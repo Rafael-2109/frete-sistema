@@ -1,0 +1,99 @@
+{
+  "modelo": "account.full.reconcile",
+  "total_campos": 9,
+  "campos": {
+    "partial_reconcile_ids": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": false,
+      "relation": "account.partial.reconcile",
+      "required": false,
+      "store": true,
+      "string": "Reconciliation Parts",
+      "type": "one2many"
+    },
+    "reconciled_line_ids": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": false,
+      "relation": "account.move.line",
+      "required": false,
+      "store": true,
+      "string": "Matched Journal Items",
+      "type": "one2many"
+    },
+    "exchange_move_id": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": false,
+      "relation": "account.move",
+      "required": false,
+      "store": true,
+      "string": "Exchange Move",
+      "type": "many2one"
+    },
+    "id": {
+      "depends": [],
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "ID",
+      "type": "integer"
+    },
+    "display_name": {
+      "depends": [],
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Display Name",
+      "type": "char"
+    },
+    "create_uid": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": true,
+      "relation": "res.users",
+      "required": false,
+      "store": true,
+      "string": "Created by",
+      "type": "many2one"
+    },
+    "create_date": {
+      "depends": [],
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Created on",
+      "type": "datetime"
+    },
+    "write_uid": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": true,
+      "relation": "res.users",
+      "required": false,
+      "store": true,
+      "string": "Last Updated by",
+      "type": "many2one"
+    },
+    "write_date": {
+      "depends": [],
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Last Updated on",
+      "type": "datetime"
+    }
+  },
+  "estatisticas": {
+    "computados": 0,
+    "relacionados": 0,
+    "armazenados": 8,
+    "obrigatorios": 0
+  }
+}

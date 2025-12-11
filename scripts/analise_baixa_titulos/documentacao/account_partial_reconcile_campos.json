@@ -1,0 +1,208 @@
+{
+  "modelo": "account.partial.reconcile",
+  "total_campos": 18,
+  "campos": {
+    "debit_move_id": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": false,
+      "relation": "account.move.line",
+      "required": true,
+      "store": true,
+      "string": "Debit Move",
+      "type": "many2one"
+    },
+    "credit_move_id": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": false,
+      "relation": "account.move.line",
+      "required": true,
+      "store": true,
+      "string": "Credit Move",
+      "type": "many2one"
+    },
+    "full_reconcile_id": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": false,
+      "relation": "account.full.reconcile",
+      "required": false,
+      "store": true,
+      "string": "Full Reconcile",
+      "type": "many2one"
+    },
+    "exchange_move_id": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": false,
+      "relation": "account.move",
+      "required": false,
+      "store": true,
+      "string": "Exchange Move",
+      "type": "many2one"
+    },
+    "company_currency_id": {
+      "context": {},
+      "depends": [
+        "company_id.currency_id"
+      ],
+      "domain": [],
+      "help": "Utility field to express amount currency",
+      "readonly": true,
+      "related": "company_id.currency_id",
+      "relation": "res.currency",
+      "required": false,
+      "store": false,
+      "string": "Company Currency",
+      "type": "many2one"
+    },
+    "debit_currency_id": {
+      "context": {},
+      "depends": [
+        "debit_move_id.currency_id"
+      ],
+      "domain": [],
+      "readonly": true,
+      "related": "debit_move_id.currency_id",
+      "relation": "res.currency",
+      "required": false,
+      "store": true,
+      "string": "Currency of the debit journal item.",
+      "type": "many2one"
+    },
+    "credit_currency_id": {
+      "context": {},
+      "depends": [
+        "credit_move_id.currency_id"
+      ],
+      "domain": [],
+      "readonly": true,
+      "related": "credit_move_id.currency_id",
+      "relation": "res.currency",
+      "required": false,
+      "store": true,
+      "string": "Currency of the credit journal item.",
+      "type": "many2one"
+    },
+    "amount": {
+      "depends": [],
+      "group_operator": "sum",
+      "help": "Always positive amount concerned by this matching expressed in the company currency.",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Amount",
+      "type": "monetary"
+    },
+    "debit_amount_currency": {
+      "depends": [],
+      "group_operator": "sum",
+      "help": "Always positive amount concerned by this matching expressed in the debit line foreign currency.",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Debit Amount Currency",
+      "type": "monetary"
+    },
+    "credit_amount_currency": {
+      "depends": [],
+      "group_operator": "sum",
+      "help": "Always positive amount concerned by this matching expressed in the credit line foreign currency.",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Credit Amount Currency",
+      "type": "monetary"
+    },
+    "company_id": {
+      "context": {},
+      "depends": [
+        "debit_move_id",
+        "credit_move_id"
+      ],
+      "domain": [],
+      "readonly": false,
+      "relation": "res.company",
+      "required": false,
+      "store": true,
+      "string": "Company",
+      "type": "many2one"
+    },
+    "max_date": {
+      "depends": [
+        "debit_move_id.date",
+        "credit_move_id.date"
+      ],
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Max Date of Matched Lines",
+      "type": "date"
+    },
+    "id": {
+      "depends": [],
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "ID",
+      "type": "integer"
+    },
+    "display_name": {
+      "depends": [],
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Display Name",
+      "type": "char"
+    },
+    "create_uid": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": true,
+      "relation": "res.users",
+      "required": false,
+      "store": true,
+      "string": "Created by",
+      "type": "many2one"
+    },
+    "create_date": {
+      "depends": [],
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Created on",
+      "type": "datetime"
+    },
+    "write_uid": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": true,
+      "relation": "res.users",
+      "required": false,
+      "store": true,
+      "string": "Last Updated by",
+      "type": "many2one"
+    },
+    "write_date": {
+      "depends": [],
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Last Updated on",
+      "type": "datetime"
+    }
+  },
+  "estatisticas": {
+    "computados": 0,
+    "relacionados": 3,
+    "armazenados": 16,
+    "obrigatorios": 2
+  }
+}

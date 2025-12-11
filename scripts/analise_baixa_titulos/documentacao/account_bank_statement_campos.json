@@ -1,0 +1,241 @@
+{
+  "modelo": "account.bank.statement",
+  "total_campos": 21,
+  "campos": {
+    "name": {
+      "depends": [
+        "create_date"
+      ],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Reference",
+      "type": "char"
+    },
+    "reference": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "External Reference",
+      "type": "char"
+    },
+    "date": {
+      "depends": [
+        "line_ids.internal_index",
+        "line_ids.state"
+      ],
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Date",
+      "type": "date"
+    },
+    "first_line_index": {
+      "depends": [
+        "line_ids.internal_index",
+        "line_ids.state"
+      ],
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "First Line Index",
+      "type": "char"
+    },
+    "balance_start": {
+      "depends": [
+        "create_date"
+      ],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Starting Balance",
+      "type": "monetary"
+    },
+    "balance_end": {
+      "depends": [
+        "balance_start",
+        "line_ids.amount",
+        "line_ids.state"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Computed Balance",
+      "type": "monetary"
+    },
+    "balance_end_real": {
+      "depends": [
+        "balance_start"
+      ],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Ending Balance",
+      "type": "monetary"
+    },
+    "company_id": {
+      "context": {},
+      "depends": [
+        "journal_id.company_id"
+      ],
+      "domain": [],
+      "help": "Company related to this journal",
+      "readonly": true,
+      "related": "journal_id.company_id",
+      "relation": "res.company",
+      "required": false,
+      "store": true,
+      "string": "Company",
+      "type": "many2one"
+    },
+    "currency_id": {
+      "context": {},
+      "depends": [
+        "journal_id"
+      ],
+      "domain": [],
+      "readonly": true,
+      "relation": "res.currency",
+      "required": false,
+      "store": false,
+      "string": "Currency",
+      "type": "many2one"
+    },
+    "journal_id": {
+      "context": {},
+      "depends": [
+        "line_ids.journal_id"
+      ],
+      "domain": "(company_id and ['|', ('company_id', '=', False), ('company_id', 'parent_of', [company_id])] or ['|', ('company_id', '=', False), ('company_id', 'parent_of', [''])]) + ([])",
+      "readonly": true,
+      "relation": "account.journal",
+      "required": false,
+      "store": true,
+      "string": "Journal",
+      "type": "many2one"
+    },
+    "line_ids": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": false,
+      "relation": "account.bank.statement.line",
+      "required": true,
+      "store": true,
+      "string": "Statement lines",
+      "type": "one2many"
+    },
+    "is_complete": {
+      "depends": [
+        "balance_end",
+        "balance_end_real",
+        "line_ids.amount",
+        "line_ids.state"
+      ],
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Is Complete",
+      "type": "boolean"
+    },
+    "is_valid": {
+      "depends": [
+        "balance_end",
+        "balance_end_real"
+      ],
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Is Valid",
+      "type": "boolean"
+    },
+    "problem_description": {
+      "depends": [
+        "is_valid",
+        "is_complete"
+      ],
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Problem Description",
+      "type": "text"
+    },
+    "attachment_ids": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": false,
+      "relation": "ir.attachment",
+      "required": false,
+      "store": true,
+      "string": "Attachments",
+      "type": "many2many"
+    },
+    "id": {
+      "depends": [],
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "ID",
+      "type": "integer"
+    },
+    "display_name": {
+      "depends": [
+        "name"
+      ],
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Display Name",
+      "type": "char"
+    },
+    "create_uid": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": true,
+      "relation": "res.users",
+      "required": false,
+      "store": true,
+      "string": "Created by",
+      "type": "many2one"
+    },
+    "create_date": {
+      "depends": [],
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Created on",
+      "type": "datetime"
+    },
+    "write_uid": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": true,
+      "relation": "res.users",
+      "required": false,
+      "store": true,
+      "string": "Last Updated by",
+      "type": "many2one"
+    },
+    "write_date": {
+      "depends": [],
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Last Updated on",
+      "type": "datetime"
+    }
+  },
+  "estatisticas": {
+    "computados": 0,
+    "relacionados": 1,
+    "armazenados": 17,
+    "obrigatorios": 1
+  }
+}

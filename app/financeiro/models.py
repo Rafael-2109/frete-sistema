@@ -612,7 +612,7 @@ class ContasAReceberAbatimento(db.Model):
     # Relacionamentos
     tipo = relationship('ContasAReceberTipo', foreign_keys=[tipo_id])
     reconciliacao_odoo = relationship('ContasAReceberReconciliacao', foreign_keys=[reconciliacao_odoo_id],
-                                       backref=db.backref('abatimentos_vinculados', lazy='dynamic'))
+                                    backref=db.backref('abatimentos_vinculados', lazy='dynamic'))
 
     __table_args__ = (
         Index('idx_abatimento_status_vinculacao', 'status_vinculacao'),
@@ -631,7 +631,7 @@ class ContasAReceberAbatimento(db.Model):
             'NAO_ENCONTRADO': '❌ Não Encontrado',
             'NAO_APLICAVEL': '➖ N/A'
         }
-        return status_map.get(self.status_vinculacao, self.status_vinculacao)
+        return status_map.get(self.status_vinculacao, self.status_vinculacao) #type: ignore
 
     @property
     def documento_odoo(self) -> str:
@@ -913,7 +913,234 @@ class ContasAReceberReconciliacao(db.Model):
 
 
 # =============================================================================
-# FIM CONTAS A RECEBER
+# BAIXA DE TITULOS VIA EXCEL
+# =============================================================================
+
+
+class BaixaTituloLote(db.Model):
+    """
+    Lote de importacao de baixas via Excel.
+    Agrupa multiplas baixas importadas de um mesmo arquivo.
+    """
+    __tablename__ = 'baixa_titulo_lote'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Identificacao do lote
+    nome_arquivo = db.Column(db.String(255), nullable=False)
+    hash_arquivo = db.Column(db.String(64), nullable=True)  # SHA256 do arquivo
+
+    # Estatisticas
+    total_linhas = db.Column(db.Integer, default=0)
+    linhas_validas = db.Column(db.Integer, default=0)
+    linhas_invalidas = db.Column(db.Integer, default=0)
+    linhas_processadas = db.Column(db.Integer, default=0)
+    linhas_sucesso = db.Column(db.Integer, default=0)
+    linhas_erro = db.Column(db.Integer, default=0)
+
+    # Status do lote: IMPORTADO, VALIDANDO, VALIDADO, PROCESSANDO, CONCLUIDO, ERRO
+    status = db.Column(db.String(20), default='IMPORTADO', nullable=False, index=True)
+
+    # Auditoria
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_por = db.Column(db.String(100), nullable=True)
+    processado_em = db.Column(db.DateTime, nullable=True)
+    processado_por = db.Column(db.String(100), nullable=True)
+
+    # Relacionamento com itens
+    itens = relationship('BaixaTituloItem', backref='lote', lazy='dynamic', cascade='all, delete-orphan')
+
+    def __repr__(self):
+        return f'<BaixaTituloLote {self.id} - {self.nome_arquivo} ({self.status})>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'nome_arquivo': self.nome_arquivo,
+            'total_linhas': self.total_linhas,
+            'linhas_validas': self.linhas_validas,
+            'linhas_invalidas': self.linhas_invalidas,
+            'linhas_processadas': self.linhas_processadas,
+            'linhas_sucesso': self.linhas_sucesso,
+            'linhas_erro': self.linhas_erro,
+            'status': self.status,
+            'criado_em': self.criado_em.isoformat() if self.criado_em else None,
+            'criado_por': self.criado_por,
+            'processado_em': self.processado_em.isoformat() if self.processado_em else None,
+            'processado_por': self.processado_por
+        }
+
+
+class BaixaTituloItem(db.Model):
+    """
+    Item individual de baixa de titulo.
+    Registra dados do Excel + validacao + resultado da operacao no Odoo.
+
+    Fluxo:
+    1. Excel importado -> status = PENDENTE
+    2. Validacao -> status = VALIDO ou INVALIDO
+    3. Usuario ativa/inativa -> ativo = True/False
+    4. Processamento -> status = PROCESSANDO -> SUCESSO ou ERRO
+    """
+    __tablename__ = 'baixa_titulo_item'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # FK para o lote
+    lote_id = db.Column(db.Integer, db.ForeignKey('baixa_titulo_lote.id'), nullable=False, index=True)
+
+    # Linha do Excel (para referencia)
+    linha_excel = db.Column(db.Integer, nullable=False)
+
+    # =========================================================================
+    # DADOS DO EXCEL (entrada do usuario)
+    # =========================================================================
+
+    nf_excel = db.Column(db.String(50), nullable=False)  # Numero da NF-e
+    parcela_excel = db.Column(db.Integer, nullable=False)  # Numero sequencial da parcela
+    valor_excel = db.Column(db.Float, nullable=False)  # Valor a baixar
+    journal_excel = db.Column(db.String(100), nullable=False)  # Nome do journal (ex: GRAFENO)
+    data_excel = db.Column(db.Date, nullable=False)  # Data do pagamento
+
+    # =========================================================================
+    # DADOS RESOLVIDOS DO ODOO (apos validacao)
+    # =========================================================================
+
+    # Titulo encontrado
+    titulo_odoo_id = db.Column(db.Integer, nullable=True)  # account.move.line ID
+    move_odoo_id = db.Column(db.Integer, nullable=True)  # account.move ID (NF)
+    move_odoo_name = db.Column(db.String(100), nullable=True)  # Nome do move (VND/2025/...)
+    partner_odoo_id = db.Column(db.Integer, nullable=True)  # ID do cliente
+
+    # Journal resolvido
+    journal_odoo_id = db.Column(db.Integer, nullable=True)  # account.journal ID
+    journal_odoo_code = db.Column(db.String(20), nullable=True)  # Codigo do journal
+
+    # Valor do titulo no Odoo
+    valor_titulo_odoo = db.Column(db.Float, nullable=True)  # Valor original do titulo
+    saldo_antes = db.Column(db.Float, nullable=True)  # amount_residual ANTES da baixa
+
+    # =========================================================================
+    # CONTROLE DE PROCESSAMENTO
+    # =========================================================================
+
+    # Se o usuario quer processar esta linha
+    ativo = db.Column(db.Boolean, default=True, nullable=False)
+
+    # Status: PENDENTE, VALIDO, INVALIDO, PROCESSANDO, SUCESSO, ERRO
+    status = db.Column(db.String(20), default='PENDENTE', nullable=False, index=True)
+
+    # Mensagem de erro ou validacao
+    mensagem = db.Column(db.Text, nullable=True)
+
+    # =========================================================================
+    # RESULTADO DA OPERACAO NO ODOO
+    # =========================================================================
+
+    # IDs criados no Odoo
+    payment_odoo_id = db.Column(db.Integer, nullable=True)  # account.payment ID criado
+    payment_odoo_name = db.Column(db.String(100), nullable=True)  # Nome do pagamento (PGRA1/2025/...)
+    partial_reconcile_id = db.Column(db.Integer, nullable=True)  # account.partial.reconcile ID
+
+    # Saldo apos baixa
+    saldo_depois = db.Column(db.Float, nullable=True)  # amount_residual DEPOIS
+
+    # =========================================================================
+    # SNAPSHOT ODOO - ANTES E DEPOIS (campos criticos)
+    # =========================================================================
+
+    # Campos do titulo ANTES da baixa (JSON)
+    snapshot_antes = db.Column(db.Text, nullable=True)
+
+    # Campos do titulo DEPOIS da baixa (JSON)
+    snapshot_depois = db.Column(db.Text, nullable=True)
+
+    # Campos alterados (JSON lista de campos que mudaram)
+    campos_alterados = db.Column(db.Text, nullable=True)
+
+    # =========================================================================
+    # AUDITORIA
+    # =========================================================================
+
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    validado_em = db.Column(db.DateTime, nullable=True)
+    processado_em = db.Column(db.DateTime, nullable=True)
+
+    __table_args__ = (
+        Index('idx_baixa_item_lote', 'lote_id'),
+        Index('idx_baixa_item_status', 'status'),
+        Index('idx_baixa_item_nf', 'nf_excel'),
+    )
+
+    def __repr__(self):
+        return f'<BaixaTituloItem {self.id} - NF {self.nf_excel} P{self.parcela_excel} ({self.status})>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'lote_id': self.lote_id,
+            'linha_excel': self.linha_excel,
+            # Dados Excel
+            'nf_excel': self.nf_excel,
+            'parcela_excel': self.parcela_excel,
+            'valor_excel': self.valor_excel,
+            'journal_excel': self.journal_excel,
+            'data_excel': self.data_excel.isoformat() if self.data_excel else None,
+            # Dados Odoo resolvidos
+            'titulo_odoo_id': self.titulo_odoo_id,
+            'move_odoo_id': self.move_odoo_id,
+            'move_odoo_name': self.move_odoo_name,
+            'partner_odoo_id': self.partner_odoo_id,
+            'journal_odoo_id': self.journal_odoo_id,
+            'journal_odoo_code': self.journal_odoo_code,
+            'valor_titulo_odoo': self.valor_titulo_odoo,
+            'saldo_antes': self.saldo_antes,
+            # Controle
+            'ativo': self.ativo,
+            'status': self.status,
+            'mensagem': self.mensagem,
+            # Resultado
+            'payment_odoo_id': self.payment_odoo_id,
+            'payment_odoo_name': self.payment_odoo_name,
+            'partial_reconcile_id': self.partial_reconcile_id,
+            'saldo_depois': self.saldo_depois,
+            # Snapshots
+            'snapshot_antes': json.loads(self.snapshot_antes) if self.snapshot_antes else None,
+            'snapshot_depois': json.loads(self.snapshot_depois) if self.snapshot_depois else None,
+            'campos_alterados': json.loads(self.campos_alterados) if self.campos_alterados else None,
+            # Auditoria
+            'criado_em': self.criado_em.isoformat() if self.criado_em else None,
+            'validado_em': self.validado_em.isoformat() if self.validado_em else None,
+            'processado_em': self.processado_em.isoformat() if self.processado_em else None
+        }
+
+    def set_snapshot_antes(self, dados: dict):
+        """Salva snapshot dos dados do titulo ANTES da baixa"""
+        self.snapshot_antes = json.dumps(dados, default=str)
+
+    def set_snapshot_depois(self, dados: dict):
+        """Salva snapshot dos dados do titulo DEPOIS da baixa"""
+        self.snapshot_depois = json.dumps(dados, default=str)
+
+    def set_campos_alterados(self, campos: list):
+        """Salva lista de campos que foram alterados"""
+        self.campos_alterados = json.dumps(campos)
+
+    def get_snapshot_antes(self) -> dict:
+        """Retorna snapshot ANTES como dict"""
+        return json.loads(self.snapshot_antes) if self.snapshot_antes else {}
+
+    def get_snapshot_depois(self) -> dict:
+        """Retorna snapshot DEPOIS como dict"""
+        return json.loads(self.snapshot_depois) if self.snapshot_depois else {}
+
+    def get_campos_alterados(self) -> list:
+        """Retorna lista de campos alterados"""
+        return json.loads(self.campos_alterados) if self.campos_alterados else []
+
+
+# =============================================================================
+# FIM BAIXA DE TITULOS
 # =============================================================================
 
 

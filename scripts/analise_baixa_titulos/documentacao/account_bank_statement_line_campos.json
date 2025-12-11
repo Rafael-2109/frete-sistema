@@ -1,0 +1,5752 @@
+{
+  "modelo": "account.bank.statement.line",
+  "total_campos": 399,
+  "campos": {
+    "move_id": {
+      "context": {},
+      "depends": [],
+      "domain": "(company_id and ['|', ('company_id', '=', False), ('company_id', 'in', [company_id])] or [('company_id', '=', False)]) + ([])",
+      "readonly": true,
+      "relation": "account.move",
+      "required": true,
+      "store": true,
+      "string": "Journal Entry",
+      "type": "many2one"
+    },
+    "statement_id": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": false,
+      "relation": "account.bank.statement",
+      "required": false,
+      "store": true,
+      "string": "Statement",
+      "type": "many2one"
+    },
+    "payment_ids": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": false,
+      "relation": "account.payment",
+      "required": false,
+      "store": true,
+      "string": "Auto-generated Payments",
+      "type": "many2many"
+    },
+    "sequence": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Sequence",
+      "type": "integer"
+    },
+    "partner_id": {
+      "context": {},
+      "depends": [],
+      "domain": "(company_id and ['|', ('company_id', '=', False), ('company_id', 'parent_of', [company_id])] or ['|', ('company_id', '=', False), ('company_id', 'parent_of', [''])]) + (['|', ('parent_id','=', False), ('is_company','=',True)])",
+      "readonly": false,
+      "relation": "res.partner",
+      "required": false,
+      "store": true,
+      "string": "Partner",
+      "type": "many2one"
+    },
+    "account_number": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Bank Account Number",
+      "type": "char"
+    },
+    "partner_name": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Partner Name",
+      "type": "char"
+    },
+    "transaction_type": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Transaction Type",
+      "type": "char"
+    },
+    "payment_ref": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Label",
+      "type": "char"
+    },
+    "currency_id": {
+      "context": {},
+      "depends": [
+        "journal_id.currency_id"
+      ],
+      "domain": [],
+      "readonly": true,
+      "relation": "res.currency",
+      "required": false,
+      "store": true,
+      "string": "Journal Currency",
+      "type": "many2one"
+    },
+    "amount": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Amount",
+      "type": "monetary"
+    },
+    "running_balance": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Running Balance",
+      "type": "monetary"
+    },
+    "foreign_currency_id": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "help": "The optional other currency if it is a multi-currency entry.",
+      "readonly": false,
+      "relation": "res.currency",
+      "required": false,
+      "store": true,
+      "string": "Foreign Currency",
+      "type": "many2one"
+    },
+    "amount_currency": {
+      "depends": [
+        "foreign_currency_id",
+        "date",
+        "amount",
+        "company_id"
+      ],
+      "group_operator": "sum",
+      "help": "The amount expressed in an optional other currency if it is a multi-currency entry.",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Amount in Currency",
+      "type": "monetary"
+    },
+    "amount_residual": {
+      "depends": [
+        "journal_id",
+        "currency_id",
+        "amount",
+        "foreign_currency_id",
+        "amount_currency",
+        "move_id.to_check",
+        "move_id.line_ids.account_id",
+        "move_id.line_ids.amount_currency",
+        "move_id.line_ids.amount_residual_currency",
+        "move_id.line_ids.currency_id",
+        "move_id.line_ids.matched_debit_ids",
+        "move_id.line_ids.matched_credit_ids"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Residual Amount",
+      "type": "float"
+    },
+    "country_code": {
+      "depends": [
+        "company_id.account_fiscal_country_id.code"
+      ],
+      "help": "The ISO country code in two chars. \nYou can use this field for quick search.",
+      "readonly": true,
+      "related": "company_id.account_fiscal_country_id.code",
+      "required": false,
+      "store": false,
+      "string": "Country Code",
+      "type": "char"
+    },
+    "internal_index": {
+      "depends": [
+        "date",
+        "sequence"
+      ],
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Internal Reference",
+      "type": "char"
+    },
+    "is_reconciled": {
+      "depends": [
+        "journal_id",
+        "currency_id",
+        "amount",
+        "foreign_currency_id",
+        "amount_currency",
+        "move_id.to_check",
+        "move_id.line_ids.account_id",
+        "move_id.line_ids.amount_currency",
+        "move_id.line_ids.amount_residual_currency",
+        "move_id.line_ids.currency_id",
+        "move_id.line_ids.matched_debit_ids",
+        "move_id.line_ids.matched_credit_ids"
+      ],
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Is Reconciled",
+      "type": "boolean"
+    },
+    "statement_complete": {
+      "depends": [
+        "statement_id.is_complete"
+      ],
+      "readonly": true,
+      "related": "statement_id.is_complete",
+      "required": false,
+      "store": false,
+      "string": "Is Complete",
+      "type": "boolean"
+    },
+    "statement_valid": {
+      "depends": [
+        "statement_id.is_valid"
+      ],
+      "readonly": true,
+      "related": "statement_id.is_valid",
+      "required": false,
+      "store": false,
+      "string": "Is Valid",
+      "type": "boolean"
+    },
+    "statement_balance_end_real": {
+      "depends": [
+        "statement_id.balance_end_real"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "statement_id.balance_end_real",
+      "required": false,
+      "store": false,
+      "string": "Ending Balance",
+      "type": "monetary"
+    },
+    "statement_name": {
+      "depends": [
+        "statement_id.name"
+      ],
+      "readonly": true,
+      "related": "statement_id.name",
+      "required": false,
+      "store": false,
+      "string": "Statement Name",
+      "type": "char"
+    },
+    "transaction_details": {
+      "depends": [],
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Transaction Details",
+      "type": "json"
+    },
+    "id": {
+      "depends": [],
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "ID",
+      "type": "integer"
+    },
+    "display_name": {
+      "depends": [
+        "name"
+      ],
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Display Name",
+      "type": "char"
+    },
+    "create_uid": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": true,
+      "relation": "res.users",
+      "required": false,
+      "store": true,
+      "string": "Created by",
+      "type": "many2one"
+    },
+    "create_date": {
+      "depends": [],
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Created on",
+      "type": "datetime"
+    },
+    "write_uid": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": true,
+      "relation": "res.users",
+      "required": false,
+      "store": true,
+      "string": "Last Updated by",
+      "type": "many2one"
+    },
+    "write_date": {
+      "depends": [],
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Last Updated on",
+      "type": "datetime"
+    },
+    "cron_last_check": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Cron Last Check",
+      "type": "datetime"
+    },
+    "unique_import_id": {
+      "depends": [],
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Import ID",
+      "type": "char"
+    },
+    "online_transaction_identifier": {
+      "depends": [],
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Online Transaction Identifier",
+      "type": "char"
+    },
+    "online_partner_information": {
+      "depends": [],
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Online Partner Information",
+      "type": "char"
+    },
+    "online_account_id": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": true,
+      "relation": "account.online.account",
+      "required": false,
+      "store": true,
+      "string": "Online Account",
+      "type": "many2one"
+    },
+    "online_link_id": {
+      "context": {},
+      "depends": [
+        "online_account_id.account_online_link_id"
+      ],
+      "domain": [],
+      "readonly": true,
+      "related": "online_account_id.account_online_link_id",
+      "relation": "account.online.link",
+      "required": false,
+      "store": true,
+      "string": "Account Online Link",
+      "type": "many2one"
+    },
+    "campaign_id": {
+      "context": {},
+      "depends": [
+        "move_id.campaign_id"
+      ],
+      "domain": [],
+      "help": "This is a name that helps you keep track of your different campaign efforts, e.g. Fall_Drive, Christmas_Special",
+      "readonly": false,
+      "related": "move_id.campaign_id",
+      "relation": "utm.campaign",
+      "required": false,
+      "store": false,
+      "string": "Campaign",
+      "type": "many2one"
+    },
+    "source_id": {
+      "context": {},
+      "depends": [
+        "move_id.source_id"
+      ],
+      "domain": [],
+      "help": "This is the source of the link, e.g. Search Engine, another domain, or name of email list",
+      "readonly": false,
+      "related": "move_id.source_id",
+      "relation": "utm.source",
+      "required": false,
+      "store": false,
+      "string": "Source",
+      "type": "many2one"
+    },
+    "medium_id": {
+      "context": {},
+      "depends": [
+        "move_id.medium_id"
+      ],
+      "domain": [],
+      "help": "This is the method of delivery, e.g. Postcard, Email, or Banner Ad",
+      "readonly": false,
+      "related": "move_id.medium_id",
+      "relation": "utm.medium",
+      "required": false,
+      "store": false,
+      "string": "Medium",
+      "type": "many2one"
+    },
+    "sequence_prefix": {
+      "depends": [
+        "move_id.sequence_prefix"
+      ],
+      "readonly": true,
+      "related": "move_id.sequence_prefix",
+      "required": false,
+      "store": false,
+      "string": "Sequence Prefix",
+      "type": "char"
+    },
+    "sequence_number": {
+      "depends": [
+        "move_id.sequence_number"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.sequence_number",
+      "required": false,
+      "store": false,
+      "string": "Sequence Number",
+      "type": "integer"
+    },
+    "activity_ids": {
+      "context": {},
+      "depends": [
+        "move_id.activity_ids"
+      ],
+      "domain": [],
+      "groups": "base.group_user",
+      "readonly": false,
+      "related": "move_id.activity_ids",
+      "relation": "mail.activity",
+      "required": false,
+      "store": false,
+      "string": "Activities",
+      "type": "one2many"
+    },
+    "activity_state": {
+      "depends": [
+        "move_id.activity_state"
+      ],
+      "groups": "base.group_user",
+      "help": "Status based on activities\nOverdue: Due date is already passed\nToday: Activity date is today\nPlanned: Future activities.",
+      "readonly": true,
+      "related": "move_id.activity_state",
+      "required": false,
+      "selection": [
+        [
+          "overdue",
+          "Overdue"
+        ],
+        [
+          "today",
+          "Today"
+        ],
+        [
+          "planned",
+          "Planned"
+        ]
+      ],
+      "store": false,
+      "string": "Activity State",
+      "type": "selection"
+    },
+    "activity_user_id": {
+      "context": {},
+      "depends": [
+        "move_id.activity_user_id"
+      ],
+      "domain": [],
+      "groups": "base.group_user",
+      "readonly": true,
+      "related": "move_id.activity_user_id",
+      "relation": "res.users",
+      "required": false,
+      "store": false,
+      "string": "Responsible User",
+      "type": "many2one"
+    },
+    "activity_type_id": {
+      "context": {},
+      "depends": [
+        "move_id.activity_type_id"
+      ],
+      "domain": "['|', ('res_model', '=', False), ('res_model', '=', res_model)]",
+      "groups": "base.group_user",
+      "readonly": false,
+      "related": "move_id.activity_type_id",
+      "relation": "mail.activity.type",
+      "required": false,
+      "store": false,
+      "string": "Next Activity Type",
+      "type": "many2one"
+    },
+    "activity_type_icon": {
+      "depends": [
+        "move_id.activity_type_icon"
+      ],
+      "help": "Font awesome icon e.g. fa-tasks",
+      "readonly": true,
+      "related": "move_id.activity_type_icon",
+      "required": false,
+      "store": false,
+      "string": "Activity Type Icon",
+      "type": "char"
+    },
+    "activity_date_deadline": {
+      "depends": [
+        "move_id.activity_date_deadline"
+      ],
+      "groups": "base.group_user",
+      "readonly": true,
+      "related": "move_id.activity_date_deadline",
+      "required": false,
+      "store": false,
+      "string": "Next Activity Deadline",
+      "type": "date"
+    },
+    "my_activity_date_deadline": {
+      "depends": [
+        "move_id.my_activity_date_deadline"
+      ],
+      "groups": "base.group_user",
+      "readonly": true,
+      "related": "move_id.my_activity_date_deadline",
+      "required": false,
+      "store": false,
+      "string": "My Activity Deadline",
+      "type": "date"
+    },
+    "activity_summary": {
+      "depends": [
+        "move_id.activity_summary"
+      ],
+      "groups": "base.group_user",
+      "readonly": false,
+      "related": "move_id.activity_summary",
+      "required": false,
+      "store": false,
+      "string": "Next Activity Summary",
+      "type": "char"
+    },
+    "activity_exception_decoration": {
+      "depends": [
+        "move_id.activity_exception_decoration"
+      ],
+      "help": "Type of the exception activity on record.",
+      "readonly": true,
+      "related": "move_id.activity_exception_decoration",
+      "required": false,
+      "selection": [
+        [
+          "warning",
+          "Alert"
+        ],
+        [
+          "danger",
+          "Error"
+        ]
+      ],
+      "store": false,
+      "string": "Activity Exception Decoration",
+      "type": "selection"
+    },
+    "activity_exception_icon": {
+      "depends": [
+        "move_id.activity_exception_icon"
+      ],
+      "help": "Icon to indicate an exception activity.",
+      "readonly": true,
+      "related": "move_id.activity_exception_icon",
+      "required": false,
+      "store": false,
+      "string": "Icon",
+      "type": "char"
+    },
+    "activity_calendar_event_id": {
+      "context": {},
+      "depends": [
+        "move_id.activity_calendar_event_id"
+      ],
+      "domain": [],
+      "groups": "base.group_user",
+      "readonly": true,
+      "related": "move_id.activity_calendar_event_id",
+      "relation": "calendar.event",
+      "required": false,
+      "store": false,
+      "string": "Next Activity Calendar Event",
+      "type": "many2one"
+    },
+    "access_url": {
+      "depends": [
+        "move_id.access_url"
+      ],
+      "help": "Customer Portal URL",
+      "readonly": true,
+      "related": "move_id.access_url",
+      "required": false,
+      "store": false,
+      "string": "Portal Access URL",
+      "type": "char"
+    },
+    "access_token": {
+      "depends": [
+        "move_id.access_token"
+      ],
+      "readonly": false,
+      "related": "move_id.access_token",
+      "required": false,
+      "store": false,
+      "string": "Security Token",
+      "type": "char"
+    },
+    "access_warning": {
+      "depends": [
+        "move_id.access_warning"
+      ],
+      "readonly": true,
+      "related": "move_id.access_warning",
+      "required": false,
+      "store": false,
+      "string": "Access warning",
+      "type": "text"
+    },
+    "message_is_follower": {
+      "depends": [
+        "move_id.message_is_follower"
+      ],
+      "readonly": true,
+      "related": "move_id.message_is_follower",
+      "required": false,
+      "store": false,
+      "string": "Is Follower",
+      "type": "boolean"
+    },
+    "message_follower_ids": {
+      "context": {},
+      "depends": [
+        "move_id.message_follower_ids"
+      ],
+      "domain": [],
+      "groups": "base.group_user",
+      "readonly": false,
+      "related": "move_id.message_follower_ids",
+      "relation": "mail.followers",
+      "required": false,
+      "store": false,
+      "string": "Followers",
+      "type": "one2many"
+    },
+    "message_partner_ids": {
+      "context": {},
+      "depends": [
+        "move_id.message_partner_ids"
+      ],
+      "domain": [],
+      "groups": "base.group_user",
+      "readonly": false,
+      "related": "move_id.message_partner_ids",
+      "relation": "res.partner",
+      "required": false,
+      "store": false,
+      "string": "Followers (Partners)",
+      "type": "many2many"
+    },
+    "message_ids": {
+      "context": {},
+      "depends": [
+        "move_id.message_ids"
+      ],
+      "domain": [
+        [
+          "message_type",
+          "!=",
+          "user_notification"
+        ]
+      ],
+      "readonly": false,
+      "related": "move_id.message_ids",
+      "relation": "mail.message",
+      "required": false,
+      "store": false,
+      "string": "Messages",
+      "type": "one2many"
+    },
+    "has_message": {
+      "depends": [
+        "move_id.has_message"
+      ],
+      "readonly": true,
+      "related": "move_id.has_message",
+      "required": false,
+      "store": false,
+      "string": "Has Message",
+      "type": "boolean"
+    },
+    "message_needaction": {
+      "depends": [
+        "move_id.message_needaction"
+      ],
+      "help": "If checked, new messages require your attention.",
+      "readonly": true,
+      "related": "move_id.message_needaction",
+      "required": false,
+      "store": false,
+      "string": "Action Needed",
+      "type": "boolean"
+    },
+    "message_needaction_counter": {
+      "depends": [
+        "move_id.message_needaction_counter"
+      ],
+      "group_operator": "sum",
+      "help": "Number of messages requiring action",
+      "readonly": true,
+      "related": "move_id.message_needaction_counter",
+      "required": false,
+      "store": false,
+      "string": "Number of Actions",
+      "type": "integer"
+    },
+    "message_has_error": {
+      "depends": [
+        "move_id.message_has_error"
+      ],
+      "help": "If checked, some messages have a delivery error.",
+      "readonly": true,
+      "related": "move_id.message_has_error",
+      "required": false,
+      "store": false,
+      "string": "Message Delivery error",
+      "type": "boolean"
+    },
+    "message_has_error_counter": {
+      "depends": [
+        "move_id.message_has_error_counter"
+      ],
+      "group_operator": "sum",
+      "help": "Number of messages with delivery error",
+      "readonly": true,
+      "related": "move_id.message_has_error_counter",
+      "required": false,
+      "store": false,
+      "string": "Number of errors",
+      "type": "integer"
+    },
+    "message_attachment_count": {
+      "depends": [
+        "move_id.message_attachment_count"
+      ],
+      "group_operator": "sum",
+      "groups": "base.group_user",
+      "readonly": true,
+      "related": "move_id.message_attachment_count",
+      "required": false,
+      "store": false,
+      "string": "Attachment Count",
+      "type": "integer"
+    },
+    "rating_ids": {
+      "context": {},
+      "depends": [
+        "move_id.rating_ids"
+      ],
+      "domain": [
+        [
+          "res_model",
+          "=",
+          "account.move"
+        ]
+      ],
+      "groups": "base.group_user",
+      "readonly": false,
+      "related": "move_id.rating_ids",
+      "relation": "rating.rating",
+      "required": false,
+      "store": false,
+      "string": "Ratings",
+      "type": "one2many"
+    },
+    "website_message_ids": {
+      "context": {},
+      "depends": [
+        "move_id.website_message_ids"
+      ],
+      "domain": [
+        [
+          "model",
+          "=",
+          "account.move"
+        ],
+        [
+          "message_type",
+          "in",
+          [
+            "comment",
+            "email",
+            "email_outgoing",
+            "auto_comment"
+          ]
+        ]
+      ],
+      "help": "Website communication history",
+      "readonly": false,
+      "related": "move_id.website_message_ids",
+      "relation": "mail.message",
+      "required": false,
+      "store": false,
+      "string": "Website Messages",
+      "type": "one2many"
+    },
+    "message_has_sms_error": {
+      "depends": [
+        "move_id.message_has_sms_error"
+      ],
+      "help": "If checked, some messages have a delivery error.",
+      "readonly": true,
+      "related": "move_id.message_has_sms_error",
+      "required": false,
+      "store": false,
+      "string": "SMS Delivery error",
+      "type": "boolean"
+    },
+    "message_main_attachment_id": {
+      "context": {},
+      "depends": [
+        "move_id.message_main_attachment_id"
+      ],
+      "domain": [],
+      "readonly": false,
+      "related": "move_id.message_main_attachment_id",
+      "relation": "ir.attachment",
+      "required": false,
+      "store": false,
+      "string": "Main Attachment",
+      "type": "many2one"
+    },
+    "name": {
+      "depends": [
+        "move_id.name"
+      ],
+      "readonly": false,
+      "related": "move_id.name",
+      "required": false,
+      "store": false,
+      "string": "Number",
+      "type": "char"
+    },
+    "ref": {
+      "depends": [
+        "move_id.ref"
+      ],
+      "readonly": false,
+      "related": "move_id.ref",
+      "required": false,
+      "store": false,
+      "string": "Reference",
+      "type": "char"
+    },
+    "date": {
+      "depends": [
+        "move_id.date"
+      ],
+      "readonly": false,
+      "related": "move_id.date",
+      "required": true,
+      "store": false,
+      "string": "Date",
+      "type": "date"
+    },
+    "state": {
+      "depends": [
+        "move_id.state"
+      ],
+      "readonly": true,
+      "related": "move_id.state",
+      "required": true,
+      "selection": [
+        [
+          "draft",
+          "Draft"
+        ],
+        [
+          "posted",
+          "Posted"
+        ],
+        [
+          "cancel",
+          "Cancelled"
+        ]
+      ],
+      "store": false,
+      "string": "Status",
+      "type": "selection"
+    },
+    "move_type": {
+      "depends": [
+        "move_id.move_type"
+      ],
+      "readonly": true,
+      "related": "move_id.move_type",
+      "required": true,
+      "selection": [
+        [
+          "entry",
+          "Journal Entry"
+        ],
+        [
+          "out_invoice",
+          "Customer Invoice"
+        ],
+        [
+          "out_refund",
+          "Customer Credit Note"
+        ],
+        [
+          "in_invoice",
+          "Vendor Bill"
+        ],
+        [
+          "in_refund",
+          "Vendor Credit Note"
+        ],
+        [
+          "out_receipt",
+          "Sales Receipt"
+        ],
+        [
+          "in_receipt",
+          "Purchase Receipt"
+        ]
+      ],
+      "store": false,
+      "string": "Type",
+      "type": "selection"
+    },
+    "is_storno": {
+      "depends": [
+        "move_id.is_storno"
+      ],
+      "readonly": false,
+      "related": "move_id.is_storno",
+      "required": false,
+      "store": false,
+      "string": "Is Storno",
+      "type": "boolean"
+    },
+    "journal_id": {
+      "context": {},
+      "depends": [
+        "move_id.journal_id"
+      ],
+      "domain": "[('id', 'in', suitable_journal_ids)]",
+      "readonly": false,
+      "related": "move_id.journal_id",
+      "relation": "account.journal",
+      "required": true,
+      "store": false,
+      "string": "Journal",
+      "type": "many2one"
+    },
+    "company_id": {
+      "context": {},
+      "depends": [
+        "move_id.company_id"
+      ],
+      "domain": [],
+      "readonly": false,
+      "related": "move_id.company_id",
+      "relation": "res.company",
+      "required": false,
+      "store": false,
+      "string": "Company",
+      "type": "many2one"
+    },
+    "line_ids": {
+      "context": {},
+      "depends": [
+        "move_id.line_ids"
+      ],
+      "domain": [],
+      "readonly": false,
+      "related": "move_id.line_ids",
+      "relation": "account.move.line",
+      "required": false,
+      "store": false,
+      "string": "Journal Items",
+      "type": "one2many"
+    },
+    "payment_id": {
+      "context": {},
+      "depends": [
+        "move_id.payment_id"
+      ],
+      "domain": [],
+      "readonly": false,
+      "related": "move_id.payment_id",
+      "relation": "account.payment",
+      "required": false,
+      "store": false,
+      "string": "Payment",
+      "type": "many2one"
+    },
+    "statement_line_id": {
+      "context": {},
+      "depends": [
+        "move_id.statement_line_id"
+      ],
+      "domain": [],
+      "readonly": false,
+      "related": "move_id.statement_line_id",
+      "relation": "account.bank.statement.line",
+      "required": false,
+      "store": false,
+      "string": "Statement Line",
+      "type": "many2one"
+    },
+    "tax_cash_basis_rec_id": {
+      "context": {},
+      "depends": [
+        "move_id.tax_cash_basis_rec_id"
+      ],
+      "domain": [],
+      "readonly": false,
+      "related": "move_id.tax_cash_basis_rec_id",
+      "relation": "account.partial.reconcile",
+      "required": false,
+      "store": false,
+      "string": "Tax Cash Basis Entry of",
+      "type": "many2one"
+    },
+    "tax_cash_basis_origin_move_id": {
+      "context": {},
+      "depends": [
+        "move_id.tax_cash_basis_origin_move_id"
+      ],
+      "domain": [],
+      "help": "The journal entry from which this tax cash basis journal entry has been created.",
+      "readonly": true,
+      "related": "move_id.tax_cash_basis_origin_move_id",
+      "relation": "account.move",
+      "required": false,
+      "store": false,
+      "string": "Cash Basis Origin",
+      "type": "many2one"
+    },
+    "tax_cash_basis_created_move_ids": {
+      "context": {},
+      "depends": [
+        "move_id.tax_cash_basis_created_move_ids"
+      ],
+      "domain": [],
+      "help": "The cash basis entries created from the taxes on this entry, when reconciling its lines.",
+      "readonly": false,
+      "related": "move_id.tax_cash_basis_created_move_ids",
+      "relation": "account.move",
+      "required": false,
+      "store": false,
+      "string": "Cash Basis Entries",
+      "type": "one2many"
+    },
+    "always_tax_exigible": {
+      "depends": [
+        "move_id.always_tax_exigible"
+      ],
+      "readonly": false,
+      "related": "move_id.always_tax_exigible",
+      "required": false,
+      "store": false,
+      "string": "Always Tax Exigible",
+      "type": "boolean"
+    },
+    "auto_post": {
+      "depends": [
+        "move_id.auto_post"
+      ],
+      "help": "Specify whether this entry is posted automatically on its accounting date, and any similar recurring invoices.",
+      "readonly": false,
+      "related": "move_id.auto_post",
+      "required": true,
+      "selection": [
+        [
+          "no",
+          "No"
+        ],
+        [
+          "at_date",
+          "At Date"
+        ],
+        [
+          "monthly",
+          "Monthly"
+        ],
+        [
+          "quarterly",
+          "Quarterly"
+        ],
+        [
+          "yearly",
+          "Yearly"
+        ]
+      ],
+      "store": false,
+      "string": "Auto-post",
+      "type": "selection"
+    },
+    "auto_post_until": {
+      "depends": [
+        "move_id.auto_post_until"
+      ],
+      "help": "This recurring move will be posted up to and including this date.",
+      "readonly": false,
+      "related": "move_id.auto_post_until",
+      "required": false,
+      "store": false,
+      "string": "Auto-post until",
+      "type": "date"
+    },
+    "auto_post_origin_id": {
+      "context": {},
+      "depends": [
+        "move_id.auto_post_origin_id"
+      ],
+      "domain": [],
+      "readonly": true,
+      "related": "move_id.auto_post_origin_id",
+      "relation": "account.move",
+      "required": false,
+      "store": false,
+      "string": "First recurring entry",
+      "type": "many2one"
+    },
+    "hide_post_button": {
+      "depends": [
+        "move_id.hide_post_button"
+      ],
+      "readonly": true,
+      "related": "move_id.hide_post_button",
+      "required": false,
+      "store": false,
+      "string": "Hide Post Button",
+      "type": "boolean"
+    },
+    "to_check": {
+      "depends": [
+        "move_id.to_check"
+      ],
+      "help": "If this checkbox is ticked, it means that the user was not sure of all the related information at the time of the creation of the move and that the move needs to be checked again.",
+      "readonly": false,
+      "related": "move_id.to_check",
+      "required": false,
+      "store": false,
+      "string": "To Check",
+      "type": "boolean"
+    },
+    "posted_before": {
+      "depends": [
+        "move_id.posted_before"
+      ],
+      "readonly": false,
+      "related": "move_id.posted_before",
+      "required": false,
+      "store": false,
+      "string": "Posted Before",
+      "type": "boolean"
+    },
+    "suitable_journal_ids": {
+      "context": {},
+      "depends": [
+        "move_id.suitable_journal_ids"
+      ],
+      "domain": [],
+      "readonly": true,
+      "related": "move_id.suitable_journal_ids",
+      "relation": "account.journal",
+      "required": false,
+      "store": false,
+      "string": "Suitable Journal",
+      "type": "many2many"
+    },
+    "highest_name": {
+      "depends": [
+        "move_id.highest_name"
+      ],
+      "readonly": true,
+      "related": "move_id.highest_name",
+      "required": false,
+      "store": false,
+      "string": "Highest Name",
+      "type": "char"
+    },
+    "made_sequence_hole": {
+      "depends": [
+        "move_id.made_sequence_hole"
+      ],
+      "readonly": true,
+      "related": "move_id.made_sequence_hole",
+      "required": false,
+      "store": false,
+      "string": "Made Sequence Hole",
+      "type": "boolean"
+    },
+    "show_name_warning": {
+      "depends": [
+        "move_id.show_name_warning"
+      ],
+      "readonly": false,
+      "related": "move_id.show_name_warning",
+      "required": false,
+      "store": false,
+      "string": "Show Name Warning",
+      "type": "boolean"
+    },
+    "type_name": {
+      "depends": [
+        "move_id.type_name"
+      ],
+      "readonly": true,
+      "related": "move_id.type_name",
+      "required": false,
+      "store": false,
+      "string": "Type Name",
+      "type": "char"
+    },
+    "attachment_ids": {
+      "context": {},
+      "depends": [
+        "move_id.attachment_ids"
+      ],
+      "domain": [
+        [
+          "res_model",
+          "=",
+          "account.move"
+        ]
+      ],
+      "readonly": false,
+      "related": "move_id.attachment_ids",
+      "relation": "ir.attachment",
+      "required": false,
+      "store": false,
+      "string": "Attachments",
+      "type": "one2many"
+    },
+    "restrict_mode_hash_table": {
+      "depends": [
+        "move_id.restrict_mode_hash_table"
+      ],
+      "help": "If ticked, the accounting entry or invoice receives a hash as soon as it is posted and cannot be modified anymore.",
+      "readonly": true,
+      "related": "move_id.restrict_mode_hash_table",
+      "required": false,
+      "store": false,
+      "string": "Lock Posted Entries with Hash",
+      "type": "boolean"
+    },
+    "secure_sequence_number": {
+      "depends": [
+        "move_id.secure_sequence_number"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.secure_sequence_number",
+      "required": false,
+      "store": false,
+      "string": "Inalteralbility No Gap Sequence #",
+      "type": "integer"
+    },
+    "inalterable_hash": {
+      "depends": [
+        "move_id.inalterable_hash"
+      ],
+      "readonly": true,
+      "related": "move_id.inalterable_hash",
+      "required": false,
+      "store": false,
+      "string": "Inalterability Hash",
+      "type": "char"
+    },
+    "string_to_hash": {
+      "depends": [
+        "move_id.string_to_hash"
+      ],
+      "readonly": true,
+      "related": "move_id.string_to_hash",
+      "required": false,
+      "store": false,
+      "string": "String To Hash",
+      "type": "char"
+    },
+    "invoice_line_ids": {
+      "context": {},
+      "depends": [
+        "move_id.invoice_line_ids"
+      ],
+      "domain": [
+        [
+          "display_type",
+          "in",
+          [
+            "product",
+            "line_section",
+            "line_note"
+          ]
+        ]
+      ],
+      "readonly": false,
+      "related": "move_id.invoice_line_ids",
+      "relation": "account.move.line",
+      "required": false,
+      "store": false,
+      "string": "Invoice lines",
+      "type": "one2many"
+    },
+    "invoice_date": {
+      "depends": [
+        "move_id.invoice_date"
+      ],
+      "readonly": false,
+      "related": "move_id.invoice_date",
+      "required": false,
+      "store": false,
+      "string": "Invoice/Bill Date",
+      "type": "date"
+    },
+    "invoice_date_due": {
+      "depends": [
+        "move_id.invoice_date_due"
+      ],
+      "readonly": false,
+      "related": "move_id.invoice_date_due",
+      "required": false,
+      "store": false,
+      "string": "Due Date",
+      "type": "date"
+    },
+    "delivery_date": {
+      "depends": [
+        "move_id.delivery_date"
+      ],
+      "readonly": false,
+      "related": "move_id.delivery_date",
+      "required": false,
+      "store": false,
+      "string": "Delivery Date",
+      "type": "date"
+    },
+    "show_delivery_date": {
+      "depends": [
+        "move_id.show_delivery_date"
+      ],
+      "readonly": true,
+      "related": "move_id.show_delivery_date",
+      "required": false,
+      "store": false,
+      "string": "Show Delivery Date",
+      "type": "boolean"
+    },
+    "invoice_payment_term_id": {
+      "context": {},
+      "depends": [
+        "move_id.invoice_payment_term_id"
+      ],
+      "domain": [],
+      "readonly": false,
+      "related": "move_id.invoice_payment_term_id",
+      "relation": "account.payment.term",
+      "required": false,
+      "store": false,
+      "string": "Payment Terms",
+      "type": "many2one"
+    },
+    "needed_terms": {
+      "depends": [
+        "move_id.needed_terms"
+      ],
+      "readonly": true,
+      "related": "move_id.needed_terms",
+      "required": false,
+      "store": false,
+      "string": "Needed Terms",
+      "type": "binary"
+    },
+    "needed_terms_dirty": {
+      "depends": [
+        "move_id.needed_terms_dirty"
+      ],
+      "readonly": true,
+      "related": "move_id.needed_terms_dirty",
+      "required": false,
+      "store": false,
+      "string": "Needed Terms Dirty",
+      "type": "boolean"
+    },
+    "tax_calculation_rounding_method": {
+      "depends": [
+        "move_id.tax_calculation_rounding_method"
+      ],
+      "readonly": true,
+      "related": "move_id.tax_calculation_rounding_method",
+      "required": false,
+      "selection": [
+        [
+          "round_per_line",
+          "Round per Line"
+        ],
+        [
+          "round_globally",
+          "Round Globally"
+        ]
+      ],
+      "store": false,
+      "string": "Tax calculation rounding method",
+      "type": "selection"
+    },
+    "commercial_partner_id": {
+      "context": {},
+      "depends": [
+        "move_id.commercial_partner_id"
+      ],
+      "domain": [],
+      "readonly": true,
+      "related": "move_id.commercial_partner_id",
+      "relation": "res.partner",
+      "required": false,
+      "store": false,
+      "string": "Commercial Entity",
+      "type": "many2one"
+    },
+    "partner_shipping_id": {
+      "context": {},
+      "depends": [
+        "move_id.partner_shipping_id"
+      ],
+      "domain": [],
+      "help": "The delivery address will be used in the computation of the fiscal position.",
+      "readonly": false,
+      "related": "move_id.partner_shipping_id",
+      "relation": "res.partner",
+      "required": false,
+      "store": false,
+      "string": "Delivery Address",
+      "type": "many2one"
+    },
+    "partner_bank_id": {
+      "context": {},
+      "depends": [
+        "move_id.partner_bank_id"
+      ],
+      "domain": [],
+      "help": "Bank Account Number to which the invoice will be paid. A Company bank account if this is a Customer Invoice or Vendor Credit Note, otherwise a Partner bank account number.",
+      "readonly": false,
+      "related": "move_id.partner_bank_id",
+      "relation": "res.partner.bank",
+      "required": false,
+      "store": false,
+      "string": "Recipient Bank",
+      "type": "many2one"
+    },
+    "fiscal_position_id": {
+      "context": {},
+      "depends": [
+        "move_id.fiscal_position_id"
+      ],
+      "domain": [],
+      "help": "Fiscal positions are used to adapt taxes and accounts for particular customers or sales orders/invoices. The default value comes from the customer.",
+      "readonly": false,
+      "related": "move_id.fiscal_position_id",
+      "relation": "account.fiscal.position",
+      "required": false,
+      "store": false,
+      "string": "Fiscal Position",
+      "type": "many2one"
+    },
+    "payment_reference": {
+      "depends": [
+        "move_id.payment_reference"
+      ],
+      "help": "The payment reference to set on journal items.",
+      "readonly": false,
+      "related": "move_id.payment_reference",
+      "required": false,
+      "store": false,
+      "string": "Payment Reference",
+      "type": "char"
+    },
+    "display_qr_code": {
+      "depends": [
+        "move_id.display_qr_code"
+      ],
+      "readonly": true,
+      "related": "move_id.display_qr_code",
+      "required": false,
+      "store": false,
+      "string": "Display QR-code",
+      "type": "boolean"
+    },
+    "qr_code_method": {
+      "depends": [
+        "move_id.qr_code_method"
+      ],
+      "help": "Type of QR-code to be generated for the payment of this invoice, when printing it. If left blank, the first available and usable method will be used.",
+      "readonly": false,
+      "related": "move_id.qr_code_method",
+      "required": false,
+      "selection": [],
+      "store": false,
+      "string": "Payment QR-code",
+      "type": "selection"
+    },
+    "invoice_outstanding_credits_debits_widget": {
+      "depends": [
+        "move_id.invoice_outstanding_credits_debits_widget"
+      ],
+      "groups": "account.group_account_invoice,account.group_account_readonly",
+      "readonly": true,
+      "related": "move_id.invoice_outstanding_credits_debits_widget",
+      "required": false,
+      "store": false,
+      "string": "Invoice Outstanding Credits Debits Widget",
+      "type": "binary"
+    },
+    "invoice_has_outstanding": {
+      "depends": [
+        "move_id.invoice_has_outstanding"
+      ],
+      "groups": "account.group_account_invoice,account.group_account_readonly",
+      "readonly": true,
+      "related": "move_id.invoice_has_outstanding",
+      "required": false,
+      "store": false,
+      "string": "Invoice Has Outstanding",
+      "type": "boolean"
+    },
+    "invoice_payments_widget": {
+      "depends": [
+        "move_id.invoice_payments_widget"
+      ],
+      "groups": "account.group_account_invoice,account.group_account_readonly",
+      "readonly": true,
+      "related": "move_id.invoice_payments_widget",
+      "required": false,
+      "store": false,
+      "string": "Invoice Payments Widget",
+      "type": "binary"
+    },
+    "company_currency_id": {
+      "context": {},
+      "depends": [
+        "move_id.company_currency_id"
+      ],
+      "domain": [],
+      "readonly": true,
+      "related": "move_id.company_currency_id",
+      "relation": "res.currency",
+      "required": false,
+      "store": false,
+      "string": "Company Currency",
+      "type": "many2one"
+    },
+    "direction_sign": {
+      "depends": [
+        "move_id.direction_sign"
+      ],
+      "group_operator": "sum",
+      "help": "Multiplicator depending on the document type, to convert a price into a balance",
+      "readonly": true,
+      "related": "move_id.direction_sign",
+      "required": false,
+      "store": false,
+      "string": "Direction Sign",
+      "type": "integer"
+    },
+    "amount_untaxed": {
+      "depends": [
+        "move_id.amount_untaxed"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.amount_untaxed",
+      "required": false,
+      "store": false,
+      "string": "Untaxed Amount",
+      "type": "monetary"
+    },
+    "amount_tax": {
+      "depends": [
+        "move_id.amount_tax"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.amount_tax",
+      "required": false,
+      "store": false,
+      "string": "Tax",
+      "type": "monetary"
+    },
+    "amount_total": {
+      "depends": [
+        "move_id.amount_total"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.amount_total",
+      "required": false,
+      "store": false,
+      "string": "Total",
+      "type": "monetary"
+    },
+    "amount_untaxed_signed": {
+      "depends": [
+        "move_id.amount_untaxed_signed"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.amount_untaxed_signed",
+      "required": false,
+      "store": false,
+      "string": "Untaxed Amount Signed",
+      "type": "monetary"
+    },
+    "amount_tax_signed": {
+      "depends": [
+        "move_id.amount_tax_signed"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.amount_tax_signed",
+      "required": false,
+      "store": false,
+      "string": "Tax Signed",
+      "type": "monetary"
+    },
+    "amount_total_signed": {
+      "depends": [
+        "move_id.amount_total_signed"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.amount_total_signed",
+      "required": false,
+      "store": false,
+      "string": "Total Signed",
+      "type": "monetary"
+    },
+    "amount_total_in_currency_signed": {
+      "depends": [
+        "move_id.amount_total_in_currency_signed"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.amount_total_in_currency_signed",
+      "required": false,
+      "store": false,
+      "string": "Total in Currency Signed",
+      "type": "monetary"
+    },
+    "amount_residual_signed": {
+      "depends": [
+        "move_id.amount_residual_signed"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.amount_residual_signed",
+      "required": false,
+      "store": false,
+      "string": "Amount Due Signed",
+      "type": "monetary"
+    },
+    "tax_totals": {
+      "depends": [
+        "move_id.tax_totals"
+      ],
+      "help": "Edit Tax amounts if you encounter rounding issues.",
+      "readonly": false,
+      "related": "move_id.tax_totals",
+      "required": false,
+      "store": false,
+      "string": "Invoice Totals",
+      "type": "binary"
+    },
+    "payment_state": {
+      "depends": [
+        "move_id.payment_state"
+      ],
+      "readonly": true,
+      "related": "move_id.payment_state",
+      "required": false,
+      "selection": [
+        [
+          "not_paid",
+          "Not Paid"
+        ],
+        [
+          "in_payment",
+          "In Payment"
+        ],
+        [
+          "paid",
+          "Paid"
+        ],
+        [
+          "partial",
+          "Partially Paid"
+        ],
+        [
+          "reversed",
+          "Reversed"
+        ],
+        [
+          "invoicing_legacy",
+          "Invoicing App Legacy"
+        ]
+      ],
+      "store": false,
+      "string": "Payment Status",
+      "type": "selection"
+    },
+    "amount_total_words": {
+      "depends": [
+        "move_id.amount_total_words"
+      ],
+      "readonly": true,
+      "related": "move_id.amount_total_words",
+      "required": false,
+      "store": false,
+      "string": "Amount total in words",
+      "type": "char"
+    },
+    "reversed_entry_id": {
+      "context": {},
+      "depends": [
+        "move_id.reversed_entry_id"
+      ],
+      "domain": [],
+      "readonly": true,
+      "related": "move_id.reversed_entry_id",
+      "relation": "account.move",
+      "required": false,
+      "store": false,
+      "string": "Reversal of",
+      "type": "many2one"
+    },
+    "reversal_move_id": {
+      "context": {},
+      "depends": [
+        "move_id.reversal_move_id"
+      ],
+      "domain": [],
+      "readonly": false,
+      "related": "move_id.reversal_move_id",
+      "relation": "account.move",
+      "required": false,
+      "store": false,
+      "string": "Reversal Move",
+      "type": "one2many"
+    },
+    "invoice_vendor_bill_id": {
+      "context": {},
+      "depends": [
+        "move_id.invoice_vendor_bill_id"
+      ],
+      "domain": [],
+      "help": "Auto-complete from a past bill.",
+      "readonly": false,
+      "related": "move_id.invoice_vendor_bill_id",
+      "relation": "account.move",
+      "required": false,
+      "store": false,
+      "string": "Vendor Bill",
+      "type": "many2one"
+    },
+    "invoice_source_email": {
+      "depends": [
+        "move_id.invoice_source_email"
+      ],
+      "readonly": false,
+      "related": "move_id.invoice_source_email",
+      "required": false,
+      "store": false,
+      "string": "Source Email",
+      "type": "char"
+    },
+    "invoice_partner_display_name": {
+      "depends": [
+        "move_id.invoice_partner_display_name"
+      ],
+      "readonly": true,
+      "related": "move_id.invoice_partner_display_name",
+      "required": false,
+      "store": false,
+      "string": "Invoice Partner Display Name",
+      "type": "char"
+    },
+    "quick_edit_mode": {
+      "depends": [
+        "move_id.quick_edit_mode"
+      ],
+      "readonly": true,
+      "related": "move_id.quick_edit_mode",
+      "required": false,
+      "store": false,
+      "string": "Quick Edit Mode",
+      "type": "boolean"
+    },
+    "quick_edit_total_amount": {
+      "depends": [
+        "move_id.quick_edit_total_amount"
+      ],
+      "group_operator": "sum",
+      "help": "Use this field to encode the total amount of the invoice.\nOdoo will automatically create one invoice line with default values to match it.",
+      "readonly": false,
+      "related": "move_id.quick_edit_total_amount",
+      "required": false,
+      "store": false,
+      "string": "Total (Tax inc.)",
+      "type": "monetary"
+    },
+    "quick_encoding_vals": {
+      "depends": [
+        "move_id.quick_encoding_vals"
+      ],
+      "readonly": true,
+      "related": "move_id.quick_encoding_vals",
+      "required": false,
+      "store": false,
+      "string": "Quick Encoding Vals",
+      "type": "json"
+    },
+    "narration": {
+      "depends": [
+        "move_id.narration"
+      ],
+      "readonly": false,
+      "related": "move_id.narration",
+      "required": false,
+      "store": false,
+      "string": "Terms and Conditions",
+      "type": "html"
+    },
+    "is_move_sent": {
+      "depends": [
+        "move_id.is_move_sent"
+      ],
+      "help": "It indicates that the invoice/payment has been sent or the PDF has been generated.",
+      "readonly": true,
+      "related": "move_id.is_move_sent",
+      "required": false,
+      "store": false,
+      "string": "Is Move Sent",
+      "type": "boolean"
+    },
+    "is_being_sent": {
+      "depends": [
+        "move_id.is_being_sent"
+      ],
+      "help": "Is the move being sent asynchronously",
+      "readonly": true,
+      "related": "move_id.is_being_sent",
+      "required": false,
+      "store": false,
+      "string": "Is Being Sent",
+      "type": "boolean"
+    },
+    "invoice_user_id": {
+      "context": {},
+      "depends": [
+        "move_id.invoice_user_id"
+      ],
+      "domain": [],
+      "readonly": false,
+      "related": "move_id.invoice_user_id",
+      "relation": "res.users",
+      "required": false,
+      "store": false,
+      "string": "Salesperson",
+      "type": "many2one"
+    },
+    "user_id": {
+      "context": {},
+      "depends": [
+        "move_id.user_id"
+      ],
+      "domain": [],
+      "readonly": true,
+      "related": "move_id.user_id",
+      "relation": "res.users",
+      "required": false,
+      "store": false,
+      "string": "User",
+      "type": "many2one"
+    },
+    "invoice_origin": {
+      "depends": [
+        "move_id.invoice_origin"
+      ],
+      "help": "The document(s) that generated the invoice.",
+      "readonly": true,
+      "related": "move_id.invoice_origin",
+      "required": false,
+      "store": false,
+      "string": "Origin",
+      "type": "char"
+    },
+    "invoice_incoterm_id": {
+      "context": {},
+      "depends": [
+        "move_id.invoice_incoterm_id"
+      ],
+      "domain": [],
+      "help": "International Commercial Terms are a series of predefined commercial terms used in international transactions.",
+      "readonly": false,
+      "related": "move_id.invoice_incoterm_id",
+      "relation": "account.incoterms",
+      "required": false,
+      "store": false,
+      "string": "Tipo de Frete",
+      "type": "many2one"
+    },
+    "incoterm_location": {
+      "depends": [
+        "move_id.incoterm_location"
+      ],
+      "readonly": false,
+      "related": "move_id.incoterm_location",
+      "required": false,
+      "store": false,
+      "string": "Incoterm Location",
+      "type": "char"
+    },
+    "invoice_cash_rounding_id": {
+      "context": {},
+      "depends": [
+        "move_id.invoice_cash_rounding_id"
+      ],
+      "domain": [],
+      "help": "Defines the smallest coinage of the currency that can be used to pay by cash.",
+      "readonly": false,
+      "related": "move_id.invoice_cash_rounding_id",
+      "relation": "account.cash.rounding",
+      "required": false,
+      "store": false,
+      "string": "Cash Rounding Method",
+      "type": "many2one"
+    },
+    "send_and_print_values": {
+      "depends": [
+        "move_id.send_and_print_values"
+      ],
+      "readonly": false,
+      "related": "move_id.send_and_print_values",
+      "required": false,
+      "store": false,
+      "string": "Send And Print Values",
+      "type": "json"
+    },
+    "invoice_pdf_report_id": {
+      "context": {},
+      "depends": [
+        "move_id.invoice_pdf_report_id"
+      ],
+      "domain": [],
+      "readonly": true,
+      "related": "move_id.invoice_pdf_report_id",
+      "relation": "ir.attachment",
+      "required": false,
+      "store": false,
+      "string": "PDF Attachment",
+      "type": "many2one"
+    },
+    "invoice_pdf_report_file": {
+      "depends": [
+        "move_id.invoice_pdf_report_file"
+      ],
+      "readonly": false,
+      "related": "move_id.invoice_pdf_report_file",
+      "required": false,
+      "store": false,
+      "string": "PDF File",
+      "type": "binary"
+    },
+    "invoice_filter_type_domain": {
+      "depends": [
+        "move_id.invoice_filter_type_domain"
+      ],
+      "readonly": true,
+      "related": "move_id.invoice_filter_type_domain",
+      "required": false,
+      "store": false,
+      "string": "Invoice Filter Type Domain",
+      "type": "char"
+    },
+    "bank_partner_id": {
+      "context": {},
+      "depends": [
+        "move_id.bank_partner_id"
+      ],
+      "domain": [],
+      "help": "Technical field to get the domain on the bank",
+      "readonly": true,
+      "related": "move_id.bank_partner_id",
+      "relation": "res.partner",
+      "required": false,
+      "store": false,
+      "string": "Bank Partner",
+      "type": "many2one"
+    },
+    "tax_lock_date_message": {
+      "depends": [
+        "move_id.tax_lock_date_message"
+      ],
+      "readonly": true,
+      "related": "move_id.tax_lock_date_message",
+      "required": false,
+      "store": false,
+      "string": "Tax Lock Date Message",
+      "type": "char"
+    },
+    "display_inactive_currency_warning": {
+      "depends": [
+        "move_id.display_inactive_currency_warning"
+      ],
+      "readonly": true,
+      "related": "move_id.display_inactive_currency_warning",
+      "required": false,
+      "store": false,
+      "string": "Display Inactive Currency Warning",
+      "type": "boolean"
+    },
+    "tax_country_id": {
+      "context": {},
+      "depends": [
+        "move_id.tax_country_id"
+      ],
+      "domain": [],
+      "readonly": true,
+      "related": "move_id.tax_country_id",
+      "relation": "res.country",
+      "required": false,
+      "store": false,
+      "string": "Tax Country",
+      "type": "many2one"
+    },
+    "tax_country_code": {
+      "depends": [
+        "move_id.tax_country_code"
+      ],
+      "readonly": true,
+      "related": "move_id.tax_country_code",
+      "required": false,
+      "store": false,
+      "string": "Tax Country Code",
+      "type": "char"
+    },
+    "has_reconciled_entries": {
+      "depends": [
+        "move_id.has_reconciled_entries"
+      ],
+      "readonly": true,
+      "related": "move_id.has_reconciled_entries",
+      "required": false,
+      "store": false,
+      "string": "Has Reconciled Entries",
+      "type": "boolean"
+    },
+    "show_reset_to_draft_button": {
+      "depends": [
+        "move_id.show_reset_to_draft_button"
+      ],
+      "readonly": true,
+      "related": "move_id.show_reset_to_draft_button",
+      "required": false,
+      "store": false,
+      "string": "Show Reset To Draft Button",
+      "type": "boolean"
+    },
+    "partner_credit_warning": {
+      "depends": [
+        "move_id.partner_credit_warning"
+      ],
+      "groups": "account.group_account_invoice,account.group_account_readonly",
+      "readonly": true,
+      "related": "move_id.partner_credit_warning",
+      "required": false,
+      "store": false,
+      "string": "Partner Credit Warning",
+      "type": "text"
+    },
+    "partner_credit": {
+      "depends": [
+        "move_id.partner_credit"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.partner_credit",
+      "required": false,
+      "store": false,
+      "string": "Partner Credit",
+      "type": "monetary"
+    },
+    "duplicated_ref_ids": {
+      "context": {},
+      "depends": [
+        "move_id.duplicated_ref_ids"
+      ],
+      "domain": [],
+      "readonly": true,
+      "related": "move_id.duplicated_ref_ids",
+      "relation": "account.move",
+      "required": false,
+      "store": false,
+      "string": "Duplicated Ref",
+      "type": "many2many"
+    },
+    "need_cancel_request": {
+      "depends": [
+        "move_id.need_cancel_request"
+      ],
+      "readonly": true,
+      "related": "move_id.need_cancel_request",
+      "required": false,
+      "store": false,
+      "string": "Need Cancel Request",
+      "type": "boolean"
+    },
+    "show_update_fpos": {
+      "depends": [
+        "move_id.show_update_fpos"
+      ],
+      "readonly": false,
+      "related": "move_id.show_update_fpos",
+      "required": false,
+      "store": false,
+      "string": "Has Fiscal Position Changed",
+      "type": "boolean"
+    },
+    "payment_term_details": {
+      "depends": [
+        "move_id.payment_term_details"
+      ],
+      "readonly": true,
+      "related": "move_id.payment_term_details",
+      "required": false,
+      "store": false,
+      "string": "Payment Term Details",
+      "type": "binary"
+    },
+    "show_payment_term_details": {
+      "depends": [
+        "move_id.show_payment_term_details"
+      ],
+      "readonly": true,
+      "related": "move_id.show_payment_term_details",
+      "required": false,
+      "store": false,
+      "string": "Show Payment Term Details",
+      "type": "boolean"
+    },
+    "show_discount_details": {
+      "depends": [
+        "move_id.show_discount_details"
+      ],
+      "readonly": true,
+      "related": "move_id.show_discount_details",
+      "required": false,
+      "store": false,
+      "string": "Show Discount Details",
+      "type": "boolean"
+    },
+    "statement_line_ids": {
+      "context": {},
+      "depends": [
+        "move_id.statement_line_ids"
+      ],
+      "domain": [],
+      "readonly": false,
+      "related": "move_id.statement_line_ids",
+      "relation": "account.bank.statement.line",
+      "required": false,
+      "store": false,
+      "string": "Statements",
+      "type": "one2many"
+    },
+    "payment_state_before_switch": {
+      "depends": [
+        "move_id.payment_state_before_switch"
+      ],
+      "readonly": false,
+      "related": "move_id.payment_state_before_switch",
+      "required": false,
+      "store": false,
+      "string": "Payment State Before Switch",
+      "type": "char"
+    },
+    "deferred_move_ids": {
+      "context": {},
+      "depends": [
+        "move_id.deferred_move_ids"
+      ],
+      "domain": [],
+      "help": "The deferred entries created by this invoice",
+      "readonly": false,
+      "related": "move_id.deferred_move_ids",
+      "relation": "account.move",
+      "required": false,
+      "store": false,
+      "string": "Deferred Entries",
+      "type": "many2many"
+    },
+    "deferred_original_move_ids": {
+      "context": {},
+      "depends": [
+        "move_id.deferred_original_move_ids"
+      ],
+      "domain": [],
+      "help": "The original invoices that created the deferred entries",
+      "readonly": false,
+      "related": "move_id.deferred_original_move_ids",
+      "relation": "account.move",
+      "required": false,
+      "store": false,
+      "string": "Original Invoices",
+      "type": "many2many"
+    },
+    "deferred_entry_type": {
+      "depends": [
+        "move_id.deferred_entry_type"
+      ],
+      "readonly": true,
+      "related": "move_id.deferred_entry_type",
+      "required": false,
+      "selection": [
+        [
+          "expense",
+          "Deferred Expense"
+        ],
+        [
+          "revenue",
+          "Deferred Revenue"
+        ]
+      ],
+      "store": false,
+      "string": "Deferred Entry Type",
+      "type": "selection"
+    },
+    "edi_document_ids": {
+      "context": {},
+      "depends": [
+        "move_id.edi_document_ids"
+      ],
+      "domain": [],
+      "readonly": false,
+      "related": "move_id.edi_document_ids",
+      "relation": "account.edi.document",
+      "required": false,
+      "store": false,
+      "string": "Edi Document",
+      "type": "one2many"
+    },
+    "edi_state": {
+      "depends": [
+        "move_id.edi_state"
+      ],
+      "help": "The aggregated state of all the EDIs with web-service of this move",
+      "readonly": true,
+      "related": "move_id.edi_state",
+      "required": false,
+      "selection": [
+        [
+          "to_send",
+          "To Send"
+        ],
+        [
+          "sent",
+          "Sent"
+        ],
+        [
+          "to_cancel",
+          "To Cancel"
+        ],
+        [
+          "cancelled",
+          "Cancelled"
+        ]
+      ],
+      "store": false,
+      "string": "Electronic invoicing",
+      "type": "selection"
+    },
+    "edi_error_count": {
+      "depends": [
+        "move_id.edi_error_count"
+      ],
+      "group_operator": "sum",
+      "help": "How many EDIs are in error for this move?",
+      "readonly": true,
+      "related": "move_id.edi_error_count",
+      "required": false,
+      "store": false,
+      "string": "Edi Error Count",
+      "type": "integer"
+    },
+    "edi_blocking_level": {
+      "depends": [
+        "move_id.edi_blocking_level"
+      ],
+      "readonly": true,
+      "related": "move_id.edi_blocking_level",
+      "required": false,
+      "selection": [
+        [
+          "info",
+          "Info"
+        ],
+        [
+          "warning",
+          "Warning"
+        ],
+        [
+          "error",
+          "Error"
+        ]
+      ],
+      "store": false,
+      "string": "Edi Blocking Level",
+      "type": "selection"
+    },
+    "edi_error_message": {
+      "depends": [
+        "move_id.edi_error_message"
+      ],
+      "readonly": true,
+      "related": "move_id.edi_error_message",
+      "required": false,
+      "store": false,
+      "string": "Edi Error Message",
+      "type": "html"
+    },
+    "edi_web_services_to_process": {
+      "depends": [
+        "move_id.edi_web_services_to_process"
+      ],
+      "readonly": true,
+      "related": "move_id.edi_web_services_to_process",
+      "required": false,
+      "store": false,
+      "string": "Edi Web Services To Process",
+      "type": "text"
+    },
+    "edi_show_cancel_button": {
+      "depends": [
+        "move_id.edi_show_cancel_button"
+      ],
+      "readonly": true,
+      "related": "move_id.edi_show_cancel_button",
+      "required": false,
+      "store": false,
+      "string": "Edi Show Cancel Button",
+      "type": "boolean"
+    },
+    "edi_show_abandon_cancel_button": {
+      "depends": [
+        "move_id.edi_show_abandon_cancel_button"
+      ],
+      "readonly": true,
+      "related": "move_id.edi_show_abandon_cancel_button",
+      "required": false,
+      "store": false,
+      "string": "Edi Show Abandon Cancel Button",
+      "type": "boolean"
+    },
+    "edi_show_force_cancel_button": {
+      "depends": [
+        "move_id.edi_show_force_cancel_button"
+      ],
+      "readonly": true,
+      "related": "move_id.edi_show_force_cancel_button",
+      "required": false,
+      "store": false,
+      "string": "Edi Show Force Cancel Button",
+      "type": "boolean"
+    },
+    "ubl_cii_xml_id": {
+      "context": {},
+      "depends": [
+        "move_id.ubl_cii_xml_id"
+      ],
+      "domain": [],
+      "readonly": true,
+      "related": "move_id.ubl_cii_xml_id",
+      "relation": "ir.attachment",
+      "required": false,
+      "store": false,
+      "string": "Attachment",
+      "type": "many2one"
+    },
+    "ubl_cii_xml_file": {
+      "depends": [
+        "move_id.ubl_cii_xml_file"
+      ],
+      "readonly": false,
+      "related": "move_id.ubl_cii_xml_file",
+      "required": false,
+      "store": false,
+      "string": "UBL/CII File",
+      "type": "binary"
+    },
+    "auto_generated": {
+      "depends": [
+        "move_id.auto_generated"
+      ],
+      "readonly": false,
+      "related": "move_id.auto_generated",
+      "required": false,
+      "store": false,
+      "string": "Auto Generated Document",
+      "type": "boolean"
+    },
+    "auto_invoice_id": {
+      "context": {},
+      "depends": [
+        "move_id.auto_invoice_id"
+      ],
+      "domain": [],
+      "readonly": true,
+      "related": "move_id.auto_invoice_id",
+      "relation": "account.move",
+      "required": false,
+      "store": false,
+      "string": "Source Invoice",
+      "type": "many2one"
+    },
+    "extract_state": {
+      "depends": [
+        "move_id.extract_state"
+      ],
+      "readonly": false,
+      "related": "move_id.extract_state",
+      "required": true,
+      "selection": [
+        [
+          "no_extract_requested",
+          "No extract requested"
+        ],
+        [
+          "not_enough_credit",
+          "Not enough credits"
+        ],
+        [
+          "error_status",
+          "An error occurred"
+        ],
+        [
+          "waiting_extraction",
+          "Waiting extraction"
+        ],
+        [
+          "extract_not_ready",
+          "waiting extraction, but it is not ready"
+        ],
+        [
+          "waiting_validation",
+          "Waiting validation"
+        ],
+        [
+          "to_validate",
+          "To validate"
+        ],
+        [
+          "done",
+          "Completed flow"
+        ]
+      ],
+      "store": false,
+      "string": "Extract state",
+      "type": "selection"
+    },
+    "extract_status": {
+      "depends": [
+        "move_id.extract_status"
+      ],
+      "readonly": false,
+      "related": "move_id.extract_status",
+      "required": false,
+      "store": false,
+      "string": "Extract status",
+      "type": "char"
+    },
+    "extract_error_message": {
+      "depends": [
+        "move_id.extract_error_message"
+      ],
+      "readonly": true,
+      "related": "move_id.extract_error_message",
+      "required": false,
+      "store": false,
+      "string": "Error message",
+      "type": "text"
+    },
+    "extract_document_uuid": {
+      "depends": [
+        "move_id.extract_document_uuid"
+      ],
+      "readonly": true,
+      "related": "move_id.extract_document_uuid",
+      "required": false,
+      "store": false,
+      "string": "ID of the request to IAP-OCR",
+      "type": "char"
+    },
+    "extract_can_show_send_button": {
+      "depends": [
+        "move_id.extract_can_show_send_button"
+      ],
+      "readonly": true,
+      "related": "move_id.extract_can_show_send_button",
+      "required": false,
+      "store": false,
+      "string": "Can show the ocr send button",
+      "type": "boolean"
+    },
+    "is_in_extractable_state": {
+      "depends": [
+        "move_id.is_in_extractable_state"
+      ],
+      "readonly": true,
+      "related": "move_id.is_in_extractable_state",
+      "required": false,
+      "store": false,
+      "string": "Is In Extractable State",
+      "type": "boolean"
+    },
+    "extract_state_processed": {
+      "depends": [
+        "move_id.extract_state_processed"
+      ],
+      "readonly": true,
+      "related": "move_id.extract_state_processed",
+      "required": false,
+      "store": false,
+      "string": "Extract State Processed",
+      "type": "boolean"
+    },
+    "extract_word_ids": {
+      "context": {},
+      "depends": [
+        "move_id.extract_word_ids"
+      ],
+      "domain": [],
+      "readonly": false,
+      "related": "move_id.extract_word_ids",
+      "relation": "account.invoice_extract.words",
+      "required": false,
+      "store": false,
+      "string": "Extract Word",
+      "type": "one2many"
+    },
+    "extract_attachment_id": {
+      "context": {},
+      "depends": [
+        "move_id.extract_attachment_id"
+      ],
+      "domain": [],
+      "readonly": true,
+      "related": "move_id.extract_attachment_id",
+      "relation": "ir.attachment",
+      "required": false,
+      "store": false,
+      "string": "Extract Attachment",
+      "type": "many2one"
+    },
+    "extract_can_show_banners": {
+      "depends": [
+        "move_id.extract_can_show_banners"
+      ],
+      "readonly": true,
+      "related": "move_id.extract_can_show_banners",
+      "required": false,
+      "store": false,
+      "string": "Can show the ocr banners",
+      "type": "boolean"
+    },
+    "extract_detected_layout": {
+      "depends": [
+        "move_id.extract_detected_layout"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.extract_detected_layout",
+      "required": false,
+      "store": false,
+      "string": "Extract Detected Layout Id",
+      "type": "integer"
+    },
+    "extract_partner_name": {
+      "depends": [
+        "move_id.extract_partner_name"
+      ],
+      "readonly": true,
+      "related": "move_id.extract_partner_name",
+      "required": false,
+      "store": false,
+      "string": "Extract Detected Partner Name",
+      "type": "char"
+    },
+    "transaction_ids": {
+      "context": {},
+      "depends": [
+        "move_id.transaction_ids"
+      ],
+      "domain": [],
+      "readonly": true,
+      "related": "move_id.transaction_ids",
+      "relation": "payment.transaction",
+      "required": false,
+      "store": false,
+      "string": "Transactions",
+      "type": "many2many"
+    },
+    "authorized_transaction_ids": {
+      "context": {},
+      "depends": [
+        "move_id.authorized_transaction_ids"
+      ],
+      "domain": [],
+      "readonly": true,
+      "related": "move_id.authorized_transaction_ids",
+      "relation": "payment.transaction",
+      "required": false,
+      "store": false,
+      "string": "Authorized Transactions",
+      "type": "many2many"
+    },
+    "amount_paid": {
+      "depends": [
+        "move_id.amount_paid"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.amount_paid",
+      "required": false,
+      "store": false,
+      "string": "Amount paid",
+      "type": "monetary"
+    },
+    "purchase_vendor_bill_id": {
+      "context": {},
+      "depends": [
+        "move_id.purchase_vendor_bill_id"
+      ],
+      "domain": [],
+      "help": "Auto-complete from a past bill / purchase order.",
+      "readonly": false,
+      "related": "move_id.purchase_vendor_bill_id",
+      "relation": "purchase.bill.union",
+      "required": false,
+      "store": false,
+      "string": "Auto-complete",
+      "type": "many2one"
+    },
+    "purchase_id": {
+      "context": {},
+      "depends": [
+        "move_id.purchase_id"
+      ],
+      "domain": [],
+      "help": "Auto-complete from a past purchase order.",
+      "readonly": false,
+      "related": "move_id.purchase_id",
+      "relation": "purchase.order",
+      "required": false,
+      "store": false,
+      "string": "Purchase Order",
+      "type": "many2one"
+    },
+    "purchase_order_count": {
+      "depends": [
+        "move_id.purchase_order_count"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.purchase_order_count",
+      "required": false,
+      "store": false,
+      "string": "Purchase Order Count",
+      "type": "integer"
+    },
+    "stock_move_id": {
+      "context": {},
+      "depends": [
+        "move_id.stock_move_id"
+      ],
+      "domain": [],
+      "readonly": false,
+      "related": "move_id.stock_move_id",
+      "relation": "stock.move",
+      "required": false,
+      "store": false,
+      "string": "Stock Move",
+      "type": "many2one"
+    },
+    "stock_valuation_layer_ids": {
+      "context": {},
+      "depends": [
+        "move_id.stock_valuation_layer_ids"
+      ],
+      "domain": [],
+      "readonly": false,
+      "related": "move_id.stock_valuation_layer_ids",
+      "relation": "stock.valuation.layer",
+      "required": false,
+      "store": false,
+      "string": "Stock Valuation Layer",
+      "type": "one2many"
+    },
+    "release_to_pay": {
+      "depends": [
+        "move_id.release_to_pay"
+      ],
+      "help": "This field can take the following values :\n  * Yes: you should pay the bill, you have received the products\n  * No, you should not pay the bill, you have not received the products\n  * Exception, there is a difference between received and billed quantities\nThis status is defined automatically, but you can force it by ticking the 'Force Status' checkbox.",
+      "readonly": true,
+      "related": "move_id.release_to_pay",
+      "required": false,
+      "selection": [
+        [
+          "yes",
+          "Yes"
+        ],
+        [
+          "no",
+          "No"
+        ],
+        [
+          "exception",
+          "Exception"
+        ]
+      ],
+      "store": false,
+      "string": "Release To Pay",
+      "type": "selection"
+    },
+    "release_to_pay_manual": {
+      "depends": [
+        "move_id.release_to_pay_manual"
+      ],
+      "help": "  * Yes: you should pay the bill, you have received the products\n  * No, you should not pay the bill, you have not received the products\n  * Exception, there is a difference between received and billed quantities\nThis status is defined automatically, but you can force it by ticking the 'Force Status' checkbox.",
+      "readonly": false,
+      "related": "move_id.release_to_pay_manual",
+      "required": false,
+      "selection": [
+        [
+          "yes",
+          "Yes"
+        ],
+        [
+          "no",
+          "No"
+        ],
+        [
+          "exception",
+          "Exception"
+        ]
+      ],
+      "store": false,
+      "string": "Should Be Paid",
+      "type": "selection"
+    },
+    "force_release_to_pay": {
+      "depends": [
+        "move_id.force_release_to_pay"
+      ],
+      "help": "Indicates whether the 'Should Be Paid' status is defined automatically or manually.",
+      "readonly": false,
+      "related": "move_id.force_release_to_pay",
+      "required": false,
+      "store": false,
+      "string": "Force Status",
+      "type": "boolean"
+    },
+    "transfer_model_id": {
+      "context": {},
+      "depends": [
+        "move_id.transfer_model_id"
+      ],
+      "domain": [],
+      "readonly": false,
+      "related": "move_id.transfer_model_id",
+      "relation": "account.transfer.model",
+      "required": false,
+      "store": false,
+      "string": "Originating Model",
+      "type": "many2one"
+    },
+    "tax_closing_end_date": {
+      "depends": [
+        "move_id.tax_closing_end_date"
+      ],
+      "readonly": false,
+      "related": "move_id.tax_closing_end_date",
+      "required": false,
+      "store": false,
+      "string": "Tax Closing End Date",
+      "type": "date"
+    },
+    "tax_report_control_error": {
+      "depends": [
+        "move_id.tax_report_control_error"
+      ],
+      "readonly": false,
+      "related": "move_id.tax_report_control_error",
+      "required": false,
+      "store": false,
+      "string": "Tax Report Control Error",
+      "type": "boolean"
+    },
+    "tax_closing_alert": {
+      "depends": [
+        "move_id.tax_closing_alert"
+      ],
+      "readonly": true,
+      "related": "move_id.tax_closing_alert",
+      "required": false,
+      "store": false,
+      "string": "Tax Closing Alert",
+      "type": "boolean"
+    },
+    "tax_closing_show_multi_closing_warning": {
+      "depends": [
+        "move_id.tax_closing_show_multi_closing_warning"
+      ],
+      "readonly": true,
+      "related": "move_id.tax_closing_show_multi_closing_warning",
+      "required": false,
+      "store": false,
+      "string": "Tax Closing Show Multi Closing Warning",
+      "type": "boolean"
+    },
+    "team_id": {
+      "context": {},
+      "depends": [
+        "move_id.team_id"
+      ],
+      "domain": "['|', ('company_id', '=', False), ('company_id', '=', company_id)]",
+      "readonly": false,
+      "related": "move_id.team_id",
+      "relation": "crm.team",
+      "required": false,
+      "store": false,
+      "string": "Sales Team",
+      "type": "many2one"
+    },
+    "sale_order_count": {
+      "depends": [
+        "move_id.sale_order_count"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.sale_order_count",
+      "required": false,
+      "store": false,
+      "string": "Sale Order Count",
+      "type": "integer"
+    },
+    "asset_id": {
+      "context": {},
+      "depends": [
+        "move_id.asset_id"
+      ],
+      "domain": "[('company_id', '=', company_id)]",
+      "readonly": false,
+      "related": "move_id.asset_id",
+      "relation": "account.asset",
+      "required": false,
+      "store": false,
+      "string": "Asset",
+      "type": "many2one"
+    },
+    "asset_remaining_value": {
+      "depends": [
+        "move_id.asset_remaining_value"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.asset_remaining_value",
+      "required": false,
+      "store": false,
+      "string": "Depreciable Value",
+      "type": "monetary"
+    },
+    "asset_depreciated_value": {
+      "depends": [
+        "move_id.asset_depreciated_value"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.asset_depreciated_value",
+      "required": false,
+      "store": false,
+      "string": "Cumulative Depreciation",
+      "type": "monetary"
+    },
+    "asset_value_change": {
+      "depends": [
+        "move_id.asset_value_change"
+      ],
+      "readonly": false,
+      "related": "move_id.asset_value_change",
+      "required": false,
+      "store": false,
+      "string": "Asset Value Change",
+      "type": "boolean"
+    },
+    "asset_number_days": {
+      "depends": [
+        "move_id.asset_number_days"
+      ],
+      "group_operator": "sum",
+      "readonly": false,
+      "related": "move_id.asset_number_days",
+      "required": false,
+      "store": false,
+      "string": "Number of days",
+      "type": "integer"
+    },
+    "asset_depreciation_beginning_date": {
+      "depends": [
+        "move_id.asset_depreciation_beginning_date"
+      ],
+      "readonly": false,
+      "related": "move_id.asset_depreciation_beginning_date",
+      "required": false,
+      "store": false,
+      "string": "Date of the beginning of the depreciation",
+      "type": "date"
+    },
+    "depreciation_value": {
+      "depends": [
+        "move_id.depreciation_value"
+      ],
+      "group_operator": "sum",
+      "readonly": false,
+      "related": "move_id.depreciation_value",
+      "required": false,
+      "store": false,
+      "string": "Depreciation",
+      "type": "monetary"
+    },
+    "asset_ids": {
+      "context": {},
+      "depends": [
+        "move_id.asset_ids"
+      ],
+      "domain": [],
+      "readonly": true,
+      "related": "move_id.asset_ids",
+      "relation": "account.asset",
+      "required": false,
+      "store": false,
+      "string": "Assets",
+      "type": "one2many"
+    },
+    "asset_id_display_name": {
+      "depends": [
+        "move_id.asset_id_display_name"
+      ],
+      "readonly": true,
+      "related": "move_id.asset_id_display_name",
+      "required": false,
+      "store": false,
+      "string": "Asset Id Display Name",
+      "type": "char"
+    },
+    "count_asset": {
+      "depends": [
+        "move_id.count_asset"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.count_asset",
+      "required": false,
+      "store": false,
+      "string": "Count Asset",
+      "type": "integer"
+    },
+    "draft_asset_exists": {
+      "depends": [
+        "move_id.draft_asset_exists"
+      ],
+      "readonly": true,
+      "related": "move_id.draft_asset_exists",
+      "required": false,
+      "store": false,
+      "string": "Draft Asset Exists",
+      "type": "boolean"
+    },
+    "suspense_statement_line_id": {
+      "context": {},
+      "depends": [
+        "move_id.suspense_statement_line_id"
+      ],
+      "domain": [],
+      "readonly": false,
+      "related": "move_id.suspense_statement_line_id",
+      "relation": "account.bank.statement.line",
+      "required": false,
+      "store": false,
+      "string": "Request document from a bank statement line",
+      "type": "many2one"
+    },
+    "landed_costs_ids": {
+      "context": {},
+      "depends": [
+        "move_id.landed_costs_ids"
+      ],
+      "domain": [],
+      "readonly": false,
+      "related": "move_id.landed_costs_ids",
+      "relation": "stock.landed.cost",
+      "required": false,
+      "store": false,
+      "string": "Landed Costs",
+      "type": "one2many"
+    },
+    "landed_costs_visible": {
+      "depends": [
+        "move_id.landed_costs_visible"
+      ],
+      "readonly": true,
+      "related": "move_id.landed_costs_visible",
+      "required": false,
+      "store": false,
+      "string": "Landed Costs Visible",
+      "type": "boolean"
+    },
+    "partner_contact_id": {
+      "context": {},
+      "depends": [
+        "move_id.partner_contact_id"
+      ],
+      "domain": "['|', ('company_id', '=', False), ('company_id', 'parent_of', company_id)]",
+      "readonly": true,
+      "related": "move_id.partner_contact_id",
+      "relation": "res.partner",
+      "required": false,
+      "store": false,
+      "string": "Contato",
+      "type": "many2one"
+    },
+    "partner_invoice_id": {
+      "context": {},
+      "depends": [
+        "move_id.partner_invoice_id"
+      ],
+      "domain": "['|', ('company_id', '=', False), ('company_id', 'parent_of', company_id)]",
+      "readonly": true,
+      "related": "move_id.partner_invoice_id",
+      "relation": "res.partner",
+      "required": false,
+      "store": false,
+      "string": "Endereço de Cobrança",
+      "type": "many2one"
+    },
+    "l10n_br_data_saida": {
+      "depends": [
+        "move_id.l10n_br_data_saida"
+      ],
+      "readonly": false,
+      "related": "move_id.l10n_br_data_saida",
+      "required": false,
+      "store": false,
+      "string": "Data/Hora de Saída",
+      "type": "datetime"
+    },
+    "l10n_br_show_nfe_btn": {
+      "depends": [
+        "move_id.l10n_br_show_nfe_btn"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_show_nfe_btn",
+      "required": false,
+      "store": false,
+      "string": "Mostrar botão NF-e",
+      "type": "boolean"
+    },
+    "l10n_br_numero_nota_fiscal": {
+      "depends": [
+        "move_id.l10n_br_numero_nota_fiscal"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_numero_nota_fiscal",
+      "required": false,
+      "store": false,
+      "string": "Número da Nota Fiscal",
+      "type": "char"
+    },
+    "l10n_br_numero_nf": {
+      "depends": [
+        "move_id.l10n_br_numero_nf"
+      ],
+      "group_operator": "sum",
+      "readonly": false,
+      "related": "move_id.l10n_br_numero_nf",
+      "required": false,
+      "store": false,
+      "string": "Número da Nota Fiscal de Mercadoria",
+      "type": "integer"
+    },
+    "l10n_br_numero_nfse": {
+      "depends": [
+        "move_id.l10n_br_numero_nfse"
+      ],
+      "readonly": false,
+      "related": "move_id.l10n_br_numero_nfse",
+      "required": false,
+      "store": false,
+      "string": "Número da Nota Fiscal de Serviço",
+      "type": "char"
+    },
+    "l10n_br_numero_nfce": {
+      "depends": [
+        "move_id.l10n_br_numero_nfce"
+      ],
+      "readonly": false,
+      "related": "move_id.l10n_br_numero_nfce",
+      "required": false,
+      "store": false,
+      "string": "Número da Nota Fiscal Eletrônica ao Consumidor",
+      "type": "char"
+    },
+    "l10n_br_numero_rps": {
+      "depends": [
+        "move_id.l10n_br_numero_rps"
+      ],
+      "group_operator": "sum",
+      "readonly": false,
+      "related": "move_id.l10n_br_numero_rps",
+      "required": false,
+      "store": false,
+      "string": "Número RPS",
+      "type": "integer"
+    },
+    "l10n_br_serie_nf": {
+      "depends": [
+        "move_id.l10n_br_serie_nf"
+      ],
+      "readonly": false,
+      "related": "move_id.l10n_br_serie_nf",
+      "required": false,
+      "store": false,
+      "string": "Série da Nota Fiscal",
+      "type": "char"
+    },
+    "l10n_br_tipo_documento": {
+      "depends": [
+        "move_id.l10n_br_tipo_documento"
+      ],
+      "readonly": false,
+      "related": "move_id.l10n_br_tipo_documento",
+      "required": false,
+      "selection": [
+        [
+          "NFS",
+          "Nota Fiscal de Serviços Instituída por Municípios"
+        ],
+        [
+          "NFSE",
+          "Nota Fiscal de Serviços Eletrônica - NFS-e"
+        ],
+        [
+          "NDS",
+          "Nota de Débito de Serviços"
+        ],
+        [
+          "FAT",
+          "Fatura"
+        ],
+        [
+          "ND",
+          "Nota de Débito"
+        ],
+        [
+          "01",
+          "Nota Fiscal"
+        ],
+        [
+          "1B",
+          "Nota Fiscal Avulsa"
+        ],
+        [
+          "02",
+          "Nota Fiscal de Venda a Consumidor"
+        ],
+        [
+          "2D",
+          "Cupom Fiscal"
+        ],
+        [
+          "2E",
+          "Cupom Fiscal Bilhete de Passagem"
+        ],
+        [
+          "04",
+          "Nota Fiscal de Produtor"
+        ],
+        [
+          "06",
+          "Nota Fiscal/Conta de Energia Elétrica"
+        ],
+        [
+          "07",
+          "Nota Fiscal de Serviço de Transporte"
+        ],
+        [
+          "08",
+          "Conhecimento de Transporte Rodoviário de Cargas"
+        ],
+        [
+          "8B",
+          "Conhecimento de Transporte de Cargas Avulso"
+        ],
+        [
+          "09",
+          "Conhecimento de Transporte Aquaviário de Cargas"
+        ],
+        [
+          "10",
+          "Conhecimento Aéreo"
+        ],
+        [
+          "11",
+          "Conhecimento de Transporte Ferroviário de Cargas"
+        ],
+        [
+          "13",
+          "Bilhete de Passagem Rodoviário"
+        ],
+        [
+          "14",
+          "Bilhete de Passagem Aquaviário"
+        ],
+        [
+          "15",
+          "Bilhete de Passagem e Nota de Bagagem"
+        ],
+        [
+          "16",
+          "Bilhete de Passagem Ferroviário"
+        ],
+        [
+          "18",
+          "Resumo de Movimento Diário"
+        ],
+        [
+          "21",
+          "Nota Fiscal de Serviço de Comunicação"
+        ],
+        [
+          "22",
+          "Nota Fiscal de Serviço de Telecomunicação"
+        ],
+        [
+          "26",
+          "Conhecimento de Transporte Multimodal de Cargas"
+        ],
+        [
+          "27",
+          "Nota Fiscal De Transporte Ferroviário De Carga"
+        ],
+        [
+          "28",
+          "Nota Fiscal/Conta de Fornecimento de Gás Canalizado"
+        ],
+        [
+          "29",
+          "Nota Fiscal/Conta de Fornecimento de Água Canalizada"
+        ],
+        [
+          "55",
+          "Nota Fiscal Eletrônica (NF-e)"
+        ],
+        [
+          "57",
+          "Conhecimento de Transporte Eletrônico (CT-e)"
+        ],
+        [
+          "59",
+          "Cupom Fiscal Eletrônico (CF-e-SAT)"
+        ],
+        [
+          "60",
+          "Cupom Fiscal Eletrônico (CF-e-ECF)"
+        ],
+        [
+          "63",
+          "Bilhete de Passagem Eletrônico (BP-e)"
+        ],
+        [
+          "65",
+          "Nota Fiscal Eletrônica ao Consumidor Final (NFC-e)"
+        ],
+        [
+          "66",
+          "Nota Fiscal de Energia Elétrica Eletrônica - NF3e"
+        ],
+        [
+          "67",
+          "Conhecimento de Transporte Eletrônico (CT-e OS)"
+        ]
+      ],
+      "store": false,
+      "string": "Tipo Documento Fiscal",
+      "type": "selection"
+    },
+    "l10n_br_chave_nf": {
+      "depends": [
+        "move_id.l10n_br_chave_nf"
+      ],
+      "readonly": false,
+      "related": "move_id.l10n_br_chave_nf",
+      "required": false,
+      "store": false,
+      "string": "Chave da Nota Fiscal",
+      "type": "char"
+    },
+    "l10n_br_cstat_nf": {
+      "depends": [
+        "move_id.l10n_br_cstat_nf"
+      ],
+      "readonly": false,
+      "related": "move_id.l10n_br_cstat_nf",
+      "required": false,
+      "store": false,
+      "string": "Status da Nota Fiscal",
+      "type": "char"
+    },
+    "l10n_br_xmotivo_nf": {
+      "depends": [
+        "move_id.l10n_br_xmotivo_nf"
+      ],
+      "readonly": false,
+      "related": "move_id.l10n_br_xmotivo_nf",
+      "required": false,
+      "store": false,
+      "string": "Situação da Nota Fiscal",
+      "type": "char"
+    },
+    "l10n_br_sequencia_evento": {
+      "depends": [
+        "move_id.l10n_br_sequencia_evento"
+      ],
+      "group_operator": "sum",
+      "readonly": false,
+      "related": "move_id.l10n_br_sequencia_evento",
+      "required": false,
+      "store": false,
+      "string": "Sequencia Evento NF-e",
+      "type": "integer"
+    },
+    "simples_nacional": {
+      "depends": [
+        "move_id.simples_nacional"
+      ],
+      "readonly": false,
+      "related": "move_id.simples_nacional",
+      "required": false,
+      "store": false,
+      "string": "Emitente Simples Nacional",
+      "type": "boolean"
+    },
+    "l10n_br_correcao": {
+      "depends": [
+        "move_id.l10n_br_correcao"
+      ],
+      "readonly": false,
+      "related": "move_id.l10n_br_correcao",
+      "required": false,
+      "store": false,
+      "string": "Correção",
+      "type": "text"
+    },
+    "l10n_br_motivo": {
+      "depends": [
+        "move_id.l10n_br_motivo"
+      ],
+      "readonly": false,
+      "related": "move_id.l10n_br_motivo",
+      "required": false,
+      "store": false,
+      "string": "Motivo Cancelamento",
+      "type": "text"
+    },
+    "l10n_br_situacao_nf": {
+      "depends": [
+        "move_id.l10n_br_situacao_nf"
+      ],
+      "readonly": false,
+      "related": "move_id.l10n_br_situacao_nf",
+      "required": false,
+      "selection": [
+        [
+          "rascunho",
+          "Rascunho"
+        ],
+        [
+          "autorizado",
+          "Autorizado"
+        ],
+        [
+          "excecao_autorizado",
+          "Exceção"
+        ],
+        [
+          "cce",
+          "Carta de Correção"
+        ],
+        [
+          "excecao_cce",
+          "Exceção"
+        ],
+        [
+          "cancelado",
+          "Cancelado"
+        ],
+        [
+          "excecao_cancelado",
+          "Exceção"
+        ]
+      ],
+      "store": false,
+      "string": "Situação NF-e",
+      "type": "selection"
+    },
+    "l10n_br_handle_nfse": {
+      "depends": [
+        "move_id.l10n_br_handle_nfse"
+      ],
+      "group_operator": "sum",
+      "readonly": false,
+      "related": "move_id.l10n_br_handle_nfse",
+      "required": false,
+      "store": false,
+      "string": "Handle da Nota Fiscal de Serviço",
+      "type": "integer"
+    },
+    "l10n_br_handle_nfce": {
+      "depends": [
+        "move_id.l10n_br_handle_nfce"
+      ],
+      "group_operator": "sum",
+      "readonly": false,
+      "related": "move_id.l10n_br_handle_nfce",
+      "required": false,
+      "store": false,
+      "string": "Handle da Nota Fiscal Eletrônica ao Consumidor",
+      "type": "integer"
+    },
+    "l10n_br_nfse_substituta": {
+      "depends": [
+        "move_id.l10n_br_nfse_substituta"
+      ],
+      "readonly": false,
+      "related": "move_id.l10n_br_nfse_substituta",
+      "required": false,
+      "store": false,
+      "string": "NFS-e Substituta?",
+      "type": "boolean"
+    },
+    "l10n_br_numero_nfse_substituida": {
+      "depends": [
+        "move_id.l10n_br_numero_nfse_substituida"
+      ],
+      "readonly": false,
+      "related": "move_id.l10n_br_numero_nfse_substituida",
+      "required": false,
+      "store": false,
+      "string": "Número da NFS-e Substituida",
+      "type": "char"
+    },
+    "l10n_br_numero_rps_substituido": {
+      "depends": [
+        "move_id.l10n_br_numero_rps_substituido"
+      ],
+      "group_operator": "sum",
+      "readonly": false,
+      "related": "move_id.l10n_br_numero_rps_substituido",
+      "required": false,
+      "store": false,
+      "string": "Número RPS Substituido",
+      "type": "integer"
+    },
+    "l10n_br_serie_nf_substituido": {
+      "depends": [
+        "move_id.l10n_br_serie_nf_substituido"
+      ],
+      "readonly": false,
+      "related": "move_id.l10n_br_serie_nf_substituido",
+      "required": false,
+      "store": false,
+      "string": "Série NFS-e Substituido",
+      "type": "char"
+    },
+    "l10n_br_data_nfse_substituida": {
+      "depends": [
+        "move_id.l10n_br_data_nfse_substituida"
+      ],
+      "readonly": false,
+      "related": "move_id.l10n_br_data_nfse_substituida",
+      "required": false,
+      "store": false,
+      "string": "Data de Emissão da NFS-e Substituida",
+      "type": "date"
+    },
+    "dfe_id": {
+      "context": {},
+      "depends": [
+        "move_id.dfe_id"
+      ],
+      "domain": [],
+      "readonly": false,
+      "related": "move_id.dfe_id",
+      "relation": "l10n_br_ciel_it_account.dfe",
+      "required": false,
+      "store": false,
+      "string": "Documento",
+      "type": "many2one"
+    },
+    "l10n_br_carrier_id": {
+      "context": {},
+      "depends": [
+        "move_id.l10n_br_carrier_id"
+      ],
+      "domain": [],
+      "readonly": true,
+      "related": "move_id.l10n_br_carrier_id",
+      "relation": "delivery.carrier",
+      "required": false,
+      "store": false,
+      "string": "Carrier",
+      "type": "many2one"
+    },
+    "l10n_br_peso_liquido": {
+      "depends": [
+        "move_id.l10n_br_peso_liquido"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_peso_liquido",
+      "required": false,
+      "store": false,
+      "string": "Peso Líquido",
+      "type": "float"
+    },
+    "l10n_br_peso_bruto": {
+      "depends": [
+        "move_id.l10n_br_peso_bruto"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_peso_bruto",
+      "required": false,
+      "store": false,
+      "string": "Peso Bruto",
+      "type": "float"
+    },
+    "l10n_br_volumes": {
+      "depends": [
+        "move_id.l10n_br_volumes"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_volumes",
+      "required": false,
+      "store": false,
+      "string": "Volumes",
+      "type": "integer"
+    },
+    "l10n_br_especie": {
+      "depends": [
+        "move_id.l10n_br_especie"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_especie",
+      "required": false,
+      "store": false,
+      "string": "Espécie",
+      "type": "char"
+    },
+    "l10n_br_marca": {
+      "depends": [
+        "move_id.l10n_br_marca"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_marca",
+      "required": false,
+      "store": false,
+      "string": "Marca",
+      "type": "char"
+    },
+    "l10n_br_numeracao_volume": {
+      "depends": [
+        "move_id.l10n_br_numeracao_volume"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_numeracao_volume",
+      "required": false,
+      "store": false,
+      "string": "Númeração Volume",
+      "type": "char"
+    },
+    "l10n_br_veiculo_placa": {
+      "depends": [
+        "move_id.l10n_br_veiculo_placa"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_veiculo_placa",
+      "required": false,
+      "store": false,
+      "string": "Placa",
+      "type": "char"
+    },
+    "l10n_br_veiculo_uf": {
+      "depends": [
+        "move_id.l10n_br_veiculo_uf"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_veiculo_uf",
+      "required": false,
+      "store": false,
+      "string": "UF da Placa",
+      "type": "char"
+    },
+    "l10n_br_veiculo_rntc": {
+      "depends": [
+        "move_id.l10n_br_veiculo_rntc"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_veiculo_rntc",
+      "required": false,
+      "store": false,
+      "string": "RNTC",
+      "type": "char"
+    },
+    "l10n_br_uf_saida_pais": {
+      "depends": [
+        "move_id.l10n_br_uf_saida_pais"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_uf_saida_pais",
+      "required": false,
+      "store": false,
+      "string": "Sigla UF de Saída",
+      "type": "char"
+    },
+    "l10n_br_local_despacho": {
+      "depends": [
+        "move_id.l10n_br_local_despacho"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_local_despacho",
+      "required": false,
+      "store": false,
+      "string": "Local de despacho",
+      "type": "char"
+    },
+    "l10n_br_local_embarque": {
+      "depends": [
+        "move_id.l10n_br_local_embarque"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_local_embarque",
+      "required": false,
+      "store": false,
+      "string": "Local de embarque",
+      "type": "char"
+    },
+    "l10n_br_municipio_inicio_id": {
+      "context": {},
+      "depends": [
+        "move_id.l10n_br_municipio_inicio_id"
+      ],
+      "domain": [],
+      "readonly": false,
+      "related": "move_id.l10n_br_municipio_inicio_id",
+      "relation": "l10n_br_ciel_it_account.res.municipio",
+      "required": false,
+      "store": false,
+      "string": "Município de Origem",
+      "type": "many2one"
+    },
+    "l10n_br_municipio_fim_id": {
+      "context": {},
+      "depends": [
+        "move_id.l10n_br_municipio_fim_id"
+      ],
+      "domain": [],
+      "readonly": false,
+      "related": "move_id.l10n_br_municipio_fim_id",
+      "relation": "l10n_br_ciel_it_account.res.municipio",
+      "required": false,
+      "store": false,
+      "string": "Município de Destino",
+      "type": "many2one"
+    },
+    "l10n_br_xml_aut_nfe": {
+      "depends": [
+        "move_id.l10n_br_xml_aut_nfe"
+      ],
+      "readonly": false,
+      "related": "move_id.l10n_br_xml_aut_nfe",
+      "required": false,
+      "store": false,
+      "string": "XML NF-e",
+      "type": "binary"
+    },
+    "l10n_br_xml_aut_nfe_fname": {
+      "depends": [
+        "move_id.l10n_br_xml_aut_nfe_fname"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_xml_aut_nfe_fname",
+      "required": false,
+      "store": false,
+      "string": "Arquivo XML NF-e",
+      "type": "char"
+    },
+    "l10n_br_pdf_aut_nfe": {
+      "depends": [
+        "move_id.l10n_br_pdf_aut_nfe"
+      ],
+      "readonly": false,
+      "related": "move_id.l10n_br_pdf_aut_nfe",
+      "required": false,
+      "store": false,
+      "string": "DANFE NF-e",
+      "type": "binary"
+    },
+    "l10n_br_pdf_aut_nfe_fname": {
+      "depends": [
+        "move_id.l10n_br_pdf_aut_nfe_fname"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_pdf_aut_nfe_fname",
+      "required": false,
+      "store": false,
+      "string": "Arquivo DANFE NF-e",
+      "type": "char"
+    },
+    "l10n_br_pdf_aut_gnre": {
+      "depends": [
+        "move_id.l10n_br_pdf_aut_gnre"
+      ],
+      "readonly": false,
+      "related": "move_id.l10n_br_pdf_aut_gnre",
+      "required": false,
+      "store": false,
+      "string": "GNRE",
+      "type": "binary"
+    },
+    "l10n_br_pdf_aut_gnre_fname": {
+      "depends": [
+        "move_id.l10n_br_pdf_aut_gnre_fname"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_pdf_aut_gnre_fname",
+      "required": false,
+      "store": false,
+      "string": "Arquivo GNRE",
+      "type": "char"
+    },
+    "l10n_br_gnre_ok": {
+      "depends": [
+        "move_id.l10n_br_gnre_ok"
+      ],
+      "readonly": false,
+      "related": "move_id.l10n_br_gnre_ok",
+      "required": false,
+      "store": false,
+      "string": "GNRE OK",
+      "type": "boolean"
+    },
+    "l10n_br_gnre_numero_recibo": {
+      "depends": [
+        "move_id.l10n_br_gnre_numero_recibo"
+      ],
+      "readonly": false,
+      "related": "move_id.l10n_br_gnre_numero_recibo",
+      "required": false,
+      "store": false,
+      "string": "GNRE - Número do Recibo",
+      "type": "char"
+    },
+    "l10n_br_gnre_disponivel": {
+      "depends": [
+        "move_id.l10n_br_gnre_disponivel"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_gnre_disponivel",
+      "required": false,
+      "store": false,
+      "string": "GNRE Disponível",
+      "type": "boolean"
+    },
+    "l10n_br_xml_cce_nfe": {
+      "depends": [
+        "move_id.l10n_br_xml_cce_nfe"
+      ],
+      "readonly": false,
+      "related": "move_id.l10n_br_xml_cce_nfe",
+      "required": false,
+      "store": false,
+      "string": "XML CC-e",
+      "type": "binary"
+    },
+    "l10n_br_xml_cce_nfe_fname": {
+      "depends": [
+        "move_id.l10n_br_xml_cce_nfe_fname"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_xml_cce_nfe_fname",
+      "required": false,
+      "store": false,
+      "string": "Arquivo XML CC-e",
+      "type": "char"
+    },
+    "l10n_br_pdf_cce_nfe": {
+      "depends": [
+        "move_id.l10n_br_pdf_cce_nfe"
+      ],
+      "readonly": false,
+      "related": "move_id.l10n_br_pdf_cce_nfe",
+      "required": false,
+      "store": false,
+      "string": "DANFE CC-e",
+      "type": "binary"
+    },
+    "l10n_br_pdf_cce_nfe_fname": {
+      "depends": [
+        "move_id.l10n_br_pdf_cce_nfe_fname"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_pdf_cce_nfe_fname",
+      "required": false,
+      "store": false,
+      "string": "Arquivo DANFE CC-e",
+      "type": "char"
+    },
+    "l10n_br_xml_can_nfe": {
+      "depends": [
+        "move_id.l10n_br_xml_can_nfe"
+      ],
+      "readonly": false,
+      "related": "move_id.l10n_br_xml_can_nfe",
+      "required": false,
+      "store": false,
+      "string": "XML NF-e Cancelamento",
+      "type": "binary"
+    },
+    "l10n_br_xml_can_nfe_fname": {
+      "depends": [
+        "move_id.l10n_br_xml_can_nfe_fname"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_xml_can_nfe_fname",
+      "required": false,
+      "store": false,
+      "string": "Arquivo XML NF-e Cancelamento",
+      "type": "char"
+    },
+    "l10n_br_pdf_can_nfe": {
+      "depends": [
+        "move_id.l10n_br_pdf_can_nfe"
+      ],
+      "readonly": false,
+      "related": "move_id.l10n_br_pdf_can_nfe",
+      "required": false,
+      "store": false,
+      "string": "DANFE NF-e Cancelamento",
+      "type": "binary"
+    },
+    "l10n_br_pdf_can_nfe_fname": {
+      "depends": [
+        "move_id.l10n_br_pdf_can_nfe_fname"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_pdf_can_nfe_fname",
+      "required": false,
+      "store": false,
+      "string": "Arquivo DANFE NF-e Cancelamento",
+      "type": "char"
+    },
+    "l10n_br_operacao_id": {
+      "context": {},
+      "depends": [
+        "move_id.l10n_br_operacao_id"
+      ],
+      "domain": [],
+      "readonly": true,
+      "related": "move_id.l10n_br_operacao_id",
+      "relation": "l10n_br_ciel_it_account.operacao",
+      "required": false,
+      "store": false,
+      "string": "Operação",
+      "type": "many2one"
+    },
+    "l10n_br_tipo_pedido": {
+      "depends": [
+        "move_id.l10n_br_tipo_pedido"
+      ],
+      "readonly": false,
+      "related": "move_id.l10n_br_tipo_pedido",
+      "required": false,
+      "selection": [
+        [
+          "baixa-estoque",
+          "Saída: Baixa de Estoque"
+        ],
+        [
+          "complemento-valor",
+          "Saída: Complemento de Preço"
+        ],
+        [
+          "dev-comodato",
+          "Saída: Devolução de Comodato"
+        ],
+        [
+          "compra",
+          "Saída: Devolução de Compra"
+        ],
+        [
+          "dev-conserto",
+          "Saída: Devolução de Conserto"
+        ],
+        [
+          "dev-consignacao",
+          "Saída: Devolução de Consignação"
+        ],
+        [
+          "dev-demonstracao",
+          "Saída: Devolução de Demonstração"
+        ],
+        [
+          "dev-industrializacao",
+          "Saída: Devolução de Industrialização"
+        ],
+        [
+          "dev-locacao",
+          "Saída: Devolução de Locação"
+        ],
+        [
+          "dev-mostruario",
+          "Saída: Devolução de Mostruário"
+        ],
+        [
+          "dev-teste",
+          "Saída: Devolução de Teste"
+        ],
+        [
+          "dev-vasilhame",
+          "Saída: Devolução de Vasilhame"
+        ],
+        [
+          "venda-locacao",
+          "Saída: Locação"
+        ],
+        [
+          "outro",
+          "Saída: Outros"
+        ],
+        [
+          "perda",
+          "Saída: Perda"
+        ],
+        [
+          "mostruario",
+          "Saída: Remessa de Mostruário"
+        ],
+        [
+          "vasilhame",
+          "Saída: Remessa de Vasilhame"
+        ],
+        [
+          "rem-venda-futura",
+          "Saída: Remessa de Venda p/ Entrega Futura"
+        ],
+        [
+          "ativo-fora",
+          "Saída: Remessa de bem do ativo imobilizado p/ uso Fora do Estabelecimento"
+        ],
+        [
+          "comodato",
+          "Saída: Remessa em Comodato"
+        ],
+        [
+          "consignacao",
+          "Saída: Remessa em Consignação"
+        ],
+        [
+          "garantia",
+          "Saída: Remessa em Garantia"
+        ],
+        [
+          "amostra",
+          "Saída: Remessa p/ Amostra Grátis"
+        ],
+        [
+          "bonificacao",
+          "Saída: Remessa p/ Bonificação"
+        ],
+        [
+          "conserto",
+          "Saída: Remessa p/ Conserto"
+        ],
+        [
+          "demonstracao",
+          "Saída: Remessa p/ Demonstração"
+        ],
+        [
+          "deposito",
+          "Saída: Remessa p/ Depósito"
+        ],
+        [
+          "exportacao",
+          "Saída: Remessa p/ Exportação"
+        ],
+        [
+          "feira",
+          "Saída: Remessa p/ Feira"
+        ],
+        [
+          "fora",
+          "Saída: Remessa p/ Fora do Estabelecimento"
+        ],
+        [
+          "industrializacao",
+          "Saída: Remessa p/ Industrialização"
+        ],
+        [
+          "rem-obra",
+          "Saída: Remessa p/ Obra"
+        ],
+        [
+          "teste",
+          "Saída: Remessa p/ Teste"
+        ],
+        [
+          "troca",
+          "Saída: Remessa p/ Troca"
+        ],
+        [
+          "uso-prestacao",
+          "Saída: Remessa p/ Uso na Prestação de Serviço"
+        ],
+        [
+          "locacao",
+          "Saída: Remessa para Locação"
+        ],
+        [
+          "rem-conta-ordem",
+          "Saída: Remessa por Conta e Ordem"
+        ],
+        [
+          "transf-filial",
+          "Saída: Transferencia entre Filiais"
+        ],
+        [
+          "venda",
+          "Saída: Venda"
+        ],
+        [
+          "venda-nfce",
+          "Saída: Venda Cupom Fiscal"
+        ],
+        [
+          "venda-armazem",
+          "Saída: Venda de Armazém Externo"
+        ],
+        [
+          "venda-industrializacao",
+          "Saída: Venda de Industrialização"
+        ],
+        [
+          "servico",
+          "Saída: Venda de Serviço"
+        ],
+        [
+          "venda-consignacao",
+          "Saída: Venda em Consignação"
+        ],
+        [
+          "venda_futura",
+          "Saída: Venda p/ Entrega Futura"
+        ],
+        [
+          "venda-conta-ordem",
+          "Saída: Venda por Conta e Ordem"
+        ],
+        [
+          "venda-conta-ordem-vendedor",
+          "Saída: Venda por Conta e Ordem por Vendedor"
+        ]
+      ],
+      "store": false,
+      "string": "Tipo de Pedido (saída)",
+      "type": "selection"
+    },
+    "l10n_br_tipo_pedido_entrada": {
+      "depends": [
+        "move_id.l10n_br_tipo_pedido_entrada"
+      ],
+      "readonly": false,
+      "related": "move_id.l10n_br_tipo_pedido_entrada",
+      "required": false,
+      "selection": [
+        [
+          "ent-amostra",
+          "Entrada: Amostra Grátis"
+        ],
+        [
+          "ent-bonificacao",
+          "Entrada: Bonificação"
+        ],
+        [
+          "ent-comodato",
+          "Entrada: Comodato"
+        ],
+        [
+          "comp-importacao",
+          "Entrada: Complementar de Importação"
+        ],
+        [
+          "compra",
+          "Entrada: Compra"
+        ],
+        [
+          "compra-venda-ordem",
+          "Entrada: Compra Venda à Ordem"
+        ],
+        [
+          "compra-ent-futura",
+          "Entrada: Compra p/ Entrega Futura"
+        ],
+        [
+          "ent-conserto",
+          "Entrada: Conserto"
+        ],
+        [
+          "credito-imposto",
+          "Entrada: Crédito de Imposto"
+        ],
+        [
+          "ent-demonstracao",
+          "Entrada: Demonstração"
+        ],
+        [
+          "devolucao",
+          "Entrada: Devolução Emissão Própria"
+        ],
+        [
+          "devolucao_compra",
+          "Entrada: Devolução de Venda"
+        ],
+        [
+          "importacao",
+          "Entrada: Importação"
+        ],
+        [
+          "locacao",
+          "Entrada: Locação"
+        ],
+        [
+          "ent-mostruario",
+          "Entrada: Mostruário"
+        ],
+        [
+          "outro",
+          "Entrada: Outros"
+        ],
+        [
+          "retorno",
+          "Entrada: Outros Retorno"
+        ],
+        [
+          "compra-rec-venda-ordem",
+          "Entrada: Recebimento de Compra Venda à Ordem"
+        ],
+        [
+          "compra-rec-ent-futura",
+          "Entrada: Recebimento de Compra p/ Entrega Futura"
+        ],
+        [
+          "rem-industrializacao",
+          "Entrada: Remessa p/ Industrialização"
+        ],
+        [
+          "rem-conta-ordem",
+          "Entrada: Remessa por Conta e Ordem"
+        ],
+        [
+          "comodato",
+          "Entrada: Retorno de Comodato"
+        ],
+        [
+          "conserto",
+          "Entrada: Retorno de Conserto"
+        ],
+        [
+          "consignacao",
+          "Entrada: Retorno de Consignação"
+        ],
+        [
+          "demonstracao",
+          "Entrada: Retorno de Demonstração"
+        ],
+        [
+          "deposito",
+          "Entrada: Retorno de Depósito"
+        ],
+        [
+          "feira",
+          "Entrada: Retorno de Feira"
+        ],
+        [
+          "industrializacao",
+          "Entrada: Retorno de Industrialização"
+        ],
+        [
+          "ret-locacao",
+          "Entrada: Retorno de Locação"
+        ],
+        [
+          "mostruario",
+          "Entrada: Retorno de Mostruário"
+        ],
+        [
+          "troca",
+          "Entrada: Retorno de Troca"
+        ],
+        [
+          "vasilhame",
+          "Entrada: Retorno de Vasilhame"
+        ],
+        [
+          "ativo-fora",
+          "Entrada: Retorno de bem do ativo imobilizado p/ uso Fora do Estabelecimento"
+        ],
+        [
+          "servico",
+          "Entrada: Serviço"
+        ],
+        [
+          "serv-industrializacao",
+          "Entrada: Serviço de Industrialização"
+        ],
+        [
+          "transf-filial",
+          "Entrada: Transferencia entre Filiais"
+        ],
+        [
+          "importacao-transporte",
+          "Entrada: Transporte de Importação"
+        ],
+        [
+          "ent-vasilhame",
+          "Entrada: Vasilhame"
+        ]
+      ],
+      "store": false,
+      "string": "Tipo de Pedido (entrada)",
+      "type": "selection"
+    },
+    "l10n_br_operacao_consumidor": {
+      "depends": [
+        "move_id.l10n_br_operacao_consumidor"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_operacao_consumidor",
+      "required": false,
+      "selection": [
+        [
+          "0",
+          "0 - Normal"
+        ],
+        [
+          "1",
+          "1 - Consumidor Final"
+        ]
+      ],
+      "store": false,
+      "string": "Operação Consumidor Final",
+      "type": "selection"
+    },
+    "l10n_br_indicador_presenca": {
+      "depends": [
+        "move_id.l10n_br_indicador_presenca"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_indicador_presenca",
+      "required": false,
+      "selection": [
+        [
+          "0",
+          "0 - Não se aplica"
+        ],
+        [
+          "1",
+          "1 - Operação presencial"
+        ],
+        [
+          "2",
+          "2 - Operação não presencial, pela internet"
+        ],
+        [
+          "3",
+          "3 - Operação não presencial, teleatendimento"
+        ],
+        [
+          "4",
+          "4 - NFC-e em operação com entrega a domicílio"
+        ],
+        [
+          "5",
+          "5 - Operação presencial, fora do estabelecimento"
+        ],
+        [
+          "9",
+          "9 - Operação não presencial, outros"
+        ]
+      ],
+      "store": false,
+      "string": "Indicador Presença",
+      "type": "selection"
+    },
+    "l10n_br_compra_indcom": {
+      "depends": [
+        "move_id.l10n_br_compra_indcom"
+      ],
+      "readonly": false,
+      "related": "move_id.l10n_br_compra_indcom",
+      "required": false,
+      "selection": [
+        [
+          "uso",
+          "Uso e Consumo"
+        ],
+        [
+          "uso-prestacao",
+          "Uso na Prestação de Serviço"
+        ],
+        [
+          "ind",
+          "Industrialização"
+        ],
+        [
+          "com",
+          "Comercialização"
+        ],
+        [
+          "ativo",
+          "Ativo"
+        ],
+        [
+          "garantia",
+          "Garantia"
+        ],
+        [
+          "out",
+          "Outros"
+        ]
+      ],
+      "store": false,
+      "string": "Destinação de Uso",
+      "type": "selection"
+    },
+    "payment_provider_id": {
+      "context": {},
+      "depends": [
+        "move_id.payment_provider_id"
+      ],
+      "domain": [
+        [
+          "state",
+          "=",
+          "enabled"
+        ]
+      ],
+      "readonly": false,
+      "related": "move_id.payment_provider_id",
+      "relation": "payment.provider",
+      "required": false,
+      "store": false,
+      "string": "Forma de Pagamento",
+      "type": "many2one"
+    },
+    "l10n_br_cfop_id": {
+      "context": {},
+      "depends": [
+        "move_id.l10n_br_cfop_id"
+      ],
+      "domain": [],
+      "readonly": true,
+      "related": "move_id.l10n_br_cfop_id",
+      "relation": "l10n_br_ciel_it_account.cfop",
+      "required": false,
+      "store": false,
+      "string": "CFOP",
+      "type": "many2one"
+    },
+    "l10n_br_pedido_compra": {
+      "depends": [
+        "move_id.l10n_br_pedido_compra"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_pedido_compra",
+      "required": false,
+      "store": false,
+      "string": "Pedido de Compra do Cliente",
+      "type": "char"
+    },
+    "l10n_br_item_pedido_compra": {
+      "depends": [
+        "move_id.l10n_br_item_pedido_compra"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_item_pedido_compra",
+      "required": false,
+      "store": false,
+      "string": "Item Pedido de Compra do Cliente",
+      "type": "char"
+    },
+    "l10n_br_informacao_fiscal": {
+      "depends": [
+        "move_id.l10n_br_informacao_fiscal"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_informacao_fiscal",
+      "required": false,
+      "store": false,
+      "string": "Informação Fiscal",
+      "type": "text"
+    },
+    "l10n_br_informacao_complementar": {
+      "depends": [
+        "move_id.l10n_br_informacao_complementar"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_informacao_complementar",
+      "required": false,
+      "store": false,
+      "string": "Informação Complementar",
+      "type": "text"
+    },
+    "l10n_br_imposto_auto": {
+      "depends": [
+        "move_id.l10n_br_imposto_auto"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_imposto_auto",
+      "required": false,
+      "store": false,
+      "string": "Calcular Impostos Automaticamente",
+      "type": "boolean"
+    },
+    "l10n_br_calcular_imposto": {
+      "depends": [
+        "move_id.l10n_br_calcular_imposto"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_calcular_imposto",
+      "required": false,
+      "store": false,
+      "string": "Calcular Impostos",
+      "type": "boolean"
+    },
+    "l10n_br_rateio_frete_auto": {
+      "depends": [
+        "move_id.l10n_br_rateio_frete_auto"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_rateio_frete_auto",
+      "required": false,
+      "store": false,
+      "string": "Rateio Frete Automatico",
+      "type": "boolean"
+    },
+    "l10n_br_icms_base": {
+      "depends": [
+        "move_id.l10n_br_icms_base"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_icms_base",
+      "required": false,
+      "store": false,
+      "string": "Total da Base de Cálculo do ICMS",
+      "type": "float"
+    },
+    "l10n_br_icms_valor": {
+      "depends": [
+        "move_id.l10n_br_icms_valor"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_icms_valor",
+      "required": false,
+      "store": false,
+      "string": "Total do ICMS (Tributável)",
+      "type": "float"
+    },
+    "l10n_br_icms_valor_isento": {
+      "depends": [
+        "move_id.l10n_br_icms_valor_isento"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_icms_valor_isento",
+      "required": false,
+      "store": false,
+      "string": "Total do ICMS (Isento/Não Tributável)",
+      "type": "float"
+    },
+    "l10n_br_icms_valor_outros": {
+      "depends": [
+        "move_id.l10n_br_icms_valor_outros"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_icms_valor_outros",
+      "required": false,
+      "store": false,
+      "string": "Total do ICMS (Outros)",
+      "type": "float"
+    },
+    "l10n_br_icms_valor_desonerado": {
+      "depends": [
+        "move_id.l10n_br_icms_valor_desonerado"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_icms_valor_desonerado",
+      "required": false,
+      "store": false,
+      "string": "Total do ICMS (Desonerado)",
+      "type": "float"
+    },
+    "l10n_br_icms_valor_credito_presumido": {
+      "depends": [
+        "move_id.l10n_br_icms_valor_credito_presumido"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_icms_valor_credito_presumido",
+      "required": false,
+      "store": false,
+      "string": "Total do ICMS (Crédito Presumido)",
+      "type": "float"
+    },
+    "l10n_br_icms_valor_efetivo": {
+      "depends": [
+        "move_id.l10n_br_icms_valor_efetivo"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_icms_valor_efetivo",
+      "required": false,
+      "store": false,
+      "string": "Total do ICMS (Efetivo)",
+      "type": "float"
+    },
+    "l10n_br_icmsst_base": {
+      "depends": [
+        "move_id.l10n_br_icmsst_base"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_icmsst_base",
+      "required": false,
+      "store": false,
+      "string": "Total da Base de Cálculo do ICMSST",
+      "type": "float"
+    },
+    "l10n_br_icmsst_valor": {
+      "depends": [
+        "move_id.l10n_br_icmsst_valor"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_icmsst_valor",
+      "required": false,
+      "store": false,
+      "string": "Total do ICMSST",
+      "type": "float"
+    },
+    "l10n_br_icmsst_valor_outros": {
+      "depends": [
+        "move_id.l10n_br_icmsst_valor_outros"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_icmsst_valor_outros",
+      "required": false,
+      "store": false,
+      "string": "Total do ICMSST (Outros)",
+      "type": "float"
+    },
+    "l10n_br_icmsst_valor_proprio": {
+      "depends": [
+        "move_id.l10n_br_icmsst_valor_proprio"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_icmsst_valor_proprio",
+      "required": false,
+      "store": false,
+      "string": "Total do ICMSST (Próprio)",
+      "type": "float"
+    },
+    "l10n_br_icmsst_substituto_valor": {
+      "depends": [
+        "move_id.l10n_br_icmsst_substituto_valor"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_icmsst_substituto_valor",
+      "required": false,
+      "store": false,
+      "string": "Total do ICMSST Substituto",
+      "type": "float"
+    },
+    "l10n_br_icmsst_substituto_valor_outros": {
+      "depends": [
+        "move_id.l10n_br_icmsst_substituto_valor_outros"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_icmsst_substituto_valor_outros",
+      "required": false,
+      "store": false,
+      "string": "Total do ICMSST Substituto (Outros)",
+      "type": "float"
+    },
+    "l10n_br_icmsst_retido_valor": {
+      "depends": [
+        "move_id.l10n_br_icmsst_retido_valor"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_icmsst_retido_valor",
+      "required": false,
+      "store": false,
+      "string": "Total do ICMSST Retido",
+      "type": "float"
+    },
+    "l10n_br_icmsst_retido_valor_outros": {
+      "depends": [
+        "move_id.l10n_br_icmsst_retido_valor_outros"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_icmsst_retido_valor_outros",
+      "required": false,
+      "store": false,
+      "string": "Total do ICMSST Retido (Outros)",
+      "type": "float"
+    },
+    "l10n_br_icms_dest_valor": {
+      "depends": [
+        "move_id.l10n_br_icms_dest_valor"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_icms_dest_valor",
+      "required": false,
+      "store": false,
+      "string": "Total do ICMS UF Destino",
+      "type": "float"
+    },
+    "l10n_br_icms_remet_valor": {
+      "depends": [
+        "move_id.l10n_br_icms_remet_valor"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_icms_remet_valor",
+      "required": false,
+      "store": false,
+      "string": "Total do ICMS UF Remetente",
+      "type": "float"
+    },
+    "l10n_br_fcp_dest_valor": {
+      "depends": [
+        "move_id.l10n_br_fcp_dest_valor"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_fcp_dest_valor",
+      "required": false,
+      "store": false,
+      "string": "Total do Fundo de Combate a Pobreza",
+      "type": "float"
+    },
+    "l10n_br_fcp_st_valor": {
+      "depends": [
+        "move_id.l10n_br_fcp_st_valor"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_fcp_st_valor",
+      "required": false,
+      "store": false,
+      "string": "Total do Fundo de Combate a Pobreza Retido por ST",
+      "type": "float"
+    },
+    "l10n_br_fcp_st_ant_valor": {
+      "depends": [
+        "move_id.l10n_br_fcp_st_ant_valor"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_fcp_st_ant_valor",
+      "required": false,
+      "store": false,
+      "string": "Total do Fundo de Combate a Pobreza Retido Anteriormente por ST",
+      "type": "float"
+    },
+    "l10n_br_prod_valor": {
+      "depends": [
+        "move_id.l10n_br_prod_valor"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_prod_valor",
+      "required": false,
+      "store": false,
+      "string": "Total dos Produtos",
+      "type": "float"
+    },
+    "l10n_br_frete": {
+      "depends": [
+        "move_id.l10n_br_frete"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_frete",
+      "required": false,
+      "store": false,
+      "string": "Total do Frete",
+      "type": "float"
+    },
+    "l10n_br_seguro": {
+      "depends": [
+        "move_id.l10n_br_seguro"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_seguro",
+      "required": false,
+      "store": false,
+      "string": "Total do Seguro",
+      "type": "float"
+    },
+    "l10n_br_despesas_acessorias": {
+      "depends": [
+        "move_id.l10n_br_despesas_acessorias"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_despesas_acessorias",
+      "required": false,
+      "store": false,
+      "string": "Total da Despesas Acessórias",
+      "type": "float"
+    },
+    "l10n_br_desc_valor": {
+      "depends": [
+        "move_id.l10n_br_desc_valor"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_desc_valor",
+      "required": false,
+      "store": false,
+      "string": "Total do Desconto",
+      "type": "float"
+    },
+    "l10n_br_ipi_valor": {
+      "depends": [
+        "move_id.l10n_br_ipi_valor"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_ipi_valor",
+      "required": false,
+      "store": false,
+      "string": "Total do IPI",
+      "type": "float"
+    },
+    "l10n_br_ipi_valor_isento": {
+      "depends": [
+        "move_id.l10n_br_ipi_valor_isento"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_ipi_valor_isento",
+      "required": false,
+      "store": false,
+      "string": "Total do IPI (Isento/Não Tributável)",
+      "type": "float"
+    },
+    "l10n_br_ipi_valor_outros": {
+      "depends": [
+        "move_id.l10n_br_ipi_valor_outros"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_ipi_valor_outros",
+      "required": false,
+      "store": false,
+      "string": "Total do IPI (Outros)",
+      "type": "float"
+    },
+    "l10n_br_iof_valor": {
+      "depends": [
+        "move_id.l10n_br_iof_valor"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_iof_valor",
+      "required": false,
+      "store": false,
+      "string": "Total do IOF",
+      "type": "float"
+    },
+    "l10n_br_pis_valor": {
+      "depends": [
+        "move_id.l10n_br_pis_valor"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_pis_valor",
+      "required": false,
+      "store": false,
+      "string": "Total do PIS",
+      "type": "float"
+    },
+    "l10n_br_pis_valor_isento": {
+      "depends": [
+        "move_id.l10n_br_pis_valor_isento"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_pis_valor_isento",
+      "required": false,
+      "store": false,
+      "string": "Total do PIS (Isento/Não Tributável)",
+      "type": "float"
+    },
+    "l10n_br_pis_valor_outros": {
+      "depends": [
+        "move_id.l10n_br_pis_valor_outros"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_pis_valor_outros",
+      "required": false,
+      "store": false,
+      "string": "Total do PIS (Outros)",
+      "type": "float"
+    },
+    "l10n_br_cofins_valor": {
+      "depends": [
+        "move_id.l10n_br_cofins_valor"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_cofins_valor",
+      "required": false,
+      "store": false,
+      "string": "Total do Cofins",
+      "type": "float"
+    },
+    "l10n_br_cofins_valor_isento": {
+      "depends": [
+        "move_id.l10n_br_cofins_valor_isento"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_cofins_valor_isento",
+      "required": false,
+      "store": false,
+      "string": "Total do Cofins (Isento/Não Tributável)",
+      "type": "float"
+    },
+    "l10n_br_cofins_valor_outros": {
+      "depends": [
+        "move_id.l10n_br_cofins_valor_outros"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_cofins_valor_outros",
+      "required": false,
+      "store": false,
+      "string": "Total do Cofins (Outros)",
+      "type": "float"
+    },
+    "l10n_br_is_valor": {
+      "depends": [
+        "move_id.l10n_br_is_valor"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_is_valor",
+      "required": false,
+      "store": false,
+      "string": "Total do IS",
+      "type": "float"
+    },
+    "l10n_br_ibscbs_base": {
+      "depends": [
+        "move_id.l10n_br_ibscbs_base"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_ibscbs_base",
+      "required": false,
+      "store": false,
+      "string": "Total da Base de Cálculo do IBS/CBS",
+      "type": "float"
+    },
+    "l10n_br_ibs_uf_valor": {
+      "depends": [
+        "move_id.l10n_br_ibs_uf_valor"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_ibs_uf_valor",
+      "required": false,
+      "store": false,
+      "string": "Total do IBS UF",
+      "type": "float"
+    },
+    "l10n_br_ibs_mun_valor": {
+      "depends": [
+        "move_id.l10n_br_ibs_mun_valor"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_ibs_mun_valor",
+      "required": false,
+      "store": false,
+      "string": "Total do IBS Município",
+      "type": "float"
+    },
+    "l10n_br_ibs_valor": {
+      "depends": [
+        "move_id.l10n_br_ibs_valor"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_ibs_valor",
+      "required": false,
+      "store": false,
+      "string": "Total do IBS",
+      "type": "float"
+    },
+    "l10n_br_cbs_valor": {
+      "depends": [
+        "move_id.l10n_br_cbs_valor"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_cbs_valor",
+      "required": false,
+      "store": false,
+      "string": "Total do CBS",
+      "type": "float"
+    },
+    "l10n_br_ii_valor": {
+      "depends": [
+        "move_id.l10n_br_ii_valor"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_ii_valor",
+      "required": false,
+      "store": false,
+      "string": "Total do II",
+      "type": "float"
+    },
+    "l10n_br_ii_valor_aduaneira": {
+      "depends": [
+        "move_id.l10n_br_ii_valor_aduaneira"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_ii_valor_aduaneira",
+      "required": false,
+      "store": false,
+      "string": "Total do II Aduaneira",
+      "type": "float"
+    },
+    "l10n_br_ii_valor_afrmm": {
+      "depends": [
+        "move_id.l10n_br_ii_valor_afrmm"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_ii_valor_afrmm",
+      "required": false,
+      "store": false,
+      "string": "Total do II AFRMM",
+      "type": "float"
+    },
+    "l10n_br_iss_valor": {
+      "depends": [
+        "move_id.l10n_br_iss_valor"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_iss_valor",
+      "required": false,
+      "store": false,
+      "string": "Total do ISS",
+      "type": "float"
+    },
+    "l10n_br_irpj_valor": {
+      "depends": [
+        "move_id.l10n_br_irpj_valor"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_irpj_valor",
+      "required": false,
+      "store": false,
+      "string": "Total do IRPJ",
+      "type": "float"
+    },
+    "l10n_br_csll_valor": {
+      "depends": [
+        "move_id.l10n_br_csll_valor"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_csll_valor",
+      "required": false,
+      "store": false,
+      "string": "Total do CSLL",
+      "type": "float"
+    },
+    "l10n_br_irpj_ret_base": {
+      "depends": [
+        "move_id.l10n_br_irpj_ret_base"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_irpj_ret_base",
+      "required": false,
+      "store": false,
+      "string": "Base do IRPJ Retido",
+      "type": "float"
+    },
+    "l10n_br_inss_ret_base": {
+      "depends": [
+        "move_id.l10n_br_inss_ret_base"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_inss_ret_base",
+      "required": false,
+      "store": false,
+      "string": "Base do INSS Retido",
+      "type": "float"
+    },
+    "l10n_br_iss_ret_base": {
+      "depends": [
+        "move_id.l10n_br_iss_ret_base"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_iss_ret_base",
+      "required": false,
+      "store": false,
+      "string": "Base do ISS Retido",
+      "type": "float"
+    },
+    "l10n_br_csll_ret_base": {
+      "depends": [
+        "move_id.l10n_br_csll_ret_base"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_csll_ret_base",
+      "required": false,
+      "store": false,
+      "string": "Base do CSLL Retido",
+      "type": "float"
+    },
+    "l10n_br_pis_ret_base": {
+      "depends": [
+        "move_id.l10n_br_pis_ret_base"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_pis_ret_base",
+      "required": false,
+      "store": false,
+      "string": "Base do PIS Retido",
+      "type": "float"
+    },
+    "l10n_br_cofins_ret_base": {
+      "depends": [
+        "move_id.l10n_br_cofins_ret_base"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_cofins_ret_base",
+      "required": false,
+      "store": false,
+      "string": "Base do Cofins Retido",
+      "type": "float"
+    },
+    "l10n_br_irpj_ret_valor": {
+      "depends": [
+        "move_id.l10n_br_irpj_ret_valor"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_irpj_ret_valor",
+      "required": false,
+      "store": false,
+      "string": "Valor do IRPJ Retido",
+      "type": "float"
+    },
+    "l10n_br_inss_ret_valor": {
+      "depends": [
+        "move_id.l10n_br_inss_ret_valor"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_inss_ret_valor",
+      "required": false,
+      "store": false,
+      "string": "Valor do INSS Retido",
+      "type": "float"
+    },
+    "l10n_br_iss_ret_valor": {
+      "depends": [
+        "move_id.l10n_br_iss_ret_valor"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_iss_ret_valor",
+      "required": false,
+      "store": false,
+      "string": "Valor do ISS Retido",
+      "type": "float"
+    },
+    "l10n_br_csll_ret_valor": {
+      "depends": [
+        "move_id.l10n_br_csll_ret_valor"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_csll_ret_valor",
+      "required": false,
+      "store": false,
+      "string": "Valor do CSLL Retido",
+      "type": "float"
+    },
+    "l10n_br_pis_ret_valor": {
+      "depends": [
+        "move_id.l10n_br_pis_ret_valor"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_pis_ret_valor",
+      "required": false,
+      "store": false,
+      "string": "Valor do PIS Retido",
+      "type": "float"
+    },
+    "l10n_br_cofins_ret_valor": {
+      "depends": [
+        "move_id.l10n_br_cofins_ret_valor"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_cofins_ret_valor",
+      "required": false,
+      "store": false,
+      "string": "Valor do Cofins Retido",
+      "type": "float"
+    },
+    "l10n_br_total_nfe": {
+      "depends": [
+        "move_id.l10n_br_total_nfe"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_total_nfe",
+      "required": false,
+      "store": false,
+      "string": "Total da Nota Fiscal",
+      "type": "float"
+    },
+    "l10n_br_total_tributos": {
+      "depends": [
+        "move_id.l10n_br_total_tributos"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.l10n_br_total_tributos",
+      "required": false,
+      "store": false,
+      "string": "Total dos Tributos",
+      "type": "float"
+    },
+    "l10n_br_tipo_imposto": {
+      "depends": [
+        "move_id.l10n_br_tipo_imposto"
+      ],
+      "readonly": false,
+      "related": "move_id.l10n_br_tipo_imposto",
+      "required": false,
+      "selection": [
+        [
+          "cofins",
+          "COFINS"
+        ],
+        [
+          "csll",
+          "CSLL"
+        ],
+        [
+          "icms",
+          "ICMS"
+        ],
+        [
+          "ii",
+          "II"
+        ],
+        [
+          "inss",
+          "INSS"
+        ],
+        [
+          "ipi",
+          "IPI"
+        ],
+        [
+          "irrf",
+          "IRRF"
+        ],
+        [
+          "iss",
+          "ISS"
+        ],
+        [
+          "pis",
+          "PIS"
+        ],
+        [
+          "simples",
+          "Simples Nacional"
+        ],
+        [
+          "icmsst",
+          "ICMS ST"
+        ],
+        [
+          "fgts",
+          "FGTS"
+        ]
+      ],
+      "store": false,
+      "string": "Tipo Imposto",
+      "type": "selection"
+    },
+    "l10n_br_dctf_imposto_codigo": {
+      "depends": [
+        "move_id.l10n_br_dctf_imposto_codigo"
+      ],
+      "readonly": false,
+      "related": "move_id.l10n_br_dctf_imposto_codigo",
+      "required": false,
+      "store": false,
+      "string": "Código do Imposto DCTF",
+      "type": "char"
+    },
+    "l10n_br_nfe_emails": {
+      "depends": [
+        "move_id.l10n_br_nfe_emails"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_nfe_emails",
+      "required": false,
+      "store": false,
+      "string": "Email XML NF-e",
+      "type": "char"
+    },
+    "l10n_br_cnpj": {
+      "depends": [
+        "move_id.l10n_br_cnpj"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_cnpj",
+      "required": false,
+      "store": false,
+      "string": "CNPJ",
+      "type": "char"
+    },
+    "referencia_ids": {
+      "context": {},
+      "depends": [
+        "move_id.referencia_ids"
+      ],
+      "domain": [],
+      "readonly": true,
+      "related": "move_id.referencia_ids",
+      "relation": "l10n_br_ciel_it_account.account.move.referencia",
+      "required": false,
+      "store": false,
+      "string": "NF-e referência",
+      "type": "one2many"
+    },
+    "payment_line_ids": {
+      "context": {},
+      "depends": [
+        "move_id.payment_line_ids"
+      ],
+      "domain": [],
+      "readonly": true,
+      "related": "move_id.payment_line_ids",
+      "relation": "account.move.line",
+      "required": false,
+      "store": false,
+      "string": "Payment lines",
+      "type": "many2many"
+    },
+    "l10n_br_iss_municipio_id": {
+      "context": {},
+      "depends": [
+        "move_id.l10n_br_iss_municipio_id"
+      ],
+      "domain": [],
+      "readonly": false,
+      "related": "move_id.l10n_br_iss_municipio_id",
+      "relation": "l10n_br_ciel_it_account.res.municipio",
+      "required": false,
+      "store": false,
+      "string": "Município de Incidência do ISS",
+      "type": "many2one"
+    },
+    "parcelas_manual_id": {
+      "context": {},
+      "depends": [
+        "move_id.parcelas_manual_id"
+      ],
+      "domain": [],
+      "readonly": false,
+      "related": "move_id.parcelas_manual_id",
+      "relation": "l10n_br_ciel_it_account.payment.parcela.manual",
+      "required": false,
+      "store": false,
+      "string": "Parcelas Personalizada",
+      "type": "many2one"
+    },
+    "reinfs_2010_ids": {
+      "context": {},
+      "depends": [
+        "move_id.reinfs_2010_ids"
+      ],
+      "domain": [],
+      "readonly": true,
+      "related": "move_id.reinfs_2010_ids",
+      "relation": "l10n_br_ciel_it_account.reinf.2010",
+      "required": false,
+      "store": false,
+      "string": "REINF 2010",
+      "type": "one2many"
+    },
+    "reinfs_2010_count": {
+      "depends": [
+        "move_id.reinfs_2010_count"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.reinfs_2010_count",
+      "required": false,
+      "store": false,
+      "string": "REINF 2010 Qtd.",
+      "type": "integer"
+    },
+    "reinfs_2020_ids": {
+      "context": {},
+      "depends": [
+        "move_id.reinfs_2020_ids"
+      ],
+      "domain": [],
+      "readonly": true,
+      "related": "move_id.reinfs_2020_ids",
+      "relation": "l10n_br_ciel_it_account.reinf.2020",
+      "required": false,
+      "store": false,
+      "string": "REINF 2020",
+      "type": "one2many"
+    },
+    "reinfs_2020_count": {
+      "depends": [
+        "move_id.reinfs_2020_count"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.reinfs_2020_count",
+      "required": false,
+      "store": false,
+      "string": "REINF 2020 Qtd.",
+      "type": "integer"
+    },
+    "reinfs_2060_ids": {
+      "context": {},
+      "depends": [
+        "move_id.reinfs_2060_ids"
+      ],
+      "domain": [],
+      "readonly": true,
+      "related": "move_id.reinfs_2060_ids",
+      "relation": "l10n_br_ciel_it_account.reinf.2060",
+      "required": false,
+      "store": false,
+      "string": "REINF 2060",
+      "type": "one2many"
+    },
+    "reinfs_2060_count": {
+      "depends": [
+        "move_id.reinfs_2060_count"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.reinfs_2060_count",
+      "required": false,
+      "store": false,
+      "string": "REINF 2060 Qtd.",
+      "type": "integer"
+    },
+    "reinfs_4010_ids": {
+      "context": {},
+      "depends": [
+        "move_id.reinfs_4010_ids"
+      ],
+      "domain": [],
+      "readonly": true,
+      "related": "move_id.reinfs_4010_ids",
+      "relation": "l10n_br_ciel_it_account.reinf.4010",
+      "required": false,
+      "store": false,
+      "string": "REINF 4010",
+      "type": "one2many"
+    },
+    "reinfs_4010_count": {
+      "depends": [
+        "move_id.reinfs_4010_count"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.reinfs_4010_count",
+      "required": false,
+      "store": false,
+      "string": "REINF 4010 Qtd.",
+      "type": "integer"
+    },
+    "reinfs_4020_ids": {
+      "context": {},
+      "depends": [
+        "move_id.reinfs_4020_ids"
+      ],
+      "domain": [],
+      "readonly": true,
+      "related": "move_id.reinfs_4020_ids",
+      "relation": "l10n_br_ciel_it_account.reinf.4020",
+      "required": false,
+      "store": false,
+      "string": "REINF 4020",
+      "type": "one2many"
+    },
+    "reinfs_4020_count": {
+      "depends": [
+        "move_id.reinfs_4020_count"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.reinfs_4020_count",
+      "required": false,
+      "store": false,
+      "string": "REINF 4020 Qtd.",
+      "type": "integer"
+    },
+    "reinfs_4080_ids": {
+      "context": {},
+      "depends": [
+        "move_id.reinfs_4080_ids"
+      ],
+      "domain": [],
+      "readonly": true,
+      "related": "move_id.reinfs_4080_ids",
+      "relation": "l10n_br_ciel_it_account.reinf.4080",
+      "required": false,
+      "store": false,
+      "string": "REINF 4080",
+      "type": "one2many"
+    },
+    "reinfs_4080_count": {
+      "depends": [
+        "move_id.reinfs_4080_count"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.reinfs_4080_count",
+      "required": false,
+      "store": false,
+      "string": "REINF 4080 Qtd.",
+      "type": "integer"
+    },
+    "l10n_br_descricao_servico_show": {
+      "depends": [
+        "move_id.l10n_br_descricao_servico_show"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_descricao_servico_show",
+      "required": false,
+      "store": false,
+      "string": "Mostrar Descrição do Serviço",
+      "type": "boolean"
+    },
+    "l10n_br_descricao_servico": {
+      "depends": [
+        "move_id.l10n_br_descricao_servico"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_descricao_servico",
+      "required": false,
+      "store": false,
+      "string": "Descrição do Serviço",
+      "type": "text"
+    },
+    "is_encerramento": {
+      "depends": [
+        "move_id.is_encerramento"
+      ],
+      "help": "Indica se o lançamento é de encerramento do exercício.",
+      "readonly": true,
+      "related": "move_id.is_encerramento",
+      "required": false,
+      "store": false,
+      "string": "Lançamento de Encerramento",
+      "type": "boolean"
+    },
+    "picking_ids": {
+      "context": {},
+      "depends": [
+        "move_id.picking_ids"
+      ],
+      "domain": [],
+      "readonly": false,
+      "related": "move_id.picking_ids",
+      "relation": "stock.picking",
+      "required": false,
+      "store": false,
+      "string": "Picking References",
+      "type": "many2many"
+    },
+    "usuario_id": {
+      "context": {},
+      "depends": [
+        "move_id.usuario_id"
+      ],
+      "domain": [],
+      "readonly": false,
+      "related": "move_id.usuario_id",
+      "relation": "res.partner",
+      "required": false,
+      "store": false,
+      "string": "Usuário",
+      "type": "many2one"
+    },
+    "agendamento_id": {
+      "depends": [
+        "move_id.agendamento_id"
+      ],
+      "readonly": true,
+      "related": "move_id.agendamento_id",
+      "required": false,
+      "selection": [
+        [
+          "sim",
+          "Sim"
+        ],
+        [
+          "nao",
+          "Não"
+        ]
+      ],
+      "store": false,
+      "string": "Agendamento",
+      "type": "selection"
+    },
+    "adiantamento_id": {
+      "depends": [
+        "move_id.adiantamento_id"
+      ],
+      "readonly": true,
+      "related": "move_id.adiantamento_id",
+      "required": false,
+      "store": false,
+      "string": "Adiantamento",
+      "type": "boolean"
+    },
+    "laudos": {
+      "depends": [
+        "move_id.laudos"
+      ],
+      "readonly": false,
+      "related": "move_id.laudos",
+      "required": false,
+      "store": false,
+      "string": "Laudos",
+      "type": "binary"
+    },
+    "laudos_filename": {
+      "depends": [
+        "move_id.laudos_filename"
+      ],
+      "readonly": true,
+      "related": "move_id.laudos_filename",
+      "required": false,
+      "store": false,
+      "string": "Nome do arquivo de laudos",
+      "type": "char"
+    },
+    "picking_ok": {
+      "depends": [
+        "move_id.picking_ok"
+      ],
+      "readonly": true,
+      "related": "move_id.picking_ok",
+      "required": false,
+      "store": false,
+      "string": "Picking OK",
+      "type": "boolean"
+    },
+    "timesheet_ids": {
+      "context": {},
+      "depends": [
+        "move_id.timesheet_ids"
+      ],
+      "domain": [],
+      "readonly": true,
+      "related": "move_id.timesheet_ids",
+      "relation": "account.analytic.line",
+      "required": false,
+      "store": false,
+      "string": "Timesheets",
+      "type": "one2many"
+    },
+    "timesheet_count": {
+      "depends": [
+        "move_id.timesheet_count"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "related": "move_id.timesheet_count",
+      "required": false,
+      "store": false,
+      "string": "Number of timesheets",
+      "type": "integer"
+    },
+    "timesheet_encode_uom_id": {
+      "context": {},
+      "depends": [
+        "move_id.timesheet_encode_uom_id"
+      ],
+      "domain": [
+        [
+          "category_id",
+          "=",
+          3
+        ]
+      ],
+      "readonly": true,
+      "related": "move_id.timesheet_encode_uom_id",
+      "relation": "uom.uom",
+      "required": false,
+      "store": false,
+      "string": "Timesheet Encoding Unit",
+      "type": "many2one"
+    },
+    "timesheet_total_duration": {
+      "depends": [
+        "move_id.timesheet_total_duration"
+      ],
+      "group_operator": "sum",
+      "help": "Total recorded duration, expressed in the encoding UoM, and rounded to the unit",
+      "readonly": true,
+      "related": "move_id.timesheet_total_duration",
+      "required": false,
+      "store": false,
+      "string": "Timesheet Total Duration",
+      "type": "integer"
+    },
+    "x_studio_observao_interna": {
+      "depends": [
+        "move_id.x_studio_observao_interna"
+      ],
+      "readonly": false,
+      "related": "move_id.x_studio_observao_interna",
+      "required": false,
+      "store": false,
+      "string": "Observação Interna",
+      "type": "text"
+    }
+  },
+  "estatisticas": {
+    "computados": 0,
+    "relacionados": 370,
+    "armazenados": 28,
+    "obrigatorios": 7
+  }
+}

@@ -1,0 +1,860 @@
+{% extends "base.html" %}
+
+{% block title %}Baixa de Títulos via Excel{% endblock %}
+
+{% block extra_css %}
+<style>
+    .hub-container {
+        max-width: 1600px;
+        margin: 0 auto;
+    }
+
+    /* Stats Cards */
+    .stat-card {
+        border: none;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        transition: all 0.3s ease;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    }
+
+    .stat-card .stat-value {
+        font-size: 1.8rem;
+        font-weight: 700;
+    }
+
+    .stat-card .stat-label {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    /* Tabela */
+    .table-baixas {
+        font-size: 0.9rem;
+    }
+
+    .table-baixas th {
+        background: #f8f9fa;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        font-weight: 600;
+        border-bottom: 2px solid #dee2e6;
+    }
+
+    .table-baixas .row-inactive {
+        opacity: 0.5;
+        background: #f8f9fa;
+    }
+
+    .table-baixas .row-sucesso {
+        background: #d4edda;
+    }
+
+    .table-baixas .row-erro {
+        background: #f8d7da;
+    }
+
+    .table-baixas .row-processando {
+        background: #fff3cd;
+    }
+
+    /* Status badges */
+    .status-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-weight: 500;
+    }
+
+    .status-pendente { background: #e9ecef; color: #495057; }
+    .status-valido { background: #d4edda; color: #155724; }
+    .status-invalido { background: #f8d7da; color: #721c24; }
+    .status-processando { background: #fff3cd; color: #856404; }
+    .status-sucesso { background: #28a745; color: white; }
+    .status-erro { background: #dc3545; color: white; }
+
+    /* Warning duplicidade */
+    .warning-duplicidade {
+        color: #856404;
+        font-size: 0.8rem;
+    }
+
+    /* Journal Badge */
+    .journal-badge {
+        font-size: 0.7rem;
+        padding: 0.2rem 0.4rem;
+    }
+
+    .journal-badge.bank { background-color: #e3f2fd; color: #1976d2; }
+    .journal-badge.cash { background-color: #fff3e0; color: #f57c00; }
+
+    /* Barra de ações flutuante */
+    .action-bar {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #343a40;
+        color: white;
+        padding: 12px 24px;
+        border-radius: 50px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        z-index: 1000;
+        display: none;
+        align-items: center;
+        gap: 15px;
+    }
+
+    .action-bar.show {
+        display: flex;
+        animation: slideUp 0.3s ease;
+    }
+
+    @keyframes slideUp {
+        from { transform: translateX(-50%) translateY(100px); opacity: 0; }
+        to { transform: translateX(-50%) translateY(0); opacity: 1; }
+    }
+
+    .action-bar .count {
+        font-weight: bold;
+        font-size: 1.1rem;
+    }
+
+    /* Upload Zone no Modal */
+    .upload-zone-modal {
+        border: 2px dashed #dee2e6;
+        border-radius: 12px;
+        padding: 2rem;
+        text-align: center;
+        transition: all 0.3s ease;
+        cursor: pointer;
+        background: #f8f9fa;
+    }
+
+    .upload-zone-modal:hover {
+        border-color: #28a745;
+        background: #e8f5e9;
+    }
+
+    .upload-zone-modal.dragover {
+        border-color: #28a745;
+        background: #c8e6c9;
+    }
+
+    .upload-zone-modal i {
+        font-size: 2.5rem;
+        color: #6c757d;
+        margin-bottom: 0.5rem;
+    }
+
+    /* Filtros */
+    .filter-bar {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    /* Checkbox styling */
+    .form-check-input {
+        cursor: pointer;
+    }
+
+    .form-check-input:checked {
+        background-color: #28a745;
+        border-color: #28a745;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4 hub-container">
+    <!-- Cabeçalho -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-2">
+                    <li class="breadcrumb-item"><a href="{{ url_for('financeiro.contas_receber_hub') }}">Contas a Receber</a></li>
+                    <li class="breadcrumb-item active">Baixa de Títulos</li>
+                </ol>
+            </nav>
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="mb-0">
+                        <i class="fas fa-file-invoice-dollar text-success"></i>
+                        Baixa de Títulos via Excel
+                    </h2>
+                    <small class="text-muted">Gerencie baixas importadas e processe no Odoo</small>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="{{ url_for('financeiro.baixas_download_template') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-download me-1"></i> Template
+                    </a>
+                    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalImportar">
+                        <i class="fas fa-upload me-1"></i> Nova Importação
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cards de Estatísticas -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-2">
+            <div class="card stat-card h-100">
+                <div class="card-body text-center py-3">
+                    <div class="stat-value text-primary" id="statTotal">{{ stats.total }}</div>
+                    <div class="stat-label text-muted">Total</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card stat-card h-100">
+                <div class="card-body text-center py-3">
+                    <div class="stat-value text-warning" id="statPendentes">{{ stats.pendentes }}</div>
+                    <div class="stat-label text-muted">Pendentes</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card stat-card h-100">
+                <div class="card-body text-center py-3">
+                    <div class="stat-value text-info" id="statValidos">{{ stats.validos }}</div>
+                    <div class="stat-label text-muted">Válidos</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card stat-card h-100">
+                <div class="card-body text-center py-3">
+                    <div class="stat-value text-danger" id="statInvalidos">{{ stats.invalidos }}</div>
+                    <div class="stat-label text-muted">Inválidos</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card stat-card h-100">
+                <div class="card-body text-center py-3">
+                    <div class="stat-value text-success" id="statSucesso">{{ stats.sucesso }}</div>
+                    <div class="stat-label text-muted">Sucesso</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card stat-card h-100">
+                <div class="card-body text-center py-3">
+                    <div class="stat-value text-danger" id="statErro">{{ stats.erro }}</div>
+                    <div class="stat-label text-muted">Erro</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="filter-bar">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label small mb-1">Lote</label>
+                <select class="form-select form-select-sm" id="filtroLote">
+                    <option value="">Todos os lotes</option>
+                    {% for lote in lotes %}
+                    <option value="{{ lote.id }}" {% if filtro_lote == lote.id %}selected{% endif %}>
+                        #{{ lote.id }} - {{ lote.nome_arquivo[:20] }}...
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-1">Status</label>
+                <select class="form-select form-select-sm" id="filtroStatus">
+                    <option value="">Todos</option>
+                    <option value="PENDENTE" {% if filtro_status == 'PENDENTE' %}selected{% endif %}>Pendente</option>
+                    <option value="VALIDO" {% if filtro_status == 'VALIDO' %}selected{% endif %}>Válido</option>
+                    <option value="INVALIDO" {% if filtro_status == 'INVALIDO' %}selected{% endif %}>Inválido</option>
+                    <option value="SUCESSO" {% if filtro_status == 'SUCESSO' %}selected{% endif %}>Sucesso</option>
+                    <option value="ERRO" {% if filtro_status == 'ERRO' %}selected{% endif %}>Erro</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-1">Ativo</label>
+                <select class="form-select form-select-sm" id="filtroAtivo">
+                    <option value="">Todos</option>
+                    <option value="1" {% if filtro_ativo == '1' %}selected{% endif %}>Ativos</option>
+                    <option value="0" {% if filtro_ativo == '0' %}selected{% endif %}>Inativos</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small mb-1">Buscar NF</label>
+                <input type="text" class="form-control form-control-sm" id="filtroNF"
+                       placeholder="Número da NF..." value="{{ filtro_nf or '' }}">
+            </div>
+            <div class="col-md-3 d-flex gap-2">
+                <button class="btn btn-primary btn-sm" onclick="aplicarFiltros()">
+                    <i class="fas fa-search"></i> Filtrar
+                </button>
+                <button class="btn btn-outline-secondary btn-sm" onclick="limparFiltros()">
+                    <i class="fas fa-times"></i> Limpar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela Principal -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center py-2">
+            <div class="d-flex align-items-center gap-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="checkTodosPagina"
+                           onchange="togglePagina(this.checked)">
+                    <label class="form-check-label small" for="checkTodosPagina">
+                        Página
+                    </label>
+                </div>
+                <button class="btn btn-sm btn-outline-primary" onclick="selecionarTodos()">
+                    <i class="fas fa-check-double"></i> Selecionar Todos ({{ stats.total }})
+                </button>
+                <span class="text-muted small" id="infoSelecionados">
+                    <span id="countSelecionados">0</span> selecionado(s)
+                </span>
+            </div>
+            <div>
+                <span class="text-muted small">
+                    Mostrando {{ itens|length }} de {{ stats.total }} itens
+                </span>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive" style="max-height: 60vh; overflow-y: auto;">
+                <table class="table table-sm table-hover table-baixas mb-0">
+                    <thead>
+                        <tr>
+                            <th width="40"></th>
+                            <th width="50">Lote</th>
+                            <th width="50">Linha</th>
+                            <th>NF</th>
+                            <th width="60">Parcela</th>
+                            <th width="120">Valor</th>
+                            <th>Journal</th>
+                            <th width="100">Data</th>
+                            <th width="80">Ativo</th>
+                            <th width="90">Status</th>
+                            <th>Mensagem</th>
+                            <th width="100">Resultado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelaBody">
+                        {% for item in itens %}
+                        <tr class="{% if not item.ativo %}row-inactive{% endif %}
+                                   {% if item.status == 'SUCESSO' %}row-sucesso{% endif %}
+                                   {% if item.status == 'ERRO' %}row-erro{% endif %}
+                                   {% if item.status == 'PROCESSANDO' %}row-processando{% endif %}"
+                            data-id="{{ item.id }}"
+                            data-status="{{ item.status }}"
+                            data-ativo="{{ item.ativo|lower }}">
+                            <td class="text-center">
+                                <input type="checkbox" class="form-check-input item-check"
+                                       value="{{ item.id }}"
+                                       {% if item.status in ['SUCESSO', 'PROCESSANDO'] %}disabled{% endif %}
+                                       onchange="atualizarSelecao()">
+                            </td>
+                            <td>
+                                <span class="badge bg-secondary">#{{ item.lote_id }}</span>
+                            </td>
+                            <td>{{ item.linha_excel }}</td>
+                            <td>
+                                <strong>{{ item.nf_excel }}</strong>
+                                {% if item.duplicidade %}
+                                <br><span class="warning-duplicidade">
+                                    <i class="fas fa-exclamation-triangle"></i> Possível duplicidade
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">{{ item.parcela_excel }}</td>
+                            <td class="text-end">
+                                <strong>R$ {{ "%.2f"|format(item.valor_excel) }}</strong>
+                            </td>
+                            <td>
+                                {{ item.journal_excel }}
+                                {% if item.journal_odoo_id %}
+                                <i class="fas fa-check-circle text-success" title="Journal válido"></i>
+                                {% else %}
+                                <i class="fas fa-times-circle text-danger" title="Journal não encontrado"></i>
+                                {% endif %}
+                            </td>
+                            <td>{{ item.data_excel.strftime('%d/%m/%Y') if item.data_excel else '-' }}</td>
+                            <td class="text-center">
+                                <div class="form-check form-switch d-inline-block">
+                                    <input class="form-check-input" type="checkbox" role="switch"
+                                           id="ativo{{ item.id }}"
+                                           {% if item.ativo %}checked{% endif %}
+                                           {% if item.status in ['SUCESSO', 'PROCESSANDO', 'INVALIDO'] %}disabled{% endif %}
+                                           onchange="toggleAtivo({{ item.id }}, this.checked)">
+                                </div>
+                            </td>
+                            <td>
+                                <span class="status-badge status-{{ item.status|lower }}">
+                                    {{ item.status }}
+                                </span>
+                            </td>
+                            <td>
+                                <small class="text-muted" title="{{ item.mensagem or '' }}">
+                                    {{ (item.mensagem or '-')[:30] }}{% if item.mensagem and item.mensagem|length > 30 %}...{% endif %}
+                                </small>
+                            </td>
+                            <td>
+                                {% if item.payment_odoo_name %}
+                                <small class="text-success">
+                                    <i class="fas fa-check"></i> {{ item.payment_odoo_name }}
+                                </small>
+                                {% elif item.status == 'ERRO' %}
+                                <small class="text-danger">
+                                    <i class="fas fa-times"></i> Falha
+                                </small>
+                                {% else %}
+                                <small class="text-muted">-</small>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="12" class="text-center py-4 text-muted">
+                                <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
+                                Nenhum item encontrado.
+                                <a href="#" data-bs-toggle="modal" data-bs-target="#modalImportar">
+                                    Importe um arquivo Excel
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Barra de Ações Flutuante -->
+<div class="action-bar" id="actionBar">
+    <span class="count" id="actionCount">0</span>
+    <span>selecionado(s)</span>
+    <div class="vr bg-light"></div>
+    <button class="btn btn-success btn-sm" onclick="processarSelecionados()">
+        <i class="fas fa-play me-1"></i> Processar no Odoo
+    </button>
+    <button class="btn btn-outline-light btn-sm" onclick="ativarSelecionados(true)">
+        <i class="fas fa-toggle-on"></i> Ativar
+    </button>
+    <button class="btn btn-outline-light btn-sm" onclick="ativarSelecionados(false)">
+        <i class="fas fa-toggle-off"></i> Inativar
+    </button>
+    <button class="btn btn-outline-light btn-sm" onclick="limparSelecao()">
+        <i class="fas fa-times"></i>
+    </button>
+</div>
+
+<!-- Modal Importar -->
+<div class="modal fade" id="modalImportar" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-upload me-2"></i>
+                    Importar Arquivo Excel
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Instruções -->
+                <div class="alert alert-info mb-4">
+                    <h6 class="mb-2"><i class="fas fa-info-circle"></i> Formato esperado</h6>
+                    <p class="mb-1">O arquivo deve conter as colunas:</p>
+                    <code>NF | PARCELA | VALOR | JOURNAL | DATA</code>
+                    <p class="mt-2 mb-0">
+                        <a href="{{ url_for('financeiro.baixas_download_template') }}">
+                            <i class="fas fa-download"></i> Baixar modelo Excel
+                        </a>
+                    </p>
+                </div>
+
+                <!-- Upload Zone -->
+                <div class="upload-zone-modal" id="uploadZone">
+                    <input type="file" id="fileInput" accept=".xlsx" style="display: none;">
+                    <i class="fas fa-cloud-upload-alt d-block"></i>
+                    <h5>Arraste o arquivo aqui</h5>
+                    <p class="text-muted mb-0">ou clique para selecionar</p>
+                </div>
+
+                <!-- Progress -->
+                <div id="uploadProgress" class="mt-3" style="display: none;">
+                    <div class="progress">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated"
+                             role="progressbar" style="width: 100%"></div>
+                    </div>
+                    <small class="text-muted">Processando arquivo...</small>
+                </div>
+
+                <!-- Resultado da importação -->
+                <div id="uploadResultado" class="mt-3" style="display: none;">
+                    <div class="alert" id="uploadResultadoAlert">
+                        <span id="uploadResultadoMsg"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Processamento -->
+<div class="modal fade" id="modalProcessamento" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-body text-center py-5">
+                <div class="spinner-border text-success mb-3" role="status" style="width: 3rem; height: 3rem;">
+                    <span class="visually-hidden">Processando...</span>
+                </div>
+                <h5>Processando Baixas no Odoo</h5>
+                <p class="text-muted mb-0" id="processamentoStatus">Aguarde...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Confirmação -->
+<div class="modal fade" id="modalConfirmacao" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Confirmar Processamento
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Você está prestes a processar <strong id="confirmQtd">0</strong> baixa(s) no Odoo.</p>
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <strong>Atenção:</strong> Esta ação criará pagamentos no Odoo e não pode ser desfeita facilmente.
+                </div>
+                <p class="mb-0">Deseja continuar?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" id="btnConfirmarProcessar">
+                    <i class="fas fa-play me-1"></i> Sim, Processar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Estado global
+let itensSelecionados = new Set();
+let todosIds = {{ todos_ids|tojson|default('[]') }};
+
+document.addEventListener('DOMContentLoaded', function() {
+    setupUploadZone();
+    setupFiltros();
+});
+
+// ============================================================================
+// UPLOAD
+// ============================================================================
+
+function setupUploadZone() {
+    const zone = document.getElementById('uploadZone');
+    const input = document.getElementById('fileInput');
+
+    zone.addEventListener('click', () => input.click());
+
+    zone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        zone.classList.add('dragover');
+    });
+
+    zone.addEventListener('dragleave', () => {
+        zone.classList.remove('dragover');
+    });
+
+    zone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        zone.classList.remove('dragover');
+        if (e.dataTransfer.files.length > 0) {
+            uploadFile(e.dataTransfer.files[0]);
+        }
+    });
+
+    input.addEventListener('change', () => {
+        if (input.files.length > 0) {
+            uploadFile(input.files[0]);
+        }
+    });
+}
+
+function uploadFile(file) {
+    if (!file.name.endsWith('.xlsx')) {
+        toastr.error('Arquivo deve ser .xlsx', 'Erro');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('arquivo', file);
+
+    document.getElementById('uploadProgress').style.display = 'block';
+    document.getElementById('uploadResultado').style.display = 'none';
+
+    fetch("{{ url_for('financeiro.baixas_upload') }}", {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        document.getElementById('uploadProgress').style.display = 'none';
+        document.getElementById('uploadResultado').style.display = 'block';
+
+        const alert = document.getElementById('uploadResultadoAlert');
+        const msg = document.getElementById('uploadResultadoMsg');
+
+        if (data.success) {
+            alert.className = 'alert alert-success';
+            msg.innerHTML = `
+                <i class="fas fa-check-circle"></i>
+                <strong>Importação concluída!</strong><br>
+                ${data.linhas_validas} válidas, ${data.linhas_invalidas} inválidas de ${data.total_linhas} linhas.
+                ${data.duplicidades > 0 ? '<br><span class="text-warning"><i class="fas fa-exclamation-triangle"></i> ' + data.duplicidades + ' possíveis duplicidade(s) detectada(s)</span>' : ''}
+            `;
+            toastr.success('Arquivo importado com sucesso!');
+
+            // Recarregar página após 2 segundos
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            alert.className = 'alert alert-danger';
+            msg.innerHTML = `<i class="fas fa-times-circle"></i> ${data.error}`;
+            toastr.error(data.error, 'Erro na Importação');
+        }
+    })
+    .catch(error => {
+        document.getElementById('uploadProgress').style.display = 'none';
+        console.error('Erro:', error);
+        toastr.error('Erro ao enviar arquivo', 'Erro');
+    });
+}
+
+// ============================================================================
+// FILTROS
+// ============================================================================
+
+function setupFiltros() {
+    // Enter no campo de NF aplica filtro
+    document.getElementById('filtroNF').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') aplicarFiltros();
+    });
+}
+
+function aplicarFiltros() {
+    const params = new URLSearchParams();
+
+    const lote = document.getElementById('filtroLote').value;
+    const status = document.getElementById('filtroStatus').value;
+    const ativo = document.getElementById('filtroAtivo').value;
+    const nf = document.getElementById('filtroNF').value;
+
+    if (lote) params.set('lote', lote);
+    if (status) params.set('status', status);
+    if (ativo) params.set('ativo', ativo);
+    if (nf) params.set('nf', nf);
+
+    window.location.href = "{{ url_for('financeiro.baixas_hub') }}?" + params.toString();
+}
+
+function limparFiltros() {
+    window.location.href = "{{ url_for('financeiro.baixas_hub') }}";
+}
+
+// ============================================================================
+// SELEÇÃO
+// ============================================================================
+
+function togglePagina(checked) {
+    document.querySelectorAll('.item-check:not(:disabled)').forEach(cb => {
+        cb.checked = checked;
+        if (checked) {
+            itensSelecionados.add(parseInt(cb.value));
+        } else {
+            itensSelecionados.delete(parseInt(cb.value));
+        }
+    });
+    atualizarSelecao();
+}
+
+function selecionarTodos() {
+    // Adiciona todos os IDs processáveis
+    todosIds.forEach(id => itensSelecionados.add(id));
+
+    // Marca os checkboxes visíveis
+    document.querySelectorAll('.item-check:not(:disabled)').forEach(cb => {
+        cb.checked = true;
+    });
+
+    atualizarSelecao();
+    toastr.info(`${itensSelecionados.size} itens selecionados`);
+}
+
+function limparSelecao() {
+    itensSelecionados.clear();
+    document.querySelectorAll('.item-check').forEach(cb => cb.checked = false);
+    document.getElementById('checkTodosPagina').checked = false;
+    atualizarSelecao();
+}
+
+function atualizarSelecao() {
+    // Sincronizar set com checkboxes visíveis
+    document.querySelectorAll('.item-check').forEach(cb => {
+        const id = parseInt(cb.value);
+        if (cb.checked) {
+            itensSelecionados.add(id);
+        } else {
+            itensSelecionados.delete(id);
+        }
+    });
+
+    const count = itensSelecionados.size;
+    document.getElementById('countSelecionados').textContent = count;
+    document.getElementById('actionCount').textContent = count;
+
+    const actionBar = document.getElementById('actionBar');
+    if (count > 0) {
+        actionBar.classList.add('show');
+    } else {
+        actionBar.classList.remove('show');
+    }
+}
+
+// ============================================================================
+// AÇÕES
+// ============================================================================
+
+function toggleAtivo(itemId, ativo) {
+    fetch(`{{ url_for('financeiro.baixas_toggle_item', item_id=0) }}`.replace('/0/', `/${itemId}/`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ativo: ativo })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Atualizar visual da linha
+            const row = document.querySelector(`tr[data-id="${itemId}"]`);
+            if (row) {
+                if (ativo) {
+                    row.classList.remove('row-inactive');
+                } else {
+                    row.classList.add('row-inactive');
+                }
+            }
+            toastr.success(ativo ? 'Item ativado' : 'Item inativado');
+        } else {
+            toastr.error(data.error, 'Erro');
+            // Reverter checkbox
+            document.getElementById(`ativo${itemId}`).checked = !ativo;
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        toastr.error('Erro ao atualizar item', 'Erro');
+        document.getElementById(`ativo${itemId}`).checked = !ativo;
+    });
+}
+
+function ativarSelecionados(ativo) {
+    if (itensSelecionados.size === 0) return;
+
+    const ids = Array.from(itensSelecionados);
+
+    fetch("{{ url_for('financeiro.baixas_ativar_lote') }}", {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: ids, ativo: ativo })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            toastr.success(`${data.atualizados} itens ${ativo ? 'ativados' : 'inativados'}`);
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            toastr.error(data.error, 'Erro');
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        toastr.error('Erro ao atualizar itens', 'Erro');
+    });
+}
+
+function processarSelecionados() {
+    if (itensSelecionados.size === 0) {
+        toastr.warning('Nenhum item selecionado', 'Atenção');
+        return;
+    }
+
+    // Mostrar modal de confirmação
+    document.getElementById('confirmQtd').textContent = itensSelecionados.size;
+    const modalConfirm = new bootstrap.Modal(document.getElementById('modalConfirmacao'));
+    modalConfirm.show();
+
+    // Configurar botão de confirmação
+    document.getElementById('btnConfirmarProcessar').onclick = function() {
+        modalConfirm.hide();
+        executarProcessamento();
+    };
+}
+
+function executarProcessamento() {
+    const ids = Array.from(itensSelecionados);
+
+    // Mostrar modal de processamento
+    const modalProc = new bootstrap.Modal(document.getElementById('modalProcessamento'));
+    modalProc.show();
+    document.getElementById('processamentoStatus').textContent =
+        `Processando ${ids.length} baixa(s)...`;
+
+    fetch("{{ url_for('financeiro.baixas_processar_itens') }}", {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: ids })
+    })
+    .then(response => response.json())
+    .then(data => {
+        modalProc.hide();
+
+        if (data.success) {
+            const res = data.resultado;
+            toastr.success(
+                `Sucesso: ${res.sucesso} | Erro: ${res.erro} | Total: ${res.processados}`,
+                'Processamento Concluído!'
+            );
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            toastr.error(data.error, 'Erro no Processamento');
+        }
+    })
+    .catch(error => {
+        modalProc.hide();
+        console.error('Erro:', error);
+        toastr.error('Erro ao processar baixas', 'Erro');
+    });
+}
+</script>
+{% endblock %}

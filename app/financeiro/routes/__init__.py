@@ -12,6 +12,7 @@ Estrutura:
 - tipos.py               - CRUD de tipos
 - liberacao.py           - CRUD de liberação antecipação
 - pendencias_modal.py    - APIs do modal de pendência financeira
+- baixas.py              - Baixa de títulos via Excel (NEW)
 """
 
 import os
@@ -26,10 +27,11 @@ UPLOAD_FOLDER = os.path.join(BASE_DIR, '..', '..', '..', 'uploads', 'financeiro'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # Importar módulos de rotas (registra as rotas no blueprint)
-from app.financeiro.routes import pendencias  
+from app.financeiro.routes import pendencias
 from app.financeiro.routes import contas_receber
 from app.financeiro.routes import contas_receber_api
 from app.financeiro.routes import abatimentos
 from app.financeiro.routes import tipos
 from app.financeiro.routes import liberacao
 from app.financeiro.routes import pendencias_modal
+from app.financeiro.routes import baixas

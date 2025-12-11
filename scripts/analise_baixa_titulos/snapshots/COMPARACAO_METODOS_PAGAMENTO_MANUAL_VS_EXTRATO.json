@@ -1,0 +1,16 @@
+{
+  "analise": "COMPARACAO_PAGAMENTO_MANUAL_VS_EXTRATO",
+  "titulo_id": 2388141,
+  "nf_id": 365580,
+  "diferencas": {
+    "payment_state": {
+      "pagamento_manual": "in_payment",
+      "extrato_bancario": "paid"
+    },
+    "x_studio_status_de_pagamento": {
+      "pagamento_manual": "in_payment",
+      "extrato_bancario": "paid"
+    }
+  },
+  "conclusao": "Estrutura de reconciliacao IDENTICA. Diferenca principal: payment_state (in_payment vs paid)"
+}

@@ -1,0 +1,5258 @@
+{
+  "modelo": "account.move.line",
+  "total_campos": 326,
+  "campos": {
+    "activity_ids": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "groups": "base.group_user",
+      "readonly": false,
+      "relation": "mail.activity",
+      "required": false,
+      "store": true,
+      "string": "Activities",
+      "type": "one2many"
+    },
+    "activity_state": {
+      "depends": [
+        "activity_ids.state"
+      ],
+      "groups": "base.group_user",
+      "help": "Status based on activities\nOverdue: Due date is already passed\nToday: Activity date is today\nPlanned: Future activities.",
+      "readonly": true,
+      "required": false,
+      "selection": [
+        [
+          "overdue",
+          "Overdue"
+        ],
+        [
+          "today",
+          "Today"
+        ],
+        [
+          "planned",
+          "Planned"
+        ]
+      ],
+      "store": false,
+      "string": "Activity State",
+      "type": "selection"
+    },
+    "activity_user_id": {
+      "context": {},
+      "depends": [
+        "activity_ids.user_id"
+      ],
+      "domain": [],
+      "groups": "base.group_user",
+      "readonly": true,
+      "relation": "res.users",
+      "required": false,
+      "store": false,
+      "string": "Responsible User",
+      "type": "many2one"
+    },
+    "activity_type_id": {
+      "context": {},
+      "depends": [
+        "activity_ids.activity_type_id"
+      ],
+      "domain": "['|', ('res_model', '=', False), ('res_model', '=', res_model)]",
+      "groups": "base.group_user",
+      "readonly": false,
+      "related": "activity_ids.activity_type_id",
+      "relation": "mail.activity.type",
+      "required": false,
+      "store": false,
+      "string": "Next Activity Type",
+      "type": "many2one"
+    },
+    "activity_type_icon": {
+      "depends": [
+        "activity_ids.icon"
+      ],
+      "help": "Font awesome icon e.g. fa-tasks",
+      "readonly": true,
+      "related": "activity_ids.icon",
+      "required": false,
+      "store": false,
+      "string": "Activity Type Icon",
+      "type": "char"
+    },
+    "activity_date_deadline": {
+      "depends": [
+        "activity_ids.date_deadline"
+      ],
+      "groups": "base.group_user",
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Next Activity Deadline",
+      "type": "date"
+    },
+    "my_activity_date_deadline": {
+      "depends": [
+        "activity_ids.date_deadline",
+        "activity_ids.user_id"
+      ],
+      "groups": "base.group_user",
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "My Activity Deadline",
+      "type": "date"
+    },
+    "activity_summary": {
+      "depends": [
+        "activity_ids.summary"
+      ],
+      "groups": "base.group_user",
+      "readonly": false,
+      "related": "activity_ids.summary",
+      "required": false,
+      "store": false,
+      "string": "Next Activity Summary",
+      "type": "char"
+    },
+    "activity_exception_decoration": {
+      "depends": [
+        "activity_ids.activity_type_id.decoration_type",
+        "activity_ids.activity_type_id.icon"
+      ],
+      "help": "Type of the exception activity on record.",
+      "readonly": true,
+      "required": false,
+      "selection": [
+        [
+          "warning",
+          "Alert"
+        ],
+        [
+          "danger",
+          "Error"
+        ]
+      ],
+      "store": false,
+      "string": "Activity Exception Decoration",
+      "type": "selection"
+    },
+    "activity_exception_icon": {
+      "depends": [
+        "activity_ids.activity_type_id.decoration_type",
+        "activity_ids.activity_type_id.icon"
+      ],
+      "help": "Icon to indicate an exception activity.",
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Icon",
+      "type": "char"
+    },
+    "activity_calendar_event_id": {
+      "context": {},
+      "depends": [
+        "activity_ids.calendar_event_id"
+      ],
+      "domain": [],
+      "groups": "base.group_user",
+      "readonly": true,
+      "relation": "calendar.event",
+      "required": false,
+      "store": false,
+      "string": "Next Activity Calendar Event",
+      "type": "many2one"
+    },
+    "message_is_follower": {
+      "depends": [
+        "message_follower_ids"
+      ],
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Is Follower",
+      "type": "boolean"
+    },
+    "message_follower_ids": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "groups": "base.group_user",
+      "readonly": false,
+      "relation": "mail.followers",
+      "required": false,
+      "store": true,
+      "string": "Followers",
+      "type": "one2many"
+    },
+    "message_partner_ids": {
+      "context": {},
+      "depends": [
+        "message_follower_ids"
+      ],
+      "domain": [],
+      "groups": "base.group_user",
+      "readonly": false,
+      "relation": "res.partner",
+      "required": false,
+      "store": false,
+      "string": "Followers (Partners)",
+      "type": "many2many"
+    },
+    "message_ids": {
+      "context": {},
+      "depends": [],
+      "domain": [
+        [
+          "message_type",
+          "!=",
+          "user_notification"
+        ]
+      ],
+      "readonly": false,
+      "relation": "mail.message",
+      "required": false,
+      "store": true,
+      "string": "Messages",
+      "type": "one2many"
+    },
+    "has_message": {
+      "depends": [],
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Has Message",
+      "type": "boolean"
+    },
+    "message_needaction": {
+      "depends": [],
+      "help": "If checked, new messages require your attention.",
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Action Needed",
+      "type": "boolean"
+    },
+    "message_needaction_counter": {
+      "depends": [],
+      "group_operator": "sum",
+      "help": "Number of messages requiring action",
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Number of Actions",
+      "type": "integer"
+    },
+    "message_has_error": {
+      "depends": [],
+      "help": "If checked, some messages have a delivery error.",
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Message Delivery error",
+      "type": "boolean"
+    },
+    "message_has_error_counter": {
+      "depends": [],
+      "group_operator": "sum",
+      "help": "Number of messages with delivery error",
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Number of errors",
+      "type": "integer"
+    },
+    "message_attachment_count": {
+      "depends": [],
+      "group_operator": "sum",
+      "groups": "base.group_user",
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Attachment Count",
+      "type": "integer"
+    },
+    "rating_ids": {
+      "context": {},
+      "depends": [],
+      "domain": [
+        [
+          "res_model",
+          "=",
+          "account.move.line"
+        ]
+      ],
+      "groups": "base.group_user",
+      "readonly": false,
+      "relation": "rating.rating",
+      "required": false,
+      "store": true,
+      "string": "Ratings",
+      "type": "one2many"
+    },
+    "website_message_ids": {
+      "context": {},
+      "depends": [],
+      "domain": [
+        [
+          "model",
+          "=",
+          "account.move.line"
+        ],
+        [
+          "message_type",
+          "in",
+          [
+            "comment",
+            "email",
+            "email_outgoing",
+            "auto_comment"
+          ]
+        ]
+      ],
+      "help": "Website communication history",
+      "readonly": false,
+      "relation": "mail.message",
+      "required": false,
+      "store": true,
+      "string": "Website Messages",
+      "type": "one2many"
+    },
+    "message_has_sms_error": {
+      "depends": [],
+      "help": "If checked, some messages have a delivery error.",
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "SMS Delivery error",
+      "type": "boolean"
+    },
+    "analytic_distribution": {
+      "depends": [
+        "account_id",
+        "partner_id",
+        "product_id"
+      ],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Analytic Distribution",
+      "type": "json"
+    },
+    "analytic_distribution_search": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "store": false,
+      "string": "Analytic Distribution Search",
+      "type": "json",
+      "searchable": false
+    },
+    "analytic_precision": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": false,
+      "string": "Analytic Precision",
+      "type": "integer"
+    },
+    "distribution_analytic_account_ids": {
+      "context": {},
+      "depends": [
+        "analytic_distribution"
+      ],
+      "domain": [],
+      "readonly": true,
+      "relation": "account.analytic.account",
+      "required": false,
+      "store": false,
+      "string": "Distribution Analytic Account",
+      "type": "many2many"
+    },
+    "move_id": {
+      "context": {},
+      "depends": [],
+      "domain": "(company_id and ['|', ('company_id', '=', False), ('company_id', 'in', [company_id])] or [('company_id', '=', False)]) + ([])",
+      "readonly": true,
+      "relation": "account.move",
+      "required": true,
+      "store": true,
+      "string": "Journal Entry",
+      "type": "many2one"
+    },
+    "journal_id": {
+      "context": {},
+      "depends": [
+        "move_id.journal_id"
+      ],
+      "domain": "[('id', 'in', suitable_journal_ids)]",
+      "readonly": true,
+      "related": "move_id.journal_id",
+      "relation": "account.journal",
+      "required": false,
+      "store": true,
+      "string": "Journal",
+      "type": "many2one"
+    },
+    "company_id": {
+      "context": {},
+      "depends": [
+        "move_id.company_id"
+      ],
+      "domain": [],
+      "readonly": true,
+      "related": "move_id.company_id",
+      "relation": "res.company",
+      "required": false,
+      "store": true,
+      "string": "Company",
+      "type": "many2one"
+    },
+    "company_currency_id": {
+      "context": {},
+      "depends": [
+        "move_id.company_currency_id"
+      ],
+      "domain": [],
+      "readonly": true,
+      "related": "move_id.company_currency_id",
+      "relation": "res.currency",
+      "required": false,
+      "store": true,
+      "string": "Company Currency",
+      "type": "many2one"
+    },
+    "move_name": {
+      "depends": [
+        "move_id.name"
+      ],
+      "readonly": true,
+      "related": "move_id.name",
+      "required": false,
+      "store": true,
+      "string": "Number",
+      "type": "char"
+    },
+    "parent_state": {
+      "depends": [
+        "move_id.state"
+      ],
+      "readonly": true,
+      "related": "move_id.state",
+      "required": false,
+      "selection": [
+        [
+          "draft",
+          "Draft"
+        ],
+        [
+          "posted",
+          "Posted"
+        ],
+        [
+          "cancel",
+          "Cancelled"
+        ]
+      ],
+      "store": true,
+      "string": "Status",
+      "type": "selection"
+    },
+    "date": {
+      "depends": [
+        "move_id.date"
+      ],
+      "group_operator": "min",
+      "readonly": true,
+      "related": "move_id.date",
+      "required": false,
+      "store": true,
+      "string": "Date",
+      "type": "date"
+    },
+    "invoice_date": {
+      "depends": [
+        "move_id.invoice_date"
+      ],
+      "group_operator": "min",
+      "readonly": true,
+      "related": "move_id.invoice_date",
+      "required": false,
+      "store": true,
+      "string": "Invoice/Bill Date",
+      "type": "date"
+    },
+    "ref": {
+      "depends": [
+        "move_id.ref"
+      ],
+      "readonly": true,
+      "related": "move_id.ref",
+      "required": false,
+      "store": true,
+      "string": "Reference",
+      "type": "char"
+    },
+    "is_storno": {
+      "depends": [
+        "move_id.is_storno"
+      ],
+      "help": "Utility field to express whether the journal item is subject to storno accounting",
+      "readonly": true,
+      "related": "move_id.is_storno",
+      "required": false,
+      "store": false,
+      "string": "Company Storno Accounting",
+      "type": "boolean"
+    },
+    "sequence": {
+      "depends": [
+        "display_type"
+      ],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Sequence",
+      "type": "integer"
+    },
+    "move_type": {
+      "depends": [
+        "move_id.move_type"
+      ],
+      "readonly": true,
+      "related": "move_id.move_type",
+      "required": false,
+      "selection": [
+        [
+          "entry",
+          "Journal Entry"
+        ],
+        [
+          "out_invoice",
+          "Customer Invoice"
+        ],
+        [
+          "out_refund",
+          "Customer Credit Note"
+        ],
+        [
+          "in_invoice",
+          "Vendor Bill"
+        ],
+        [
+          "in_refund",
+          "Vendor Credit Note"
+        ],
+        [
+          "out_receipt",
+          "Sales Receipt"
+        ],
+        [
+          "in_receipt",
+          "Purchase Receipt"
+        ]
+      ],
+      "store": false,
+      "string": "Type",
+      "type": "selection"
+    },
+    "account_id": {
+      "context": {},
+      "depends": [],
+      "domain": "(company_id and ['|', ('company_id', '=', False), ('company_id', 'parent_of', [company_id])] or ['|', ('company_id', '=', False), ('company_id', 'parent_of', [''])]) + ([('deprecated', '=', False), ('account_type', '!=', 'off_balance')])",
+      "readonly": false,
+      "relation": "account.account",
+      "required": false,
+      "store": true,
+      "string": "Account",
+      "type": "many2one"
+    },
+    "name": {
+      "depends": [
+        "product_id",
+        "move_id.payment_reference"
+      ],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Label",
+      "type": "char"
+    },
+    "debit": {
+      "depends": [
+        "balance",
+        "move_id.is_storno"
+      ],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Debit",
+      "type": "monetary"
+    },
+    "credit": {
+      "depends": [
+        "balance",
+        "move_id.is_storno"
+      ],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Credit",
+      "type": "monetary"
+    },
+    "balance": {
+      "depends": [
+        "move_id"
+      ],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Balance",
+      "type": "monetary"
+    },
+    "cumulated_balance": {
+      "depends": [],
+      "group_operator": "sum",
+      "help": "Cumulated balance depending on the domain and the order chosen in the view.",
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Cumulated Balance",
+      "type": "monetary"
+    },
+    "currency_rate": {
+      "depends": [
+        "currency_id",
+        "company_id",
+        "move_id.date"
+      ],
+      "group_operator": "sum",
+      "help": "Currency rate from company currency to document currency.",
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Currency Rate",
+      "type": "float"
+    },
+    "amount_currency": {
+      "depends": [
+        "currency_rate",
+        "balance"
+      ],
+      "help": "The amount expressed in an optional other currency if it is a multi-currency entry.",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Amount in Currency",
+      "type": "monetary"
+    },
+    "currency_id": {
+      "context": {},
+      "depends": [
+        "move_id.currency_id"
+      ],
+      "domain": [],
+      "readonly": false,
+      "relation": "res.currency",
+      "required": true,
+      "store": true,
+      "string": "Currency",
+      "type": "many2one"
+    },
+    "is_same_currency": {
+      "depends": [
+        "currency_id",
+        "company_currency_id"
+      ],
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Is Same Currency",
+      "type": "boolean"
+    },
+    "partner_id": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": false,
+      "relation": "res.partner",
+      "required": false,
+      "store": true,
+      "string": "Partner",
+      "type": "many2one"
+    },
+    "reconcile_model_id": {
+      "context": {},
+      "depends": [],
+      "domain": "(company_id and ['|', ('company_id', '=', False), ('company_id', 'in', [company_id])] or [('company_id', '=', False)]) + ([])",
+      "readonly": true,
+      "relation": "account.reconcile.model",
+      "required": false,
+      "store": true,
+      "string": "Reconciliation Model",
+      "type": "many2one"
+    },
+    "payment_id": {
+      "context": {},
+      "depends": [
+        "move_id.payment_id"
+      ],
+      "domain": [],
+      "help": "The payment that created this entry",
+      "readonly": true,
+      "related": "move_id.payment_id",
+      "relation": "account.payment",
+      "required": false,
+      "store": true,
+      "string": "Originator Payment",
+      "type": "many2one"
+    },
+    "statement_line_id": {
+      "context": {},
+      "depends": [
+        "move_id.statement_line_id"
+      ],
+      "domain": [],
+      "help": "The statement line that created this entry",
+      "readonly": true,
+      "related": "move_id.statement_line_id",
+      "relation": "account.bank.statement.line",
+      "required": false,
+      "store": true,
+      "string": "Originator Statement Line",
+      "type": "many2one"
+    },
+    "statement_id": {
+      "context": {},
+      "depends": [
+        "statement_line_id.statement_id"
+      ],
+      "domain": [],
+      "help": "The bank statement used for bank reconciliation",
+      "readonly": true,
+      "related": "statement_line_id.statement_id",
+      "relation": "account.bank.statement",
+      "required": false,
+      "store": true,
+      "string": "Statement",
+      "type": "many2one"
+    },
+    "tax_ids": {
+      "context": {
+        "active_test": false
+      },
+      "depends": [
+        "l10n_br_total_nfe",
+        "product_id",
+        "product_uom_id"
+      ],
+      "domain": "(company_id and ['|', ('company_id', '=', False), ('company_id', 'parent_of', [company_id])] or ['|', ('company_id', '=', False), ('company_id', 'parent_of', [''])]) + ([])",
+      "readonly": false,
+      "relation": "account.tax",
+      "required": false,
+      "store": true,
+      "string": "Taxes",
+      "type": "many2many"
+    },
+    "group_tax_id": {
+      "context": {},
+      "depends": [],
+      "domain": "(company_id and ['|', ('company_id', '=', False), ('company_id', 'parent_of', [company_id])] or ['|', ('company_id', '=', False), ('company_id', 'parent_of', [''])]) + ([])",
+      "readonly": false,
+      "relation": "account.tax",
+      "required": false,
+      "store": true,
+      "string": "Originator Group of Taxes",
+      "type": "many2one"
+    },
+    "tax_line_id": {
+      "context": {},
+      "depends": [
+        "tax_repartition_line_id.tax_id"
+      ],
+      "domain": [],
+      "help": "Indicates that this journal item is a tax line",
+      "readonly": true,
+      "related": "tax_repartition_line_id.tax_id",
+      "relation": "account.tax",
+      "required": false,
+      "store": true,
+      "string": "Originator Tax",
+      "type": "many2one"
+    },
+    "tax_group_id": {
+      "context": {},
+      "depends": [
+        "tax_line_id.tax_group_id"
+      ],
+      "domain": "[('country_id', 'in', (country_id, False))]",
+      "readonly": true,
+      "related": "tax_line_id.tax_group_id",
+      "relation": "account.tax.group",
+      "required": false,
+      "store": true,
+      "string": "Originator tax group",
+      "type": "many2one"
+    },
+    "tax_base_amount": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Base Amount",
+      "type": "monetary"
+    },
+    "tax_repartition_line_id": {
+      "context": {},
+      "depends": [],
+      "domain": "(company_id and ['|', ('company_id', '=', False), ('company_id', 'parent_of', [company_id])] or ['|', ('company_id', '=', False), ('company_id', 'parent_of', [''])]) + ([])",
+      "help": "Tax distribution line that caused the creation of this move line, if any",
+      "readonly": true,
+      "relation": "account.tax.repartition.line",
+      "required": false,
+      "store": true,
+      "string": "Originator Tax Distribution Line",
+      "type": "many2one"
+    },
+    "tax_tag_ids": {
+      "context": {
+        "active_test": false
+      },
+      "depends": [],
+      "domain": [],
+      "help": "Tags assigned to this line by the tax creating it, if any. It determines its impact on financial reports.",
+      "readonly": false,
+      "relation": "account.account.tag",
+      "required": false,
+      "store": true,
+      "string": "Tags",
+      "type": "many2many"
+    },
+    "tax_tag_invert": {
+      "depends": [
+        "move_id.move_type",
+        "tax_ids",
+        "tax_repartition_line_id",
+        "debit",
+        "credit",
+        "tax_tag_ids",
+        "is_refund",
+        "move_id.tax_cash_basis_origin_move_id"
+      ],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Invert Tags",
+      "type": "boolean"
+    },
+    "amount_residual": {
+      "depends": [
+        "debit",
+        "credit",
+        "amount_currency",
+        "account_id",
+        "currency_id",
+        "company_id",
+        "matched_debit_ids",
+        "matched_credit_ids"
+      ],
+      "group_operator": "sum",
+      "help": "The residual amount on a journal item expressed in the company currency.",
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Residual Amount",
+      "type": "monetary"
+    },
+    "amount_residual_currency": {
+      "depends": [
+        "debit",
+        "credit",
+        "amount_currency",
+        "account_id",
+        "currency_id",
+        "company_id",
+        "matched_debit_ids",
+        "matched_credit_ids"
+      ],
+      "help": "The residual amount on a journal item expressed in its currency (possibly not the company currency).",
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Residual Amount in Currency",
+      "type": "monetary"
+    },
+    "reconciled": {
+      "depends": [
+        "debit",
+        "credit",
+        "amount_currency",
+        "account_id",
+        "currency_id",
+        "company_id",
+        "matched_debit_ids",
+        "matched_credit_ids"
+      ],
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Reconciled",
+      "type": "boolean"
+    },
+    "full_reconcile_id": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": true,
+      "relation": "account.full.reconcile",
+      "required": false,
+      "store": true,
+      "string": "Matching",
+      "type": "many2one"
+    },
+    "matched_debit_ids": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "help": "Debit journal items that are matched with this journal item.",
+      "readonly": true,
+      "relation": "account.partial.reconcile",
+      "required": false,
+      "store": true,
+      "string": "Matched Debits",
+      "type": "one2many"
+    },
+    "matched_credit_ids": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "help": "Credit journal items that are matched with this journal item.",
+      "readonly": true,
+      "relation": "account.partial.reconcile",
+      "required": false,
+      "store": true,
+      "string": "Matched Credits",
+      "type": "one2many"
+    },
+    "matching_number": {
+      "depends": [],
+      "help": "Matching number for this line, 'P' if it is only partially reconcile, or the name of the full reconcile if it exists.",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Matching #",
+      "type": "char"
+    },
+    "is_account_reconcile": {
+      "depends": [
+        "account_id.reconcile"
+      ],
+      "help": "Check this box if this account allows invoices & payments matching of journal items.",
+      "readonly": true,
+      "related": "account_id.reconcile",
+      "required": false,
+      "store": false,
+      "string": "Account Reconcile",
+      "type": "boolean"
+    },
+    "account_type": {
+      "depends": [
+        "account_id.account_type"
+      ],
+      "help": "Account Type is used for information purpose, to generate country-specific legal reports, and set the rules to close a fiscal year and generate opening entries.",
+      "readonly": true,
+      "related": "account_id.account_type",
+      "required": false,
+      "selection": [
+        [
+          "asset_receivable",
+          "Receivable"
+        ],
+        [
+          "asset_cash",
+          "Bank and Cash"
+        ],
+        [
+          "asset_current",
+          "Current Assets"
+        ],
+        [
+          "asset_non_current",
+          "Non-current Assets"
+        ],
+        [
+          "asset_prepayments",
+          "Prepayments"
+        ],
+        [
+          "asset_fixed",
+          "Fixed Assets"
+        ],
+        [
+          "liability_payable",
+          "Payable"
+        ],
+        [
+          "liability_credit_card",
+          "Credit Card"
+        ],
+        [
+          "liability_current",
+          "Current Liabilities"
+        ],
+        [
+          "liability_non_current",
+          "Non-current Liabilities"
+        ],
+        [
+          "equity",
+          "Equity"
+        ],
+        [
+          "equity_unaffected",
+          "Current Year Earnings"
+        ],
+        [
+          "income",
+          "Income"
+        ],
+        [
+          "income_other",
+          "Other Income"
+        ],
+        [
+          "expense",
+          "Expenses"
+        ],
+        [
+          "expense_depreciation",
+          "Depreciation"
+        ],
+        [
+          "expense_direct_cost",
+          "Cost of Revenue"
+        ],
+        [
+          "off_balance",
+          "Off-Balance Sheet"
+        ]
+      ],
+      "store": false,
+      "string": "Internal Type",
+      "type": "selection"
+    },
+    "account_internal_group": {
+      "depends": [
+        "account_id.internal_group"
+      ],
+      "readonly": true,
+      "related": "account_id.internal_group",
+      "required": false,
+      "selection": [
+        [
+          "equity",
+          "Equity"
+        ],
+        [
+          "asset",
+          "Asset"
+        ],
+        [
+          "liability",
+          "Liability"
+        ],
+        [
+          "income",
+          "Income"
+        ],
+        [
+          "expense",
+          "Expense"
+        ],
+        [
+          "off_balance",
+          "Off Balance"
+        ]
+      ],
+      "store": false,
+      "string": "Internal Group",
+      "type": "selection"
+    },
+    "account_root_id": {
+      "context": {},
+      "depends": [
+        "account_id.root_id"
+      ],
+      "domain": [],
+      "readonly": true,
+      "related": "account_id.root_id",
+      "relation": "account.root",
+      "required": false,
+      "store": true,
+      "string": "Account Root",
+      "type": "many2one"
+    },
+    "display_type": {
+      "depends": [
+        "move_id"
+      ],
+      "readonly": false,
+      "required": true,
+      "selection": [
+        [
+          "product",
+          "Product"
+        ],
+        [
+          "cogs",
+          "Cost of Goods Sold"
+        ],
+        [
+          "tax",
+          "Tax"
+        ],
+        [
+          "discount",
+          "Discount"
+        ],
+        [
+          "rounding",
+          "Rounding"
+        ],
+        [
+          "payment_term",
+          "Payment Term"
+        ],
+        [
+          "line_section",
+          "Section"
+        ],
+        [
+          "line_note",
+          "Note"
+        ],
+        [
+          "epd",
+          "Early Payment Discount"
+        ]
+      ],
+      "store": true,
+      "string": "Display Type",
+      "type": "selection"
+    },
+    "product_id": {
+      "context": {},
+      "depends": [],
+      "domain": "(company_id and ['|', ('company_id', '=', False), ('company_id', 'parent_of', [company_id])] or ['|', ('company_id', '=', False), ('company_id', 'parent_of', [''])]) + ([])",
+      "readonly": false,
+      "relation": "product.product",
+      "required": false,
+      "store": true,
+      "string": "Product",
+      "type": "many2one"
+    },
+    "product_uom_id": {
+      "context": {},
+      "depends": [
+        "product_id"
+      ],
+      "domain": "[('category_id', '=', product_uom_category_id)]",
+      "readonly": false,
+      "relation": "uom.uom",
+      "required": false,
+      "store": true,
+      "string": "Unit of Measure",
+      "type": "many2one"
+    },
+    "product_uom_category_id": {
+      "context": {},
+      "depends": [
+        "product_id.uom_id.category_id"
+      ],
+      "domain": [],
+      "help": "Conversion between Units of Measure can only occur if they belong to the same category. The conversion will be made based on the ratios.",
+      "readonly": true,
+      "related": "product_id.uom_id.category_id",
+      "relation": "uom.category",
+      "required": false,
+      "store": false,
+      "string": "Category",
+      "type": "many2one"
+    },
+    "quantity": {
+      "depends": [
+        "display_type"
+      ],
+      "group_operator": "sum",
+      "help": "The optional quantity expressed by this line, eg: number of product sold. The quantity is not a legal requirement but is very useful for some reports.",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Quantity",
+      "type": "float"
+    },
+    "date_maturity": {
+      "depends": [],
+      "help": "This field is used for payable and receivable journal entries. You can put the limit date for the payment of this line.",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Due Date",
+      "type": "date"
+    },
+    "price_unit": {
+      "depends": [
+        "product_id",
+        "product_uom_id"
+      ],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Unit Price",
+      "type": "float"
+    },
+    "price_subtotal": {
+      "depends": [
+        "quantity",
+        "discount",
+        "price_unit",
+        "tax_ids",
+        "currency_id"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Subtotal",
+      "type": "monetary"
+    },
+    "price_total": {
+      "depends": [
+        "quantity",
+        "discount",
+        "price_unit",
+        "tax_ids",
+        "currency_id"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Total",
+      "type": "monetary"
+    },
+    "discount": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Discount (%)",
+      "type": "float"
+    },
+    "tax_calculation_rounding_method": {
+      "depends": [
+        "company_id.tax_calculation_rounding_method"
+      ],
+      "readonly": true,
+      "related": "company_id.tax_calculation_rounding_method",
+      "required": false,
+      "selection": [
+        [
+          "round_per_line",
+          "Round per Line"
+        ],
+        [
+          "round_globally",
+          "Round Globally"
+        ]
+      ],
+      "store": false,
+      "string": "Tax calculation rounding method",
+      "type": "selection"
+    },
+    "term_key": {
+      "depends": [
+        "l10n_br_cobranca_parcela",
+        "date_maturity"
+      ],
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Term Key",
+      "type": "binary"
+    },
+    "tax_key": {
+      "depends": [
+        "deferred_start_date",
+        "deferred_end_date",
+        "tax_ids",
+        "currency_id",
+        "partner_id",
+        "account_id",
+        "group_tax_id",
+        "analytic_distribution"
+      ],
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Tax Key",
+      "type": "binary"
+    },
+    "compute_all_tax": {
+      "depends": [
+        "deferred_start_date",
+        "deferred_end_date",
+        "tax_ids",
+        "currency_id",
+        "partner_id",
+        "analytic_distribution",
+        "balance",
+        "partner_id",
+        "move_id.partner_id",
+        "price_unit",
+        "quantity"
+      ],
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Compute All Tax",
+      "type": "binary"
+    },
+    "compute_all_tax_dirty": {
+      "depends": [
+        "deferred_start_date",
+        "deferred_end_date",
+        "tax_ids",
+        "currency_id",
+        "partner_id",
+        "analytic_distribution",
+        "balance",
+        "partner_id",
+        "move_id.partner_id",
+        "price_unit",
+        "quantity"
+      ],
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Compute All Tax Dirty",
+      "type": "boolean"
+    },
+    "epd_key": {
+      "depends": [
+        "tax_ids",
+        "account_id",
+        "company_id"
+      ],
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Epd Key",
+      "type": "binary"
+    },
+    "epd_needed": {
+      "depends": [
+        "move_id.needed_terms",
+        "account_id",
+        "analytic_distribution",
+        "tax_ids",
+        "tax_tag_ids",
+        "company_id"
+      ],
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Epd Needed",
+      "type": "binary"
+    },
+    "epd_dirty": {
+      "depends": [
+        "move_id.needed_terms",
+        "account_id",
+        "analytic_distribution",
+        "tax_ids",
+        "tax_tag_ids",
+        "company_id"
+      ],
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Epd Dirty",
+      "type": "boolean"
+    },
+    "discount_allocation_key": {
+      "depends": [
+        "account_id",
+        "company_id"
+      ],
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Discount Allocation Key",
+      "type": "binary"
+    },
+    "discount_allocation_needed": {
+      "depends": [
+        "account_id",
+        "company_id",
+        "discount",
+        "price_unit",
+        "quantity",
+        "currency_rate",
+        "analytic_distribution"
+      ],
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Discount Allocation Needed",
+      "type": "binary"
+    },
+    "discount_allocation_dirty": {
+      "depends": [
+        "account_id",
+        "company_id",
+        "discount",
+        "price_unit",
+        "quantity",
+        "currency_rate",
+        "analytic_distribution"
+      ],
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Discount Allocation Dirty",
+      "type": "boolean"
+    },
+    "analytic_line_ids": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": false,
+      "relation": "account.analytic.line",
+      "required": false,
+      "store": true,
+      "string": "Analytic lines",
+      "type": "one2many"
+    },
+    "discount_date": {
+      "depends": [],
+      "help": "Last date at which the discounted amount must be paid in order for the Early Payment Discount to be granted",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Discount Date",
+      "type": "date"
+    },
+    "discount_amount_currency": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Discount amount in Currency",
+      "type": "monetary"
+    },
+    "discount_balance": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Discount Balance",
+      "type": "monetary"
+    },
+    "payment_date": {
+      "depends": [
+        "discount_date",
+        "date_maturity"
+      ],
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Payment Date",
+      "type": "date"
+    },
+    "blocked": {
+      "depends": [],
+      "help": "You can check this box to mark this journal item as a litigation with the associated partner",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "No Follow-up",
+      "type": "boolean"
+    },
+    "is_refund": {
+      "depends": [
+        "move_id.move_type",
+        "balance",
+        "tax_repartition_line_id",
+        "tax_ids"
+      ],
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Is Refund",
+      "type": "boolean"
+    },
+    "id": {
+      "depends": [],
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "ID",
+      "type": "integer"
+    },
+    "display_name": {
+      "depends": [
+        "move_id",
+        "ref",
+        "product_id",
+        "name"
+      ],
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Display Name",
+      "type": "char"
+    },
+    "create_uid": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": true,
+      "relation": "res.users",
+      "required": false,
+      "store": true,
+      "string": "Created by",
+      "type": "many2one"
+    },
+    "create_date": {
+      "depends": [],
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Created on",
+      "type": "datetime"
+    },
+    "write_uid": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": true,
+      "relation": "res.users",
+      "required": false,
+      "store": true,
+      "string": "Last Updated by",
+      "type": "many2one"
+    },
+    "write_date": {
+      "depends": [],
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Last Updated on",
+      "type": "datetime"
+    },
+    "move_attachment_ids": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": true,
+      "relation": "ir.attachment",
+      "required": false,
+      "store": false,
+      "string": "Move Attachment",
+      "type": "one2many"
+    },
+    "deferred_start_date": {
+      "depends": [
+        "deferred_end_date",
+        "move_id.invoice_date",
+        "move_id.state"
+      ],
+      "help": "Date at which the deferred expense/revenue starts",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Start Date",
+      "type": "date"
+    },
+    "deferred_end_date": {
+      "depends": [],
+      "help": "Date at which the deferred expense/revenue ends",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "End Date",
+      "type": "date"
+    },
+    "has_deferred_moves": {
+      "depends": [],
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Has Deferred Moves",
+      "type": "boolean"
+    },
+    "has_abnormal_deferred_dates": {
+      "depends": [
+        "deferred_start_date",
+        "deferred_end_date"
+      ],
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Has Abnormal Deferred Dates",
+      "type": "boolean"
+    },
+    "purchase_line_id": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": false,
+      "relation": "purchase.order.line",
+      "required": false,
+      "store": true,
+      "string": "Purchase Order Line",
+      "type": "many2one"
+    },
+    "purchase_order_id": {
+      "context": {},
+      "depends": [
+        "purchase_line_id.order_id"
+      ],
+      "domain": [],
+      "readonly": true,
+      "related": "purchase_line_id.order_id",
+      "relation": "purchase.order",
+      "required": false,
+      "store": false,
+      "string": "Purchase Order",
+      "type": "many2one"
+    },
+    "stock_valuation_layer_ids": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": false,
+      "relation": "stock.valuation.layer",
+      "required": false,
+      "store": true,
+      "string": "Stock Valuation Layer",
+      "type": "one2many"
+    },
+    "cogs_origin_id": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": false,
+      "relation": "account.move.line",
+      "required": false,
+      "store": true,
+      "string": "Cogs Origin",
+      "type": "many2one"
+    },
+    "can_be_paid": {
+      "depends": [
+        "purchase_line_id.qty_received",
+        "purchase_line_id.qty_invoiced",
+        "purchase_line_id.product_qty",
+        "price_unit"
+      ],
+      "readonly": true,
+      "required": false,
+      "selection": [
+        [
+          "yes",
+          "Yes"
+        ],
+        [
+          "no",
+          "No"
+        ],
+        [
+          "exception",
+          "Exception"
+        ]
+      ],
+      "store": true,
+      "string": "Release to Pay",
+      "type": "selection"
+    },
+    "expected_pay_date": {
+      "depends": [],
+      "help": "Expected payment date as manually set through the customer statement(e.g: if you had the customer on the phone and want to remember the date he promised he would pay)",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Expected Date",
+      "type": "date"
+    },
+    "is_downpayment": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Is Downpayment",
+      "type": "boolean"
+    },
+    "sale_line_ids": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": true,
+      "relation": "sale.order.line",
+      "required": false,
+      "store": true,
+      "string": "Sales Order Lines",
+      "type": "many2many"
+    },
+    "asset_ids": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": false,
+      "relation": "account.asset",
+      "required": false,
+      "store": true,
+      "string": "Related Assets",
+      "type": "many2many"
+    },
+    "non_deductible_tax_value": {
+      "depends": [
+        "tax_ids.invoice_repartition_line_ids"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Non Deductible Tax Value",
+      "type": "monetary"
+    },
+    "followup_line_id": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": false,
+      "relation": "account_followup.followup.line",
+      "required": false,
+      "store": true,
+      "string": "Follow-up Level",
+      "type": "many2one"
+    },
+    "last_followup_date": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Latest Follow-up",
+      "type": "date"
+    },
+    "next_action_date": {
+      "depends": [],
+      "help": "Date where the next action should be taken for a receivable item. Usually, automatically set when sending reminders through the customer statement.",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Next Action Date",
+      "type": "date"
+    },
+    "invoice_origin": {
+      "depends": [
+        "move_id.invoice_origin"
+      ],
+      "help": "The document(s) that generated the invoice.",
+      "readonly": true,
+      "related": "move_id.invoice_origin",
+      "required": false,
+      "store": false,
+      "string": "Origin",
+      "type": "char"
+    },
+    "product_type": {
+      "depends": [
+        "product_id.detailed_type"
+      ],
+      "help": "A storable product is a product for which you manage stock. The Inventory app has to be installed.\nA consumable product is a product for which stock is not managed.\nA service is a non-material product you provide.",
+      "readonly": true,
+      "related": "product_id.detailed_type",
+      "required": false,
+      "selection": [
+        [
+          "consu",
+          "Consumable"
+        ],
+        [
+          "service",
+          "Service"
+        ],
+        [
+          "product",
+          "Storable Product"
+        ]
+      ],
+      "store": false,
+      "string": "Product Type",
+      "type": "selection"
+    },
+    "is_landed_costs_line": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Is Landed Costs Line",
+      "type": "boolean"
+    },
+    "dfe_line_id": {
+      "context": {},
+      "depends": [],
+      "domain": "(company_id and ['|', ('company_id', '=', False), ('company_id', 'in', [company_id])] or [('company_id', '=', False)]) + ([])",
+      "readonly": false,
+      "relation": "l10n_br_ciel_it_account.dfe.line",
+      "required": false,
+      "store": true,
+      "string": "Item Documento Fiscal",
+      "type": "many2one"
+    },
+    "l10n_br_operacao_id": {
+      "context": {},
+      "depends": [],
+      "domain": "(company_id and ['|', ('company_id', '=', False), ('company_id', 'in', [company_id])] or [('company_id', '=', False)]) + ([])",
+      "readonly": false,
+      "relation": "l10n_br_ciel_it_account.operacao",
+      "required": false,
+      "store": true,
+      "string": "Operação",
+      "type": "many2one"
+    },
+    "l10n_br_operacao_manual": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Definir Operação Manual",
+      "type": "boolean"
+    },
+    "l10n_br_cfop_id": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": false,
+      "relation": "l10n_br_ciel_it_account.cfop",
+      "required": false,
+      "store": true,
+      "string": "CFOP",
+      "type": "many2one"
+    },
+    "l10n_br_origem": {
+      "depends": [
+        "product_id"
+      ],
+      "readonly": false,
+      "required": false,
+      "selection": [
+        [
+          "0",
+          "0 - Nacional, exceto as indicadas nos códigos 3, 4, 5 e 8;"
+        ],
+        [
+          "1",
+          "1 - Estrangeira - Importação direta, exceto a indicada no código 6;"
+        ],
+        [
+          "2",
+          "2 - Estrangeira - Adquirida no mercado interno, exceto a indicada no código 7;"
+        ],
+        [
+          "3",
+          "3 - Nacional, mercadoria ou bem com Conteúdo de Importação superior a 40% e inferior ou igual a 70%;"
+        ],
+        [
+          "4",
+          "4 - Nacional, cuja produção tenha sido feita em conformidade com os processos produtivos básicos de quetratam as legislações citadas nos Ajustes;"
+        ],
+        [
+          "5",
+          "5 - Nacional, mercadoria ou bem com Conteúdo de Importação inferior ou igual a 40%;"
+        ],
+        [
+          "6",
+          "6 - Estrangeira - Importação direta, sem similar nacional, constante em lista da CAMEX e gás natural;"
+        ],
+        [
+          "7",
+          "7 - Estrangeira - Adquirida no mercado interno, sem similar nacional, constante lista CAMEX e gás natural."
+        ],
+        [
+          "8",
+          "8 - Nacional, mercadoria ou bem com Conteúdo de Importação superior a 70%;"
+        ]
+      ],
+      "store": true,
+      "string": "Origem do Produto",
+      "type": "selection"
+    },
+    "l10n_br_cfop_codigo": {
+      "depends": [
+        "l10n_br_cfop_id.codigo_cfop"
+      ],
+      "readonly": true,
+      "related": "l10n_br_cfop_id.codigo_cfop",
+      "required": false,
+      "store": false,
+      "string": "Código CFOP",
+      "type": "char"
+    },
+    "l10n_br_frete": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Frete",
+      "type": "float"
+    },
+    "l10n_br_seguro": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Seguro",
+      "type": "float"
+    },
+    "l10n_br_despesas_acessorias": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Despesas Acessórias",
+      "type": "float"
+    },
+    "l10n_br_desc_valor": {
+      "depends": [
+        "l10n_br_icms_valor",
+        "l10n_br_icmsst_valor",
+        "l10n_br_fcp_st_valor",
+        "l10n_br_icmsst_valor_outros",
+        "l10n_br_icmsst_valor_proprio",
+        "l10n_br_frete",
+        "l10n_br_seguro",
+        "l10n_br_despesas_acessorias",
+        "l10n_br_ipi_valor",
+        "l10n_br_ipi_valor_isento",
+        "l10n_br_ipi_valor_outros",
+        "l10n_br_iof_valor",
+        "price_unit",
+        "discount",
+        "quantity",
+        "l10n_br_pis_valor",
+        "l10n_br_cofins_valor",
+        "l10n_br_is_valor",
+        "l10n_br_ibs_uf_valor",
+        "l10n_br_ibs_mun_valor",
+        "l10n_br_cbs_valor",
+        "l10n_br_icmsst_substituto_valor",
+        "l10n_br_icmsst_substituto_valor_outros",
+        "l10n_br_icmsst_retido_valor",
+        "l10n_br_icmsst_retido_valor_outros",
+        "l10n_br_ii_valor",
+        "l10n_br_ii_valor_aduaneira",
+        "l10n_br_ii_valor_afrmm",
+        "l10n_br_iss_valor",
+        "l10n_br_irpj_valor",
+        "l10n_br_csll_valor",
+        "l10n_br_csll_ret_valor",
+        "l10n_br_irpj_ret_valor",
+        "l10n_br_inss_ret_valor",
+        "l10n_br_iss_ret_valor",
+        "l10n_br_pis_ret_valor",
+        "l10n_br_cofins_ret_valor",
+        "l10n_br_icms_valor_desonerado"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Valor do Desconto",
+      "type": "float"
+    },
+    "l10n_br_prod_valor": {
+      "depends": [
+        "l10n_br_icms_valor",
+        "l10n_br_icmsst_valor",
+        "l10n_br_fcp_st_valor",
+        "l10n_br_icmsst_valor_outros",
+        "l10n_br_icmsst_valor_proprio",
+        "l10n_br_frete",
+        "l10n_br_seguro",
+        "l10n_br_despesas_acessorias",
+        "l10n_br_ipi_valor",
+        "l10n_br_ipi_valor_isento",
+        "l10n_br_ipi_valor_outros",
+        "l10n_br_iof_valor",
+        "price_unit",
+        "discount",
+        "quantity",
+        "l10n_br_pis_valor",
+        "l10n_br_cofins_valor",
+        "l10n_br_is_valor",
+        "l10n_br_ibs_uf_valor",
+        "l10n_br_ibs_mun_valor",
+        "l10n_br_cbs_valor",
+        "l10n_br_icmsst_substituto_valor",
+        "l10n_br_icmsst_substituto_valor_outros",
+        "l10n_br_icmsst_retido_valor",
+        "l10n_br_icmsst_retido_valor_outros",
+        "l10n_br_ii_valor",
+        "l10n_br_ii_valor_aduaneira",
+        "l10n_br_ii_valor_afrmm",
+        "l10n_br_iss_valor",
+        "l10n_br_irpj_valor",
+        "l10n_br_csll_valor",
+        "l10n_br_csll_ret_valor",
+        "l10n_br_irpj_ret_valor",
+        "l10n_br_inss_ret_valor",
+        "l10n_br_iss_ret_valor",
+        "l10n_br_pis_ret_valor",
+        "l10n_br_cofins_ret_valor",
+        "l10n_br_icms_valor_desonerado"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Valor do Produto",
+      "type": "float"
+    },
+    "l10n_br_unit_tax_recompute": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Recompute Unit Tax",
+      "type": "boolean"
+    },
+    "l10n_br_unit_tax": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor Unitário com Imposto",
+      "type": "float"
+    },
+    "l10n_br_unit_nfe": {
+      "depends": [
+        "l10n_br_icms_valor",
+        "l10n_br_icmsst_valor",
+        "l10n_br_fcp_st_valor",
+        "l10n_br_icmsst_valor_outros",
+        "l10n_br_icmsst_valor_proprio",
+        "l10n_br_frete",
+        "l10n_br_seguro",
+        "l10n_br_despesas_acessorias",
+        "l10n_br_ipi_valor",
+        "l10n_br_ipi_valor_isento",
+        "l10n_br_ipi_valor_outros",
+        "l10n_br_iof_valor",
+        "price_unit",
+        "discount",
+        "quantity",
+        "l10n_br_pis_valor",
+        "l10n_br_cofins_valor",
+        "l10n_br_is_valor",
+        "l10n_br_ibs_uf_valor",
+        "l10n_br_ibs_mun_valor",
+        "l10n_br_cbs_valor",
+        "l10n_br_icmsst_substituto_valor",
+        "l10n_br_icmsst_substituto_valor_outros",
+        "l10n_br_icmsst_retido_valor",
+        "l10n_br_icmsst_retido_valor_outros",
+        "l10n_br_ii_valor",
+        "l10n_br_ii_valor_aduaneira",
+        "l10n_br_ii_valor_afrmm",
+        "l10n_br_iss_valor",
+        "l10n_br_irpj_valor",
+        "l10n_br_csll_valor",
+        "l10n_br_csll_ret_valor",
+        "l10n_br_irpj_ret_valor",
+        "l10n_br_inss_ret_valor",
+        "l10n_br_iss_ret_valor",
+        "l10n_br_pis_ret_valor",
+        "l10n_br_cofins_ret_valor",
+        "l10n_br_icms_valor_desonerado"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Valor Unitário do Item da NF",
+      "type": "float"
+    },
+    "l10n_br_total_nfe": {
+      "depends": [
+        "l10n_br_icms_valor",
+        "l10n_br_icmsst_valor",
+        "l10n_br_fcp_st_valor",
+        "l10n_br_icmsst_valor_outros",
+        "l10n_br_icmsst_valor_proprio",
+        "l10n_br_frete",
+        "l10n_br_seguro",
+        "l10n_br_despesas_acessorias",
+        "l10n_br_ipi_valor",
+        "l10n_br_ipi_valor_isento",
+        "l10n_br_ipi_valor_outros",
+        "l10n_br_iof_valor",
+        "price_unit",
+        "discount",
+        "quantity",
+        "l10n_br_pis_valor",
+        "l10n_br_cofins_valor",
+        "l10n_br_is_valor",
+        "l10n_br_ibs_uf_valor",
+        "l10n_br_ibs_mun_valor",
+        "l10n_br_cbs_valor",
+        "l10n_br_icmsst_substituto_valor",
+        "l10n_br_icmsst_substituto_valor_outros",
+        "l10n_br_icmsst_retido_valor",
+        "l10n_br_icmsst_retido_valor_outros",
+        "l10n_br_ii_valor",
+        "l10n_br_ii_valor_aduaneira",
+        "l10n_br_ii_valor_afrmm",
+        "l10n_br_iss_valor",
+        "l10n_br_irpj_valor",
+        "l10n_br_csll_valor",
+        "l10n_br_csll_ret_valor",
+        "l10n_br_irpj_ret_valor",
+        "l10n_br_inss_ret_valor",
+        "l10n_br_iss_ret_valor",
+        "l10n_br_pis_ret_valor",
+        "l10n_br_cofins_ret_valor",
+        "l10n_br_icms_valor_desonerado"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Valor Total do Item da NF",
+      "type": "float"
+    },
+    "l10n_br_total_tributos": {
+      "depends": [
+        "l10n_br_icms_valor",
+        "l10n_br_icmsst_valor",
+        "l10n_br_fcp_st_valor",
+        "l10n_br_icmsst_valor_outros",
+        "l10n_br_icmsst_valor_proprio",
+        "l10n_br_frete",
+        "l10n_br_seguro",
+        "l10n_br_despesas_acessorias",
+        "l10n_br_ipi_valor",
+        "l10n_br_ipi_valor_isento",
+        "l10n_br_ipi_valor_outros",
+        "l10n_br_iof_valor",
+        "price_unit",
+        "discount",
+        "quantity",
+        "l10n_br_pis_valor",
+        "l10n_br_cofins_valor",
+        "l10n_br_is_valor",
+        "l10n_br_ibs_uf_valor",
+        "l10n_br_ibs_mun_valor",
+        "l10n_br_cbs_valor",
+        "l10n_br_icmsst_substituto_valor",
+        "l10n_br_icmsst_substituto_valor_outros",
+        "l10n_br_icmsst_retido_valor",
+        "l10n_br_icmsst_retido_valor_outros",
+        "l10n_br_ii_valor",
+        "l10n_br_ii_valor_aduaneira",
+        "l10n_br_ii_valor_afrmm",
+        "l10n_br_iss_valor",
+        "l10n_br_irpj_valor",
+        "l10n_br_csll_valor",
+        "l10n_br_csll_ret_valor",
+        "l10n_br_irpj_ret_valor",
+        "l10n_br_inss_ret_valor",
+        "l10n_br_iss_ret_valor",
+        "l10n_br_pis_ret_valor",
+        "l10n_br_cofins_ret_valor",
+        "l10n_br_icms_valor_desonerado"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Valor dos Tributos",
+      "type": "float"
+    },
+    "l10n_br_informacao_adicional": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Informações Adicionais",
+      "type": "text"
+    },
+    "l10n_br_pedido_compra": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Pedido de Compra do Cliente",
+      "type": "char"
+    },
+    "l10n_br_item_pedido_compra": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Item Pedido de Compra do Cliente",
+      "type": "char"
+    },
+    "l10n_br_registro_exportacao": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Registro de Exportação",
+      "type": "char"
+    },
+    "l10n_br_chave_nfe_exportacao": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Chave NF-e Recebida p/ Exportação",
+      "type": "char"
+    },
+    "l10n_br_drawback": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Número Drawback",
+      "type": "char"
+    },
+    "l10n_br_compra_indcom": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "selection": [
+        [
+          "uso",
+          "Uso e Consumo"
+        ],
+        [
+          "uso-prestacao",
+          "Uso na Prestação de Serviço"
+        ],
+        [
+          "ind",
+          "Industrialização"
+        ],
+        [
+          "com",
+          "Comercialização"
+        ],
+        [
+          "ativo",
+          "Ativo"
+        ],
+        [
+          "garantia",
+          "Garantia"
+        ],
+        [
+          "out",
+          "Outros"
+        ]
+      ],
+      "store": true,
+      "string": "Destinação de Uso",
+      "type": "selection"
+    },
+    "l10n_br_mensagem_fiscal_ids": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": false,
+      "relation": "l10n_br_ciel_it_account.mensagem.fiscal",
+      "required": false,
+      "store": true,
+      "string": "Observação Fiscal",
+      "type": "many2many"
+    },
+    "l10n_br_informacao_adicional_produto_ids": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": false,
+      "relation": "l10n_br_ciel_it_account.mensagem.fiscal",
+      "required": false,
+      "store": true,
+      "string": "Informação Adicional do Produto",
+      "type": "many2many"
+    },
+    "l10n_br_ncm_id": {
+      "context": {},
+      "depends": [
+        "product_id.l10n_br_ncm_id"
+      ],
+      "domain": [],
+      "readonly": true,
+      "related": "product_id.l10n_br_ncm_id",
+      "relation": "l10n_br_ciel_it_account.ncm",
+      "required": false,
+      "store": false,
+      "string": "NCM",
+      "type": "many2one"
+    },
+    "l10n_br_codigo_servico": {
+      "depends": [
+        "product_id.l10n_br_codigo_servico"
+      ],
+      "readonly": true,
+      "related": "product_id.l10n_br_codigo_servico",
+      "required": false,
+      "store": false,
+      "string": "Código Serviço",
+      "type": "char"
+    },
+    "l10n_br_codigo_tributacao_servico": {
+      "depends": [
+        "product_id.l10n_br_codigo_tributacao_servico"
+      ],
+      "readonly": true,
+      "related": "product_id.l10n_br_codigo_tributacao_servico",
+      "required": false,
+      "store": false,
+      "string": "Código Tributação Serviço",
+      "type": "char"
+    },
+    "l10n_br_imposto_auto": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Calcular Impostos Automaticamente",
+      "type": "boolean"
+    },
+    "l10n_br_calcular_imposto": {
+      "depends": [
+        "move_id.l10n_br_calcular_imposto"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_calcular_imposto",
+      "required": false,
+      "store": false,
+      "string": "Calcular Impostos",
+      "type": "boolean"
+    },
+    "l10n_br_tipo_pedido_str": {
+      "depends": [
+        "l10n_br_tipo_pedido",
+        "l10n_br_tipo_pedido_entrada"
+      ],
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Tipo de Pedido",
+      "type": "char"
+    },
+    "l10n_br_tipo_pedido": {
+      "depends": [
+        "move_id.l10n_br_tipo_pedido"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_tipo_pedido",
+      "required": false,
+      "selection": [
+        [
+          "baixa-estoque",
+          "Saída: Baixa de Estoque"
+        ],
+        [
+          "complemento-valor",
+          "Saída: Complemento de Preço"
+        ],
+        [
+          "dev-comodato",
+          "Saída: Devolução de Comodato"
+        ],
+        [
+          "compra",
+          "Saída: Devolução de Compra"
+        ],
+        [
+          "dev-conserto",
+          "Saída: Devolução de Conserto"
+        ],
+        [
+          "dev-consignacao",
+          "Saída: Devolução de Consignação"
+        ],
+        [
+          "dev-demonstracao",
+          "Saída: Devolução de Demonstração"
+        ],
+        [
+          "dev-industrializacao",
+          "Saída: Devolução de Industrialização"
+        ],
+        [
+          "dev-locacao",
+          "Saída: Devolução de Locação"
+        ],
+        [
+          "dev-mostruario",
+          "Saída: Devolução de Mostruário"
+        ],
+        [
+          "dev-teste",
+          "Saída: Devolução de Teste"
+        ],
+        [
+          "dev-vasilhame",
+          "Saída: Devolução de Vasilhame"
+        ],
+        [
+          "venda-locacao",
+          "Saída: Locação"
+        ],
+        [
+          "outro",
+          "Saída: Outros"
+        ],
+        [
+          "perda",
+          "Saída: Perda"
+        ],
+        [
+          "mostruario",
+          "Saída: Remessa de Mostruário"
+        ],
+        [
+          "vasilhame",
+          "Saída: Remessa de Vasilhame"
+        ],
+        [
+          "rem-venda-futura",
+          "Saída: Remessa de Venda p/ Entrega Futura"
+        ],
+        [
+          "ativo-fora",
+          "Saída: Remessa de bem do ativo imobilizado p/ uso Fora do Estabelecimento"
+        ],
+        [
+          "comodato",
+          "Saída: Remessa em Comodato"
+        ],
+        [
+          "consignacao",
+          "Saída: Remessa em Consignação"
+        ],
+        [
+          "garantia",
+          "Saída: Remessa em Garantia"
+        ],
+        [
+          "amostra",
+          "Saída: Remessa p/ Amostra Grátis"
+        ],
+        [
+          "bonificacao",
+          "Saída: Remessa p/ Bonificação"
+        ],
+        [
+          "conserto",
+          "Saída: Remessa p/ Conserto"
+        ],
+        [
+          "demonstracao",
+          "Saída: Remessa p/ Demonstração"
+        ],
+        [
+          "deposito",
+          "Saída: Remessa p/ Depósito"
+        ],
+        [
+          "exportacao",
+          "Saída: Remessa p/ Exportação"
+        ],
+        [
+          "feira",
+          "Saída: Remessa p/ Feira"
+        ],
+        [
+          "fora",
+          "Saída: Remessa p/ Fora do Estabelecimento"
+        ],
+        [
+          "industrializacao",
+          "Saída: Remessa p/ Industrialização"
+        ],
+        [
+          "rem-obra",
+          "Saída: Remessa p/ Obra"
+        ],
+        [
+          "teste",
+          "Saída: Remessa p/ Teste"
+        ],
+        [
+          "troca",
+          "Saída: Remessa p/ Troca"
+        ],
+        [
+          "uso-prestacao",
+          "Saída: Remessa p/ Uso na Prestação de Serviço"
+        ],
+        [
+          "locacao",
+          "Saída: Remessa para Locação"
+        ],
+        [
+          "rem-conta-ordem",
+          "Saída: Remessa por Conta e Ordem"
+        ],
+        [
+          "transf-filial",
+          "Saída: Transferencia entre Filiais"
+        ],
+        [
+          "venda",
+          "Saída: Venda"
+        ],
+        [
+          "venda-nfce",
+          "Saída: Venda Cupom Fiscal"
+        ],
+        [
+          "venda-armazem",
+          "Saída: Venda de Armazém Externo"
+        ],
+        [
+          "venda-industrializacao",
+          "Saída: Venda de Industrialização"
+        ],
+        [
+          "servico",
+          "Saída: Venda de Serviço"
+        ],
+        [
+          "venda-consignacao",
+          "Saída: Venda em Consignação"
+        ],
+        [
+          "venda_futura",
+          "Saída: Venda p/ Entrega Futura"
+        ],
+        [
+          "venda-conta-ordem",
+          "Saída: Venda por Conta e Ordem"
+        ],
+        [
+          "venda-conta-ordem-vendedor",
+          "Saída: Venda por Conta e Ordem por Vendedor"
+        ]
+      ],
+      "store": true,
+      "string": "Tipo de Pedido (saída)",
+      "type": "selection"
+    },
+    "l10n_br_tipo_pedido_entrada": {
+      "depends": [
+        "move_id.l10n_br_tipo_pedido_entrada"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_tipo_pedido_entrada",
+      "required": false,
+      "selection": [
+        [
+          "ent-amostra",
+          "Entrada: Amostra Grátis"
+        ],
+        [
+          "ent-bonificacao",
+          "Entrada: Bonificação"
+        ],
+        [
+          "ent-comodato",
+          "Entrada: Comodato"
+        ],
+        [
+          "comp-importacao",
+          "Entrada: Complementar de Importação"
+        ],
+        [
+          "compra",
+          "Entrada: Compra"
+        ],
+        [
+          "compra-venda-ordem",
+          "Entrada: Compra Venda à Ordem"
+        ],
+        [
+          "compra-ent-futura",
+          "Entrada: Compra p/ Entrega Futura"
+        ],
+        [
+          "ent-conserto",
+          "Entrada: Conserto"
+        ],
+        [
+          "credito-imposto",
+          "Entrada: Crédito de Imposto"
+        ],
+        [
+          "ent-demonstracao",
+          "Entrada: Demonstração"
+        ],
+        [
+          "devolucao",
+          "Entrada: Devolução Emissão Própria"
+        ],
+        [
+          "devolucao_compra",
+          "Entrada: Devolução de Venda"
+        ],
+        [
+          "importacao",
+          "Entrada: Importação"
+        ],
+        [
+          "locacao",
+          "Entrada: Locação"
+        ],
+        [
+          "ent-mostruario",
+          "Entrada: Mostruário"
+        ],
+        [
+          "outro",
+          "Entrada: Outros"
+        ],
+        [
+          "retorno",
+          "Entrada: Outros Retorno"
+        ],
+        [
+          "compra-rec-venda-ordem",
+          "Entrada: Recebimento de Compra Venda à Ordem"
+        ],
+        [
+          "compra-rec-ent-futura",
+          "Entrada: Recebimento de Compra p/ Entrega Futura"
+        ],
+        [
+          "rem-industrializacao",
+          "Entrada: Remessa p/ Industrialização"
+        ],
+        [
+          "rem-conta-ordem",
+          "Entrada: Remessa por Conta e Ordem"
+        ],
+        [
+          "comodato",
+          "Entrada: Retorno de Comodato"
+        ],
+        [
+          "conserto",
+          "Entrada: Retorno de Conserto"
+        ],
+        [
+          "consignacao",
+          "Entrada: Retorno de Consignação"
+        ],
+        [
+          "demonstracao",
+          "Entrada: Retorno de Demonstração"
+        ],
+        [
+          "deposito",
+          "Entrada: Retorno de Depósito"
+        ],
+        [
+          "feira",
+          "Entrada: Retorno de Feira"
+        ],
+        [
+          "industrializacao",
+          "Entrada: Retorno de Industrialização"
+        ],
+        [
+          "ret-locacao",
+          "Entrada: Retorno de Locação"
+        ],
+        [
+          "mostruario",
+          "Entrada: Retorno de Mostruário"
+        ],
+        [
+          "troca",
+          "Entrada: Retorno de Troca"
+        ],
+        [
+          "vasilhame",
+          "Entrada: Retorno de Vasilhame"
+        ],
+        [
+          "ativo-fora",
+          "Entrada: Retorno de bem do ativo imobilizado p/ uso Fora do Estabelecimento"
+        ],
+        [
+          "servico",
+          "Entrada: Serviço"
+        ],
+        [
+          "serv-industrializacao",
+          "Entrada: Serviço de Industrialização"
+        ],
+        [
+          "transf-filial",
+          "Entrada: Transferencia entre Filiais"
+        ],
+        [
+          "importacao-transporte",
+          "Entrada: Transporte de Importação"
+        ],
+        [
+          "ent-vasilhame",
+          "Entrada: Vasilhame"
+        ]
+      ],
+      "store": true,
+      "string": "Tipo de Pedido (entrada)",
+      "type": "selection"
+    },
+    "l10n_br_icms_modalidade_base": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "selection": [
+        [
+          "0",
+          "0 - Margem Valor Agregado (%)"
+        ],
+        [
+          "1",
+          "1 - Pauta (Valor)"
+        ],
+        [
+          "2",
+          "2 - Preço Tabelado Máx. (valor)"
+        ],
+        [
+          "3",
+          "3 - Valor da operação"
+        ]
+      ],
+      "store": true,
+      "string": "Modalidade de Determinação da BC do ICMS",
+      "type": "selection"
+    },
+    "l10n_br_icms_reducao_base": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Aliquota de Redução da BC do ICMS (%)",
+      "type": "float"
+    },
+    "l10n_br_icms_diferido_valor_operacao": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do ICMS da Operação",
+      "type": "float"
+    },
+    "l10n_br_icms_diferido_aliquota": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Aliquota do ICMS Diferido (%)",
+      "type": "float"
+    },
+    "l10n_br_icms_diferido_valor": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do ICMS Diferido",
+      "type": "float"
+    },
+    "l10n_br_icms_cst": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "selection": [
+        [
+          "00",
+          "00 - Tributada integralmente"
+        ],
+        [
+          "10",
+          "10 - Tributada e com cobrança do ICMS-ST"
+        ],
+        [
+          "20",
+          "20 - Com redução de base de cálculo"
+        ],
+        [
+          "30",
+          "30 - Isenta ou não tributada e com cobrança do ICMS-ST"
+        ],
+        [
+          "40",
+          "40 - Isenta"
+        ],
+        [
+          "41",
+          "41 - Não tributada"
+        ],
+        [
+          "50",
+          "50 - Suspensão"
+        ],
+        [
+          "51",
+          "51 - Diferimento"
+        ],
+        [
+          "60",
+          "60 - ICMS cobrado anteriormente por ST"
+        ],
+        [
+          "70",
+          "70 - Com redução de base de cálculo e cobrança do ICMS-ST"
+        ],
+        [
+          "90",
+          "90 - Outras"
+        ],
+        [
+          "101",
+          "101 - Tributada pelo Simples Nacional com permissão de crédito"
+        ],
+        [
+          "102",
+          "102 - Tributada pelo Simples Nacional sem permissão de crédito"
+        ],
+        [
+          "103",
+          "103 - Isenção do ICMS no Simples Nacional para faixa de receita bruta"
+        ],
+        [
+          "201",
+          "201 - Tributada pelo Simples Nacional com permissão de crédito e com cobrança do ICMS por substituição tributária"
+        ],
+        [
+          "202",
+          "202 - Tributada pelo Simples Nacional sem permissão de crédito e com cobrança do ICMS por substituição tributária"
+        ],
+        [
+          "203",
+          "203 - Isenção do ICMS no Simples Nacional para faixa de receita bruta e com cobrança do ICMS por substituição tributária"
+        ],
+        [
+          "300",
+          "300 - Imune"
+        ],
+        [
+          "400",
+          "400 - Não tributada pelo Simples Nacional"
+        ],
+        [
+          "500",
+          "500 - ICMS cobrado anteriormente por substituição tributária (substituído) ou por antecipação"
+        ],
+        [
+          "900",
+          "900 - Outros"
+        ]
+      ],
+      "store": true,
+      "string": "Código de Situação Tributária do ICMS",
+      "type": "selection"
+    },
+    "l10n_br_icms_base": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor da Base de Cálculo do ICMS",
+      "type": "float"
+    },
+    "l10n_br_icms_aliquota": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Aliquota do ICMS (%)",
+      "type": "float"
+    },
+    "l10n_br_icms_valor": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do ICMS (Tributável)",
+      "type": "float"
+    },
+    "l10n_br_icms_valor_isento": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do ICMS (Isento/Não Tributável)",
+      "type": "float"
+    },
+    "l10n_br_icms_valor_outros": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do ICMS (Outros)",
+      "type": "float"
+    },
+    "l10n_br_icms_valor_desonerado": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do ICMS (Desonerado)",
+      "type": "float"
+    },
+    "l10n_br_icms_motivo_desonerado": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "selection": [
+        [
+          "1",
+          "1 - Táxi;"
+        ],
+        [
+          "2",
+          "2 - Deficiente Físico (Revogado);"
+        ],
+        [
+          "3",
+          "3 - Produtor Agropecuário;"
+        ],
+        [
+          "4",
+          "4 - Frotista/Locadora;"
+        ],
+        [
+          "5",
+          "5 - Diplomático/Consular;"
+        ],
+        [
+          "6",
+          "6 - Utilitários e Motocicletas da Amazônia Ocidental e Áreas de Livre Comércio (Resolução 714/88 e 790/94 - CONTRAN e suas alterações);"
+        ],
+        [
+          "7",
+          "7 - SUFRAMA;"
+        ],
+        [
+          "8",
+          "8 - Venda a Órgãos Públicos"
+        ],
+        [
+          "9",
+          "9 - outros."
+        ],
+        [
+          "10",
+          "10 - Deficiente Condutor (Convênio ICMS 38/12);"
+        ],
+        [
+          "11",
+          "11 - Deficiente Não Condutor (Convênio ICMS 38/12)"
+        ],
+        [
+          "12",
+          "12 - Órgão de fomento e desenvolvimento agropecuário"
+        ],
+        [
+          "16",
+          "16 - Olimpíadas Rio 2016;"
+        ],
+        [
+          "90",
+          "90 - Solicitado pelo Fisco"
+        ]
+      ],
+      "store": true,
+      "string": "Motivo Desoneração do ICMS",
+      "type": "selection"
+    },
+    "l10n_br_icms_valor_credito_presumido": {
+      "depends": [
+        "l10n_br_icms_ajuste_ids.l10n_br_icms_valor",
+        "l10n_br_icms_ajuste_ids.l10n_br_ajuste_id"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Valor do ICMS (Crédito Presumido)",
+      "type": "float"
+    },
+    "l10n_br_icms_valor_efetivo": {
+      "depends": [
+        "l10n_br_icms_ajuste_ids.l10n_br_icms_valor",
+        "l10n_br_icms_ajuste_ids.l10n_br_ajuste_id"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Valor do ICMS (Efetivo)",
+      "type": "float"
+    },
+    "l10n_br_icms_dest_base": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor da Base de Cálculo do ICMS UF Destino",
+      "type": "float"
+    },
+    "l10n_br_icms_dest_aliquota": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Aliquota do ICMS UF Destino (%)",
+      "type": "float"
+    },
+    "l10n_br_icms_inter_aliquota": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Aliquota do ICMS Interestadual (%)",
+      "type": "float"
+    },
+    "l10n_br_icms_inter_participacao": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Participação da Aliquota do ICMS Interestadual (%)",
+      "type": "float"
+    },
+    "l10n_br_icms_dest_valor": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do ICMS UF Destino",
+      "type": "float"
+    },
+    "l10n_br_icms_remet_valor": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do ICMS UF Remetente",
+      "type": "float"
+    },
+    "l10n_br_icms_credito_aliquota": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Alíquota aplicável de cálculo do crédito (Simples Nacional)",
+      "type": "float"
+    },
+    "l10n_br_icms_credito_valor": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor crédito do ICMS que pode ser aproveitado",
+      "type": "float"
+    },
+    "l10n_br_codigo_beneficio": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Código do Benefício Fiscal",
+      "type": "char"
+    },
+    "l10n_br_fcp_base": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor da Base do Fundo de Combate a Pobreza",
+      "type": "float"
+    },
+    "l10n_br_fcp_dest_aliquota": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Aliquota do Fundo de Combate a Pobreza (%)",
+      "type": "float"
+    },
+    "l10n_br_fcp_dest_valor": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do Fundo de Combate a Pobreza",
+      "type": "float"
+    },
+    "l10n_br_fcp_st_base": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor da Base do Fundo de Combate a Pobreza retido por ST",
+      "type": "float"
+    },
+    "l10n_br_fcp_st_aliquota": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Aliquota do Fundo de Combate a Pobreza (%) retido por ST",
+      "type": "float"
+    },
+    "l10n_br_fcp_st_valor": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do Fundo de Combate a Pobreza retido por ST",
+      "type": "float"
+    },
+    "l10n_br_fcp_st_ant_base": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor da Base do Fundo de Combate a Pobreza retido anteriormente por ST",
+      "type": "float"
+    },
+    "l10n_br_fcp_st_ant_aliquota": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Aliquota do Fundo de Combate a Pobreza (%) retido anteriormente por ST",
+      "type": "float"
+    },
+    "l10n_br_fcp_st_ant_valor": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do Fundo de Combate a Pobreza retido anteriormente por ST",
+      "type": "float"
+    },
+    "l10n_br_icmsst_modalidade_base": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "selection": [
+        [
+          "0",
+          "0 - Preço tabelado ou máximo sugerido"
+        ],
+        [
+          "1",
+          "1 - Lista Negativa (valor)"
+        ],
+        [
+          "2",
+          "2 - Lista Positiva (valor)"
+        ],
+        [
+          "3",
+          "3 - Lista Neutra (valor)"
+        ],
+        [
+          "4",
+          "4 - Margem Valor Agregado (%)"
+        ],
+        [
+          "5",
+          "5 - Pauta (valor)"
+        ],
+        [
+          "6",
+          "6 - Valor da Operação (NT 2019.001)"
+        ]
+      ],
+      "store": true,
+      "string": "Modalidade de Determinação da BC do ICMSST",
+      "type": "selection"
+    },
+    "l10n_br_icmsst_reducao_base": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Aliquota de Redução da BC do ICMSST (%)",
+      "type": "float"
+    },
+    "l10n_br_icmsst_mva": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Aliquota da Margem de Valor Adicionado do ICMSST (%)",
+      "type": "float"
+    },
+    "l10n_br_icmsst_base": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor da Base de Cálculo do ICMSST",
+      "type": "float"
+    },
+    "l10n_br_icmsst_aliquota": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Aliquota do ICMSST (%)",
+      "type": "float"
+    },
+    "l10n_br_icmsst_valor": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do ICMSST",
+      "type": "float"
+    },
+    "l10n_br_icmsst_valor_outros": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do ICMSST (Outros)",
+      "type": "float"
+    },
+    "l10n_br_icmsst_valor_proprio": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do ICMSST (Próprio)",
+      "type": "float"
+    },
+    "l10n_br_icmsst_retido_base": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor da Base de Cálculo do ICMSST Retido",
+      "type": "float"
+    },
+    "l10n_br_icmsst_retido_aliquota": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Alíquota suportada pelo Consumidor Final (%)",
+      "type": "float"
+    },
+    "l10n_br_icmsst_substituto_valor": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do ICMS próprio do Substituto",
+      "type": "float"
+    },
+    "l10n_br_icmsst_substituto_valor_outros": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do ICMS próprio do Substituto (Outros)",
+      "type": "float"
+    },
+    "l10n_br_icmsst_retido_valor": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do ICMSST Retido",
+      "type": "float"
+    },
+    "l10n_br_icmsst_retido_valor_outros": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do ICMSST Retido (Outros)",
+      "type": "float"
+    },
+    "l10n_br_icmsst_base_propria_aliquota": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Alíquota da Base de Cálculo da Operação Própria",
+      "type": "float"
+    },
+    "l10n_br_icmsst_uf": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "UF para qual é devido o ICMSST",
+      "type": "char"
+    },
+    "l10n_br_ipi_cst": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "selection": [
+        [
+          "00",
+          "00 - Entrada com Recuperação de Crédito"
+        ],
+        [
+          "01",
+          "01 - Entrada Tributável com Alíquota Zero"
+        ],
+        [
+          "02",
+          "02 - Entrada Isenta"
+        ],
+        [
+          "03",
+          "03 - Entrada Não-Tributada"
+        ],
+        [
+          "04",
+          "04 - Entrada Imune"
+        ],
+        [
+          "05",
+          "05 - Entrada com Suspensão"
+        ],
+        [
+          "49",
+          "49 - Outras Entradas"
+        ],
+        [
+          "50",
+          "50 - Saída Tributada"
+        ],
+        [
+          "51",
+          "51 - Saída Tributável com Alíquota Zero"
+        ],
+        [
+          "52",
+          "52 - Saída Isenta"
+        ],
+        [
+          "53",
+          "53 - Saída Não-Tributada"
+        ],
+        [
+          "54",
+          "54 - Saída Imune"
+        ],
+        [
+          "55",
+          "55 - Saída com Suspensão"
+        ],
+        [
+          "99",
+          "99 - Outras Saídas"
+        ]
+      ],
+      "store": true,
+      "string": "Código de Situação Tributária do IPI",
+      "type": "selection"
+    },
+    "l10n_br_ipi_base": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor da Base de Cálculo do IPI",
+      "type": "float"
+    },
+    "l10n_br_ipi_aliquota": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Aliquota do IPI (%)",
+      "type": "float"
+    },
+    "l10n_br_ipi_valor": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do IPI (Tributável)",
+      "type": "float"
+    },
+    "l10n_br_ipi_valor_isento": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do IPI (Isento/Não Tributável)",
+      "type": "float"
+    },
+    "l10n_br_ipi_valor_outros": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do IPI (Outros)",
+      "type": "float"
+    },
+    "l10n_br_iof_valor": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do IOF",
+      "type": "float"
+    },
+    "l10n_br_ipi_cnpj": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "CNPJ do produtor da mercadoria",
+      "type": "char"
+    },
+    "l10n_br_ipi_selo_codigo": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Código do selo de controle IPI",
+      "type": "char"
+    },
+    "l10n_br_ipi_selo_quantidade": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Quantidade de selo de controle",
+      "type": "integer"
+    },
+    "l10n_br_ipi_enq": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Código Enquadramento",
+      "type": "char"
+    },
+    "l10n_br_pis_cst": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "selection": [
+        [
+          "01",
+          "01 - Operação Tributável com Alíquota Básica"
+        ],
+        [
+          "02",
+          "02 - Operação Tributável com Alíquota por Unidade de Medida de Produto"
+        ],
+        [
+          "03",
+          "03 - Operação Tributável com Alíquota por Unidade de Medida de Produto"
+        ],
+        [
+          "04",
+          "04 - Operação Tributável Monofásica - Revenda a Alíquota Zero"
+        ],
+        [
+          "05",
+          "05 - Operação Tributável por Substituição Tributária"
+        ],
+        [
+          "06",
+          "06 - Operação Tributável a Alíquota Zero"
+        ],
+        [
+          "07",
+          "07 - Operação Isenta da Contribuição"
+        ],
+        [
+          "08",
+          "08 - Operação sem Incidência da Contribuição"
+        ],
+        [
+          "09",
+          "09 - Operação com Suspensão da Contribuição"
+        ],
+        [
+          "49",
+          "49 - Outras Operações de Saída"
+        ],
+        [
+          "50",
+          "50 - Operação com Direito a Crédito - Vinculada Exclusivamente a Receita Tributada no Mercado Interno"
+        ],
+        [
+          "51",
+          "51 - Operação com Direito a Crédito - Vinculada Exclusivamente a Receita Não-Tributada no Mercado Interno"
+        ],
+        [
+          "52",
+          "52 - Operação com Direito a Crédito - Vinculada Exclusivamente a Receita de Exportação"
+        ],
+        [
+          "53",
+          "53 - Operação com Direito a Crédito - Vinculada a Receitas Tributadas e Não-Tributadas no Mercado Interno"
+        ],
+        [
+          "54",
+          "54 - Operação com Direito a Crédito - Vinculada a Receitas Tributadas no Mercado Interno e de Exportação"
+        ],
+        [
+          "55",
+          "55 - Operação com Direito a Crédito - Vinculada a Receitas Não Tributadas Mercado Interno e de Exportação"
+        ],
+        [
+          "56",
+          "56 - Oper. c/ Direito a Créd. Vinculada a Rec. Tributadas e Não-Tributadas Mercado Interno e de Exportação"
+        ],
+        [
+          "60",
+          "60 - Crédito Presumido - Oper. de Aquisição Vinculada Exclusivamente a Rec. Tributada no Mercado Interno"
+        ],
+        [
+          "61",
+          "61 - Créd. Presumido - Oper. de Aquisição Vinculada Exclusivamente a Rec. Não-Tributada Mercado Interno"
+        ],
+        [
+          "62",
+          "62 - Crédito Presumido - Operação de Aquisição Vinculada Exclusivamente a Receita de Exportação"
+        ],
+        [
+          "63",
+          "63 - Créd. Presumido - Oper. de Aquisição Vinculada a Rec.Tributadas e Não-Tributadas no Mercado Interno"
+        ],
+        [
+          "64",
+          "64 - Créd. Presumido - Oper. de Aquisição Vinculada a Rec. Tributadas no Mercado Interno e de Exportação"
+        ],
+        [
+          "65",
+          "65 - Créd. Presumido - Oper. de Aquisição Vinculada a Rec. Não-Tributadas Mercado Interno e Exportação"
+        ],
+        [
+          "66",
+          "66 - Créd. Presumido - Oper. de Aquisição Vinculada a Rec. Trib. e Não-Trib. Mercado Interno e Exportação"
+        ],
+        [
+          "67",
+          "67 - Crédito Presumido - Outras Operações"
+        ],
+        [
+          "70",
+          "70 - Operação de Aquisição sem Direito a Crédito"
+        ],
+        [
+          "71",
+          "71 - Operação de Aquisição com Isenção"
+        ],
+        [
+          "72",
+          "72 - Operação de Aquisição com Suspensão"
+        ],
+        [
+          "73",
+          "73 - Operação de Aquisição a Alíquota Zero"
+        ],
+        [
+          "74",
+          "74 - Operação de Aquisição sem Incidência da Contribuição"
+        ],
+        [
+          "75",
+          "75 - Operação de Aquisição por Substituição Tributária"
+        ],
+        [
+          "98",
+          "98 - Outras Operações de Entrada"
+        ],
+        [
+          "99",
+          "99 - Outras Operações"
+        ]
+      ],
+      "store": true,
+      "string": "Código de Situação Tributária do PIS",
+      "type": "selection"
+    },
+    "l10n_br_pis_base": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor da Base de Cálculo do PIS",
+      "type": "float"
+    },
+    "l10n_br_pis_aliquota": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Aliquota do PIS (%)",
+      "type": "float"
+    },
+    "l10n_br_pis_valor": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do PIS (Tributável)",
+      "type": "float"
+    },
+    "l10n_br_pis_valor_isento": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do PIS (Isento/Não Tributável)",
+      "type": "float"
+    },
+    "l10n_br_pis_valor_outros": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do PIS (Outros)",
+      "type": "float"
+    },
+    "l10n_br_cofins_cst": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "selection": [
+        [
+          "01",
+          "01 - Operação Tributável com Alíquota Básica"
+        ],
+        [
+          "02",
+          "02 - Operação Tributável com Alíquota por Unidade de Medida de Produto"
+        ],
+        [
+          "03",
+          "03 - Operação Tributável com Alíquota por Unidade de Medida de Produto"
+        ],
+        [
+          "04",
+          "04 - Operação Tributável Monofásica - Revenda a Alíquota Zero"
+        ],
+        [
+          "05",
+          "05 - Operação Tributável por Substituição Tributária"
+        ],
+        [
+          "06",
+          "06 - Operação Tributável a Alíquota Zero"
+        ],
+        [
+          "07",
+          "07 - Operação Isenta da Contribuição"
+        ],
+        [
+          "08",
+          "08 - Operação sem Incidência da Contribuição"
+        ],
+        [
+          "09",
+          "09 - Operação com Suspensão da Contribuição"
+        ],
+        [
+          "49",
+          "49 - Outras Operações de Saída"
+        ],
+        [
+          "50",
+          "50 - Operação com Direito a Crédito - Vinculada Exclusivamente a Receita Tributada no Mercado Interno"
+        ],
+        [
+          "51",
+          "51 - Operação com Direito a Crédito - Vinculada Exclusivamente a Receita Não-Tributada no Mercado Interno"
+        ],
+        [
+          "52",
+          "52 - Operação com Direito a Crédito - Vinculada Exclusivamente a Receita de Exportação"
+        ],
+        [
+          "53",
+          "53 - Operação com Direito a Crédito - Vinculada a Receitas Tributadas e Não-Tributadas no Mercado Interno"
+        ],
+        [
+          "54",
+          "54 - Operação com Direito a Crédito - Vinculada a Receitas Tributadas no Mercado Interno e de Exportação"
+        ],
+        [
+          "55",
+          "55 - Operação com Direito a Crédito - Vinculada a Receitas Não Tributadas Mercado Interno e de Exportação"
+        ],
+        [
+          "56",
+          "56 - Oper. c/ Direito a Créd. Vinculada a Rec. Tributadas e Não-Tributadas Mercado Interno e de Exportação"
+        ],
+        [
+          "60",
+          "60 - Crédito Presumido - Oper. de Aquisição Vinculada Exclusivamente a Rec. Tributada no Mercado Interno"
+        ],
+        [
+          "61",
+          "61 - Créd. Presumido - Oper. de Aquisição Vinculada Exclusivamente a Rec. Não-Tributada Mercado Interno"
+        ],
+        [
+          "62",
+          "62 - Crédito Presumido - Operação de Aquisição Vinculada Exclusivamente a Receita de Exportação"
+        ],
+        [
+          "63",
+          "63 - Créd. Presumido - Oper. de Aquisição Vinculada a Rec.Tributadas e Não-Tributadas no Mercado Interno"
+        ],
+        [
+          "64",
+          "64 - Créd. Presumido - Oper. de Aquisição Vinculada a Rec. Tributadas no Mercado Interno e de Exportação"
+        ],
+        [
+          "65",
+          "65 - Créd. Presumido - Oper. de Aquisição Vinculada a Rec. Não-Tributadas Mercado Interno e Exportação"
+        ],
+        [
+          "66",
+          "66 - Créd. Presumido - Oper. de Aquisição Vinculada a Rec. Trib. e Não-Trib. Mercado Interno e Exportação"
+        ],
+        [
+          "67",
+          "67 - Crédito Presumido - Outras Operações"
+        ],
+        [
+          "70",
+          "70 - Operação de Aquisição sem Direito a Crédito"
+        ],
+        [
+          "71",
+          "71 - Operação de Aquisição com Isenção"
+        ],
+        [
+          "72",
+          "72 - Operação de Aquisição com Suspensão"
+        ],
+        [
+          "73",
+          "73 - Operação de Aquisição a Alíquota Zero"
+        ],
+        [
+          "74",
+          "74 - Operação de Aquisição sem Incidência da Contribuição"
+        ],
+        [
+          "75",
+          "75 - Operação de Aquisição por Substituição Tributária"
+        ],
+        [
+          "98",
+          "98 - Outras Operações de Entrada"
+        ],
+        [
+          "99",
+          "99 - Outras Operações"
+        ]
+      ],
+      "store": true,
+      "string": "Código de Situação Tributária do Cofins",
+      "type": "selection"
+    },
+    "l10n_br_cofins_base": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor da Base de Cálculo do Cofins",
+      "type": "float"
+    },
+    "l10n_br_cofins_aliquota": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Aliquota do Cofins (%)",
+      "type": "float"
+    },
+    "l10n_br_cofins_valor": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do Cofins (Tributável)",
+      "type": "float"
+    },
+    "l10n_br_cofins_valor_isento": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do Cofins (Isento/Não Tributável)",
+      "type": "float"
+    },
+    "l10n_br_cofins_valor_outros": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do Cofins (Outros)",
+      "type": "float"
+    },
+    "l10n_br_is_cst": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "selection": [
+        [
+          "00",
+          "00 - Tabela não divulgada"
+        ]
+      ],
+      "store": true,
+      "string": "Código de Situação Tributária do IS",
+      "type": "selection"
+    },
+    "l10n_br_is_classtrib_id": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": false,
+      "relation": "l10n_br_ciel_it_account.classificacao.tributaria.is",
+      "required": false,
+      "store": true,
+      "string": "Classificação Tributária do IS",
+      "type": "many2one"
+    },
+    "l10n_br_is_base": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor da Base de Cálculo do IS",
+      "type": "float"
+    },
+    "l10n_br_is_aliquota": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Aliquota do IS (%)",
+      "type": "float"
+    },
+    "l10n_br_is_valor": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do IS (Tributável)",
+      "type": "float"
+    },
+    "l10n_br_ibscbs_cst": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "selection": [
+        [
+          "000",
+          "000 - Tributação integral"
+        ],
+        [
+          "010",
+          "010 - Tributação com alíquotas uniformes"
+        ],
+        [
+          "011",
+          "011 - Tributação com alíquotas uniformes reduzidas"
+        ],
+        [
+          "200",
+          "200 - Alíquota reduzida"
+        ],
+        [
+          "210",
+          "210 - Redução de alíquota com redutor de base de cálculo"
+        ],
+        [
+          "220",
+          "220 - Alíquota fixa"
+        ],
+        [
+          "221",
+          "221 - Alíquota fixa proporcional"
+        ],
+        [
+          "222",
+          "222 - Redução de base de cálculo"
+        ],
+        [
+          "400",
+          "400 - Isenção"
+        ],
+        [
+          "410",
+          "410 - Imunidade e não incidência"
+        ],
+        [
+          "510",
+          "510 - Diferimento"
+        ],
+        [
+          "515",
+          "515 - Diferimento com redução de alíquota"
+        ],
+        [
+          "550",
+          "550 - Suspensão"
+        ],
+        [
+          "620",
+          "620 - Tributação monofásica"
+        ],
+        [
+          "800",
+          "800 - Transferência de crédito"
+        ],
+        [
+          "810",
+          "810 - Ajuste de IBS na ZFM"
+        ],
+        [
+          "811",
+          "811 - Ajustes"
+        ],
+        [
+          "820",
+          "820 - Tributação em declaração de regime específico"
+        ],
+        [
+          "830",
+          "830 - Exclusão de base de cálculo"
+        ]
+      ],
+      "store": true,
+      "string": "Código de Situação Tributária do IBS/CBS",
+      "type": "selection"
+    },
+    "l10n_br_ibscbs_classtrib_id": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": false,
+      "relation": "l10n_br_ciel_it_account.classificacao.tributaria.ibscbs",
+      "required": false,
+      "store": true,
+      "string": "Classificação Tributária do IBS/CBS",
+      "type": "many2one"
+    },
+    "l10n_br_ibscbs_base": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor da Base de Cálculo do IBS/CBS",
+      "type": "float"
+    },
+    "l10n_br_ibscbs_diferido": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "% Diferimento do IBS/CBS",
+      "type": "float"
+    },
+    "l10n_br_ibscbs_reducao": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "% Redução do IBS/CBS",
+      "type": "float"
+    },
+    "l10n_br_ibs_uf_aliquota": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Aliquota do IBS (%)",
+      "type": "float"
+    },
+    "l10n_br_ibs_uf_aliquota_diferido": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Aliquota Diferida do IBS (%)",
+      "type": "float"
+    },
+    "l10n_br_ibs_uf_aliquota_reducao": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Aliquota Reduzida do IBS (%)",
+      "type": "float"
+    },
+    "l10n_br_ibs_uf_valor": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do IBS UF (Tributável)",
+      "type": "float"
+    },
+    "l10n_br_ibs_uf_valor_diferido": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do IBS UF Diferido",
+      "type": "float"
+    },
+    "l10n_br_ibs_mun_aliquota": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Aliquota do IBS Município (%)",
+      "type": "float"
+    },
+    "l10n_br_ibs_mun_aliquota_diferido": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Aliquota Diferida do IBS Município (%)",
+      "type": "float"
+    },
+    "l10n_br_ibs_mun_aliquota_reducao": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Aliquota Reduzida do IBS Município (%)",
+      "type": "float"
+    },
+    "l10n_br_ibs_mun_valor": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do IBS Município (Tributável)",
+      "type": "float"
+    },
+    "l10n_br_ibs_mun_valor_diferido": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do IBS Município Diferido",
+      "type": "float"
+    },
+    "l10n_br_ibs_valor": {
+      "depends": [
+        "l10n_br_ibs_uf_valor",
+        "l10n_br_ibs_mun_valor"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Valor do IBS (Tributável)",
+      "type": "float"
+    },
+    "l10n_br_cbs_aliquota": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Aliquota do CBS (%)",
+      "type": "float"
+    },
+    "l10n_br_cbs_aliquota_diferido": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Aliquota Diferida do CBS (%)",
+      "type": "float"
+    },
+    "l10n_br_cbs_aliquota_reducao": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Aliquota Reduzida do CBS (%)",
+      "type": "float"
+    },
+    "l10n_br_cbs_valor": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do CBS (Tributável)",
+      "type": "float"
+    },
+    "l10n_br_cbs_valor_diferido": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do CBS Diferido",
+      "type": "float"
+    },
+    "l10n_br_nat_bc_cred": {
+      "depends": [
+        "product_id"
+      ],
+      "readonly": false,
+      "required": false,
+      "selection": [
+        [
+          "01",
+          "Aquisição de bens para revenda"
+        ],
+        [
+          "02",
+          "Aquisição de bens utilizados como insumo"
+        ],
+        [
+          "03",
+          "Aquisição de serviços utilizados como insumo"
+        ],
+        [
+          "04",
+          "Energia elétrica e térmica, inclusive sob a forma de vapor"
+        ],
+        [
+          "05",
+          "Aluguéis de prédios"
+        ],
+        [
+          "06",
+          "Aluguéis de máquinas e equipamentos"
+        ],
+        [
+          "07",
+          "Armazenagem de mercadoria e frete na operação de venda"
+        ],
+        [
+          "08",
+          "Contraprestações de arrendamento mercantil"
+        ],
+        [
+          "09",
+          "Máquinas, equipamentos e outros bens incorporados ao ativo imobilizado (crédito sobre encargos de depreciação)"
+        ],
+        [
+          "10",
+          "Máquinas, equipamentos e outros bens incorporados ao ativo imobilizado (crédito com base no valor de aquisição)"
+        ],
+        [
+          "11",
+          "Amortização e Depreciação de edificações e benfeitorias em imóveis"
+        ],
+        [
+          "12",
+          "Devolução de Vendas Sujeitas à Incidência Não-Cumulativa"
+        ],
+        [
+          "13",
+          "Outras Operações com Direito a Crédito"
+        ],
+        [
+          "14",
+          "Atividade de Transporte de Cargas – Subcontratação"
+        ],
+        [
+          "15",
+          "Atividade Imobiliária – Custo Incorrido de Unidade Imobiliária"
+        ],
+        [
+          "16",
+          "Atividade Imobiliária – Custo Orçado de unidade não concluída"
+        ],
+        [
+          "17",
+          "Atividade de Prestação de Serviços de Limpeza, Conservação e Manutenção – vale-transporte, vale-refeição ou vale-alimentação, fardamento ou uniforme"
+        ],
+        [
+          "18",
+          "Estoque de abertura de bens"
+        ]
+      ],
+      "store": true,
+      "string": "Natureza da Base de Cálculo dos Créditos",
+      "type": "selection"
+    },
+    "l10n_br_nat_rec": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Natureza da Receita",
+      "type": "char"
+    },
+    "l10n_br_ii_base": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor da Base de Cálculo do II",
+      "type": "float"
+    },
+    "l10n_br_ii_aliquota": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Aliquota do II (%)",
+      "type": "float"
+    },
+    "l10n_br_ii_valor": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do II (Tributável)",
+      "type": "float"
+    },
+    "l10n_br_ii_valor_aduaneira": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do II (Aduaneira)",
+      "type": "float"
+    },
+    "l10n_br_ii_valor_afrmm": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do II (AFRMM)",
+      "type": "float"
+    },
+    "l10n_br_di_adicao_id": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": false,
+      "relation": "l10n_br_ciel_it_account.di.adicao",
+      "required": false,
+      "store": true,
+      "string": "DI/Adição",
+      "type": "many2one"
+    },
+    "l10n_br_iss_deducao": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor da Dedução para efeito de Base de Cálculo do ISS",
+      "type": "float"
+    },
+    "l10n_br_iss_base": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor da Base de Cálculo do ISS",
+      "type": "float"
+    },
+    "l10n_br_iss_aliquota": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Aliquota do ISS (%)",
+      "type": "float"
+    },
+    "l10n_br_iss_valor": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do ISS",
+      "type": "float"
+    },
+    "l10n_br_irpj_base": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor da Base de Cálculo do IRPJ",
+      "type": "float"
+    },
+    "l10n_br_irpj_aliquota": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Aliquota do IRPJ (%)",
+      "type": "float"
+    },
+    "l10n_br_irpj_valor": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do IRPJ",
+      "type": "float"
+    },
+    "l10n_br_csll_base": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor da Base de Cálculo do CSLL",
+      "type": "float"
+    },
+    "l10n_br_csll_aliquota": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Aliquota do CSLL (%)",
+      "type": "float"
+    },
+    "l10n_br_csll_valor": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do CSLL",
+      "type": "float"
+    },
+    "l10n_br_irpj_ret_base": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor da Base de Cálculo do IRPJ Retido",
+      "type": "float"
+    },
+    "l10n_br_irpj_ret_aliquota": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Aliquota do IRPJ Retido (%)",
+      "type": "float"
+    },
+    "l10n_br_irpj_ret_valor": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do IRPJ Retido",
+      "type": "float"
+    },
+    "l10n_br_inss_ret_base": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor da Base de Cálculo do INSS Retido",
+      "type": "float"
+    },
+    "l10n_br_inss_ret_aliquota": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Aliquota do INSS Retido (%)",
+      "type": "float"
+    },
+    "l10n_br_inss_ret_valor": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do INSS Retido",
+      "type": "float"
+    },
+    "l10n_br_iss_ret_base": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor da Base de Cálculo do ISS Retido",
+      "type": "float"
+    },
+    "l10n_br_iss_ret_aliquota": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Aliquota do ISS Retido (%)",
+      "type": "float"
+    },
+    "l10n_br_iss_ret_valor": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do ISS Retido",
+      "type": "float"
+    },
+    "l10n_br_csll_ret_base": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor da Base de Cálculo do CSLL Retido",
+      "type": "float"
+    },
+    "l10n_br_csll_ret_aliquota": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Aliquota do CSLL (%) Retido",
+      "type": "float"
+    },
+    "l10n_br_csll_ret_valor": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do CSLL Retido",
+      "type": "float"
+    },
+    "l10n_br_pis_ret_base": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor da Base de Cálculo do PIS Retido",
+      "type": "float"
+    },
+    "l10n_br_pis_ret_aliquota": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Aliquota do PIS (%) Retido",
+      "type": "float"
+    },
+    "l10n_br_pis_ret_valor": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do PIS Retido",
+      "type": "float"
+    },
+    "l10n_br_cofins_ret_base": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor da Base de Cálculo do Cofins Retido",
+      "type": "float"
+    },
+    "l10n_br_cofins_ret_aliquota": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Aliquota do Cofins (%) Retido",
+      "type": "float"
+    },
+    "l10n_br_cofins_ret_valor": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor do Cofins Retido",
+      "type": "float"
+    },
+    "l10n_br_cobranca_idintegracao": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Id Integração",
+      "type": "char"
+    },
+    "l10n_br_cobranca_transmissao": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "selection": [
+        [
+          "webservice",
+          "Webservice / Ecommerce"
+        ],
+        [
+          "automatico",
+          "Remessa Automática (VAN)"
+        ],
+        [
+          "manual",
+          "Remessa Manual (Internet Bank)"
+        ]
+      ],
+      "store": true,
+      "string": "Tipo Transmissão",
+      "type": "selection"
+    },
+    "l10n_br_cobranca_arquivo_remessa": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Arquivo Remessa Automática",
+      "type": "char"
+    },
+    "l10n_br_arquivo_cobranca_escritural_id": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": false,
+      "relation": "l10n_br_ciel_it_account.arquivo.cobranca.escritural",
+      "required": false,
+      "store": true,
+      "string": "Arquivo Remessa Manual",
+      "type": "many2one"
+    },
+    "l10n_br_cobranca_parcela_manual_linha_id": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": false,
+      "relation": "l10n_br_ciel_it_account.payment.parcela.manual.linhas",
+      "required": false,
+      "store": true,
+      "string": "Parcela Personalizada",
+      "type": "many2one"
+    },
+    "payment_provider_id": {
+      "context": {},
+      "depends": [
+        "move_id.payment_provider_id"
+      ],
+      "domain": [],
+      "readonly": false,
+      "related": false,
+      "relation": "payment.provider",
+      "required": false,
+      "store": true,
+      "string": "Forma de Pagamento",
+      "type": "many2one"
+    },
+    "l10n_br_meio": {
+      "depends": [
+        "payment_provider_id.l10n_br_meio"
+      ],
+      "readonly": true,
+      "related": "payment_provider_id.l10n_br_meio",
+      "required": false,
+      "selection": [
+        [
+          "01",
+          "Dinheiro"
+        ],
+        [
+          "02",
+          "Cheque"
+        ],
+        [
+          "03",
+          "Cartão de Crédito"
+        ],
+        [
+          "04",
+          "Cartão de Débito"
+        ],
+        [
+          "05",
+          "Crédito Loja"
+        ],
+        [
+          "10",
+          "Vale Alimentação"
+        ],
+        [
+          "11",
+          "Vale Refeição"
+        ],
+        [
+          "12",
+          "Vale Presente"
+        ],
+        [
+          "13",
+          "Vale Combustível"
+        ],
+        [
+          "14",
+          "Duplicata Mercantil"
+        ],
+        [
+          "15",
+          "Boleto Bancário"
+        ],
+        [
+          "16",
+          "Depósito Bancário"
+        ],
+        [
+          "17",
+          "Pagamento Instantâneo (PIX)"
+        ],
+        [
+          "18",
+          "Transferência bancária, Carteira Digital"
+        ],
+        [
+          "19",
+          "Programa de fidelidade, Cashback, Crédito Virtual"
+        ],
+        [
+          "20",
+          "Pagamento Instantâneo (PIX) – Estático"
+        ],
+        [
+          "21",
+          "Crédito em Loja"
+        ],
+        [
+          "22",
+          "Pagamento Eletrônico não Informado"
+        ],
+        [
+          "90",
+          "Sem pagamento"
+        ],
+        [
+          "99",
+          "Outros"
+        ]
+      ],
+      "store": false,
+      "string": "Meio de Pagamento",
+      "type": "selection"
+    },
+    "l10n_br_cobranca_numero_cartao": {
+      "depends": [
+        "l10n_br_cobranca_parcela_manual_linha_id.numero_cartao"
+      ],
+      "readonly": false,
+      "related": "l10n_br_cobranca_parcela_manual_linha_id.numero_cartao",
+      "required": false,
+      "store": false,
+      "string": "Número do Cartão",
+      "type": "char"
+    },
+    "l10n_br_cobranca_autorizacao_cartao": {
+      "depends": [
+        "l10n_br_cobranca_parcela_manual_linha_id.autorizacao_cartao"
+      ],
+      "readonly": false,
+      "related": "l10n_br_cobranca_parcela_manual_linha_id.autorizacao_cartao",
+      "required": false,
+      "store": false,
+      "string": "Autorização",
+      "type": "char"
+    },
+    "l10n_br_cobranca_nsu_cartao": {
+      "depends": [
+        "l10n_br_cobranca_parcela_manual_linha_id.nsu_cartao"
+      ],
+      "readonly": false,
+      "related": "l10n_br_cobranca_parcela_manual_linha_id.nsu_cartao",
+      "required": false,
+      "store": false,
+      "string": "NSU",
+      "type": "char"
+    },
+    "l10n_br_cobranca_protocolo": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Protocolo",
+      "type": "char"
+    },
+    "l10n_br_cobranca_parcela": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Parcela",
+      "type": "integer"
+    },
+    "l10n_br_cobranca_nossonumero": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Nosso Numero",
+      "type": "char"
+    },
+    "l10n_br_cobranca_situacao": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "selection": [
+        [
+          "SALVO",
+          "Salvo"
+        ],
+        [
+          "PENDENTE_RETENTATIVA",
+          "Pendente"
+        ],
+        [
+          "FALHA",
+          "Falha"
+        ],
+        [
+          "EMITIDO",
+          "Emitido"
+        ],
+        [
+          "REJEITADO",
+          "Rejeitado"
+        ],
+        [
+          "REGISTRADO",
+          "Registrado"
+        ],
+        [
+          "LIQUIDADO",
+          "Liquidado"
+        ],
+        [
+          "BAIXADO",
+          "Baixado"
+        ]
+      ],
+      "store": true,
+      "string": "Situação",
+      "type": "selection"
+    },
+    "l10n_br_cobranca_situacao_mensagem": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Mensagem",
+      "type": "char"
+    },
+    "l10n_br_cobranca_tipo_desconto": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "selection": [
+        [
+          "0",
+          "0 - Sem instrução de desconto."
+        ],
+        [
+          "1",
+          "1 - Valor Fixo Até a Data Informada."
+        ],
+        [
+          "2",
+          "2 - Percentual Até a Data Informada."
+        ],
+        [
+          "3",
+          "3 - Valor por Antecipação Dia Corrido.."
+        ],
+        [
+          "4",
+          "4 - Valor por Antecipação Dia Útil."
+        ],
+        [
+          "5",
+          "5 - Percentual Sobre o Valor Nominal Dia Corrido."
+        ],
+        [
+          "6",
+          "6 - Percentual Sobre o Valor Nominal Dia Útil."
+        ]
+      ],
+      "store": true,
+      "string": "Tipo Desconto",
+      "type": "selection"
+    },
+    "l10n_br_cobranca_data_desconto": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Data Limite p/ Desconto",
+      "type": "date"
+    },
+    "l10n_br_cobranca_valor_desconto": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Valor Desconto",
+      "type": "float"
+    },
+    "l10n_br_pdf_boleto": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Boleto",
+      "type": "binary"
+    },
+    "l10n_br_pdf_boleto_fname": {
+      "depends": [],
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Arquivo Boleto",
+      "type": "char"
+    },
+    "l10n_br_paga": {
+      "depends": [],
+      "readonly": false,
+      "required": false,
+      "store": true,
+      "string": "Parcela Paga?",
+      "type": "boolean"
+    },
+    "l10n_br_dados_pagamento_id": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": false,
+      "relation": "l10n_br_ciel_it_account.dados.pagamento",
+      "required": false,
+      "store": true,
+      "string": "Dados de Pagamento (CNAB)",
+      "type": "one2many"
+    },
+    "l10n_br_icms_ajuste_ids": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": false,
+      "relation": "l10n_br_ciel_it_account.icms.ajuste.line",
+      "required": false,
+      "store": true,
+      "string": "Ajuste de ICMS",
+      "type": "one2many"
+    },
+    "sale_line_id": {
+      "context": {},
+      "depends": [],
+      "domain": [],
+      "readonly": false,
+      "relation": "sale.order.line",
+      "required": false,
+      "store": true,
+      "string": "Sale Line",
+      "type": "many2one"
+    },
+    "desconto_concedido": {
+      "depends": [],
+      "group_operator": "sum",
+      "readonly": true,
+      "required": false,
+      "store": true,
+      "string": "Desconto Concedido",
+      "type": "float"
+    },
+    "desconto_concedido_percentual": {
+      "depends": [
+        "balance",
+        "desconto_concedido"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Desconto Concedido (%)",
+      "type": "float"
+    },
+    "indice_comissao": {
+      "depends": [
+        "move_id.l10n_br_total_nfe",
+        "l10n_br_total_nfe",
+        "move_id.l10n_br_icmsst_valor",
+        "l10n_br_icmsst_valor"
+      ],
+      "group_operator": "sum",
+      "readonly": true,
+      "required": false,
+      "store": false,
+      "string": "Índice de Comissão",
+      "type": "float"
+    },
+    "x_studio_tipo_de_documento_fiscal": {
+      "depends": [
+        "move_id.l10n_br_tipo_documento"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_tipo_documento",
+      "required": false,
+      "selection": [
+        [
+          "NFS",
+          "Nota Fiscal de Serviços Instituída por Municípios"
+        ],
+        [
+          "NFSE",
+          "Nota Fiscal de Serviços Eletrônica - NFS-e"
+        ],
+        [
+          "NDS",
+          "Nota de Débito de Serviços"
+        ],
+        [
+          "FAT",
+          "Fatura"
+        ],
+        [
+          "ND",
+          "Nota de Débito"
+        ],
+        [
+          "01",
+          "Nota Fiscal"
+        ],
+        [
+          "1B",
+          "Nota Fiscal Avulsa"
+        ],
+        [
+          "02",
+          "Nota Fiscal de Venda a Consumidor"
+        ],
+        [
+          "2D",
+          "Cupom Fiscal"
+        ],
+        [
+          "2E",
+          "Cupom Fiscal Bilhete de Passagem"
+        ],
+        [
+          "04",
+          "Nota Fiscal de Produtor"
+        ],
+        [
+          "06",
+          "Nota Fiscal/Conta de Energia Elétrica"
+        ],
+        [
+          "07",
+          "Nota Fiscal de Serviço de Transporte"
+        ],
+        [
+          "08",
+          "Conhecimento de Transporte Rodoviário de Cargas"
+        ],
+        [
+          "8B",
+          "Conhecimento de Transporte de Cargas Avulso"
+        ],
+        [
+          "09",
+          "Conhecimento de Transporte Aquaviário de Cargas"
+        ],
+        [
+          "10",
+          "Conhecimento Aéreo"
+        ],
+        [
+          "11",
+          "Conhecimento de Transporte Ferroviário de Cargas"
+        ],
+        [
+          "13",
+          "Bilhete de Passagem Rodoviário"
+        ],
+        [
+          "14",
+          "Bilhete de Passagem Aquaviário"
+        ],
+        [
+          "15",
+          "Bilhete de Passagem e Nota de Bagagem"
+        ],
+        [
+          "16",
+          "Bilhete de Passagem Ferroviário"
+        ],
+        [
+          "18",
+          "Resumo de Movimento Diário"
+        ],
+        [
+          "21",
+          "Nota Fiscal de Serviço de Comunicação"
+        ],
+        [
+          "22",
+          "Nota Fiscal de Serviço de Telecomunicação"
+        ],
+        [
+          "26",
+          "Conhecimento de Transporte Multimodal de Cargas"
+        ],
+        [
+          "27",
+          "Nota Fiscal De Transporte Ferroviário De Carga"
+        ],
+        [
+          "28",
+          "Nota Fiscal/Conta de Fornecimento de Gás Canalizado"
+        ],
+        [
+          "29",
+          "Nota Fiscal/Conta de Fornecimento de Água Canalizada"
+        ],
+        [
+          "55",
+          "Nota Fiscal Eletrônica (NF-e)"
+        ],
+        [
+          "57",
+          "Conhecimento de Transporte Eletrônico (CT-e)"
+        ],
+        [
+          "59",
+          "Cupom Fiscal Eletrônico (CF-e-SAT)"
+        ],
+        [
+          "60",
+          "Cupom Fiscal Eletrônico (CF-e-ECF)"
+        ],
+        [
+          "63",
+          "Bilhete de Passagem Eletrônico (BP-e)"
+        ],
+        [
+          "65",
+          "Nota Fiscal Eletrônica ao Consumidor Final (NFC-e)"
+        ],
+        [
+          "66",
+          "Nota Fiscal de Energia Elétrica Eletrônica - NF3e"
+        ],
+        [
+          "67",
+          "Conhecimento de Transporte Eletrônico (CT-e OS)"
+        ]
+      ],
+      "store": true,
+      "string": "Tipo de Documento Fiscal",
+      "type": "selection"
+    },
+    "x_studio_status_de_pagamento": {
+      "depends": [
+        "move_id.payment_state"
+      ],
+      "readonly": true,
+      "related": "move_id.payment_state",
+      "required": false,
+      "selection": [
+        [
+          "not_paid",
+          "Not Paid"
+        ],
+        [
+          "in_payment",
+          "In Payment"
+        ],
+        [
+          "paid",
+          "Paid"
+        ],
+        [
+          "partial",
+          "Partially Paid"
+        ],
+        [
+          "reversed",
+          "Reversed"
+        ],
+        [
+          "invoicing_legacy",
+          "Invoicing App Legacy"
+        ]
+      ],
+      "store": true,
+      "string": "Status de Pagamento",
+      "type": "selection"
+    },
+    "x_studio_nf_e": {
+      "depends": [
+        "move_id.l10n_br_numero_nota_fiscal"
+      ],
+      "readonly": true,
+      "related": "move_id.l10n_br_numero_nota_fiscal",
+      "required": false,
+      "store": true,
+      "string": "NF-e",
+      "type": "char"
+    }
+  },
+  "estatisticas": {
+    "computados": 0,
+    "relacionados": 41,
+    "armazenados": 262,
+    "obrigatorios": 3
+  }
+}

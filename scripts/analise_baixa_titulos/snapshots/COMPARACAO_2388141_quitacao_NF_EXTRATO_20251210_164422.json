@@ -1,0 +1,823 @@
+{
+  "registros_novos": {
+    "account.full.reconcile": [
+      {
+        "id": "27409",
+        "dados": {
+          "id": 27409,
+          "partial_reconcile_ids": [
+            33315
+          ],
+          "reconciled_line_ids": [
+            2772753,
+            2388141
+          ],
+          "exchange_move_id": false,
+          "display_name": "account.full.reconcile,27409",
+          "create_uid": [
+            51,
+            "Rebeca Nascimento Oliveira do Anjos"
+          ],
+          "create_date": "2025-12-10 19:40:07",
+          "write_uid": [
+            51,
+            "Rebeca Nascimento Oliveira do Anjos"
+          ],
+          "write_date": "2025-12-10 19:40:07"
+        }
+      }
+    ],
+    "account.partial.reconcile": [
+      {
+        "id": "33315",
+        "dados": {
+          "id": 33315,
+          "debit_move_id": [
+            2388141,
+            "VND/2025/03317"
+          ],
+          "credit_move_id": [
+            2772753,
+            "GRA1/2025/01829 (c5dba738-e752-4535-a236-b98d8a6a76c3) VND/2025/03317"
+          ],
+          "full_reconcile_id": [
+            27409,
+            "account.full.reconcile,27409"
+          ],
+          "exchange_move_id": false,
+          "company_currency_id": [
+            6,
+            "BRL"
+          ],
+          "debit_currency_id": [
+            6,
+            "BRL"
+          ],
+          "credit_currency_id": [
+            6,
+            "BRL"
+          ],
+          "amount": 8236.8,
+          "debit_amount_currency": 8236.8,
+          "credit_amount_currency": 8236.8,
+          "company_id": [
+            1,
+            "NACOM GOYA - FB"
+          ],
+          "max_date": "2025-10-28",
+          "display_name": "account.partial.reconcile,33315",
+          "create_uid": [
+            51,
+            "Rebeca Nascimento Oliveira do Anjos"
+          ],
+          "create_date": "2025-12-10 19:40:07",
+          "write_uid": [
+            51,
+            "Rebeca Nascimento Oliveira do Anjos"
+          ],
+          "write_date": "2025-12-10 19:40:07"
+        }
+      }
+    ]
+  },
+  "campos_alterados": {
+    "account.move.line": {
+      "2388136": [
+        {
+          "campo": "x_studio_status_de_pagamento",
+          "antes": "not_paid",
+          "depois": "paid",
+          "critico": false
+        },
+        {
+          "campo": "message_ids",
+          "antes": [
+            12672550,
+            12672189,
+            11140770
+          ],
+          "depois": [
+            12672727,
+            12672550,
+            12672189,
+            11140770
+          ],
+          "critico": false
+        }
+      ],
+      "2388139": [
+        {
+          "campo": "x_studio_status_de_pagamento",
+          "antes": "not_paid",
+          "depois": "paid",
+          "critico": false
+        },
+        {
+          "campo": "message_ids",
+          "antes": [
+            12672553,
+            12672192,
+            11140773
+          ],
+          "depois": [
+            12672730,
+            12672553,
+            12672192,
+            11140773
+          ],
+          "critico": false
+        }
+      ],
+      "2388140": [
+        {
+          "campo": "x_studio_status_de_pagamento",
+          "antes": "not_paid",
+          "depois": "paid",
+          "critico": false
+        },
+        {
+          "campo": "message_ids",
+          "antes": [
+            12672554,
+            12672193,
+            11140774
+          ],
+          "depois": [
+            12672731,
+            12672554,
+            12672193,
+            11140774
+          ],
+          "critico": false
+        }
+      ],
+      "2388149": [
+        {
+          "campo": "x_studio_status_de_pagamento",
+          "antes": "not_paid",
+          "depois": "paid",
+          "critico": false
+        },
+        {
+          "campo": "message_ids",
+          "antes": [
+            12672563,
+            12672202,
+            11140785
+          ],
+          "depois": [
+            12672740,
+            12672563,
+            12672202,
+            11140785
+          ],
+          "critico": false
+        }
+      ],
+      "2388144": [
+        {
+          "campo": "x_studio_status_de_pagamento",
+          "antes": "not_paid",
+          "depois": "paid",
+          "critico": false
+        },
+        {
+          "campo": "message_ids",
+          "antes": [
+            12672558,
+            12672197,
+            11140780
+          ],
+          "depois": [
+            12672735,
+            12672558,
+            12672197,
+            11140780
+          ],
+          "critico": false
+        }
+      ],
+      "2388138": [
+        {
+          "campo": "x_studio_status_de_pagamento",
+          "antes": "not_paid",
+          "depois": "paid",
+          "critico": false
+        },
+        {
+          "campo": "message_ids",
+          "antes": [
+            12672552,
+            12672191,
+            11140772
+          ],
+          "depois": [
+            12672729,
+            12672552,
+            12672191,
+            11140772
+          ],
+          "critico": false
+        }
+      ],
+      "2388143": [
+        {
+          "campo": "x_studio_status_de_pagamento",
+          "antes": "not_paid",
+          "depois": "paid",
+          "critico": false
+        },
+        {
+          "campo": "message_ids",
+          "antes": [
+            12672557,
+            12672196,
+            11140779
+          ],
+          "depois": [
+            12672734,
+            12672557,
+            12672196,
+            11140779
+          ],
+          "critico": false
+        }
+      ],
+      "2388134": [
+        {
+          "campo": "x_studio_status_de_pagamento",
+          "antes": "not_paid",
+          "depois": "paid",
+          "critico": false
+        },
+        {
+          "campo": "message_ids",
+          "antes": [
+            12672548,
+            12672187,
+            11140768
+          ],
+          "depois": [
+            12672725,
+            12672548,
+            12672187,
+            11140768
+          ],
+          "critico": false
+        }
+      ],
+      "2388145": [
+        {
+          "campo": "x_studio_status_de_pagamento",
+          "antes": "not_paid",
+          "depois": "paid",
+          "critico": false
+        },
+        {
+          "campo": "message_ids",
+          "antes": [
+            12672559,
+            12672198,
+            11140781
+          ],
+          "depois": [
+            12672736,
+            12672559,
+            12672198,
+            11140781
+          ],
+          "critico": false
+        }
+      ],
+      "2388131": [
+        {
+          "campo": "x_studio_status_de_pagamento",
+          "antes": "not_paid",
+          "depois": "paid",
+          "critico": false
+        },
+        {
+          "campo": "message_ids",
+          "antes": [
+            12672545,
+            12672184,
+            11140765
+          ],
+          "depois": [
+            12672722,
+            12672545,
+            12672184,
+            11140765
+          ],
+          "critico": false
+        }
+      ],
+      "2388147": [
+        {
+          "campo": "x_studio_status_de_pagamento",
+          "antes": "not_paid",
+          "depois": "paid",
+          "critico": false
+        },
+        {
+          "campo": "message_ids",
+          "antes": [
+            12672561,
+            12672200,
+            11140783
+          ],
+          "depois": [
+            12672738,
+            12672561,
+            12672200,
+            11140783
+          ],
+          "critico": false
+        }
+      ],
+      "2388146": [
+        {
+          "campo": "x_studio_status_de_pagamento",
+          "antes": "not_paid",
+          "depois": "paid",
+          "critico": false
+        },
+        {
+          "campo": "message_ids",
+          "antes": [
+            12672560,
+            12672199,
+            11140782
+          ],
+          "depois": [
+            12672737,
+            12672560,
+            12672199,
+            11140782
+          ],
+          "critico": false
+        }
+      ],
+      "2388151": [
+        {
+          "campo": "x_studio_status_de_pagamento",
+          "antes": "not_paid",
+          "depois": "paid",
+          "critico": false
+        },
+        {
+          "campo": "message_ids",
+          "antes": [
+            12672565,
+            12672204,
+            11140787
+          ],
+          "depois": [
+            12672742,
+            12672565,
+            12672204,
+            11140787
+          ],
+          "critico": false
+        }
+      ],
+      "2388142": [
+        {
+          "campo": "x_studio_status_de_pagamento",
+          "antes": "not_paid",
+          "depois": "paid",
+          "critico": false
+        },
+        {
+          "campo": "message_ids",
+          "antes": [
+            12672556,
+            12672195,
+            11140778
+          ],
+          "depois": [
+            12672733,
+            12672556,
+            12672195,
+            11140778
+          ],
+          "critico": false
+        }
+      ],
+      "2388135": [
+        {
+          "campo": "x_studio_status_de_pagamento",
+          "antes": "not_paid",
+          "depois": "paid",
+          "critico": false
+        },
+        {
+          "campo": "message_ids",
+          "antes": [
+            12672549,
+            12672188,
+            11140769
+          ],
+          "depois": [
+            12672726,
+            12672549,
+            12672188,
+            11140769
+          ],
+          "critico": false
+        }
+      ],
+      "2388132": [
+        {
+          "campo": "x_studio_status_de_pagamento",
+          "antes": "not_paid",
+          "depois": "paid",
+          "critico": false
+        },
+        {
+          "campo": "message_ids",
+          "antes": [
+            12672546,
+            12672185,
+            11140766
+          ],
+          "depois": [
+            12672723,
+            12672546,
+            12672185,
+            11140766
+          ],
+          "critico": false
+        }
+      ],
+      "2388133": [
+        {
+          "campo": "x_studio_status_de_pagamento",
+          "antes": "not_paid",
+          "depois": "paid",
+          "critico": false
+        },
+        {
+          "campo": "message_ids",
+          "antes": [
+            12672547,
+            12672186,
+            11140767
+          ],
+          "depois": [
+            12672724,
+            12672547,
+            12672186,
+            11140767
+          ],
+          "critico": false
+        }
+      ],
+      "2388148": [
+        {
+          "campo": "x_studio_status_de_pagamento",
+          "antes": "not_paid",
+          "depois": "paid",
+          "critico": false
+        },
+        {
+          "campo": "message_ids",
+          "antes": [
+            12672562,
+            12672201,
+            11140784
+          ],
+          "depois": [
+            12672739,
+            12672562,
+            12672201,
+            11140784
+          ],
+          "critico": false
+        }
+      ],
+      "2388137": [
+        {
+          "campo": "x_studio_status_de_pagamento",
+          "antes": "not_paid",
+          "depois": "paid",
+          "critico": false
+        },
+        {
+          "campo": "message_ids",
+          "antes": [
+            12672551,
+            12672190,
+            11140771
+          ],
+          "depois": [
+            12672728,
+            12672551,
+            12672190,
+            11140771
+          ],
+          "critico": false
+        }
+      ],
+      "2388141": [
+        {
+          "campo": "x_studio_status_de_pagamento",
+          "antes": "not_paid",
+          "depois": "paid",
+          "critico": false
+        },
+        {
+          "campo": "amount_residual",
+          "antes": 8236.8,
+          "depois": 0.0,
+          "critico": true
+        },
+        {
+          "campo": "full_reconcile_id",
+          "antes": false,
+          "depois": [
+            27409,
+            "account.full.reconcile,27409"
+          ],
+          "critico": true
+        },
+        {
+          "campo": "matched_credit_ids",
+          "antes": [],
+          "depois": [
+            33315
+          ],
+          "critico": true
+        },
+        {
+          "campo": "message_ids",
+          "antes": [
+            12672555,
+            12672194,
+            11194199,
+            11141181,
+            11141179,
+            11141161,
+            11141159,
+            11140775
+          ],
+          "depois": [
+            12672732,
+            12672555,
+            12672194,
+            11194199,
+            11141181,
+            11141179,
+            11141161,
+            11141159,
+            11140775
+          ],
+          "critico": false
+        },
+        {
+          "campo": "reconciled",
+          "antes": false,
+          "depois": true,
+          "critico": true
+        },
+        {
+          "campo": "amount_residual_currency",
+          "antes": 8236.8,
+          "depois": 0.0,
+          "critico": true
+        },
+        {
+          "campo": "matching_number",
+          "antes": false,
+          "depois": "27409",
+          "critico": true
+        }
+      ],
+      "2388150": [
+        {
+          "campo": "x_studio_status_de_pagamento",
+          "antes": "not_paid",
+          "depois": "paid",
+          "critico": false
+        },
+        {
+          "campo": "message_ids",
+          "antes": [
+            12672564,
+            12672203,
+            11140786
+          ],
+          "depois": [
+            12672741,
+            12672564,
+            12672203,
+            11140786
+          ],
+          "critico": false
+        }
+      ]
+    },
+    "account.move": {
+      "365580": [
+        {
+          "campo": "amount_residual_signed",
+          "antes": 8236.8,
+          "depois": 0.0,
+          "critico": false
+        },
+        {
+          "campo": "amount_residual",
+          "antes": 8236.8,
+          "depois": 0.0,
+          "critico": true
+        },
+        {
+          "campo": "payment_state",
+          "antes": "not_paid",
+          "depois": "paid",
+          "critico": true
+        },
+        {
+          "campo": "partner_credit",
+          "antes": 802777.63,
+          "depois": 794540.8300000001,
+          "critico": false
+        },
+        {
+          "campo": "invoice_outstanding_credits_debits_widget",
+          "antes": {
+            "outstanding": true,
+            "title": "Adiantamentos/Pagamentos Disponíveis",
+            "content": [
+              {
+                "journal_name": "RVAS/2025/05/0023",
+                "amount": 385.0,
+                "currency_id": 6,
+                "id": 1736877,
+                "move_id": 266301,
+                "date": "2025-05-19",
+                "account_payment_id": false
+              }
+            ],
+            "move_id": 365580
+          },
+          "depois": false,
+          "critico": false
+        },
+        {
+          "campo": "invoice_payments_widget",
+          "antes": false,
+          "depois": {
+            "title": "Menos pagamento",
+            "outstanding": false,
+            "content": [
+              {
+                "name": "VND/2025/03317",
+                "journal_name": "GRAFENO",
+                "company_name": false,
+                "amount": 8236.8,
+                "currency_id": 6,
+                "date": "2025-10-28",
+                "partial_id": 33315,
+                "account_payment_id": false,
+                "payment_method_name": false,
+                "move_id": 392471,
+                "ref": "GRA1/2025/01829 (c5dba738-e752-4535-a236-b98d8a6a76c3)",
+                "is_exchange": false,
+                "amount_company_currency": "R$ 8.236,80",
+                "amount_foreign_currency": false
+              }
+            ]
+          },
+          "critico": false
+        },
+        {
+          "campo": "message_ids",
+          "antes": [
+            12672544,
+            12672183,
+            11194198,
+            11150543,
+            11141180,
+            11141178,
+            11141160,
+            11141158,
+            11141113,
+            11141112,
+            11141111,
+            11141110,
+            11141053,
+            11141052,
+            11141051,
+            11141050,
+            11140764,
+            11140763
+          ],
+          "depois": [
+            12672721,
+            12672544,
+            12672183,
+            11194198,
+            11150543,
+            11141180,
+            11141178,
+            11141160,
+            11141158,
+            11141113,
+            11141112,
+            11141111,
+            11141110,
+            11141053,
+            11141052,
+            11141051,
+            11141050,
+            11140764,
+            11140763
+          ],
+          "critico": false
+        },
+        {
+          "campo": "has_reconciled_entries",
+          "antes": false,
+          "depois": true,
+          "critico": false
+        },
+        {
+          "campo": "release_to_pay",
+          "antes": "exception",
+          "depois": "no",
+          "critico": false
+        },
+        {
+          "campo": "invoice_has_outstanding",
+          "antes": true,
+          "depois": false,
+          "critico": false
+        }
+      ]
+    }
+  },
+  "campos_criticos": [
+    {
+      "modelo": "account.move.line",
+      "id": "2388141",
+      "campo": "amount_residual",
+      "antes": 8236.8,
+      "depois": 0.0
+    },
+    {
+      "modelo": "account.move.line",
+      "id": "2388141",
+      "campo": "full_reconcile_id",
+      "antes": false,
+      "depois": [
+        27409,
+        "account.full.reconcile,27409"
+      ]
+    },
+    {
+      "modelo": "account.move.line",
+      "id": "2388141",
+      "campo": "matched_credit_ids",
+      "antes": [],
+      "depois": [
+        33315
+      ]
+    },
+    {
+      "modelo": "account.move.line",
+      "id": "2388141",
+      "campo": "reconciled",
+      "antes": false,
+      "depois": true
+    },
+    {
+      "modelo": "account.move.line",
+      "id": "2388141",
+      "campo": "amount_residual_currency",
+      "antes": 8236.8,
+      "depois": 0.0
+    },
+    {
+      "modelo": "account.move.line",
+      "id": "2388141",
+      "campo": "matching_number",
+      "antes": false,
+      "depois": "27409"
+    },
+    {
+      "modelo": "account.move",
+      "id": "365580",
+      "campo": "amount_residual",
+      "antes": 8236.8,
+      "depois": 0.0
+    },
+    {
+      "modelo": "account.move",
+      "id": "365580",
+      "campo": "payment_state",
+      "antes": "not_paid",
+      "depois": "paid"
+    }
+  ]
+}

@@ -855,16 +855,12 @@ class AjusteSincronizacaoService:
             alerta = AlertaSeparacaoCotada(
                 separacao_lote_id=lote_id,
                 num_pedido=num_pedido,
-                tipo_alerta="ALTERACAO_QUANTIDADE_COTADO",
-                nivel="CRITICO",
-                descricao=descricao,
-                fonte="SINCRONIZACAO_ODOO",
-                resolvido=False,
+                observacao=descricao,
             )
             db.session.add(alerta)
 
             resultado["alertas"].append(
-                {"tipo": "COTADO_ALTERADO", "lote_id": lote_id, "num_pedido": num_pedido, "descricao": descricao}
+                {"tipo": "COTADO_ALTERADO", "lote_id": lote_id, "num_pedido": num_pedido, "observacao": descricao}
             )
 
             logger.warning(f"🚨 ALERTA GERADO: Separação COTADA {lote_id} foi alterada")
