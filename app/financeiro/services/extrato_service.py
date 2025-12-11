@@ -454,7 +454,8 @@ class ExtratoService:
             for g in grupos:
                 if g.get('journal_id'):
                     j_id = g['journal_id'][0] if isinstance(g['journal_id'], (list, tuple)) else g['journal_id']
-                    pendentes_por_journal[j_id] = g.get('journal_id_count', 0)
+                    # Odoo 17 retorna __count, versões anteriores retornam journal_id_count
+                    pendentes_por_journal[j_id] = g.get('__count') or g.get('journal_id_count', 0)
         except Exception as e:
             logger.warning(f"Erro ao usar read_group para journals: {e}")
             # Fallback: buscar todas as linhas e contar em Python
@@ -552,7 +553,8 @@ class ExtratoService:
             for g in grupos:
                 if g.get('statement_id'):
                     st_id = g['statement_id'][0] if isinstance(g['statement_id'], (list, tuple)) else g['statement_id']
-                    pendentes_por_statement[st_id] = g.get('statement_id_count', 0)
+                    # Odoo 17 retorna __count, versões anteriores retornam statement_id_count
+                    pendentes_por_statement[st_id] = g.get('__count') or g.get('statement_id_count', 0)
         except Exception as e:
             logger.warning(f"Erro ao usar read_group, fallback para contagem individual: {e}")
             # Fallback: buscar todas as linhas e contar em Python

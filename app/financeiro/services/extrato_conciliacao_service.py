@@ -296,7 +296,7 @@ class ExtratoConciliacaoService:
                     valor=valor_payment,
                     journal_id=883,  # GRAFENO
                     ref=move_name,
-                    data=item.data or datetime.now().date(),
+                    data=item.data_transacao or datetime.now().date(),
                     company_id=titulo_company_id
                 )
                 logger.info(f"  Payment criado: {payment_name} (ID {payment_id})")
