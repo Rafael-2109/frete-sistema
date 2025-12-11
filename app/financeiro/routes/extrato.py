@@ -296,15 +296,26 @@ def extrato_lote_detalhe(lote_id):
         pagination = query.paginate(page=page, per_page=per_page, error_out=False)
         itens = pagination.items
 
-    # Estatísticas (sem filtros - sempre mostra o total do lote)
+    # OTIMIZAÇÃO: Estatísticas em uma única query com GROUP BY
+    from sqlalchemy import func, case
+    stats_query = db.session.query(
+        func.count().label('total'),
+        func.sum(case((ExtratoItem.status_match == 'MATCH_ENCONTRADO', 1), else_=0)).label('com_match'),
+        func.sum(case((ExtratoItem.status_match == 'MULTIPLOS_MATCHES', 1), else_=0)).label('multiplos'),
+        func.sum(case((ExtratoItem.status_match == 'SEM_MATCH', 1), else_=0)).label('sem_match'),
+        func.sum(case((ExtratoItem.status_match == 'PENDENTE', 1), else_=0)).label('pendentes'),
+        func.sum(case((ExtratoItem.aprovado == True, 1), else_=0)).label('aprovados'),
+        func.sum(case((ExtratoItem.status == 'CONCILIADO', 1), else_=0)).label('conciliados'),
+    ).filter(ExtratoItem.lote_id == lote_id).first()
+
     stats = {
-        'total': lote.total_linhas,
-        'com_match': ExtratoItem.query.filter_by(lote_id=lote_id, status_match='MATCH_ENCONTRADO').count(),
-        'multiplos': ExtratoItem.query.filter_by(lote_id=lote_id, status_match='MULTIPLOS_MATCHES').count(),
-        'sem_match': ExtratoItem.query.filter_by(lote_id=lote_id, status_match='SEM_MATCH').count(),
-        'pendentes': ExtratoItem.query.filter_by(lote_id=lote_id, status_match='PENDENTE').count(),
-        'aprovados': ExtratoItem.query.filter_by(lote_id=lote_id, aprovado=True).count(),
-        'conciliados': ExtratoItem.query.filter_by(lote_id=lote_id, status='CONCILIADO').count(),
+        'total': lote.total_linhas or (stats_query.total if stats_query else 0),
+        'com_match': stats_query.com_match or 0 if stats_query else 0,
+        'multiplos': stats_query.multiplos or 0 if stats_query else 0,
+        'sem_match': stats_query.sem_match or 0 if stats_query else 0,
+        'pendentes': stats_query.pendentes or 0 if stats_query else 0,
+        'aprovados': stats_query.aprovados or 0 if stats_query else 0,
+        'conciliados': stats_query.conciliados or 0 if stats_query else 0,
     }
 
     return render_template(
@@ -396,33 +407,26 @@ def extrato_lotes_detalhe():
         pagination = query.paginate(page=page, per_page=per_page, error_out=False)
         itens = pagination.items
 
-    # Estatísticas agregadas de todos os lotes
+    # OTIMIZAÇÃO: Estatísticas agregadas em uma única query
+    from sqlalchemy import func, case
+    stats_query = db.session.query(
+        func.count().label('total'),
+        func.sum(case((ExtratoItem.status_match == 'MATCH_ENCONTRADO', 1), else_=0)).label('com_match'),
+        func.sum(case((ExtratoItem.status_match == 'MULTIPLOS_MATCHES', 1), else_=0)).label('multiplos'),
+        func.sum(case((ExtratoItem.status_match == 'SEM_MATCH', 1), else_=0)).label('sem_match'),
+        func.sum(case((ExtratoItem.status_match == 'PENDENTE', 1), else_=0)).label('pendentes'),
+        func.sum(case((ExtratoItem.aprovado == True, 1), else_=0)).label('aprovados'),
+        func.sum(case((ExtratoItem.status == 'CONCILIADO', 1), else_=0)).label('conciliados'),
+    ).filter(ExtratoItem.lote_id.in_(lote_ids)).first()
+
     stats = {
         'total': sum(lote.total_linhas or 0 for lote in lotes),
-        'com_match': ExtratoItem.query.filter(
-            ExtratoItem.lote_id.in_(lote_ids),
-            ExtratoItem.status_match == 'MATCH_ENCONTRADO'
-        ).count(),
-        'multiplos': ExtratoItem.query.filter(
-            ExtratoItem.lote_id.in_(lote_ids),
-            ExtratoItem.status_match == 'MULTIPLOS_MATCHES'
-        ).count(),
-        'sem_match': ExtratoItem.query.filter(
-            ExtratoItem.lote_id.in_(lote_ids),
-            ExtratoItem.status_match == 'SEM_MATCH'
-        ).count(),
-        'pendentes': ExtratoItem.query.filter(
-            ExtratoItem.lote_id.in_(lote_ids),
-            ExtratoItem.status_match == 'PENDENTE'
-        ).count(),
-        'aprovados': ExtratoItem.query.filter(
-            ExtratoItem.lote_id.in_(lote_ids),
-            ExtratoItem.aprovado == True
-        ).count(),
-        'conciliados': ExtratoItem.query.filter(
-            ExtratoItem.lote_id.in_(lote_ids),
-            ExtratoItem.status == 'CONCILIADO'
-        ).count(),
+        'com_match': stats_query.com_match or 0 if stats_query else 0,
+        'multiplos': stats_query.multiplos or 0 if stats_query else 0,
+        'sem_match': stats_query.sem_match or 0 if stats_query else 0,
+        'pendentes': stats_query.pendentes or 0 if stats_query else 0,
+        'aprovados': stats_query.aprovados or 0 if stats_query else 0,
+        'conciliados': stats_query.conciliados or 0 if stats_query else 0,
     }
 
     return render_template(
