@@ -398,7 +398,7 @@ def extrato_lotes_detalhe():
 
     # Estatísticas agregadas de todos os lotes
     stats = {
-        'total': sum(l.total_linhas or 0 for l in lotes),
+        'total': sum(lote.total_linhas or 0 for lote in lotes),
         'com_match': ExtratoItem.query.filter(
             ExtratoItem.lote_id.in_(lote_ids),
             ExtratoItem.status_match == 'MATCH_ENCONTRADO'
