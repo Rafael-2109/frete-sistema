@@ -8,7 +8,8 @@ import logging
 
 from app import db
 from app.manufatura.models import RequisicaoCompras, HistoricoRequisicaoCompras
-from app.odoo.services.requisicao_compras_service import RequisicaoComprasService
+# NOTA: RequisicaoComprasService é importado de forma lazy na função que usa
+# para evitar import circular
 
 logger = logging.getLogger(__name__)
 
@@ -256,6 +257,8 @@ def register_requisicao_compras_routes(bp):
             logger.info(f"[REQUISICOES] Sincronização manual: {data_inicio} a {data_fim} ({diferenca_dias} dias)")
 
             # Executar sincronização
+            # Import lazy para evitar import circular
+            from app.odoo.services.requisicao_compras_service import RequisicaoComprasService
             service = RequisicaoComprasService()
             resultado = service.sincronizar_requisicoes_incremental(
                 minutos_janela=minutos_janela,
