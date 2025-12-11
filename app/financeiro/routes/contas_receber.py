@@ -455,21 +455,77 @@ def exportar_contas_receber_json():
 def sincronizar_contas_receber_odoo():
     """
     Sincronização manual de Contas a Receber com Odoo.
-    Busca dados dos últimos 7 dias.
 
-    Uso: Botão "Sincronizar com Odoo" na interface de Contas a Receber
+    Parâmetros (JSON body ou form data):
+        data_inicio: Data inicial (YYYY-MM-DD) - opcional, default: D-7
+        data_fim: Data final (YYYY-MM-DD) - opcional
+        dias: Quantidade de dias retroativos - alternativa a data_inicio
+
+    Uso:
+        - Botão "Sincronizar com Odoo" na interface de Contas a Receber
+        - POST /financeiro/contas-receber/sincronizar-odoo
+        - Body: {"data_inicio": "2025-01-01", "data_fim": "2025-01-31"}
     """
     try:
         from app.financeiro.services.sincronizacao_contas_receber_service import SincronizacaoContasReceberService
+        from datetime import datetime, timedelta
 
-        # Criar serviço e executar sincronização manual (7 dias)
+        # Obter parâmetros (aceita JSON ou form data)
+        data = request.get_json(silent=True) or {}
+
+        # Parâmetros de data
+        data_inicio_str = data.get('data_inicio') or request.form.get('data_inicio')
+        data_fim_str = data.get('data_fim') or request.form.get('data_fim')
+        dias = data.get('dias') or request.form.get('dias')
+
+        # Converter datas
+        data_inicio = None
+        data_fim = None
+
+        if data_inicio_str:
+            try:
+                data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d').date()
+            except ValueError:
+                return jsonify({
+                    'success': False,
+                    'error': f'Formato de data_inicio inválido: {data_inicio_str}. Use YYYY-MM-DD'
+                }), 400
+
+        if data_fim_str:
+            try:
+                data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date()
+            except ValueError:
+                return jsonify({
+                    'success': False,
+                    'error': f'Formato de data_fim inválido: {data_fim_str}. Use YYYY-MM-DD'
+                }), 400
+
+        # Se informou dias, calcular data_inicio
+        if dias and not data_inicio:
+            try:
+                dias = int(dias)
+                data_inicio = date.today() - timedelta(days=dias)
+            except ValueError:
+                return jsonify({
+                    'success': False,
+                    'error': f'Parâmetro dias inválido: {dias}'
+                }), 400
+
+        # Criar serviço e executar sincronização
         service = SincronizacaoContasReceberService()
-        resultado = service.sincronizar_manual(dias=7)
+
+        # Se tem data_inicio ou data_fim, usar sincronizar() diretamente
+        if data_inicio or data_fim:
+            resultado = service.sincronizar(data_inicio=data_inicio, data_fim=data_fim)
+        else:
+            # Fallback: sincronização padrão (7 dias)
+            resultado = service.sincronizar_manual(dias=7)
 
         if resultado.get('sucesso'):
             return jsonify({
                 'success': True,
                 'message': 'Sincronização concluída com sucesso!',
+                'periodo': resultado.get('periodo', 'Últimos 7 dias'),
                 'novos': resultado.get('novos', 0),
                 'atualizados': resultado.get('atualizados', 0),
                 'enriquecidos': resultado.get('enriquecidos', 0),

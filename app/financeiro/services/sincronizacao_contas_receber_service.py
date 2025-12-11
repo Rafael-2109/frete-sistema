@@ -81,12 +81,18 @@ class SincronizacaoContasReceberService:
         logger.warning(f"⚠️ Empresa não mapeada: {nome_empresa}")
         return 0
 
-    def sincronizar(self, data_inicio: date = None, limite: int = None) -> dict:
+    def sincronizar(
+        self,
+        data_inicio: date = None,
+        data_fim: date = None,
+        limite: int = None
+    ) -> dict:
         """
         Executa a sincronização completa de Contas a Receber.
 
         Args:
             data_inicio: Data inicial para busca no Odoo (default: D-7)
+            data_fim: Data final para busca no Odoo (opcional)
             limite: Limite de registros para teste (default: None = todos)
 
         Returns:
@@ -101,12 +107,17 @@ class SincronizacaoContasReceberService:
         if data_inicio is None:
             data_inicio = date.today() - timedelta(days=7)
 
-        logger.info(f"📅 Data inicial: {data_inicio}")
+        if data_fim:
+            logger.info(f"📅 Período: {data_inicio} até {data_fim}")
+            self.estatisticas['periodo'] = f"{data_inicio} até {data_fim}"
+        else:
+            logger.info(f"📅 Data inicial: {data_inicio}")
+            self.estatisticas['periodo'] = f"A partir de {data_inicio}"
 
         try:
             # 1. Extrair dados do Odoo
             logger.info("\n[1/4] Extraindo dados do Odoo...")
-            dados_odoo = self.odoo_service.extrair_dados_odoo(data_inicio)
+            dados_odoo = self.odoo_service.extrair_dados_odoo(data_inicio, data_fim)
             logger.info(f"   ✅ {len(dados_odoo)} registros extraídos")
 
             # 2. Aplicar regras de negócio

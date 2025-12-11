@@ -49,12 +49,17 @@ class ContasReceberService:
     def __init__(self):
         self.connection = get_odoo_connection()
 
-    def extrair_dados_odoo(self, data_inicio: Optional[date] = None) -> List[Dict]:
+    def extrair_dados_odoo(
+        self,
+        data_inicio: Optional[date] = None,
+        data_fim: Optional[date] = None
+    ) -> List[Dict]:
         """
         Extrai dados do Odoo (account.move.line)
 
         Args:
             data_inicio: Data inicial para filtro (default: D-1)
+            data_fim: Data final para filtro (opcional - se não informado, busca a partir de data_inicio)
 
         Returns:
             Lista de dicionários com dados do Odoo
@@ -65,7 +70,11 @@ class ContasReceberService:
         if data_inicio is None:
             data_inicio = date.today() - timedelta(days=1)
 
-        logger.info(f"📅 Filtrando registros a partir de: {data_inicio}")
+        # Log do período
+        if data_fim:
+            logger.info(f"📅 Filtrando registros de {data_inicio} até {data_fim}")
+        else:
+            logger.info(f"📅 Filtrando registros a partir de: {data_inicio}")
 
         # Autenticar
         if not self.connection.authenticate():
@@ -74,15 +83,22 @@ class ContasReceberService:
         # Buscar registros
         # FILTRO CRÍTICO: Apenas CONTAS A RECEBER ativas
         try:
+            # Montar domain base
+            domain = [
+                ['date', '>=', data_inicio.strftime('%Y-%m-%d')],
+                ['account_type', '=', 'asset_receivable'],  # Apenas contas a receber
+                ['balance', '>', 0],  # Saldo positivo (a receber)
+                ['date_maturity', '!=', False],  # Com vencimento preenchido
+                ['parent_state', '=', 'posted'],  # Apenas faturas lançadas (não draft/cancel)
+            ]
+
+            # Adicionar filtro de data_fim se especificado
+            if data_fim:
+                domain.append(['date', '<=', data_fim.strftime('%Y-%m-%d')])
+
             registros = self.connection.search_read(
                 'account.move.line',
-                [
-                    ['date', '>=', data_inicio.strftime('%Y-%m-%d')],
-                    ['account_type', '=', 'asset_receivable'],  # Apenas contas a receber
-                    ['balance', '>', 0],  # Saldo positivo (a receber)
-                    ['date_maturity', '!=', False],  # Com vencimento preenchido
-                    ['parent_state', '=', 'posted'],  # Apenas faturas lançadas (não draft/cancel)
-                ],
+                domain,
                 fields=self.CAMPOS_ODOO,
                 limit=None  # Sem limite
             )

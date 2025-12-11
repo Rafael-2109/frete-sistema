@@ -209,9 +209,92 @@
                         Sincronize dados com o Odoo manualmente.
                         A sincronização automática ocorre a cada 30 minutos.
                     </p>
-                    <button class="btn btn-warning btn-hub w-100" onclick="sincronizarOdoo()" id="btnSincronizar">
-                        <i class="fas fa-cloud-download-alt me-2"></i>
-                        Sincronizar Agora
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-warning btn-hub flex-grow-1" onclick="sincronizarOdoo()" id="btnSincronizar">
+                            <i class="fas fa-cloud-download-alt me-2"></i>
+                            Rápida (7 dias)
+                        </button>
+                        <button class="btn btn-outline-warning btn-hub" onclick="abrirModalSincronizacao()" title="Sincronização por período">
+                            <i class="fas fa-calendar-alt"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Sincronização por Período -->
+    <div class="modal fade" id="modalSincronizacao" tabindex="-1" aria-labelledby="modalSincronizacaoLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title" id="modalSincronizacaoLabel">
+                        <i class="fas fa-sync-alt me-2"></i>
+                        Sincronização por Período
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small">
+                        Escolha o período para sincronizar os dados de Contas a Receber do Odoo.
+                        Use para importação inicial ou reprocessamento de períodos específicos.
+                    </p>
+
+                    <!-- Opções rápidas -->
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">Opções Rápidas</label>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setDias(7)">
+                                7 dias
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setDias(15)">
+                                15 dias
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setDias(30)">
+                                30 dias
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setDias(60)">
+                                60 dias
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setDias(90)">
+                                90 dias
+                            </button>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <!-- Período personalizado -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Período Personalizado</label>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <label class="form-label small text-muted">Data Início</label>
+                                <input type="date" class="form-control" id="syncDataInicio">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small text-muted">Data Fim (opcional)</label>
+                                <input type="date" class="form-control" id="syncDataFim">
+                            </div>
+                        </div>
+                        <small class="text-muted">
+                            Se não informar Data Fim, busca todos os registros a partir da Data Início.
+                        </small>
+                    </div>
+
+                    <!-- Resumo -->
+                    <div class="alert alert-info small" id="syncResumo">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Selecione um período para sincronizar.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        Cancelar
+                    </button>
+                    <button type="button" class="btn btn-warning" onclick="executarSincronizacaoPeriodo()" id="btnSincronizarPeriodo">
+                        <i class="fas fa-sync-alt me-2"></i>
+                        Sincronizar
                     </button>
                 </div>
             </div>
@@ -422,6 +505,133 @@ function sincronizarOdoo() {
                 'Sincronização Concluída!'
             );
             // Recarregar estatísticas
+            carregarEstatisticas();
+        } else {
+            toastr.error(data.error || 'Erro desconhecido', 'Erro na Sincronização');
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        toastr.error('Erro ao conectar com o servidor', 'Erro');
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
+    });
+}
+
+// =============================================
+// MODAL DE SINCRONIZAÇÃO POR PERÍODO
+// =============================================
+
+let modalSincronizacao = null;
+
+function abrirModalSincronizacao() {
+    if (!modalSincronizacao) {
+        modalSincronizacao = new bootstrap.Modal(document.getElementById('modalSincronizacao'));
+    }
+
+    // Limpar campos
+    document.getElementById('syncDataInicio').value = '';
+    document.getElementById('syncDataFim').value = '';
+    atualizarResumoSync();
+
+    modalSincronizacao.show();
+}
+
+function setDias(dias) {
+    const hoje = new Date();
+    const dataInicio = new Date(hoje);
+    dataInicio.setDate(hoje.getDate() - dias);
+
+    // Formatar como YYYY-MM-DD usando timezone local (evita bug UTC)
+    const formatarData = (d) => {
+        const ano = d.getFullYear();
+        const mes = String(d.getMonth() + 1).padStart(2, '0');
+        const dia = String(d.getDate()).padStart(2, '0');
+        return `${ano}-${mes}-${dia}`;
+    };
+
+    document.getElementById('syncDataInicio').value = formatarData(dataInicio);
+    document.getElementById('syncDataFim').value = formatarData(hoje);
+
+    atualizarResumoSync();
+}
+
+// Helper para parsear data YYYY-MM-DD sem conversão de timezone (evita bug UTC → local)
+function parseLocalDate(dateStr) {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day);  // month é 0-indexed em JS
+}
+
+function atualizarResumoSync() {
+    const dataInicio = document.getElementById('syncDataInicio').value;
+    const dataFim = document.getElementById('syncDataFim').value;
+    const resumo = document.getElementById('syncResumo');
+
+    if (!dataInicio) {
+        resumo.className = 'alert alert-info small';
+        resumo.innerHTML = '<i class="fas fa-info-circle me-1"></i> Selecione um período para sincronizar.';
+        return;
+    }
+
+    const inicio = parseLocalDate(dataInicio);
+    const inicioFormatado = inicio.toLocaleDateString('pt-BR');
+
+    if (dataFim) {
+        const fim = parseLocalDate(dataFim);
+        const fimFormatado = fim.toLocaleDateString('pt-BR');
+        const dias = Math.ceil((fim - inicio) / (1000 * 60 * 60 * 24)) + 1;
+
+        resumo.className = 'alert alert-warning small';
+        resumo.innerHTML = `<i class="fas fa-calendar-check me-1"></i> Sincronizar de <strong>${inicioFormatado}</strong> até <strong>${fimFormatado}</strong> (${dias} dias)`;
+    } else {
+        resumo.className = 'alert alert-warning small';
+        resumo.innerHTML = `<i class="fas fa-calendar-check me-1"></i> Sincronizar a partir de <strong>${inicioFormatado}</strong> até hoje`;
+    }
+}
+
+// Event listeners para atualizar resumo
+document.getElementById('syncDataInicio')?.addEventListener('change', atualizarResumoSync);
+document.getElementById('syncDataFim')?.addEventListener('change', atualizarResumoSync);
+
+function executarSincronizacaoPeriodo() {
+    const dataInicio = document.getElementById('syncDataInicio').value;
+    const dataFim = document.getElementById('syncDataFim').value;
+
+    if (!dataInicio) {
+        toastr.warning('Informe a Data Início', 'Campo obrigatório');
+        return;
+    }
+
+    const btn = document.getElementById('btnSincronizarPeriodo');
+    const textoOriginal = btn.innerHTML;
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Sincronizando...';
+
+    const payload = { data_inicio: dataInicio };
+    if (dataFim) {
+        payload.data_fim = dataFim;
+    }
+
+    fetch("{{ url_for('financeiro.sincronizar_contas_receber_odoo') }}", {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            toastr.success(
+                `Período: ${data.periodo}<br>Novos: ${data.novos} | Atualizados: ${data.atualizados} | Enriquecidos: ${data.enriquecidos}`,
+                'Sincronização Concluída!'
+            );
+            // Fechar modal e recarregar estatísticas
+            modalSincronizacao.hide();
             carregarEstatisticas();
         } else {
             toastr.error(data.error || 'Erro desconhecido', 'Erro na Sincronização');
