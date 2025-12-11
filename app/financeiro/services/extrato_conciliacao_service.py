@@ -137,19 +137,38 @@ class ExtratoConciliacaoService:
         # Buscar ID do título no Odoo (account.move.line)
         titulo_odoo = self._buscar_titulo_odoo(titulo.titulo_nf, titulo.parcela, titulo.empresa)
         if not titulo_odoo:
-            raise ValueError(f"Título NF {titulo.titulo_nf} P{titulo.parcela} não encontrado no Odoo")
+            raise ValueError(
+                f"Título NF {titulo.titulo_nf} parcela {titulo.parcela} não encontrado no Odoo. "
+                f"Empresa: {titulo.empresa}, CNPJ: {titulo.cnpj}. "
+                f"Verifique se o título existe e não está totalmente reconciliado."
+            )
 
         titulo_odoo_id = titulo_odoo['id']
 
         # Salvar saldo antes
-        item.titulo_saldo_antes = titulo_odoo.get('amount_residual', 0)
+        saldo_titulo = titulo_odoo.get('amount_residual', 0)
+        item.titulo_saldo_antes = saldo_titulo
+
+        # Validação: verificar se há saldo para baixar (igual à baixa manual)
+        if saldo_titulo <= 0:
+            raise ValueError(
+                f"Título NF {titulo.titulo_nf} P{titulo.parcela} encontrado, mas já está quitado "
+                f"(saldo: R$ {saldo_titulo:.2f}). Reconciliado: {titulo_odoo.get('reconciled', False)}"
+            )
+
+        # Validação: valor do extrato não pode ser maior que saldo do título
+        if item.valor > saldo_titulo:
+            logger.warning(
+                f"  ATENÇÃO: Valor do extrato (R$ {item.valor:.2f}) > Saldo do título (R$ {saldo_titulo:.2f}). "
+                f"Será feita baixa PARCIAL."
+            )
 
         # Capturar snapshot ANTES
         snapshot_antes = self._capturar_snapshot(titulo_odoo_id)
         item.set_snapshot_antes(snapshot_antes)
 
         # Executar reconciliação
-        logger.info(f"  Reconciliando: credit_line={item.credit_line_id} com titulo={titulo_odoo_id}")
+        logger.info(f"  Reconciliando: credit_line={item.credit_line_id} com titulo={titulo_odoo_id} (saldo: R$ {saldo_titulo:.2f})")
         self._executar_reconcile(item.credit_line_id, titulo_odoo_id)
 
         # Capturar snapshot DEPOIS
@@ -205,23 +224,30 @@ class ExtratoConciliacaoService:
     def _buscar_titulo_odoo(self, nf: str, parcela: str, empresa: int) -> Optional[Dict]:
         """
         Busca o título no Odoo pelo número da NF e parcela.
+
+        Estratégia IDÊNTICA à baixa manual:
+        1. Busca por NF + parcela (sem filtros de reconciled/amount_residual)
+        2. Se encontrar múltiplos, prefere empresa FB
+        3. Fallback: busca pelo move_id.name
+
+        NOTA: NÃO filtramos por reconciled nem amount_residual.
+        O Odoo cuida automaticamente se pode ou não reconciliar.
         """
-        # Mapeamento empresa local -> company_id Odoo
-        EMPRESA_MAP = {1: 1, 2: 3, 3: 4}  # FB=1, SC=3, CD=4
-        company_id = EMPRESA_MAP.get(empresa, empresa)
-
-        # Tentar converter parcela para int
+        # Limpar parcela - remover "P" se existir e converter para int
+        parcela_limpa = str(parcela).upper().replace('P', '').strip() if parcela else None
         try:
-            parcela_int = int(parcela)
-        except:
+            parcela_int = int(parcela_limpa) if parcela_limpa else None
+        except (ValueError, TypeError):
             parcela_int = None
+            logger.warning(f"Parcela inválida: '{parcela}' -> não será filtrada")
 
-        # Buscar por x_studio_nf_e e parcela
+        logger.info(f"  Buscando título: NF={nf}, parcela={parcela_int}, empresa_local={empresa}")
+
+        # 1. Busca principal: NF + parcela (IGUAL À BAIXA MANUAL - sem filtros extras)
         domain = [
             ['x_studio_nf_e', '=', str(nf)],
             ['account_type', '=', 'asset_receivable'],
-            ['parent_state', '=', 'posted'],
-            ['reconciled', '=', False]
+            ['parent_state', '=', 'posted']
         ]
 
         if parcela_int:
@@ -235,15 +261,76 @@ class ExtratoConciliacaoService:
         )
 
         if titulos:
-            # Preferir empresa correta
-            for t in titulos:
-                comp = t.get('company_id')
-                if comp and isinstance(comp, (list, tuple)):
-                    if comp[0] == company_id:
-                        return t
-            return titulos[0]
+            logger.info(f"  Encontrado(s) {len(titulos)} título(s)")
+            return self._selecionar_titulo_empresa(titulos)
+
+        # 2. Fallback: buscar pelo nome do move (IGUAL À BAIXA MANUAL)
+        domain_fallback = [
+            ['move_id.name', 'ilike', str(nf)],
+            ['account_type', '=', 'asset_receivable'],
+            ['parent_state', '=', 'posted']
+        ]
+
+        if parcela_int:
+            domain_fallback.append(['l10n_br_cobranca_parcela', '=', parcela_int])
+
+        titulos = self.connection.search_read(
+            'account.move.line',
+            domain_fallback,
+            fields=CAMPOS_SNAPSHOT_TITULO,
+            limit=5
+        )
+
+        if titulos:
+            logger.info(f"  Encontrado(s) {len(titulos)} título(s) via move_id.name")
+            return self._selecionar_titulo_empresa(titulos)
+
+        # 3. Log diagnóstico: buscar só por NF para mostrar parcelas disponíveis
+        if parcela_int:
+            domain_diag = [
+                ['x_studio_nf_e', '=', str(nf)],
+                ['account_type', '=', 'asset_receivable'],
+                ['parent_state', '=', 'posted']
+            ]
+            titulos_diag = self.connection.search_read(
+                'account.move.line',
+                domain_diag,
+                fields=['id', 'l10n_br_cobranca_parcela', 'amount_residual', 'reconciled'],
+                limit=10
+            )
+
+            if titulos_diag:
+                logger.warning(f"  NF {nf} encontrada, mas parcela {parcela_int} não existe")
+                for t in titulos_diag:
+                    logger.warning(f"    -> Parcela {t.get('l10n_br_cobranca_parcela')}: "
+                                   f"Saldo={t.get('amount_residual')}, "
+                                   f"Reconciliado={t.get('reconciled')}")
+            else:
+                logger.warning(f"  NF {nf} NÃO encontrada no Odoo")
 
         return None
+
+    def _selecionar_titulo_empresa(self, titulos: list) -> Optional[Dict]:
+        """
+        Seleciona o título, priorizando empresa FB se houver múltiplos.
+        Igual à lógica da baixa manual.
+        """
+        if not titulos:
+            return None
+
+        if len(titulos) == 1:
+            return titulos[0]
+
+        # Se encontrou mais de um, preferir empresa FB
+        for t in titulos:
+            company = t.get('company_id')
+            if company and isinstance(company, (list, tuple)):
+                if 'FB' in company[1]:
+                    logger.info(f"  Múltiplos títulos encontrados, selecionando FB")
+                    return t
+
+        # Fallback: retorna o primeiro
+        return titulos[0]
 
     def _buscar_titulo_por_id(self, titulo_id: int) -> Optional[Dict]:
         """Busca título por ID."""

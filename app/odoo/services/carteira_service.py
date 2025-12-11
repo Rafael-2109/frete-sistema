@@ -1632,7 +1632,7 @@ class CarteiraService:
             # FASE 2: BUSCAR DADOS NOVOS DO ODOO
             logger.info("🔄 Fase 2: Buscando dados atualizados do Odoo...")
 
-            janela = 24*60 if primeira_execucao else minutos_janela
+            janela = 48*60 if primeira_execucao else minutos_janela
 
             resultado_odoo = self.obter_carteira_pendente(
                 modo_incremental=modo_incremental,

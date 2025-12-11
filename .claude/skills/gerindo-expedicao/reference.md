@@ -269,3 +269,5 @@ normalizar_texto("Sao Paulo")  # -> "sao paulo"
 | CIF | Nacom entrega no cliente |
 | BD IND | Balde Industrial |
 | D-2, D-1, D0 | Dias relativos a data de entrega |
+| BD | Balde |
+
