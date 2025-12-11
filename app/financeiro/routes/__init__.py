@@ -13,6 +13,7 @@ Estrutura:
 - liberacao.py           - CRUD de liberação antecipação
 - pendencias_modal.py    - APIs do modal de pendência financeira
 - baixas.py              - Baixa de títulos via Excel (NEW)
+- extrato.py             - Conciliação via extrato bancário (NEW)
 """
 
 import os
@@ -35,3 +36,4 @@ from app.financeiro.routes import tipos
 from app.financeiro.routes import liberacao
 from app.financeiro.routes import pendencias_modal
 from app.financeiro.routes import baixas
+from app.financeiro.routes import extrato

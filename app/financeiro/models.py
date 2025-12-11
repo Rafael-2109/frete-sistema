@@ -1144,6 +1144,260 @@ class BaixaTituloItem(db.Model):
 # =============================================================================
 
 
+# =============================================================================
+# EXTRATO BANCÁRIO - CONCILIAÇÃO VIA EXTRATO
+# =============================================================================
+
+
+class ExtratoLote(db.Model):
+    """
+    Representa um account.bank.statement do Odoo.
+    Cada lote corresponde a um extrato bancário (geralmente por dia).
+    """
+    __tablename__ = 'extrato_lote'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # === REFERÊNCIA AO ODOO (account.bank.statement) ===
+    statement_id = db.Column(db.Integer, nullable=True, unique=True, index=True)  # account.bank.statement ID
+    statement_name = db.Column(db.String(255), nullable=True)  # Ex: "GRA1 Extrato 2025-12-10"
+
+    # Journal
+    journal_code = db.Column(db.String(20), nullable=True)  # GRA1, SIC, BRAD, etc.
+    journal_id = db.Column(db.Integer, nullable=True)  # ID do journal no Odoo
+
+    # Data do extrato (do Odoo)
+    data_extrato = db.Column(db.Date, nullable=True)  # date do statement
+
+    # Nome do lote (compatibilidade)
+    nome = db.Column(db.String(255), nullable=False)  # Pode ser igual a statement_name
+
+    # Campos legados (manter compatibilidade)
+    data_inicio = db.Column(db.Date, nullable=True)
+    data_fim = db.Column(db.Date, nullable=True)
+
+    # Estatísticas
+    total_linhas = db.Column(db.Integer, default=0)
+    linhas_com_match = db.Column(db.Integer, default=0)
+    linhas_sem_match = db.Column(db.Integer, default=0)
+    linhas_conciliadas = db.Column(db.Integer, default=0)
+    linhas_erro = db.Column(db.Integer, default=0)
+    valor_total = db.Column(db.Float, default=0)
+
+    # Status: IMPORTADO, PROCESSANDO_MATCH, AGUARDANDO_APROVACAO, CONCILIANDO, CONCLUIDO, ERRO
+    status = db.Column(db.String(30), default='IMPORTADO', nullable=False, index=True)
+
+    # Auditoria
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_por = db.Column(db.String(100), nullable=True)
+    processado_em = db.Column(db.DateTime, nullable=True)
+    processado_por = db.Column(db.String(100), nullable=True)
+
+    # Relacionamento com itens
+    itens = relationship('ExtratoItem', backref='lote', lazy='dynamic', cascade='all, delete-orphan')
+
+    def __repr__(self):
+        return f'<ExtratoLote {self.id} - {self.nome} ({self.status})>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'statement_id': self.statement_id,
+            'statement_name': self.statement_name,
+            'nome': self.nome,
+            'journal_code': self.journal_code,
+            'data_extrato': self.data_extrato.isoformat() if self.data_extrato else None,
+            'total_linhas': self.total_linhas,
+            'linhas_com_match': self.linhas_com_match,
+            'linhas_sem_match': self.linhas_sem_match,
+            'linhas_conciliadas': self.linhas_conciliadas,
+            'linhas_erro': self.linhas_erro,
+            'valor_total': self.valor_total,
+            'status': self.status,
+            'criado_em': self.criado_em.isoformat() if self.criado_em else None,
+            'criado_por': self.criado_por,
+            'processado_em': self.processado_em.isoformat() if self.processado_em else None
+        }
+
+
+class ExtratoItem(db.Model):
+    """
+    Linha de extrato importada do Odoo para conciliação.
+
+    Fluxo:
+    1. Importação -> status = PENDENTE
+    2. Matching automático -> status = MATCH_ENCONTRADO ou SEM_MATCH
+    3. Aprovação do usuário -> status = APROVADO
+    4. Conciliação -> status = CONCILIADO ou ERRO
+    """
+    __tablename__ = 'extrato_item'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # FK para o lote
+    lote_id = db.Column(db.Integer, db.ForeignKey('extrato_lote.id'), nullable=False, index=True)
+
+    # =========================================================================
+    # DADOS DO ODOO (importados)
+    # =========================================================================
+
+    # IDs do Odoo
+    statement_line_id = db.Column(db.Integer, nullable=False, index=True)  # account.bank.statement.line ID
+    move_id = db.Column(db.Integer, nullable=True)  # account.move ID
+    move_name = db.Column(db.String(100), nullable=True)  # Nome do move (GRA1/2025/...)
+    credit_line_id = db.Column(db.Integer, nullable=True)  # account.move.line ID da linha de crédito
+
+    # Dados da transação
+    data_transacao = db.Column(db.Date, nullable=False)
+    valor = db.Column(db.Float, nullable=False)
+    payment_ref = db.Column(db.Text, nullable=True)  # Label completo da transação
+
+    # Dados extraídos do payment_ref
+    tipo_transacao = db.Column(db.String(50), nullable=True)  # TED, PIX, Boleto
+    nome_pagador = db.Column(db.String(255), nullable=True)  # Nome do cliente
+    cnpj_pagador = db.Column(db.String(20), nullable=True, index=True)  # CNPJ extraído
+
+    # Journal
+    journal_id = db.Column(db.Integer, nullable=True)
+    journal_code = db.Column(db.String(20), nullable=True)
+    journal_name = db.Column(db.String(100), nullable=True)
+
+    # =========================================================================
+    # MATCHING COM TÍTULOS
+    # =========================================================================
+
+    # Status do match: PENDENTE, MATCH_ENCONTRADO, MULTIPLOS_MATCHES, SEM_MATCH
+    status_match = db.Column(db.String(30), default='PENDENTE', nullable=False, index=True)
+
+    # Título encontrado (se único match)
+    # NOTA: titulo_id é o ID da tabela local contas_a_receber (não do Odoo)
+    titulo_id = db.Column(db.Integer, db.ForeignKey('contas_a_receber.id'), nullable=True)
+    titulo_nf = db.Column(db.String(50), nullable=True)  # Número da NF-e (cache)
+    titulo_parcela = db.Column(db.Integer, nullable=True)  # Número da parcela (cache)
+    titulo_valor = db.Column(db.Float, nullable=True)  # Valor do título (cache)
+    titulo_vencimento = db.Column(db.Date, nullable=True)  # Vencimento do título (cache)
+    titulo_cliente = db.Column(db.String(255), nullable=True)  # Nome do cliente (cache)
+
+    # Relationship para acessar dados completos do título
+    titulo = db.relationship('ContasAReceber', foreign_keys=[titulo_id], lazy='joined')
+
+    # Múltiplos matches (JSON com lista de títulos candidatos)
+    matches_candidatos = db.Column(db.Text, nullable=True)
+
+    # Score de confiança do match (0-100)
+    match_score = db.Column(db.Integer, nullable=True)
+    match_criterio = db.Column(db.String(100), nullable=True)  # Ex: "CNPJ+VALOR_EXATO"
+
+    # =========================================================================
+    # CONTROLE DE PROCESSAMENTO
+    # =========================================================================
+
+    # Se o usuário aprovou para conciliar
+    aprovado = db.Column(db.Boolean, default=False, nullable=False)
+    aprovado_em = db.Column(db.DateTime, nullable=True)
+    aprovado_por = db.Column(db.String(100), nullable=True)
+
+    # Status geral: PENDENTE, MATCH_ENCONTRADO, SEM_MATCH, APROVADO, CONCILIANDO, CONCILIADO, ERRO
+    status = db.Column(db.String(30), default='PENDENTE', nullable=False, index=True)
+
+    # Mensagem de erro ou observação
+    mensagem = db.Column(db.Text, nullable=True)
+
+    # =========================================================================
+    # RESULTADO DA CONCILIAÇÃO
+    # =========================================================================
+
+    # IDs criados no Odoo
+    partial_reconcile_id = db.Column(db.Integer, nullable=True)
+    full_reconcile_id = db.Column(db.Integer, nullable=True)
+
+    # Saldo do título após conciliação
+    titulo_saldo_antes = db.Column(db.Float, nullable=True)
+    titulo_saldo_depois = db.Column(db.Float, nullable=True)
+
+    # Snapshots (JSON)
+    snapshot_antes = db.Column(db.Text, nullable=True)
+    snapshot_depois = db.Column(db.Text, nullable=True)
+
+    # =========================================================================
+    # AUDITORIA
+    # =========================================================================
+
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    processado_em = db.Column(db.DateTime, nullable=True)
+
+    __table_args__ = (
+        Index('idx_extrato_item_lote', 'lote_id'),
+        Index('idx_extrato_item_status', 'status'),
+        Index('idx_extrato_item_cnpj', 'cnpj_pagador'),
+        Index('idx_extrato_item_statement_line', 'statement_line_id'),
+    )
+
+    def __repr__(self):
+        return f'<ExtratoItem {self.id} - {self.data_transacao} R$ {self.valor} ({self.status})>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'lote_id': self.lote_id,
+            # Dados Odoo
+            'statement_line_id': self.statement_line_id,
+            'move_id': self.move_id,
+            'move_name': self.move_name,
+            'credit_line_id': self.credit_line_id,
+            'data_transacao': self.data_transacao.isoformat() if self.data_transacao else None,
+            'valor': self.valor,
+            'payment_ref': self.payment_ref,
+            # Dados extraídos
+            'tipo_transacao': self.tipo_transacao,
+            'nome_pagador': self.nome_pagador,
+            'cnpj_pagador': self.cnpj_pagador,
+            'journal_code': self.journal_code,
+            # Matching
+            'status_match': self.status_match,
+            'titulo_id': self.titulo_id,
+            'titulo_nf': self.titulo_nf,
+            'titulo_parcela': self.titulo_parcela,
+            'titulo_valor': self.titulo_valor,
+            'titulo_vencimento': self.titulo_vencimento.isoformat() if self.titulo_vencimento else None,
+            'titulo_cliente': self.titulo_cliente,
+            'match_score': self.match_score,
+            'match_criterio': self.match_criterio,
+            # Controle
+            'aprovado': self.aprovado,
+            'status': self.status,
+            'mensagem': self.mensagem,
+            # Resultado
+            'partial_reconcile_id': self.partial_reconcile_id,
+            'titulo_saldo_antes': self.titulo_saldo_antes,
+            'titulo_saldo_depois': self.titulo_saldo_depois,
+            # Auditoria
+            'criado_em': self.criado_em.isoformat() if self.criado_em else None,
+            'processado_em': self.processado_em.isoformat() if self.processado_em else None
+        }
+
+    def set_matches_candidatos(self, matches: list):
+        """Salva lista de matches candidatos como JSON"""
+        self.matches_candidatos = json.dumps(matches, default=str)
+
+    def get_matches_candidatos(self) -> list:
+        """Retorna lista de matches candidatos"""
+        return json.loads(self.matches_candidatos) if self.matches_candidatos else []
+
+    def set_snapshot_antes(self, dados: dict):
+        """Salva snapshot dos dados ANTES da conciliação"""
+        self.snapshot_antes = json.dumps(dados, default=str)
+
+    def set_snapshot_depois(self, dados: dict):
+        """Salva snapshot dos dados DEPOIS da conciliação"""
+        self.snapshot_depois = json.dumps(dados, default=str)
+
+
+# =============================================================================
+# FIM EXTRATO BANCÁRIO
+# =============================================================================
+
+
 class PendenciaFinanceiraNF(db.Model):
     __tablename__ = 'pendencias_financeiras_nf'
 

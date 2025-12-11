@@ -1,0 +1,931 @@
+{% extends "base.html" %}
+
+{% block title %}Lote {{ lote.id }} - Extrato - Financeiro{% endblock %}
+
+{% block styles %}
+<style>
+    .item-card {
+        border-left: 4px solid #dee2e6;
+        margin-bottom: 1rem;
+        transition: all 0.2s;
+    }
+    .item-card.match-encontrado {
+        border-left-color: #28a745;
+        background: #f8fff8;
+    }
+    .item-card.multiplos-matches {
+        border-left-color: #ffc107;
+        background: #fffdf8;
+    }
+    .item-card.sem-match {
+        border-left-color: #dc3545;
+        background: #fff8f8;
+    }
+    .item-card.aprovado {
+        border-left-color: #007bff;
+        background: #f8faff;
+    }
+    .item-card.conciliado {
+        border-left-color: #17a2b8;
+        background: #f0ffff;
+        opacity: 0.8;
+    }
+    .titulo-candidato {
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 10px;
+        margin-bottom: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .titulo-candidato:hover {
+        background: #e9ecef;
+        border-color: #007bff;
+    }
+    .titulo-candidato.selecionado {
+        border-color: #28a745;
+        background: #d4edda;
+    }
+    .titulo-candidato.match-perfeito {
+        border-color: #28a745;
+        border-width: 2px;
+    }
+    .extrato-info {
+        font-size: 0.85rem;
+    }
+    .tipo-transacao {
+        font-weight: bold;
+        text-transform: uppercase;
+    }
+    .tipo-pix { color: #32bcad; }
+    .tipo-ted { color: #0066cc; }
+    .tipo-boleto { color: #ff6600; }
+    .loading-candidatos {
+        text-align: center;
+        padding: 20px;
+        color: #6c757d;
+    }
+    .btn-aprovar-todos {
+        position: sticky;
+        top: 70px;
+        z-index: 100;
+    }
+    /* Seções identificadas */
+    .section-header {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: #6c757d;
+        border-bottom: 2px solid;
+        padding-bottom: 4px;
+        margin-bottom: 10px;
+        font-weight: 600;
+    }
+    .section-extrato { border-color: #0d6efd; }
+    .section-titulo { border-color: #198754; }
+    .section-comparacao { border-color: #ffc107; }
+    /* Comparação */
+    .comparacao-box {
+        background: linear-gradient(135deg, #fff9e6 0%, #fff3cd 100%);
+        border: 1px solid #ffc107;
+        border-radius: 8px;
+        padding: 12px;
+        font-size: 0.85rem;
+    }
+    .comparacao-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 4px 0;
+        border-bottom: 1px dashed #dee2e6;
+    }
+    .comparacao-item:last-child {
+        border-bottom: none;
+    }
+    .diff-positivo { color: #dc3545; }
+    .diff-negativo { color: #198754; }
+    .diff-zero { color: #6c757d; }
+    /* Info CNPJ do título */
+    .titulo-info-cnpj {
+        font-size: 0.8rem;
+        color: #495057;
+        font-family: monospace;
+        background: #f8f9fa;
+        padding: 2px 6px;
+        border-radius: 3px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                <div>
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb mb-1">
+                            <li class="breadcrumb-item">
+                                <a href="{{ url_for('financeiro.extrato_hub') }}">Extrato</a>
+                            </li>
+                            <li class="breadcrumb-item active">Lote {{ lote.id }}</li>
+                        </ol>
+                    </nav>
+                    <h3 class="mb-1">{{ lote.nome }}</h3>
+                    <p class="text-muted mb-0">
+                        <i class="fas fa-calendar me-1"></i>
+                        {{ lote.criado_em.strftime('%d/%m/%Y %H:%M') }}
+                        {% if lote.criado_por %}| {{ lote.criado_por }}{% endif %}
+                        |
+                        <span class="badge
+                            {% if lote.status == 'CONCLUIDO' %}bg-success
+                            {% elif lote.status == 'ERRO' %}bg-danger
+                            {% elif lote.status == 'CONCILIANDO' %}bg-info
+                            {% elif lote.status == 'AGUARDANDO_APROVACAO' %}bg-warning text-dark
+                            {% else %}bg-secondary{% endif %}">
+                            {{ lote.status }}
+                        </span>
+                    </p>
+                </div>
+                <div class="d-flex gap-2 flex-wrap">
+                    {% if lote.status == 'IMPORTADO' %}
+                    <button class="btn btn-primary" onclick="executarMatching()">
+                        <i class="fas fa-magic me-2"></i>Executar Matching
+                    </button>
+                    {% endif %}
+
+                    {% if stats.com_match > 0 and stats.aprovados < stats.com_match %}
+                    <button class="btn btn-success" onclick="aprovarTodos()">
+                        <i class="fas fa-check-double me-2"></i>
+                        Aprovar Todos ({{ stats.com_match - stats.aprovados }})
+                    </button>
+                    {% endif %}
+
+                    {% if stats.aprovados > 0 and lote.status != 'CONCLUIDO' %}
+                    <button class="btn btn-warning" onclick="conciliarLote()">
+                        <i class="fas fa-link me-2"></i>
+                        Conciliar Aprovados ({{ stats.aprovados }})
+                    </button>
+                    {% endif %}
+
+                    <a href="{{ url_for('financeiro.extrato_hub') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left me-2"></i>Voltar
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estatísticas -->
+    <div class="row mb-4">
+        <div class="col">
+            <div class="card">
+                <div class="card-body py-2">
+                    <div class="d-flex justify-content-around flex-wrap gap-3">
+                        <div class="text-center">
+                            <div class="h4 mb-0">{{ stats.total }}</div>
+                            <small class="text-muted">Total</small>
+                        </div>
+                        <div class="text-center">
+                            <div class="h4 mb-0 text-success">{{ stats.com_match }}</div>
+                            <small class="text-muted">Match Único</small>
+                        </div>
+                        <div class="text-center">
+                            <div class="h4 mb-0 text-warning">{{ stats.multiplos }}</div>
+                            <small class="text-muted">Múltiplos</small>
+                        </div>
+                        <div class="text-center">
+                            <div class="h4 mb-0 text-danger">{{ stats.sem_match }}</div>
+                            <small class="text-muted">Sem Match</small>
+                        </div>
+                        <div class="text-center">
+                            <div class="h4 mb-0 text-secondary">{{ stats.pendentes }}</div>
+                            <small class="text-muted">Pendentes</small>
+                        </div>
+                        <div class="text-center">
+                            <div class="h4 mb-0 text-primary">{{ stats.aprovados }}</div>
+                            <small class="text-muted">Aprovados</small>
+                        </div>
+                        <div class="text-center">
+                            <div class="h4 mb-0 text-info">{{ stats.conciliados }}</div>
+                            <small class="text-muted">Conciliados</small>
+                        </div>
+                        <div class="text-center">
+                            <div class="h4 mb-0">R$ {{ "{:,.2f}".format(lote.valor_total or 0) }}</div>
+                            <small class="text-muted">Valor Total</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body py-2">
+                    <form method="GET" action="{{ url_for('financeiro.extrato_lote_detalhe', lote_id=lote.id) }}" id="formFiltros">
+                        <div class="row g-2 align-items-end">
+                            <!-- Filtro por Status Match -->
+                            <div class="col-auto">
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <a href="{{ url_for('financeiro.extrato_lote_detalhe', lote_id=lote.id, per_page=per_page, cnpj=filtro_cnpj, data_inicio=filtro_data_inicio, data_fim=filtro_data_fim) }}"
+                                       class="btn btn-outline-secondary {{ 'active' if not request.args.get('status_match') }}">
+                                        Todos
+                                    </a>
+                                    <a href="{{ url_for('financeiro.extrato_lote_detalhe', lote_id=lote.id, status_match='MATCH_ENCONTRADO', per_page=per_page, cnpj=filtro_cnpj, data_inicio=filtro_data_inicio, data_fim=filtro_data_fim) }}"
+                                       class="btn btn-outline-success {{ 'active' if request.args.get('status_match') == 'MATCH_ENCONTRADO' }}">
+                                        Match
+                                    </a>
+                                    <a href="{{ url_for('financeiro.extrato_lote_detalhe', lote_id=lote.id, status_match='MULTIPLOS_MATCHES', per_page=per_page, cnpj=filtro_cnpj, data_inicio=filtro_data_inicio, data_fim=filtro_data_fim) }}"
+                                       class="btn btn-outline-warning {{ 'active' if request.args.get('status_match') == 'MULTIPLOS_MATCHES' }}">
+                                        Múltiplos
+                                    </a>
+                                    <a href="{{ url_for('financeiro.extrato_lote_detalhe', lote_id=lote.id, status_match='SEM_MATCH', per_page=per_page, cnpj=filtro_cnpj, data_inicio=filtro_data_inicio, data_fim=filtro_data_fim) }}"
+                                       class="btn btn-outline-danger {{ 'active' if request.args.get('status_match') == 'SEM_MATCH' }}">
+                                        Sem Match
+                                    </a>
+                                    <a href="{{ url_for('financeiro.extrato_lote_detalhe', lote_id=lote.id, status_match='PENDENTE', per_page=per_page, cnpj=filtro_cnpj, data_inicio=filtro_data_inicio, data_fim=filtro_data_fim) }}"
+                                       class="btn btn-outline-secondary {{ 'active' if request.args.get('status_match') == 'PENDENTE' }}">
+                                        Pendentes
+                                    </a>
+                                </div>
+                            </div>
+
+                            <!-- Filtro por CNPJ -->
+                            <div class="col-auto">
+                                <label class="form-label small mb-0 text-muted">CNPJ</label>
+                                <input type="text" name="cnpj" class="form-control form-control-sm" style="width:150px;"
+                                       placeholder="Digite o CNPJ..." value="{{ filtro_cnpj or '' }}">
+                            </div>
+
+                            <!-- Filtro por Data -->
+                            <div class="col-auto">
+                                <label class="form-label small mb-0 text-muted">Data Início</label>
+                                <input type="date" name="data_inicio" class="form-control form-control-sm"
+                                       value="{{ filtro_data_inicio or '' }}">
+                            </div>
+                            <div class="col-auto">
+                                <label class="form-label small mb-0 text-muted">Data Fim</label>
+                                <input type="date" name="data_fim" class="form-control form-control-sm"
+                                       value="{{ filtro_data_fim or '' }}">
+                            </div>
+
+                            <!-- Itens por página -->
+                            <div class="col-auto">
+                                <label class="form-label small mb-0 text-muted">Exibir</label>
+                                <select name="per_page" class="form-select form-select-sm" style="width:90px;">
+                                    <option value="10" {{ 'selected' if per_page == 10 }}>10</option>
+                                    <option value="20" {{ 'selected' if per_page == 20 }}>20</option>
+                                    <option value="50" {{ 'selected' if per_page == 50 }}>50</option>
+                                    <option value="100" {{ 'selected' if per_page == 100 }}>100</option>
+                                    <option value="0" {{ 'selected' if per_page == 0 }}>Todos</option>
+                                </select>
+                            </div>
+
+                            <!-- Botão filtrar -->
+                            <div class="col-auto">
+                                <button type="submit" class="btn btn-sm btn-primary">
+                                    <i class="fas fa-filter me-1"></i>Filtrar
+                                </button>
+                                {% if filtro_cnpj or filtro_data_inicio or filtro_data_fim %}
+                                <a href="{{ url_for('financeiro.extrato_lote_detalhe', lote_id=lote.id, per_page=per_page, status_match=request.args.get('status_match')) }}"
+                                   class="btn btn-sm btn-outline-secondary">
+                                    <i class="fas fa-times"></i> Limpar
+                                </a>
+                                {% endif %}
+                            </div>
+
+                            <!-- Status Match hidden para preservar -->
+                            {% if request.args.get('status_match') %}
+                            <input type="hidden" name="status_match" value="{{ request.args.get('status_match') }}">
+                            {% endif %}
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lista de Itens -->
+    <div class="row">
+        <div class="col-12">
+            {% for item in itens %}
+            <div class="card item-card
+                {{ 'conciliado' if item.status == 'CONCILIADO' else '' }}
+                {{ 'aprovado' if item.aprovado and item.status != 'CONCILIADO' else '' }}
+                {{ 'match-encontrado' if item.status_match == 'MATCH_ENCONTRADO' and not item.aprovado else '' }}
+                {{ 'multiplos-matches' if item.status_match == 'MULTIPLOS_MATCHES' else '' }}
+                {{ 'sem-match' if item.status_match == 'SEM_MATCH' else '' }}"
+                data-item-id="{{ item.id }}">
+                <div class="card-body">
+                    <div class="row">
+                        <!-- ========== SEÇÃO 1: EXTRATO ========== -->
+                        <div class="col-md-4" style="border-right:2px solid #adb5bd;padding-right:15px;">
+                            <div class="section-header section-extrato">
+                                <i class="fas fa-university me-1"></i> EXTRATO BANCÁRIO
+                            </div>
+
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div>
+                                    <span class="tipo-transacao tipo-{{ item.tipo_transacao|lower if item.tipo_transacao else 'outro' }}">
+                                        {{ item.tipo_transacao or 'OUTRO' }}
+                                    </span>
+                                </div>
+                                <div>
+                                    {% if item.status == 'CONCILIADO' %}
+                                    <span class="badge bg-info">CONCILIADO</span>
+                                    {% elif item.aprovado %}
+                                    <span class="badge bg-primary">APROVADO</span>
+                                    {% elif item.status_match == 'MATCH_ENCONTRADO' %}
+                                    <span class="badge bg-success">MATCH</span>
+                                    {% elif item.status_match == 'MULTIPLOS_MATCHES' %}
+                                    <span class="badge bg-warning text-dark">MÚLTIPLOS</span>
+                                    {% elif item.status_match == 'SEM_MATCH' %}
+                                    <span class="badge bg-danger">SEM MATCH</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">PENDENTE</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <div class="h4 mb-2 text-primary">R$ {{ "{:,.2f}".format(item.valor) }}</div>
+
+                            <div class="extrato-info">
+                                <div class="mb-1">
+                                    <i class="fas fa-calendar-day text-muted me-1"></i>
+                                    <strong>{{ item.data_transacao.strftime('%d/%m/%Y') }}</strong>
+                                </div>
+                                <div class="mb-1">
+                                    <i class="fas fa-building text-muted me-1"></i>
+                                    {{ item.nome_pagador or 'Não identificado' }}
+                                </div>
+                                <div class="mb-1">
+                                    <i class="fas fa-id-card text-muted me-1"></i>
+                                    <code class="small">{{ item.cnpj_pagador or 'CNPJ não identificado' }}</code>
+                                </div>
+                            </div>
+
+                            <!-- Ações -->
+                            {% if item.status != 'CONCILIADO' %}
+                            <div class="mt-2 pt-2 border-top">
+                                {% if item.titulo_id and not item.aprovado %}
+                                <button class="btn btn-sm btn-success me-1" onclick="aprovarItem({{ item.id }})">
+                                    <i class="fas fa-check"></i> Aprovar
+                                </button>
+                                {% endif %}
+                                {% if item.aprovado %}
+                                <button class="btn btn-sm btn-warning me-1" onclick="conciliarItem({{ item.id }})">
+                                    <i class="fas fa-link"></i> Conciliar
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="desaprovarItem({{ item.id }})">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- ========== SEÇÃO 2: COMPARAÇÃO ========== -->
+                        <div class="col-md-3" style="border-right:2px solid #adb5bd;padding-left:15px;padding-right:15px;">
+                            <div class="section-header section-comparacao">
+                                <i class="fas fa-balance-scale me-1"></i> COMPARAÇÃO
+                            </div>
+
+                            {% if item.titulo_id %}
+                            <div class="comparacao-box">
+                                <!-- Score -->
+                                <div class="text-center mb-2">
+                                    {% if item.match_score >= 100 %}
+                                    <span class="badge fs-6" style="background-color:#28a745;color:#000;">{{ item.match_score }}% Confiança</span>
+                                    {% elif item.match_score >= 90 %}
+                                    <span class="badge fs-6" style="background-color:#5cb85c;color:#000;">{{ item.match_score }}% Confiança</span>
+                                    {% elif item.match_score >= 80 %}
+                                    <span class="badge fs-6" style="background-color:#ffc107;color:#000;">{{ item.match_score }}% Confiança</span>
+                                    {% elif item.match_score >= 70 %}
+                                    <span class="badge fs-6" style="background-color:#fd7e14;color:#000;">{{ item.match_score }}% Confiança</span>
+                                    {% else %}
+                                    <span class="badge fs-6" style="background-color:#dc3545;color:#fff;">{{ item.match_score or 0 }}% Confiança</span>
+                                    {% endif %}
+                                </div>
+
+                                <!-- Tipo de Match -->
+                                <div class="comparacao-item">
+                                    <span class="text-muted">Critério:</span>
+                                    <span class="fw-bold">
+                                        {% if 'CNPJ_EXATO' in (item.match_criterio or '') %}
+                                        <span class="text-success"><i class="fas fa-check-circle"></i> CNPJ Exato</span>
+                                        {% elif 'GRUPO_CNPJ' in (item.match_criterio or '') %}
+                                        <span class="text-warning"><i class="fas fa-sitemap"></i> Grupo CNPJ</span>
+                                        {% elif 'VALOR' in (item.match_criterio or '') %}
+                                        <span class="text-info"><i class="fas fa-dollar-sign"></i> Por Valor</span>
+                                        {% else %}
+                                        <span class="text-muted">N/A</span>
+                                        {% endif %}
+                                    </span>
+                                </div>
+
+                                <!-- Diferença de Valor -->
+                                {% set diff_valor = (item.valor or 0) - (item.titulo_valor or 0) %}
+                                <div class="comparacao-item">
+                                    <span class="text-muted">Δ Valor:</span>
+                                    <span class="fw-bold {% if diff_valor > 0.01 %}diff-positivo{% elif diff_valor < -0.01 %}diff-negativo{% else %}diff-zero{% endif %}">
+                                        {% if diff_valor > 0.01 %}
+                                        +R$ {{ "{:,.2f}".format(diff_valor) }}
+                                        {% elif diff_valor < -0.01 %}
+                                        -R$ {{ "{:,.2f}".format(diff_valor|abs) }}
+                                        {% else %}
+                                        R$ 0,00 ✓
+                                        {% endif %}
+                                    </span>
+                                </div>
+
+                                <!-- Diferença de Dias -->
+                                {% if item.titulo_vencimento and item.data_transacao %}
+                                {% set diff_dias = (item.data_transacao - item.titulo_vencimento).days %}
+                                <div class="comparacao-item">
+                                    <span class="text-muted">Δ Dias:</span>
+                                    <span class="fw-bold {% if diff_dias > 0 %}diff-positivo{% elif diff_dias < 0 %}diff-negativo{% else %}diff-zero{% endif %}">
+                                        {% if diff_dias > 0 %}
+                                        <i class="fas fa-clock"></i> +{{ diff_dias }}d (atrasado)
+                                        {% elif diff_dias < 0 %}
+                                        <i class="fas fa-clock"></i> {{ diff_dias }}d (antecipado)
+                                        {% else %}
+                                        <i class="fas fa-check"></i> No dia ✓
+                                        {% endif %}
+                                    </span>
+                                </div>
+                                {% endif %}
+
+                                <!-- Tipo Detalhado -->
+                                <div class="mt-2 pt-2 border-top">
+                                    <small class="text-muted d-block">
+                                        {{ item.match_criterio or 'Critério não definido' }}
+                                    </small>
+                                </div>
+                            </div>
+                            {% else %}
+                            <div class="text-center text-muted py-4">
+                                <i class="fas fa-question-circle fa-2x mb-2 opacity-25"></i>
+                                <p class="small mb-0">Sem match</p>
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- ========== SEÇÃO 3: TÍTULO ========== -->
+                        <div class="col-md-5" style="padding-left:15px;">
+                            <div class="section-header section-titulo">
+                                <i class="fas fa-file-invoice me-1"></i> TÍTULO A RECEBER
+                            </div>
+
+                            <div id="titulos-container-{{ item.id }}">
+                                {% if item.titulo_id %}
+                                <div class="titulo-candidato selecionado">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <strong>NF {{ item.titulo_nf }}</strong>
+                                            <span class="badge bg-secondary ms-1">P{{ item.titulo_parcela }}</span>
+                                        </div>
+                                        <div class="text-end">
+                                            <div class="h5 mb-0 text-success">
+                                                R$ {{ "{:,.2f}".format(item.titulo_valor or 0) }}
+                                            </div>
+                                            {% if item.status != 'CONCILIADO' %}
+                                            <button class="btn btn-sm btn-outline-danger mt-1" onclick="desvincularTitulo({{ item.id }})"
+                                                    title="Desvincular título">
+                                                <i class="fas fa-unlink"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-primary mt-1" onclick="buscarCandidatos({{ item.id }})"
+                                                    title="Trocar título">
+                                                <i class="fas fa-exchange-alt"></i>
+                                            </button>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+
+                                    <div class="mt-2 small">
+                                        {% if item.titulo %}
+                                        <!-- Razão Social -->
+                                        <div class="mb-1">
+                                            <i class="fas fa-building text-muted me-1"></i>
+                                            <strong>{{ item.titulo.raz_social or 'N/A' }}</strong>
+                                        </div>
+                                        <!-- Nome Fantasia (se diferente) -->
+                                        {% if item.titulo.raz_social_red and item.titulo.raz_social_red != item.titulo.raz_social %}
+                                        <div class="mb-1">
+                                            <i class="fas fa-store text-muted me-1"></i>
+                                            <span class="text-muted">{{ item.titulo.raz_social_red }}</span>
+                                        </div>
+                                        {% endif %}
+                                        <!-- CNPJ -->
+                                        <div class="mb-1">
+                                            <i class="fas fa-id-card text-muted me-1"></i>
+                                            <code class="titulo-info-cnpj">{{ item.titulo.cnpj or 'N/A' }}</code>
+                                        </div>
+                                        {% endif %}
+                                        <!-- Vencimento -->
+                                        <div class="mb-1">
+                                            <i class="fas fa-calendar-check text-muted me-1"></i>
+                                            Venc: <strong>{{ item.titulo_vencimento.strftime('%d/%m/%Y') if item.titulo_vencimento else 'N/A' }}</strong>
+                                        </div>
+                                    </div>
+
+                                    {% if item.status == 'CONCILIADO' %}
+                                    <div class="mt-2 pt-2 border-top small text-info">
+                                        <i class="fas fa-check-circle me-1"></i>
+                                        Conciliado {{ item.processado_em.strftime('%d/%m %H:%M') if item.processado_em else '' }}
+                                        {% if item.titulo_saldo_antes is not none and item.titulo_saldo_depois is not none %}
+                                        <br>Saldo: {{ "{:,.2f}".format(item.titulo_saldo_antes) }} → <strong>{{ "{:,.2f}".format(item.titulo_saldo_depois) }}</strong>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                {% elif item.status_match == 'PENDENTE' %}
+                                <div class="text-center text-muted py-4">
+                                    <i class="fas fa-hourglass-half fa-2x mb-2 opacity-25"></i>
+                                    <p class="small mb-0">Execute o matching</p>
+                                </div>
+                                {% elif item.status_match == 'SEM_MATCH' %}
+                                <div class="text-center text-danger py-3">
+                                    <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                                    <p class="small mb-0">{{ item.mensagem or 'Nenhum título encontrado' }}</p>
+                                    <button class="btn btn-sm btn-outline-danger mt-2" onclick="buscarCandidatos({{ item.id }})">
+                                        <i class="fas fa-search me-1"></i>Buscar
+                                    </button>
+                                </div>
+                                {% elif item.status_match == 'MULTIPLOS_MATCHES' %}
+                                <div class="text-center text-warning py-3">
+                                    <i class="fas fa-question-circle fa-2x mb-2"></i>
+                                    <p class="small mb-0">Múltiplos encontrados</p>
+                                    <button class="btn btn-sm btn-warning mt-2" onclick="buscarCandidatos({{ item.id }})">
+                                        <i class="fas fa-list me-1"></i>Selecionar
+                                    </button>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>
+                Nenhum item encontrado com os filtros selecionados.
+            </div>
+            {% endfor %}
+
+            <!-- Paginação -->
+            {% if pagination %}
+            <nav aria-label="Paginação" class="mt-4">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="text-muted small">
+                        Exibindo {{ itens|length }} de {{ pagination.total }} itens
+                        (Página {{ pagination.page }} de {{ pagination.pages }})
+                    </div>
+                    <ul class="pagination pagination-sm mb-0">
+                        {% if pagination.has_prev %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('financeiro.extrato_lote_detalhe', lote_id=lote.id, page=pagination.prev_num, per_page=per_page, status_match=request.args.get('status_match'), cnpj=filtro_cnpj, data_inicio=filtro_data_inicio, data_fim=filtro_data_fim) }}">
+                                <i class="fas fa-chevron-left"></i>
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                            {% if p %}
+                                {% if p == pagination.page %}
+                                <li class="page-item active"><span class="page-link">{{ p }}</span></li>
+                                {% else %}
+                                <li class="page-item">
+                                    <a class="page-link" href="{{ url_for('financeiro.extrato_lote_detalhe', lote_id=lote.id, page=p, per_page=per_page, status_match=request.args.get('status_match'), cnpj=filtro_cnpj, data_inicio=filtro_data_inicio, data_fim=filtro_data_fim) }}">{{ p }}</a>
+                                </li>
+                                {% endif %}
+                            {% else %}
+                                <li class="page-item disabled"><span class="page-link">…</span></li>
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if pagination.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('financeiro.extrato_lote_detalhe', lote_id=lote.id, page=pagination.next_num, per_page=per_page, status_match=request.args.get('status_match'), cnpj=filtro_cnpj, data_inicio=filtro_data_inicio, data_fim=filtro_data_fim) }}">
+                                <i class="fas fa-chevron-right"></i>
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Candidatos -->
+<div class="modal fade" id="modalCandidatos" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-search me-2"></i>
+                    Títulos Candidatos
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="modalCandidatosBody">
+                <div class="loading-candidatos">
+                    <i class="fas fa-spinner fa-spin fa-2x"></i>
+                    <p>Buscando títulos...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const loteId = {{ lote.id }};
+let itemAtual = null;
+
+function executarMatching() {
+    if (!confirm('Executar matching automático para todos os itens?')) return;
+
+    const btn = event.target;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processando...';
+
+    fetch(`/financeiro/extrato/executar-matching/${loteId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            toastr.success(`Matching concluído: ${data.resultado.com_match} matches encontrados`);
+            location.reload();
+        } else {
+            toastr.error(data.error || 'Erro no matching');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-magic me-2"></i>Executar Matching';
+        }
+    })
+    .catch(err => {
+        toastr.error('Erro de conexão');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-magic me-2"></i>Executar Matching';
+    });
+}
+
+function aprovarTodos() {
+    if (!confirm('Aprovar todos os itens com match único?')) return;
+
+    fetch('/financeiro/extrato/api/aprovar-todos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lote_id: loteId })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            toastr.success(`${data.aprovados} itens aprovados`);
+            location.reload();
+        } else {
+            toastr.error(data.error || 'Erro ao aprovar');
+        }
+    });
+}
+
+function conciliarLote() {
+    if (!confirm('Conciliar todos os itens aprovados no Odoo?')) return;
+
+    const btn = event.target;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Conciliando...';
+
+    fetch('/financeiro/extrato/api/conciliar-lote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lote_id: loteId })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            toastr.success(`Conciliação concluída: ${data.resultado.conciliados} itens`);
+            location.reload();
+        } else {
+            toastr.error(data.error || 'Erro na conciliação');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-link me-2"></i>Conciliar Aprovados';
+        }
+    });
+}
+
+function aprovarItem(itemId) {
+    fetch('/financeiro/extrato/api/aprovar-item', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item_id: itemId, aprovar: true })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            toastr.success('Item aprovado');
+            location.reload();
+        } else {
+            toastr.error(data.error || 'Erro ao aprovar');
+        }
+    });
+}
+
+function desaprovarItem(itemId) {
+    fetch('/financeiro/extrato/api/aprovar-item', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item_id: itemId, aprovar: false })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            toastr.info('Item desaprovado');
+            location.reload();
+        } else {
+            toastr.error(data.error || 'Erro ao desaprovar');
+        }
+    });
+}
+
+function desvincularTitulo(itemId) {
+    if (!confirm('Deseja desvincular o título deste item?\n\nO item voltará para o status PENDENTE.')) return;
+
+    fetch('/financeiro/extrato/api/desvincular-titulo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item_id: itemId })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            toastr.success('Título desvinculado');
+            location.reload();
+        } else {
+            toastr.error(data.error || 'Erro ao desvincular');
+        }
+    });
+}
+
+function conciliarItem(itemId) {
+    fetch('/financeiro/extrato/api/conciliar-item', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item_id: itemId })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            toastr.success('Item conciliado no Odoo');
+            location.reload();
+        } else {
+            toastr.error(data.error || 'Erro na conciliação');
+        }
+    });
+}
+
+function buscarCandidatos(itemId) {
+    itemAtual = itemId;
+    const modal = new bootstrap.Modal(document.getElementById('modalCandidatos'));
+    modal.show();
+
+    document.getElementById('modalCandidatosBody').innerHTML = `
+        <div class="loading-candidatos">
+            <i class="fas fa-spinner fa-spin fa-2x"></i>
+            <p>Buscando títulos...</p>
+        </div>
+    `;
+
+    fetch(`/financeiro/extrato/api/titulos-candidatos/${itemId}`)
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            renderizarCandidatos(data.item, data.candidatos);
+        } else {
+            document.getElementById('modalCandidatosBody').innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    ${data.error || 'Erro ao buscar candidatos'}
+                </div>
+            `;
+        }
+    });
+}
+
+function renderizarCandidatos(item, candidatos) {
+    let html = `
+        <div class="mb-3 p-3 bg-light rounded">
+            <strong>Extrato:</strong> ${item.tipo_transacao || 'N/A'} - R$ ${item.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+            <br><strong>CNPJ:</strong> ${item.cnpj_pagador || 'Não identificado'}
+            <br><strong>Pagador:</strong> ${item.nome_pagador || 'Não identificado'}
+        </div>
+    `;
+
+    if (candidatos.length === 0) {
+        html += `
+            <div class="alert alert-warning">
+                <i class="fas fa-search me-2"></i>
+                Nenhum título candidato encontrado para os critérios atuais.
+            </div>
+        `;
+    } else {
+        html += `<p class="text-muted">Encontrados ${candidatos.length} título(s) candidato(s):</p>`;
+
+        candidatos.forEach((t, idx) => {
+            // Style inline para o badge
+            let scoreStyle = '';
+            if (t.score >= 100) scoreStyle = 'background-color:#28a745;color:#000;';
+            else if (t.score >= 90) scoreStyle = 'background-color:#5cb85c;color:#000;';
+            else if (t.score >= 80) scoreStyle = 'background-color:#ffc107;color:#000;';
+            else if (t.score >= 70) scoreStyle = 'background-color:#fd7e14;color:#000;';
+            else scoreStyle = 'background-color:#dc3545;color:#fff;';
+
+            // Identificar tipo de critério para ícone
+            let criterioIcon = '';
+            let criterioLabel = '';
+            if (t.criterio && t.criterio.includes('CNPJ_EXATO')) {
+                criterioIcon = '<i class="fas fa-check-circle text-success"></i>';
+                criterioLabel = 'CNPJ Exato';
+            } else if (t.criterio && t.criterio.includes('GRUPO_CNPJ')) {
+                criterioIcon = '<i class="fas fa-sitemap text-warning"></i>';
+                criterioLabel = 'Grupo CNPJ';
+            } else if (t.criterio && t.criterio.includes('VALOR')) {
+                criterioIcon = '<i class="fas fa-dollar-sign text-info"></i>';
+                criterioLabel = 'Por Valor';
+            }
+
+            html += `
+                <div class="titulo-candidato ${t.score >= 100 ? 'match-perfeito' : ''}"
+                     onclick="selecionarTitulo(${item.id}, ${t.titulo_id})">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <span class="badge me-2" style="${scoreStyle}font-size:1rem;padding:4px 10px;">
+                                ${t.score}%
+                            </span>
+                            <strong>
+                                <i class="fas fa-file-invoice me-1"></i>
+                                NF ${t.titulo_nf} - P${t.parcela}
+                            </strong>
+                        </div>
+                        <div class="text-end">
+                            <div class="h5 mb-0">R$ ${(t.valor || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div>
+                        </div>
+                    </div>
+                    <div class="mt-2 small">
+                        <div class="mb-1">
+                            <i class="fas fa-user text-muted me-1"></i>
+                            ${t.cliente || 'Cliente não informado'}
+                        </div>
+                        <div class="mb-1">
+                            <i class="fas fa-id-card text-muted me-1"></i>
+                            <code>${t.cnpj || 'CNPJ não informado'}</code>
+                        </div>
+                        <div class="mb-1">
+                            <i class="fas fa-calendar-check text-muted me-1"></i>
+                            Venc: ${t.vencimento || 'N/A'}
+                        </div>
+                    </div>
+                    <div class="mt-2 pt-2 border-top d-flex justify-content-between align-items-center">
+                        <div>
+                            ${criterioIcon} <small class="text-muted">${criterioLabel}</small>
+                        </div>
+                        <div>
+                            ${t.diferenca_valor > 0.01 ? `<small class="text-warning">Δ R$ ${t.diferenca_valor.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</small>` : '<small class="text-success">Valor exato ✓</small>'}
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    document.getElementById('modalCandidatosBody').innerHTML = html;
+}
+
+function selecionarTitulo(itemId, tituloId) {
+    if (!confirm('Vincular este título ao recebimento?')) return;
+
+    fetch('/financeiro/extrato/api/selecionar-titulo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item_id: itemId, titulo_id: tituloId })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            toastr.success('Título vinculado com sucesso');
+            bootstrap.Modal.getInstance(document.getElementById('modalCandidatos')).hide();
+            location.reload();
+        } else {
+            toastr.error(data.error || 'Erro ao vincular título');
+        }
+    });
+}
+</script>
+{% endblock %}

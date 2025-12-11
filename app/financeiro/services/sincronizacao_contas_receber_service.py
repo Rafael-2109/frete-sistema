@@ -246,7 +246,7 @@ class SincronizacaoContasReceberService:
             titulo_nf=titulo_nf,
             parcela=parcela,
             cnpj=row.get('partner_cnpj'),
-            raz_social=row.get('partner_id_nome') or row.get('partner_raz_social'),
+            raz_social=row.get('partner_raz_social') or row.get('partner_id_nome'),
             raz_social_red=row.get('partner_raz_social_red'),
             uf_cliente=row.get('partner_state'),
             emissao=row.get('date'),
@@ -273,7 +273,7 @@ class SincronizacaoContasReceberService:
         # Mapear campos do DataFrame para campos do modelo
         mapeamento = {
             'partner_cnpj': ('cnpj', lambda x: x),
-            'partner_id_nome': ('raz_social', lambda x: x or row.get('partner_raz_social')),
+            'partner_raz_social': ('raz_social', lambda x: x or row.get('partner_id_nome')),
             'partner_raz_social_red': ('raz_social_red', lambda x: x),
             'partner_state': ('uf_cliente', lambda x: x),
             'date': ('emissao', lambda x: x),
