@@ -302,10 +302,11 @@ class ContasReceberService:
         df = df[df['balance'] > 0]
         logger.info(f"✅ Regra 3: {len(df)} registros (removidos {total_antes - len(df)} com saldo <= 0)")
 
-        # NOVA: Remover duplicatas de NF-e (manter apenas a primeira ocorrência)
+        # NOVA: Remover duplicatas (NF + PARCELA - manter todas as parcelas!)
+        # IMPORTANTE: Usar company_id + nf + parcela para permitir mesma NF em empresas diferentes
         total_antes = len(df)
-        df = df.drop_duplicates(subset=['x_studio_nf_e'], keep='first')
-        logger.info(f"✅ Regra Extra: {len(df)} registros (removidos {total_antes - len(df)} duplicatas de NF-e)")
+        df = df.drop_duplicates(subset=['company_id_nome', 'x_studio_nf_e', 'l10n_br_cobranca_parcela'], keep='first')
+        logger.info(f"✅ Regra Extra: {len(df)} registros (removidos {total_antes - len(df)} duplicatas exatas)")
 
         # Regra 4: Remover company_id = "LA FAMIGLIA-LF"
         total_antes = len(df)

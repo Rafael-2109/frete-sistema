@@ -148,8 +148,8 @@
                     </p>
                 </div>
                 <div class="d-flex gap-2 flex-wrap">
-                    {% if lote.status == 'IMPORTADO' %}
-                    <button class="btn btn-primary" onclick="executarMatching()">
+                    {% if lote.status not in ['CONCLUIDO'] %}
+                    <button class="btn btn-primary" onclick="executarMatching()" id="btnMatching">
                         <i class="fas fa-magic me-2"></i>Executar Matching
                     </button>
                     {% endif %}
@@ -649,9 +649,10 @@ const loteId = {{ lote.id }};
 let itemAtual = null;
 
 function executarMatching() {
-    if (!confirm('Executar matching automático para todos os itens?')) return;
+    if (!confirm('Executar matching automático para todos os itens pendentes?')) return;
 
-    const btn = event.target;
+    const btn = document.getElementById('btnMatching');
+    const textoOriginal = btn.innerHTML;
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processando...';
 
@@ -667,13 +668,13 @@ function executarMatching() {
         } else {
             toastr.error(data.error || 'Erro no matching');
             btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-magic me-2"></i>Executar Matching';
+            btn.innerHTML = textoOriginal;
         }
     })
     .catch(err => {
         toastr.error('Erro de conexão');
         btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-magic me-2"></i>Executar Matching';
+        btn.innerHTML = textoOriginal;
     });
 }
 

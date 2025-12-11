@@ -216,6 +216,10 @@ class ExtratoMatchingService:
             if titulo.vencimento == DATA_VENCIMENTO_IGNORAR:
                 continue
 
+            # Ignorar NFs canceladas
+            if titulo.nf_cancelada:
+                continue
+
             # Calcular score baseado no valor
             score, criterio, diferenca = self._calcular_score_valor(valor, titulo.valor_titulo or 0)
 
@@ -273,6 +277,10 @@ class ExtratoMatchingService:
                 if titulo.vencimento == DATA_VENCIMENTO_IGNORAR:
                     continue
 
+                # Ignorar NFs canceladas
+                if titulo.nf_cancelada:
+                    continue
+
                 # Calcular score baseado no valor
                 score, criterio, diferenca = self._calcular_score_valor_grupo(valor, titulo.valor_titulo or 0)
 
@@ -311,6 +319,10 @@ class ExtratoMatchingService:
         candidatos = []
 
         for titulo in titulos:
+            # Ignorar NFs canceladas
+            if titulo.nf_cancelada:
+                continue
+
             diferenca = abs((titulo.valor_titulo or 0) - valor)
             # Score base 70, reduzido pela diferença de valor
             score = max(50, 70 - int(diferenca / valor * 100))

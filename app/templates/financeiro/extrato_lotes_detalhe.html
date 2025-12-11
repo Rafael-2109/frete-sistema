@@ -100,6 +100,26 @@
                     </p>
                 </div>
                 <div class="d-flex gap-2 flex-wrap">
+                    {% if stats.pendentes > 0 %}
+                    <button class="btn btn-primary" onclick="executarMatchingMultiplos()" id="btnMatching">
+                        <i class="fas fa-magic me-2"></i>Executar Matching
+                    </button>
+                    {% endif %}
+
+                    {% if stats.com_match > 0 and stats.aprovados < stats.com_match %}
+                    <button class="btn btn-success" onclick="aprovarTodosMultiplos()">
+                        <i class="fas fa-check-double me-2"></i>
+                        Aprovar Todos ({{ stats.com_match - stats.aprovados }})
+                    </button>
+                    {% endif %}
+
+                    {% if stats.aprovados > 0 %}
+                    <button class="btn btn-warning" onclick="conciliarMultiplos()">
+                        <i class="fas fa-link me-2"></i>
+                        Conciliar Aprovados ({{ stats.aprovados - stats.conciliados }})
+                    </button>
+                    {% endif %}
+
                     <a href="{{ url_for('financeiro.extrato_hub') }}" class="btn btn-outline-secondary">
                         <i class="fas fa-arrow-left me-2"></i>Voltar
                     </a>
@@ -423,4 +443,106 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const loteIds = [{% for lote in lotes %}{{ lote.id }}{% if not loop.last %}, {% endif %}{% endfor %}];
+
+function executarMatchingMultiplos() {
+    if (!confirm(`Executar matching automático para ${loteIds.length} lote(s)?`)) return;
+
+    const btn = document.getElementById('btnMatching');
+    const textoOriginal = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processando...';
+
+    // Executar matching em cada lote sequencialmente
+    let processados = 0;
+    let erros = [];
+
+    function processarProximoLote(index) {
+        if (index >= loteIds.length) {
+            // Finalizado
+            if (erros.length > 0) {
+                toastr.warning(`Matching concluído com ${erros.length} erro(s)`);
+            } else {
+                toastr.success('Matching concluído com sucesso!');
+            }
+            location.reload();
+            return;
+        }
+
+        fetch(`/financeiro/extrato/executar-matching/${loteIds[index]}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        })
+        .then(r => r.json())
+        .then(data => {
+            processados++;
+            btn.innerHTML = `<i class="fas fa-spinner fa-spin me-2"></i>Lote ${processados}/${loteIds.length}...`;
+            if (!data.success) {
+                erros.push(`Lote ${loteIds[index]}: ${data.error}`);
+            }
+            processarProximoLote(index + 1);
+        })
+        .catch(err => {
+            erros.push(`Lote ${loteIds[index]}: ${err}`);
+            processarProximoLote(index + 1);
+        });
+    }
+
+    processarProximoLote(0);
+}
+
+function aprovarTodosMultiplos() {
+    if (!confirm('Aprovar todos os itens com match único em todos os lotes?')) return;
+
+    fetch('/financeiro/extrato/api/aprovar-todos-multiplos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lote_ids: loteIds })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            toastr.success(`${data.aprovados} itens aprovados`);
+            location.reload();
+        } else {
+            toastr.error(data.error || 'Erro ao aprovar');
+        }
+    });
+}
+
+function conciliarMultiplos() {
+    if (!confirm('Conciliar todos os itens aprovados em todos os lotes?')) return;
+
+    const btn = event.target;
+    const textoOriginal = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Conciliando...';
+
+    fetch('/financeiro/extrato/api/conciliar-multiplos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lote_ids: loteIds })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            toastr.success(`${data.conciliados} itens conciliados`);
+            location.reload();
+        } else {
+            toastr.error(data.error || 'Erro ao conciliar');
+            btn.disabled = false;
+            btn.innerHTML = textoOriginal;
+        }
+    })
+    .catch(err => {
+        toastr.error('Erro de conexão');
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
+    });
+}
+</script>
 {% endblock %}

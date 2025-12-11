@@ -730,6 +730,100 @@ def extrato_conciliar_lote():
         }), 500
 
 
+@financeiro_bp.route('/extrato/api/aprovar-todos-multiplos', methods=['POST'])
+@login_required
+def extrato_aprovar_todos_multiplos():
+    """Aprova todos os itens com match único de múltiplos lotes."""
+    data = request.get_json()
+    lote_ids = data.get('lote_ids', [])
+
+    if not lote_ids:
+        return jsonify({'success': False, 'error': 'lote_ids é obrigatório'}), 400
+
+    # Buscar itens com match único não aprovados de todos os lotes
+    itens = ExtratoItem.query.filter(
+        ExtratoItem.lote_id.in_(lote_ids),
+        ExtratoItem.status_match == 'MATCH_ENCONTRADO',
+        ExtratoItem.aprovado == False
+    ).all()
+
+    aprovados = 0
+    for item in itens:
+        if item.titulo_id:
+            item.aprovado = True
+            item.aprovado_em = datetime.utcnow()
+            item.aprovado_por = current_user.nome if current_user else 'Sistema'
+            item.status = 'APROVADO'
+            aprovados += 1
+
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'aprovados': aprovados
+    })
+
+
+@financeiro_bp.route('/extrato/api/conciliar-multiplos', methods=['POST'])
+@login_required
+def extrato_conciliar_multiplos():
+    """Executa a conciliação de todos os itens aprovados de múltiplos lotes."""
+    data = request.get_json()
+    lote_ids = data.get('lote_ids', [])
+
+    if not lote_ids:
+        return jsonify({'success': False, 'error': 'lote_ids é obrigatório'}), 400
+
+    try:
+        from app.financeiro.services.extrato_conciliacao_service import ExtratoConciliacaoService
+
+        service = ExtratoConciliacaoService()
+        total_conciliados = 0
+        total_erros = 0
+
+        for lote_id in lote_ids:
+            lote = ExtratoLote.query.get(lote_id)
+            if not lote:
+                continue
+
+            lote.status = 'CONCILIANDO'
+            db.session.commit()
+
+            resultado = service.conciliar_lote(lote_id)
+            total_conciliados += resultado.get('conciliados', 0)
+            total_erros += resultado.get('erros', 0)
+
+            lote.linhas_conciliadas = (lote.linhas_conciliadas or 0) + resultado['conciliados']
+            lote.linhas_erro = (lote.linhas_erro or 0) + resultado['erros']
+            lote.processado_em = datetime.utcnow()
+            lote.processado_por = current_user.nome if current_user else 'Sistema'
+
+            # Só marca como concluído se todos os aprovados foram conciliados
+            aprovados_restantes = ExtratoItem.query.filter_by(
+                lote_id=lote_id,
+                aprovado=True
+            ).filter(ExtratoItem.status != 'CONCILIADO').count()
+
+            if aprovados_restantes == 0:
+                lote.status = 'CONCLUIDO'
+            else:
+                lote.status = 'AGUARDANDO_APROVACAO'
+
+            db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'conciliados': total_conciliados,
+            'erros': total_erros
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 # =============================================================================
 # EXCLUIR LOTE
 # =============================================================================
