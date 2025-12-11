@@ -124,7 +124,6 @@ def listar_programacao_completa(args):
             'cod_produto': prog.cod_produto,
             'nome_produto': nomes_produtos[prog.cod_produto],
             'quantidade': float(prog.qtd_programada or 0),
-            'status': prog.status,
             'turno': getattr(prog, 'turno', None)
         }
         programacao_lista.append(item)
@@ -132,13 +131,13 @@ def listar_programacao_completa(args):
         # Agrupar por dia
         data_str = prog.data_programacao.isoformat()
         por_dia[data_str]['itens'].append(item)
-        por_dia[data_str]['total_qtd'] += float(prog.qtd_programada or 0)
+        por_dia[data_str]['total_qtd'] += float(prog.qtd_programada or 0) #type: ignore
         por_dia[data_str]['total_linhas'].add(prog.linha_producao)
 
         # Agrupar por linha
         linha = prog.linha_producao or 'SEM_LINHA'
         por_linha[linha]['itens'].append(item)
-        por_linha[linha]['total_qtd'] += float(prog.qtd_programada or 0)
+        por_linha[linha]['total_qtd'] += float(prog.qtd_programada or 0) #type: ignore
         por_linha[linha]['total_dias'].add(data_str)
 
     resultado['programacao'] = programacao_lista
@@ -176,7 +175,7 @@ def listar_programacao_completa(args):
     msg_linhas.append(f"  Produtos: {len(produtos_unicos)} diferentes")
 
     # Top 5 datas com mais producao
-    top_dias = sorted(por_dia.items(), key=lambda x: -x[1]['total_qtd'])[:5]
+    top_dias = sorted(por_dia.items(), key=lambda x: -x[1]['total_qtd'])[:5] #type: ignore
     if top_dias:
         msg_linhas.append("  Top producao:")
         for data, dados in top_dias:

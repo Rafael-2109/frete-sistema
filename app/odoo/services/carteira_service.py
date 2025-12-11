@@ -1155,7 +1155,7 @@ class CarteiraService:
         import json
 
         if not tag_ids or not isinstance(tag_ids, list) or len(tag_ids) == 0:
-            return None
+            return None #type: ignore
 
         try:
             # Se não há cache, criar um vazio
@@ -1192,11 +1192,11 @@ class CarteiraService:
             if tags_processadas:
                 return json.dumps(tags_processadas, ensure_ascii=False)
 
-            return None
+            return None #type: ignore
 
         except Exception as e:
             logger.warning(f"⚠️ Erro ao processar tags: {e}")
-            return None
+            return None #type: ignore
 
     def _verificar_produto_no_odoo(self, num_pedido: str, cod_produto: str) -> bool:
         """

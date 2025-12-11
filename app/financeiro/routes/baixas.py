@@ -136,7 +136,7 @@ def resolver_journal(nome_journal: str) -> dict:
     Retorna dict com id, code, name ou None se nao encontrar.
     """
     if not nome_journal:
-        return None
+        return None #type: ignore
 
     entrada = str(nome_journal).strip()
     entrada_upper = entrada.upper()
@@ -165,7 +165,7 @@ def resolver_journal(nome_journal: str) -> dict:
         if entrada_norm in nome_norm or nome_norm in entrada_norm:
             return journal
 
-    return None
+    return None #type: ignore
 
 
 # =============================================================================
@@ -188,7 +188,7 @@ def verificar_duplicidade_no_arquivo(itens_novos: list) -> dict:
         else:
             chaves_vistas[chave] = idx
 
-    return duplicados
+    return duplicados #type: ignore
 
 
 def verificar_duplicidade_banco(nf: str, parcela: int, valor: float) -> bool:
@@ -434,7 +434,7 @@ def baixas_upload():
         duplicidades_total = 0
 
         for idx, row in df.iterrows():
-            linha = idx + 2  # +2 porque Excel comeca em 1 e tem cabecalho
+            linha = idx + 2  #type: ignore # +2 porque Excel comeca em 1 e tem cabecalho
 
             # Converter NF
             nf = str(row['NF']).strip() if pd.notna(row['NF']) else ''
