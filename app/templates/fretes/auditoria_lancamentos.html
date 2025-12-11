@@ -614,7 +614,8 @@ function reprocessarLancamento(tipo, id, btn) {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify({})  // Body vazio mas válido para evitar erro 400
     })
     .then(response => response.json())
     .then(data => {

@@ -29,10 +29,10 @@ class OdooConnection:
         self.username = config['username']
         self.api_key = config['api_key']
 
-        # 🔧 Circuit Breaker: Timeout otimizado para operações longas
-        # Aumentado para 30s para suportar sincronizações com período maior
+        # 🔧 Timeout aumentado para 90s para suportar operações longas
+        # A etapa 6 (action_gerar_po_dfe) pode demorar mais de 30s
         # Autenticação pode demorar mais quando Odoo está ocupado
-        self.timeout = config.get('timeout', 30)
+        self.timeout = config.get('timeout', 90)
 
         # 🔧 Retry reduzido: Circuit Breaker gerencia tentativas
         # Com Circuit Breaker, não precisa de muitas tentativas internas
@@ -156,14 +156,17 @@ class OdooConnection:
                 if not self.authenticate():
                     raise Exception("Falha na autenticação com Odoo")
 
-            models = self._get_models()
             kwargs_resolved = kwargs or {}
 
-            # 🔧 Timeout específico para operações longas
-            original_timeout = socket.getdefaulttimeout()
-            if timeout_override:
+            # 🔧 CORREÇÃO: Timeout específico para operações longas
+            # socket.setdefaulttimeout() só afeta sockets NOVOS, não conexões já estabelecidas
+            # Por isso, forçamos reconexão quando há timeout_override maior
+            if timeout_override and timeout_override > self.timeout:
+                logger.info(f"⏱️ Reconectando com timeout estendido: {timeout_override}s para {model}.{method}")
+                self._models = None  # Força reconexão
                 socket.setdefaulttimeout(timeout_override)
-                logger.info(f"⏱️ Timeout temporário: {timeout_override}s para {model}.{method}")
+
+            models = self._get_models()
 
             try:
                 result = models.execute_kw(
@@ -183,9 +186,10 @@ class OdooConnection:
                 raise
 
             finally:
-                # 🔧 Restaurar timeout original
-                if timeout_override:
-                    socket.setdefaulttimeout(original_timeout)
+                # 🔧 Restaurar timeout padrão após operação longa
+                if timeout_override and timeout_override > self.timeout:
+                    socket.setdefaulttimeout(self.timeout)
+                    self._models = None  # Força reconexão na próxima chamada com timeout normal
 
         # 🔧 Usar Circuit Breaker para proteger execução
         return self.circuit_breaker.call(_do_execute)

@@ -23,6 +23,7 @@ TRATAMENTO DE ERROS:
 import json
 import logging
 import traceback
+from contextlib import contextmanager
 from datetime import datetime
 from typing import Dict, Any, Optional
 
@@ -118,15 +119,37 @@ def _limpar_progresso_lote(fatura_id: int): # type: ignore
         logger.warning(f"⚠️ Erro ao limpar progresso do lote: {e}")
 
 
-def _criar_app_context():
-    """Cria contexto do Flask para execução no worker"""
+@contextmanager
+def _app_context_safe():
+    """
+    Context manager seguro para execução no worker.
+
+    IMPORTANTE: Verifica se já existe um contexto ativo (ex: chamado de dentro de outro job)
+    para evitar criar contextos aninhados que podem causar travamentos.
+
+    Uso:
+        with _app_context_safe():
+            # código que precisa de contexto Flask
+    """
     import sys
     import os
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 
+    from flask import has_app_context
+
+    # ✅ Se já existe contexto ativo, apenas executa o código (não cria novo contexto)
+    if has_app_context():
+        logger.debug("📎 [Context] Reutilizando contexto Flask existente")
+        yield
+        return
+
+    # Criar novo contexto apenas quando necessário
     from app import create_app
     app = create_app()
-    return app
+    logger.debug("🆕 [Context] Novo contexto Flask criado")
+
+    with app.app_context():
+        yield
 
 
 def lancar_frete_job(
@@ -178,9 +201,7 @@ def lancar_frete_job(
     }
 
     try:
-        app = _criar_app_context()
-
-        with app.app_context():
+        with _app_context_safe():
             from app.fretes.models import Frete, ConhecimentoTransporte
             from app.fretes.services import LancamentoOdooService
 
@@ -367,9 +388,7 @@ def lancar_despesa_job(
     }
 
     try:
-        app = _criar_app_context()
-
-        with app.app_context():
+        with _app_context_safe():
             from app.fretes.models import DespesaExtra
             from app.fretes.services.lancamento_despesa_odoo_service import LancamentoDespesaOdooService
 
@@ -489,34 +508,32 @@ def lancar_lote_job(
     data_vencimento_fatura: str = None
 ) -> Dict[str, Any]:
     """
-    Job para lançar todos os fretes e despesas de uma fatura no Odoo
+    Job para enfileirar lançamento de todos os fretes e despesas de uma fatura no Odoo.
+
+    MUDANÇA: Agora usa ENQUEUE para cada item, em vez de chamar diretamente.
+    Isso permite:
+    - Cada item aparece na fila de auditoria individualmente
+    - Se um travar, não afeta os outros
+    - Mais visibilidade do progresso
 
     Args:
         fatura_frete_id: ID da fatura de frete
         usuario_nome: Nome do usuário que solicitou
         usuario_ip: IP do usuário (opcional)
         data_vencimento_fatura: Data de vencimento da fatura (YYYY-MM-DD)
-            Será usado para TODOS os documentos da fatura (fretes e despesas)
 
     Returns:
-        dict: Resultado do processamento em lote
-            - success: bool (True se TODOS foram lançados)
+        dict: Resultado com jobs_ids enfileirados
+            - success: bool
             - fatura_frete_id: int
             - message: str
             - total_fretes: int
             - total_despesas: int
-            - fretes_sucesso: int
-            - despesas_sucesso: int
-            - fretes_erro: int
-            - despesas_erro: int
-            - fretes_skip: int (já lançados)
-            - despesas_skip: int (já lançados)
-            - detalhes_fretes: List[Dict]
-            - detalhes_despesas: List[Dict]
-            - tempo_total_segundos: float
+            - jobs_fretes: List[Dict] - IDs dos jobs enfileirados
+            - jobs_despesas: List[Dict] - IDs dos jobs enfileirados
     """
     inicio = datetime.now()
-    logger.info(f"🚀 [Job Lote] Iniciando lançamento em lote - Fatura #{fatura_frete_id}")
+    logger.info(f"🚀 [Job Lote] Enfileirando lançamentos da Fatura #{fatura_frete_id}")
 
     resultado = {
         'success': False,
@@ -524,23 +541,15 @@ def lancar_lote_job(
         'message': '',
         'total_fretes': 0,
         'total_despesas': 0,
-        'fretes_sucesso': 0,
-        'despesas_sucesso': 0,
-        'fretes_erro': 0,
-        'despesas_erro': 0,
-        'fretes_skip': 0,
-        'despesas_skip': 0,
-        'detalhes_fretes': [],
-        'detalhes_despesas': [],
+        'jobs_fretes': [],
+        'jobs_despesas': [],
         'tempo_total_segundos': 0
     }
 
     try:
-        app = _criar_app_context()
-
-        with app.app_context():
-            from app import db
+        with _app_context_safe():
             from app.fretes.models import FaturaFrete, Frete, DespesaExtra
+            from app.portal.workers import enqueue_job
 
             # ========================================
             # VALIDAÇÃO: Fatura existe?
@@ -554,18 +563,22 @@ def lancar_lote_job(
                 return resultado
 
             # ========================================
-            # BUSCAR FRETES DA FATURA
+            # BUSCAR FRETES DA FATURA (excluir já lançados)
             # ========================================
-            fretes = Frete.query.filter_by(fatura_frete_id=fatura_frete_id).all()
+            fretes = Frete.query.filter_by(fatura_frete_id=fatura_frete_id).filter(
+                Frete.status != 'LANCADO_ODOO'
+            ).all()
             resultado['total_fretes'] = len(fretes)
-            logger.info(f"📦 [Job Lote] Encontrados {len(fretes)} fretes na fatura")
+            logger.info(f"📦 [Job Lote] Encontrados {len(fretes)} fretes pendentes na fatura")
 
             # ========================================
-            # BUSCAR DESPESAS DA FATURA
+            # BUSCAR DESPESAS DA FATURA (excluir já lançadas)
             # ========================================
-            despesas = DespesaExtra.query.filter_by(fatura_frete_id=fatura_frete_id).all()
+            despesas = DespesaExtra.query.filter_by(fatura_frete_id=fatura_frete_id).filter(
+                DespesaExtra.status != 'LANCADO_ODOO'
+            ).all()
             resultado['total_despesas'] = len(despesas)
-            logger.info(f"📦 [Job Lote] Encontradas {len(despesas)} despesas na fatura")
+            logger.info(f"📦 [Job Lote] Encontradas {len(despesas)} despesas pendentes na fatura")
 
             # ========================================
             # INICIALIZAR PROGRESSO EM TEMPO REAL
@@ -574,149 +587,94 @@ def lancar_lote_job(
                 'fatura_id': fatura_frete_id,
                 'fatura_numero': fatura.numero_fatura,
                 'transportadora': fatura.transportadora.razao_social if fatura.transportadora else 'N/A',
-                'status': 'processando',
+                'status': 'enfileirando',
                 'total_fretes': len(fretes),
                 'total_despesas': len(despesas),
-                'fretes_processados': 0,
-                'despesas_processadas': 0,
-                'fretes_sucesso': 0,
-                'despesas_sucesso': 0,
-                'fretes_erro': 0,
-                'despesas_erro': 0,
-                'fretes_skip': 0,
-                'despesas_skip': 0,
-                'item_atual': 'Iniciando...',
-                'item_atual_id': None,
-                'item_atual_etapa': '',
-                'detalhes': [],
+                'jobs_enfileirados': 0,
+                'item_atual': 'Enfileirando jobs...',
+                'jobs': [],
                 'inicio': datetime.now().isoformat()
             }
             _atualizar_progresso_lote(fatura_frete_id, progresso)
 
             # ========================================
-            # PROCESSAR FRETES
+            # ENFILEIRAR FRETES
             # ========================================
             for idx, frete in enumerate(fretes):
                 try:
-                    # 🔧 RECONEXÃO: Garantir conexão válida antes de cada frete
-                    try:
-                        db.session.execute(db.text('SELECT 1'))
-                    except Exception as e:
-                        logger.warning(f"⚠️ [Lote] Conexão perdida, reconectando... ({e})")
-                        db.session.rollback()
-                        db.session.remove()
+                    logger.info(f"📋 [Job Lote] Enfileirando frete #{frete.id} ({idx + 1}/{len(fretes)})")
 
-                    logger.info(f"📋 [Job Lote] Processando frete #{frete.id} ({idx + 1}/{len(fretes)})")
-
-                    # 📊 Atualizar progresso
-                    progresso['item_atual'] = f"Frete #{frete.id} ({idx + 1}/{len(fretes)})"
-                    progresso['item_atual_id'] = frete.id
-                    progresso['item_atual_tipo'] = 'frete'
-                    progresso['item_atual_etapa'] = 'Lançando no Odoo...'
-                    _atualizar_progresso_lote(fatura_frete_id, progresso)
-
-                    # ✅ SIMPLIFICADO: Job faz TUDO (busca CTe, valida, lança)
-                    result_frete = lancar_frete_job(
-                        frete_id=frete.id,
-                        usuario_nome=usuario_nome,
-                        usuario_ip=usuario_ip,
-                        data_vencimento=data_vencimento_fatura
+                    job = enqueue_job(
+                        lancar_frete_job,
+                        frete.id,
+                        usuario_nome,
+                        usuario_ip,
+                        None,  # cte_chave - será buscado automaticamente
+                        data_vencimento_fatura,
+                        queue_name='odoo_lancamento',
+                        timeout='10m'
                     )
 
-                except Exception as e:
-                    # ⚠️ ISOLAMENTO: Erro em um frete NÃO impacta os demais
-                    logger.error(f"💥 [Lote] Erro inesperado frete #{frete.id}: {e}")
-                    result_frete = {
-                        'frete_id': frete.id,
-                        'success': False,
-                        'skipped': False,
-                        'error': str(e),
-                        'error_type': 'ERRO_INESPERADO'
+                    job_info = {
+                        'tipo': 'frete',
+                        'id': frete.id,
+                        'job_id': job.id,
+                        'status': 'enfileirado'
                     }
+                    resultado['jobs_fretes'].append(job_info)
+                    progresso['jobs'].append(job_info)
+                    progresso['jobs_enfileirados'] = len(resultado['jobs_fretes']) + len(resultado['jobs_despesas'])
 
-                resultado['detalhes_fretes'].append(result_frete)
+                    logger.info(f"✅ [Job Lote] Frete #{frete.id} enfileirado - Job ID: {job.id}")
 
-                # 📊 Atualizar progresso: frete concluído
-                progresso['fretes_processados'] = idx + 1
-                if result_frete.get('skipped'):
-                    resultado['fretes_skip'] += 1
-                    progresso['fretes_skip'] += 1
-                    progresso['item_atual_etapa'] = '⏭️ Já lançado (skip)'
-                elif result_frete.get('success'):
-                    resultado['fretes_sucesso'] += 1
-                    progresso['fretes_sucesso'] += 1
-                    progresso['item_atual_etapa'] = f"✅ Concluído ({result_frete.get('etapas_concluidas', 16)}/16)"
-                else:
-                    resultado['fretes_erro'] += 1
-                    progresso['fretes_erro'] += 1
-                    progresso['item_atual_etapa'] = f"❌ Erro: {result_frete.get('error', 'Desconhecido')[:50]}"
-
-                # Adicionar ao detalhes do progresso
-                progresso['detalhes'].append({
-                    'tipo': 'frete',
-                    'id': frete.id,
-                    'success': result_frete.get('success', False),
-                    'skipped': result_frete.get('skipped', False),
-                    'message': result_frete.get('message', result_frete.get('error', ''))[:100]
-                })
-                _atualizar_progresso_lote(fatura_frete_id, progresso)
+                except Exception as e:
+                    logger.error(f"❌ [Job Lote] Erro ao enfileirar frete #{frete.id}: {e}")
+                    resultado['jobs_fretes'].append({
+                        'tipo': 'frete',
+                        'id': frete.id,
+                        'job_id': None,
+                        'status': 'erro',
+                        'error': str(e)
+                    })
 
             # ========================================
-            # PROCESSAR DESPESAS
+            # ENFILEIRAR DESPESAS
             # ========================================
             for idx, despesa in enumerate(despesas):
-                # 🔧 RECONEXÃO: Garantir conexão válida antes de cada despesa
                 try:
-                    db.session.execute(db.text('SELECT 1'))
+                    logger.info(f"📋 [Job Lote] Enfileirando despesa #{despesa.id} ({idx + 1}/{len(despesas)})")
+
+                    job = enqueue_job(
+                        lancar_despesa_job,
+                        despesa.id,
+                        usuario_nome,
+                        usuario_ip,
+                        data_vencimento_fatura,
+                        queue_name='odoo_lancamento',
+                        timeout='10m'
+                    )
+
+                    job_info = {
+                        'tipo': 'despesa',
+                        'id': despesa.id,
+                        'job_id': job.id,
+                        'status': 'enfileirado'
+                    }
+                    resultado['jobs_despesas'].append(job_info)
+                    progresso['jobs'].append(job_info)
+                    progresso['jobs_enfileirados'] = len(resultado['jobs_fretes']) + len(resultado['jobs_despesas'])
+
+                    logger.info(f"✅ [Job Lote] Despesa #{despesa.id} enfileirada - Job ID: {job.id}")
+
                 except Exception as e:
-                    logger.warning(f"⚠️ [Lote] Conexão perdida antes de despesa, reconectando... ({e})")
-                    db.session.rollback()
-                    db.session.remove()
-
-                logger.info(f"📋 [Job Lote] Processando despesa #{despesa.id} ({idx + 1}/{len(despesas)})")
-
-                # 📊 Atualizar progresso: iniciando despesa
-                progresso['item_atual'] = f"Despesa #{despesa.id} ({idx + 1}/{len(despesas)})"
-                progresso['item_atual_id'] = despesa.id
-                progresso['item_atual_tipo'] = 'despesa'
-                progresso['item_atual_etapa'] = 'Lançando no Odoo (16 etapas)...'
-                _atualizar_progresso_lote(fatura_frete_id, progresso)
-
-                # Executar lançamento com vencimento da FATURA
-                result_despesa = lancar_despesa_job(
-                    despesa_id=despesa.id,
-                    usuario_nome=usuario_nome,
-                    usuario_ip=usuario_ip,
-                    data_vencimento=data_vencimento_fatura  # Vencimento da fatura
-                )
-
-                resultado['detalhes_despesas'].append(result_despesa)
-
-                # 📊 Atualizar progresso: despesa concluída
-                progresso['despesas_processadas'] = idx + 1
-
-                if result_despesa.get('skipped'):
-                    resultado['despesas_skip'] += 1
-                    progresso['despesas_skip'] += 1
-                    progresso['item_atual_etapa'] = '⏭️ Já lançada (skip)'
-                elif result_despesa.get('success'):
-                    resultado['despesas_sucesso'] += 1
-                    progresso['despesas_sucesso'] += 1
-                    progresso['item_atual_etapa'] = f"✅ Concluída ({result_despesa.get('etapas_concluidas', 16)}/16)"
-                else:
-                    resultado['despesas_erro'] += 1
-                    progresso['despesas_erro'] += 1
-                    progresso['item_atual_etapa'] = f"❌ Erro: {result_despesa.get('error', 'Desconhecido')[:50]}"
-
-                # Adicionar ao detalhes do progresso
-                progresso['detalhes'].append({
-                    'tipo': 'despesa',
-                    'id': despesa.id,
-                    'success': result_despesa.get('success', False),
-                    'skipped': result_despesa.get('skipped', False),
-                    'message': result_despesa.get('message', result_despesa.get('error', ''))[:100]
-                })
-                _atualizar_progresso_lote(fatura_frete_id, progresso)
+                    logger.error(f"❌ [Job Lote] Erro ao enfileirar despesa #{despesa.id}: {e}")
+                    resultado['jobs_despesas'].append({
+                        'tipo': 'despesa',
+                        'id': despesa.id,
+                        'job_id': None,
+                        'status': 'erro',
+                        'error': str(e)
+                    })
 
             # ========================================
             # RESUMO FINAL
@@ -724,31 +682,23 @@ def lancar_lote_job(
             tempo_total = (datetime.now() - inicio).total_seconds()
             resultado['tempo_total_segundos'] = tempo_total
 
-            # Sucesso se não houver erros (skip não conta como erro)
-            total_erros = resultado['fretes_erro'] + resultado['despesas_erro']
-            total_sucesso = resultado['fretes_sucesso'] + resultado['despesas_sucesso']
-            total_skip = resultado['fretes_skip'] + resultado['despesas_skip']
-            total_itens = resultado['total_fretes'] + resultado['total_despesas']
+            total_enfileirados = sum(1 for j in resultado['jobs_fretes'] if j.get('job_id')) + \
+                                 sum(1 for j in resultado['jobs_despesas'] if j.get('job_id'))
+            total_erros = sum(1 for j in resultado['jobs_fretes'] if j.get('status') == 'erro') + \
+                          sum(1 for j in resultado['jobs_despesas'] if j.get('status') == 'erro')
 
-            resultado['success'] = (total_erros == 0)
+            resultado['success'] = (total_erros == 0 and total_enfileirados > 0)
 
-            if total_erros == 0:
-                resultado['message'] = (
-                    f"Lote processado com sucesso em {tempo_total:.1f}s! "
-                    f"{total_sucesso} lançados, {total_skip} já lançados anteriormente"
-                )
-                logger.info(f"✅ [Job Lote] {resultado['message']}")
-            else:
-                resultado['message'] = (
-                    f"Lote processado com {total_erros} erros em {tempo_total:.1f}s. "
-                    f"{total_sucesso} lançados, {total_skip} já lançados, {total_erros} com erro"
-                )
-                logger.warning(f"⚠️ [Job Lote] {resultado['message']}")
+            resultado['message'] = (
+                f"Lote enfileirado em {tempo_total:.1f}s! "
+                f"{total_enfileirados} jobs na fila 'odoo_lancamento'. "
+                f"Acompanhe na tela de auditoria."
+            )
+            logger.info(f"✅ [Job Lote] {resultado['message']}")
 
             # 📊 Finalizar progresso
-            progresso['status'] = 'concluido' if total_erros == 0 else 'erro'
-            progresso['item_atual'] = 'Concluído!'
-            progresso['item_atual_etapa'] = resultado['message']
+            progresso['status'] = 'enfileirado'
+            progresso['item_atual'] = 'Todos os jobs enfileirados!'
             progresso['fim'] = datetime.now().isoformat()
             progresso['tempo_total_segundos'] = tempo_total
             _atualizar_progresso_lote(fatura_frete_id, progresso)

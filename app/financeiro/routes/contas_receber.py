@@ -72,8 +72,17 @@ def listar_contas_receber():
         query = query.filter(ContasAReceber.titulo_nf.ilike(f'%{titulo_nf}%'))
 
     if cnpj:
-        cnpj_limpo = cnpj.replace('.', '').replace('/', '').replace('-', '')
-        query = query.filter(ContasAReceber.cnpj.ilike(f'%{cnpj_limpo}%'))
+        # CNPJ pode estar formatado no banco (ex: 61.724.241/0001-78)
+        # Buscar tanto o valor original quanto o limpo
+        cnpj_limpo = cnpj.replace('.', '').replace('/', '').replace('-', '').replace(' ', '')
+        query = query.filter(
+            or_(
+                # Busca direta (se usuário digitou formatado igual ao banco)
+                ContasAReceber.cnpj.ilike(f'%{cnpj}%'),
+                # Busca por dígitos (remove formatação do campo via regexp)
+                func.regexp_replace(ContasAReceber.cnpj, r'[^0-9]', '', 'g').ilike(f'%{cnpj_limpo}%')
+            )
+        )
 
     if cliente:
         query = query.filter(or_(
@@ -248,7 +257,14 @@ def exportar_contas_receber_excel():
             query = query.filter(ContasAReceber.titulo_nf.ilike(f'%{titulo_nf}%'))
 
         if cnpj:
-            query = query.filter(ContasAReceber.cnpj.ilike(f'%{cnpj}%'))
+            # CNPJ pode estar formatado no banco - mesma lógica da listagem
+            cnpj_limpo = cnpj.replace('.', '').replace('/', '').replace('-', '').replace(' ', '')
+            query = query.filter(
+                or_(
+                    ContasAReceber.cnpj.ilike(f'%{cnpj}%'),
+                    func.regexp_replace(ContasAReceber.cnpj, r'[^0-9]', '', 'g').ilike(f'%{cnpj_limpo}%')
+                )
+            )
 
         if cliente:
             query = query.filter(or_(
