@@ -18,6 +18,18 @@
 4. **NUNCA pular** direto para a solucao
 5. **NUNCA mantenha lixo** Caso um codigo seja substituido, REMOVA o anterior, mantenha o codigo limpo.
 
+### ANTES DE PROPOR NOVOS ARQUIVOS OU REORGANIZACAO:
+
+**CHECKLIST OBRIGATORIO** - Executar e MOSTRAR output antes de qualquer proposta:
+
+1. **EXECUTAR**: `ls -la .claude/references/` - mostrar arquivos existentes
+2. **EXECUTAR**: `ls -la .claude/skills/[skill-em-questao]/` - mostrar arquivos da skill
+3. **LER**: Secao "INDICE DE REFERENCIAS" deste arquivo (abaixo)
+4. **LISTAR**: O que cada arquivo existente contem (1 linha por arquivo)
+5. **VERIFICAR**: O conteudo proposto ja existe? Se SIM → NAO criar novo
+
+**VIOLACAO** = Propor arquivo que ja existe ou duplica conteudo existente
+
 ### FORMATO OBRIGATORIO DE RESPOSTA:
 ```
 1. CONFIRMACAO DO ENTENDIMENTO:

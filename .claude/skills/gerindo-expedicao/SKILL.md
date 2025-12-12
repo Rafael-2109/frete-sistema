@@ -27,10 +27,7 @@ Skill para consultas e operacoes logisticas da Nacom Goya.
    - [criando_separacao_pedidos.py](#5-criando_separacao_pedidospy)
    - [consultando_programacao_producao.py](#6-consultando_programacao_producaopy)
 4. [Fluxo de Criacao de Separacao](#fluxo-de-criacao-de-separacao)
-5. [Glossario de Sinonimos](#glossario-de-sinonimos)
-6. [Grupos Empresariais](#grupos-empresariais)
-7. [Resolucao de Produtos](#resolucao-de-produtos)
-8. [Referencias](#referencias)
+5. [Referencias](#referencias) (tables, business, glossary, synonyms, products, examples)
 
 ---
 
@@ -517,75 +514,17 @@ python .claude/skills/gerindo-expedicao/scripts/consultando_programacao_producao
 
 ---
 
-## Glossario de Sinonimos
-
-<glossario>
-O usuario pode usar diversos termos para a mesma coisa. Normalize antes de processar:
-
-| Termo Usuario | Termo Padrao | Significado |
-|---------------|--------------|-------------|
-| ketchup, catchup, ketichap | ketchup | Produto ketchup |
-| caixa, cx, unidade, un | unidade | Quantidade de produto |
-| loja, filial, unidade (cliente) | loja | Filial do cliente |
-| embarque, despacho, saida | expedicao | Data de envio |
-| chegada, recebimento, entrega | agendamento | Data de entrega no cliente |
-| pedido, PV, OV, venda | pedido | Ordem de venda |
-| cliente, comprador, destinatario | cliente | Quem compra |
-| transportadora, frete, carrier | transportadora | Empresa de transporte |
-| estoque, saldo, disponivel | estoque | Quantidade em armazem |
-| falta, ruptura, stockout | ruptura | Estoque insuficiente |
-| separacao, picking, sep | separacao | Preparacao de pedido |
-| programacao, OP, ordem producao | producao | Ordem de producao |
-</glossario>
-
-**Importante**: Quando o termo for ambiguo no contexto, PERGUNTE. Ex: "unidade" pode ser quantidade ou filial.
-
----
-
-## Grupos Empresariais
-
-→ Ver [reference.md](reference.md#grupos-empresariais) para prefixos CNPJ completos.
-
-**Comandos rápidos:** `--grupo atacadao`, `--grupo assai`, `--grupo tenda`
-
----
-
-## Resolucao de Produtos
-
-A funcao `resolver_produto()` usa busca inteligente com abreviacoes mapeadas.
-
-### Abreviacoes Suportadas (busca EXATA nos campos corretos)
-
-<abreviacoes_produto>
-
-| Abreviacao | Campo | Tipo Busca | Significado |
-|------------|-------|------------|-------------|
-| **CI** | tipo_materia_prima | EXATO | Cogumelo Inteiro |
-| **CF** | tipo_materia_prima | EXATO | Cogumelo Fatiado |
-| **AZ VF** | tipo_materia_prima | EXATO | Azeitona Verde Fatiada |
-| **AZ PF** | tipo_materia_prima | EXATO | Azeitona Preta Fatiada |
-| **AZ VI** | tipo_materia_prima | EXATO | Azeitona Verde Inteira |
-| **AZ VSC** | tipo_materia_prima | EXATO | Azeitona Verde Sem Caroco |
-| **BR** | tipo_embalagem | EXATO→BARRICA | Barrica |
-| **BD** | tipo_embalagem | LIKE BD% | Balde |
-| **GL** | tipo_embalagem | LIKE GALAO% | Galao |
-| **VD** | tipo_embalagem | LIKE VIDRO% | Vidro |
-| **POUCH** | tipo_embalagem | LIKE POUCH% | Pouch |
-| **SACHET** | tipo_embalagem | LIKE SACHET% | Sachet |
-| **MEZZANI** | categoria_produto | EXATO | Marca Mezzani |
-| **BENASSI** | categoria_produto | EXATO | Marca Benassi |
-| **IND** | categoria_produto | EXATO→INDUSTRIA | Industria |
-
-</abreviacoes_produto>
-
-**Exemplos de busca:**
-- "ci" → Cogumelo Inteiro (busca EXATA, nao encontra "INTENSA")
-- "az vf bd" → Azeitona Verde Fatiada em Balde
-- "br mezzani" → Barrica Mezzani
-
----
-
 ## Referencias
 
-- [reference.md](reference.md) - Documentacao tecnica (tabelas, campos)
-- [examples.md](examples.md) - Exemplos de perguntas e comandos
+Consulte os arquivos em `references/` conforme a necessidade:
+
+| Arquivo | Conteudo | Quando Usar |
+|---------|----------|-------------|
+| [tables.md](references/tables.md) | Schemas das 6 tabelas principais | Quando precisar saber campos para queries |
+| [business.md](references/business.md) | Grupos empresariais, constantes, calculos | Quando precisar de regras de negocio ou constantes |
+| [glossary.md](references/glossary.md) | Termos do dominio (ruptura, matar pedido) | Quando encontrar termo desconhecido |
+| [synonyms.md](references/synonyms.md) | Sinonimos de entrada (ketchup→catchup) | Quando precisar normalizar input do usuario |
+| [products.md](references/products.md) | Abreviacoes de produtos (CI, AZ VF, BD) | Quando precisar resolver busca de produto |
+| [examples.md](examples.md) | Exemplos de perguntas e comandos | Quando precisar ver exemplos de uso |
+
+**Grupos Empresariais:** `--grupo atacadao`, `--grupo assai`, `--grupo tenda` (detalhes em [business.md](references/business.md#grupos-empresariais))

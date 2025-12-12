@@ -10,6 +10,26 @@ Este documento descreve as regras de negocio especificas do sistema logistico.
 
 ---
 
+## Indice
+
+0. [A Empresa: Nacom Goya](#0-a-empresa-nacom-goya)
+1. [Grupos Empresariais (por CNPJ)](#1-grupos-empresariais-por-cnpj)
+2. [Bonificacao](#2-bonificacao)
+3. [Roteirizacao](#3-roteirizacao)
+4. [Estoque e Projecao](#4-estoque-e-projecao)
+5. [Status de Separacao](#5-status-de-separacao)
+6. [Pedidos Pendentes vs Separados](#6-pedidos-pendentes-vs-separados)
+7. [Completude de Pedido ("Matar")](#7-completude-de-pedido-matar)
+8. [Atraso de Pedido](#8-atraso-de-pedido)
+9. [Agendamento](#9-agendamento)
+10. [Lead Time (Prazo de Entrega)](#10-lead-time-prazo-de-entrega)
+11. [Concentracao de Item no Pedido](#11-concentracao-de-item-no-pedido)
+12. [Termos Comuns (Glossario)](#12-termos-comuns-glossario)
+13. [Criacao de Separacao](#13-criacao-de-separacao)
+14. [Agendamento para Criacao de Separacao](#14-agendamento-para-criacao-de-separacao)
+
+---
+
 ## 0. A Empresa: Nacom Goya
 
 ### Estrutura do Grupo
