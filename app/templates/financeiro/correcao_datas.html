@@ -544,7 +544,7 @@
     // Renderizar paginação
     function renderizarPaginacao(total) {
         const info = document.getElementById('paginacaoInfo');
-        const inicio = (paginaAtual - 1) * 50 + 1;
+        const inicio = total > 0 ? (paginaAtual - 1) * 50 + 1 : 0;
         const fim = Math.min(paginaAtual * 50, total);
         info.textContent = `Mostrando ${inicio}-${fim} de ${total} registros`;
 
@@ -556,15 +556,42 @@
         // Anterior
         ul.innerHTML += `
             <li class="page-item ${paginaAtual === 1 ? 'disabled' : ''}">
-                <a class="page-link" href="#" onclick="carregarDados(${paginaAtual - 1})">&laquo;</a>
+                <a class="page-link" href="#" onclick="event.preventDefault(); carregarDados(${paginaAtual - 1})">&laquo;</a>
             </li>
         `;
 
-        // Páginas
-        for (let i = 1; i <= Math.min(totalPaginas, 5); i++) {
+        // Primeira página
+        if (paginaAtual > 3) {
+            ul.innerHTML += `
+                <li class="page-item">
+                    <a class="page-link" href="#" onclick="event.preventDefault(); carregarDados(1)">1</a>
+                </li>
+            `;
+            if (paginaAtual > 4) {
+                ul.innerHTML += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+            }
+        }
+
+        // Páginas ao redor da atual
+        const startPage = Math.max(1, paginaAtual - 2);
+        const endPage = Math.min(totalPaginas, paginaAtual + 2);
+
+        for (let i = startPage; i <= endPage; i++) {
             ul.innerHTML += `
                 <li class="page-item ${paginaAtual === i ? 'active' : ''}">
-                    <a class="page-link" href="#" onclick="carregarDados(${i})">${i}</a>
+                    <a class="page-link" href="#" onclick="event.preventDefault(); carregarDados(${i})">${i}</a>
+                </li>
+            `;
+        }
+
+        // Última página
+        if (paginaAtual < totalPaginas - 2) {
+            if (paginaAtual < totalPaginas - 3) {
+                ul.innerHTML += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+            }
+            ul.innerHTML += `
+                <li class="page-item">
+                    <a class="page-link" href="#" onclick="event.preventDefault(); carregarDados(${totalPaginas})">${totalPaginas}</a>
                 </li>
             `;
         }
@@ -572,7 +599,7 @@
         // Próximo
         ul.innerHTML += `
             <li class="page-item ${paginaAtual === totalPaginas ? 'disabled' : ''}">
-                <a class="page-link" href="#" onclick="carregarDados(${paginaAtual + 1})">&raquo;</a>
+                <a class="page-link" href="#" onclick="event.preventDefault(); carregarDados(${paginaAtual + 1})">&raquo;</a>
             </li>
         `;
     }

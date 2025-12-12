@@ -60,24 +60,13 @@ def correcao_datas_api_listar():
 
         service = CorrecaoDatasService()
 
-        if documento:
-            # Busca por documento específico
-            items, total = service.listar_todos(
-                status=status,
-                mes=mes,
-                page=page,
-                per_page=per_page
-            )
-            # Filtrar por documento
-            items = [i for i in items if documento.lower() in i['nome_documento'].lower()]
-            total = len(items)
-        else:
-            items, total = service.listar_todos(
-                status=status,
-                mes=mes,
-                page=page,
-                per_page=per_page
-            )
+        items, total = service.listar_todos(
+            status=status,
+            mes=mes,
+            documento=documento,
+            page=page,
+            per_page=per_page
+        )
 
         return jsonify({
             'sucesso': True,

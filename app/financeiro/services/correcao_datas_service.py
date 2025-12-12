@@ -386,6 +386,7 @@ class CorrecaoDatasService:
         self,
         status: str = None,
         mes: str = None,
+        documento: str = None,
         page: int = 1,
         per_page: int = 50
     ) -> Tuple[List[Dict], int]:
@@ -400,6 +401,11 @@ class CorrecaoDatasService:
             query = query.filter(
                 db.extract('year', CorrecaoDataNFCredito.data_emissao) == int(ano),
                 db.extract('month', CorrecaoDataNFCredito.data_emissao) == int(mes_num)
+            )
+
+        if documento:
+            query = query.filter(
+                CorrecaoDataNFCredito.nome_documento.ilike(f'%{documento}%')
             )
 
         query = query.order_by(CorrecaoDataNFCredito.data_emissao.desc())
