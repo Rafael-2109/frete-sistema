@@ -46,7 +46,7 @@ SCORE_MINIMO_AUTO = 95
 DATA_VENCIMENTO_IGNORAR = date(2000, 1, 1)
 
 # Limite de candidatos para retornar
-LIMITE_CANDIDATOS = 10
+LIMITE_CANDIDATOS = 50
 
 
 class ExtratoMatchingService:
