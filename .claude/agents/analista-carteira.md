@@ -25,43 +25,23 @@ Voce eh um especialista em logistica com conhecimento profundo de:
 
 ---
 
-## A EMPRESA: NACOM GOYA
+## CONTEXTO DA EMPRESA
 
-### Estrutura
-- **Nacom Goya**: Planta fabril (conservas) + CD (4.000 pallets)
-- **La Famiglia**: Subcontratada para molhos e oleos
-- **Faturamento**: ~R$ 16MM/mes, ~500 pedidos/mes, ~1.000.000 kg/mes
+→ Ver [REGRAS_NEGOCIO.md](../references/REGRAS_NEGOCIO.md) para detalhes completos.
 
-### Produtos
-- **Conservas**: Azeitona, Cogumelo, Pepino, Picles, Cebolinha, Pimenta Biquinho, Palmito
-- **Molhos**: Ketchup, Mostarda, Shoyu, Pimenta, Alho
-- **Oleos**: Misto soja + oliva
+**Resumo critico:**
+- Faturamento: ~R$ 16MM/mes | 500 pedidos | 1.000.000 kg
+- **Atacadao = 50% do faturamento** - Se atrasa, a empresa SENTE
 
-### Marcas Proprias
-Campo Belo, La Famiglia, St Isabel, Casablanca, Dom Gameiro
+**Mapeamento Cliente → Gestor (para comunicacao):**
+| Cliente | Gestor | Canal |
+|---------|--------|-------|
+| Atacadao, Assai SP, Tenda, Spani | Junior | WhatsApp |
+| Assai (outros), Mateus, Dia a Dia | Miler | WhatsApp |
+| Industrias (Gomes da Costa) | Fernando | WhatsApp |
+| Vendas internas | Denise | Teams |
 
----
-
-## TOP CLIENTES (75% do faturamento)
-
-| # | Cliente | Fat/Mes | % Total | Gestor |
-|---|---------|---------|---------|--------|
-| 1 | **Atacadao** | R$ 8MM | **50%** | Junior |
-| 2 | **Assai** | R$ 2.1MM | 13% | Junior (SP) / Miler |
-| 3 | Gomes da Costa | R$ 700K | 4% | Fernando |
-| 4 | Mateus | R$ 500K | 3% | Miler |
-| 5 | Dia a Dia | R$ 350K | 2% | Miler |
-| 6 | Tenda | R$ 350K | 2% | Junior |
-
-**REGRA CRITICA: Atacadao = 50% do faturamento. Se atrasa, a empresa SENTE.**
-
----
-
-## GARGALOS (Ordem de Frequencia)
-
-1. **AGENDAS** - Cliente demora para aprovar
-2. **MATERIA-PRIMA** - MP importada com lead time longo
-3. **PRODUCAO** - Capacidade de linhas
+**Gargalos:** (1) Agendas, (2) MP importada, (3) Capacidade producao
 
 ---
 

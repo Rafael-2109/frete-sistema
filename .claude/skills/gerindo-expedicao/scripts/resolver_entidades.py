@@ -21,6 +21,7 @@ Uso:
         resolver_cidade,
         resolver_grupo,
         resolver_uf,
+        resolver_cliente,  # NOVO
         normalizar_texto
     )
 
@@ -94,6 +95,102 @@ GRUPOS_EMPRESARIAIS = {
     'assai': ['06.057.22'],
     'tenda': ['01.157.55']
 }
+
+
+# ============================================================
+# ABREVIACOES DE PRODUTO
+# Mapeamento de abreviacoes conhecidas para busca EXATA
+# Evita falsos positivos (ex: "CI" encontrando "INTENSA")
+# ============================================================
+ABREVIACOES_PRODUTO = {
+    # Tipo Materia Prima (tipo_materia_prima) - busca EXATA
+    'CI': {'campo': 'tipo_materia_prima', 'valor': 'CI', 'tipo': 'exato', 'descricao': 'Cogumelo Inteiro'},
+    'CF': {'campo': 'tipo_materia_prima', 'valor': 'CF', 'tipo': 'exato', 'descricao': 'Cogumelo Fatiado'},
+    'AZ VF': {'campo': 'tipo_materia_prima', 'valor': 'AZ VF', 'tipo': 'exato', 'descricao': 'Azeitona Verde Fatiada'},
+    'AZ PF': {'campo': 'tipo_materia_prima', 'valor': 'AZ PF', 'tipo': 'exato', 'descricao': 'Azeitona Preta Fatiada'},
+    'AZ VI': {'campo': 'tipo_materia_prima', 'valor': 'AZ VI', 'tipo': 'exato', 'descricao': 'Azeitona Verde Inteira'},
+    'AZ PI': {'campo': 'tipo_materia_prima', 'valor': 'AZ PI', 'tipo': 'exato', 'descricao': 'Azeitona Preta Inteira'},
+    'AZ VR': {'campo': 'tipo_materia_prima', 'valor': 'AZ VR', 'tipo': 'exato', 'descricao': 'Azeitona Verde Recheada'},
+    'AZ VSC': {'campo': 'tipo_materia_prima', 'valor': 'AZ VSC', 'tipo': 'exato', 'descricao': 'Azeitona Verde Sem Caroco'},
+
+    # Alias curtos para tipo_materia_prima
+    'VF': {'campo': 'tipo_materia_prima', 'valor': '%VF%', 'tipo': 'like', 'descricao': 'Verde Fatiada'},
+    'PF': {'campo': 'tipo_materia_prima', 'valor': '%PF%', 'tipo': 'like', 'descricao': 'Preta Fatiada'},
+
+    # Tipo Embalagem (tipo_embalagem) - busca EXATA ou LIKE
+    'BARRICA': {'campo': 'tipo_embalagem', 'valor': 'BARRICA', 'tipo': 'exato', 'descricao': 'Barrica'},
+    'BR': {'campo': 'tipo_embalagem', 'valor': 'BARRICA', 'tipo': 'exato', 'descricao': 'Barrica (alias)'},
+    'BD': {'campo': 'tipo_embalagem', 'valor': 'BD%', 'tipo': 'like', 'descricao': 'Balde'},
+    'BALDE': {'campo': 'tipo_embalagem', 'valor': 'BD%', 'tipo': 'like', 'descricao': 'Balde'},
+    'POUCH': {'campo': 'tipo_embalagem', 'valor': 'POUCH%', 'tipo': 'like', 'descricao': 'Pouch'},
+    'SACHET': {'campo': 'tipo_embalagem', 'valor': 'SACHET%', 'tipo': 'like', 'descricao': 'Sachet'},
+    'VIDRO': {'campo': 'tipo_embalagem', 'valor': 'VIDRO%', 'tipo': 'like', 'descricao': 'Vidro'},
+    'VD': {'campo': 'tipo_embalagem', 'valor': 'VIDRO%', 'tipo': 'like', 'descricao': 'Vidro (alias)'},
+    'GALAO': {'campo': 'tipo_embalagem', 'valor': 'GALAO%', 'tipo': 'like', 'descricao': 'Galao'},
+    'GL': {'campo': 'tipo_embalagem', 'valor': 'GALAO%', 'tipo': 'like', 'descricao': 'Galao (alias)'},
+
+    # Categorias/Marcas (categoria_produto) - busca EXATA
+    'CAMPO BELO': {'campo': 'categoria_produto', 'valor': 'CAMPO BELO', 'tipo': 'exato', 'descricao': 'Marca Campo Belo'},
+    'MEZZANI': {'campo': 'categoria_produto', 'valor': 'MEZZANI', 'tipo': 'exato', 'descricao': 'Marca Mezzani'},
+    'BENASSI': {'campo': 'categoria_produto', 'valor': 'BENASSI', 'tipo': 'exato', 'descricao': 'Marca Benassi'},
+    'IMPERIAL': {'campo': 'categoria_produto', 'valor': 'IMPERIAL', 'tipo': 'exato', 'descricao': 'Marca Imperial'},
+    'INDUSTRIA': {'campo': 'categoria_produto', 'valor': 'INDUSTRIA', 'tipo': 'exato', 'descricao': 'Destinado a industria'},
+    'IND': {'campo': 'categoria_produto', 'valor': 'INDUSTRIA', 'tipo': 'exato', 'descricao': 'Industria (alias)'},
+}
+
+
+def get_abreviacao_produto(termo: str) -> dict:
+    """
+    Verifica se termo e uma abreviacao conhecida.
+
+    Args:
+        termo: Termo de busca (ex: 'CI', 'AZ VF', 'BD')
+
+    Returns:
+        dict com info da abreviacao ou None se nao for abreviacao conhecida
+    """
+    termo_upper = termo.strip().upper()
+    return ABREVIACOES_PRODUTO.get(termo_upper)
+
+
+def detectar_abreviacoes(tokens: list) -> tuple:
+    """
+    Detecta abreviacoes em lista de tokens, incluindo combinacoes.
+
+    Exemplo: ['az', 'vf', 'pouch'] -> detecta 'AZ VF' como combinacao
+
+    Args:
+        tokens: Lista de tokens (ex: ['az', 'vf', 'pouch'])
+
+    Returns:
+        tuple: (abreviacoes_encontradas, tokens_restantes)
+        - abreviacoes_encontradas: lista de dicts com info das abreviacoes
+        - tokens_restantes: tokens que nao sao abreviacoes
+    """
+    abreviacoes = []
+    tokens_usados = set()
+
+    # Primeiro, tentar combinacoes de 2 tokens (ex: 'AZ VF')
+    for i in range(len(tokens) - 1):
+        combo = f"{tokens[i]} {tokens[i+1]}".upper()
+        if combo in ABREVIACOES_PRODUTO:
+            abreviacoes.append(ABREVIACOES_PRODUTO[combo])
+            tokens_usados.add(i)
+            tokens_usados.add(i + 1)
+
+    # Depois, tentar tokens individuais
+    for i, token in enumerate(tokens):
+        if i in tokens_usados:
+            continue
+        token_upper = token.upper()
+        if token_upper in ABREVIACOES_PRODUTO:
+            abreviacoes.append(ABREVIACOES_PRODUTO[token_upper])
+            tokens_usados.add(i)
+
+    # Tokens restantes
+    tokens_restantes = [t for i, t in enumerate(tokens) if i not in tokens_usados]
+
+    return abreviacoes, tokens_restantes
 
 
 def get_prefixos_grupo(grupo: str) -> list:
@@ -400,6 +497,188 @@ def resolver_uf(uf: str, fonte: str = 'carteira') -> dict:
             'cidades': cidades
         }
     }
+
+
+# ============================================================
+# RESOLVER CLIENTE
+# Busca por CNPJ ou nome parcial (clientes nao-grupo)
+# ============================================================
+def resolver_cliente(termo: str, fonte: str = 'carteira') -> dict:
+    """
+    Resolve termo de cliente para pedidos da carteira/separacao.
+
+    Estrategias de busca:
+    1. CNPJ direto (formato XX.XXX.XXX, XXXXXXXX, ou completo)
+    2. Nome parcial (raz_social_red)
+
+    Diferente de resolver_grupo, esta funcao busca qualquer cliente,
+    nao apenas os grupos empresariais mapeados.
+
+    Args:
+        termo: Termo de busca (CNPJ ou nome parcial)
+        fonte: 'carteira', 'separacao' ou 'ambos'
+
+    Returns:
+        dict: {
+            'sucesso': bool,
+            'cliente': str,
+            'estrategia': str,  # 'CNPJ' ou 'NOME_PARCIAL'
+            'clientes_encontrados': list,  # Lista de clientes unicos
+            'pedidos': list,  # Lista de pedidos
+            'resumo': dict,
+            'erro': str (se sucesso=False)
+        }
+
+    Exemplo:
+        >>> resolver_cliente('Carrefour')
+        {
+            'sucesso': True,
+            'cliente': 'Carrefour',
+            'estrategia': 'NOME_PARCIAL',
+            'clientes_encontrados': [
+                {'cnpj': '45.543.915/0001-81', 'nome': 'CARREFOUR CENTRO', 'pedidos': 3}
+            ],
+            'pedidos': [...]
+        }
+    """
+    from app.carteira.models import CarteiraPrincipal
+    from app.separacao.models import Separacao
+    from sqlalchemy import or_
+    from collections import defaultdict
+    import re
+
+    termo = termo.strip()
+
+    resultado = {
+        'sucesso': False,
+        'termo_original': termo,
+        'estrategia': None,
+        'clientes_encontrados': [],
+        'pedidos': [],
+        'resumo': {}
+    }
+
+    if not termo:
+        resultado['erro'] = 'Termo de busca vazio'
+        return resultado
+
+    # Detectar se parece CNPJ
+    termo_limpo = re.sub(r'[^\d]', '', termo)
+    parece_cnpj = (
+        len(termo_limpo) >= 8 or
+        re.match(r'^\d{2}\.\d{3}\.\d{3}', termo) or
+        '/' in termo
+    )
+
+    # Escolher fonte
+    if fonte == 'carteira':
+        Model = CarteiraPrincipal
+        filtro_saldo = CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+    elif fonte == 'separacao':
+        Model = Separacao
+        filtro_saldo = Separacao.sincronizado_nf == False
+    else:  # ambos - priorizar carteira
+        Model = CarteiraPrincipal
+        filtro_saldo = CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+
+    itens = []
+
+    # Estrategia 1: CNPJ
+    if parece_cnpj and len(termo_limpo) >= 8:
+        resultado['estrategia'] = 'CNPJ'
+        itens = Model.query.filter(
+            or_(
+                Model.cnpj_cpf.ilike(f'%{termo}%'),
+                Model.cnpj_cpf.ilike(f'%{termo_limpo[:8]}%')
+            ),
+            filtro_saldo
+        ).all()
+
+    # Se nao encontrou por CNPJ, tentar nome parcial
+    if not itens:
+        resultado['estrategia'] = 'NOME_PARCIAL'
+        itens = Model.query.filter(
+            Model.raz_social_red.ilike(f'%{termo}%'),
+            filtro_saldo
+        ).all()
+
+    if not itens:
+        resultado['erro'] = f"Cliente '{termo}' nao encontrado"
+        resultado['sugestao'] = "Tente buscar por CNPJ (ex: 45.543.915) ou nome parcial (ex: Carrefour)"
+        return resultado
+
+    # Agrupar por CNPJ para identificar clientes unicos
+    clientes_dict = defaultdict(lambda: {
+        'cnpj': None,
+        'nome': None,
+        'cidade': None,
+        'uf': None,
+        'num_pedidos': 0,
+        'valor_total': 0.0
+    })
+
+    pedidos_dict = defaultdict(lambda: {
+        'num_pedido': None,
+        'cliente': None,
+        'cnpj': None,
+        'cidade': None,
+        'uf': None,
+        'total_itens': 0,
+        'valor_total': 0.0
+    })
+
+    for item in itens:
+        cnpj = item.cnpj_cpf
+        num = item.num_pedido
+
+        # Agrupar cliente
+        if clientes_dict[cnpj]['cnpj'] is None:
+            clientes_dict[cnpj]['cnpj'] = cnpj
+            clientes_dict[cnpj]['nome'] = item.raz_social_red
+            clientes_dict[cnpj]['cidade'] = item.nome_cidade
+            clientes_dict[cnpj]['uf'] = item.cod_uf
+
+        # Agrupar pedido
+        if pedidos_dict[num]['num_pedido'] is None:
+            pedidos_dict[num]['num_pedido'] = num
+            pedidos_dict[num]['cliente'] = item.raz_social_red
+            pedidos_dict[num]['cnpj'] = cnpj
+            pedidos_dict[num]['cidade'] = item.nome_cidade
+            pedidos_dict[num]['uf'] = item.cod_uf
+            clientes_dict[cnpj]['num_pedidos'] += 1
+
+        pedidos_dict[num]['total_itens'] += 1
+
+        # Calcular valor
+        if fonte == 'separacao':
+            valor_item = float(item.valor_saldo or 0)
+        else:
+            valor_item = float(item.qtd_saldo_produto_pedido or 0) * float(item.preco_produto_pedido or 0)
+
+        pedidos_dict[num]['valor_total'] += valor_item
+        clientes_dict[cnpj]['valor_total'] += valor_item
+
+    # Converter para listas
+    clientes_lista = list(clientes_dict.values())
+    clientes_lista.sort(key=lambda c: -c['valor_total'])
+
+    pedidos_lista = list(pedidos_dict.values())
+    pedidos_lista.sort(key=lambda p: -p['valor_total'])
+
+    resultado['sucesso'] = True
+    resultado['clientes_encontrados'] = clientes_lista
+    resultado['pedidos'] = pedidos_lista
+    resultado['fonte'] = fonte
+
+    # Resumo
+    total_valor = sum(p['valor_total'] for p in pedidos_lista)
+    resultado['resumo'] = {
+        'total_clientes': len(clientes_lista),
+        'total_pedidos': len(pedidos_lista),
+        'total_valor': round(total_valor, 2)
+    }
+
+    return resultado
 
 
 # ============================================================
@@ -842,11 +1121,15 @@ def resolver_produto(termo: str, limit: int = 10):
     Busca em: nome_produto, categoria_produto, subcategoria,
               tipo_embalagem, tipo_materia_prima
 
-    Estrategia:
-    1. Tokeniza o termo (ex: "pf mezzani" -> ["pf", "mezzani"])
-    2. Para cada token, busca match em qualquer campo
-    3. Combina resultados com AND (todos tokens devem dar match)
-    4. Ordena por relevancia (mais matches = maior score)
+    Estrategia MELHORADA (12/12/2025):
+    1. Tokeniza o termo (ex: "az vf mezzani" -> ["az", "vf", "mezzani"])
+    2. Detecta abreviacoes conhecidas (ex: "AZ VF" -> busca EXATA em tipo_materia_prima)
+    3. Tokens restantes: busca parcial ILIKE em todos os campos
+    4. Combina resultados com AND (todos criterios devem dar match)
+    5. Ordena por relevancia (mais matches = maior score)
+
+    IMPORTANTE: Abreviacoes como CI, CF, BR usam busca EXATA para evitar falsos positivos.
+    Ex: "CI" busca tipo_materia_prima='CI', NAO encontra "INTENSA" ou "ADOCICADA".
 
     Args:
         termo: Termo de busca (pode ser abreviacao, nome parcial, combinacao)
@@ -866,7 +1149,20 @@ def resolver_produto(termo: str, limit: int = 10):
     # Tokenizar
     tokens = termo.split()
 
-    # Campos para busca (ordem de prioridade para score)
+    # Detectar abreviacoes conhecidas
+    abreviacoes, tokens_restantes = detectar_abreviacoes(tokens)
+
+    # Mapeamento de nomes de campo para colunas SQLAlchemy
+    mapa_colunas = {
+        'cod_produto': CadastroPalletizacao.cod_produto,
+        'nome_produto': CadastroPalletizacao.nome_produto,
+        'tipo_materia_prima': CadastroPalletizacao.tipo_materia_prima,
+        'tipo_embalagem': CadastroPalletizacao.tipo_embalagem,
+        'categoria_produto': CadastroPalletizacao.categoria_produto,
+        'subcategoria': CadastroPalletizacao.subcategoria,
+    }
+
+    # Campos para busca PARCIAL (ordem de prioridade para score)
     campos_busca = [
         ('cod_produto', CadastroPalletizacao.cod_produto, 5),       # Match exato no codigo = alto score
         ('nome_produto', CadastroPalletizacao.nome_produto, 3),
@@ -876,22 +1172,43 @@ def resolver_produto(termo: str, limit: int = 10):
         ('subcategoria', CadastroPalletizacao.subcategoria, 1),
     ]
 
-    # Construir filtros: cada token deve dar match em ALGUM campo
-    filtros_por_token = []
-    for token in tokens:
+    filtros = []
+
+    # 1. Filtros para ABREVIACOES (busca EXATA ou LIKE no campo especifico)
+    for abrev in abreviacoes:
+        campo = abrev['campo']
+        valor = abrev['valor']
+        tipo = abrev['tipo']
+        coluna = mapa_colunas.get(campo)
+
+        if coluna is not None:
+            if tipo == 'exato':
+                # Busca EXATA (evita falsos positivos)
+                filtros.append(
+                    and_(coluna.isnot(None), func.upper(coluna) == valor.upper())
+                )
+            else:  # tipo == 'like'
+                # Busca LIKE (para prefixos como "BD%", "POUCH%")
+                filtros.append(
+                    and_(coluna.isnot(None), coluna.ilike(valor))
+                )
+
+    # 2. Filtros para TOKENS RESTANTES (busca PARCIAL em qualquer campo)
+    for token in tokens_restantes:
         filtros_token = []
         for nome_campo, coluna, peso in campos_busca:
             # ILIKE para match parcial, tratando NULL
             filtros_token.append(
                 and_(coluna.isnot(None), coluna.ilike(f'%{token}%'))
             )
-        filtros_por_token.append(or_(*filtros_token))
+        if filtros_token:
+            filtros.append(or_(*filtros_token))
 
-    # Todos os tokens devem dar match (AND entre tokens)
-    if filtros_por_token:
-        filtro_final = and_(*filtros_por_token)
-    else:
+    # Todos os filtros devem dar match (AND entre todos)
+    if not filtros:
         return []
+
+    filtro_final = and_(*filtros)
 
     # Buscar produtos ativos
     produtos = CadastroPalletizacao.query.filter(
@@ -908,7 +1225,16 @@ def resolver_produto(termo: str, limit: int = 10):
         score = 0
         matches = []
 
-        for token in tokens:
+        # Score para abreviacoes encontradas (peso alto pois foi busca exata)
+        for abrev in abreviacoes:
+            campo = abrev['campo']
+            valor_prod = getattr(prod, campo, None)
+            if valor_prod:
+                score += 4  # Peso alto para abreviacao exata
+                matches.append(f"{campo}:{abrev['descricao']}")
+
+        # Score para tokens restantes
+        for token in tokens_restantes:
             token_lower = token.lower()
 
             # Verificar match em cada campo

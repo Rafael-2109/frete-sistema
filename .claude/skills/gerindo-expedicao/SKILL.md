@@ -8,6 +8,32 @@ allowed-tools: Read, Bash, Glob, Grep
 
 Skill para consultas e operacoes logisticas da Nacom Goya.
 
+---
+
+## Indice
+
+1. [Quando Usar Esta Skill](#quando-usar-esta-skill)
+2. [DECISION TREE - Qual Script Usar?](#decision-tree---qual-script-usar)
+   - [Mapeamento Rapido](#mapeamento-rapido)
+   - [Regras de Decisao](#regras-de-decisao-em-ordem-de-prioridade)
+   - [Como Decidir (Raciocinio)](#como-decidir-raciocinio-obrigatorio)
+   - [Termos Ambiguos](#termos-ambiguos---pergunte-antes-de-agir)
+   - [Exemplos](#exemplos-de-boas-e-mas-escolhas)
+3. [Scripts Disponiveis](#scripts-disponiveis)
+   - [analisando_disponibilidade_estoque.py](#1-analisando_disponibilidade_estoquepy)
+   - [consultando_situacao_pedidos.py](#2-consultando_situacao_pedidospy)
+   - [consultando_produtos_estoque.py](#3-consultando_produtos_estoquepy)
+   - [calculando_leadtime_entrega.py](#4-calculando_leadtime_entregapy)
+   - [criando_separacao_pedidos.py](#5-criando_separacao_pedidospy)
+   - [consultando_programacao_producao.py](#6-consultando_programacao_producaopy)
+4. [Fluxo de Criacao de Separacao](#fluxo-de-criacao-de-separacao)
+5. [Glossario de Sinonimos](#glossario-de-sinonimos)
+6. [Grupos Empresariais](#grupos-empresariais)
+7. [Resolucao de Produtos](#resolucao-de-produtos)
+8. [Referencias](#referencias)
+
+---
+
 ## Quando Usar Esta Skill
 
 USE para:
@@ -22,6 +48,215 @@ NAO USE para:
 - Analise COMPLETA da carteira com decisoes (use o Agent `analista-carteira`)
 - Comunicacao com PCP ou Comercial (use o Agent)
 - Decisoes de priorizacao P1-P7 (use o Agent)
+
+---
+
+## DECISION TREE - Qual Script Usar?
+
+<decision_tree>
+SEMPRE consulte esta secao ANTES de executar qualquer script.
+A escolha correta evita resultados errados e retrabalho.
+</decision_tree>
+
+### Mapeamento Rapido
+
+<mapeamento>
+
+| Se a pergunta menciona... | Use este script | Com estes parametros |
+|---------------------------|-----------------|----------------------|
+| **PRODUTO + CLIENTE/GRUPO** ("quanto de X pro Y?") | `consultando_situacao_pedidos.py` | `--grupo Y --produto X` ou `--cliente Y --produto X` |
+| **Pedidos de um grupo** ("tem pedido do atacadao?") | `consultando_situacao_pedidos.py` | `--grupo atacadao` |
+| **Pedidos de um cliente** ("tem pedido do Carrefour?") | `consultando_situacao_pedidos.py` | `--cliente Carrefour` |
+| **Pedidos atrasados** | `consultando_situacao_pedidos.py` | `--atrasados` |
+| **Estoque de produto** ("quanto tem de X?") | `consultando_produtos_estoque.py` | `--produto X --completo` |
+| **Entradas recentes** ("chegou X?") | `consultando_produtos_estoque.py` | `--produto X --entradas` |
+| **Ruptura/falta** ("vai faltar X?") | `consultando_produtos_estoque.py` | `--ruptura --dias 7` |
+| **Quando pedido fica disponivel** | `analisando_disponibilidade_estoque.py` | `--pedido VCD123` |
+| **Disponibilidade de grupo** | `analisando_disponibilidade_estoque.py` | `--grupo atacadao --completude` |
+| **Prazo de entrega** ("quando chega?") | `calculando_leadtime_entrega.py` | `--pedido X --data-embarque Y` |
+| **Criar separacao** | `criando_separacao_pedidos.py` | `--pedido X --expedicao Y` (SEM --executar primeiro!) |
+| **Programacao de producao** | `consultando_programacao_producao.py` | `--listar --dias 7` |
+
+</mapeamento>
+
+### Regras de Decisao (em ordem de prioridade)
+
+<regras_decisao>
+
+1. **Se pergunta tem PRODUTO + CLIENTE/GRUPO juntos:**
+   → Use `consultando_situacao_pedidos.py --grupo X --produto Y` ou `--cliente X --produto Y`
+   → Exemplo: "quantas caixas de ketchup tem pro atacadao?" → `--grupo atacadao --produto ketchup`
+
+2. **Se pergunta e sobre PEDIDOS de um cliente/grupo (sem produto):**
+   → Use `consultando_situacao_pedidos.py --grupo X` ou `--cliente X`
+   → Exemplo: "tem pedido do assai?" → `--grupo assai`
+
+3. **Se pergunta e sobre ESTOQUE de produto (sem cliente):**
+   → Use `consultando_produtos_estoque.py --produto X --completo`
+   → Exemplo: "quanto tem de palmito?" → `--produto palmito --completo`
+
+4. **Se pergunta e sobre DISPONIBILIDADE de pedido:**
+   → Use `analisando_disponibilidade_estoque.py --pedido X`
+   → Exemplo: "quando VCD123 fica disponivel?" → `--pedido VCD123`
+
+5. **Se pergunta e sobre PRAZO de entrega:**
+   → Use `calculando_leadtime_entrega.py`
+   → Exemplo: "se embarcar amanha, quando chega?" → `--pedido X --data-embarque amanha`
+
+6. **Se for ACAO de criar separacao:**
+   → Use `criando_separacao_pedidos.py` (SEMPRE simular antes de executar!)
+   → Exemplo: "crie separacao do VCD123" → `--pedido VCD123 --expedicao [data]` (SEM --executar)
+
+</regras_decisao>
+
+### Como Decidir (Raciocinio Obrigatorio)
+
+<instrucao_raciocinio>
+ANTES de escolher qualquer script, faca este raciocinio mentalmente:
+
+**PASSO 1 - IDENTIFICAR**: O que o usuario quer saber?
+- E sobre PEDIDOS? (quem comprou, quanto, quando entregar)
+- E sobre ESTOQUE? (tem, vai faltar, chegou, quanto sobra)
+- E sobre DISPONIBILIDADE? (quando pedido fica pronto)
+- E sobre PRAZO? (quando chega se embarcar dia X)
+- E uma ACAO? (criar separacao)
+
+**PASSO 2 - VERIFICAR**: Tem cliente/grupo mencionado?
+- SIM + produto → `consultando_situacao_pedidos --grupo/--cliente + --produto`
+- SIM sem produto → `consultando_situacao_pedidos --grupo/--cliente`
+- NAO → provavelmente `consultando_produtos_estoque`
+
+**PASSO 3 - CONFIRMAR**: A escolha faz sentido?
+- Se escolhi ESTOQUE mas usuario perguntou "pro atacadao" → **ERRADO** (use PEDIDOS)
+- Se escolhi PEDIDOS mas usuario perguntou "quanto tem em estoque" → **ERRADO** (use ESTOQUE)
+- Se escolhi DISPONIBILIDADE mas usuario perguntou "quando chega" → **ERRADO** (use LEADTIME)
+
+**PASSO 4 - PERGUNTAR**: Se ainda em duvida apos os 3 passos → pergunte ao usuario!
+</instrucao_raciocinio>
+
+---
+
+### Termos Ambiguos - PERGUNTE antes de agir!
+
+<termos_ambiguos>
+
+**Se o usuario usar estes termos, PARE e PERGUNTE antes de executar.**
+
+#### "programacao de entrega" (CRITICO - 4 interpretacoes)
+
+| Opcao | Significado | Campo | Tabela |
+|-------|-------------|-------|--------|
+| A | Data que cliente solicitou | `data_entrega_pedido` | CarteiraPrincipal |
+| B | Data que vamos expedir | `expedicao` | Separacao |
+| C | Data que vai chegar no cliente | `agendamento` | Separacao |
+| D | Protocolo de agendamento | `protocolo` | Separacao |
+
+**PERGUNTAR:** "Voce quer saber: A) data que o cliente solicitou, B) data de expedicao programada, C) data de chegada no cliente, ou D) protocolo de agendamento?"
+
+#### "quantidade pendente"
+
+| Opcao | Significado | Fonte |
+|-------|-------------|-------|
+| Carteira | Ainda nao separado | CarteiraPrincipal |
+| Separacao | Separado mas nao faturado | Separacao (sincronizado_nf=False) |
+| Total | Ambos | Carteira + Separacao |
+
+**ACAO PADRAO:** Mostrar AMBOS e explicar: "Na carteira: X un | Em separacao: Y un | Total pendente: Z un"
+
+#### "itens" vs "unidades"
+
+**NUNCA usar "itens" sozinho.** SEMPRE especificar:
+- "X linhas de produto" (SKUs diferentes)
+- "X unidades" ou "X caixas" (quantidade)
+
+#### Multiplas lojas do mesmo grupo
+
+Se resultado tiver mais de 1 loja do mesmo grupo (ex: Atacadao):
+**PERGUNTAR:** "Encontrei pedidos em X lojas do [grupo]. Qual loja especificamente, ou quer ver todas?"
+
+#### Outros termos ambiguos
+
+| Termo | Possibilidades | O que PERGUNTAR |
+|-------|---------------|-----------------|
+| "quando fica disponivel?" | Pedido ou produto? | "Voce quer saber quando um PEDIDO fica disponivel ou quando um PRODUTO estara em estoque?" |
+| "situacao" | De que? | "Situacao de qual pedido ou produto?" |
+| "crie separacao" | Data faltando | "Para qual data de expedicao?" |
+
+</termos_ambiguos>
+
+### Exemplos de Boas e Mas Escolhas
+
+<exemplo_bom>
+Pergunta: "quantas caixas de ketchup tem pendentes pro atacadao 183"
+Escolha: consultando_situacao_pedidos.py --grupo atacadao --produto ketchup
+Motivo: Combina PRODUTO + GRUPO, que e o caso 1 das regras de decisao.
+</exemplo_bom>
+
+<exemplo_ruim>
+Pergunta: "quantas caixas de ketchup tem pendentes pro atacadao 183"
+Escolha ERRADA: consultando_produtos_estoque.py --produto ketchup
+Problema: Mostra catalogo de produtos, NAO pedidos do cliente. O usuario quer saber qtd pendente para o atacadao, nao estoque geral.
+</exemplo_ruim>
+
+<exemplo_bom>
+Pergunta: "quanto tem de palmito?"
+Escolha: consultando_produtos_estoque.py --produto palmito --completo
+Motivo: Pergunta sobre ESTOQUE de produto, sem mencionar cliente.
+</exemplo_bom>
+
+<exemplo_ruim>
+Pergunta: "quanto tem de palmito?"
+Escolha ERRADA: consultando_situacao_pedidos.py --produto palmito
+Problema: Mostra pedidos com palmito, NAO estoque. O usuario quer saber quantidade em estoque.
+</exemplo_ruim>
+
+<exemplo_bom>
+Pergunta: "quando o pedido VCD123 fica disponivel?"
+Escolha: analisando_disponibilidade_estoque.py --pedido VCD123
+Motivo: Pergunta sobre DISPONIBILIDADE de pedido especifico. Analisa estoque vs demanda.
+</exemplo_bom>
+
+<exemplo_ruim>
+Pergunta: "quando o pedido VCD123 fica disponivel?"
+Escolha ERRADA: consultando_situacao_pedidos.py --pedido VCD123 --status
+Problema: Mostra status atual do pedido, NAO projeta quando tera estoque disponivel.
+</exemplo_ruim>
+
+<exemplo_bom>
+Pergunta: "se embarcar amanha, quando chega em Manaus?"
+Escolha: calculando_leadtime_entrega.py --pedido X --data-embarque amanha
+Motivo: Calculo de PRAZO de entrega com data de embarque fornecida.
+</exemplo_bom>
+
+<exemplo_ruim>
+Pergunta: "se embarcar amanha, quando chega em Manaus?"
+Escolha ERRADA: analisando_disponibilidade_estoque.py --pedido X
+Problema: Analisa disponibilidade de estoque, NAO calcula prazo de transporte.
+</exemplo_ruim>
+
+<exemplo_bom>
+Pergunta: "crie separacao do VCD123 pra segunda"
+Escolha: criando_separacao_pedidos.py --pedido VCD123 --expedicao segunda
+Motivo: ACAO de criar separacao com data informada. SEMPRE simular primeiro (SEM --executar).
+</exemplo_bom>
+
+<exemplo_ruim>
+Pergunta: "crie separacao do VCD123 pra segunda"
+Escolha ERRADA: criando_separacao_pedidos.py --pedido VCD123 --expedicao segunda --executar
+Problema: NUNCA usar --executar sem simular primeiro e confirmar com usuario!
+</exemplo_ruim>
+
+<exemplo_bom>
+Pergunta: "o que vai ser produzido essa semana?"
+Escolha: consultando_programacao_producao.py --listar --dias 7 --por-dia
+Motivo: Consulta de PROGRAMACAO de producao futura com agrupamento por dia.
+</exemplo_bom>
+
+<exemplo_ruim>
+Pergunta: "o que vai ser produzido essa semana?"
+Escolha ERRADA: consultando_produtos_estoque.py --entradas
+Problema: Mostra entradas de estoque (producao JA realizada), NAO programacao futura.
+</exemplo_ruim>
 
 ---
 
@@ -79,15 +314,21 @@ python .claude/skills/gerindo-expedicao/scripts/consultando_situacao_pedidos.py 
 | Parametro | Descricao | Exemplo |
 |-----------|-----------|---------|
 | `--pedido` | Numero do pedido ou termo de busca | `--pedido VCD123` |
-| `--grupo` | Grupo empresarial | `--grupo atacadao` |
+| `--grupo` | Grupo empresarial (atacadao, assai, tenda) | `--grupo atacadao` |
+| `--cliente` | ⭐ **NOVO** CNPJ ou nome parcial do cliente | `--cliente Carrefour`, `--cliente "45.543.915"` |
+| `--produto` | Filtrar por produto (combina com --grupo ou --cliente) | `--produto palmito` |
 | `--atrasados` | Listar pedidos atrasados | flag |
 | `--verificar-bonificacao` | Verificar bonificacoes faltando | flag |
 | `--status` | Mostrar status detalhado | flag |
 | `--consolidar-com` | Buscar pedidos para consolidar | `--consolidar-com "assai 123"` |
-| `--produto` | Filtrar por produto | `--produto palmito` |
 | `--ate-data` | Data limite de expedicao | `--ate-data amanha`, `--ate-data 15/12` |
 | `--em-separacao` | Buscar em Separacao (nao CarteiraPrincipal) | flag |
 | `--limit` | Limite de resultados (default: 100) | `--limit 20` |
+
+**Combinacoes suportadas:**
+- `--grupo atacadao --produto ketchup` → Pedidos do Atacadao com ketchup
+- `--cliente Carrefour --produto palmito` → Pedidos do Carrefour com palmito
+- `--cliente "45.543.915"` → Busca por CNPJ
 
 ---
 
@@ -276,31 +517,71 @@ python .claude/skills/gerindo-expedicao/scripts/consultando_programacao_producao
 
 ---
 
+## Glossario de Sinonimos
+
+<glossario>
+O usuario pode usar diversos termos para a mesma coisa. Normalize antes de processar:
+
+| Termo Usuario | Termo Padrao | Significado |
+|---------------|--------------|-------------|
+| ketchup, catchup, ketichap | ketchup | Produto ketchup |
+| caixa, cx, unidade, un | unidade | Quantidade de produto |
+| loja, filial, unidade (cliente) | loja | Filial do cliente |
+| embarque, despacho, saida | expedicao | Data de envio |
+| chegada, recebimento, entrega | agendamento | Data de entrega no cliente |
+| pedido, PV, OV, venda | pedido | Ordem de venda |
+| cliente, comprador, destinatario | cliente | Quem compra |
+| transportadora, frete, carrier | transportadora | Empresa de transporte |
+| estoque, saldo, disponivel | estoque | Quantidade em armazem |
+| falta, ruptura, stockout | ruptura | Estoque insuficiente |
+| separacao, picking, sep | separacao | Preparacao de pedido |
+| programacao, OP, ordem producao | producao | Ordem de producao |
+</glossario>
+
+**Importante**: Quando o termo for ambiguo no contexto, PERGUNTE. Ex: "unidade" pode ser quantidade ou filial.
+
+---
+
 ## Grupos Empresariais
 
-| Grupo | Prefixos CNPJ | Comando |
-|-------|---------------|---------|
-| Atacadao | 93.209.76, 75.315.33, 00.063.96 | `--grupo atacadao` |
-| Assai | 06.057.22 | `--grupo assai` |
-| Tenda | 01.157.55 | `--grupo tenda` |
+→ Ver [reference.md](reference.md#grupos-empresariais) para prefixos CNPJ completos.
+
+**Comandos rápidos:** `--grupo atacadao`, `--grupo assai`, `--grupo tenda`
 
 ---
 
 ## Resolucao de Produtos
 
-Usuarios podem usar termos abreviados:
+A funcao `resolver_produto()` usa busca inteligente com abreviacoes mapeadas.
 
-| Abreviacao | Significado |
-|------------|-------------|
-| AZ | Azeitona |
-| PF | Preta Fatiada |
-| VF | Verde Fatiada |
-| VI | Verde Inteira |
-| BD | Balde |
-| IND | Industrial |
-| POUCH | Pouch |
+### Abreviacoes Suportadas (busca EXATA nos campos corretos)
 
-**Exemplo:** "pf mezzani" = Azeitona Preta Fatiada Mezzani
+<abreviacoes_produto>
+
+| Abreviacao | Campo | Tipo Busca | Significado |
+|------------|-------|------------|-------------|
+| **CI** | tipo_materia_prima | EXATO | Cogumelo Inteiro |
+| **CF** | tipo_materia_prima | EXATO | Cogumelo Fatiado |
+| **AZ VF** | tipo_materia_prima | EXATO | Azeitona Verde Fatiada |
+| **AZ PF** | tipo_materia_prima | EXATO | Azeitona Preta Fatiada |
+| **AZ VI** | tipo_materia_prima | EXATO | Azeitona Verde Inteira |
+| **AZ VSC** | tipo_materia_prima | EXATO | Azeitona Verde Sem Caroco |
+| **BR** | tipo_embalagem | EXATO→BARRICA | Barrica |
+| **BD** | tipo_embalagem | LIKE BD% | Balde |
+| **GL** | tipo_embalagem | LIKE GALAO% | Galao |
+| **VD** | tipo_embalagem | LIKE VIDRO% | Vidro |
+| **POUCH** | tipo_embalagem | LIKE POUCH% | Pouch |
+| **SACHET** | tipo_embalagem | LIKE SACHET% | Sachet |
+| **MEZZANI** | categoria_produto | EXATO | Marca Mezzani |
+| **BENASSI** | categoria_produto | EXATO | Marca Benassi |
+| **IND** | categoria_produto | EXATO→INDUSTRIA | Industria |
+
+</abreviacoes_produto>
+
+**Exemplos de busca:**
+- "ci" → Cogumelo Inteiro (busca EXATA, nao encontra "INTENSA")
+- "az vf bd" → Azeitona Verde Fatiada em Balde
+- "br mezzani" → Barrica Mezzani
 
 ---
 

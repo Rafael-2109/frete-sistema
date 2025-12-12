@@ -30,6 +30,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 from resolver_entidades import (
     resolver_pedido,
     resolver_produto_unico,
+    resolver_cliente,  # NOVO: GAP-01
     formatar_sugestao_produto,
     get_prefixos_grupo,
     listar_grupos_disponiveis,
@@ -180,6 +181,367 @@ def consultar_situacao_pedidos_grupo(args):
         'total_pedidos': len(pedidos_lista),
         'valor_total': total_valor,
         'mensagem': f"Sim! {len(pedidos_lista)} pedido(s) pendente(s) para {args.grupo.capitalize()}. Total: R$ {total_valor:,.2f}"
+    }
+
+    return resultado
+
+
+def consultar_situacao_pedidos_grupo_produto(args):
+    """
+    NOVO: Combina filtros --grupo + --produto para responder perguntas como:
+    "quantas caixas de ketchup tem pendentes pro atacadao?"
+    "pedidos do assai com palmito"
+
+    Fluxo:
+    1. Valida grupo (prefixos CNPJ)
+    2. Resolve produto (cod_produto via resolver_produto_unico)
+    3. Busca em CarteiraPrincipal com ambos os filtros
+    4. Agrupa por pedido, mostrando quantidade do produto especifico
+    """
+    from app.carteira.models import CarteiraPrincipal
+    from app.separacao.models import Separacao
+    from sqlalchemy import or_
+
+    resultado = {
+        'sucesso': True,
+        'tipo_analise': 'PEDIDOS_GRUPO_PRODUTO',
+        'grupo': args.grupo,
+        'termo_produto': args.produto,
+        'produto': None,
+        'fonte': 'separacao' if getattr(args, 'em_separacao', False) else 'carteira',
+        'pedidos': [],
+        'resumo': {}
+    }
+
+    # 1. Validar grupo
+    prefixos = get_prefixos_grupo(args.grupo)
+    if not prefixos:
+        resultado['sucesso'] = False
+        resultado['erro'] = f"Grupo '{args.grupo}' nao encontrado"
+        resultado['sugestao'] = f"Grupos validos: {listar_grupos_disponiveis()}"
+        return resultado
+
+    # 2. Resolver produto
+    produto_info, info_busca = resolver_produto_unico(args.produto)
+
+    if not produto_info:
+        resultado['sucesso'] = False
+        resultado['erro'] = f"Produto '{args.produto}' nao encontrado"
+        resultado['sugestao'] = formatar_sugestao_produto(info_busca)
+        if info_busca.get('candidatos'):
+            resultado['candidatos'] = info_busca['candidatos']
+        return resultado
+
+    cod_produto = produto_info['cod_produto']
+    nome_produto = produto_info['nome_produto']
+
+    resultado['produto'] = {
+        'cod_produto': cod_produto,
+        'nome_produto': nome_produto
+    }
+    resultado['busca'] = {
+        'encontrado': info_busca.get('encontrado', False),
+        'multiplos': info_busca.get('multiplos', False)
+    }
+    if info_busca.get('candidatos'):
+        resultado['busca']['outros_candidatos'] = info_busca['candidatos']
+
+    # 3. Construir filtros combinados
+    filtros_cnpj = [CarteiraPrincipal.cnpj_cpf.like(f'{p}%') for p in prefixos]
+
+    # Buscar na fonte correta
+    em_separacao = getattr(args, 'em_separacao', False)
+
+    if em_separacao:
+        # Buscar em Separacao
+        filtros_cnpj_sep = [Separacao.cnpj_cpf.like(f'{p}%') for p in prefixos]
+        itens = Separacao.query.filter(
+            or_(*filtros_cnpj_sep),
+            Separacao.cod_produto == cod_produto,
+            Separacao.sincronizado_nf == False,
+            Separacao.qtd_saldo > 0
+        ).all()
+    else:
+        # Buscar em CarteiraPrincipal
+        itens = CarteiraPrincipal.query.filter(
+            or_(*filtros_cnpj),
+            CarteiraPrincipal.cod_produto == cod_produto,
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+        ).all()
+
+    if not itens:
+        resultado['resumo'] = {
+            'total_pedidos': 0,
+            'total_quantidade': 0,
+            'total_valor': 0,
+            'mensagem': f"Nenhum pedido do {args.grupo.capitalize()} com {nome_produto}"
+        }
+        return resultado
+
+    # 4. Agrupar por pedido
+    pedidos_dict = defaultdict(lambda: {
+        'num_pedido': None,
+        'cliente': None,
+        'cnpj': None,
+        'cidade': None,
+        'uf': None,
+        'qtd_produto': 0.0,
+        'valor_produto': 0.0,
+        'total_itens': 0
+    })
+
+    for item in itens:
+        num = item.num_pedido
+        if pedidos_dict[num]['num_pedido'] is None:
+            pedidos_dict[num]['num_pedido'] = num
+            pedidos_dict[num]['cliente'] = item.raz_social_red
+            pedidos_dict[num]['cnpj'] = item.cnpj_cpf
+            pedidos_dict[num]['cidade'] = item.nome_cidade
+            pedidos_dict[num]['uf'] = item.cod_uf
+
+        if em_separacao:
+            qtd = float(item.qtd_saldo or 0)
+            valor = float(item.valor_saldo or 0)
+        else:
+            qtd = float(item.qtd_saldo_produto_pedido or 0)
+            preco = float(item.preco_produto_pedido or 0)
+            valor = qtd * preco
+
+        pedidos_dict[num]['qtd_produto'] += qtd  # type: ignore
+        pedidos_dict[num]['valor_produto'] += valor  # type: ignore
+        pedidos_dict[num]['total_itens'] += 1  # type: ignore
+
+    # Converter para lista
+    pedidos_lista = list(pedidos_dict.values())
+    pedidos_lista.sort(key=lambda x: -x['valor_produto'])  # type: ignore
+
+    resultado['pedidos'] = pedidos_lista[:args.limit]
+
+    # Resumo
+    total_qtd = sum(p['qtd_produto'] for p in pedidos_lista)
+    total_valor = sum(p['valor_produto'] for p in pedidos_lista)
+    fonte_texto = 'em separacao' if em_separacao else 'na carteira'
+
+    resultado['resumo'] = {
+        'total_pedidos': len(pedidos_lista),
+        'total_quantidade': total_qtd,
+        'total_valor': total_valor,
+        'mensagem': (
+            f"{len(pedidos_lista)} pedido(s) do {args.grupo.capitalize()} com {nome_produto} ({fonte_texto}). "
+            f"Total: {total_qtd:,.0f} unid, R$ {total_valor:,.2f}"
+        )
+    }
+
+    return resultado
+
+
+def consultar_situacao_pedidos_cliente(args):
+    """
+    GAP-01: Tem pedido do cliente X?
+    Busca pedidos de um cliente especifico por CNPJ ou nome parcial.
+
+    Diferente de --grupo, aceita qualquer cliente, nao apenas grupos mapeados.
+
+    Exemplos:
+        --cliente "Carrefour"
+        --cliente "45.543.915"
+        --cliente "12345678000199"
+    """
+    resultado = {
+        'sucesso': True,
+        'tipo_analise': 'PEDIDOS_CLIENTE',
+        'termo_cliente': args.cliente,
+        'pedidos': [],
+        'clientes_encontrados': [],
+        'resumo': {}
+    }
+
+    # Usar resolver_cliente
+    em_separacao = getattr(args, 'em_separacao', False)
+    fonte = 'separacao' if em_separacao else 'carteira'
+
+    cliente_info = resolver_cliente(args.cliente, fonte=fonte)
+
+    if not cliente_info['sucesso']:
+        resultado['sucesso'] = False
+        resultado['erro'] = cliente_info.get('erro', f"Cliente '{args.cliente}' nao encontrado")
+        resultado['sugestao'] = cliente_info.get('sugestao')
+        return resultado
+
+    resultado['estrategia'] = cliente_info['estrategia']
+    resultado['clientes_encontrados'] = cliente_info['clientes_encontrados']
+    resultado['pedidos'] = cliente_info['pedidos'][:args.limit]
+    resultado['fonte'] = fonte
+
+    # Resumo
+    total_clientes = cliente_info['resumo']['total_clientes']
+    total_pedidos = cliente_info['resumo']['total_pedidos']
+    total_valor = cliente_info['resumo']['total_valor']
+
+    resultado['resumo'] = {
+        'total_clientes': total_clientes,
+        'total_pedidos': total_pedidos,
+        'total_valor': total_valor,
+        'mensagem': (
+            f"{total_pedidos} pedido(s) de {total_clientes} cliente(s) encontrado(s) para '{args.cliente}'. "
+            f"Total: R$ {total_valor:,.2f}"
+        )
+    }
+
+    return resultado
+
+
+def consultar_situacao_pedidos_cliente_produto(args):
+    """
+    GAP-03: Combina filtros --cliente + --produto
+    Exemplo: "quanto de palmito tem pro Carrefour?"
+
+    Fluxo:
+    1. Resolve cliente (CNPJ ou nome parcial)
+    2. Resolve produto
+    3. Busca pedidos combinando ambos os filtros
+    """
+    from app.carteira.models import CarteiraPrincipal
+    from app.separacao.models import Separacao
+    from sqlalchemy import or_
+
+    resultado = {
+        'sucesso': True,
+        'tipo_analise': 'PEDIDOS_CLIENTE_PRODUTO',
+        'termo_cliente': args.cliente,
+        'termo_produto': args.produto,
+        'cliente': None,
+        'produto': None,
+        'fonte': 'separacao' if getattr(args, 'em_separacao', False) else 'carteira',
+        'pedidos': [],
+        'resumo': {}
+    }
+
+    em_separacao = getattr(args, 'em_separacao', False)
+    fonte = 'separacao' if em_separacao else 'carteira'
+
+    # 1. Resolver cliente
+    cliente_info = resolver_cliente(args.cliente, fonte=fonte)
+
+    if not cliente_info['sucesso']:
+        resultado['sucesso'] = False
+        resultado['erro'] = cliente_info.get('erro', f"Cliente '{args.cliente}' nao encontrado")
+        resultado['sugestao'] = cliente_info.get('sugestao')
+        return resultado
+
+    # Pegar CNPJs encontrados
+    cnpjs_encontrados = [c['cnpj'] for c in cliente_info['clientes_encontrados']]
+
+    resultado['cliente'] = {
+        'termo': args.cliente,
+        'estrategia': cliente_info['estrategia'],
+        'total_encontrados': len(cnpjs_encontrados),
+        'clientes': cliente_info['clientes_encontrados'][:5]  # Limitar para nao poluir
+    }
+
+    # 2. Resolver produto
+    produto_info, info_busca = resolver_produto_unico(args.produto)
+
+    if not produto_info:
+        resultado['sucesso'] = False
+        resultado['erro'] = f"Produto '{args.produto}' nao encontrado"
+        resultado['sugestao'] = formatar_sugestao_produto(info_busca)
+        if info_busca.get('candidatos'):
+            resultado['candidatos'] = info_busca['candidatos']
+        return resultado
+
+    cod_produto = produto_info['cod_produto']
+    nome_produto = produto_info['nome_produto']
+
+    resultado['produto'] = {
+        'cod_produto': cod_produto,
+        'nome_produto': nome_produto
+    }
+    resultado['busca_produto'] = {
+        'encontrado': info_busca.get('encontrado', False),
+        'multiplos': info_busca.get('multiplos', False)
+    }
+    if info_busca.get('candidatos'):
+        resultado['busca_produto']['outros_candidatos'] = info_busca['candidatos']
+
+    # 3. Buscar pedidos combinando cliente + produto
+    if em_separacao:
+        filtros_cnpj = [Separacao.cnpj_cpf == cnpj for cnpj in cnpjs_encontrados]
+        itens = Separacao.query.filter(
+            or_(*filtros_cnpj),
+            Separacao.cod_produto == cod_produto,
+            Separacao.sincronizado_nf == False,
+            Separacao.qtd_saldo > 0
+        ).all()
+    else:
+        filtros_cnpj = [CarteiraPrincipal.cnpj_cpf == cnpj for cnpj in cnpjs_encontrados]
+        itens = CarteiraPrincipal.query.filter(
+            or_(*filtros_cnpj),
+            CarteiraPrincipal.cod_produto == cod_produto,
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+        ).all()
+
+    if not itens:
+        resultado['resumo'] = {
+            'total_pedidos': 0,
+            'total_quantidade': 0,
+            'total_valor': 0,
+            'mensagem': f"Nenhum pedido de '{args.cliente}' com {nome_produto}"
+        }
+        return resultado
+
+    # 4. Agrupar por pedido
+    pedidos_dict = defaultdict(lambda: {
+        'num_pedido': None,
+        'cliente': None,
+        'cnpj': None,
+        'cidade': None,
+        'uf': None,
+        'qtd_produto': 0.0,
+        'valor_produto': 0.0,
+        'total_itens': 0
+    })
+
+    for item in itens:
+        num = item.num_pedido
+        if pedidos_dict[num]['num_pedido'] is None:
+            pedidos_dict[num]['num_pedido'] = num
+            pedidos_dict[num]['cliente'] = item.raz_social_red
+            pedidos_dict[num]['cnpj'] = item.cnpj_cpf
+            pedidos_dict[num]['cidade'] = item.nome_cidade
+            pedidos_dict[num]['uf'] = item.cod_uf
+
+        if em_separacao:
+            qtd = float(item.qtd_saldo or 0)
+            valor = float(item.valor_saldo or 0)
+        else:
+            qtd = float(item.qtd_saldo_produto_pedido or 0)
+            preco = float(item.preco_produto_pedido or 0)
+            valor = qtd * preco
+
+        pedidos_dict[num]['qtd_produto'] += qtd
+        pedidos_dict[num]['valor_produto'] += valor
+        pedidos_dict[num]['total_itens'] += 1
+
+    # Converter para lista
+    pedidos_lista = list(pedidos_dict.values())
+    pedidos_lista.sort(key=lambda x: -x['valor_produto'])
+
+    resultado['pedidos'] = pedidos_lista[:args.limit]
+
+    # Resumo
+    total_qtd = sum(p['qtd_produto'] for p in pedidos_lista)
+    total_valor = sum(p['valor_produto'] for p in pedidos_lista)
+    fonte_texto = 'em separacao' if em_separacao else 'na carteira'
+
+    resultado['resumo'] = {
+        'total_pedidos': len(pedidos_lista),
+        'total_quantidade': total_qtd,
+        'total_valor': total_valor,
+        'mensagem': (
+            f"{len(pedidos_lista)} pedido(s) de '{args.cliente}' com {nome_produto} ({fonte_texto}). "
+            f"Total: {total_qtd:,.0f} unid, R$ {total_valor:,.2f}"
+        )
     }
 
     return resultado
@@ -981,6 +1343,10 @@ def main():
         epilog="""
 Exemplos:
   python consultando_situacao_pedidos.py --grupo atacadao
+  python consultando_situacao_pedidos.py --grupo atacadao --produto ketchup  # combina grupo + produto
+  python consultando_situacao_pedidos.py --cliente "Carrefour"              # NOVO: busca por cliente (GAP-01)
+  python consultando_situacao_pedidos.py --cliente "45.543.915"             # NOVO: busca por CNPJ
+  python consultando_situacao_pedidos.py --cliente "Carrefour" --produto palmito  # NOVO: cliente + produto (GAP-03)
   python consultando_situacao_pedidos.py --atrasados
   python consultando_situacao_pedidos.py --verificar-bonificacao
   python consultando_situacao_pedidos.py --pedido VCD123 --status
@@ -994,6 +1360,7 @@ Exemplos:
     # Argumentos
     parser.add_argument('--pedido', help='Numero do pedido ou termo de busca')
     parser.add_argument('--grupo', help='Grupo empresarial (atacadao, assai, tenda)')
+    parser.add_argument('--cliente', help='CNPJ ou nome parcial do cliente (ex: "Carrefour", "45.543.915")')
     parser.add_argument('--atrasados', action='store_true', help='Listar pedidos atrasados')
     parser.add_argument('--verificar-bonificacao', action='store_true', help='Verificar bonificacoes faltando')
     parser.add_argument('--status', action='store_true', help='Mostrar status detalhado do pedido')
@@ -1008,8 +1375,17 @@ Exemplos:
     app = create_app()
     with app.app_context():
         # Determinar qual analise executar
-        if args.grupo:
+        # IMPORTANTE: Verificar combinacoes ANTES dos filtros individuais
+        if args.grupo and args.produto:
+            resultado = consultar_situacao_pedidos_grupo_produto(args)
+        elif args.cliente and args.produto:
+            # GAP-03: cliente + produto
+            resultado = consultar_situacao_pedidos_cliente_produto(args)
+        elif args.grupo:
             resultado = consultar_situacao_pedidos_grupo(args)
+        elif args.cliente:
+            # GAP-01: cliente (CNPJ ou nome)
+            resultado = consultar_situacao_pedidos_cliente(args)
         elif args.atrasados:
             resultado = consultar_situacao_pedidos_atrasados(args)
         elif args.verificar_bonificacao:
@@ -1023,7 +1399,7 @@ Exemplos:
         else:
             resultado = {
                 'sucesso': False,
-                'erro': 'Informe ao menos um filtro: --grupo, --atrasados, --verificar-bonificacao, --pedido com --status, --consolidar-com, ou --produto'
+                'erro': 'Informe ao menos um filtro: --grupo, --cliente, --atrasados, --verificar-bonificacao, --pedido com --status, --consolidar-com, ou --produto'
             }
 
         print(json.dumps(resultado, ensure_ascii=False, indent=2, default=decimal_default))

@@ -125,7 +125,15 @@ Documentacao tecnica das tabelas, campos e constantes utilizadas pelos scripts.
 
 ## Grupos Empresariais
 
-Prefixos CNPJ para identificacao de grupos:
+> **FONTE ÚNICA** - Esta é a referência canônica para identificação de grupos por CNPJ.
+
+| Grupo | Prefixos CNPJ (formatados) | Comando |
+|-------|----------------------------|---------|
+| `atacadao` | 93.209.76, 75.315.33, 00.063.96 | `--grupo atacadao` |
+| `assai` | 06.057.22 | `--grupo assai` |
+| `tenda` | 01.157.55 | `--grupo tenda` |
+
+**IMPORTANTE:** CNPJs no banco estão FORMATADOS com pontos: `93.209.765/XXXX-XX`
 
 ```python
 GRUPOS_EMPRESARIAIS = {
@@ -133,6 +141,18 @@ GRUPOS_EMPRESARIAIS = {
     'assai': ['06.057.22'],
     'tenda': ['01.157.55']
 }
+```
+
+**Como buscar (usar formato com pontos):**
+```sql
+-- Atacadao
+WHERE cnpj_cpf LIKE '93.209.76%' OR cnpj_cpf LIKE '75.315.33%' OR cnpj_cpf LIKE '00.063.96%'
+
+-- Assai
+WHERE cnpj_cpf LIKE '06.057.22%'
+
+-- Tenda
+WHERE cnpj_cpf LIKE '01.157.55%'
 ```
 
 ---
@@ -258,16 +278,27 @@ normalizar_texto("Sao Paulo")  # -> "sao paulo"
 
 ## Glossario - Termos do Dominio
 
+> **FONTE ÚNICA** - Esta é a referência canônica para termos do domínio logístico.
+
 | Termo | Significado |
 |-------|-------------|
 | Matar pedido | Completar 100% do pedido |
 | Ruptura | Falta de estoque para atender demanda |
 | Falta absoluta | Estoque < demanda (mesmo sem outros pedidos) |
 | Falta relativa | Estoque comprometido com outros pedidos |
+| Travando a carteira | Pedidos consumindo estoque que impede outros |
 | RED | Redespacho via SP |
 | FOB | Cliente coleta no CD |
 | CIF | Nacom entrega no cliente |
 | BD IND | Balde Industrial |
-| D-2, D-1, D0 | Dias relativos a data de entrega |
 | BD | Balde |
+| D-2, D-1, D0 | Dias relativos a data de entrega |
+| Chegou? | Verificar entrada recente no estoque |
+| Falta embarcar | Qtd na carteira ainda não separada |
+| Vai sobrar | Estoque após atender toda demanda |
+| Mandar junto | Consolidar entregas na mesma viagem |
+| Criar separação | Gerar registros em Separacao com status ABERTO |
+| Enviar o que tem | Separar apenas quantidade disponível em estoque |
+
+**Nota:** Para sinônimos de entrada do usuário (ketchup→catchup, caixa→unidade), ver [SKILL.md#glossario-de-sinonimos](SKILL.md#glossario-de-sinonimos).
 

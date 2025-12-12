@@ -93,35 +93,9 @@ PCP:
 
 ## 1. Grupos Empresariais (por CNPJ)
 
-Clientes sao identificados por grupo empresarial atraves dos primeiros 8 digitos do CNPJ.
+→ Ver [reference.md#grupos-empresariais](../skills/gerindo-expedicao/reference.md#grupos-empresariais) para prefixos CNPJ e queries SQL.
 
-**IMPORTANTE:** CNPJs no banco estao FORMATADOS com pontos e barras: `93.209.765/XXXX-XX`
-
-| Grupo | Nome Completo | Prefixos CNPJ (formatados) |
-|-------|---------------|----------------------------|
-| `atacadao` | Rede Atacadao | 93.209.76, 75.315.33, 00.063.96 |
-| `assai` | Rede Assai (Sendas) | 06.057.22 |
-| `tenda` | Rede Tenda | 01.157.55 |
-
-**Como buscar (usar formato com pontos):**
-```sql
--- Atacadao
-WHERE cnpj_cpf LIKE '93.209.76%'
-   OR cnpj_cpf LIKE '75.315.33%'
-   OR cnpj_cpf LIKE '00.063.96%'
-
--- Assai
-WHERE cnpj_cpf LIKE '06.057.22%'
-
--- Tenda
-WHERE cnpj_cpf LIKE '01.157.55%'
-```
-
-**Busca por nome (complementar):**
-```sql
-WHERE raz_social_red ILIKE '%atacadao%'
-   OR raz_social_red ILIKE '%assai%'
-```
+**Resumo rápido:** Atacadão, Assaí, Tenda - identificados por prefixo CNPJ.
 
 ---
 
@@ -322,17 +296,7 @@ concentracao = valor_item / valor_total_pedido
 
 ## 12. Termos Comuns (Glossario)
 
-| Termo do Usuario | Significado Tecnico |
-|------------------|---------------------|
-| "Matar pedido" | Completar 100% do pedido |
-| "Ruptura" | Falta de estoque para atender demanda |
-| "Travando a carteira" | Pedidos consumindo estoque que impede outros |
-| "Chegou?" | Verificar entrada recente no estoque |
-| "Falta embarcar" | qtd na carteira ainda nao separada |
-| "Vai sobrar" | Estoque apos atender toda demanda |
-| "Mandar junto" | Consolidar entregas na mesma viagem |
-| "Criar separacao" | Gerar registros em Separacao com status ABERTO |
-| "Enviar o que tem" | Separar apenas quantidade disponivel em estoque |
+→ Ver [reference.md#glossario-termos-do-dominio](../skills/gerindo-expedicao/reference.md#glossario---termos-do-dominio) para glossário completo.
 
 ---
 
