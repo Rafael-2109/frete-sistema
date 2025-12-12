@@ -131,6 +131,9 @@
             <button class="btn btn-success me-2" onclick="corrigirSelecionados()" id="btnCorrigir" disabled>
                 <i class="bi bi-check-circle me-1"></i> Corrigir Selecionados
             </button>
+            <button class="btn btn-outline-danger me-2" onclick="resetarErros()" id="btnResetarErros">
+                <i class="bi bi-arrow-counterclockwise me-1"></i> Resetar Erros
+            </button>
             <a href="{{ url_for('financeiro.correcao_datas_api_exportar') }}" class="btn btn-outline-secondary">
                 <i class="bi bi-file-earmark-excel me-1"></i> Exportar Excel
             </a>
@@ -519,6 +522,35 @@
         } catch (error) {
             console.error('Erro:', error);
             alert('Erro na correção');
+        } finally {
+            hideLoading();
+        }
+    }
+
+    // Resetar registros com erro para pendente
+    async function resetarErros() {
+        if (!confirm('Resetar todos os registros com erro para pendente?')) return;
+
+        showLoading('Resetando registros...');
+
+        try {
+            const response = await fetch('/financeiro/correcao-datas/api/resetar-erros', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            const data = await response.json();
+
+            if (data.sucesso) {
+                alert(`${data.resetados} registro(s) resetado(s) para pendente`);
+                carregarDados();
+                atualizarEstatisticas();
+            } else {
+                alert('Erro: ' + data.erro);
+            }
+        } catch (error) {
+            console.error('Erro:', error);
+            alert('Erro ao resetar');
         } finally {
             hideLoading();
         }

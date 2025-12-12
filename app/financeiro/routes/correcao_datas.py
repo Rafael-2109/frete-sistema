@@ -95,6 +95,19 @@ def correcao_datas_api_estatisticas():
         return jsonify({'sucesso': False, 'erro': str(e)}), 500
 
 
+@financeiro_bp.route('/correcao-datas/api/resetar-erros', methods=['POST'])
+@login_required
+def correcao_datas_api_resetar_erros():
+    """Reseta registros com erro para pendente"""
+    try:
+        service = CorrecaoDatasService()
+        resultado = service.resetar_erros()
+        return jsonify(resultado)
+    except Exception as e:
+        logger.error(f"Erro ao resetar: {e}")
+        return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+
 @financeiro_bp.route('/correcao-datas/api/diagnosticar', methods=['POST'])
 @login_required
 def correcao_datas_api_diagnosticar():

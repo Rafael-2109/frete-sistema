@@ -229,8 +229,8 @@ class CorrecaoDatasService:
                     # Buscar data das linhas
                     data_linhas = self._buscar_data_linhas(m['id'])
 
-                    # Extrair número da NF do nome ou ref
-                    numero_nf = self._extrair_numero_nf(m['name'], m.get('ref', ''))
+                    # Buscar número da NF
+                    numero_nf = self._buscar_numero_nf(m['id'])
 
                     # Verificar se realmente precisa correção
                     data_correta_dt = datetime.strptime(data_original, '%Y-%m-%d').date()
@@ -328,14 +328,20 @@ class CorrecaoDatasService:
             logger.warning(f"Erro ao buscar data das linhas do move {move_id}: {e}")
             return None
 
-    def _extrair_numero_nf(self, nome: str, ref: str) -> Optional[str]:
-        """Extrai número da NF do nome ou referência"""
-        import re
-        # Tentar extrair do formato "NF-e: 123456"
-        match = re.search(r'NF-?e?:?\s*(\d+)', ref or '')
-        if match:
-            return match.group(1)
-        return None
+    def _buscar_numero_nf(self, move_id: int) -> Optional[str]:
+        """Busca número da NF via campo l10n_br_numero_nota_fiscal"""
+        try:
+            move = self.odoo.execute_kw(
+                'account.move', 'read',
+                [[move_id]],
+                {'fields': ['l10n_br_numero_nota_fiscal']}
+            )
+            if move and move[0].get('l10n_br_numero_nota_fiscal'):
+                return str(move[0]['l10n_br_numero_nota_fiscal'])
+            return None
+        except Exception as e:
+            logger.warning(f"Erro ao buscar número NF do move {move_id}: {e}")
+            return None
 
     def listar_pendentes(
         self,
@@ -497,34 +503,55 @@ class CorrecaoDatasService:
         Corrige a data de um documento no Odoo.
 
         Fluxo:
-        1. Voltar documento para draft
-        2. Atualizar date
-        3. Repostar documento
+        1. Desbloquear período fiscal temporariamente
+        2. Voltar documento para draft
+        3. Atualizar date
+        4. Repostar documento
+        5. Restaurar bloqueio
         """
+        lock_date_original = None
+        company_id = None
+
         try:
-            # 1. Verificar estado atual
+            # 1. Verificar estado atual e empresa
             move = self.odoo.execute_kw(
                 'account.move', 'read',
                 [[move_id]],
-                {'fields': ['state']}
+                {'fields': ['state', 'company_id']}
             )
 
             if not move:
                 raise Exception(f"Documento {move_id} não encontrado")
 
             was_posted = move[0]['state'] == 'posted'
+            company_id = move[0]['company_id'][0] if move[0]['company_id'] else 1
 
-            # 2. Voltar para draft se estava posted
+            # 2. Salvar e remover lock_date da empresa
+            company = self.odoo.execute_kw(
+                'res.company', 'read',
+                [[company_id]],
+                {'fields': ['fiscalyear_lock_date']}
+            )
+            lock_date_original = company[0].get('fiscalyear_lock_date') if company else None
+
+            if lock_date_original:
+                logger.info(f"Removendo lock_date temporariamente (era: {lock_date_original})")
+                self.odoo.execute_kw(
+                    'res.company', 'write',
+                    [[company_id], {'fiscalyear_lock_date': False}]
+                )
+
+            # 3. Voltar para draft se estava posted
             if was_posted:
                 self.odoo.execute_kw('account.move', 'button_draft', [[move_id]])
 
-            # 3. Atualizar a data
+            # 4. Atualizar a data
             self.odoo.execute_kw(
                 'account.move', 'write',
                 [[move_id], {'date': data_correta}]
             )
 
-            # 4. Atualizar linhas
+            # 5. Atualizar linhas
             line_ids = self.odoo.execute_kw(
                 'account.move.line', 'search',
                 [[['move_id', '=', move_id]]]
@@ -536,7 +563,7 @@ class CorrecaoDatasService:
                     [line_ids, {'date': data_correta}]
                 )
 
-            # 5. Repostar se estava posted
+            # 6. Repostar se estava posted
             if was_posted:
                 self.odoo.execute_kw('account.move', 'action_post', [[move_id]])
 
@@ -546,6 +573,101 @@ class CorrecaoDatasService:
         except Exception as e:
             logger.error(f"Erro ao corrigir documento {move_id}: {e}")
             raise
+
+        finally:
+            # SEMPRE restaurar lock_date
+            if lock_date_original and company_id:
+                try:
+                    logger.info(f"Restaurando lock_date para {lock_date_original}")
+                    self.odoo.execute_kw(
+                        'res.company', 'write',
+                        [[company_id], {'fiscalyear_lock_date': lock_date_original}]
+                    )
+                except Exception as restore_error:
+                    logger.error(f"CRÍTICO: Falha ao restaurar lock_date: {restore_error}")
+
+    def atualizar_numeros_nf(self) -> Dict:
+        """
+        Atualiza números de NF nos registros existentes - OTIMIZADO.
+        Faz uma única chamada ao Odoo para buscar todos os números.
+        """
+        if not self._conectar_odoo():
+            return {'sucesso': False, 'erro': 'Falha na conexão com Odoo'}
+
+        resultado = {'sucesso': True, 'atualizados': 0, 'erros': 0}
+
+        try:
+            # 1. Buscar registros sem numero_nf
+            registros = CorrecaoDataNFCredito.query.filter(
+                (CorrecaoDataNFCredito.numero_nf == None) |
+                (CorrecaoDataNFCredito.numero_nf == '')
+            ).all()
+
+            if not registros:
+                logger.info("Nenhum registro sem número de NF")
+                return resultado
+
+            # 2. Coletar todos os move_ids
+            move_ids = [r.odoo_move_id for r in registros]
+            logger.info(f"Buscando números de NF para {len(move_ids)} registros...")
+
+            # 3. Buscar TODOS os números em UMA única chamada ao Odoo
+            moves_data = self.odoo.execute_kw(
+                'account.move', 'read',
+                [move_ids],
+                {'fields': ['id', 'l10n_br_numero_nota_fiscal']}
+            )
+
+            # 4. Criar mapa move_id -> numero_nf
+            nf_por_move = {
+                m['id']: str(m['l10n_br_numero_nota_fiscal'])
+                for m in moves_data
+                if m.get('l10n_br_numero_nota_fiscal')
+            }
+
+            logger.info(f"Encontrados {len(nf_por_move)} números de NF no Odoo")
+
+            # 5. Atualizar registros locais
+            for reg in registros:
+                numero = nf_por_move.get(reg.odoo_move_id)
+                if numero:
+                    reg.numero_nf = numero
+                    resultado['atualizados'] += 1
+
+            # 6. Commit único
+            db.session.commit()
+            logger.info(f"Atualização concluída: {resultado}")
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro na atualização: {e}")
+            resultado['sucesso'] = False
+            resultado['erro'] = str(e)
+
+        return resultado
+
+    def resetar_erros(self) -> Dict:
+        """Reseta registros com status 'erro' para 'pendente'"""
+        resultado = {'sucesso': True, 'resetados': 0}
+
+        try:
+            registros = CorrecaoDataNFCredito.query.filter_by(status='erro').all()
+
+            for reg in registros:
+                reg.status = 'pendente'
+                reg.erro_mensagem = None
+                resultado['resetados'] += 1
+
+            db.session.commit()
+            logger.info(f"Resetados {resultado['resetados']} registros")
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao resetar: {e}")
+            resultado['sucesso'] = False
+            resultado['erro'] = str(e)
+
+        return resultado
 
     def obter_estatisticas(self) -> Dict:
         """Retorna estatísticas do diagnóstico"""
