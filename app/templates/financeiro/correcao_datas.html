@@ -1,0 +1,590 @@
+{% extends "base.html" %}
+
+{% block title %}Correção de Datas - NFs de Crédito{% endblock %}
+
+{% block extra_css %}
+<style>
+    .hub-container {
+        max-width: 1800px;
+        margin: 0 auto;
+    }
+
+    /* Stats Cards */
+    .stat-card {
+        border: none;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        transition: all 0.3s ease;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    }
+
+    .stat-card .stat-value {
+        font-size: 1.8rem;
+        font-weight: 700;
+    }
+
+    .stat-card .stat-label {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    /* Tabela */
+    .table-correcao {
+        font-size: 0.85rem;
+    }
+
+    .table-correcao th {
+        background: #f8f9fa;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        font-weight: 600;
+        border-bottom: 2px solid #dee2e6;
+    }
+
+    .table-correcao .data-errada {
+        background: #f8d7da;
+        color: #721c24;
+        font-weight: 600;
+    }
+
+    .table-correcao .data-correta {
+        background: #d4edda;
+        color: #155724;
+        font-weight: 600;
+    }
+
+    /* Status badges */
+    .status-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-weight: 500;
+    }
+
+    .status-pendente { background: #fff3cd; color: #856404; }
+    .status-corrigido { background: #28a745; color: white; }
+    .status-erro { background: #dc3545; color: white; }
+    .status-ignorado { background: #6c757d; color: white; }
+
+    /* Botões de ação */
+    .btn-action {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.8rem;
+    }
+
+    /* Filtros */
+    .filter-card {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 1rem;
+    }
+
+    /* Checkbox */
+    .form-check-input:checked {
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+    }
+
+    /* Loading */
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255,255,255,0.8);
+        z-index: 9999;
+        display: none;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .loading-overlay.active {
+        display: flex;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="hub-container p-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1">
+                <i class="bi bi-calendar-check me-2"></i>
+                Correção de Datas - NFs de Crédito
+            </h4>
+            <p class="text-muted mb-0">
+                Identifica e corrige datas de lançamento incorretas em notas de crédito
+            </p>
+        </div>
+        <div>
+            <button class="btn btn-outline-primary me-2" onclick="executarDiagnostico()">
+                <i class="bi bi-search me-1"></i> Diagnosticar Odoo
+            </button>
+            <button class="btn btn-success me-2" onclick="corrigirSelecionados()" id="btnCorrigir" disabled>
+                <i class="bi bi-check-circle me-1"></i> Corrigir Selecionados
+            </button>
+            <a href="{{ url_for('financeiro.correcao_datas_api_exportar') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-file-earmark-excel me-1"></i> Exportar Excel
+            </a>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card stat-card">
+                <div class="card-body text-center">
+                    <div class="stat-value text-primary" id="statTotal">{{ stats.total }}</div>
+                    <div class="stat-label text-muted">Total Diagnosticado</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card">
+                <div class="card-body text-center">
+                    <div class="stat-value text-warning" id="statPendente">{{ stats.pendente }}</div>
+                    <div class="stat-label text-muted">Pendentes</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card">
+                <div class="card-body text-center">
+                    <div class="stat-value text-success" id="statCorrigido">{{ stats.corrigido }}</div>
+                    <div class="stat-label text-muted">Corrigidos</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card">
+                <div class="card-body text-center">
+                    <div class="stat-value text-danger" id="statErro">{{ stats.erro }}</div>
+                    <div class="stat-label text-muted">Com Erro</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="filter-card mb-4">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label small">Status</label>
+                <select class="form-select form-select-sm" id="filtroStatus">
+                    <option value="">Todos</option>
+                    <option value="pendente" selected>Pendente</option>
+                    <option value="corrigido">Corrigido</option>
+                    <option value="erro">Com Erro</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">Mês Emissão</label>
+                <input type="month" class="form-control form-control-sm" id="filtroMes">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small">Documento</label>
+                <input type="text" class="form-control form-control-sm" id="filtroDocumento"
+                       placeholder="Ex: RDVEND/2024/00621">
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-primary btn-sm w-100" onclick="carregarDados()">
+                    <i class="bi bi-funnel me-1"></i> Filtrar
+                </button>
+            </div>
+            <div class="col-md-3 text-end">
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="checkbox" id="selecionarTodos" onclick="toggleSelecionarTodos()">
+                    <label class="form-check-label small" for="selecionarTodos">Selecionar Todos</label>
+                </div>
+                <span class="badge bg-primary ms-2" id="countSelecionados">0 selecionados</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela -->
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
+                <table class="table table-hover table-correcao mb-0">
+                    <thead>
+                        <tr>
+                            <th style="width: 40px;">
+                                <input class="form-check-input" type="checkbox" id="checkAll" onclick="toggleSelecionarTodos()">
+                            </th>
+                            <th>Documento</th>
+                            <th>NF</th>
+                            <th>Parceiro</th>
+                            <th class="text-center">Data Emissão</th>
+                            <th class="text-center">Data Lanç. (Antes)</th>
+                            <th class="text-center">Data Linhas (Antes)</th>
+                            <th class="text-center">Data Correta</th>
+                            <th class="text-center">Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelaBody">
+                        <tr>
+                            <td colspan="10" class="text-center py-5 text-muted">
+                                <i class="bi bi-arrow-clockwise me-2"></i>
+                                Carregando dados...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Paginação -->
+    <div class="d-flex justify-content-between align-items-center mt-3">
+        <div class="text-muted small" id="paginacaoInfo">
+            Mostrando 0 de 0 registros
+        </div>
+        <nav>
+            <ul class="pagination pagination-sm mb-0" id="paginacao">
+            </ul>
+        </nav>
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="text-center">
+        <div class="spinner-border text-primary mb-3" role="status"></div>
+        <div class="text-muted" id="loadingText">Processando...</div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Estado global
+    let dadosAtuais = [];
+    let paginaAtual = 1;
+    let totalPaginas = 1;
+    let selecionados = new Set();
+
+    // Inicialização
+    document.addEventListener('DOMContentLoaded', function() {
+        carregarDados();
+    });
+
+    // Carregar dados
+    async function carregarDados(page = 1) {
+        const status = document.getElementById('filtroStatus').value;
+        const mes = document.getElementById('filtroMes').value;
+        const documento = document.getElementById('filtroDocumento').value;
+
+        const params = new URLSearchParams({
+            page: page,
+            per_page: 50
+        });
+
+        if (status) params.append('status', status);
+        if (mes) params.append('mes', mes);
+        if (documento) params.append('documento', documento);
+
+        try {
+            const response = await fetch(`/financeiro/correcao-datas/api/listar?${params}`);
+            const data = await response.json();
+
+            if (data.sucesso) {
+                dadosAtuais = data.items;
+                paginaAtual = data.page;
+                totalPaginas = data.pages;
+                renderizarTabela();
+                renderizarPaginacao(data.total);
+            } else {
+                alert('Erro ao carregar dados: ' + data.erro);
+            }
+        } catch (error) {
+            console.error('Erro:', error);
+            alert('Erro ao carregar dados');
+        }
+    }
+
+    // Renderizar tabela
+    function renderizarTabela() {
+        const tbody = document.getElementById('tabelaBody');
+
+        if (dadosAtuais.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="10" class="text-center py-5 text-muted">
+                        <i class="bi bi-inbox me-2"></i>
+                        Nenhum registro encontrado
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        tbody.innerHTML = dadosAtuais.map(item => {
+            // Verificar se header e linhas estão errados
+            const headerErrado = item.data_lancamento_antes !== item.data_correta;
+            const linhasErradas = item.data_lancamento_linhas_antes && item.data_lancamento_linhas_antes !== item.data_correta;
+
+            const classeDataAntes = headerErrado ? 'data-errada' : '';
+            const classeDataLinhas = linhasErradas ? 'data-errada' : '';
+            const classeDataCorreta = (headerErrado || linhasErradas) ? 'data-correta' : '';
+
+            const checked = selecionados.has(item.id) ? 'checked' : '';
+            const disabled = item.status !== 'pendente' ? 'disabled' : '';
+
+            return `
+                <tr>
+                    <td>
+                        <input class="form-check-input item-check" type="checkbox"
+                               value="${item.id}" ${checked} ${disabled}
+                               onchange="toggleItem(${item.id})">
+                    </td>
+                    <td>
+                        <a href="https://odoo.nacomgoya.com.br/web#id=${item.odoo_move_id}&model=account.move&view_type=form"
+                           target="_blank" class="text-decoration-none">
+                            ${item.nome_documento}
+                            <i class="bi bi-box-arrow-up-right ms-1 small"></i>
+                        </a>
+                    </td>
+                    <td>${item.numero_nf || '-'}</td>
+                    <td class="text-truncate" style="max-width: 200px;" title="${item.nome_parceiro || ''}">
+                        ${item.nome_parceiro || '-'}
+                    </td>
+                    <td class="text-center">${formatarData(item.data_emissao)}</td>
+                    <td class="text-center ${classeDataAntes}">${formatarData(item.data_lancamento_antes)}</td>
+                    <td class="text-center ${classeDataLinhas}">${formatarData(item.data_lancamento_linhas_antes)}</td>
+                    <td class="text-center ${classeDataCorreta}">${formatarData(item.data_correta)}</td>
+                    <td class="text-center">
+                        <span class="status-badge status-${item.status}">${item.status.toUpperCase()}</span>
+                    </td>
+                    <td>
+                        ${item.status === 'pendente' ? `
+                            <button class="btn btn-outline-success btn-action"
+                                    onclick="corrigirUm(${item.id})" title="Corrigir">
+                                <i class="bi bi-check-lg"></i>
+                            </button>
+                        ` : ''}
+                        ${item.status === 'erro' ? `
+                            <span class="text-danger small" title="${item.erro_mensagem}">
+                                <i class="bi bi-exclamation-circle"></i>
+                            </span>
+                        ` : ''}
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        atualizarContadores();
+    }
+
+    // Formatar data
+    function formatarData(data) {
+        if (!data) return '-';
+        const [ano, mes, dia] = data.split('-');
+        return `${dia}/${mes}/${ano}`;
+    }
+
+    // Toggle selecionar todos
+    function toggleSelecionarTodos() {
+        const checkAll = document.getElementById('checkAll');
+        const checkboxes = document.querySelectorAll('.item-check:not(:disabled)');
+
+        checkboxes.forEach(cb => {
+            cb.checked = checkAll.checked;
+            const id = parseInt(cb.value);
+            if (checkAll.checked) {
+                selecionados.add(id);
+            } else {
+                selecionados.delete(id);
+            }
+        });
+
+        atualizarContadores();
+    }
+
+    // Toggle item individual
+    function toggleItem(id) {
+        if (selecionados.has(id)) {
+            selecionados.delete(id);
+        } else {
+            selecionados.add(id);
+        }
+        atualizarContadores();
+    }
+
+    // Atualizar contadores
+    function atualizarContadores() {
+        const count = selecionados.size;
+        document.getElementById('countSelecionados').textContent = `${count} selecionados`;
+        document.getElementById('btnCorrigir').disabled = count === 0;
+    }
+
+    // Executar diagnóstico
+    async function executarDiagnostico() {
+        if (!confirm('Isso irá buscar novas NFs com problema no Odoo. Continuar?')) return;
+
+        showLoading('Buscando NFs com problema no Odoo...');
+
+        try {
+            const response = await fetch('/financeiro/correcao-datas/api/diagnosticar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            });
+
+            const data = await response.json();
+
+            if (data.sucesso) {
+                alert(`Diagnóstico concluído!\n\nAnalisados: ${data.total_analisados}\nCom problema: ${data.total_com_problema}\nNovos: ${data.novos_diagnosticados}\nJá existentes: ${data.ja_existentes}`);
+                carregarDados();
+                atualizarEstatisticas();
+            } else {
+                alert('Erro no diagnóstico: ' + data.erro);
+            }
+        } catch (error) {
+            console.error('Erro:', error);
+            alert('Erro no diagnóstico');
+        } finally {
+            hideLoading();
+        }
+    }
+
+    // Corrigir selecionados
+    async function corrigirSelecionados() {
+        if (selecionados.size === 0) {
+            alert('Selecione pelo menos um item');
+            return;
+        }
+
+        if (!confirm(`Corrigir ${selecionados.size} documento(s)? Esta ação irá alterar os dados no Odoo.`)) {
+            return;
+        }
+
+        showLoading(`Corrigindo ${selecionados.size} documento(s)...`);
+
+        try {
+            const response = await fetch('/financeiro/correcao-datas/api/corrigir', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: Array.from(selecionados) })
+            });
+
+            const data = await response.json();
+
+            if (data.sucesso) {
+                alert(`Correção concluída!\n\nTotal: ${data.total}\nCorrigidos: ${data.corrigidos}\nErros: ${data.erros}`);
+                selecionados.clear();
+                carregarDados();
+                atualizarEstatisticas();
+            } else {
+                alert('Erro na correção: ' + data.erro);
+            }
+        } catch (error) {
+            console.error('Erro:', error);
+            alert('Erro na correção');
+        } finally {
+            hideLoading();
+        }
+    }
+
+    // Corrigir um documento
+    async function corrigirUm(id) {
+        if (!confirm('Corrigir este documento?')) return;
+
+        showLoading('Corrigindo documento...');
+
+        try {
+            const response = await fetch('/financeiro/correcao-datas/api/corrigir', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: [id] })
+            });
+
+            const data = await response.json();
+
+            if (data.sucesso && data.corrigidos > 0) {
+                alert('Documento corrigido com sucesso!');
+                carregarDados();
+                atualizarEstatisticas();
+            } else {
+                alert('Erro na correção: ' + (data.detalhes?.[0]?.erro || data.erro || 'Erro desconhecido'));
+            }
+        } catch (error) {
+            console.error('Erro:', error);
+            alert('Erro na correção');
+        } finally {
+            hideLoading();
+        }
+    }
+
+    // Atualizar estatísticas
+    async function atualizarEstatisticas() {
+        try {
+            const response = await fetch('/financeiro/correcao-datas/api/estatisticas');
+            const data = await response.json();
+
+            if (data.sucesso) {
+                document.getElementById('statTotal').textContent = data.stats.total;
+                document.getElementById('statPendente').textContent = data.stats.pendente;
+                document.getElementById('statCorrigido').textContent = data.stats.corrigido;
+                document.getElementById('statErro').textContent = data.stats.erro;
+            }
+        } catch (error) {
+            console.error('Erro ao atualizar estatísticas:', error);
+        }
+    }
+
+    // Renderizar paginação
+    function renderizarPaginacao(total) {
+        const info = document.getElementById('paginacaoInfo');
+        const inicio = (paginaAtual - 1) * 50 + 1;
+        const fim = Math.min(paginaAtual * 50, total);
+        info.textContent = `Mostrando ${inicio}-${fim} de ${total} registros`;
+
+        const ul = document.getElementById('paginacao');
+        ul.innerHTML = '';
+
+        if (totalPaginas <= 1) return;
+
+        // Anterior
+        ul.innerHTML += `
+            <li class="page-item ${paginaAtual === 1 ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="carregarDados(${paginaAtual - 1})">&laquo;</a>
+            </li>
+        `;
+
+        // Páginas
+        for (let i = 1; i <= Math.min(totalPaginas, 5); i++) {
+            ul.innerHTML += `
+                <li class="page-item ${paginaAtual === i ? 'active' : ''}">
+                    <a class="page-link" href="#" onclick="carregarDados(${i})">${i}</a>
+                </li>
+            `;
+        }
+
+        // Próximo
+        ul.innerHTML += `
+            <li class="page-item ${paginaAtual === totalPaginas ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="carregarDados(${paginaAtual + 1})">&raquo;</a>
+            </li>
+        `;
+    }
+
+    // Loading
+    function showLoading(text = 'Processando...') {
+        document.getElementById('loadingText').textContent = text;
+        document.getElementById('loadingOverlay').classList.add('active');
+    }
+
+    function hideLoading() {
+        document.getElementById('loadingOverlay').classList.remove('active');
+    }
+</script>
+{% endblock %}

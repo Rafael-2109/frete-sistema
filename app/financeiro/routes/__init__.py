@@ -37,3 +37,4 @@ from app.financeiro.routes import liberacao
 from app.financeiro.routes import pendencias_modal
 from app.financeiro.routes import baixas
 from app.financeiro.routes import extrato
+from app.financeiro.routes import correcao_datas
