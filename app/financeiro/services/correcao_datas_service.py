@@ -354,7 +354,7 @@ class CorrecaoDatasService:
         Lista NFs pendentes de correção.
 
         Args:
-            mes: Filtro por mês (YYYY-MM)
+            mes: Filtro por mês (YYYY-MM) - filtra pela DATA CORRETA
             documento: Filtro por nome do documento
             page: Página atual
             per_page: Itens por página
@@ -367,8 +367,8 @@ class CorrecaoDatasService:
         if mes:
             ano, mes_num = mes.split('-')
             query = query.filter(
-                db.extract('year', CorrecaoDataNFCredito.data_emissao) == int(ano),
-                db.extract('month', CorrecaoDataNFCredito.data_emissao) == int(mes_num)
+                db.extract('year', CorrecaoDataNFCredito.data_correta) == int(ano),
+                db.extract('month', CorrecaoDataNFCredito.data_correta) == int(mes_num)
             )
 
         if documento:
@@ -396,7 +396,7 @@ class CorrecaoDatasService:
         page: int = 1,
         per_page: int = 50
     ) -> Tuple[List[Dict], int]:
-        """Lista todos os registros com filtros opcionais"""
+        """Lista todos os registros com filtros opcionais (mes filtra por data_correta)"""
         query = CorrecaoDataNFCredito.query
 
         if status:
@@ -405,8 +405,8 @@ class CorrecaoDatasService:
         if mes:
             ano, mes_num = mes.split('-')
             query = query.filter(
-                db.extract('year', CorrecaoDataNFCredito.data_emissao) == int(ano),
-                db.extract('month', CorrecaoDataNFCredito.data_emissao) == int(mes_num)
+                db.extract('year', CorrecaoDataNFCredito.data_correta) == int(ano),
+                db.extract('month', CorrecaoDataNFCredito.data_correta) == int(mes_num)
             )
 
         if documento:

@@ -28,6 +28,17 @@ from app.financeiro.models import BaixaTituloLote, BaixaTituloItem
 logger = logging.getLogger(__name__)
 
 
+# =============================================================================
+# CONSTANTES - JOURNAL JUROS RECEBIDOS
+# =============================================================================
+
+# ID do journal especial para lancamento de juros recebidos
+# Este journal permite valores acima do saldo do titulo
+JOURNAL_JUROS_RECEBIDOS_ID = 1066
+JOURNAL_JUROS_RECEBIDOS_CODE = 'JUROS'
+JOURNAL_JUROS_RECEBIDOS_NAME = 'JUROS RECEBIDOS'
+
+
 # Campos criticos para snapshot do titulo
 CAMPOS_SNAPSHOT_TITULO = [
     'id', 'name', 'debit', 'credit', 'balance',
@@ -127,8 +138,16 @@ class BaixaTitulosService:
     def _processar_item(self, item: BaixaTituloItem) -> None:
         """
         Processa um item de baixa individual.
+
+        Suporta lancamento de juros:
+        - Se juros_excel > 0: verifica se nao existe juros no Odoo e cria lancamento separado
+        - Valor do juros pode ser acima do saldo do titulo
+        - Usa journal JUROS RECEBIDOS (ID 1066)
         """
-        logger.info(f"Processando: NF {item.nf_excel} P{item.parcela_excel} R$ {item.valor_excel}")
+        juros_excel = getattr(item, 'juros_excel', 0) or 0
+
+        logger.info(f"Processando: NF {item.nf_excel} P{item.parcela_excel} R$ {item.valor_excel}" +
+                    (f" + JUROS R$ {juros_excel}" if juros_excel > 0 else ""))
 
         item.status = 'PROCESSANDO'
         db.session.commit()
@@ -155,46 +174,84 @@ class BaixaTitulosService:
         logger.info(f"  Titulo encontrado: ID={item.titulo_odoo_id}, Company={company_id} ({company_name}), Saldo={item.saldo_antes}")
 
         # NOTA: O Odoo permite usar journal de outra empresa!
-        # Ao criar pagamento com company_id do titulo, o Odoo cria as linhas
-        # contabeis na empresa correta usando contas equivalentes.
-        # Nao e necessario fazer De-Para de journals.
         journal_id_final = item.journal_odoo_id
         logger.info(f"  Usando journal: {item.journal_excel} (ID={journal_id_final})")
 
-        # Validar saldo suficiente
-        if item.valor_excel > item.saldo_antes + 0.01:  # Tolerancia de 1 centavo
-            raise ValueError(
-                f"Valor ({item.valor_excel}) maior que saldo ({item.saldo_antes})"
-            )
+        # =================================================================
+        # VALIDACAO DE JUROS - Verificar se ja existe no Odoo
+        # =================================================================
+        if juros_excel > 0:
+            juros_existente = self._verificar_juros_existente_odoo(item.nf_excel, item.parcela_excel)
+            if juros_existente:
+                raise ValueError(
+                    f"Ja existe baixa de JUROS RECEBIDOS para NF {item.nf_excel} P{item.parcela_excel}"
+                )
+
+        # =================================================================
+        # VALIDACAO DE SALDO
+        # - Valor principal deve respeitar saldo (exceto se for 0)
+        # - Juros NAO valida saldo (pode ser acima)
+        # =================================================================
+        tem_valor_principal = item.valor_excel > 0
+
+        if tem_valor_principal:
+            if item.valor_excel > item.saldo_antes + 0.01:  # Tolerancia de 1 centavo
+                raise ValueError(
+                    f"Valor ({item.valor_excel}) maior que saldo ({item.saldo_antes})"
+                )
 
         # 2. Capturar snapshot ANTES
         snapshot_antes = self._capturar_snapshot(item.titulo_odoo_id, item.move_odoo_id)
         item.set_snapshot_antes(snapshot_antes)
 
-        # 3. Criar pagamento no Odoo (na mesma empresa do titulo!)
-        # Usa journal_id_final que pode ter sido ajustado pelo De-Para
-        payment_id, payment_name = self._criar_pagamento(
-            partner_id=item.partner_odoo_id,
-            valor=item.valor_excel,
-            journal_id=journal_id_final,  # Journal correto para a empresa
-            ref=item.move_odoo_name,
-            data=item.data_excel,
-            company_id=company_id
-        )
+        # =================================================================
+        # LANCAMENTO 1: VALOR PRINCIPAL (se > 0)
+        # =================================================================
+        if tem_valor_principal:
+            # 3. Criar pagamento no Odoo (na mesma empresa do titulo!)
+            payment_id, payment_name = self._criar_pagamento(
+                partner_id=item.partner_odoo_id,
+                valor=item.valor_excel,
+                journal_id=journal_id_final,
+                ref=item.move_odoo_name,
+                data=item.data_excel,
+                company_id=company_id
+            )
 
-        item.payment_odoo_id = payment_id
-        item.payment_odoo_name = payment_name
+            item.payment_odoo_id = payment_id
+            item.payment_odoo_name = payment_name
 
-        # 4. Postar pagamento
-        self._postar_pagamento(payment_id)
+            # 4. Postar pagamento
+            self._postar_pagamento(payment_id)
 
-        # 5. Buscar linha de credito criada
-        credit_line_id = self._buscar_linha_credito(payment_id)
-        if not credit_line_id:
-            raise ValueError("Linha de credito nao encontrada apos postar pagamento")
+            # 5. Buscar linha de credito criada
+            credit_line_id = self._buscar_linha_credito(payment_id)
+            if not credit_line_id:
+                raise ValueError("Linha de credito nao encontrada apos postar pagamento")
 
-        # 6. Reconciliar
-        self._reconciliar(credit_line_id, item.titulo_odoo_id)
+            # 6. Reconciliar
+            self._reconciliar(credit_line_id, item.titulo_odoo_id)
+
+            logger.info(f"  Pagamento principal criado: {payment_name}")
+        else:
+            logger.info(f"  Sem valor principal (R$ 0), apenas juros sera lancado")
+
+        # =================================================================
+        # LANCAMENTO 2: JUROS (se > 0)
+        # =================================================================
+        if juros_excel > 0:
+            payment_juros_id, payment_juros_name = self._criar_pagamento_juros(
+                partner_id=item.partner_odoo_id,
+                valor_juros=juros_excel,
+                ref=item.move_odoo_name,
+                data=item.data_excel,
+                company_id=company_id
+            )
+
+            item.payment_juros_odoo_id = payment_juros_id
+            item.payment_juros_odoo_name = payment_juros_name
+
+            logger.info(f"  Pagamento JUROS criado: {payment_juros_name}")
 
         # 7. Capturar snapshot DEPOIS
         snapshot_depois = self._capturar_snapshot(item.titulo_odoo_id, item.move_odoo_id)
@@ -208,14 +265,22 @@ class BaixaTitulosService:
         titulo_atualizado = self._buscar_titulo_por_id(item.titulo_odoo_id)
         item.saldo_depois = titulo_atualizado.get('amount_residual', 0) if titulo_atualizado else None
 
-        # 10. Buscar partial_reconcile criado
-        item.partial_reconcile_id = self._buscar_partial_reconcile(item.titulo_odoo_id)
+        # 10. Buscar partial_reconcile criado (se houve valor principal)
+        if tem_valor_principal:
+            item.partial_reconcile_id = self._buscar_partial_reconcile(item.titulo_odoo_id)
 
         item.status = 'SUCESSO'
         item.processado_em = datetime.utcnow()
         item.validado_em = datetime.utcnow()
 
-        logger.info(f"  OK - Payment: {payment_name}, Saldo: {item.saldo_antes} -> {item.saldo_depois}")
+        # Log de conclusao
+        pagamentos_criados = []
+        if item.payment_odoo_name:
+            pagamentos_criados.append(item.payment_odoo_name)
+        if item.payment_juros_odoo_name:
+            pagamentos_criados.append(f"JUROS: {item.payment_juros_odoo_name}")
+
+        logger.info(f"  OK - Payments: {', '.join(pagamentos_criados)}, Saldo: {item.saldo_antes} -> {item.saldo_depois}")
 
     def _buscar_titulo(self, nf: str, parcela: int) -> Optional[Dict]:
         """
@@ -460,3 +525,118 @@ class BaixaTitulosService:
         if isinstance(valor, (list, tuple)) and len(valor) > 1:
             return valor[1]
         return None
+
+    def _verificar_juros_existente_odoo(self, nf: str, parcela: int) -> bool:
+        """
+        Verifica se ja existe baixa de juros no Odoo para NF+parcela.
+
+        Busca no account.payment com journal_id = JOURNAL_JUROS_RECEBIDOS_ID
+        e ref contendo o numero da NF.
+
+        Args:
+            nf: Numero da NF-e
+            parcela: Numero da parcela
+
+        Returns:
+            True se ja existe baixa de juros, False caso contrario
+        """
+        try:
+            # Buscar pagamentos com journal de juros que referenciam esta NF
+            pagamentos = self.connection.search_read(
+                'account.payment',
+                [
+                    ['journal_id', '=', JOURNAL_JUROS_RECEBIDOS_ID],
+                    ['ref', 'ilike', nf],
+                    ['state', '=', 'posted']
+                ],
+                fields=['id', 'name', 'ref', 'amount'],
+                limit=10
+            )
+
+            if not pagamentos:
+                return False
+
+            # Verificar se algum pagamento corresponde a esta NF+parcela
+            for pagamento in pagamentos:
+                ref = pagamento.get('ref', '') or ''
+                # Verificar se a ref contem a NF (pode estar no formato "VND/2025/00123")
+                if nf in ref:
+                    logger.info(f"  Juros ja existe para NF {nf}: Payment {pagamento.get('name')}")
+                    return True
+
+            return False
+
+        except Exception as e:
+            logger.warning(f"Erro ao verificar juros existente: {e}")
+            return False
+
+    def _criar_pagamento_juros(
+        self,
+        partner_id: int,
+        valor_juros: float,
+        ref: str,
+        data,
+        company_id: int
+    ) -> Tuple[int, str]:
+        """
+        Cria um pagamento de juros no Odoo usando journal JUROS RECEBIDOS.
+
+        Diferente do pagamento normal, este pagamento:
+        - NAO e reconciliado com o titulo (valor acima do saldo)
+        - Usa journal especifico de juros
+
+        Args:
+            partner_id: ID do parceiro
+            valor_juros: Valor do juros
+            ref: Referencia (nome do move)
+            data: Data do pagamento
+            company_id: ID da empresa
+
+        Returns:
+            Tuple com (payment_id, payment_name)
+        """
+        # Converter data para string se necessario
+        data_str = data.strftime('%Y-%m-%d') if hasattr(data, 'strftime') else str(data)
+
+        payment_data = {
+            'payment_type': 'inbound',
+            'partner_type': 'customer',
+            'partner_id': partner_id,
+            'amount': valor_juros,
+            'journal_id': JOURNAL_JUROS_RECEBIDOS_ID,
+            'ref': f"JUROS - {ref}",
+            'date': data_str,
+            'company_id': company_id
+        }
+
+        logger.info(f"  Criando pagamento JUROS: Company={company_id}, Valor={valor_juros}")
+
+        payment_id = self.connection.execute_kw(
+            'account.payment',
+            'create',
+            [payment_data]
+        )
+
+        # Postar pagamento
+        try:
+            self.connection.execute_kw(
+                'account.payment',
+                'action_post',
+                [[payment_id]]
+            )
+        except Exception as e:
+            # Ignorar erro de serializacao - operacao foi executada
+            if "cannot marshal None" not in str(e):
+                raise
+
+        # Buscar nome gerado
+        payment = self.connection.search_read(
+            'account.payment',
+            [['id', '=', payment_id]],
+            fields=['name'],
+            limit=1
+        )
+
+        payment_name = payment[0]['name'] if payment else f'Payment #{payment_id}'
+
+        return payment_id, payment_name

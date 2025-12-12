@@ -32,6 +32,17 @@ from app.financeiro.models import BaixaTituloLote, BaixaTituloItem
 
 
 # =============================================================================
+# CONSTANTES - JOURNAL JUROS RECEBIDOS
+# =============================================================================
+
+# ID do journal especial para lancamento de juros recebidos
+# Este journal permite valores acima do saldo do titulo
+JOURNAL_JUROS_RECEBIDOS_ID = 1066
+JOURNAL_JUROS_RECEBIDOS_CODE = 'JUROS'
+JOURNAL_JUROS_RECEBIDOS_NAME = 'JUROS RECEBIDOS'
+
+
+# =============================================================================
 # CONSTANTES - JOURNALS DISPONIVEIS
 # =============================================================================
 
@@ -73,6 +84,8 @@ JOURNALS_DISPONIVEIS = [
     {'id': 389, 'code': 'CAIXA', 'name': 'CAIXA ECONÔMICA', 'type': 'bank', 'freq': 1},
     {'id': 1061, 'code': 'GRA2', 'name': 'GRAFENO 2', 'type': 'bank', 'freq': 1},
     {'id': 973, 'code': 'STO A', 'name': 'STO ATAC DE ALIM EIRELI', 'type': 'cash', 'freq': 1},
+    # Journal especial para juros recebidos
+    {'id': 1066, 'code': 'JUROS', 'name': 'JUROS RECEBIDOS', 'type': 'cash', 'freq': 0},
     # Journals sem uso no periodo (freq = 0)
     {'id': 1040, 'code': 'CSH2', 'name': 'ADIANTAMENTOS A FORNECEDORES', 'type': 'cash', 'freq': 0},
     {'id': 1064, 'code': 'ADTO', 'name': 'ADIANTAMENTOS DE FORNECEDORES NACIONAIS', 'type': 'cash', 'freq': 0},
@@ -299,12 +312,14 @@ def baixas_download_template():
 
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             # Aba 1: Baixas (template para preenchimento)
+            # Coluna JUROS: valor de juros recebidos (gera lancamento separado com journal JUROS RECEBIDOS)
             df_baixas = pd.DataFrame({
                 'NF': ['92234', '92235', '92236'],
                 'PARCELA': [1, 1, 2],
                 'VALOR': [1500.00, 2000.00, 3500.50],
                 'JOURNAL': ['GRAFENO', 'DEVOLUCAO', 'SICOOB'],
-                'DATA': [date.today().strftime('%Y-%m-%d')] * 3
+                'DATA': [date.today().strftime('%Y-%m-%d')] * 3,
+                'JUROS': [50.00, '', 25.00]  # Opcional: valor de juros recebidos
             })
             df_baixas.to_excel(writer, index=False, sheet_name='Baixas')
 
@@ -454,6 +469,12 @@ def baixas_upload():
             # Journal
             journal_nome = str(row['JOURNAL']).strip() if pd.notna(row['JOURNAL']) else ''
 
+            # Juros (coluna opcional)
+            try:
+                juros = round(float(row['JUROS']), 2) if 'JUROS' in df.columns and pd.notna(row.get('JUROS')) else 0
+            except (ValueError, TypeError):
+                juros = 0
+
             # Data
             try:
                 if pd.notna(row['DATA']):
@@ -504,6 +525,7 @@ def baixas_upload():
                 valor_excel=valor,
                 journal_excel=journal_nome,
                 data_excel=data_baixa,
+                juros_excel=juros,
                 journal_odoo_id=journal_info['id'] if journal_info else None,
                 journal_odoo_code=journal_info['code'] if journal_info else None,
                 ativo=status == 'VALIDO',

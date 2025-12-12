@@ -1001,6 +1001,7 @@ class BaixaTituloItem(db.Model):
     valor_excel = db.Column(db.Float, nullable=False)  # Valor a baixar
     journal_excel = db.Column(db.String(100), nullable=False)  # Nome do journal (ex: GRAFENO)
     data_excel = db.Column(db.Date, nullable=False)  # Data do pagamento
+    juros_excel = db.Column(db.Float, nullable=True, default=0)  # Valor de juros recebidos (lancamento separado)
 
     # =========================================================================
     # DADOS RESOLVIDOS DO ODOO (apos validacao)
@@ -1041,6 +1042,10 @@ class BaixaTituloItem(db.Model):
     payment_odoo_id = db.Column(db.Integer, nullable=True)  # account.payment ID criado
     payment_odoo_name = db.Column(db.String(100), nullable=True)  # Nome do pagamento (PGRA1/2025/...)
     partial_reconcile_id = db.Column(db.Integer, nullable=True)  # account.partial.reconcile ID
+
+    # IDs do lancamento de JUROS (se houver)
+    payment_juros_odoo_id = db.Column(db.Integer, nullable=True)  # account.payment ID do juros
+    payment_juros_odoo_name = db.Column(db.String(100), nullable=True)  # Nome do pagamento de juros
 
     # Saldo apos baixa
     saldo_depois = db.Column(db.Float, nullable=True)  # amount_residual DEPOIS
@@ -1086,6 +1091,7 @@ class BaixaTituloItem(db.Model):
             'valor_excel': self.valor_excel,
             'journal_excel': self.journal_excel,
             'data_excel': self.data_excel.isoformat() if self.data_excel else None,
+            'juros_excel': self.juros_excel,
             # Dados Odoo resolvidos
             'titulo_odoo_id': self.titulo_odoo_id,
             'move_odoo_id': self.move_odoo_id,
@@ -1103,6 +1109,8 @@ class BaixaTituloItem(db.Model):
             'payment_odoo_id': self.payment_odoo_id,
             'payment_odoo_name': self.payment_odoo_name,
             'partial_reconcile_id': self.partial_reconcile_id,
+            'payment_juros_odoo_id': self.payment_juros_odoo_id,
+            'payment_juros_odoo_name': self.payment_juros_odoo_name,
             'saldo_depois': self.saldo_depois,
             # Snapshots
             'snapshot_antes': json.loads(self.snapshot_antes) if self.snapshot_antes else None,
