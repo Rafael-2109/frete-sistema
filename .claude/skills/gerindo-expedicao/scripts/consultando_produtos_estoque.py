@@ -608,7 +608,6 @@ def consultar_situacao_completa_produto(args):
                 'data': prog.data_programacao.isoformat(),
                 'quantidade': qtd,
                 'linha': prog.linha_producao,
-                'status': prog.status
             })
             total_programado += qtd
 

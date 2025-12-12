@@ -543,7 +543,29 @@ class CorrecaoDatasService:
 
             # 3. Voltar para draft se estava posted
             if was_posted:
-                self.odoo.execute_kw('account.move', 'button_draft', [[move_id]])
+                try:
+                    self.odoo.execute_kw('account.move', 'button_draft', [[move_id]])
+                except Exception as draft_error:
+                    # Odoo server retorna None no button_draft e não consegue serializar
+                    if 'cannot marshal None' in str(draft_error):
+                        logger.warning(f"Erro XML-RPC 'None' no button_draft para {move_id}, verificando estado...")
+
+                        # Verificar se o documento foi para draft mesmo com o erro
+                        move_check = self.odoo.execute_kw(
+                            'account.move', 'read',
+                            [[move_id]],
+                            {'fields': ['state']}
+                        )
+
+                        if move_check and move_check[0]['state'] == 'draft':
+                            logger.info(f"Documento {move_id} foi para draft com sucesso apesar do erro XML-RPC")
+                        else:
+                            # Documento não foi para draft, erro real
+                            logger.error(f"Documento {move_id} permaneceu posted após erro")
+                            raise Exception(f"Falha ao voltar documento para draft")
+                    else:
+                        # Outro erro, propagar
+                        raise
 
             # 4. Atualizar a data
             self.odoo.execute_kw(
@@ -565,13 +587,69 @@ class CorrecaoDatasService:
 
             # 6. Repostar se estava posted
             if was_posted:
-                self.odoo.execute_kw('account.move', 'action_post', [[move_id]])
+                try:
+                    self.odoo.execute_kw('account.move', 'action_post', [[move_id]])
+                except Exception as post_error:
+                    # Odoo server retorna None no action_post e não consegue serializar
+                    # Erro: "cannot marshal None unless allow_none is enabled"
+                    # A operação PODE ter sido executada com sucesso no servidor
+                    if 'cannot marshal None' in str(post_error):
+                        logger.warning(f"Erro XML-RPC 'None' no action_post para {move_id}, verificando estado...")
+
+                        # Verificar se o documento foi postado mesmo com o erro
+                        move_check = self.odoo.execute_kw(
+                            'account.move', 'read',
+                            [[move_id]],
+                            {'fields': ['state']}
+                        )
+
+                        if move_check and move_check[0]['state'] == 'posted':
+                            logger.info(f"Documento {move_id} foi postado com sucesso apesar do erro XML-RPC")
+                        else:
+                            # Documento não foi postado, erro real
+                            logger.error(f"Documento {move_id} permaneceu em draft após erro")
+                            raise Exception(f"Falha ao repostar documento: permaneceu em draft")
+                    else:
+                        # Outro erro, propagar
+                        raise
 
             logger.info(f"Documento {move_id} corrigido para data {data_correta}")
             return True
 
         except Exception as e:
             logger.error(f"Erro ao corrigir documento {move_id}: {e}")
+
+            # CRÍTICO: Se estava posted e ficou em draft por causa do erro,
+            # tentar repostar para não deixar documento inconsistente
+            if was_posted:
+                try:
+                    move_state = self.odoo.execute_kw(
+                        'account.move', 'read',
+                        [[move_id]],
+                        {'fields': ['state']}
+                    )
+                    if move_state and move_state[0]['state'] == 'draft':
+                        logger.warning(f"Documento {move_id} ficou em draft após erro, tentando repostar...")
+                        try:
+                            self.odoo.execute_kw('account.move', 'action_post', [[move_id]])
+                            logger.info(f"Documento {move_id} repostado com sucesso após erro")
+                        except Exception as repost_err:
+                            if 'cannot marshal None' in str(repost_err):
+                                # Verificar se realmente postou
+                                check = self.odoo.execute_kw(
+                                    'account.move', 'read',
+                                    [[move_id]],
+                                    {'fields': ['state']}
+                                )
+                                if check and check[0]['state'] == 'posted':
+                                    logger.info(f"Documento {move_id} repostado (ignorando erro XML-RPC)")
+                                else:
+                                    logger.error(f"CRÍTICO: Documento {move_id} permaneceu em draft!")
+                            else:
+                                logger.error(f"CRÍTICO: Falha ao repostar documento {move_id}: {repost_err}")
+                except Exception as check_err:
+                    logger.error(f"CRÍTICO: Não foi possível verificar/repostar documento {move_id}: {check_err}")
+
             raise
 
         finally:

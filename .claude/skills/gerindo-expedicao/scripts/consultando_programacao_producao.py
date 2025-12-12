@@ -123,8 +123,7 @@ def listar_programacao_completa(args):
             'linha': prog.linha_producao,
             'cod_produto': prog.cod_produto,
             'nome_produto': nomes_produtos[prog.cod_produto],
-            'quantidade': float(prog.qtd_programada or 0),
-            'turno': getattr(prog, 'turno', None)
+            'quantidade': float(prog.qtd_programada or 0)
         }
         programacao_lista.append(item)
 
