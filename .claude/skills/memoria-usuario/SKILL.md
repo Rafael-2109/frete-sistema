@@ -75,32 +75,32 @@ Esta skill gerencia a memória persistente por usuário, permitindo que Claude l
 ### Ver Memórias
 
 ```bash
-source venv/bin/activate && python .claude/skills/memoria-usuario/scripts/memoria.py view --user-id USER_ID
-source venv/bin/activate && python .claude/skills/memoria-usuario/scripts/memoria.py view --user-id USER_ID --path /memories/preferences.xml
+source $([ -d venv ] && echo venv || echo .venv)/bin/activate && python .claude/skills/memoria-usuario/scripts/memoria.py view --user-id USER_ID
+source $([ -d venv ] && echo venv || echo .venv)/bin/activate && python .claude/skills/memoria-usuario/scripts/memoria.py view --user-id USER_ID --path /memories/preferences.xml
 ```
 
 ### Salvar Memória
 
 ```bash
-source venv/bin/activate && python .claude/skills/memoria-usuario/scripts/memoria.py save --user-id USER_ID --path /memories/preferences.xml --content "<preferences>...</preferences>"
+source $([ -d venv ] && echo venv || echo .venv)/bin/activate && python .claude/skills/memoria-usuario/scripts/memoria.py save --user-id USER_ID --path /memories/preferences.xml --content "<preferences>...</preferences>"
 ```
 
 ### Atualizar Memória (substituir texto)
 
 ```bash
-source venv/bin/activate && python .claude/skills/memoria-usuario/scripts/memoria.py update --user-id USER_ID --path /memories/preferences.xml --old "texto antigo" --new "texto novo"
+source $([ -d venv ] && echo venv || echo .venv)/bin/activate && python .claude/skills/memoria-usuario/scripts/memoria.py update --user-id USER_ID --path /memories/preferences.xml --old "texto antigo" --new "texto novo"
 ```
 
 ### Deletar Memória
 
 ```bash
-source venv/bin/activate && python .claude/skills/memoria-usuario/scripts/memoria.py delete --user-id USER_ID --path /memories/preferences.xml
+source $([ -d venv ] && echo venv || echo .venv)/bin/activate && python .claude/skills/memoria-usuario/scripts/memoria.py delete --user-id USER_ID --path /memories/preferences.xml
 ```
 
 ### Limpar Todas as Memórias
 
 ```bash
-source venv/bin/activate && python .claude/skills/memoria-usuario/scripts/memoria.py clear --user-id USER_ID
+source $([ -d venv ] && echo venv || echo .venv)/bin/activate && python .claude/skills/memoria-usuario/scripts/memoria.py clear --user-id USER_ID
 ```
 
 ---

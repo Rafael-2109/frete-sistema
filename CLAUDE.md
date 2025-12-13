@@ -1,6 +1,6 @@
 # [PRECISION MODE] - MODO PRECISION ENGINEER ATIVO
 
-**Ultima Atualizacao**: 01/12/2025
+**Ultima Atualizacao**: 13/12/2025
 
 ## REGRAS ABSOLUTAS - NUNCA IGNORAR:
 
@@ -9,7 +9,7 @@
 2. **MOSTRAR EVIDENCIAS**: Citar arquivo:linha ANTES de qualquer modificacao
 3. **VERIFICAR TUDO**: Ler arquivos completos, verificar imports, testar mentalmente
 4. **QUESTIONAR**: Se algo nao estiver 100% claro, PARAR e PERGUNTAR
-5. **AMBIENTE VIRTUAL**: Sempre utilize o ambiente virtual quando for necessario `source /home/rafaelnascimento/projetos/frete_sistema/venv/bin/activate`
+5. **AMBIENTE VIRTUAL**: Sempre utilize o ambiente virtual quando for necessario `source $([ -d venv ] && echo venv || echo .venv)/bin/activate`
 
 ### NUNCA FAZER:
 1. **NUNCA assumir** comportamento pelo nome da funcao
@@ -53,28 +53,55 @@ Quando ver **"pense profundamente"** ou **"[PRECISION MODE]"**: DOBRAR o nivel d
 
 # MEMORIA PERSISTENTE DO USUARIO
 
-## Uso Proativo OBRIGATORIO
+## Arquitetura
 
-A skill `memoria-usuario` armazena preferencias e padroes aprendidos no banco de dados (tabela `agent_memories`). **Persiste entre deploys.**
+A skill `memoria-usuario` usa a **Memory Tool da Anthropic** com armazenamento em banco de dados.
+**Persiste entre deploys e sessoes.**
 
-### CONSULTAR memorias no inicio da conversa:
-```bash
-source venv/bin/activate && python .claude/skills/memoria-usuario/scripts/memoria.py view --user-id 1
+### Tabelas do Agente (app/agente/models.py)
+
+| Tabela | Modelo | Descricao |
+|--------|--------|-----------|
+| `agent_memories` | AgentMemory | Memorias persistentes (preferencias, fatos, correcoes) |
+| `agent_sessions` | AgentSession | Historico de conversas (mensagens, tokens, custos) |
+
+### Estrutura de Paths Virtuais
+
+Os paths sao **virtuais** (armazenados no banco, nao arquivos fisicos):
+```
+/memories/                      # Raiz (diretorio virtual)
+/memories/preferences.xml       # Preferencias do usuario
+/memories/context/company.xml   # Informacoes da empresa
+/memories/learned/terms.xml     # Termos aprendidos
+/memories/corrections/          # Correcoes de terminologia
 ```
 
-### SALVAR quando aprender algo novo sobre o usuario:
-- Preferencia de comunicacao ("seja mais direto", "pode detalhar")
-- Fatos pessoais (nome, cargo, clientes que gerencia)
-- Padroes observados (sempre pergunta sobre Atacadao primeiro)
-- Correcoes ("nao eh assim, aqui usamos X")
+### Comandos da Skill
+
+```bash
+# Visualizar todas as memorias
+source $([ -d venv ] && echo venv || echo .venv)/bin/activate && python .claude/skills/memoria-usuario/scripts/memoria.py view --user-id 1
+
+# Visualizar path especifico
+python .claude/skills/memoria-usuario/scripts/memoria.py view --user-id 1 --path /memories/preferences.xml
+
+# Salvar memoria
+python .claude/skills/memoria-usuario/scripts/memoria.py save --user-id 1 --path /memories/preferences.xml --content "<preferencias>...</preferencias>"
+
+# Atualizar (str_replace)
+python .claude/skills/memoria-usuario/scripts/memoria.py update --user-id 1 --path /memories/preferences.xml --old "texto" --new "novo"
+
+# Deletar
+python .claude/skills/memoria-usuario/scripts/memoria.py delete --user-id 1 --path /memories/preferences.xml
+```
 
 ### Gatilhos para SALVAR automaticamente:
-| Usuario diz... | Acao |
-|----------------|------|
-| "Prefiro respostas curtas" | SALVAR em /memories/preferences.xml |
-| "Sou gerente de logistica" | SALVAR em /memories/user.xml |
-| "Aqui chamamos de X, nao Y" | SALVAR em /memories/corrections/terms.xml |
-| "Sempre faco isso antes de..." | SALVAR em /memories/learned/patterns.xml |
+| Usuario diz... | Path Virtual |
+|----------------|--------------|
+| "Prefiro respostas curtas" | `/memories/preferences.xml` |
+| "Sou gerente de logistica" | `/memories/context/user.xml` |
+| "Aqui chamamos de X, nao Y" | `/memories/corrections/terms.xml` |
+| "Sempre faco isso antes de..." | `/memories/learned/patterns.xml` |
 
 ### User ID padrao: 1 (Rafael - dono do projeto)
 
@@ -89,15 +116,23 @@ source venv/bin/activate && python .claude/skills/memoria-usuario/scripts/memori
 | Campos de Carteira/Separacao | **Este arquivo (abaixo)** | Desenvolvendo features principais |
 | Campos de outros modelos | `.claude/references/MODELOS_CAMPOS.md` | Pedido, Embarque, Faturamento, DespesaExtra, ContasAReceber |
 | Regras de negocio detalhadas | `.claude/references/REGRAS_NEGOCIO.md` | Grupos CNPJ, bonificacao, roteirizacao, calculos |
-| Fluxo de dados comercial | `.claude/references/MODULO_COMERCIAL_FLUXO_DADOS.md` | Agregacao de dados, JOINs, APIs do modulo comercial |
+| Queries e mapeamentos SQL | `.claude/references/QUERIES_MAPEAMENTO.md` | Consultas SQL, JOINs entre tabelas |
+| Ajustes e fixes pendentes | `.claude/references/AJUSTES.md` | Bugs conhecidos, melhorias planejadas |
 | Consultas estoque/carteira | Skill `gerindo-expedicao` | Perguntas sobre disponibilidade, pedidos, estoque |
-| Consultas comerciais | Skill `consultando-comercial` | Valor em aberto, status de pedidos, documentos, ranking clientes |
 | Integracao Odoo | Skill `integracao-odoo` | Lancamentos fiscais, CTe, 16 etapas |
 
-## Documentos Externos
-- **ESPECIFICACAO_SINCRONIZACAO_ODOO.md** - Processo de sincronizacao com Odoo
-- **CARD_SEPARACAO.md** - Detalhamento do Card de Separacao na Carteira Agrupada
-- **app/integracoes/tagplus/DOCUMENTACAO_API_TAGPLUS.md** - API TagPlus
+## Documentos de Referencia Adicionais
+| Documento | Localizacao | Descricao |
+|-----------|-------------|-----------|
+| ESPECIFICACAO_SINCRONIZACAO_ODOO.md | `app/odoo/services/` | Processo de sincronizacao com Odoo |
+| CARD_SEPARACAO.md | Raiz do projeto | Detalhamento do Card de Separacao |
+| DOCUMENTACAO_API_TAGPLUS.md | `app/integracoes/tagplus/` | API TagPlus |
+| ROADMAP_FEATURES_AGENTE.md | `.claude/references/` | Roadmap de features do agente |
+| ROADMAP_IMPLEMENTACAO.md | `.claude/references/` | Roadmap de implementacao geral |
+| historia_organizada.md | `.claude/references/` | Historico de decisoes do projeto |
+
+## Cookbooks (Exemplos de Codigo)
+- `.claude/references/cookbooks/` - Exemplos praticos de implementacao
 
 ---
 
@@ -358,8 +393,7 @@ items = Separacao.query.filter_by(
 # CAMINHOS DO SISTEMA
 
 ### ARQUIVOS OBSOLETOS DA CARTEIRA DE PEDIDOS (NAO USAR):
-- `app/carteira/main_routes.py` - Carteira de pedidos antiga
-- `app/templates/carteira/listar_agrupados.py` - template da Carteira de pedidos antigo
+- `app/carteira/main_routes.py` - Carteira de pedidos antiga (ainda existe, mas nao usar)
 
 ### ARQUIVOS CORRETOS DA CARTEIRA DE PEDIDOS:
 - `app/carteira/routes/`
@@ -372,3 +406,81 @@ items = Separacao.query.filter_by(
 
 ### AGENTE LOGISTICO:
 - `app/agente/` - Modulo principal (Claude Agent SDK)
+
+---
+
+# AGENTE LOGISTICO WEB
+
+## Diferenca entre CLAUDE.md e system_prompt.md
+
+| Arquivo | Publico-Alvo | Contexto | Proposito |
+|---------|--------------|----------|-----------|
+| **CLAUDE.md** | Claude Code (dev) | IDE/Terminal | Desenvolvimento do sistema |
+| **system_prompt.md** | Agente Web | Chat web | Usuarios finais (logistica) |
+
+**NAO MISTURAR**: Regras de negocio P1-P7 pertencem ao `system_prompt.md`, nao ao CLAUDE.md.
+
+## Arquitetura do Agente
+
+```
+app/agente/
+├── __init__.py
+├── models.py              # AgentSession, AgentMemory, AgentEvent
+├── routes.py              # API endpoints (/api/agente/...)
+├── memory_tool.py         # DatabaseMemoryTool (Memory Tool Anthropic)
+├── prompts/
+│   └── system_prompt.md   # Prompt do agente web (usuarios finais)
+└── hooks/
+    ├── memory_agent.py    # Hook de memoria automatica
+    └── README.md          # Documentacao dos hooks
+```
+
+## Prompt do Agente Web
+
+**Arquivo**: `app/agente/prompts/system_prompt.md`
+
+**Contem**:
+- Regras de priorizacao P1-P7
+- Regras de envio parcial
+- Skills disponiveis para o agente
+- Templates de resposta
+- Validacoes obrigatorias (FOB, data_entrega, etc.)
+
+**Versao atual**: 3.0.0 (estrutura XML com hierarquia de prioridade)
+
+## Tabelas do Agente
+
+| Tabela | Modelo | Campos Principais |
+|--------|--------|-------------------|
+| `agent_sessions` | AgentSession | session_id, user_id, title, data (JSONB com historico) |
+| `agent_memories` | AgentMemory | user_id, path, content, is_directory |
+| `agent_events` | AgentEvent | session_id, event_type, data (feedback, erros) |
+
+---
+
+# SKILLS DISPONIVEIS
+
+## Skills de Logistica
+| Skill | Diretorio | Descricao |
+|-------|-----------|-----------|
+| `gerindo-expedicao` | `.claude/skills/gerindo-expedicao/` | Consulta pedidos, estoque, disponibilidade, cria separacoes |
+
+## Skills de Integracao Odoo
+| Skill | Diretorio | Descricao |
+|-------|-----------|-----------|
+| `consultando-odoo-financeiro` | `.claude/skills/consultando-odoo-financeiro/` | Contas a pagar/receber, parcelas, inadimplencia |
+| `consultando-odoo-compras` | `.claude/skills/consultando-odoo-compras/` | Pedidos de compra, historico, status |
+| `consultando-odoo-produtos` | `.claude/skills/consultando-odoo-produtos/` | Catalogo, NCM, precos, fornecedores |
+| `consultando-odoo-cadastros` | `.claude/skills/consultando-odoo-cadastros/` | Fornecedores, clientes, transportadoras |
+| `consultando-odoo-dfe` | `.claude/skills/consultando-odoo-dfe/` | CTe, NF entrada, devolucoes, impostos |
+| `descobrindo-odoo-estrutura` | `.claude/skills/descobrindo-odoo-estrutura/` | Explorar campos/modelos nao mapeados |
+| `integracao-odoo` | `.claude/skills/integracao-odoo/` | Criar novas integracoes, lancamentos fiscais |
+
+## Skills Utilitarias
+| Skill | Diretorio | Descricao |
+|-------|-----------|-----------|
+| `memoria-usuario` | `.claude/skills/memoria-usuario/` | Salvar/recuperar preferencias entre sessoes |
+| `exportando-arquivos` | `.claude/skills/exportando-arquivos/` | Gerar Excel, CSV, JSON para download |
+| `lendo-arquivos` | `.claude/skills/lendo-arquivos/` | Processar Excel/CSV enviados |
+| `frontend-design` | `.claude/skills/frontend-design/` | Criar interfaces web, componentes UI |
+| `skill_creator` | `.claude/skills/skill_creator/` | Criar/atualizar skills
