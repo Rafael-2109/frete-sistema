@@ -20,13 +20,13 @@ import json
 import argparse
 import math
 from datetime import date, datetime, timedelta
-from decimal import Decimal, ROUND_DOWN
+from decimal import Decimal
 
 # Adicionar path do projeto
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..')))
 
 # Importar modulo centralizado de resolucao de entidades
-from resolver_entidades import resolver_pedido, formatar_sugestao_pedido
+from resolver_entidades import resolver_pedido, formatar_sugestao_pedido # type: ignore # noqa: E402
 
 
 def decimal_default(obj):
@@ -50,7 +50,7 @@ def parse_data_natural(termo: str) -> date:
     - "yyyy-mm-dd" -> formato ISO
     """
     if not termo:
-        return None
+        return None # type: ignore
 
     termo = termo.strip().lower()
     hoje = date.today()
@@ -199,7 +199,6 @@ def calcular_estoque_disponivel(cod_produto: str, data_expedicao: date = None) -
         Estoque projetado para a data especificada
     """
     from app.estoque.services.estoque_simples import ServicoEstoqueSimples
-    from datetime import timedelta
 
     hoje = date.today()
     data_alvo = data_expedicao or hoje
@@ -425,8 +424,7 @@ def simular_separacao(
             excluir = False
             for termo in excluir_produtos:
                 termo_upper = termo.upper()
-                if (item.cod_produto.upper() == termo_upper or
-                    termo_upper in item.nome_produto.upper()):
+                if (item.cod_produto.upper() == termo_upper or termo_upper in item.nome_produto.upper()):
                     excluir = True
                     break
             if excluir:
@@ -548,6 +546,7 @@ def simular_separacao(
         'num_pedido': num_pedido,
         'cliente': itens_finais[0]['raz_social_red'] if itens_finais else None,
         'cnpj': itens_finais[0]['cnpj_cpf'] if itens_finais else None,
+        'data_pedido': itens_finais[0]['data_pedido'] if itens_finais else None,
         'data_expedicao': data_expedicao.isoformat(),
         'agendamento': agendamento.isoformat() if agendamento else None,
         'protocolo': protocolo,
@@ -580,6 +579,7 @@ def executar_separacao(simulacao: dict) -> dict:
     from app.utils.lote_utils import gerar_lote_id
     from app.utils.timezone import agora_brasil
     from datetime import datetime
+    from flask_login import current_user
 
     if not simulacao.get('success'):
         return simulacao
@@ -624,7 +624,7 @@ def executar_separacao(simulacao: dict) -> dict:
                 status='ABERTO',
                 sincronizado_nf=False,
                 criado_em=agora_brasil(),
-                criado_por='Agente Logistico'  # Identificar origem da criação
+                criado_por=current_user.nome if current_user else 'Agente Logistico'  # Identificar origem da criação
             )
 
             db.session.add(separacao)
