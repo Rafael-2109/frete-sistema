@@ -1,29 +1,20 @@
 # Sistema de Hooks - Agent SDK
 
-Sistema robusto de hooks programáticos para o Agent SDK da Nacom Goya.
+Sistema simplificado de hooks usando subagente Haiku para gerenciamento inteligente de memórias.
 
 ## Arquitetura
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                              FLUXO DE HOOKS                                  │
+│                         FLUXO SIMPLIFICADO                                   │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│   [SESSÃO INICIA]                                                           │
-│        │                                                                    │
-│        ▼                                                                    │
-│   ┌─────────────────────────────────┐                                       │
-│   │ on_session_start                │  ← MemoryRetriever carrega memórias   │
-│   │ (START HOOK)                    │    Monta WorkingSet estruturado       │
-│   └─────────────────────────────────┘                                       │
-│        │                                                                    │
-│        ▼                                                                    │
 │   [USUÁRIO ENVIA MENSAGEM]                                                  │
 │        │                                                                    │
 │        ▼                                                                    │
 │   ┌─────────────────────────────────┐                                       │
-│   │ on_pre_query                    │  ← MemoryRetriever atualiza contexto  │
-│   │ (PRE HOOK)                      │    Renderiza context_injection        │
+│   │ PRE-HOOK                        │  ← Haiku analisa memórias existentes  │
+│   │ get_relevant_context()          │    + prompt → retorna contexto        │
 │   └─────────────────────────────────┘                                       │
 │        │                                                                    │
 │        ▼                                                                    │
@@ -31,189 +22,117 @@ Sistema robusto de hooks programáticos para o Agent SDK da Nacom Goya.
 │        │                                                                    │
 │        ▼                                                                    │
 │   ┌─────────────────────────────────┐                                       │
-│   │ on_post_response                │  ← PatternDetector → candidates       │
-│   │ (POST HOOK)                     │    WritePolicy → approved             │
-│   │                                 │    MemoryWriter → saved               │
-│   └─────────────────────────────────┘                                       │
-│        │                                                                    │
-│        ▼                                                                    │
-│   [FEEDBACK DO USUÁRIO (opcional)]                                          │
-│        │                                                                    │
-│        ▼                                                                    │
-│   ┌─────────────────────────────────┐                                       │
-│   │ on_feedback_received            │  ← LearningLoop processa feedback     │
-│   │ (FEEDBACK HOOK)                 │    Ajusta confidence de memórias      │
+│   │ POST-HOOK                       │  ← Haiku analisa conversa             │
+│   │ analyze_and_save()              │    → detecta padrões/correções        │
+│   │                                 │    → salva silenciosamente            │
 │   └─────────────────────────────────┘                                       │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
-```
-
-## Características de Robustez
-
-### 1. Multi-Worker Safe
-- **Cache local**: `_contexts` é cache, não fonte de verdade
-- **DB como fonte**: `agent_events` é append-only
-- **Lock distribuído**: `pg_advisory_xact_lock` para exclusão mútua
-- **Rebuild automático**: Contexto reconstruído do DB se cache vazio
-
-### 2. Separação de Responsabilidades
-```
-MemoryRetriever (pre-hook)    → Recupera memórias
-PatternDetector (post-hook)   → Detecta padrões → candidates
-MemoryWritePolicy             → Avalia candidates → approved
-MemoryWriter                  → Persiste approved → saved
-```
-
-### 3. WorkingSet Estruturado
-```python
-WorkingSet:
-    profile: Dict           # Dados do usuário
-    semantic: List[Dict]    # Fatos, preferências
-    procedural: List[Dict]  # Padrões de uso
-    recent_entities: List   # Entidades recentes
-    corrections: List[Dict] # Correções aprendidas
-```
-
-### 4. Write Policy (Gating)
-- Confidence mínima: 0.7 (normal) / 0.5 (fim de sessão)
-- Evidence count mínimo: 1
-- Deduplicação automática
-- **HIGH sensitivity NUNCA é recuperável**
-
-### 5. Instrumentação First-Class
-Todos os eventos são logados em `agent_events`:
-- `session_start` / `session_end`
-- `pre_query` / `post_response`
-- `tool_call` / `tool_result` / `tool_error`
-- `memory_retrieved` / `memory_candidate` / `memory_saved`
-- `feedback_received`
-
-### 6. Segurança
-- Scrubbing de CPF, CNPJ, senhas, tokens
-- Truncamento de payloads
-- HIGH sensitivity nunca vai para contexto
-
-## Uso
-
-### Integração no routes.py
-
-```python
-from app.agente.hooks import get_hook_manager
-
-async def _stream_chat_response(...):
-    manager = get_hook_manager()
-
-    # Início da sessão (primeira mensagem ou nova)
-    if is_first_message:
-        context = await manager.on_session_start(user_id, session_id)
-
-    # Antes de enviar ao SDK
-    pre_result = await manager.on_pre_query(user_id, session_id, prompt)
-    context_injection = pre_result['context_injection']
-
-    # ... chama SDK com context_injection no system_prompt.append ...
-
-    # Após resposta
-    post_result = await manager.on_post_response(
-        user_id=user_id,
-        session_id=session_id,
-        user_prompt=prompt,
-        assistant_response=full_text,
-        tools_used=tools_used,
-        tool_errors=tool_errors,
-    )
-
-    # Verifica se deve pedir feedback
-    if post_result['feedback_requested']:
-        # Envia evento para frontend pedir feedback
-        yield _sse_event('feedback_request', {})
-```
-
-### API de Feedback
-
-```python
-@agente_bp.route('/api/feedback', methods=['POST'])
-async def api_feedback():
-    data = request.get_json()
-    manager = get_hook_manager()
-
-    result = await manager.on_feedback_received(
-        user_id=current_user.id,
-        session_id=data['session_id'],
-        feedback_type=data['type'],  # positive, negative, correction, preference
-        feedback_data=data['data'],
-    )
-
-    return jsonify(result)
-```
-
-## Migração
-
-### Local (Python)
-```bash
-python scripts/migrations/create_agent_events_table.py
-```
-
-### Render (SQL)
-```sql
--- Copiar conteúdo de scripts/migrations/create_agent_events_table.sql
 ```
 
 ## Componentes
 
 | Componente | Arquivo | Responsabilidade |
 |------------|---------|------------------|
-| HookManager | `manager.py` | Coordenação central |
-| MemoryRetriever | `memory_retriever.py` | Recupera memórias |
-| PatternDetector | `pattern_detector.py` | Detecta padrões |
-| MemoryWritePolicy | `write_policy.py` | Avalia candidatos |
-| MemoryWriter | `memory_writer.py` | Persiste memórias |
-| EventLogger | `event_logger.py` | Instrumentação |
-| LearningLoop | `learning_loop.py` | Processa feedback |
+| MemoryAgent | `memory_agent.py` | Subagente Haiku para PRE e POST hooks |
 
-## Enums
+## Uso
 
 ```python
-class MemoryScope(str, Enum):
-    GLOBAL = "global"   # Todos os usuários
-    ORG = "org"         # Organização
-    USER = "user"       # Específico do usuário
+from app.agente.hooks import get_memory_agent
 
-class MemorySensitivity(str, Enum):
-    LOW = "low"         # Recuperável livremente
-    MEDIUM = "medium"   # Requer contexto
-    HIGH = "high"       # APENAS telemetria, NUNCA recuperável
+agent = get_memory_agent()
 
-class EventType(str, Enum):
-    SESSION_START = "session_start"
-    PRE_QUERY = "pre_query"
-    TOOL_CALL = "tool_call"
-    TOOL_RESULT = "tool_result"
-    TOOL_ERROR = "tool_error"
-    POST_RESPONSE = "post_response"
-    FEEDBACK_RECEIVED = "feedback_received"
-    SESSION_END = "session_end"
-    MEMORY_RETRIEVED = "memory_retrieved"
-    MEMORY_CANDIDATE = "memory_candidate"
-    MEMORY_SAVED = "memory_saved"
+# PRE-HOOK: Antes de enviar ao SDK
+context = agent.get_relevant_context(user_id, prompt)
+if context:
+    prompt_with_context = f"[CONTEXTO DO USUÁRIO]\n{context}\n\n{prompt}"
+
+# ... SDK processa ...
+
+# POST-HOOK: Após resposta (silencioso)
+result = agent.analyze_and_save(user_id, prompt, response)
 ```
 
-## Padrões Detectados
+## O que o Haiku detecta e salva
 
-O PatternDetector detecta automaticamente:
+### 1. TERMOS E SINÔNIMOS (category: sinonimos)
+- Abreviações: "VCD", "PO", "NF", "CT-e"
+- Vocabulário específico: como usuário se refere a entidades
+- Exemplo: "pedido dele" = pedido_cliente
 
-| Padrão | Trigger | Exemplo |
-|--------|---------|---------|
-| Preferência comunicação | "prefiro respostas curtas" | communication=direto |
-| Correção | "não é assim, é X" | Salva correção |
-| Fato pessoal | "sou gerente de..." | role=gerente |
-| Padrão procedural | Mesma keyword em 2+ queries | Detecta tópico frequente |
+### 2. REGRAS DE NEGÓCIO (category: negocio)
+- Políticas: "FOB sempre manda completo"
+- Prioridades: "Atacadão 183 sempre por último"
+- Restrições: "cliente X não aceita parcial"
 
-## Limites
+### 3. PADRÕES DE TRABALHO (category: workflow)
+- Sequências: "sempre verifico estoque antes de separar"
+- Preferências: "começo pelo maior volume"
+- Rotinas: "analiso Atacadão primeiro"
 
-```python
-MAX_MEMORIES_PER_TYPE = 5
-MAX_CONTEXT_INJECTION_CHARS = 2000
-MAX_RECENT_ENTITIES = 10
-MAX_PAYLOAD_LOG_SIZE = 500
+### 4. CORREÇÕES DE DOMÍNIO (category: dominio)
+- Campos: "esse campo se chama X, não Y"
+- Processos: "aqui fazemos assim, não assado"
+- Terminologia: "chamamos de X, não de Y"
+
+### 5. FATOS DO USUÁRIO (category: usuario)
+- Cargo e responsabilidades
+- Clientes que gerencia
+- Produtos que acompanha
+
+## O que NÃO é salvo
+
+- Dados temporários ("pedido 12345 de hoje")
+- Informações já existentes nas memórias
+- Obviedades sem valor agregado
+
+## Custo Estimado
+
+Modelo: `claude-haiku-4-5-20251001`
+
+| Operação | Tokens ~in | Tokens ~out | Custo |
+|----------|-----------|-------------|-------|
+| PRE-HOOK | 500 | 200 | ~$0.0015 |
+| POST-HOOK | 1500 | 200 | ~$0.0015 |
+| **Total/mensagem** | | | **~$0.003** |
+
+## Estrutura de Memórias
+
+As memórias são salvas na tabela `agent_memories` com paths organizados por categoria:
+
 ```
+/memories/
+├── preferences.xml           # Preferências de comunicação (feedback)
+├── context/
+│   └── usuario.xml           # Fatos do usuário (category: usuario)
+├── learned/
+│   ├── termos.xml            # Termos e sinônimos (category: sinonimos)
+│   ├── regras.xml            # Regras de negócio (category: negocio)
+│   ├── patterns.xml          # Padrões de trabalho (category: workflow)
+│   └── auto_*.xml            # Detecções não categorizadas
+└── corrections/
+    ├── dominio.xml           # Correções de domínio (category: dominio)
+    └── feedback_*.xml        # Correções via feedback
+```
+
+### Formato das Memórias
+
+```xml
+<memoria type="regra" category="negocio">
+  <content>FOB sempre manda completo - não aceita parcial</content>
+  <tags>FOB, parcial, regra</tags>
+  <detected_at>2024-12-13T15:00:00Z</detected_at>
+  <source>auto_haiku</source>
+</memoria>
+```
+
+## Diferença da Versão Anterior
+
+| Aspecto | Versão Antiga | Versão Nova |
+|---------|---------------|-------------|
+| Arquivos | 8 arquivos (~900 linhas) | 1 arquivo (~250 linhas) |
+| Detecção | Regex frágeis | LLM (Haiku) inteligente |
+| Custo extra | Zero | ~$0.003/mensagem |
+| Falsos positivos | Muitos | Poucos (LLM entende contexto) |
+| Feedback positive/negative | Código morto | Removido |

@@ -209,27 +209,25 @@ def _stream_chat_response(
     from .sdk import get_client, get_cost_tracker
     from .config.permissions import can_use_tool
     from .models import AgentSession
-    from .hooks import get_hook_manager
+    from .hooks import get_memory_agent
     from queue import Queue, Empty
     from threading import Thread
 
     app = current_app._get_current_object()
     event_queue = Queue()
 
-    # FEAT-030: Estado para acumular resposta
-    # FEAT-031: Adiciona campos para hooks
+    # Estado para acumular resposta
     response_state = {
         'full_text': '',
         'tools_used': [],
-        'tool_errors': [],  # FEAT-031: Erros de tools para post-hook
+        'tool_errors': [],
         'input_tokens': 0,
         'output_tokens': 0,
         'sdk_session_id': None,
         'our_session_id': session_id,
         'session_expired': False,
         'error_message': None,
-        'context_injection': '',  # FEAT-031: Contexto injetado pelo hook
-        'feedback_requested': False,  # FEAT-031: Se deve pedir feedback
+        'context_injection': '',
     }
 
     def run_async_stream():
@@ -240,7 +238,7 @@ def _stream_chat_response(
             logger.info("[AGENTE] Iniciando async_stream()")
             client = get_client()
             cost_tracker = get_cost_tracker()
-            hook_manager = get_hook_manager(app)
+            memory_agent = get_memory_agent(app)
             processed_message_ids = set()
 
             # FEAT-030: Busca sessão existente para obter sdk_session_id
@@ -261,24 +259,18 @@ def _stream_chat_response(
 
             try:
                 # =============================================================
-                # FEAT-031: PRE-HOOK - Carrega memórias do usuário
+                # PRE-HOOK: Subagente Haiku recupera memórias relevantes
                 # =============================================================
                 context_injection = ""
                 try:
-                    # Inicia sessão no hook manager (carrega memórias)
-                    is_new_session = sdk_session_id is None
-                    await hook_manager.on_session_start(user_id, our_session_id, is_new_session)
-
-                    # Executa pre-query hook (recupera memórias relevantes)
-                    pre_result = await hook_manager.on_pre_query(user_id, our_session_id, message)
-                    context_injection = pre_result.get('context_injection', '')
+                    context_injection = memory_agent.get_relevant_context(user_id, message)
                     response_state['context_injection'] = context_injection
 
                     if context_injection:
-                        logger.info(f"[AGENTE] HOOK: Contexto injetado ({len(context_injection)} chars)")
+                        logger.info(f"[AGENTE] MEMORIA: Contexto injetado ({len(context_injection)} chars)")
 
                 except Exception as hook_error:
-                    logger.warning(f"[AGENTE] HOOK PRE-QUERY falhou (continuando sem contexto): {hook_error}")
+                    logger.warning(f"[AGENTE] PRE-HOOK falhou (continuando sem contexto): {hook_error}")
 
                 # FEAT-030: Prepara prompt com contexto se necessário
                 prompt_to_send = message
@@ -341,17 +333,6 @@ def _stream_chat_response(
                             'description': event.metadata.get('description', '')
                         }))
 
-                        # FEAT-031: Instrumenta tool call
-                        try:
-                            await hook_manager.on_tool_call(
-                                user_id=user_id,
-                                session_id=our_session_id,
-                                tool_name=tool_name,
-                                tool_input=event.metadata.get('input', {}),
-                            )
-                        except Exception as hook_err:
-                            logger.debug(f"[AGENTE] HOOK tool_call falhou: {hook_err}")
-
                     elif event.type == 'tool_result':
                         tool_name_result = event.metadata.get('tool_name', '')
                         is_error = event.metadata.get('is_error', False)
@@ -367,18 +348,6 @@ def _stream_chat_response(
                             'tool_name': tool_name_result,
                             'result': event.content
                         }))
-
-                        # FEAT-031: Instrumenta tool result
-                        try:
-                            await hook_manager.on_tool_result(
-                                user_id=user_id,
-                                session_id=our_session_id,
-                                tool_name=tool_name_result,
-                                result=event.content,
-                                is_error=is_error,
-                            )
-                        except Exception as hook_err:
-                            logger.debug(f"[AGENTE] HOOK tool_result falhou: {hook_err}")
 
                     elif event.type == 'todos':
                         todos = event.content.get('todos', [])
@@ -406,33 +375,27 @@ def _stream_chat_response(
                             )
 
                         # =============================================================
-                        # FEAT-031: POST-HOOK - Detecta padrões e preferências
+                        # POST-HOOK: Subagente Haiku analisa e salva padrões/correções
                         # =============================================================
                         try:
-                            post_result = await hook_manager.on_post_response(
+                            post_result = memory_agent.analyze_and_save(
                                 user_id=user_id,
-                                session_id=our_session_id,
-                                user_prompt=message,
-                                assistant_response=response_state['full_text'],
-                                tools_used=response_state['tools_used'],
-                                tool_errors=response_state['tool_errors'],
+                                prompt=message,
+                                response=response_state['full_text'],
                             )
 
-                            response_state['feedback_requested'] = post_result.get('feedback_requested', False)
-
-                            if post_result.get('memories_saved'):
-                                logger.info(f"[AGENTE] HOOK: {len(post_result['memories_saved'])} memórias salvas")
+                            if post_result.get('action') == 'saved':
+                                logger.info(f"[AGENTE] MEMORIA: Salvo {post_result.get('type')} em {post_result.get('path')}")
 
                         except Exception as hook_error:
-                            logger.warning(f"[AGENTE] HOOK POST-RESPONSE falhou: {hook_error}")
+                            logger.warning(f"[AGENTE] POST-HOOK falhou: {hook_error}")
 
-                        # Inclui flag de feedback no evento done
+                        # Evento done
                         event_queue.put(_sse_event('done', {
                             'session_id': response_state['our_session_id'],
                             'input_tokens': response_state['input_tokens'],
                             'output_tokens': response_state['output_tokens'],
                             'cost_usd': cost_usd,
-                            'feedback_requested': response_state['feedback_requested'],  # FEAT-031
                         }))
 
             except Exception as e:
@@ -1175,7 +1138,7 @@ def api_health():
 @login_required
 def api_feedback():
     """
-    FEAT-031: Recebe feedback do usuário sobre a resposta.
+    Recebe feedback do usuário sobre a resposta.
 
     POST /agente/api/feedback
     {
@@ -1188,13 +1151,12 @@ def api_feedback():
         }
     }
 
-    O feedback é processado pelo LearningLoop para:
-    - Ajustar confidence de memórias existentes
-    - Salvar novas correções/preferências
+    Apenas correction e preference salvam memórias.
+    positive/negative são apenas logados (analytics futuro).
     """
     try:
-        import asyncio
-        from .hooks import get_hook_manager
+        from .models import AgentMemory
+        from datetime import datetime, timezone
 
         data = request.get_json()
 
@@ -1221,18 +1183,40 @@ def api_feedback():
             }), 400
 
         user_id = current_user.id
+        result = {'processed': True, 'action': feedback_type, 'memory_path': None}
 
-        # Processa feedback via hook manager
-        async def process_feedback():
-            manager = get_hook_manager()
-            return await manager.on_feedback_received(
-                user_id=user_id,
-                session_id=session_id,
-                feedback_type=feedback_type,
-                feedback_data=feedback_data,
-            )
+        # Salva correções e preferências diretamente
+        if feedback_type == 'correction':
+            correction_text = feedback_data.get('correction', '')
+            if correction_text:
+                path = f"/memories/corrections/feedback_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xml"
+                content = f"""<correction>
+<text>{correction_text}</text>
+<context>{feedback_data.get('context', '')}</context>
+<source>user_feedback</source>
+<created_at>{datetime.now(timezone.utc).isoformat()}</created_at>
+</correction>"""
+                AgentMemory.create_file(user_id, path, content)
+                db.session.commit()
+                result['memory_path'] = path
 
-        result = asyncio.run(process_feedback())
+        elif feedback_type == 'preference':
+            pref_key = feedback_data.get('key', 'general')
+            pref_value = feedback_data.get('value', '')
+            if pref_value:
+                path = '/memories/preferences.xml'
+                content = f"""<preferences>
+<{pref_key}>{pref_value}</{pref_key}>
+<source>user_feedback</source>
+<updated_at>{datetime.now(timezone.utc).isoformat()}</updated_at>
+</preferences>"""
+                existing = AgentMemory.get_by_path(user_id, path)
+                if existing:
+                    existing.content = content
+                else:
+                    AgentMemory.create_file(user_id, path, content)
+                db.session.commit()
+                result['memory_path'] = path
 
         logger.info(
             f"[AGENTE] Feedback recebido | user={user_id} "

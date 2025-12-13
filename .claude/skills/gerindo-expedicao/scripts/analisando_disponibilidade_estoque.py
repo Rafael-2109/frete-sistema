@@ -28,12 +28,11 @@ from collections import defaultdict
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..')))
 
 # Importar modulo centralizado de resolucao de entidades
-from resolver_entidades import (
+from resolver_entidades import ( # type: ignore # noqa: E402
     resolver_pedido,
     get_prefixos_grupo,
     listar_grupos_disponiveis,
-    formatar_sugestao_pedido,
-    GRUPOS_EMPRESARIAIS
+    formatar_sugestao_pedido
 )
 
 
@@ -64,14 +63,14 @@ def parse_data(data_str: str) -> date:
 def encontrar_data_disponibilidade(projecao: dict, qtd_necessaria: float) -> str:
     """Encontra a primeira data em que havera estoque suficiente"""
     if not projecao.get('projecao'):
-        return None
+        return None # type: ignore
 
     for dia in projecao['projecao']:
         saldo = dia.get('saldo_final', 0)
         if saldo >= qtd_necessaria:
             return dia.get('data')
 
-    return None
+    return None # type: ignore
 
 
 def calcular_completude(num_pedido: str, itens_carteira: list) -> dict:
@@ -512,7 +511,6 @@ def analisar_grupo(args):
 def diagnosticar_origem_falta(cod_produto: str, demanda_cliente: float, estoque_atual: float, args) -> dict:
     """Q5: Distingue falta absoluta vs falta relativa"""
     from app.carteira.models import CarteiraPrincipal
-    from app.separacao.models import Separacao
     from sqlalchemy import func
     from app import db
 
@@ -689,7 +687,6 @@ def filtrar_sem_agendamento(pedidos: list) -> list:
 def analisar_atrasados(args):
     """Q11: Analisa pedidos atrasados e diagnostica se eh por falta de estoque"""
     from app.separacao.models import Separacao
-    from app.estoque.services.estoque_simples import ServicoEstoqueSimples
     from sqlalchemy import func
     from app import db
 
@@ -920,8 +917,8 @@ def ranking_impacto(args):
                 'qtd_consumida': qtd_consumida,
                 'impacto_percentual': round(impacto * 100, 1)
             })
-            impacto_pedidos[sep.num_pedido]['impacto_total'] += impacto
-            impacto_pedidos[sep.num_pedido]['valor_total'] += float(sep.valor_saldo or 0)
+            impacto_pedidos[sep.num_pedido]['impacto_total'] += impacto # type: ignore
+            impacto_pedidos[sep.num_pedido]['valor_total'] += float(sep.valor_saldo or 0) # type: ignore
 
         # Carteira
         itens_carteira = CarteiraPrincipal.query.filter(
@@ -944,12 +941,12 @@ def ranking_impacto(args):
                     'qtd_consumida': qtd_consumida,
                     'impacto_percentual': round(impacto * 100, 1)
                 })
-                impacto_pedidos[item.num_pedido]['impacto_total'] += impacto
+                impacto_pedidos[item.num_pedido]['impacto_total'] += impacto # type: ignore
                 valor_item = qtd_consumida * float(item.preco_produto_pedido or 0)
-                impacto_pedidos[item.num_pedido]['valor_total'] += valor_item
+                impacto_pedidos[item.num_pedido]['valor_total'] += valor_item # type: ignore
 
     pedidos_lista = list(impacto_pedidos.values())
-    pedidos_lista.sort(key=lambda x: -x['impacto_total'])
+    pedidos_lista.sort(key=lambda x: -x['impacto_total']) # type: ignore
 
     for pedido in pedidos_lista:
         pedido['impacto_total'] = round(pedido['impacto_total'], 2)
