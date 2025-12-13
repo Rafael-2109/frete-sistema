@@ -12,6 +12,12 @@ FEAT-030: Histórico de Mensagens Persistente
 - Tratamento de sessão expirada no SDK
 - Endpoint para buscar histórico
 
+FEAT-031: Sistema de Hooks para Memória Persistente
+- PRE-HOOK: Carrega memórias do usuário antes de enviar ao SDK
+- POST-HOOK: Detecta padrões e preferências após resposta
+- TOOL HOOKS: Instrumenta tool calls para analytics
+- FEEDBACK: Processa feedback do usuário
+
 Endpoints:
 - GET  /agente/              - Página de chat
 - POST /agente/api/chat      - Chat com streaming (SSE)
@@ -24,6 +30,7 @@ Endpoints:
 - GET  /agente/api/files/<filename> - Download de arquivo
 - GET  /agente/api/files     - Lista arquivos da sessão
 - DELETE /agente/api/files/<filename> - Remove arquivo
+- POST /agente/api/feedback  - Recebe feedback do usuário (FEAT-031)
 """
 
 import logging
@@ -202,6 +209,7 @@ def _stream_chat_response(
     from .sdk import get_client, get_cost_tracker
     from .config.permissions import can_use_tool
     from .models import AgentSession
+    from .hooks import get_hook_manager
     from queue import Queue, Empty
     from threading import Thread
 
@@ -209,15 +217,19 @@ def _stream_chat_response(
     event_queue = Queue()
 
     # FEAT-030: Estado para acumular resposta
+    # FEAT-031: Adiciona campos para hooks
     response_state = {
         'full_text': '',
         'tools_used': [],
+        'tool_errors': [],  # FEAT-031: Erros de tools para post-hook
         'input_tokens': 0,
         'output_tokens': 0,
         'sdk_session_id': None,
         'our_session_id': session_id,
         'session_expired': False,
         'error_message': None,
+        'context_injection': '',  # FEAT-031: Contexto injetado pelo hook
+        'feedback_requested': False,  # FEAT-031: Se deve pedir feedback
     }
 
     def run_async_stream():
@@ -228,10 +240,12 @@ def _stream_chat_response(
             logger.info("[AGENTE] Iniciando async_stream()")
             client = get_client()
             cost_tracker = get_cost_tracker()
+            hook_manager = get_hook_manager(app)
             processed_message_ids = set()
 
             # FEAT-030: Busca sessão existente para obter sdk_session_id
             sdk_session_id = None
+            our_session_id = session_id
 
             with app.app_context():
                 if session_id:
@@ -240,7 +254,32 @@ def _stream_chat_response(
                         sdk_session_id = session.get_sdk_session_id()
                         logger.info(f"[AGENTE] Sessão encontrada: {session_id[:8]}... SDK: {sdk_session_id[:8] if sdk_session_id else 'None'}")
 
+            # FEAT-031: Se não temos session_id, criar novo agora para os hooks
+            if not our_session_id:
+                our_session_id = str(uuid.uuid4())
+                response_state['our_session_id'] = our_session_id
+
             try:
+                # =============================================================
+                # FEAT-031: PRE-HOOK - Carrega memórias do usuário
+                # =============================================================
+                context_injection = ""
+                try:
+                    # Inicia sessão no hook manager (carrega memórias)
+                    is_new_session = sdk_session_id is None
+                    await hook_manager.on_session_start(user_id, our_session_id, is_new_session)
+
+                    # Executa pre-query hook (recupera memórias relevantes)
+                    pre_result = await hook_manager.on_pre_query(user_id, our_session_id, message)
+                    context_injection = pre_result.get('context_injection', '')
+                    response_state['context_injection'] = context_injection
+
+                    if context_injection:
+                        logger.info(f"[AGENTE] HOOK: Contexto injetado ({len(context_injection)} chars)")
+
+                except Exception as hook_error:
+                    logger.warning(f"[AGENTE] HOOK PRE-QUERY falhou (continuando sem contexto): {hook_error}")
+
                 # FEAT-030: Prepara prompt com contexto se necessário
                 prompt_to_send = message
 
@@ -256,6 +295,10 @@ def _stream_chat_response(
                                 history_text = _format_messages_as_context(previous_messages)
                                 prompt_to_send = f"{history_text}\n\n[NOVA MENSAGEM DO USUÁRIO]\n{message}"
                                 logger.info(f"[AGENTE] Injetando {len(previous_messages)} mensagens como contexto")
+
+                # FEAT-031: Injeta contexto de memória do usuário no prompt
+                if context_injection:
+                    prompt_to_send = f"[CONTEXTO DO USUÁRIO]\n{context_injection}\n\n{prompt_to_send}"
 
                 logger.info(f"[AGENTE] Chamando SDK | sdk_session_id: {sdk_session_id[:8] if sdk_session_id else 'Nova'}")
 
@@ -298,11 +341,44 @@ def _stream_chat_response(
                             'description': event.metadata.get('description', '')
                         }))
 
+                        # FEAT-031: Instrumenta tool call
+                        try:
+                            await hook_manager.on_tool_call(
+                                user_id=user_id,
+                                session_id=our_session_id,
+                                tool_name=tool_name,
+                                tool_input=event.metadata.get('input', {}),
+                            )
+                        except Exception as hook_err:
+                            logger.debug(f"[AGENTE] HOOK tool_call falhou: {hook_err}")
+
                     elif event.type == 'tool_result':
+                        tool_name_result = event.metadata.get('tool_name', '')
+                        is_error = event.metadata.get('is_error', False)
+
+                        # FEAT-031: Registra erros de tools para post-hook
+                        if is_error:
+                            response_state['tool_errors'].append({
+                                'tool_name': tool_name_result,
+                                'error': str(event.content)[:500],
+                            })
+
                         event_queue.put(_sse_event('tool_result', {
-                            'tool_name': event.metadata.get('tool_name'),
+                            'tool_name': tool_name_result,
                             'result': event.content
                         }))
+
+                        # FEAT-031: Instrumenta tool result
+                        try:
+                            await hook_manager.on_tool_result(
+                                user_id=user_id,
+                                session_id=our_session_id,
+                                tool_name=tool_name_result,
+                                result=event.content,
+                                is_error=is_error,
+                            )
+                        except Exception as hook_err:
+                            logger.debug(f"[AGENTE] HOOK tool_result falhou: {hook_err}")
 
                     elif event.type == 'todos':
                         todos = event.content.get('todos', [])
@@ -329,11 +405,34 @@ def _stream_chat_response(
                                 user_id=user_id,
                             )
 
+                        # =============================================================
+                        # FEAT-031: POST-HOOK - Detecta padrões e preferências
+                        # =============================================================
+                        try:
+                            post_result = await hook_manager.on_post_response(
+                                user_id=user_id,
+                                session_id=our_session_id,
+                                user_prompt=message,
+                                assistant_response=response_state['full_text'],
+                                tools_used=response_state['tools_used'],
+                                tool_errors=response_state['tool_errors'],
+                            )
+
+                            response_state['feedback_requested'] = post_result.get('feedback_requested', False)
+
+                            if post_result.get('memories_saved'):
+                                logger.info(f"[AGENTE] HOOK: {len(post_result['memories_saved'])} memórias salvas")
+
+                        except Exception as hook_error:
+                            logger.warning(f"[AGENTE] HOOK POST-RESPONSE falhou: {hook_error}")
+
+                        # Inclui flag de feedback no evento done
                         event_queue.put(_sse_event('done', {
                             'session_id': response_state['our_session_id'],
                             'input_tokens': response_state['input_tokens'],
                             'output_tokens': response_state['output_tokens'],
                             'cost_usd': cost_usd,
+                            'feedback_requested': response_state['feedback_requested'],  # FEAT-031
                         }))
 
             except Exception as e:
@@ -1064,5 +1163,92 @@ def api_health():
         return jsonify({
             'success': False,
             'status': 'unhealthy',
+            'error': str(e)
+        }), 500
+
+
+# =============================================================================
+# API - FEEDBACK (FEAT-031)
+# =============================================================================
+
+@agente_bp.route('/api/feedback', methods=['POST'])
+@login_required
+def api_feedback():
+    """
+    FEAT-031: Recebe feedback do usuário sobre a resposta.
+
+    POST /agente/api/feedback
+    {
+        "session_id": "uuid-da-sessao",
+        "type": "positive" | "negative" | "correction" | "preference",
+        "data": {
+            "correction": "texto da correção",  // para type=correction
+            "key": "communication",              // para type=preference
+            "value": "direto"                    // para type=preference
+        }
+    }
+
+    O feedback é processado pelo LearningLoop para:
+    - Ajustar confidence de memórias existentes
+    - Salvar novas correções/preferências
+    """
+    try:
+        import asyncio
+        from .hooks import get_hook_manager
+
+        data = request.get_json()
+
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'Body é obrigatório'
+            }), 400
+
+        session_id = data.get('session_id')
+        feedback_type = data.get('type')
+        feedback_data = data.get('data', {})
+
+        if not session_id:
+            return jsonify({
+                'success': False,
+                'error': 'session_id é obrigatório'
+            }), 400
+
+        if feedback_type not in ['positive', 'negative', 'correction', 'preference']:
+            return jsonify({
+                'success': False,
+                'error': 'type deve ser: positive, negative, correction ou preference'
+            }), 400
+
+        user_id = current_user.id
+
+        # Processa feedback via hook manager
+        async def process_feedback():
+            manager = get_hook_manager()
+            return await manager.on_feedback_received(
+                user_id=user_id,
+                session_id=session_id,
+                feedback_type=feedback_type,
+                feedback_data=feedback_data,
+            )
+
+        result = asyncio.run(process_feedback())
+
+        logger.info(
+            f"[AGENTE] Feedback recebido | user={user_id} "
+            f"session={session_id[:8]}... type={feedback_type}"
+        )
+
+        return jsonify({
+            'success': True,
+            'processed': result.get('processed', False),
+            'action': result.get('action'),
+            'memory_path': result.get('memory_path'),
+        })
+
+    except Exception as e:
+        logger.error(f"[AGENTE] Erro ao processar feedback: {e}")
+        return jsonify({
+            'success': False,
             'error': str(e)
         }), 500

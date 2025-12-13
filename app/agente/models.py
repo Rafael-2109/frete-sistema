@@ -10,7 +10,7 @@ Arquitetura:
 - Quando SDK expira, injeta histórico de mensagens como contexto
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional, Tuple
 import uuid
 
@@ -535,3 +535,80 @@ class AgentMemory(db.Model):
 
         memory.path = new_path
         return True
+
+
+class AgentEvent(db.Model):
+    """
+    Eventos do Agente para instrumentacao (append-only).
+
+    Usado para:
+    - Dataset de ML
+    - Analytics de uso
+    - Debugging e auditoria
+    - Rastreamento de comportamento
+
+    Tipos de eventos:
+    - session_start / session_end
+    - pre_query / post_response
+    - tool_call / tool_result / tool_error
+    - memory_retrieved / memory_candidate / memory_saved
+    - feedback_received
+    """
+    __tablename__ = 'agent_events'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False, index=True)
+    session_id = db.Column(db.String(100), nullable=False, index=True)
+
+    # Tipo do evento
+    event_type = db.Column(db.String(50), nullable=False, index=True)
+
+    # Dados do evento (JSONB)
+    data = db.Column(db.JSON, default=dict)
+
+    # Timestamp (timezone-aware)
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    # Relacionamento
+    user = db.relationship('Usuario', backref=db.backref('agent_events', lazy='dynamic'))
+
+    # Indices para queries comuns
+    __table_args__ = (
+        db.Index('ix_agent_events_user_session', 'user_id', 'session_id'),
+        db.Index('ix_agent_events_type_created', 'event_type', 'created_at'),
+    )
+
+    def __repr__(self):
+        return f'<AgentEvent {self.event_type} user={self.user_id} session={self.session_id[:8]}>'
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serializa para JSON."""
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'session_id': self.session_id,
+            'event_type': self.event_type,
+            'data': self.data,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
+    @classmethod
+    def get_by_session(cls, session_id: str, limit: int = 100) -> List['AgentEvent']:
+        """Busca eventos de uma sessao."""
+        return cls.query.filter_by(session_id=session_id)\
+            .order_by(cls.created_at.desc())\
+            .limit(limit)\
+            .all()
+
+    @classmethod
+    def get_by_user(cls, user_id: int, event_type: str = None, limit: int = 100) -> List['AgentEvent']:
+        """Busca eventos de um usuario."""
+        query = cls.query.filter_by(user_id=user_id)
+        if event_type:
+            query = query.filter_by(event_type=event_type)
+        return query.order_by(cls.created_at.desc()).limit(limit).all()
+
+    @classmethod
+    def count_by_type(cls, user_id: int, event_type: str) -> int:
+        """Conta eventos de um tipo para um usuario."""
+        return cls.query.filter_by(user_id=user_id, event_type=event_type).count()
