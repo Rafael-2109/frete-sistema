@@ -1,649 +1,502 @@
 {% extends "base.html" %}
 
-{% block title %}Correção de Datas - NFs de Crédito{% endblock %}
+{% block title %}Correcao de Datas - NFs de Credito{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/financeiro/extrato.css') }}">
 <style>
-    .hub-container {
-        max-width: 1800px;
-        margin: 0 auto;
-    }
-
-    /* Stats Cards */
-    .stat-card {
-        border: none;
-        border-radius: 10px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        transition: all 0.3s ease;
-    }
-
-    .stat-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.12);
-    }
-
-    .stat-card .stat-value {
-        font-size: 1.8rem;
-        font-weight: 700;
-    }
-
-    .stat-card .stat-label {
-        font-size: 0.8rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-
-    /* Tabela */
-    .table-correcao {
-        font-size: 0.85rem;
-    }
-
-    .table-correcao th {
-        background: #f8f9fa;
-        position: sticky;
-        top: 0;
-        z-index: 10;
-        font-weight: 600;
-        border-bottom: 2px solid #dee2e6;
-    }
-
-    .table-correcao .data-errada {
-        background: #f8d7da;
-        color: #721c24;
-        font-weight: 600;
-    }
-
-    .table-correcao .data-correta {
-        background: #d4edda;
-        color: #155724;
-        font-weight: 600;
-    }
-
-    /* Status badges */
-    .status-badge {
-        font-size: 0.75rem;
-        padding: 0.25rem 0.5rem;
-        border-radius: 4px;
-        font-weight: 500;
-    }
-
-    .status-pendente { background: #fff3cd; color: #856404; }
-    .status-corrigido { background: #28a745; color: white; }
-    .status-erro { background: #dc3545; color: white; }
-    .status-ignorado { background: #6c757d; color: white; }
-
-    /* Botões de ação */
-    .btn-action {
-        padding: 0.25rem 0.5rem;
-        font-size: 0.8rem;
-    }
-
-    /* Filtros */
-    .filter-card {
-        background: #f8f9fa;
-        border-radius: 8px;
-        padding: 1rem;
-    }
-
-    /* Checkbox */
-    .form-check-input:checked {
-        background-color: #0d6efd;
-        border-color: #0d6efd;
-    }
-
-    /* Loading */
-    .loading-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(255,255,255,0.8);
-        z-index: 9999;
-        display: none;
-        justify-content: center;
-        align-items: center;
-    }
-
-    .loading-overlay.active {
-        display: flex;
-    }
+.data-errada {
+    background: var(--fin-bg-danger) !important;
+    color: var(--fin-accent-danger);
+    font-weight: 600;
+}
+.data-correta {
+    background: var(--fin-bg-success) !important;
+    color: var(--fin-accent-success);
+    font-weight: 600;
+}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="hub-container p-4">
-    <!-- Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
+<div class="fin-container">
+    <!-- ================================================================== -->
+    <!-- HEADER -->
+    <!-- ================================================================== -->
+    <header class="fin-header">
         <div>
-            <h4 class="mb-1">
-                <i class="bi bi-calendar-check me-2"></i>
-                Correção de Datas - NFs de Crédito
-            </h4>
-            <p class="text-muted mb-0">
-                Identifica e corrige datas de lançamento incorretas em notas de crédito
+            <nav class="fin-breadcrumb">
+                <a href="{{ url_for('financeiro.contas_receber_hub') }}" class="fin-breadcrumb__item">
+                    <i class="fas fa-wallet"></i> Contas a Receber
+                </a>
+                <span class="fin-breadcrumb__separator">/</span>
+                <span class="fin-breadcrumb__current">Correcao de Datas</span>
+            </nav>
+            <h1 class="fin-header__title">
+                <i class="fas fa-calendar-check"></i>
+                Correcao de Datas - NFs de Credito
+            </h1>
+            <p class="fin-header__subtitle">
+                Identifica e corrige datas de lancamento incorretas em notas de credito
             </p>
         </div>
-        <div>
-            <button class="btn btn-outline-primary me-2" onclick="executarDiagnostico()">
-                <i class="bi bi-search me-1"></i> Diagnosticar Odoo
+        <div class="fin-header__actions">
+            <button class="theme-toggle" onclick="toggleTheme()" title="Alternar tema">
+                <i class="fas fa-sun theme-toggle__icon theme-toggle__icon--light"></i>
+                <i class="fas fa-moon theme-toggle__icon theme-toggle__icon--dark"></i>
             </button>
-            <button class="btn btn-success me-2" onclick="corrigirSelecionados()" id="btnCorrigir" disabled>
-                <i class="bi bi-check-circle me-1"></i> Corrigir Selecionados
+            <button class="fin-btn fin-btn--ghost" onclick="executarDiagnostico()">
+                <i class="fas fa-search"></i> Diagnosticar Odoo
             </button>
-            <button class="btn btn-outline-danger me-2" onclick="resetarErros()" id="btnResetarErros">
-                <i class="bi bi-arrow-counterclockwise me-1"></i> Resetar Erros
+            <button class="fin-btn fin-btn--success" onclick="corrigirSelecionados()" id="btnCorrigir" disabled>
+                <i class="fas fa-check-circle"></i> Corrigir Selecionados
             </button>
-            <a href="{{ url_for('financeiro.correcao_datas_api_exportar') }}" class="btn btn-outline-secondary">
-                <i class="bi bi-file-earmark-excel me-1"></i> Exportar Excel
+            <button class="fin-btn fin-btn--ghost" onclick="resetarErros()">
+                <i class="fas fa-redo"></i> Resetar Erros
+            </button>
+            <a href="{{ url_for('financeiro.correcao_datas_api_exportar') }}" class="fin-btn fin-btn--ghost">
+                <i class="fas fa-file-excel"></i> Exportar
             </a>
         </div>
-    </div>
+    </header>
 
-    <!-- Stats Cards -->
-    <div class="row g-3 mb-4">
-        <div class="col-md-3">
-            <div class="card stat-card">
-                <div class="card-body text-center">
-                    <div class="stat-value text-primary" id="statTotal">{{ stats.total }}</div>
-                    <div class="stat-label text-muted">Total Diagnosticado</div>
-                </div>
-            </div>
+    <!-- ================================================================== -->
+    <!-- STATS CARDS -->
+    <!-- ================================================================== -->
+    <div class="fin-stats">
+        <div class="fin-stat-card fin-stat-card--primary">
+            <div class="fin-stat-card__value" id="statTotal">{{ stats.total }}</div>
+            <div class="fin-stat-card__label">Total Diagnosticado</div>
         </div>
-        <div class="col-md-3">
-            <div class="card stat-card">
-                <div class="card-body text-center">
-                    <div class="stat-value text-warning" id="statPendente">{{ stats.pendente }}</div>
-                    <div class="stat-label text-muted">Pendentes</div>
-                </div>
-            </div>
+        <div class="fin-stat-card fin-stat-card--warning">
+            <div class="fin-stat-card__value" id="statPendente">{{ stats.pendente }}</div>
+            <div class="fin-stat-card__label">Pendentes</div>
         </div>
-        <div class="col-md-3">
-            <div class="card stat-card">
-                <div class="card-body text-center">
-                    <div class="stat-value text-success" id="statCorrigido">{{ stats.corrigido }}</div>
-                    <div class="stat-label text-muted">Corrigidos</div>
-                </div>
-            </div>
+        <div class="fin-stat-card fin-stat-card--success">
+            <div class="fin-stat-card__value" id="statCorrigido">{{ stats.corrigido }}</div>
+            <div class="fin-stat-card__label">Corrigidos</div>
         </div>
-        <div class="col-md-3">
-            <div class="card stat-card">
-                <div class="card-body text-center">
-                    <div class="stat-value text-danger" id="statErro">{{ stats.erro }}</div>
-                    <div class="stat-label text-muted">Com Erro</div>
-                </div>
-            </div>
+        <div class="fin-stat-card fin-stat-card--danger">
+            <div class="fin-stat-card__value" id="statErro">{{ stats.erro }}</div>
+            <div class="fin-stat-card__label">Com Erro</div>
         </div>
     </div>
 
-    <!-- Filtros -->
-    <div class="filter-card mb-4">
-        <div class="row g-3 align-items-end">
-            <div class="col-md-2">
-                <label class="form-label small">Status</label>
-                <select class="form-select form-select-sm" id="filtroStatus">
+    <!-- ================================================================== -->
+    <!-- FILTROS -->
+    <!-- ================================================================== -->
+    <div class="fin-filters">
+        <div class="fin-filters__grid">
+            <div class="fin-filter-group">
+                <label class="fin-filter-group__label">Status</label>
+                <select class="fin-filter-group__input fin-filter-group__select" id="filtroStatus">
                     <option value="">Todos</option>
                     <option value="pendente" selected>Pendente</option>
                     <option value="corrigido">Corrigido</option>
                     <option value="erro">Com Erro</option>
                 </select>
             </div>
-            <div class="col-md-2">
-                <label class="form-label small">Mês Emissão</label>
-                <input type="month" class="form-control form-control-sm" id="filtroMes">
+
+            <div class="fin-filter-group">
+                <label class="fin-filter-group__label">Mes Emissao</label>
+                <input type="month" class="fin-filter-group__input" id="filtroMes">
             </div>
-            <div class="col-md-3">
-                <label class="form-label small">Documento</label>
-                <input type="text" class="form-control form-control-sm" id="filtroDocumento"
+
+            <div class="fin-filter-group">
+                <label class="fin-filter-group__label">Documento</label>
+                <input type="text" class="fin-filter-group__input" id="filtroDocumento"
                        placeholder="Ex: RDVEND/2024/00621">
             </div>
-            <div class="col-md-2">
-                <button class="btn btn-primary btn-sm w-100" onclick="carregarDados()">
-                    <i class="bi bi-funnel me-1"></i> Filtrar
+
+            <div class="fin-filter-group">
+                <label class="fin-filter-group__label">&nbsp;</label>
+                <button class="fin-btn fin-btn--primary" onclick="carregarDados()">
+                    <i class="fas fa-filter"></i> Filtrar
                 </button>
             </div>
-            <div class="col-md-3 text-end">
-                <div class="form-check form-check-inline">
-                    <input class="form-check-input" type="checkbox" id="selecionarTodos" onclick="toggleSelecionarTodos()">
-                    <label class="form-check-label small" for="selecionarTodos">Selecionar Todos</label>
+
+            <div class="fin-filter-group">
+                <label class="fin-filter-group__label">&nbsp;</label>
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="checkbox" class="fin-checkbox" id="checkAll" onclick="toggleSelecionarTodos()">
+                        <span style="font-size: 0.8rem; color: var(--fin-text-secondary);">Todos</span>
+                    </label>
+                    <span class="fin-badge fin-badge--primary" id="countSelecionados">0 selecionados</span>
                 </div>
-                <span class="badge bg-primary ms-2" id="countSelecionados">0 selecionados</span>
             </div>
         </div>
     </div>
 
-    <!-- Tabela -->
-    <div class="card">
-        <div class="card-body p-0">
-            <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
-                <table class="table table-hover table-correcao mb-0">
+    <!-- ================================================================== -->
+    <!-- TABELA -->
+    <!-- ================================================================== -->
+    <div class="fin-section">
+        <div class="fin-section__header">
+            <h2 class="fin-section__title">
+                <i class="fas fa-list"></i>
+                Documentos
+                <span class="fin-section__badge" id="badgeTotal">0</span>
+            </h2>
+        </div>
+
+        <div class="fin-section__content">
+            <div class="fin-table-wrapper" style="max-height: 55vh; overflow-y: auto;">
+                <table class="fin-table">
                     <thead>
                         <tr>
-                            <th style="width: 40px;">
-                                <input class="form-check-input" type="checkbox" id="checkAll" onclick="toggleSelecionarTodos()">
-                            </th>
+                            <th width="40"></th>
                             <th>Documento</th>
                             <th>NF</th>
                             <th>Parceiro</th>
-                            <th class="text-center">Data Emissão</th>
-                            <th class="text-center">Data Lanç. (Antes)</th>
-                            <th class="text-center">Data Linhas (Antes)</th>
-                            <th class="text-center">Data Correta</th>
-                            <th class="text-center">Status</th>
-                            <th>Ações</th>
+                            <th width="100">Data Emissao</th>
+                            <th width="120">Lanc. (Antes)</th>
+                            <th width="120">Linhas (Antes)</th>
+                            <th width="100">Data Correta</th>
+                            <th width="90">Status</th>
+                            <th width="60">Acoes</th>
                         </tr>
                     </thead>
                     <tbody id="tabelaBody">
                         <tr>
-                            <td colspan="10" class="text-center py-5 text-muted">
-                                <i class="bi bi-arrow-clockwise me-2"></i>
-                                Carregando dados...
+                            <td colspan="10">
+                                <div class="fin-loading">
+                                    <div class="fin-loading__spinner"></div>
+                                    <div class="fin-loading__text">Carregando dados...</div>
+                                </div>
                             </td>
                         </tr>
                     </tbody>
                 </table>
             </div>
-        </div>
-    </div>
 
-    <!-- Paginação -->
-    <div class="d-flex justify-content-between align-items-center mt-3">
-        <div class="text-muted small" id="paginacaoInfo">
-            Mostrando 0 de 0 registros
+            <!-- Paginacao -->
+            <div class="fin-pagination" id="paginacaoContainer">
+                <div class="fin-pagination__info" id="paginacaoInfo">
+                    Mostrando 0 de 0 registros
+                </div>
+                <nav class="fin-pagination__nav" id="paginacao"></nav>
+            </div>
         </div>
-        <nav>
-            <ul class="pagination pagination-sm mb-0" id="paginacao">
-            </ul>
-        </nav>
     </div>
 </div>
 
 <!-- Loading Overlay -->
-<div class="loading-overlay" id="loadingOverlay">
-    <div class="text-center">
-        <div class="spinner-border text-primary mb-3" role="status"></div>
-        <div class="text-muted" id="loadingText">Processando...</div>
+<div class="fin-loading-overlay" id="loadingOverlay">
+    <div style="text-align: center;">
+        <div class="fin-loading__spinner" style="width: 50px; height: 50px; margin-bottom: 1rem;"></div>
+        <div style="color: var(--fin-text-primary);" id="loadingText">Processando...</div>
     </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/financeiro/extrato.js') }}"></script>
 <script>
-    // Estado global
-    let dadosAtuais = [];
-    let paginaAtual = 1;
-    let totalPaginas = 1;
-    let selecionados = new Set();
+// Estado global
+let dadosAtuais = [];
+let paginaAtual = 1;
+let totalPaginas = 1;
+let selecionados = new Set();
 
-    // Inicialização
-    document.addEventListener('DOMContentLoaded', function() {
-        carregarDados();
-    });
+document.addEventListener('DOMContentLoaded', function() {
+    carregarDados();
+});
 
-    // Carregar dados
-    async function carregarDados(page = 1) {
-        const status = document.getElementById('filtroStatus').value;
-        const mes = document.getElementById('filtroMes').value;
-        const documento = document.getElementById('filtroDocumento').value;
+async function carregarDados(page = 1) {
+    const status = document.getElementById('filtroStatus').value;
+    const mes = document.getElementById('filtroMes').value;
+    const documento = document.getElementById('filtroDocumento').value;
 
-        const params = new URLSearchParams({
-            page: page,
-            per_page: 50
-        });
+    const params = new URLSearchParams({ page: page, per_page: 50 });
+    if (status) params.append('status', status);
+    if (mes) params.append('mes', mes);
+    if (documento) params.append('documento', documento);
 
-        if (status) params.append('status', status);
-        if (mes) params.append('mes', mes);
-        if (documento) params.append('documento', documento);
+    try {
+        const response = await fetch(`/financeiro/correcao-datas/api/listar?${params}`);
+        const data = await response.json();
 
-        try {
-            const response = await fetch(`/financeiro/correcao-datas/api/listar?${params}`);
-            const data = await response.json();
-
-            if (data.sucesso) {
-                dadosAtuais = data.items;
-                paginaAtual = data.page;
-                totalPaginas = data.pages;
-                renderizarTabela();
-                renderizarPaginacao(data.total);
-            } else {
-                alert('Erro ao carregar dados: ' + data.erro);
-            }
-        } catch (error) {
-            console.error('Erro:', error);
-            alert('Erro ao carregar dados');
-        }
-    }
-
-    // Renderizar tabela
-    function renderizarTabela() {
-        const tbody = document.getElementById('tabelaBody');
-
-        if (dadosAtuais.length === 0) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="10" class="text-center py-5 text-muted">
-                        <i class="bi bi-inbox me-2"></i>
-                        Nenhum registro encontrado
-                    </td>
-                </tr>
-            `;
-            return;
-        }
-
-        tbody.innerHTML = dadosAtuais.map(item => {
-            // Verificar se header e linhas estão errados
-            const headerErrado = item.data_lancamento_antes !== item.data_correta;
-            const linhasErradas = item.data_lancamento_linhas_antes && item.data_lancamento_linhas_antes !== item.data_correta;
-
-            const classeDataAntes = headerErrado ? 'data-errada' : '';
-            const classeDataLinhas = linhasErradas ? 'data-errada' : '';
-            const classeDataCorreta = (headerErrado || linhasErradas) ? 'data-correta' : '';
-
-            const checked = selecionados.has(item.id) ? 'checked' : '';
-            const disabled = item.status !== 'pendente' ? 'disabled' : '';
-
-            return `
-                <tr>
-                    <td>
-                        <input class="form-check-input item-check" type="checkbox"
-                               value="${item.id}" ${checked} ${disabled}
-                               onchange="toggleItem(${item.id})">
-                    </td>
-                    <td>
-                        <a href="https://odoo.nacomgoya.com.br/web#id=${item.odoo_move_id}&model=account.move&view_type=form"
-                           target="_blank" class="text-decoration-none">
-                            ${item.nome_documento}
-                            <i class="bi bi-box-arrow-up-right ms-1 small"></i>
-                        </a>
-                    </td>
-                    <td>${item.numero_nf || '-'}</td>
-                    <td class="text-truncate" style="max-width: 200px;" title="${item.nome_parceiro || ''}">
-                        ${item.nome_parceiro || '-'}
-                    </td>
-                    <td class="text-center">${formatarData(item.data_emissao)}</td>
-                    <td class="text-center ${classeDataAntes}">${formatarData(item.data_lancamento_antes)}</td>
-                    <td class="text-center ${classeDataLinhas}">${formatarData(item.data_lancamento_linhas_antes)}</td>
-                    <td class="text-center ${classeDataCorreta}">${formatarData(item.data_correta)}</td>
-                    <td class="text-center">
-                        <span class="status-badge status-${item.status}">${item.status.toUpperCase()}</span>
-                    </td>
-                    <td>
-                        ${item.status === 'pendente' ? `
-                            <button class="btn btn-outline-success btn-action"
-                                    onclick="corrigirUm(${item.id})" title="Corrigir">
-                                <i class="bi bi-check-lg"></i>
-                            </button>
-                        ` : ''}
-                        ${item.status === 'erro' ? `
-                            <span class="text-danger small" title="${item.erro_mensagem}">
-                                <i class="bi bi-exclamation-circle"></i>
-                            </span>
-                        ` : ''}
-                    </td>
-                </tr>
-            `;
-        }).join('');
-
-        atualizarContadores();
-    }
-
-    // Formatar data
-    function formatarData(data) {
-        if (!data) return '-';
-        const [ano, mes, dia] = data.split('-');
-        return `${dia}/${mes}/${ano}`;
-    }
-
-    // Toggle selecionar todos
-    function toggleSelecionarTodos() {
-        const checkAll = document.getElementById('checkAll');
-        const checkboxes = document.querySelectorAll('.item-check:not(:disabled)');
-
-        checkboxes.forEach(cb => {
-            cb.checked = checkAll.checked;
-            const id = parseInt(cb.value);
-            if (checkAll.checked) {
-                selecionados.add(id);
-            } else {
-                selecionados.delete(id);
-            }
-        });
-
-        atualizarContadores();
-    }
-
-    // Toggle item individual
-    function toggleItem(id) {
-        if (selecionados.has(id)) {
-            selecionados.delete(id);
+        if (data.sucesso) {
+            dadosAtuais = data.items;
+            paginaAtual = data.page;
+            totalPaginas = data.pages;
+            renderizarTabela();
+            renderizarPaginacao(data.total);
+            document.getElementById('badgeTotal').textContent = data.total;
         } else {
-            selecionados.add(id);
+            toastr.error('Erro ao carregar: ' + data.erro);
         }
-        atualizarContadores();
+    } catch (error) {
+        console.error('Erro:', error);
+        toastr.error('Erro ao carregar dados');
     }
+}
 
-    // Atualizar contadores
-    function atualizarContadores() {
-        const count = selecionados.size;
-        document.getElementById('countSelecionados').textContent = `${count} selecionados`;
-        document.getElementById('btnCorrigir').disabled = count === 0;
-    }
+function renderizarTabela() {
+    const tbody = document.getElementById('tabelaBody');
 
-    // Executar diagnóstico
-    async function executarDiagnostico() {
-        if (!confirm('Isso irá buscar novas NFs com problema no Odoo. Continuar?')) return;
-
-        showLoading('Buscando NFs com problema no Odoo...');
-
-        try {
-            const response = await fetch('/financeiro/correcao-datas/api/diagnosticar', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({})
-            });
-
-            const data = await response.json();
-
-            if (data.sucesso) {
-                alert(`Diagnóstico concluído!\n\nAnalisados: ${data.total_analisados}\nCom problema: ${data.total_com_problema}\nNovos: ${data.novos_diagnosticados}\nJá existentes: ${data.ja_existentes}`);
-                carregarDados();
-                atualizarEstatisticas();
-            } else {
-                alert('Erro no diagnóstico: ' + data.erro);
-            }
-        } catch (error) {
-            console.error('Erro:', error);
-            alert('Erro no diagnóstico');
-        } finally {
-            hideLoading();
-        }
-    }
-
-    // Corrigir selecionados
-    async function corrigirSelecionados() {
-        if (selecionados.size === 0) {
-            alert('Selecione pelo menos um item');
-            return;
-        }
-
-        if (!confirm(`Corrigir ${selecionados.size} documento(s)? Esta ação irá alterar os dados no Odoo.`)) {
-            return;
-        }
-
-        showLoading(`Corrigindo ${selecionados.size} documento(s)...`);
-
-        try {
-            const response = await fetch('/financeiro/correcao-datas/api/corrigir', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ids: Array.from(selecionados) })
-            });
-
-            const data = await response.json();
-
-            if (data.sucesso) {
-                alert(`Correção concluída!\n\nTotal: ${data.total}\nCorrigidos: ${data.corrigidos}\nErros: ${data.erros}`);
-                selecionados.clear();
-                carregarDados();
-                atualizarEstatisticas();
-            } else {
-                alert('Erro na correção: ' + data.erro);
-            }
-        } catch (error) {
-            console.error('Erro:', error);
-            alert('Erro na correção');
-        } finally {
-            hideLoading();
-        }
-    }
-
-    // Corrigir um documento
-    async function corrigirUm(id) {
-        if (!confirm('Corrigir este documento?')) return;
-
-        showLoading('Corrigindo documento...');
-
-        try {
-            const response = await fetch('/financeiro/correcao-datas/api/corrigir', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ids: [id] })
-            });
-
-            const data = await response.json();
-
-            if (data.sucesso && data.corrigidos > 0) {
-                alert('Documento corrigido com sucesso!');
-                carregarDados();
-                atualizarEstatisticas();
-            } else {
-                alert('Erro na correção: ' + (data.detalhes?.[0]?.erro || data.erro || 'Erro desconhecido'));
-            }
-        } catch (error) {
-            console.error('Erro:', error);
-            alert('Erro na correção');
-        } finally {
-            hideLoading();
-        }
-    }
-
-    // Resetar registros com erro para pendente
-    async function resetarErros() {
-        if (!confirm('Resetar todos os registros com erro para pendente?')) return;
-
-        showLoading('Resetando registros...');
-
-        try {
-            const response = await fetch('/financeiro/correcao-datas/api/resetar-erros', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            });
-
-            const data = await response.json();
-
-            if (data.sucesso) {
-                alert(`${data.resetados} registro(s) resetado(s) para pendente`);
-                carregarDados();
-                atualizarEstatisticas();
-            } else {
-                alert('Erro: ' + data.erro);
-            }
-        } catch (error) {
-            console.error('Erro:', error);
-            alert('Erro ao resetar');
-        } finally {
-            hideLoading();
-        }
-    }
-
-    // Atualizar estatísticas
-    async function atualizarEstatisticas() {
-        try {
-            const response = await fetch('/financeiro/correcao-datas/api/estatisticas');
-            const data = await response.json();
-
-            if (data.sucesso) {
-                document.getElementById('statTotal').textContent = data.stats.total;
-                document.getElementById('statPendente').textContent = data.stats.pendente;
-                document.getElementById('statCorrigido').textContent = data.stats.corrigido;
-                document.getElementById('statErro').textContent = data.stats.erro;
-            }
-        } catch (error) {
-            console.error('Erro ao atualizar estatísticas:', error);
-        }
-    }
-
-    // Renderizar paginação
-    function renderizarPaginacao(total) {
-        const info = document.getElementById('paginacaoInfo');
-        const inicio = total > 0 ? (paginaAtual - 1) * 50 + 1 : 0;
-        const fim = Math.min(paginaAtual * 50, total);
-        info.textContent = `Mostrando ${inicio}-${fim} de ${total} registros`;
-
-        const ul = document.getElementById('paginacao');
-        ul.innerHTML = '';
-
-        if (totalPaginas <= 1) return;
-
-        // Anterior
-        ul.innerHTML += `
-            <li class="page-item ${paginaAtual === 1 ? 'disabled' : ''}">
-                <a class="page-link" href="#" onclick="event.preventDefault(); carregarDados(${paginaAtual - 1})">&laquo;</a>
-            </li>
+    if (dadosAtuais.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="10">
+                    <div class="fin-empty">
+                        <div class="fin-empty__icon"><i class="fas fa-inbox"></i></div>
+                        <div class="fin-empty__title">Nenhum registro encontrado</div>
+                    </div>
+                </td>
+            </tr>
         `;
+        return;
+    }
 
-        // Primeira página
-        if (paginaAtual > 3) {
-            ul.innerHTML += `
-                <li class="page-item">
-                    <a class="page-link" href="#" onclick="event.preventDefault(); carregarDados(1)">1</a>
-                </li>
-            `;
-            if (paginaAtual > 4) {
-                ul.innerHTML += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
-            }
+    tbody.innerHTML = dadosAtuais.map(item => {
+        const headerErrado = item.data_lancamento_antes !== item.data_correta;
+        const linhasErradas = item.data_lancamento_linhas_antes && item.data_lancamento_linhas_antes !== item.data_correta;
+        const checked = selecionados.has(item.id) ? 'checked' : '';
+        const disabled = item.status !== 'pendente' ? 'disabled' : '';
+
+        let statusBadge = '';
+        if (item.status === 'pendente') statusBadge = '<span class="fin-badge fin-badge--warning">PENDENTE</span>';
+        else if (item.status === 'corrigido') statusBadge = '<span class="fin-badge fin-badge--success">CORRIGIDO</span>';
+        else if (item.status === 'erro') statusBadge = '<span class="fin-badge fin-badge--danger">ERRO</span>';
+
+        return `
+            <tr>
+                <td class="text-center">
+                    <input class="fin-checkbox item-check" type="checkbox"
+                           value="${item.id}" ${checked} ${disabled}
+                           onchange="toggleItem(${item.id})">
+                </td>
+                <td>
+                    <a href="https://odoo.nacomgoya.com.br/web#id=${item.odoo_move_id}&model=account.move&view_type=form"
+                       target="_blank" class="fin-link">
+                        ${item.nome_documento}
+                        <i class="fas fa-external-link-alt" style="font-size: 0.7rem;"></i>
+                    </a>
+                </td>
+                <td class="mono">${item.numero_nf || '-'}</td>
+                <td style="max-width: 180px; overflow: hidden; text-overflow: ellipsis;" title="${item.nome_parceiro || ''}">
+                    ${item.nome_parceiro || '-'}
+                </td>
+                <td class="text-center mono">${formatarData(item.data_emissao)}</td>
+                <td class="text-center mono ${headerErrado ? 'data-errada' : ''}">${formatarData(item.data_lancamento_antes)}</td>
+                <td class="text-center mono ${linhasErradas ? 'data-errada' : ''}">${formatarData(item.data_lancamento_linhas_antes)}</td>
+                <td class="text-center mono ${(headerErrado || linhasErradas) ? 'data-correta' : ''}">${formatarData(item.data_correta)}</td>
+                <td class="text-center">${statusBadge}</td>
+                <td class="text-center">
+                    ${item.status === 'pendente' ? `
+                        <button class="fin-btn fin-btn--success fin-btn--sm fin-btn--icon"
+                                onclick="corrigirUm(${item.id})" title="Corrigir">
+                            <i class="fas fa-check"></i>
+                        </button>
+                    ` : ''}
+                    ${item.status === 'erro' ? `
+                        <span style="color: var(--fin-accent-danger);" title="${item.erro_mensagem || 'Erro'}">
+                            <i class="fas fa-exclamation-circle"></i>
+                        </span>
+                    ` : ''}
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    atualizarContadores();
+}
+
+function formatarData(data) {
+    if (!data) return '-';
+    const [ano, mes, dia] = data.split('-');
+    return `${dia}/${mes}/${ano}`;
+}
+
+function toggleSelecionarTodos() {
+    const checkAll = document.getElementById('checkAll');
+    document.querySelectorAll('.item-check:not(:disabled)').forEach(cb => {
+        cb.checked = checkAll.checked;
+        const id = parseInt(cb.value);
+        if (checkAll.checked) selecionados.add(id);
+        else selecionados.delete(id);
+    });
+    atualizarContadores();
+}
+
+function toggleItem(id) {
+    if (selecionados.has(id)) selecionados.delete(id);
+    else selecionados.add(id);
+    atualizarContadores();
+}
+
+function atualizarContadores() {
+    const count = selecionados.size;
+    document.getElementById('countSelecionados').textContent = `${count} selecionados`;
+    document.getElementById('btnCorrigir').disabled = count === 0;
+}
+
+async function executarDiagnostico() {
+    if (!confirm('Isso ira buscar novas NFs com problema no Odoo. Continuar?')) return;
+    showLoading('Buscando NFs com problema no Odoo...');
+
+    try {
+        const response = await fetch('/financeiro/correcao-datas/api/diagnosticar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        });
+        const data = await response.json();
+
+        if (data.sucesso) {
+            toastr.success(`Diagnostico concluido! ${data.total_com_problema} com problema, ${data.novos_diagnosticados} novos.`);
+            carregarDados();
+            atualizarEstatisticas();
+        } else {
+            toastr.error('Erro: ' + data.erro);
         }
+    } catch (error) {
+        toastr.error('Erro no diagnostico');
+    } finally {
+        hideLoading();
+    }
+}
 
-        // Páginas ao redor da atual
-        const startPage = Math.max(1, paginaAtual - 2);
-        const endPage = Math.min(totalPaginas, paginaAtual + 2);
+async function corrigirSelecionados() {
+    if (selecionados.size === 0) { toastr.warning('Selecione pelo menos um item'); return; }
+    if (!confirm(`Corrigir ${selecionados.size} documento(s)? Esta acao alterara os dados no Odoo.`)) return;
 
-        for (let i = startPage; i <= endPage; i++) {
-            ul.innerHTML += `
-                <li class="page-item ${paginaAtual === i ? 'active' : ''}">
-                    <a class="page-link" href="#" onclick="event.preventDefault(); carregarDados(${i})">${i}</a>
-                </li>
-            `;
+    showLoading(`Corrigindo ${selecionados.size} documento(s)...`);
+
+    try {
+        const response = await fetch('/financeiro/correcao-datas/api/corrigir', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids: Array.from(selecionados) })
+        });
+        const data = await response.json();
+
+        if (data.sucesso) {
+            toastr.success(`Correcao concluida! ${data.corrigidos} corrigidos, ${data.erros} erros.`);
+            selecionados.clear();
+            carregarDados();
+            atualizarEstatisticas();
+        } else {
+            toastr.error('Erro: ' + data.erro);
         }
+    } catch (error) {
+        toastr.error('Erro na correcao');
+    } finally {
+        hideLoading();
+    }
+}
 
-        // Última página
-        if (paginaAtual < totalPaginas - 2) {
-            if (paginaAtual < totalPaginas - 3) {
-                ul.innerHTML += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
-            }
-            ul.innerHTML += `
-                <li class="page-item">
-                    <a class="page-link" href="#" onclick="event.preventDefault(); carregarDados(${totalPaginas})">${totalPaginas}</a>
-                </li>
-            `;
+async function corrigirUm(id) {
+    if (!confirm('Corrigir este documento?')) return;
+    showLoading('Corrigindo documento...');
+
+    try {
+        const response = await fetch('/financeiro/correcao-datas/api/corrigir', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids: [id] })
+        });
+        const data = await response.json();
+
+        if (data.sucesso && data.corrigidos > 0) {
+            toastr.success('Documento corrigido!');
+            carregarDados();
+            atualizarEstatisticas();
+        } else {
+            toastr.error('Erro: ' + (data.detalhes?.[0]?.erro || data.erro || 'Erro desconhecido'));
         }
+    } catch (error) {
+        toastr.error('Erro na correcao');
+    } finally {
+        hideLoading();
+    }
+}
 
-        // Próximo
-        ul.innerHTML += `
-            <li class="page-item ${paginaAtual === totalPaginas ? 'disabled' : ''}">
-                <a class="page-link" href="#" onclick="event.preventDefault(); carregarDados(${paginaAtual + 1})">&raquo;</a>
-            </li>
+async function resetarErros() {
+    if (!confirm('Resetar todos os registros com erro para pendente?')) return;
+    showLoading('Resetando registros...');
+
+    try {
+        const response = await fetch('/financeiro/correcao-datas/api/resetar-erros', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await response.json();
+
+        if (data.sucesso) {
+            toastr.success(`${data.resetados} registro(s) resetado(s)`);
+            carregarDados();
+            atualizarEstatisticas();
+        } else {
+            toastr.error('Erro: ' + data.erro);
+        }
+    } catch (error) {
+        toastr.error('Erro ao resetar');
+    } finally {
+        hideLoading();
+    }
+}
+
+async function atualizarEstatisticas() {
+    try {
+        const response = await fetch('/financeiro/correcao-datas/api/estatisticas');
+        const data = await response.json();
+
+        if (data.sucesso) {
+            document.getElementById('statTotal').textContent = data.stats.total;
+            document.getElementById('statPendente').textContent = data.stats.pendente;
+            document.getElementById('statCorrigido').textContent = data.stats.corrigido;
+            document.getElementById('statErro').textContent = data.stats.erro;
+        }
+    } catch (error) {
+        console.error('Erro ao atualizar estatisticas:', error);
+    }
+}
+
+function renderizarPaginacao(total) {
+    const info = document.getElementById('paginacaoInfo');
+    const inicio = total > 0 ? (paginaAtual - 1) * 50 + 1 : 0;
+    const fim = Math.min(paginaAtual * 50, total);
+    info.innerHTML = `Mostrando <strong>${inicio}-${fim}</strong> de <strong>${total}</strong> registros`;
+
+    const nav = document.getElementById('paginacao');
+    nav.innerHTML = '';
+    if (totalPaginas <= 1) return;
+
+    // Anterior
+    nav.innerHTML += `
+        <button class="fin-pagination__btn" onclick="carregarDados(${paginaAtual - 1})" ${paginaAtual === 1 ? 'disabled' : ''}>
+            <i class="fas fa-chevron-left"></i>
+        </button>
+    `;
+
+    // Paginas
+    const startPage = Math.max(1, paginaAtual - 2);
+    const endPage = Math.min(totalPaginas, paginaAtual + 2);
+
+    for (let i = startPage; i <= endPage; i++) {
+        nav.innerHTML += `
+            <button class="fin-pagination__btn ${paginaAtual === i ? 'active' : ''}" onclick="carregarDados(${i})">${i}</button>
         `;
     }
 
-    // Loading
-    function showLoading(text = 'Processando...') {
-        document.getElementById('loadingText').textContent = text;
-        document.getElementById('loadingOverlay').classList.add('active');
-    }
+    // Proximo
+    nav.innerHTML += `
+        <button class="fin-pagination__btn" onclick="carregarDados(${paginaAtual + 1})" ${paginaAtual === totalPaginas ? 'disabled' : ''}>
+            <i class="fas fa-chevron-right"></i>
+        </button>
+    `;
+}
 
-    function hideLoading() {
-        document.getElementById('loadingOverlay').classList.remove('active');
-    }
+function showLoading(text = 'Processando...') {
+    document.getElementById('loadingText').textContent = text;
+    document.getElementById('loadingOverlay').classList.add('active');
+}
+
+function hideLoading() {
+    document.getElementById('loadingOverlay').classList.remove('active');
+}
 </script>
 {% endblock %}

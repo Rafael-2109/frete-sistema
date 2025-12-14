@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Lote {{ lote.id }} - Extrato - Financeiro{% endblock %}
+{% block title %}Lote {{ lote.id }} - Pagamentos - Financeiro{% endblock %}
 
 {% block extra_css %}
 {# Bootstrap overrides + Module CSS #}
@@ -24,7 +24,8 @@
                         </ol>
                     </nav>
                     <h1 class="fin-header__title h3 fw-bold mb-1">
-                        <i class="fas fa-file-invoice me-2 text-primary"></i>
+                        <i class="fas fa-file-invoice-dollar me-2 text-danger"></i>
+                        <span class="badge bg-danger me-2">PAGAMENTOS</span>
                         {{ lote.nome }}
                     </h1>
                     <p class="fin-header__subtitle text-secondary mb-0">
@@ -111,7 +112,7 @@
                             <small class="text-muted text-uppercase">Conciliados</small>
                         </div>
                         <div class="text-center">
-                            <div class="h4 mb-0 font-mono fw-bold">R$ {{ "{:,.2f}".format(lote.valor_total or 0) }}</div>
+                            <div class="h4 mb-0 font-mono fw-bold text-danger">R$ {{ "{:,.2f}".format((lote.valor_total or 0)|abs) }}</div>
                             <small class="text-muted text-uppercase">Valor Total</small>
                         </div>
                     </div>
@@ -125,28 +126,28 @@
         <div class="col-12">
             <div class="card card-static">
                 <div class="card-body py-3">
-                    <form method="GET" action="{{ url_for('financeiro.extrato_lote_detalhe', lote_id=lote.id) }}" id="formFiltros">
+                    <form method="GET" action="{{ url_for('financeiro.extrato_lote_pagamentos_detalhe', lote_id=lote.id) }}" id="formFiltros">
                         <div class="row g-2 align-items-end">
                             {# Filtro por Status Match #}
                             <div class="col-auto">
                                 <div class="btn-group btn-group-sm" role="group">
-                                    <a href="{{ url_for('financeiro.extrato_lote_detalhe', lote_id=lote.id, per_page=per_page, cnpj=filtro_cnpj, data_inicio=filtro_data_inicio, data_fim=filtro_data_fim) }}"
+                                    <a href="{{ url_for('financeiro.extrato_lote_pagamentos_detalhe', lote_id=lote.id, per_page=per_page, cnpj=filtro_cnpj, data_inicio=filtro_data_inicio, data_fim=filtro_data_fim) }}"
                                        class="btn btn-outline-secondary {{ 'active' if not request.args.get('status_match') }}">
                                         Todos
                                     </a>
-                                    <a href="{{ url_for('financeiro.extrato_lote_detalhe', lote_id=lote.id, status_match='MATCH_ENCONTRADO', per_page=per_page, cnpj=filtro_cnpj, data_inicio=filtro_data_inicio, data_fim=filtro_data_fim) }}"
+                                    <a href="{{ url_for('financeiro.extrato_lote_pagamentos_detalhe', lote_id=lote.id, status_match='MATCH_ENCONTRADO', per_page=per_page, cnpj=filtro_cnpj, data_inicio=filtro_data_inicio, data_fim=filtro_data_fim) }}"
                                        class="btn btn-outline-success {{ 'active' if request.args.get('status_match') == 'MATCH_ENCONTRADO' }}">
                                         Match
                                     </a>
-                                    <a href="{{ url_for('financeiro.extrato_lote_detalhe', lote_id=lote.id, status_match='MULTIPLOS_MATCHES', per_page=per_page, cnpj=filtro_cnpj, data_inicio=filtro_data_inicio, data_fim=filtro_data_fim) }}"
+                                    <a href="{{ url_for('financeiro.extrato_lote_pagamentos_detalhe', lote_id=lote.id, status_match='MULTIPLOS_MATCHES', per_page=per_page, cnpj=filtro_cnpj, data_inicio=filtro_data_inicio, data_fim=filtro_data_fim) }}"
                                        class="btn btn-outline-warning {{ 'active' if request.args.get('status_match') == 'MULTIPLOS_MATCHES' }}">
                                         Múltiplos
                                     </a>
-                                    <a href="{{ url_for('financeiro.extrato_lote_detalhe', lote_id=lote.id, status_match='SEM_MATCH', per_page=per_page, cnpj=filtro_cnpj, data_inicio=filtro_data_inicio, data_fim=filtro_data_fim) }}"
+                                    <a href="{{ url_for('financeiro.extrato_lote_pagamentos_detalhe', lote_id=lote.id, status_match='SEM_MATCH', per_page=per_page, cnpj=filtro_cnpj, data_inicio=filtro_data_inicio, data_fim=filtro_data_fim) }}"
                                        class="btn btn-outline-danger {{ 'active' if request.args.get('status_match') == 'SEM_MATCH' }}">
                                         Sem Match
                                     </a>
-                                    <a href="{{ url_for('financeiro.extrato_lote_detalhe', lote_id=lote.id, status_match='PENDENTE', per_page=per_page, cnpj=filtro_cnpj, data_inicio=filtro_data_inicio, data_fim=filtro_data_fim) }}"
+                                    <a href="{{ url_for('financeiro.extrato_lote_pagamentos_detalhe', lote_id=lote.id, status_match='PENDENTE', per_page=per_page, cnpj=filtro_cnpj, data_inicio=filtro_data_inicio, data_fim=filtro_data_fim) }}"
                                        class="btn btn-outline-secondary {{ 'active' if request.args.get('status_match') == 'PENDENTE' }}">
                                         Pendentes
                                     </a>
@@ -190,7 +191,7 @@
                                     <i class="fas fa-filter me-1"></i>Filtrar
                                 </button>
                                 {% if filtro_cnpj or filtro_data_inicio or filtro_data_fim %}
-                                <a href="{{ url_for('financeiro.extrato_lote_detalhe', lote_id=lote.id, per_page=per_page, status_match=request.args.get('status_match')) }}"
+                                <a href="{{ url_for('financeiro.extrato_lote_pagamentos_detalhe', lote_id=lote.id, per_page=per_page, status_match=request.args.get('status_match')) }}"
                                    class="btn btn-sm btn-outline-secondary">
                                     <i class="fas fa-times"></i> Limpar
                                 </a>
@@ -246,7 +247,7 @@
                             </div>
                         </div>
 
-                        <div class="fin-valor-grande mb-2">R$ {{ "{:,.2f}".format(item.valor) }}</div>
+                        <div class="fin-valor-grande fin-valor-grande--pag mb-2">R$ {{ "{:,.2f}".format((item.valor or 0)|abs) }}</div>
 
                         <div class="small">
                             <div class="fin-info-line">
@@ -351,10 +352,10 @@
                         {% endif %}
                     </div>
 
-                    {# SEÇÃO 3: TÍTULO #}
+                    {# SEÇÃO 3: TÍTULO A PAGAR #}
                     <div class="col-md-5 fin-item-col">
-                        <div class="fin-section-header fin-section-header--titulo">
-                            <i class="fas fa-file-invoice"></i> TÍTULO A RECEBER
+                        <div class="fin-section-header fin-section-header--titulo" style="background: linear-gradient(135deg, var(--fin-accent-danger), #ff6b6b);">
+                            <i class="fas fa-file-invoice-dollar"></i> TÍTULO A PAGAR
                         </div>
 
                         <div id="titulos-container-{{ item.id }}">
@@ -366,7 +367,7 @@
                                         <span class="badge bg-secondary ms-1">P{{ item.titulo_parcela }}</span>
                                     </div>
                                     <div class="text-end">
-                                        <div class="h5 mb-0 text-success font-mono fw-bold">
+                                        <div class="h5 mb-0 text-danger font-mono fw-bold">
                                             R$ {{ "{:,.2f}".format(item.titulo_valor or 0) }}
                                         </div>
                                         {% if item.status != 'CONCILIADO' %}
@@ -456,7 +457,7 @@
                     <ul class="pagination pagination-sm mb-0">
                         {% if pagination.has_prev %}
                         <li class="page-item">
-                            <a class="page-link" href="{{ url_for('financeiro.extrato_lote_detalhe', lote_id=lote.id, page=pagination.prev_num, per_page=per_page, status_match=request.args.get('status_match'), cnpj=filtro_cnpj, data_inicio=filtro_data_inicio, data_fim=filtro_data_fim) }}">
+                            <a class="page-link" href="{{ url_for('financeiro.extrato_lote_pagamentos_detalhe', lote_id=lote.id, page=pagination.prev_num, per_page=per_page, status_match=request.args.get('status_match'), cnpj=filtro_cnpj, data_inicio=filtro_data_inicio, data_fim=filtro_data_fim) }}">
                                 <i class="fas fa-chevron-left"></i>
                             </a>
                         </li>
@@ -468,7 +469,7 @@
                                 <li class="page-item active"><span class="page-link">{{ p }}</span></li>
                                 {% else %}
                                 <li class="page-item">
-                                    <a class="page-link" href="{{ url_for('financeiro.extrato_lote_detalhe', lote_id=lote.id, page=p, per_page=per_page, status_match=request.args.get('status_match'), cnpj=filtro_cnpj, data_inicio=filtro_data_inicio, data_fim=filtro_data_fim) }}">{{ p }}</a>
+                                    <a class="page-link" href="{{ url_for('financeiro.extrato_lote_pagamentos_detalhe', lote_id=lote.id, page=p, per_page=per_page, status_match=request.args.get('status_match'), cnpj=filtro_cnpj, data_inicio=filtro_data_inicio, data_fim=filtro_data_fim) }}">{{ p }}</a>
                                 </li>
                                 {% endif %}
                             {% else %}
@@ -478,7 +479,7 @@
 
                         {% if pagination.has_next %}
                         <li class="page-item">
-                            <a class="page-link" href="{{ url_for('financeiro.extrato_lote_detalhe', lote_id=lote.id, page=pagination.next_num, per_page=per_page, status_match=request.args.get('status_match'), cnpj=filtro_cnpj, data_inicio=filtro_data_inicio, data_fim=filtro_data_fim) }}">
+                            <a class="page-link" href="{{ url_for('financeiro.extrato_lote_pagamentos_detalhe', lote_id=lote.id, page=pagination.next_num, per_page=per_page, status_match=request.args.get('status_match'), cnpj=filtro_cnpj, data_inicio=filtro_data_inicio, data_fim=filtro_data_fim) }}">
                                 <i class="fas fa-chevron-right"></i>
                             </a>
                         </li>
@@ -527,7 +528,7 @@ function executarMatching() {
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processando...';
 
-    fetch(`/financeiro/extrato/executar-matching/${loteId}`, {
+    fetch(`/financeiro/extrato/pagamentos/executar-matching/${loteId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
     })
@@ -671,11 +672,11 @@ function buscarCandidatos(itemId) {
     document.getElementById('modalCandidatosBody').innerHTML = `
         <div class="fin-loading">
             <div class="fin-loading__spinner"></div>
-            <p class="fin-loading__text">Buscando títulos...</p>
+            <p class="fin-loading__text">Buscando títulos a pagar...</p>
         </div>
     `;
 
-    fetch(`/financeiro/extrato/api/titulos-candidatos/${itemId}`)
+    fetch(`/financeiro/extrato/pagamentos/api/titulos-candidatos/${itemId}`)
     .then(r => r.json())
     .then(data => {
         if (data.success) {
@@ -731,8 +732,8 @@ function renderizarCandidatos(item, candidatos) {
                     </div>
                     <div class="mt-2 small">
                         <div class="fin-info-line">
-                            <i class="fas fa-user"></i>
-                            ${t.cliente || 'Cliente não informado'}
+                            <i class="fas fa-building"></i>
+                            ${t.fornecedor || 'Fornecedor não informado'}
                         </div>
                         <div class="fin-info-line">
                             <i class="fas fa-id-card"></i>
@@ -752,9 +753,9 @@ function renderizarCandidatos(item, candidatos) {
 }
 
 function selecionarTitulo(itemId, tituloId) {
-    if (!confirm('Vincular este título ao recebimento?')) return;
+    if (!confirm('Vincular este título ao pagamento?')) return;
 
-    fetch('/financeiro/extrato/api/selecionar-titulo', {
+    fetch('/financeiro/extrato/pagamentos/api/selecionar-titulo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ item_id: itemId, titulo_id: tituloId })

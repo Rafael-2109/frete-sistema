@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+
+{% block title %}Baixa de Pagamentos - Contas a Pagar{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1">
+                <i class="bi bi-cash-stack text-danger me-2"></i>
+                Baixa de Pagamentos
+            </h4>
+            <p class="text-muted mb-0">Vincular pagamentos do extrato a títulos de fornecedores</p>
+        </div>
+        <div>
+            <a href="{{ url_for('financeiro.contas_receber_hub') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-1"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    <!-- Importar do Extrato -->
+    <div class="card mb-4">
+        <div class="card-header bg-light">
+            <h6 class="mb-0">
+                <i class="bi bi-download me-2"></i>
+                Importar do Extrato Bancário
+            </h6>
+        </div>
+        <div class="card-body">
+            {% if extratos_disponiveis %}
+            <p class="text-muted small mb-3">
+                Selecione um extrato para importar as linhas de saída (pagamentos):
+            </p>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Extrato</th>
+                            <th>Journal</th>
+                            <th>Data</th>
+                            <th>Status</th>
+                            <th class="text-end">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for extrato in extratos_disponiveis %}
+                        <tr>
+                            <td>{{ extrato.statement_name or extrato.nome }}</td>
+                            <td><span class="badge bg-secondary">{{ extrato.journal_code }}</span></td>
+                            <td>{{ extrato.data_extrato.strftime('%d/%m/%Y') if extrato.data_extrato else '-' }}</td>
+                            <td>
+                                <span class="badge {% if extrato.status == 'CONCLUIDO' %}bg-success{% else %}bg-warning{% endif %}">
+                                    {{ extrato.status }}
+                                </span>
+                            </td>
+                            <td class="text-end">
+                                <form action="{{ url_for('financeiro.pagamentos_importar_extrato', extrato_lote_id=extrato.id) }}" method="POST" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-download me-1"></i> Importar Saídas
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info mb-0">
+                <i class="bi bi-info-circle me-2"></i>
+                Nenhum extrato disponível. Importe um extrato primeiro em
+                <a href="{{ url_for('financeiro.extrato_hub') }}">Extrato Bancário</a>.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body py-2">
+            <form method="GET" class="row g-2 align-items-center">
+                <div class="col-auto">
+                    <label class="col-form-label">Status:</label>
+                </div>
+                <div class="col-auto">
+                    <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="">Todos</option>
+                        <option value="IMPORTADO" {% if status_filtro == 'IMPORTADO' %}selected{% endif %}>Importado</option>
+                        <option value="AGUARDANDO_APROVACAO" {% if status_filtro == 'AGUARDANDO_APROVACAO' %}selected{% endif %}>Aguardando Aprovação</option>
+                        <option value="PROCESSANDO" {% if status_filtro == 'PROCESSANDO' %}selected{% endif %}>Processando</option>
+                        <option value="CONCLUIDO" {% if status_filtro == 'CONCLUIDO' %}selected{% endif %}>Concluído</option>
+                    </select>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Lista de Lotes -->
+    <div class="card">
+        <div class="card-header bg-light">
+            <h6 class="mb-0">
+                <i class="bi bi-collection me-2"></i>
+                Lotes de Pagamentos
+            </h6>
+        </div>
+        <div class="card-body p-0">
+            {% if lotes.items %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>ID</th>
+                            <th>Nome</th>
+                            <th>Journal</th>
+                            <th>Data</th>
+                            <th class="text-center">Itens</th>
+                            <th class="text-end">Valor Total</th>
+                            <th class="text-center">Status</th>
+                            <th class="text-center">Progresso</th>
+                            <th class="text-end">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for lote in lotes.items %}
+                        <tr>
+                            <td>{{ lote.id }}</td>
+                            <td>
+                                <a href="{{ url_for('financeiro.pagamentos_baixas_lote_detalhe', lote_id=lote.id) }}">
+                                    {{ lote.nome[:50] }}{% if lote.nome|length > 50 %}...{% endif %}
+                                </a>
+                            </td>
+                            <td><span class="badge bg-secondary">{{ lote.journal_code or '-' }}</span></td>
+                            <td>{{ lote.data_inicio.strftime('%d/%m/%Y') if lote.data_inicio else '-' }}</td>
+                            <td class="text-center">{{ lote.total_linhas }}</td>
+                            <td class="text-end">R$ {{ '{:,.2f}'.format(lote.valor_total or 0) }}</td>
+                            <td class="text-center">
+                                <span class="badge
+                                    {% if lote.status == 'CONCLUIDO' %}bg-success
+                                    {% elif lote.status == 'PROCESSANDO' %}bg-primary
+                                    {% elif lote.status == 'AGUARDANDO_APROVACAO' %}bg-warning text-dark
+                                    {% elif lote.status == 'ERRO' %}bg-danger
+                                    {% else %}bg-secondary{% endif %}">
+                                    {{ lote.status }}
+                                </span>
+                            </td>
+                            <td class="text-center">
+                                {% if lote.total_linhas > 0 %}
+                                <div class="progress" style="height: 20px; min-width: 100px;">
+                                    <div class="progress-bar bg-success" style="width: {{ (lote.linhas_sucesso / lote.total_linhas * 100)|int }}%">
+                                        {{ lote.linhas_sucesso }}
+                                    </div>
+                                    <div class="progress-bar bg-danger" style="width: {{ (lote.linhas_erro / lote.total_linhas * 100)|int }}%">
+                                        {{ lote.linhas_erro if lote.linhas_erro else '' }}
+                                    </div>
+                                </div>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                <a href="{{ url_for('financeiro.pagamentos_baixas_lote_detalhe', lote_id=lote.id) }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginação -->
+            {% if lotes.pages > 1 %}
+            <div class="card-footer">
+                <nav>
+                    <ul class="pagination pagination-sm mb-0 justify-content-center">
+                        {% for page_num in lotes.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                            {% if page_num %}
+                                <li class="page-item {% if page_num == lotes.page %}active{% endif %}">
+                                    <a class="page-link" href="{{ url_for('financeiro.pagamentos_baixas_hub', page=page_num, status=status_filtro) }}">
+                                        {{ page_num }}
+                                    </a>
+                                </li>
+                            {% else %}
+                                <li class="page-item disabled"><span class="page-link">...</span></li>
+                            {% endif %}
+                        {% endfor %}
+                    </ul>
+                </nav>
+            </div>
+            {% endif %}
+
+            {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
+                <p class="text-muted mt-3">Nenhum lote de pagamentos encontrado.</p>
+                <p class="text-muted small">Importe um extrato bancário para começar.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

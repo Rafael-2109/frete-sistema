@@ -176,21 +176,31 @@ class ExtratoService:
         journal_id: int,
         data_inicio: Optional[date] = None,
         data_fim: Optional[date] = None,
-        limit: int = 500
+        limit: int = 500,
+        tipo_transacao: str = 'entrada'
     ) -> List[Dict]:
         """
-        Busca linhas de extrato não conciliadas (recebimentos).
+        Busca linhas de extrato não conciliadas.
 
         Critérios:
         - journal_id específico
         - is_reconciled = False
-        - amount > 0 (recebimentos)
+        - tipo_transacao: 'entrada' (amount > 0), 'saida' (amount < 0), 'ambos'
+
+        Args:
+            tipo_transacao: 'entrada' (recebimentos), 'saida' (pagamentos), 'ambos'
         """
         domain = [
             ['journal_id', '=', journal_id],
             ['is_reconciled', '=', False],
-            ['amount', '>', 0]  # Apenas recebimentos
         ]
+
+        # Filtro por tipo de transação
+        if tipo_transacao == 'entrada':
+            domain.append(['amount', '>', 0])
+        elif tipo_transacao == 'saida':
+            domain.append(['amount', '<', 0])
+        # Se 'ambos', não adiciona filtro de amount
 
         if data_inicio:
             domain.append(['date', '>=', data_inicio.strftime('%Y-%m-%d')])
@@ -417,11 +427,14 @@ class ExtratoService:
             return valor[1]
         return None
 
-    def listar_journals_disponiveis(self) -> List[Dict]:
+    def listar_journals_disponiveis(self, tipo_transacao: str = 'entrada') -> List[Dict]:
         """
         Lista journals bancários disponíveis para importação.
 
         OTIMIZADO: Usa read_group para contar pendentes por journal em uma única query.
+
+        Args:
+            tipo_transacao: 'entrada' (recebimentos), 'saida' (pagamentos), 'ambos'
         """
         journals = self.connection.search_read(
             'account.journal',
@@ -434,17 +447,26 @@ class ExtratoService:
 
         journal_ids = [j['id'] for j in journals]
 
+        # Construir filtro base
+        domain_base = [
+            ['journal_id', 'in', journal_ids],
+            ['is_reconciled', '=', False],
+        ]
+
+        # Adicionar filtro por tipo
+        if tipo_transacao == 'entrada':
+            domain_base.append(['amount', '>', 0])
+        elif tipo_transacao == 'saida':
+            domain_base.append(['amount', '<', 0])
+        # Se 'ambos', não adiciona filtro de amount
+
         # OTIMIZAÇÃO: Contar pendentes de TODOS os journals em uma única query
         pendentes_por_journal = {}
         try:
             grupos = self.connection.execute_kw(
                 'account.bank.statement.line',
                 'read_group',
-                [[
-                    ['journal_id', 'in', journal_ids],
-                    ['is_reconciled', '=', False],
-                    ['amount', '>', 0]
-                ]],
+                [domain_base],
                 {
                     'fields': ['journal_id'],
                     'groupby': ['journal_id'],
@@ -461,16 +483,17 @@ class ExtratoService:
             # Fallback: buscar todas as linhas e contar em Python
             linhas = self.connection.search_read(
                 'account.bank.statement.line',
-                [
-                    ['journal_id', 'in', journal_ids],
-                    ['is_reconciled', '=', False],
-                    ['amount', '>', 0]
-                ],
+                domain_base,
                 fields=['journal_id']
             )
             for linha in linhas:
                 j_id = linha['journal_id'][0] if isinstance(linha['journal_id'], (list, tuple)) else linha['journal_id']
                 pendentes_por_journal[j_id] = pendentes_por_journal.get(j_id, 0) + 1
+
+        # Nome do campo de pendentes baseado no tipo
+        campo_pendentes = 'recebimentos_pendentes' if tipo_transacao == 'entrada' else (
+            'pagamentos_pendentes' if tipo_transacao == 'saida' else 'transacoes_pendentes'
+        )
 
         resultado = []
         for j in journals:
@@ -480,7 +503,7 @@ class ExtratoService:
                 'name': j['name'],
                 'type': j['type'],
                 'company': j['company_id'][1] if j['company_id'] else 'N/A',
-                'recebimentos_pendentes': pendentes_por_journal.get(j['id'], 0)
+                campo_pendentes: pendentes_por_journal.get(j['id'], 0)
             })
 
         return resultado
@@ -489,7 +512,11 @@ class ExtratoService:
     # MÉTODOS PARA STATEMENTS (NOVOS)
     # =========================================================================
 
-    def listar_statements_disponiveis(self, journal_code: Optional[str] = None) -> List[Dict]:
+    def listar_statements_disponiveis(
+        self,
+        journal_code: Optional[str] = None,
+        tipo_transacao: str = 'entrada'
+    ) -> List[Dict]:
         """
         Lista statements (extratos) do Odoo com linhas não conciliadas.
 
@@ -498,6 +525,7 @@ class ExtratoService:
 
         Args:
             journal_code: Filtrar por código do journal (opcional)
+            tipo_transacao: 'entrada' (recebimentos), 'saida' (pagamentos), 'ambos'
 
         Returns:
             Lista de statements com contagem de pendentes
@@ -531,6 +559,19 @@ class ExtratoService:
 
         statement_ids = [st['id'] for st in statements]
 
+        # Construir filtro base
+        domain_base = [
+            ['statement_id', 'in', statement_ids],
+            ['is_reconciled', '=', False],
+        ]
+
+        # Adicionar filtro por tipo
+        if tipo_transacao == 'entrada':
+            domain_base.append(['amount', '>', 0])
+        elif tipo_transacao == 'saida':
+            domain_base.append(['amount', '<', 0])
+        # Se 'ambos', não adiciona filtro de amount
+
         # OTIMIZAÇÃO: Contar pendentes de TODOS os statements em uma única query
         # usando read_group ao invés de N queries individuais
         pendentes_por_statement = {}
@@ -539,11 +580,7 @@ class ExtratoService:
             grupos = self.connection.execute_kw(
                 'account.bank.statement.line',
                 'read_group',
-                [[
-                    ['statement_id', 'in', statement_ids],
-                    ['is_reconciled', '=', False],
-                    ['amount', '>', 0]
-                ]],
+                [domain_base],
                 {
                     'fields': ['statement_id'],
                     'groupby': ['statement_id'],
@@ -560,19 +597,21 @@ class ExtratoService:
             # Fallback: buscar todas as linhas e contar em Python
             linhas = self.connection.search_read(
                 'account.bank.statement.line',
-                [
-                    ['statement_id', 'in', statement_ids],
-                    ['is_reconciled', '=', False],
-                    ['amount', '>', 0]
-                ],
+                domain_base,
                 fields=['statement_id']
             )
             for linha in linhas:
                 st_id = linha['statement_id'][0] if isinstance(linha['statement_id'], (list, tuple)) else linha['statement_id']
                 pendentes_por_statement[st_id] = pendentes_por_statement.get(st_id, 0) + 1
 
-        # OTIMIZAÇÃO: Buscar lotes existentes em uma única query
+        # OTIMIZAÇÃO: Buscar lotes existentes em uma única query (filtrado por tipo_transacao)
         lotes_existentes = {
+            lote.statement_id: lote
+            for lote in ExtratoLote.query.filter(
+                ExtratoLote.statement_id.in_(statement_ids),
+                ExtratoLote.tipo_transacao == tipo_transacao
+            ).all()
+        } if tipo_transacao != 'ambos' else {
             lote.statement_id: lote
             for lote in ExtratoLote.query.filter(
                 ExtratoLote.statement_id.in_(statement_ids)
@@ -607,7 +646,8 @@ class ExtratoService:
     def importar_statement(
         self,
         statement_id: int,
-        criado_por: str = 'Sistema'
+        criado_por: str = 'Sistema',
+        tipo_transacao: str = 'entrada'
     ) -> ExtratoLote:
         """
         Importa um statement específico do Odoo.
@@ -615,14 +655,19 @@ class ExtratoService:
         Args:
             statement_id: ID do account.bank.statement no Odoo
             criado_por: Usuário que criou
+            tipo_transacao: 'entrada' (recebimentos), 'saida' (pagamentos), 'ambos'
 
         Returns:
             ExtratoLote criado
         """
-        # Verificar se já foi importado
-        lote_existente = ExtratoLote.query.filter_by(statement_id=statement_id).first()
+        # Verificar se já foi importado (por statement_id + tipo_transacao)
+        lote_existente = ExtratoLote.query.filter_by(
+            statement_id=statement_id,
+            tipo_transacao=tipo_transacao
+        ).first()
         if lote_existente:
-            raise ValueError(f"Statement {statement_id} já foi importado (Lote {lote_existente.id})")
+            tipo_label = 'recebimentos' if tipo_transacao == 'entrada' else 'pagamentos'
+            raise ValueError(f"Statement {statement_id} ({tipo_label}) já foi importado (Lote {lote_existente.id})")
 
         # Buscar dados do statement no Odoo
         statements = self.connection.search_read(
@@ -672,15 +717,19 @@ class ExtratoService:
             journal_id=journal_id,
             data_extrato=statement_date_obj,
             status='IMPORTADO',
+            tipo_transacao=tipo_transacao,
             criado_por=criado_por
         )
         db.session.add(lote)
         db.session.flush()
 
         # Buscar linhas não conciliadas do statement
-        linhas = self._buscar_linhas_statement(statement_id)
+        linhas = self._buscar_linhas_statement(statement_id, tipo_transacao=tipo_transacao)
 
-        logger.info(f"Linhas encontradas: {len(linhas)}")
+        tipo_label = 'recebimentos' if tipo_transacao == 'entrada' else (
+            'pagamentos' if tipo_transacao == 'saida' else 'transações'
+        )
+        logger.info(f"Linhas de {tipo_label} encontradas: {len(linhas)}")
 
         # OTIMIZAÇÃO: Buscar todas as linhas de crédito em batch
         move_ids = [
@@ -720,15 +769,24 @@ class ExtratoService:
 
         return lote
 
-    def _buscar_linhas_statement(self, statement_id: int) -> List[Dict]:
+    def _buscar_linhas_statement(self, statement_id: int, tipo_transacao: str = 'entrada') -> List[Dict]:
         """
         Busca linhas não conciliadas de um statement específico.
+
+        Args:
+            tipo_transacao: 'entrada' (recebimentos), 'saida' (pagamentos), 'ambos'
         """
         domain = [
             ['statement_id', '=', statement_id],
             ['is_reconciled', '=', False],
-            ['amount', '>', 0]  # Apenas recebimentos
         ]
+
+        # Filtro por tipo de transação
+        if tipo_transacao == 'entrada':
+            domain.append(['amount', '>', 0])
+        elif tipo_transacao == 'saida':
+            domain.append(['amount', '<', 0])
+        # Se 'ambos', não adiciona filtro de amount
 
         fields = [
             'id', 'date', 'payment_ref', 'amount', 'amount_residual',

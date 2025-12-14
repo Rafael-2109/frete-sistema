@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+
+{% block title %}Contas a Pagar - Hub{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1">
+                <i class="fas fa-file-invoice-dollar text-danger me-2"></i>
+                Contas a Pagar
+            </h4>
+            <p class="text-muted mb-0">Gestao de titulos a pagar sincronizados do Odoo</p>
+        </div>
+        <div>
+            <button class="btn btn-primary" onclick="sincronizarOdoo()">
+                <i class="fas fa-sync-alt me-1"></i> Sincronizar Odoo
+            </button>
+        </div>
+    </div>
+
+    <!-- Cards de Resumo -->
+    <div class="row g-3 mb-4">
+        <!-- Total em Aberto -->
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Total em Aberto</h6>
+                            <h4 class="mb-0 text-primary">R$ {{ '{:,.2f}'.format(total_aberto) }}</h4>
+                        </div>
+                        <div class="rounded-circle bg-primary bg-opacity-10 p-3">
+                            <i class="fas fa-coins text-primary fa-lg"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Vencidos -->
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100 {% if qtd_vencido > 0 %}border-start border-danger border-4{% endif %}">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Vencidos</h6>
+                            <h4 class="mb-0 text-danger">R$ {{ '{:,.2f}'.format(total_vencido) }}</h4>
+                            <small class="text-muted">{{ qtd_vencido }} titulo(s)</small>
+                        </div>
+                        <div class="rounded-circle bg-danger bg-opacity-10 p-3">
+                            <i class="fas fa-exclamation-triangle text-danger fa-lg"></i>
+                        </div>
+                    </div>
+                    {% if qtd_vencido > 0 %}
+                    <a href="{{ url_for('financeiro.listar_contas_pagar', status='vencido') }}" class="stretched-link"></a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Vence Hoje -->
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100 {% if qtd_hoje > 0 %}border-start border-warning border-4{% endif %}">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Vence Hoje</h6>
+                            <h4 class="mb-0 text-warning">R$ {{ '{:,.2f}'.format(total_hoje) }}</h4>
+                            <small class="text-muted">{{ qtd_hoje }} titulo(s)</small>
+                        </div>
+                        <div class="rounded-circle bg-warning bg-opacity-10 p-3">
+                            <i class="fas fa-clock text-warning fa-lg"></i>
+                        </div>
+                    </div>
+                    {% if qtd_hoje > 0 %}
+                    <a href="{{ url_for('financeiro.listar_contas_pagar', status='vence_hoje') }}" class="stretched-link"></a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Vence na Semana -->
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Vence em 7 dias</h6>
+                            <h4 class="mb-0 text-info">R$ {{ '{:,.2f}'.format(total_semana) }}</h4>
+                            <small class="text-muted">{{ qtd_semana }} titulo(s)</small>
+                        </div>
+                        <div class="rounded-circle bg-info bg-opacity-10 p-3">
+                            <i class="fas fa-calendar-week text-info fa-lg"></i>
+                        </div>
+                    </div>
+                    {% if qtd_semana > 0 %}
+                    <a href="{{ url_for('financeiro.listar_contas_pagar', status='vence_semana') }}" class="stretched-link"></a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Links Rapidos -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body text-center">
+                    <i class="fas fa-list fa-2x text-primary mb-3"></i>
+                    <h5>Listar Titulos</h5>
+                    <p class="text-muted small">Consultar todos os titulos a pagar com filtros</p>
+                    <a href="{{ url_for('financeiro.listar_contas_pagar') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-arrow-right me-1"></i> Acessar
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body text-center">
+                    <i class="fas fa-file-import fa-2x text-success mb-3"></i>
+                    <h5>Baixa de Pagamentos</h5>
+                    <p class="text-muted small">Vincular pagamentos do extrato aos titulos</p>
+                    <a href="{{ url_for('financeiro.pagamentos_baixas_hub') }}" class="btn btn-outline-success">
+                        <i class="fas fa-arrow-right me-1"></i> Acessar
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body text-center">
+                    <i class="fas fa-university fa-2x text-info mb-3"></i>
+                    <h5>Extrato Bancario</h5>
+                    <p class="text-muted small">Visualizar extratos e conciliacoes</p>
+                    <a href="{{ url_for('financeiro.extrato_hub') }}" class="btn btn-outline-info">
+                        <i class="fas fa-arrow-right me-1"></i> Acessar
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Info da Sincronizacao -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-body">
+            <div class="row align-items-center">
+                <div class="col-auto">
+                    <i class="fas fa-database text-muted fa-2x"></i>
+                </div>
+                <div class="col">
+                    <h6 class="mb-0">Status da Sincronizacao</h6>
+                    <small class="text-muted">
+                        {% if ultima_sync %}
+                        Ultima sincronizacao: {{ ultima_sync.strftime('%d/%m/%Y %H:%M') }}
+                        {% else %}
+                        Nenhuma sincronizacao realizada
+                        {% endif %}
+                        | Total de registros: {{ total_registros }}
+                    </small>
+                </div>
+                <div class="col-auto">
+                    <span class="badge bg-secondary">
+                        <i class="fas fa-sync-alt me-1"></i> Manual
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Modal -->
+<div class="modal fade" id="loadingModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-body text-center py-5">
+                <div class="spinner-border text-primary mb-3" role="status">
+                    <span class="visually-hidden">Carregando...</span>
+                </div>
+                <h5 id="loadingMessage">Sincronizando com Odoo...</h5>
+                <p class="text-muted mb-0">Isso pode levar alguns segundos.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function sincronizarOdoo() {
+    const modal = new bootstrap.Modal(document.getElementById('loadingModal'));
+    modal.show();
+
+    fetch('{{ url_for("financeiro.sincronizar_contas_pagar_odoo") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+        },
+        body: JSON.stringify({
+            dias: 90,
+            apenas_em_aberto: true
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        modal.hide();
+        if (data.success) {
+            toastr.success(
+                `Novos: ${data.novos}, Atualizados: ${data.atualizados}, Erros: ${data.erros}`,
+                'Sincronizacao concluida!'
+            );
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            toastr.error(data.error || 'Erro desconhecido', 'Erro na sincronizacao');
+        }
+    })
+    .catch(error => {
+        modal.hide();
+        toastr.error(error.message, 'Erro');
+    });
+}
+</script>
+{% endblock %}

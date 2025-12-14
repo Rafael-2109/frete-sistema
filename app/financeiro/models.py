@@ -1161,13 +1161,21 @@ class ExtratoLote(db.Model):
     """
     Representa um account.bank.statement do Odoo.
     Cada lote corresponde a um extrato bancário (geralmente por dia).
+
+    NOTA: Um mesmo statement pode ter 2 lotes: um de entrada (recebimentos) e outro de saída (pagamentos).
+    A unicidade é por (statement_id + tipo_transacao).
     """
     __tablename__ = 'extrato_lote'
+
+    # Constraint único composto: mesmo statement pode ter entrada E saída
+    __table_args__ = (
+        db.UniqueConstraint('statement_id', 'tipo_transacao', name='uq_extrato_lote_statement_tipo'),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
 
     # === REFERÊNCIA AO ODOO (account.bank.statement) ===
-    statement_id = db.Column(db.Integer, nullable=True, unique=True, index=True)  # account.bank.statement ID
+    statement_id = db.Column(db.Integer, nullable=True, index=True)  # account.bank.statement ID (sem unique simples)
     statement_name = db.Column(db.String(255), nullable=True)  # Ex: "GRA1 Extrato 2025-12-10"
 
     # Journal
@@ -1194,6 +1202,9 @@ class ExtratoLote(db.Model):
 
     # Status: IMPORTADO, PROCESSANDO_MATCH, AGUARDANDO_APROVACAO, CONCILIANDO, CONCLUIDO, ERRO
     status = db.Column(db.String(30), default='IMPORTADO', nullable=False, index=True)
+
+    # Tipo de transação: 'entrada' (recebimentos), 'saida' (pagamentos)
+    tipo_transacao = db.Column(db.String(20), default='entrada', nullable=False, index=True)
 
     # Auditoria
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
@@ -1222,6 +1233,7 @@ class ExtratoLote(db.Model):
             'linhas_erro': self.linhas_erro,
             'valor_total': self.valor_total,
             'status': self.status,
+            'tipo_transacao': self.tipo_transacao,
             'criado_em': self.criado_em.isoformat() if self.criado_em else None,
             'criado_por': self.criado_por,
             'processado_em': self.processado_em.isoformat() if self.processado_em else None
@@ -1435,3 +1447,488 @@ class PendenciaFinanceiraNF(db.Model):
     def tem_resposta_valida(self):
         """Retorna True se há resposta e ela não foi excluída"""
         return self.respondida_em is not None and self.resposta_excluida_em is None
+
+
+# =============================================================================
+# BAIXA DE PAGAMENTOS (CONTAS A PAGAR) VIA EXTRATO
+# =============================================================================
+
+
+class BaixaPagamentoLote(db.Model):
+    """
+    Lote de baixa de pagamentos (contas a pagar).
+    Similar a BaixaTituloLote, mas para pagamentos a fornecedores.
+
+    Fluxo:
+    1. Importar linhas do extrato (amount < 0 = saídas)
+    2. Fazer matching com títulos a pagar (liability_payable)
+    3. Aprovar matches
+    4. Executar baixa (criar payment outbound + reconciliar)
+    """
+    __tablename__ = 'baixa_pagamento_lote'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # === REFERÊNCIA AO EXTRATO ===
+    # Pode ser vinculado a um extrato específico ou importado manualmente
+    extrato_lote_id = db.Column(db.Integer, db.ForeignKey('extrato_lote.id'), nullable=True, index=True)
+
+    # Identificação do lote
+    nome = db.Column(db.String(255), nullable=False)
+    descricao = db.Column(db.Text, nullable=True)
+
+    # Journal/Conta bancária
+    journal_id = db.Column(db.Integer, nullable=True)
+    journal_code = db.Column(db.String(20), nullable=True)
+    journal_name = db.Column(db.String(100), nullable=True)
+
+    # Período
+    data_inicio = db.Column(db.Date, nullable=True)
+    data_fim = db.Column(db.Date, nullable=True)
+
+    # Estatísticas
+    total_linhas = db.Column(db.Integer, default=0)
+    linhas_com_match = db.Column(db.Integer, default=0)
+    linhas_sem_match = db.Column(db.Integer, default=0)
+    linhas_aprovadas = db.Column(db.Integer, default=0)
+    linhas_processadas = db.Column(db.Integer, default=0)
+    linhas_sucesso = db.Column(db.Integer, default=0)
+    linhas_erro = db.Column(db.Integer, default=0)
+    valor_total = db.Column(db.Float, default=0)
+
+    # Status: IMPORTADO, MATCHING, AGUARDANDO_APROVACAO, PROCESSANDO, CONCLUIDO, ERRO
+    status = db.Column(db.String(30), default='IMPORTADO', nullable=False, index=True)
+
+    # Auditoria
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_por = db.Column(db.String(100), nullable=True)
+    processado_em = db.Column(db.DateTime, nullable=True)
+    processado_por = db.Column(db.String(100), nullable=True)
+
+    # Relacionamentos
+    itens = relationship('BaixaPagamentoItem', backref='lote', lazy='dynamic', cascade='all, delete-orphan')
+    extrato_lote = relationship('ExtratoLote', foreign_keys=[extrato_lote_id])
+
+    def __repr__(self):
+        return f'<BaixaPagamentoLote {self.id} - {self.nome} ({self.status})>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'extrato_lote_id': self.extrato_lote_id,
+            'nome': self.nome,
+            'descricao': self.descricao,
+            'journal_id': self.journal_id,
+            'journal_code': self.journal_code,
+            'journal_name': self.journal_name,
+            'data_inicio': self.data_inicio.isoformat() if self.data_inicio else None,
+            'data_fim': self.data_fim.isoformat() if self.data_fim else None,
+            'total_linhas': self.total_linhas,
+            'linhas_com_match': self.linhas_com_match,
+            'linhas_sem_match': self.linhas_sem_match,
+            'linhas_aprovadas': self.linhas_aprovadas,
+            'linhas_processadas': self.linhas_processadas,
+            'linhas_sucesso': self.linhas_sucesso,
+            'linhas_erro': self.linhas_erro,
+            'valor_total': self.valor_total,
+            'status': self.status,
+            'criado_em': self.criado_em.isoformat() if self.criado_em else None,
+            'criado_por': self.criado_por,
+            'processado_em': self.processado_em.isoformat() if self.processado_em else None,
+            'processado_por': self.processado_por
+        }
+
+
+class BaixaPagamentoItem(db.Model):
+    """
+    Item individual de baixa de pagamento.
+    Representa uma linha de saída do extrato vinculada a um título a pagar.
+
+    Fluxo:
+    1. Importado do extrato -> status = PENDENTE
+    2. Matching automático -> status_match = MATCH_ENCONTRADO/SEM_MATCH/MULTIPLOS
+    3. Aprovação manual -> aprovado = True
+    4. Processamento -> status = PROCESSANDO -> SUCESSO ou ERRO
+    """
+    __tablename__ = 'baixa_pagamento_item'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # FK para o lote
+    lote_id = db.Column(db.Integer, db.ForeignKey('baixa_pagamento_lote.id'), nullable=False, index=True)
+
+    # =========================================================================
+    # DADOS DO EXTRATO (origem)
+    # =========================================================================
+
+    # Referência ao Odoo
+    statement_line_id = db.Column(db.Integer, nullable=True, index=True)  # account.bank.statement.line ID
+    move_id_extrato = db.Column(db.Integer, nullable=True)  # account.move ID do extrato
+
+    # Dados da transação
+    data_transacao = db.Column(db.Date, nullable=False)
+    valor = db.Column(db.Float, nullable=False)  # Valor absoluto (positivo)
+    payment_ref = db.Column(db.Text, nullable=True)  # Label completo da transação
+
+    # Dados extraídos do payment_ref
+    tipo_transacao = db.Column(db.String(50), nullable=True)  # PIX, TED, BOLETO, etc.
+    nome_beneficiario = db.Column(db.String(255), nullable=True)  # Nome do fornecedor extraído
+    cnpj_beneficiario = db.Column(db.String(20), nullable=True, index=True)  # CNPJ extraído
+
+    # Linha de débito do extrato (para reconciliar)
+    debit_line_id_extrato = db.Column(db.Integer, nullable=True)  # account.move.line ID (débito na TRANSITÓRIA)
+
+    # =========================================================================
+    # MATCHING - TÍTULO VINCULADO
+    # =========================================================================
+
+    # Status do matching: PENDENTE, MATCH_ENCONTRADO, MULTIPLOS_MATCHES, SEM_MATCH
+    status_match = db.Column(db.String(30), default='PENDENTE', nullable=False, index=True)
+
+    # Título a pagar vinculado
+    titulo_id = db.Column(db.Integer, nullable=True, index=True)  # account.move.line ID (liability_payable)
+    titulo_move_id = db.Column(db.Integer, nullable=True)  # account.move ID (NF de entrada)
+    titulo_move_name = db.Column(db.String(100), nullable=True)  # Nome do move (COM2/2024/...)
+    titulo_nf = db.Column(db.String(50), nullable=True)  # Número da NF (cache)
+    titulo_parcela = db.Column(db.Integer, nullable=True)  # Parcela (cache)
+    titulo_valor = db.Column(db.Float, nullable=True)  # Valor do título (cache)
+    titulo_vencimento = db.Column(db.Date, nullable=True)  # Vencimento (cache)
+
+    # Fornecedor
+    partner_id = db.Column(db.Integer, nullable=True)  # res.partner ID
+    partner_name = db.Column(db.String(255), nullable=True)  # Nome do fornecedor (cache)
+
+    # Empresa
+    company_id = db.Column(db.Integer, nullable=True)  # company_id do título
+
+    # Score e critério do match
+    match_score = db.Column(db.Integer, nullable=True)  # 0-100
+    match_criterio = db.Column(db.String(100), nullable=True)  # Ex: "CNPJ_EXATO+VALOR_EXATO"
+
+    # Múltiplos candidatos (JSON)
+    matches_candidatos = db.Column(db.Text, nullable=True)
+
+    # =========================================================================
+    # APROVAÇÃO
+    # =========================================================================
+
+    aprovado = db.Column(db.Boolean, default=False, nullable=False)
+    aprovado_em = db.Column(db.DateTime, nullable=True)
+    aprovado_por = db.Column(db.String(100), nullable=True)
+
+    # =========================================================================
+    # CONTROLE DE PROCESSAMENTO
+    # =========================================================================
+
+    # Status geral: PENDENTE, APROVADO, PROCESSANDO, SUCESSO, ERRO
+    status = db.Column(db.String(20), default='PENDENTE', nullable=False, index=True)
+
+    # Mensagem de erro
+    mensagem = db.Column(db.Text, nullable=True)
+
+    # =========================================================================
+    # RESULTADO DA OPERAÇÃO NO ODOO
+    # =========================================================================
+
+    # Payment criado
+    payment_id = db.Column(db.Integer, nullable=True)  # account.payment ID criado
+    payment_name = db.Column(db.String(100), nullable=True)  # Nome do pagamento (PGRA1/2025/...)
+
+    # Linhas do payment
+    debit_line_id_payment = db.Column(db.Integer, nullable=True)  # Linha de DÉBITO (liability_payable)
+    credit_line_id_payment = db.Column(db.Integer, nullable=True)  # Linha de CRÉDITO (PENDENTES)
+
+    # Reconciliações
+    partial_reconcile_titulo_id = db.Column(db.Integer, nullable=True)  # Reconcile payment <-> título
+    full_reconcile_titulo_id = db.Column(db.Integer, nullable=True)
+    partial_reconcile_extrato_id = db.Column(db.Integer, nullable=True)  # Reconcile payment <-> extrato
+    full_reconcile_extrato_id = db.Column(db.Integer, nullable=True)
+
+    # Saldos
+    saldo_antes = db.Column(db.Float, nullable=True)  # amount_residual ANTES
+    saldo_depois = db.Column(db.Float, nullable=True)  # amount_residual DEPOIS
+
+    # =========================================================================
+    # SNAPSHOTS (auditoria completa)
+    # =========================================================================
+
+    snapshot_antes = db.Column(db.Text, nullable=True)  # JSON com estado ANTES
+    snapshot_depois = db.Column(db.Text, nullable=True)  # JSON com estado DEPOIS
+
+    # =========================================================================
+    # AUDITORIA
+    # =========================================================================
+
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    processado_em = db.Column(db.DateTime, nullable=True)
+
+    __table_args__ = (
+        Index('idx_baixa_pag_item_lote', 'lote_id'),
+        Index('idx_baixa_pag_item_status', 'status'),
+        Index('idx_baixa_pag_item_status_match', 'status_match'),
+        Index('idx_baixa_pag_item_cnpj', 'cnpj_beneficiario'),
+        Index('idx_baixa_pag_item_titulo', 'titulo_id'),
+    )
+
+    def __repr__(self):
+        return f'<BaixaPagamentoItem {self.id} - {self.nome_beneficiario} R${self.valor:.2f} ({self.status})>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'lote_id': self.lote_id,
+            # Extrato
+            'statement_line_id': self.statement_line_id,
+            'move_id_extrato': self.move_id_extrato,
+            'data_transacao': self.data_transacao.isoformat() if self.data_transacao else None,
+            'valor': self.valor,
+            'payment_ref': self.payment_ref,
+            'tipo_transacao': self.tipo_transacao,
+            'nome_beneficiario': self.nome_beneficiario,
+            'cnpj_beneficiario': self.cnpj_beneficiario,
+            # Matching
+            'status_match': self.status_match,
+            'titulo_id': self.titulo_id,
+            'titulo_move_id': self.titulo_move_id,
+            'titulo_move_name': self.titulo_move_name,
+            'titulo_nf': self.titulo_nf,
+            'titulo_parcela': self.titulo_parcela,
+            'titulo_valor': self.titulo_valor,
+            'titulo_vencimento': self.titulo_vencimento.isoformat() if self.titulo_vencimento else None,
+            'partner_id': self.partner_id,
+            'partner_name': self.partner_name,
+            'company_id': self.company_id,
+            'match_score': self.match_score,
+            'match_criterio': self.match_criterio,
+            'matches_candidatos': self.get_matches_candidatos(),
+            # Aprovação
+            'aprovado': self.aprovado,
+            'aprovado_em': self.aprovado_em.isoformat() if self.aprovado_em else None,
+            'aprovado_por': self.aprovado_por,
+            # Controle
+            'status': self.status,
+            'mensagem': self.mensagem,
+            # Resultado
+            'payment_id': self.payment_id,
+            'payment_name': self.payment_name,
+            'saldo_antes': self.saldo_antes,
+            'saldo_depois': self.saldo_depois,
+            # Snapshots
+            'snapshot_antes': self.get_snapshot_antes(),
+            'snapshot_depois': self.get_snapshot_depois(),
+            # Auditoria
+            'criado_em': self.criado_em.isoformat() if self.criado_em else None,
+            'processado_em': self.processado_em.isoformat() if self.processado_em else None
+        }
+
+    def set_matches_candidatos(self, matches: list):
+        """Salva lista de matches candidatos como JSON"""
+        self.matches_candidatos = json.dumps(matches, default=str)
+
+    def get_matches_candidatos(self) -> list:
+        """Retorna lista de matches candidatos"""
+        return json.loads(self.matches_candidatos) if self.matches_candidatos else []
+
+    def set_snapshot_antes(self, dados: dict):
+        """Salva snapshot dos dados ANTES da baixa"""
+        self.snapshot_antes = json.dumps(dados, default=str)
+
+    def set_snapshot_depois(self, dados: dict):
+        """Salva snapshot dos dados DEPOIS da baixa"""
+        self.snapshot_depois = json.dumps(dados, default=str)
+
+    def get_snapshot_antes(self) -> dict:
+        """Retorna snapshot ANTES como dict"""
+        return json.loads(self.snapshot_antes) if self.snapshot_antes else {}
+
+    def get_snapshot_depois(self) -> dict:
+        """Retorna snapshot DEPOIS como dict"""
+        return json.loads(self.snapshot_depois) if self.snapshot_depois else {}
+
+
+# =============================================================================
+# FIM BAIXA DE PAGAMENTOS
+# =============================================================================
+
+
+# =============================================================================
+# CONTAS A PAGAR - MODELOS
+# =============================================================================
+
+
+class ContasAPagar(db.Model):
+    """
+    Contas a Pagar - Dados importados do Odoo com enriquecimento local.
+
+    Chave única: empresa + titulo_nf + parcela
+
+    Fontes de dados:
+    - ODOO: empresa, titulo_nf, parcela, cnpj, razao_social, emissao, vencimento,
+            valor_original, valor_residual, parcela_paga
+    - SISTEMA: observacao, alerta, status_sistema
+    - CALCULADO: dias_vencidos, status_vencimento
+
+    Diferenças em relação a Contas a Receber:
+    - account_type = 'liability_payable' (vs 'asset_receivable')
+    - Valor no campo 'credit' (vs 'debit')
+    - amount_residual é NEGATIVO quando em aberto
+    - Fornecedores (vs Clientes)
+    """
+    __tablename__ = 'contas_a_pagar'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # =========================================================================
+    # CAMPOS DO ODOO (importados automaticamente)
+    # =========================================================================
+
+    # Identificação única
+    empresa = db.Column(db.Integer, nullable=False, index=True)  # 1=FB, 2=SC, 3=CD
+    titulo_nf = db.Column(db.String(50), nullable=False, index=True)  # NF-e de entrada (x_studio_nf_e)
+    parcela = db.Column(db.String(10), nullable=False, index=True)  # Número da parcela
+
+    # IDs do Odoo (para referência)
+    odoo_line_id = db.Column(db.Integer, nullable=True, unique=True, index=True)  # account.move.line ID
+    odoo_move_id = db.Column(db.Integer, nullable=True, index=True)  # account.move ID
+    odoo_move_name = db.Column(db.String(255), nullable=True)  # Nome do move (ENTSI/2025/...)
+
+    # Fornecedor
+    partner_id = db.Column(db.Integer, nullable=True, index=True)  # res.partner ID
+    cnpj = db.Column(db.String(20), nullable=True, index=True)  # CNPJ do fornecedor
+    raz_social = db.Column(db.String(255), nullable=True)  # Razão Social completa
+    raz_social_red = db.Column(db.String(100), nullable=True)  # Nome reduzido/fantasia
+
+    # Datas do Odoo
+    emissao = db.Column(db.Date, nullable=True)  # Data de emissão (date)
+    vencimento = db.Column(db.Date, nullable=True, index=True)  # Data de vencimento (date_maturity)
+
+    # Valores do Odoo
+    valor_original = db.Column(db.Float, nullable=True)  # Valor original (credit)
+    valor_residual = db.Column(db.Float, nullable=True)  # Saldo em aberto (abs(amount_residual))
+
+    # Status do Odoo
+    parcela_paga = db.Column(db.Boolean, default=False)  # l10n_br_paga
+    reconciliado = db.Column(db.Boolean, default=False)  # reconciled
+
+    # =========================================================================
+    # CAMPOS DO SISTEMA (preenchidos manualmente)
+    # =========================================================================
+
+    # Observações e alertas
+    observacao = db.Column(db.Text, nullable=True)
+    alerta = db.Column(db.Boolean, default=False, nullable=False)
+
+    # Status interno do sistema
+    # PENDENTE: Aguardando pagamento
+    # PROGRAMADO: Pagamento programado
+    # PAGO: Pago (sincronizado do Odoo)
+    # CONTESTADO: Em contestação
+    status_sistema = db.Column(db.String(30), default='PENDENTE', nullable=False, index=True)
+
+    # Data programada para pagamento (definido pelo usuário)
+    data_programada = db.Column(db.Date, nullable=True)
+
+    # =========================================================================
+    # AUDITORIA E CONTROLE
+    # =========================================================================
+
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_por = db.Column(db.String(100), nullable=True)
+    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    atualizado_por = db.Column(db.String(100), nullable=True)
+
+    # Controle de sincronização
+    odoo_write_date = db.Column(db.DateTime, nullable=True)  # write_date do Odoo para sync incremental
+    ultima_sincronizacao = db.Column(db.DateTime, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint('empresa', 'titulo_nf', 'parcela', name='uq_conta_pagar_empresa_nf_parcela'),
+        Index('idx_conta_pagar_vencimento', 'vencimento'),
+        Index('idx_conta_pagar_cnpj', 'cnpj'),
+        Index('idx_conta_pagar_nf', 'titulo_nf'),
+        Index('idx_conta_pagar_odoo_line', 'odoo_line_id'),
+    )
+
+    def __repr__(self):
+        return f'<ContasAPagar {self.empresa}-{self.titulo_nf}-{self.parcela}>'
+
+    @property
+    def titulo_parcela_display(self) -> str:
+        """Retorna o formato de exibição: Titulo-Parcela"""
+        return f"{self.titulo_nf}-{self.parcela}"
+
+    @property
+    def empresa_nome(self) -> str:
+        """Retorna o nome da empresa baseado no código"""
+        nomes = {
+            1: 'NACOM GOYA - FB',
+            2: 'NACOM GOYA - SC',
+            3: 'NACOM GOYA - CD'
+        }
+        return nomes.get(self.empresa, f'Empresa {self.empresa}')
+
+    @property
+    def dias_vencidos(self) -> int:
+        """Calcula dias vencidos (positivo) ou a vencer (negativo)"""
+        if not self.vencimento:
+            return 0
+        hoje = date.today()
+        return (hoje - self.vencimento).days
+
+    @property
+    def status_vencimento(self) -> str:
+        """Retorna status baseado no vencimento"""
+        if self.parcela_paga:
+            return 'PAGO'
+        dias = self.dias_vencidos
+        if dias > 0:
+            return 'VENCIDO'
+        elif dias == 0:
+            return 'VENCE_HOJE'
+        elif dias >= -7:
+            return 'VENCE_SEMANA'
+        else:
+            return 'A_VENCER'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'empresa': self.empresa,
+            'empresa_nome': self.empresa_nome,
+            'titulo_nf': self.titulo_nf,
+            'parcela': self.parcela,
+            'titulo_parcela_display': self.titulo_parcela_display,
+            # IDs Odoo
+            'odoo_line_id': self.odoo_line_id,
+            'odoo_move_id': self.odoo_move_id,
+            'odoo_move_name': self.odoo_move_name,
+            # Fornecedor
+            'partner_id': self.partner_id,
+            'cnpj': self.cnpj,
+            'raz_social': self.raz_social,
+            'raz_social_red': self.raz_social_red,
+            # Datas
+            'emissao': self.emissao.isoformat() if self.emissao else None,
+            'vencimento': self.vencimento.isoformat() if self.vencimento else None,
+            # Valores
+            'valor_original': self.valor_original,
+            'valor_residual': self.valor_residual,
+            # Status
+            'parcela_paga': self.parcela_paga,
+            'reconciliado': self.reconciliado,
+            'status_sistema': self.status_sistema,
+            'data_programada': self.data_programada.isoformat() if self.data_programada else None,
+            # Calculados
+            'dias_vencidos': self.dias_vencidos,
+            'status_vencimento': self.status_vencimento,
+            # Campos do sistema
+            'observacao': self.observacao,
+            'alerta': self.alerta,
+            # Auditoria
+            'ultima_sincronizacao': self.ultima_sincronizacao.isoformat() if self.ultima_sincronizacao else None,
+        }
+
+
+# =============================================================================
+# FIM CONTAS A PAGAR
+# =============================================================================

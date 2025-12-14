@@ -1,0 +1,435 @@
+/**
+ * Sistema Financeiro - Premium Visual Effects (LIMPO)
+ * ====================================================
+ * Apenas efeitos REALMENTE usados: ~200 linhas
+ * Efeitos: Grain, Aurora, Glass, Colored Shadows, Spotlight, Reveal
+ */
+
+/* =============================================================================
+   1. GRAIN TEXTURE
+   ============================================================================= */
+
+.grain-overlay::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23grain)'/%3E%3C/svg%3E");
+    opacity: 0.04;
+    pointer-events: none;
+    z-index: 9999;
+}
+
+/* =============================================================================
+   2. AURORA BACKGROUND
+   ============================================================================= */
+
+.aurora-bg {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    z-index: -1;
+    pointer-events: none;
+}
+
+.aurora-bg::before,
+.aurora-bg::after {
+    content: '';
+    position: absolute;
+    width: 150%;
+    height: 150%;
+    background: conic-gradient(
+        from 0deg at 50% 50%,
+        rgba(0, 212, 170, 0.12) 0deg,
+        rgba(99, 102, 241, 0.08) 60deg,
+        rgba(14, 165, 233, 0.12) 120deg,
+        rgba(168, 85, 247, 0.06) 180deg,
+        rgba(236, 72, 153, 0.06) 240deg,
+        rgba(0, 212, 170, 0.12) 360deg
+    );
+    animation: aurora-rotate 35s linear infinite;
+    filter: blur(100px);
+}
+
+.aurora-bg::before {
+    top: -25%;
+    left: -25%;
+}
+
+.aurora-bg::after {
+    bottom: -25%;
+    right: -25%;
+    animation-direction: reverse;
+    animation-duration: 30s;
+}
+
+[data-theme="light"] .aurora-bg::before,
+[data-theme="light"] .aurora-bg::after {
+    opacity: 0.5;
+}
+
+@keyframes aurora-rotate {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* =============================================================================
+   3. GLASSMORPHISM
+   ============================================================================= */
+
+.glass {
+    background: rgba(17, 29, 46, 0.7);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="light"] .glass {
+    background: rgba(255, 255, 255, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+/* =============================================================================
+   4. COLORED SHADOWS
+   ============================================================================= */
+
+.shadow-glow {
+    --glow-color-rgb: 0, 212, 170;
+    box-shadow:
+        0 4px 6px rgba(0, 0, 0, 0.1),
+        0 0 40px rgba(var(--glow-color-rgb), 0.12),
+        0 0 80px rgba(var(--glow-color-rgb), 0.06);
+    transition: box-shadow var(--fin-transition-normal);
+}
+
+.shadow-glow:hover {
+    box-shadow:
+        0 8px 25px rgba(0, 0, 0, 0.15),
+        0 0 60px rgba(var(--glow-color-rgb), 0.2),
+        0 0 120px rgba(var(--glow-color-rgb), 0.1);
+}
+
+.shadow-glow--success { --glow-color-rgb: 16, 185, 129; }
+.shadow-glow--danger { --glow-color-rgb: 239, 68, 68; }
+
+/* Light theme: sombras mais sutis */
+[data-theme="light"] .shadow-glow {
+    box-shadow:
+        0 4px 6px rgba(0, 0, 0, 0.06),
+        0 0 30px rgba(var(--glow-color-rgb), 0.08),
+        0 0 60px rgba(var(--glow-color-rgb), 0.04);
+}
+
+[data-theme="light"] .shadow-glow:hover {
+    box-shadow:
+        0 8px 25px rgba(0, 0, 0, 0.1),
+        0 0 40px rgba(var(--glow-color-rgb), 0.12),
+        0 0 80px rgba(var(--glow-color-rgb), 0.06);
+}
+
+/* =============================================================================
+   5. BUTTON EFFECTS
+   ============================================================================= */
+
+.btn-shine {
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-shine::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s ease;
+}
+
+.btn-shine:hover::before {
+    left: 100%;
+}
+
+.btn-liquid {
+    position: relative;
+    overflow: hidden;
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-liquid::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    transition: width 0.6s ease, height 0.6s ease;
+}
+
+.btn-liquid:hover::before {
+    width: 300%;
+    height: 300%;
+}
+
+.icon-morph {
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    display: inline-block;
+}
+
+.btn-ext:hover .icon-morph {
+    transform: rotate(90deg) scale(1.2);
+}
+
+/* =============================================================================
+   6. TYPOGRAPHY
+   ============================================================================= */
+
+.text-gradient {
+    background: linear-gradient(135deg, var(--fin-accent-primary) 0%, var(--fin-accent-info) 50%, #a855f7 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.text-gradient-animated {
+    background: linear-gradient(90deg, #00d4aa, #6366f1, #ec4899, #00d4aa);
+    background-size: 300% 100%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: gradient-shift 5s linear infinite;
+}
+
+@keyframes gradient-shift {
+    0% { background-position: 0% 50%; }
+    100% { background-position: 300% 50%; }
+}
+
+.text-glow {
+    text-shadow: 0 0 10px rgba(0, 212, 170, 0.5), 0 0 20px rgba(0, 212, 170, 0.3);
+}
+
+[data-theme="light"] .text-glow {
+    text-shadow: 0 0 10px rgba(0, 157, 128, 0.3);
+}
+
+/* Light theme: gradientes com cores mais saturadas para contraste */
+[data-theme="light"] .text-gradient {
+    background: linear-gradient(135deg, #009d80 0%, #0369a1 50%, #7c3aed 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+[data-theme="light"] .text-gradient-animated {
+    background: linear-gradient(90deg, #009d80, #4f46e5, #db2777, #009d80);
+    background-size: 300% 100%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* =============================================================================
+   7. SCROLL REVEAL
+   ============================================================================= */
+
+.reveal {
+    opacity: 0;
+    transform: translateY(40px);
+    transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.stagger-children > * {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.stagger-children.visible > *:nth-child(1) { transition-delay: 0.1s; opacity: 1; transform: translateY(0); }
+.stagger-children.visible > *:nth-child(2) { transition-delay: 0.15s; opacity: 1; transform: translateY(0); }
+.stagger-children.visible > *:nth-child(3) { transition-delay: 0.2s; opacity: 1; transform: translateY(0); }
+.stagger-children.visible > *:nth-child(4) { transition-delay: 0.25s; opacity: 1; transform: translateY(0); }
+.stagger-children.visible > *:nth-child(5) { transition-delay: 0.3s; opacity: 1; transform: translateY(0); }
+.stagger-children.visible > *:nth-child(6) { transition-delay: 0.35s; opacity: 1; transform: translateY(0); }
+
+/* =============================================================================
+   8. SPOTLIGHT EFFECT
+   ============================================================================= */
+
+.spotlight {
+    position: relative;
+}
+
+.spotlight::after {
+    content: '';
+    position: absolute;
+    width: 200px;
+    height: 200px;
+    left: var(--spotlight-x, 50%);
+    top: var(--spotlight-y, 50%);
+    transform: translate(-50%, -50%);
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.05) 40%, transparent 70%);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+    border-radius: 50%;
+}
+
+.spotlight:hover::after {
+    opacity: 1;
+}
+
+/* Light theme: spotlight com cor escura para contraste */
+[data-theme="light"] .spotlight::after {
+    background: radial-gradient(circle, rgba(0, 157, 128, 0.12) 0%, rgba(0, 157, 128, 0.04) 40%, transparent 70%);
+}
+
+/* =============================================================================
+   9. PULSE GLOW
+   ============================================================================= */
+
+.pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 20px rgba(0, 212, 170, 0.2); }
+    50% { box-shadow: 0 0 40px rgba(0, 212, 170, 0.4); }
+}
+
+/* Light theme: pulse mais sutil */
+[data-theme="light"] .pulse-glow {
+    animation: pulse-glow-light 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow-light {
+    0%, 100% { box-shadow: 0 0 15px rgba(0, 157, 128, 0.15); }
+    50% { box-shadow: 0 0 30px rgba(0, 157, 128, 0.25); }
+}
+
+/* =============================================================================
+   10. FINANCIAL MODULE SPECIFIC
+   ============================================================================= */
+
+.fin-stats-unified.stagger-children.visible .fin-stat-unified {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.fin-stat-unified__value {
+    text-shadow: 0 0 20px rgba(0, 212, 170, 0.3);
+}
+
+.fin-stat-unified--rec .fin-stat-unified__value {
+    text-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+}
+
+.fin-stat-unified--pag .fin-stat-unified__value {
+    text-shadow: 0 0 20px rgba(239, 68, 68, 0.2);
+}
+
+/* Light theme: text-shadow mais sutil para stats */
+[data-theme="light"] .fin-stat-unified__value {
+    text-shadow: 0 0 15px rgba(0, 157, 128, 0.2);
+}
+
+[data-theme="light"] .fin-stat-unified--rec .fin-stat-unified__value {
+    text-shadow: 0 0 15px rgba(5, 150, 105, 0.2);
+}
+
+[data-theme="light"] .fin-stat-unified--pag .fin-stat-unified__value {
+    text-shadow: 0 0 15px rgba(220, 38, 38, 0.15);
+}
+
+.extrato-header__title.text-gradient-animated {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.extrato-header__title.text-gradient-animated i {
+    -webkit-text-fill-color: initial;
+    background: none;
+}
+
+.bulk-actions-bar.glass {
+    background: rgba(17, 29, 46, 0.9);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border-top: 1px solid rgba(0, 212, 170, 0.2);
+}
+
+[data-theme="light"] .bulk-actions-bar.glass {
+    background: rgba(255, 255, 255, 0.92);
+    border-top: 1px solid rgba(0, 157, 128, 0.2);
+}
+
+.bulk-actions-bar.pulse-glow.visible {
+    animation: bulk-bar-glow 2s ease-in-out infinite;
+}
+
+@keyframes bulk-bar-glow {
+    0%, 100% {
+        box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.3), 0 0 40px rgba(0, 212, 170, 0.1);
+    }
+    50% {
+        box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.3), 0 0 60px rgba(0, 212, 170, 0.2);
+    }
+}
+
+/* Light theme: bulk bar glow mais sutil */
+[data-theme="light"] .bulk-actions-bar.pulse-glow.visible {
+    animation: bulk-bar-glow-light 2s ease-in-out infinite;
+}
+
+@keyframes bulk-bar-glow-light {
+    0%, 100% {
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08), 0 0 30px rgba(0, 157, 128, 0.08);
+    }
+    50% {
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08), 0 0 50px rgba(0, 157, 128, 0.12);
+    }
+}
+
+.extrato-container.premium {
+    position: relative;
+    z-index: 1;
+}
+
+/* =============================================================================
+   11. REDUCED MOTION
+   ============================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+    .aurora-bg::before,
+    .aurora-bg::after,
+    .text-gradient-animated,
+    .pulse-glow,
+    .bulk-actions-bar.pulse-glow.visible {
+        animation: none;
+    }
+
+    .reveal {
+        opacity: 1;
+        transform: none;
+    }
+
+    .stagger-children > * {
+        opacity: 1;
+        transform: none;
+    }
+}

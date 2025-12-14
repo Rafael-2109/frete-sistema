@@ -48,6 +48,22 @@ DATA_VENCIMENTO_IGNORAR = date(2000, 1, 1)
 # Limite de candidatos para retornar
 LIMITE_CANDIDATOS = 50
 
+# =============================================================================
+# CONFIGURAÇÕES DE VENCIMENTO (ajustáveis)
+# =============================================================================
+# Cliente pagou ATRASADO (mais comum):
+#   - Até 4 dias de atraso: 0% desconto (normal)
+#   - Acima de 4 dias: -1% por dia adicional
+#
+# Cliente pagou ANTECIPADO (raro):
+#   - Até 3 dias antecipado: -2% desconto
+#   - 4 a 7 dias antecipado: -4% desconto
+#   - Acima de 7 dias: -4% base + -1% por dia adicional
+
+DIAS_ATRASO_TOLERANCIA = 4  # Dias de atraso sem penalidade
+DIAS_ANTECIPADO_LEVE = 3    # Até 3 dias antecipado = -2%
+DIAS_ANTECIPADO_MEDIO = 7   # 4-7 dias antecipado = -4%
+
 
 class ExtratoMatchingService:
     """
@@ -175,22 +191,22 @@ class ExtratoMatchingService:
 
         if cnpj:
             # 1. Busca por CNPJ exato
-            candidatos = self._buscar_por_cnpj_exato(cnpj, valor)
+            candidatos = self._buscar_por_cnpj_exato(cnpj, valor, data_pagamento)
 
             # 2. Se não encontrou exato, busca por raiz do CNPJ (grupo empresarial)
             if not candidatos:
-                candidatos = self._buscar_por_cnpj_raiz(cnpj, valor)
+                candidatos = self._buscar_por_cnpj_raiz(cnpj, valor, data_pagamento)
 
         # 3. Se ainda não encontrou, busca por valor (mais arriscado)
         if not candidatos and valor > 0:
-            candidatos = self._buscar_por_valor(valor)
+            candidatos = self._buscar_por_valor(valor, data_pagamento)
 
         # Ordenar por score decrescente
         candidatos.sort(key=lambda x: x['score'], reverse=True)
 
         return candidatos[:LIMITE_CANDIDATOS]
 
-    def _buscar_por_cnpj_exato(self, cnpj: str, valor: float) -> List[Dict]:
+    def _buscar_por_cnpj_exato(self, cnpj: str, valor: float, data_pagamento: Optional[date] = None) -> List[Dict]:
         """
         Busca títulos pelo CNPJ EXATO do cliente.
         Score mais alto pois é match perfeito de CNPJ.
@@ -223,12 +239,19 @@ class ExtratoMatchingService:
             # Calcular score baseado no valor
             score, criterio, diferenca = self._calcular_score_valor(valor, titulo.valor_titulo or 0)
 
+            # Aplicar desconto de vencimento
+            desconto_venc, criterio_venc = self._calcular_desconto_vencimento(data_pagamento, titulo.vencimento)
+            score = max(0, score - desconto_venc)
+            if criterio_venc:
+                criterio = f'{criterio}+{criterio_venc}'
+
             candidatos.append({
                 'titulo_id': titulo.id,
                 'titulo_nf': titulo.titulo_nf,
                 'parcela': titulo.parcela,
                 'valor': titulo.valor_titulo,
                 'vencimento': titulo.vencimento.strftime('%d/%m/%Y') if titulo.vencimento else None,
+                'vencimento_date': titulo.vencimento,
                 'cliente': titulo.raz_social_red or titulo.raz_social,
                 'cnpj': titulo.cnpj,
                 'empresa': titulo.empresa,
@@ -239,7 +262,7 @@ class ExtratoMatchingService:
 
         return candidatos
 
-    def _buscar_por_cnpj_raiz(self, cnpj: str, valor: float) -> List[Dict]:
+    def _buscar_por_cnpj_raiz(self, cnpj: str, valor: float, data_pagamento: Optional[date] = None) -> List[Dict]:
         """
         Busca títulos pela RAIZ do CNPJ (primeiros 8 dígitos).
         Usado para grupos empresariais onde a matriz paga por filiais.
@@ -284,12 +307,19 @@ class ExtratoMatchingService:
                 # Calcular score baseado no valor
                 score, criterio, diferenca = self._calcular_score_valor_grupo(valor, titulo.valor_titulo or 0)
 
+                # Aplicar desconto de vencimento
+                desconto_venc, criterio_venc = self._calcular_desconto_vencimento(data_pagamento, titulo.vencimento)
+                score = max(0, score - desconto_venc)
+                if criterio_venc:
+                    criterio = f'{criterio}+{criterio_venc}'
+
                 candidatos.append({
                     'titulo_id': titulo.id,
                     'titulo_nf': titulo.titulo_nf,
                     'parcela': titulo.parcela,
                     'valor': titulo.valor_titulo,
                     'vencimento': titulo.vencimento.strftime('%d/%m/%Y') if titulo.vencimento else None,
+                    'vencimento_date': titulo.vencimento,
                     'cliente': titulo.raz_social_red or titulo.raz_social,
                     'cnpj': titulo.cnpj,
                     'empresa': titulo.empresa,
@@ -300,7 +330,7 @@ class ExtratoMatchingService:
 
         return candidatos
 
-    def _buscar_por_valor(self, valor: float) -> List[Dict]:
+    def _buscar_por_valor(self, valor: float, data_pagamento: Optional[date] = None) -> List[Dict]:
         """
         Busca títulos apenas pelo valor (quando CNPJ não disponível).
         Score mais baixo pois é menos confiável.
@@ -326,6 +356,13 @@ class ExtratoMatchingService:
             diferenca = abs((titulo.valor_titulo or 0) - valor)
             # Score base 70, reduzido pela diferença de valor
             score = max(50, 70 - int(diferenca / valor * 100))
+            criterio = 'VALOR_APROXIMADO_SEM_CNPJ'
+
+            # Aplicar desconto de vencimento
+            desconto_venc, criterio_venc = self._calcular_desconto_vencimento(data_pagamento, titulo.vencimento)
+            score = max(0, score - desconto_venc)
+            if criterio_venc:
+                criterio = f'{criterio}+{criterio_venc}'
 
             candidatos.append({
                 'titulo_id': titulo.id,
@@ -333,11 +370,12 @@ class ExtratoMatchingService:
                 'parcela': titulo.parcela,
                 'valor': titulo.valor_titulo,
                 'vencimento': titulo.vencimento.strftime('%d/%m/%Y') if titulo.vencimento else None,
+                'vencimento_date': titulo.vencimento,
                 'cliente': titulo.raz_social_red or titulo.raz_social,
                 'cnpj': titulo.cnpj,
                 'empresa': titulo.empresa,
                 'score': score,
-                'criterio': 'VALOR_APROXIMADO_SEM_CNPJ',
+                'criterio': criterio,
                 'diferenca_valor': diferenca
             })
 
@@ -469,6 +507,60 @@ class ExtratoMatchingService:
         import re
         return re.sub(r'\D', '', cnpj)
 
+    def _calcular_desconto_vencimento(
+        self,
+        data_pagamento: Optional[date],
+        data_vencimento: Optional[date]
+    ) -> Tuple[int, str]:
+        """
+        Calcula o desconto baseado na diferença entre data de pagamento e vencimento.
+
+        REGRAS:
+        - Cliente ATRASOU até 4 dias: 0% (normal, tolerância)
+        - Cliente ATRASOU > 4 dias: -1% por dia adicional
+        - Cliente ANTECIPOU até 3 dias: -2%
+        - Cliente ANTECIPOU 4-7 dias: -4%
+        - Cliente ANTECIPOU > 7 dias: -4% base + -1% por dia adicional
+
+        Args:
+            data_pagamento: Data do pagamento no extrato
+            data_vencimento: Data de vencimento do título
+
+        Returns:
+            Tuple (desconto_percentual, criterio)
+        """
+        if not data_pagamento or not data_vencimento:
+            return 0, ''
+
+        # Diferença em dias (positivo = atrasou, negativo = antecipou)
+        diff_dias = (data_pagamento - data_vencimento).days
+
+        if diff_dias >= 0:
+            # Cliente ATRASOU (pagamento após vencimento) - MAIS COMUM
+            if diff_dias <= DIAS_ATRASO_TOLERANCIA:
+                # Até 4 dias de atraso: sem desconto
+                return 0, f'ATRASO_{diff_dias}D_OK'
+            else:
+                # Acima de 4 dias: -1% por dia adicional
+                dias_excedentes = diff_dias - DIAS_ATRASO_TOLERANCIA
+                desconto = dias_excedentes  # -1% por dia
+                return desconto, f'ATRASO_{diff_dias}D'
+        else:
+            # Cliente ANTECIPOU (pagamento antes do vencimento) - RARO
+            dias_antecipado = abs(diff_dias)
+
+            if dias_antecipado <= DIAS_ANTECIPADO_LEVE:
+                # Até 3 dias antecipado: -2%
+                return 2, f'ANTECIPADO_{dias_antecipado}D'
+            elif dias_antecipado <= DIAS_ANTECIPADO_MEDIO:
+                # 4-7 dias antecipado: -4%
+                return 4, f'ANTECIPADO_{dias_antecipado}D'
+            else:
+                # Mais de 7 dias antecipado: -4% base + -1% por dia adicional
+                dias_excedentes = dias_antecipado - DIAS_ANTECIPADO_MEDIO
+                desconto = 4 + dias_excedentes  # -4% + -1% por dia
+                return desconto, f'ANTECIPADO_{dias_antecipado}D'
+
 
 # =============================================================================
 # TABELA DE SCORES DE MATCHING
@@ -492,5 +584,15 @@ class ExtratoMatchingService:
 #
 # SEM CNPJ (apenas valor):
 #    70 - VALOR_APROXIMADO_SEM_CNPJ   (busca genérica por valor)
+#
+# DESCONTOS DE VENCIMENTO (aplicados sobre o score base):
+#   CLIENTE ATRASOU (mais comum):
+#     0% - ATRASO_XD_OK              (até 4 dias de atraso - tolerância)
+#    -1% por dia - ATRASO_XD         (acima de 4 dias)
+#
+#   CLIENTE ANTECIPOU (raro):
+#    -2% - ANTECIPADO_XD             (até 3 dias antecipado)
+#    -4% - ANTECIPADO_XD             (4 a 7 dias antecipado)
+#    -4% base + -1% por dia adicional (acima de 7 dias)
 #
 # SCORE MÍNIMO PARA AUTO-MATCH: 95 (configurável via SCORE_MINIMO_AUTO)

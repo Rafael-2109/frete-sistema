@@ -3,461 +3,307 @@
 {% block title %}Contas a Receber - Central{% endblock %}
 
 {% block extra_css %}
-<style>
-    .hub-container {
-        max-width: 1200px;
-        margin: 0 auto;
-    }
-
-    .hub-card {
-        border: none;
-        border-radius: 12px;
-        transition: all 0.3s ease;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        height: 100%;
-    }
-
-    .hub-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-    }
-
-    .hub-card .card-body {
-        padding: 2rem;
-    }
-
-    .hub-icon {
-        width: 80px;
-        height: 80px;
-        border-radius: 16px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 2rem;
-        margin-bottom: 1.5rem;
-    }
-
-    .hub-icon.primary {
-        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-        color: white;
-    }
-
-    .hub-icon.info {
-        background: linear-gradient(135deg, #007bff 0%, #17a2b8 100%);
-        color: white;
-    }
-
-    .hub-icon.warning {
-        background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
-        color: white;
-    }
-
-    .hub-icon.secondary {
-        background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
-        color: white;
-    }
-
-    .hub-card h4 {
-        color: #343a40;
-        font-weight: 600;
-        margin-bottom: 0.75rem;
-    }
-
-    .hub-card p {
-        color: #6c757d;
-        font-size: 0.95rem;
-        margin-bottom: 1.5rem;
-    }
-
-    .hub-badge {
-        position: absolute;
-        top: 1rem;
-        right: 1rem;
-        font-size: 0.75rem;
-    }
-
-    .stats-container {
-        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-        border-radius: 12px;
-        padding: 1.5rem;
-        margin-bottom: 2rem;
-    }
-
-    .stat-item {
-        text-align: center;
-        padding: 1rem;
-    }
-
-    .stat-value {
-        font-size: 2rem;
-        font-weight: 700;
-        color: #343a40;
-    }
-
-    .stat-label {
-        font-size: 0.875rem;
-        color: #6c757d;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-
-    .btn-hub {
-        padding: 0.75rem 1.5rem;
-        font-weight: 500;
-        border-radius: 8px;
-    }
-</style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/financeiro/extrato.css') }}">
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid mt-4 hub-container">
-    <!-- Cabeçalho -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <h2 class="mb-1">
-                <i class="fas fa-file-invoice-dollar text-success"></i>
+<div class="fin-container">
+    <!-- ================================================================== -->
+    <!-- HEADER                                                              -->
+    <!-- ================================================================== -->
+    <header class="fin-header">
+        <div class="fin-header__content">
+            <h1 class="fin-header__title">
+                <i class="fas fa-file-invoice-dollar"></i>
                 Contas a Receber
-            </h2>
-            <p class="text-muted mb-0">
+            </h1>
+            <p class="fin-header__subtitle">
                 Central de gestão de contas a receber - Dados sincronizados do Odoo
             </p>
         </div>
+        <div class="fin-header__actions">
+            <button class="theme-toggle" onclick="toggleTheme()" title="Alternar tema">
+                <i class="fas fa-sun theme-toggle__icon theme-toggle__icon--light"></i>
+                <i class="fas fa-moon theme-toggle__icon theme-toggle__icon--dark"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- ================================================================== -->
+    <!-- ESTATÍSTICAS RÁPIDAS                                               -->
+    <!-- ================================================================== -->
+    <div class="fin-stats-grid" id="statsContainer">
+        <div class="fin-stat-card">
+            <div class="fin-stat-card__value" id="statTotal">-</div>
+            <div class="fin-stat-card__label">Total de Títulos</div>
+        </div>
+        <div class="fin-stat-card">
+            <div class="fin-stat-card__value" id="statFB">-</div>
+            <div class="fin-stat-card__label">FB (Fábrica)</div>
+        </div>
+        <div class="fin-stat-card">
+            <div class="fin-stat-card__value" id="statSC">-</div>
+            <div class="fin-stat-card__label">SC (Santa Catarina)</div>
+        </div>
+        <div class="fin-stat-card">
+            <div class="fin-stat-card__value" id="statCD">-</div>
+            <div class="fin-stat-card__label">CD (Centro Dist.)</div>
+        </div>
     </div>
 
-    <!-- Estatísticas Rápidas -->
-    <div class="stats-container" id="statsContainer">
-        <div class="row">
-            <div class="col-md-3 stat-item">
-                <div class="stat-value" id="statTotal">-</div>
-                <div class="stat-label">Total de Títulos</div>
-            </div>
-            <div class="col-md-3 stat-item">
-                <div class="stat-value" id="statFB">-</div>
-                <div class="stat-label">FB (Fábrica)</div>
-            </div>
-            <div class="col-md-3 stat-item">
-                <div class="stat-value" id="statSC">-</div>
-                <div class="stat-label">SC (Santa Catarina)</div>
-            </div>
-            <div class="col-md-3 stat-item">
-                <div class="stat-value" id="statCD">-</div>
-                <div class="stat-label">CD (Centro Dist.)</div>
-            </div>
-        </div>
-        <div class="row mt-2">
-            <div class="col-12 text-center">
-                <small class="text-muted">
+    <div class="fin-sync-info">
+        <i class="fas fa-sync-alt"></i>
+        Última sincronização: <span id="ultimaSync">-</span>
+    </div>
+
+    <!-- ================================================================== -->
+    <!-- CARDS PRINCIPAIS                                                    -->
+    <!-- ================================================================== -->
+    <div class="fin-hub-section">
+        <h2 class="fin-hub-section__title">
+            <i class="fas fa-star"></i>
+            Principais
+        </h2>
+
+        <div class="fin-hub-grid">
+            <!-- Consultar Títulos -->
+            <a href="{{ url_for('financeiro.listar_contas_receber') }}" class="fin-hub-card fin-hub-card--primary">
+                <span class="fin-hub-card__badge fin-hub-card__badge--success">PRINCIPAL</span>
+                <div class="fin-hub-card__icon fin-hub-card__icon--success">
+                    <i class="fas fa-search-dollar"></i>
+                </div>
+                <h3 class="fin-hub-card__title">Consultar Títulos</h3>
+                <p class="fin-hub-card__desc">
+                    Visualize e gerencie todos os títulos a receber com filtros avançados,
+                    ordenação e paginação. Acesse informações de entrega e agendamento.
+                </p>
+                <span class="fin-hub-card__action">
+                    <i class="fas fa-table"></i>
+                    Acessar Listagem
+                </span>
+            </a>
+
+            <!-- Exportar Relatórios -->
+            <a href="{{ url_for('financeiro.contas_receber_exportar') }}" class="fin-hub-card">
+                <div class="fin-hub-card__icon fin-hub-card__icon--info">
+                    <i class="fas fa-file-export"></i>
+                </div>
+                <h3 class="fin-hub-card__title">Exportar Relatórios</h3>
+                <p class="fin-hub-card__desc">
+                    Exporte dados para Excel ou acesse via API JSON para integração
+                    com Power Query e outras ferramentas de análise.
+                </p>
+                <span class="fin-hub-card__action">
+                    <i class="fas fa-download"></i>
+                    Exportar Dados
+                </span>
+            </a>
+
+            <!-- Sincronização -->
+            <div class="fin-hub-card fin-hub-card--interactive">
+                <div class="fin-hub-card__icon fin-hub-card__icon--warning">
                     <i class="fas fa-sync-alt"></i>
-                    Última sincronização: <span id="ultimaSync">-</span>
-                </small>
-            </div>
-        </div>
-    </div>
-
-    <!-- Cards de Navegação - Linha 1: Principais -->
-    <div class="row g-4 mb-4">
-        <!-- Consultar Títulos -->
-        <div class="col-md-6 col-lg-4">
-            <div class="card hub-card position-relative">
-                <span class="badge bg-success hub-badge">PRINCIPAL</span>
-                <div class="card-body">
-                    <div class="hub-icon primary">
-                        <i class="fas fa-search-dollar"></i>
-                    </div>
-                    <h4>Consultar Títulos</h4>
-                    <p>
-                        Visualize e gerencie todos os títulos a receber com filtros avançados,
-                        ordenação e paginação. Acesse informações de entrega e agendamento.
-                    </p>
-                    <a href="{{ url_for('financeiro.listar_contas_receber') }}" class="btn btn-success btn-hub w-100">
-                        <i class="fas fa-table me-2"></i>
-                        Acessar Listagem
-                    </a>
                 </div>
-            </div>
-        </div>
-
-        <!-- Exportar Relatórios -->
-        <div class="col-md-6 col-lg-4">
-            <div class="card hub-card">
-                <div class="card-body">
-                    <div class="hub-icon info">
-                        <i class="fas fa-file-export"></i>
-                    </div>
-                    <h4>Exportar Relatórios</h4>
-                    <p>
-                        Exporte dados para Excel ou acesse via API JSON para integração
-                        com Power Query e outras ferramentas de análise.
-                    </p>
-                    <a href="{{ url_for('financeiro.contas_receber_exportar') }}" class="btn btn-primary btn-hub w-100">
-                        <i class="fas fa-download me-2"></i>
-                        Exportar Dados
-                    </a>
-                </div>
-            </div>
-        </div>
-
-        <!-- Sincronização -->
-        <div class="col-md-6 col-lg-4">
-            <div class="card hub-card">
-                <div class="card-body">
-                    <div class="hub-icon warning">
-                        <i class="fas fa-sync-alt"></i>
-                    </div>
-                    <h4>Sincronização</h4>
-                    <p>
-                        Sincronize dados com o Odoo manualmente.
-                        A sincronização automática ocorre a cada 30 minutos.
-                    </p>
-                    <div class="d-flex gap-2">
-                        <button class="btn btn-warning btn-hub flex-grow-1" onclick="sincronizarOdoo()" id="btnSincronizar">
-                            <i class="fas fa-cloud-download-alt me-2"></i>
-                            Rápida (7 dias)
-                        </button>
-                        <button class="btn btn-outline-warning btn-hub" onclick="abrirModalSincronizacao()" title="Sincronização por período">
-                            <i class="fas fa-calendar-alt"></i>
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal de Sincronização por Período -->
-    <div class="modal fade" id="modalSincronizacao" tabindex="-1" aria-labelledby="modalSincronizacaoLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header bg-warning text-dark">
-                    <h5 class="modal-title" id="modalSincronizacaoLabel">
-                        <i class="fas fa-sync-alt me-2"></i>
-                        Sincronização por Período
-                    </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
-                </div>
-                <div class="modal-body">
-                    <p class="text-muted small">
-                        Escolha o período para sincronizar os dados de Contas a Receber do Odoo.
-                        Use para importação inicial ou reprocessamento de períodos específicos.
-                    </p>
-
-                    <!-- Opções rápidas -->
-                    <div class="mb-4">
-                        <label class="form-label fw-bold">Opções Rápidas</label>
-                        <div class="d-flex flex-wrap gap-2">
-                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setDias(7)">
-                                7 dias
-                            </button>
-                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setDias(15)">
-                                15 dias
-                            </button>
-                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setDias(30)">
-                                30 dias
-                            </button>
-                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setDias(60)">
-                                60 dias
-                            </button>
-                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setDias(90)">
-                                90 dias
-                            </button>
-                        </div>
-                    </div>
-
-                    <hr>
-
-                    <!-- Período personalizado -->
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Período Personalizado</label>
-                        <div class="row g-2">
-                            <div class="col-6">
-                                <label class="form-label small text-muted">Data Início</label>
-                                <input type="date" class="form-control" id="syncDataInicio">
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label small text-muted">Data Fim (opcional)</label>
-                                <input type="date" class="form-control" id="syncDataFim">
-                            </div>
-                        </div>
-                        <small class="text-muted">
-                            Se não informar Data Fim, busca todos os registros a partir da Data Início.
-                        </small>
-                    </div>
-
-                    <!-- Resumo -->
-                    <div class="alert alert-info small" id="syncResumo">
-                        <i class="fas fa-info-circle me-1"></i>
-                        Selecione um período para sincronizar.
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                        Cancelar
+                <h3 class="fin-hub-card__title">Sincronização</h3>
+                <p class="fin-hub-card__desc">
+                    Sincronize dados com o Odoo manualmente.
+                    A sincronização automática ocorre a cada 30 minutos.
+                </p>
+                <div class="fin-hub-card__buttons">
+                    <button class="btn-ext btn-ext--warning" onclick="sincronizarOdoo()" id="btnSincronizar">
+                        <i class="fas fa-cloud-download-alt"></i>
+                        Rápida (7 dias)
                     </button>
-                    <button type="button" class="btn btn-warning" onclick="executarSincronizacaoPeriodo()" id="btnSincronizarPeriodo">
-                        <i class="fas fa-sync-alt me-2"></i>
-                        Sincronizar
+                    <button class="btn-ext btn-ext--outline" onclick="abrirModalSincronizacao()" title="Sincronização por período">
+                        <i class="fas fa-calendar-alt"></i>
                     </button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Cards de Navegação - Linha 2: Configurações -->
-    <h5 class="text-muted mb-3"><i class="fas fa-cogs"></i> Configurações</h5>
-    <div class="row g-4">
-        <!-- Tipos (Confirmação, Ação, etc) -->
-        <div class="col-md-6 col-lg-3">
-            <div class="card hub-card">
-                <div class="card-body">
-                    <div class="hub-icon secondary">
-                        <i class="fas fa-tags"></i>
-                    </div>
-                    <h4>Tipos</h4>
-                    <p>
-                        Gerencie tipos de Confirmação, Ação Necessária e Abatimento.
-                    </p>
-                    <a href="{{ url_for('financeiro.listar_tipos') }}" class="btn btn-secondary btn-hub w-100">
-                        <i class="fas fa-cog me-2"></i>
-                        Gerenciar Tipos
-                    </a>
-                </div>
-            </div>
-        </div>
+    <!-- ================================================================== -->
+    <!-- CONFIGURAÇÕES                                                       -->
+    <!-- ================================================================== -->
+    <div class="fin-hub-section">
+        <h2 class="fin-hub-section__title">
+            <i class="fas fa-cogs"></i>
+            Configurações
+        </h2>
 
-        <!-- Abatimentos (Cadastro geral) -->
-        <div class="col-md-6 col-lg-3">
-            <div class="card hub-card">
-                <div class="card-body">
-                    <div class="hub-icon" style="background: linear-gradient(135deg, #fd7e14 0%, #dc3545 100%); color: white;">
-                        <i class="fas fa-minus-circle"></i>
-                    </div>
-                    <h4>Abatimentos</h4>
-                    <p>
-                        Visualize e gerencie todos os abatimentos cadastrados no sistema.
-                    </p>
-                    <a href="{{ url_for('financeiro.listar_abatimentos') }}" class="btn btn-outline-danger btn-hub w-100">
-                        <i class="fas fa-list me-2"></i>
-                        Ver Abatimentos
-                    </a>
+        <div class="fin-hub-grid fin-hub-grid--sm">
+            <!-- Tipos -->
+            <a href="{{ url_for('financeiro.listar_tipos') }}" class="fin-hub-card fin-hub-card--compact">
+                <div class="fin-hub-card__icon fin-hub-card__icon--secondary">
+                    <i class="fas fa-tags"></i>
                 </div>
-            </div>
-        </div>
+                <h3 class="fin-hub-card__title">Tipos</h3>
+                <p class="fin-hub-card__desc">
+                    Gerencie tipos de Confirmação, Ação Necessária e Abatimento.
+                </p>
+            </a>
 
-        <!-- Liberação Antecipação -->
-        <div class="col-md-6 col-lg-3">
-            <div class="card hub-card">
-                <div class="card-body">
-                    <div class="hub-icon" style="background: linear-gradient(135deg, #20c997 0%, #28a745 100%); color: white;">
-                        <i class="fas fa-clock"></i>
-                    </div>
-                    <h4>Liberação Antecipação</h4>
-                    <p>
-                        Configure dias úteis para liberação de antecipação por cliente.
-                    </p>
-                    <a href="{{ url_for('financeiro.listar_liberacao_antecipacao') }}" class="btn btn-outline-success btn-hub w-100">
-                        <i class="fas fa-calendar-alt me-2"></i>
-                        Configurar
-                    </a>
+            <!-- Abatimentos -->
+            <a href="{{ url_for('financeiro.listar_abatimentos') }}" class="fin-hub-card fin-hub-card--compact">
+                <div class="fin-hub-card__icon fin-hub-card__icon--danger">
+                    <i class="fas fa-minus-circle"></i>
                 </div>
-            </div>
-        </div>
+                <h3 class="fin-hub-card__title">Abatimentos</h3>
+                <p class="fin-hub-card__desc">
+                    Visualize e gerencie todos os abatimentos cadastrados no sistema.
+                </p>
+            </a>
 
-        <!-- Baixa de Títulos via Excel -->
-        <div class="col-md-6 col-lg-3">
-            <div class="card hub-card position-relative">
-                <span class="badge bg-info hub-badge">NOVO</span>
-                <div class="card-body">
-                    <div class="hub-icon" style="background: linear-gradient(135deg, #6f42c1 0%, #e83e8c 100%); color: white;">
-                        <i class="fas fa-file-excel"></i>
-                    </div>
-                    <h4>Baixa via Excel</h4>
-                    <p>
-                        Importe baixas de títulos em lote a partir de arquivo Excel.
-                    </p>
-                    <a href="{{ url_for('financeiro.baixas_hub') }}" class="btn btn-outline-purple btn-hub w-100" style="border-color: #6f42c1; color: #6f42c1;">
-                        <i class="fas fa-upload me-2"></i>
-                        Importar Baixas
-                    </a>
+            <!-- Liberação Antecipação -->
+            <a href="{{ url_for('financeiro.listar_liberacao_antecipacao') }}" class="fin-hub-card fin-hub-card--compact">
+                <div class="fin-hub-card__icon fin-hub-card__icon--success">
+                    <i class="fas fa-clock"></i>
                 </div>
-            </div>
-        </div>
+                <h3 class="fin-hub-card__title">Liberação Antecipação</h3>
+                <p class="fin-hub-card__desc">
+                    Configure dias úteis para liberação de antecipação por cliente.
+                </p>
+            </a>
 
-        <!-- Conciliação via Extrato -->
-        <div class="col-md-6 col-lg-3">
-            <div class="card hub-card position-relative">
-                <span class="badge bg-success hub-badge">NOVO</span>
-                <div class="card-body">
-                    <div class="hub-icon" style="background: linear-gradient(135deg, #17a2b8 0%, #20c997 100%); color: white;">
-                        <i class="fas fa-university"></i>
-                    </div>
-                    <h4>Conciliação Extrato</h4>
-                    <p>
-                        Concilie recebimentos do extrato bancário com títulos a receber.
-                    </p>
-                    <a href="{{ url_for('financeiro.extrato_hub') }}" class="btn btn-outline-info btn-hub w-100">
-                        <i class="fas fa-link me-2"></i>
-                        Conciliar
-                    </a>
+            <!-- Baixa via Excel -->
+            <a href="{{ url_for('financeiro.baixas_hub') }}" class="fin-hub-card fin-hub-card--compact">
+                <span class="fin-hub-card__badge fin-hub-card__badge--info">NOVO</span>
+                <div class="fin-hub-card__icon fin-hub-card__icon--purple">
+                    <i class="fas fa-file-excel"></i>
                 </div>
-            </div>
-        </div>
+                <h3 class="fin-hub-card__title">Baixa via Excel</h3>
+                <p class="fin-hub-card__desc">
+                    Importe baixas de títulos em lote a partir de arquivo Excel.
+                </p>
+            </a>
 
-        <!-- Correção de Datas NF Crédito -->
-        <div class="col-md-6 col-lg-3">
-            <div class="card hub-card position-relative">
-                <span class="badge bg-warning text-dark hub-badge">CIEL IT</span>
-                <div class="card-body">
-                    <div class="hub-icon" style="background: linear-gradient(135deg, #dc3545 0%, #fd7e14 100%); color: white;">
-                        <i class="fas fa-calendar-check"></i>
-                    </div>
-                    <h4>Correção Datas</h4>
-                    <p>
-                        Corrige datas de lançamento incorretas em NFs de Crédito.
-                    </p>
-                    <a href="{{ url_for('financeiro.correcao_datas_index') }}" class="btn btn-outline-danger btn-hub w-100">
-                        <i class="fas fa-wrench me-2"></i>
-                        Corrigir Datas
-                    </a>
+            <!-- Conciliação Extrato -->
+            <a href="{{ url_for('financeiro.extrato_hub') }}" class="fin-hub-card fin-hub-card--compact">
+                <span class="fin-hub-card__badge fin-hub-card__badge--success">NOVO</span>
+                <div class="fin-hub-card__icon fin-hub-card__icon--cyan">
+                    <i class="fas fa-university"></i>
                 </div>
-            </div>
-        </div>
+                <h3 class="fin-hub-card__title">Conciliação Extrato</h3>
+                <p class="fin-hub-card__desc">
+                    Concilie recebimentos do extrato bancário com títulos a receber.
+                </p>
+            </a>
 
+            <!-- Correção de Datas -->
+            <a href="{{ url_for('financeiro.correcao_datas_index') }}" class="fin-hub-card fin-hub-card--compact">
+                <span class="fin-hub-card__badge fin-hub-card__badge--warning">CIEL IT</span>
+                <div class="fin-hub-card__icon fin-hub-card__icon--danger">
+                    <i class="fas fa-calendar-check"></i>
+                </div>
+                <h3 class="fin-hub-card__title">Correção Datas</h3>
+                <p class="fin-hub-card__desc">
+                    Corrige datas de lançamento incorretas em NFs de Crédito.
+                </p>
+            </a>
+        </div>
     </div>
 
-    <!-- Informações Adicionais -->
-    <div class="row mt-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header bg-dark text-white">
-                    <h6 class="mb-0">
-                        <i class="fas fa-info-circle me-2"></i>
-                        Sobre os Dados
-                    </h6>
+    <!-- ================================================================== -->
+    <!-- INFORMAÇÕES SOBRE DADOS                                            -->
+    <!-- ================================================================== -->
+    <div class="fin-info-panel">
+        <div class="fin-info-panel__header">
+            <i class="fas fa-info-circle"></i>
+            Sobre os Dados
+        </div>
+        <div class="fin-info-panel__body">
+            <div class="fin-info-panel__grid">
+                <div class="fin-info-panel__item">
+                    <h4><i class="fas fa-database"></i> Fonte de Dados</h4>
+                    <p>
+                        Dados extraídos do modelo <code>account.move.line</code> do Odoo,
+                        filtrados por 11 regras de negócio.
+                    </p>
                 </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-4">
-                            <h6><i class="fas fa-database text-primary"></i> Fonte de Dados</h6>
-                            <p class="text-muted small">
-                                Dados extraídos do modelo <code>account.move.line</code> do Odoo,
-                                filtrados por 11 regras de negócio.
-                            </p>
-                        </div>
-                        <div class="col-md-4">
-                            <h6><i class="fas fa-sync text-success"></i> Sincronização</h6>
-                            <p class="text-muted small">
-                                Automática a cada 30 minutos via scheduler.
-                                Janela de 120 minutos para alterações incrementais.
-                            </p>
-                        </div>
-                        <div class="col-md-4">
-                            <h6><i class="fas fa-link text-info"></i> Enriquecimento</h6>
-                            <p class="text-muted small">
-                                Dados enriquecidos com informações de entregas, agendamentos
-                                e status de finalização do sistema local.
-                            </p>
-                        </div>
+                <div class="fin-info-panel__item">
+                    <h4><i class="fas fa-sync"></i> Sincronização</h4>
+                    <p>
+                        Automática a cada 30 minutos via scheduler.
+                        Janela de 120 minutos para alterações incrementais.
+                    </p>
+                </div>
+                <div class="fin-info-panel__item">
+                    <h4><i class="fas fa-link"></i> Enriquecimento</h4>
+                    <p>
+                        Dados enriquecidos com informações de entregas, agendamentos
+                        e status de finalização do sistema local.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ====================================================================== -->
+<!-- MODAL DE SINCRONIZAÇÃO POR PERÍODO                                     -->
+<!-- ====================================================================== -->
+<div class="modal fade fin-modal" id="modalSincronizacao" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-sync-alt"></i>
+                    Sincronização por Período
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <p class="fin-modal__hint">
+                    Escolha o período para sincronizar os dados de Contas a Receber do Odoo.
+                    Use para importação inicial ou reprocessamento de períodos específicos.
+                </p>
+
+                <!-- Opções rápidas -->
+                <div class="fin-form-group">
+                    <label class="fin-form-group__label">Opções Rápidas</label>
+                    <div class="fin-quick-options">
+                        <button type="button" class="fin-quick-btn" onclick="setDias(7)">7 dias</button>
+                        <button type="button" class="fin-quick-btn" onclick="setDias(15)">15 dias</button>
+                        <button type="button" class="fin-quick-btn" onclick="setDias(30)">30 dias</button>
+                        <button type="button" class="fin-quick-btn" onclick="setDias(60)">60 dias</button>
+                        <button type="button" class="fin-quick-btn" onclick="setDias(90)">90 dias</button>
                     </div>
                 </div>
+
+                <hr class="fin-divider">
+
+                <!-- Período personalizado -->
+                <div class="fin-form-group">
+                    <label class="fin-form-group__label">Período Personalizado</label>
+                    <div class="fin-form-row">
+                        <div class="fin-form-col">
+                            <label class="fin-form-col__label">Data Início</label>
+                            <input type="date" class="fin-input" id="syncDataInicio">
+                        </div>
+                        <div class="fin-form-col">
+                            <label class="fin-form-col__label">Data Fim (opcional)</label>
+                            <input type="date" class="fin-input" id="syncDataFim">
+                        </div>
+                    </div>
+                    <small class="fin-form-group__hint">
+                        Se não informar Data Fim, busca todos os registros a partir da Data Início.
+                    </small>
+                </div>
+
+                <!-- Resumo -->
+                <div class="fin-alert fin-alert--info" id="syncResumo">
+                    <i class="fas fa-info-circle"></i>
+                    Selecione um período para sincronizar.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-ext btn-ext--ghost" data-bs-dismiss="modal">
+                    Cancelar
+                </button>
+                <button type="button" class="btn-ext btn-ext--warning" onclick="executarSincronizacaoPeriodo()" id="btnSincronizarPeriodo">
+                    <i class="fas fa-sync-alt"></i>
+                    Sincronizar
+                </button>
             </div>
         </div>
     </div>
@@ -465,8 +311,12 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/financeiro/extrato.js') }}"></script>
 <script>
-// Carregar estatísticas ao abrir a página
+// =============================================
+// ESTATÍSTICAS
+// =============================================
+
 document.addEventListener('DOMContentLoaded', function() {
     carregarEstatisticas();
 });
@@ -503,12 +353,16 @@ function carregarEstatisticas() {
         });
 }
 
+// =============================================
+// SINCRONIZAÇÃO RÁPIDA
+// =============================================
+
 function sincronizarOdoo() {
     const btn = document.getElementById('btnSincronizar');
     const textoOriginal = btn.innerHTML;
 
     btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Sincronizando...';
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sincronizando...';
 
     fetch("{{ url_for('financeiro.sincronizar_contas_receber_odoo') }}", {
         method: 'POST',
@@ -524,7 +378,6 @@ function sincronizarOdoo() {
                 `Novos: ${data.novos} | Atualizados: ${data.atualizados} | Enriquecidos: ${data.enriquecidos}`,
                 'Sincronização Concluída!'
             );
-            // Recarregar estatísticas
             carregarEstatisticas();
         } else {
             toastr.error(data.error || 'Erro desconhecido', 'Erro na Sincronização');
@@ -564,7 +417,6 @@ function setDias(dias) {
     const dataInicio = new Date(hoje);
     dataInicio.setDate(hoje.getDate() - dias);
 
-    // Formatar como YYYY-MM-DD usando timezone local (evita bug UTC)
     const formatarData = (d) => {
         const ano = d.getFullYear();
         const mes = String(d.getMonth() + 1).padStart(2, '0');
@@ -578,10 +430,9 @@ function setDias(dias) {
     atualizarResumoSync();
 }
 
-// Helper para parsear data YYYY-MM-DD sem conversão de timezone (evita bug UTC → local)
 function parseLocalDate(dateStr) {
     const [year, month, day] = dateStr.split('-').map(Number);
-    return new Date(year, month - 1, day);  // month é 0-indexed em JS
+    return new Date(year, month - 1, day);
 }
 
 function atualizarResumoSync() {
@@ -590,8 +441,8 @@ function atualizarResumoSync() {
     const resumo = document.getElementById('syncResumo');
 
     if (!dataInicio) {
-        resumo.className = 'alert alert-info small';
-        resumo.innerHTML = '<i class="fas fa-info-circle me-1"></i> Selecione um período para sincronizar.';
+        resumo.className = 'fin-alert fin-alert--info';
+        resumo.innerHTML = '<i class="fas fa-info-circle"></i> Selecione um período para sincronizar.';
         return;
     }
 
@@ -603,11 +454,11 @@ function atualizarResumoSync() {
         const fimFormatado = fim.toLocaleDateString('pt-BR');
         const dias = Math.ceil((fim - inicio) / (1000 * 60 * 60 * 24)) + 1;
 
-        resumo.className = 'alert alert-warning small';
-        resumo.innerHTML = `<i class="fas fa-calendar-check me-1"></i> Sincronizar de <strong>${inicioFormatado}</strong> até <strong>${fimFormatado}</strong> (${dias} dias)`;
+        resumo.className = 'fin-alert fin-alert--warning';
+        resumo.innerHTML = `<i class="fas fa-calendar-check"></i> Sincronizar de <strong>${inicioFormatado}</strong> até <strong>${fimFormatado}</strong> (${dias} dias)`;
     } else {
-        resumo.className = 'alert alert-warning small';
-        resumo.innerHTML = `<i class="fas fa-calendar-check me-1"></i> Sincronizar a partir de <strong>${inicioFormatado}</strong> até hoje`;
+        resumo.className = 'fin-alert fin-alert--warning';
+        resumo.innerHTML = `<i class="fas fa-calendar-check"></i> Sincronizar a partir de <strong>${inicioFormatado}</strong> até hoje`;
     }
 }
 
@@ -628,7 +479,7 @@ function executarSincronizacaoPeriodo() {
     const textoOriginal = btn.innerHTML;
 
     btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Sincronizando...';
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sincronizando...';
 
     const payload = { data_inicio: dataInicio };
     if (dataFim) {
@@ -650,7 +501,6 @@ function executarSincronizacaoPeriodo() {
                 `Período: ${data.periodo}<br>Novos: ${data.novos} | Atualizados: ${data.atualizados} | Enriquecidos: ${data.enriquecidos}`,
                 'Sincronização Concluída!'
             );
-            // Fechar modal e recarregar estatísticas
             modalSincronizacao.hide();
             carregarEstatisticas();
         } else {

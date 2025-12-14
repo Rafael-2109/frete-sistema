@@ -1,0 +1,588 @@
+/* ==========================================================================
+   BOOTSTRAP OVERRIDES - Financial Teal Identity Layer
+   Load this AFTER bootstrap.min.css
+   Syncs with fin-* design system in css/financeiro/extrato.css
+   ========================================================================== */
+
+/* === FONTS === */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+/* === PREVENT GITHUB-CLONE SYNDROME === */
+/* Bootstrap 5.3+ uses CSS variables - override them ALL */
+
+:root,
+[data-bs-theme="light"] {
+    /* Primary - Financial Teal (NOT Bootstrap blue #0d6efd) */
+    --bs-primary: #009d80;
+    --bs-primary-rgb: 0, 157, 128;
+
+    /* Secondary */
+    --bs-secondary: #64748b;
+    --bs-secondary-rgb: 100, 116, 139;
+
+    /* Success - Emerald (NOT Bootstrap green #198754) */
+    --bs-success: #0d7d5f;
+    --bs-success-rgb: 13, 125, 95;
+
+    /* Warning - Amber */
+    --bs-warning: #b45309;
+    --bs-warning-rgb: 180, 83, 9;
+
+    /* Danger - Red */
+    --bs-danger: #dc2626;
+    --bs-danger-rgb: 220, 38, 38;
+
+    /* Info - Sky Blue */
+    --bs-info: #0284c7;
+    --bs-info-rgb: 2, 132, 199;
+
+    /* Body - Light Mode */
+    --bs-body-bg: #ffffff;
+    --bs-body-color: #1f2328;
+    --bs-secondary-bg: #f6f8fa;
+    --bs-tertiary-bg: #eaeef2;
+
+    /* Secondary text color - Bluish tint */
+    --bs-secondary-color: #6b8aad;
+
+    /* Borders - Soft */
+    --bs-border-color: rgba(31, 35, 40, 0.15);
+    --bs-border-radius: 0.5rem;
+    --bs-border-radius-sm: 0.25rem;
+    --bs-border-radius-lg: 0.75rem;
+
+    /* Fonts - NEVER use default Bootstrap fonts */
+    --bs-font-sans-serif: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+    --bs-font-monospace: 'JetBrains Mono', 'Fira Code', monospace;
+
+    /* Links */
+    --bs-link-color: #009d80;
+    --bs-link-hover-color: #007a63;
+}
+
+[data-bs-theme="dark"],
+:root:not([data-theme="light"]) {
+    /* Dark mode backgrounds - Corporate Deep (NOT GitHub #0d1117) */
+    --bs-body-bg: #0a1628;
+    --bs-body-color: #f0f6fc;
+    --bs-secondary-bg: #111d2e;
+    --bs-tertiary-bg: #1a2942;
+
+    /* Borders in dark mode */
+    --bs-border-color: #2d4a6a;
+
+    /* Secondary text color - dark mode (Bluish tint) */
+    --bs-secondary-color: #8dafd5;
+
+    /* Primary - Financial Teal (brighter for dark mode) */
+    --bs-primary: #00d4aa;
+    --bs-primary-rgb: 0, 212, 170;
+
+    /* Success */
+    --bs-success: #10b981;
+    --bs-success-rgb: 16, 185, 129;
+
+    /* Warning */
+    --bs-warning: #f59e0b;
+    --bs-warning-rgb: 245, 158, 11;
+
+    /* Danger */
+    --bs-danger: #ef4444;
+    --bs-danger-rgb: 239, 68, 68;
+
+    /* Info */
+    --bs-info: #0ea5e9;
+    --bs-info-rgb: 14, 165, 233;
+
+    /* Links */
+    --bs-link-color: #00d4aa;
+    --bs-link-hover-color: #00f5c4;
+
+    /* Card */
+    --bs-card-bg: #111d2e;
+    --bs-card-border-color: #2d4a6a;
+}
+
+/* Support for data-theme attribute (used by extrato.js ThemeManager) */
+[data-theme="light"] {
+    /* Light mode - same as data-bs-theme="light" */
+    --bs-primary: #009d80;
+    --bs-primary-rgb: 0, 157, 128;
+    --bs-success: #0d7d5f;
+    --bs-success-rgb: 13, 125, 95;
+    --bs-warning: #b45309;
+    --bs-warning-rgb: 180, 83, 9;
+    --bs-danger: #dc2626;
+    --bs-danger-rgb: 220, 38, 38;
+    --bs-info: #0284c7;
+    --bs-info-rgb: 2, 132, 199;
+    --bs-body-bg: #ffffff;
+    --bs-body-color: #1f2328;
+    --bs-secondary-bg: #f6f8fa;
+    --bs-tertiary-bg: #eaeef2;
+    --bs-border-color: rgba(31, 35, 40, 0.15);
+    --bs-secondary-color: #6b8aad;
+    --bs-link-color: #009d80;
+    --bs-link-hover-color: #007a63;
+    --bs-card-bg: #ffffff;
+}
+
+/* ==========================================================================
+   TYPOGRAPHY ENHANCEMENT
+   ========================================================================== */
+
+h1, h2, h3, .h1, .h2, .h3 {
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+h4, h5, h6, .h4, .h5, .h6 {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+
+.display-1, .display-2, .display-3, .display-4, .display-5, .display-6 {
+    font-weight: 700;
+    letter-spacing: -0.03em;
+}
+
+/* Monospace for values */
+.font-mono {
+    font-family: var(--bs-font-monospace);
+}
+
+/* ==========================================================================
+   BUTTON ENHANCEMENT
+   ========================================================================== */
+
+.btn {
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    transition: all 0.25s ease, box-shadow 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Shine effect on buttons */
+.btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.15),
+        transparent
+    );
+    transition: left 0.5s ease;
+}
+
+.btn:hover::before {
+    left: 100%;
+}
+
+.btn-primary {
+    --bs-btn-bg: var(--bs-primary);
+    --bs-btn-border-color: var(--bs-primary);
+    --bs-btn-hover-bg: var(--bs-primary);
+    --bs-btn-hover-border-color: var(--bs-primary);
+}
+
+.btn-primary:hover {
+    filter: brightness(1.1);
+    box-shadow:
+        0 0 0 3px rgba(var(--bs-primary-rgb), 0.25),
+        0 4px 15px rgba(var(--bs-primary-rgb), 0.3);
+    transform: translateY(-1px);
+}
+
+.btn-success:hover {
+    box-shadow:
+        0 0 0 3px rgba(var(--bs-success-rgb), 0.25),
+        0 4px 15px rgba(var(--bs-success-rgb), 0.3);
+    transform: translateY(-1px);
+}
+
+.btn-warning:hover {
+    box-shadow:
+        0 0 0 3px rgba(var(--bs-warning-rgb), 0.25),
+        0 4px 15px rgba(var(--bs-warning-rgb), 0.3);
+    transform: translateY(-1px);
+}
+
+.btn-danger:hover {
+    box-shadow:
+        0 0 0 3px rgba(var(--bs-danger-rgb), 0.25),
+        0 4px 15px rgba(var(--bs-danger-rgb), 0.3);
+    transform: translateY(-1px);
+}
+
+/* Outline buttons */
+.btn-outline-primary {
+    --bs-btn-color: var(--bs-primary);
+    --bs-btn-border-color: var(--bs-primary);
+    --bs-btn-hover-bg: var(--bs-primary);
+    --bs-btn-hover-border-color: var(--bs-primary);
+}
+
+.btn-outline-success {
+    --bs-btn-color: var(--bs-success);
+    --bs-btn-border-color: var(--bs-success);
+}
+
+.btn-outline-warning {
+    --bs-btn-color: var(--bs-warning);
+    --bs-btn-border-color: var(--bs-warning);
+}
+
+.btn-outline-danger {
+    --bs-btn-color: var(--bs-danger);
+    --bs-btn-border-color: var(--bs-danger);
+}
+
+/* ==========================================================================
+   CARD ENHANCEMENT
+   ========================================================================== */
+
+.card {
+    border: 1px solid var(--bs-border-color);
+    transition: all 0.3s ease, box-shadow 0.4s ease;
+    position: relative;
+    overflow: hidden;
+    background: var(--bs-card-bg, var(--bs-body-bg));
+}
+
+/* Progressive glow line */
+.card::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--bs-primary), var(--bs-info));
+    transition: width 0.4s ease;
+}
+
+.card:hover::after {
+    width: 100%;
+}
+
+.card:hover {
+    transform: translateY(-4px);
+    box-shadow:
+        0 20px 40px rgba(0, 0, 0, 0.15),
+        0 0 0 1px var(--bs-primary);
+}
+
+[data-bs-theme="dark"] .card:hover,
+:root:not([data-theme="light"]) .card:hover {
+    box-shadow:
+        0 20px 40px rgba(0, 0, 0, 0.4),
+        0 0 0 1px var(--bs-primary),
+        0 0 30px rgba(var(--bs-primary-rgb), 0.1);
+}
+
+/* Disable hover effects on static cards */
+.card.card-static:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+.card.card-static::after {
+    display: none;
+}
+
+/* ==========================================================================
+   FORM ENHANCEMENT
+   ========================================================================== */
+
+.form-control,
+.form-select {
+    background: var(--bs-tertiary-bg);
+    border-color: var(--bs-border-color);
+    color: var(--bs-body-color);
+    transition: all 0.2s ease;
+}
+
+.form-control:focus,
+.form-select:focus {
+    background: var(--bs-tertiary-bg);
+    border-color: var(--bs-primary);
+    color: var(--bs-body-color);
+    box-shadow:
+        0 0 0 3px rgba(var(--bs-primary-rgb), 0.15),
+        0 4px 12px rgba(var(--bs-primary-rgb), 0.1);
+}
+
+.form-control::placeholder {
+    color: var(--bs-secondary-color);
+    opacity: 0.6;
+}
+
+/* Date inputs - special handling for dark mode */
+input[type="date"].form-control,
+input[type="datetime-local"].form-control,
+input[type="time"].form-control {
+    color-scheme: light dark;
+}
+
+[data-bs-theme="dark"] input[type="date"].form-control,
+[data-bs-theme="dark"] input[type="datetime-local"].form-control,
+[data-bs-theme="dark"] input[type="time"].form-control,
+:root:not([data-theme="light"]) input[type="date"].form-control,
+:root:not([data-theme="light"]) input[type="datetime-local"].form-control,
+:root:not([data-theme="light"]) input[type="time"].form-control {
+    color-scheme: dark;
+}
+
+[data-theme="light"] input[type="date"].form-control,
+[data-theme="light"] input[type="datetime-local"].form-control,
+[data-theme="light"] input[type="time"].form-control {
+    color-scheme: light;
+}
+
+/* Calendar icon color in dark mode */
+[data-bs-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator,
+:root:not([data-theme="light"]) input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+}
+
+/* ==========================================================================
+   TABLE ENHANCEMENT
+   ========================================================================== */
+
+.table {
+    --bs-table-bg: transparent;
+    --bs-table-hover-bg: rgba(var(--bs-primary-rgb), 0.05);
+    --bs-table-border-color: var(--bs-border-color);
+}
+
+.table > thead {
+    background: var(--bs-tertiary-bg);
+}
+
+.table > thead th {
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.5px;
+    color: var(--bs-secondary-color);
+    border-bottom-width: 2px;
+}
+
+.table > tbody > tr {
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.table > tbody > tr:hover {
+    box-shadow: inset 3px 0 0 var(--bs-primary);
+}
+
+/* ==========================================================================
+   BADGE ENHANCEMENT
+   ========================================================================== */
+
+.badge {
+    font-weight: 600;
+    letter-spacing: 0.3px;
+}
+
+.bg-primary {
+    background-color: var(--bs-primary) !important;
+}
+
+.bg-success {
+    background-color: var(--bs-success) !important;
+}
+
+.bg-warning {
+    background-color: var(--bs-warning) !important;
+    color: #ffffff !important;
+}
+
+.bg-danger {
+    background-color: var(--bs-danger) !important;
+}
+
+.bg-info {
+    background-color: var(--bs-info) !important;
+}
+
+/* ==========================================================================
+   MODAL ENHANCEMENT
+   ========================================================================== */
+
+.modal-content {
+    border: 1px solid var(--bs-border-color);
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+    background: var(--bs-body-bg);
+}
+
+[data-bs-theme="dark"] .modal-content,
+:root:not([data-theme="light"]) .modal-content {
+    background: var(--bs-secondary-bg);
+}
+
+.modal-header {
+    background: var(--bs-tertiary-bg);
+    border-bottom-color: var(--bs-border-color);
+}
+
+.modal-footer {
+    background: var(--bs-tertiary-bg);
+    border-top-color: var(--bs-border-color);
+}
+
+/* Close button in dark mode */
+[data-bs-theme="dark"] .btn-close,
+:root:not([data-theme="light"]) .btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%);
+}
+
+/* Light mode explicit - reset close button */
+[data-theme="light"] .btn-close {
+    filter: none;
+}
+
+/* ==========================================================================
+   BREADCRUMB ENHANCEMENT
+   ========================================================================== */
+
+.breadcrumb {
+    --bs-breadcrumb-divider-color: var(--bs-secondary-color);
+    --bs-breadcrumb-item-active-color: var(--bs-secondary-color);
+}
+
+.breadcrumb-item a {
+    color: var(--bs-primary);
+    text-decoration: none;
+}
+
+.breadcrumb-item a:hover {
+    color: var(--bs-link-hover-color);
+    text-decoration: underline;
+}
+
+/* ==========================================================================
+   PAGINATION ENHANCEMENT
+   ========================================================================== */
+
+.page-link {
+    background: var(--bs-tertiary-bg);
+    border-color: var(--bs-border-color);
+    color: var(--bs-body-color);
+    transition: all 0.2s ease;
+}
+
+.page-link:hover {
+    background: var(--bs-secondary-bg);
+    border-color: var(--bs-primary);
+    color: var(--bs-primary);
+}
+
+.page-item.active .page-link {
+    background: var(--bs-primary);
+    border-color: var(--bs-primary);
+}
+
+.page-item.disabled .page-link {
+    background: var(--bs-secondary-bg);
+    color: var(--bs-secondary-color);
+}
+
+/* ==========================================================================
+   ALERT ENHANCEMENT
+   ========================================================================== */
+
+.alert-info {
+    --bs-alert-bg: rgba(var(--bs-info-rgb), 0.15);
+    --bs-alert-border-color: var(--bs-info);
+    --bs-alert-color: var(--bs-body-color);
+}
+
+.alert-success {
+    --bs-alert-bg: rgba(var(--bs-success-rgb), 0.15);
+    --bs-alert-border-color: var(--bs-success);
+    --bs-alert-color: var(--bs-body-color);
+}
+
+.alert-warning {
+    --bs-alert-bg: rgba(var(--bs-warning-rgb), 0.15);
+    --bs-alert-border-color: var(--bs-warning);
+    --bs-alert-color: var(--bs-body-color);
+}
+
+.alert-danger {
+    --bs-alert-bg: rgba(var(--bs-danger-rgb), 0.15);
+    --bs-alert-border-color: var(--bs-danger);
+    --bs-alert-color: var(--bs-body-color);
+}
+
+/* ==========================================================================
+   TEXT COLORS
+   ========================================================================== */
+
+.text-primary {
+    color: var(--bs-primary) !important;
+}
+
+.text-success {
+    color: var(--bs-success) !important;
+}
+
+.text-warning {
+    color: var(--bs-warning) !important;
+}
+
+.text-danger {
+    color: var(--bs-danger) !important;
+}
+
+.text-info {
+    color: var(--bs-info) !important;
+}
+
+.text-muted {
+    color: var(--bs-secondary-color) !important;
+}
+
+/* ==========================================================================
+   REDUCED MOTION SUPPORT
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+    .btn::before,
+    .card::after {
+        display: none;
+    }
+
+    .btn, .card, .form-control, .form-select {
+        transition: none !important;
+        transform: none !important;
+    }
+}
+
+/* ==========================================================================
+   THEME TOGGLE SYNC
+   ========================================================================== */
+
+/* Support both data-bs-theme and data-theme for compatibility */
+[data-theme="light"] {
+    color-scheme: light;
+}
+
+[data-theme="dark"],
+:root:not([data-theme]) {
+    color-scheme: dark;
+}
+
+/* Map data-theme to data-bs-theme styles when using extrato.css */
+[data-theme="light"] .card {
+    background: var(--bs-body-bg);
+    border-color: var(--bs-border-color);
+}

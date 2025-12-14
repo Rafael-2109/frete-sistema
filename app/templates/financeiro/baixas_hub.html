@@ -1,267 +1,97 @@
 {% extends "base.html" %}
 
-{% block title %}Baixa de Títulos via Excel{% endblock %}
+{% block title %}Baixa de Titulos via Excel{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/financeiro/extrato.css') }}">
 <style>
-    .hub-container {
-        max-width: 1600px;
-        margin: 0 auto;
-    }
+/* Estilos específicos para baixas que complementam o design system */
+.row-inactive { opacity: 0.5; }
+.row-sucesso td { background: var(--fin-bg-success) !important; }
+.row-erro td { background: var(--fin-bg-danger) !important; }
+.row-processando td { background: var(--fin-bg-warning) !important; }
 
-    /* Stats Cards */
-    .stat-card {
-        border: none;
-        border-radius: 10px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        transition: all 0.3s ease;
-    }
-
-    .stat-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.12);
-    }
-
-    .stat-card .stat-value {
-        font-size: 1.8rem;
-        font-weight: 700;
-    }
-
-    .stat-card .stat-label {
-        font-size: 0.8rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-
-    /* Tabela */
-    .table-baixas {
-        font-size: 0.9rem;
-    }
-
-    .table-baixas th {
-        background: #f8f9fa;
-        position: sticky;
-        top: 0;
-        z-index: 10;
-        font-weight: 600;
-        border-bottom: 2px solid #dee2e6;
-    }
-
-    .table-baixas .row-inactive {
-        opacity: 0.5;
-        background: #f8f9fa;
-    }
-
-    .table-baixas .row-sucesso {
-        background: #d4edda;
-    }
-
-    .table-baixas .row-erro {
-        background: #f8d7da;
-    }
-
-    .table-baixas .row-processando {
-        background: #fff3cd;
-    }
-
-    /* Status badges */
-    .status-badge {
-        font-size: 0.75rem;
-        padding: 0.25rem 0.5rem;
-        border-radius: 4px;
-        font-weight: 500;
-    }
-
-    .status-pendente { background: #e9ecef; color: #495057; }
-    .status-valido { background: #d4edda; color: #155724; }
-    .status-invalido { background: #f8d7da; color: #721c24; }
-    .status-processando { background: #fff3cd; color: #856404; }
-    .status-sucesso { background: #28a745; color: white; }
-    .status-erro { background: #dc3545; color: white; }
-
-    /* Warning duplicidade */
-    .warning-duplicidade {
-        color: #856404;
-        font-size: 0.8rem;
-    }
-
-    /* Journal Badge */
-    .journal-badge {
-        font-size: 0.7rem;
-        padding: 0.2rem 0.4rem;
-    }
-
-    .journal-badge.bank { background-color: #e3f2fd; color: #1976d2; }
-    .journal-badge.cash { background-color: #fff3e0; color: #f57c00; }
-
-    /* Barra de ações flutuante */
-    .action-bar {
-        position: fixed;
-        bottom: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: #343a40;
-        color: white;
-        padding: 12px 24px;
-        border-radius: 50px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-        z-index: 1000;
-        display: none;
-        align-items: center;
-        gap: 15px;
-    }
-
-    .action-bar.show {
-        display: flex;
-        animation: slideUp 0.3s ease;
-    }
-
-    @keyframes slideUp {
-        from { transform: translateX(-50%) translateY(100px); opacity: 0; }
-        to { transform: translateX(-50%) translateY(0); opacity: 1; }
-    }
-
-    .action-bar .count {
-        font-weight: bold;
-        font-size: 1.1rem;
-    }
-
-    /* Upload Zone no Modal */
-    .upload-zone-modal {
-        border: 2px dashed #dee2e6;
-        border-radius: 12px;
-        padding: 2rem;
-        text-align: center;
-        transition: all 0.3s ease;
-        cursor: pointer;
-        background: #f8f9fa;
-    }
-
-    .upload-zone-modal:hover {
-        border-color: #28a745;
-        background: #e8f5e9;
-    }
-
-    .upload-zone-modal.dragover {
-        border-color: #28a745;
-        background: #c8e6c9;
-    }
-
-    .upload-zone-modal i {
-        font-size: 2.5rem;
-        color: #6c757d;
-        margin-bottom: 0.5rem;
-    }
-
-    /* Filtros */
-    .filter-bar {
-        background: #f8f9fa;
-        border-radius: 8px;
-        padding: 1rem;
-        margin-bottom: 1rem;
-    }
-
-    /* Checkbox styling */
-    .form-check-input {
-        cursor: pointer;
-    }
-
-    .form-check-input:checked {
-        background-color: #28a745;
-        border-color: #28a745;
-    }
+.warning-duplicidade {
+    color: var(--fin-accent-warning);
+    font-size: 0.75rem;
+}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid mt-4 hub-container">
-    <!-- Cabeçalho -->
-    <div class="row mb-3">
-        <div class="col-12">
-            <nav aria-label="breadcrumb">
-                <ol class="breadcrumb mb-2">
-                    <li class="breadcrumb-item"><a href="{{ url_for('financeiro.contas_receber_hub') }}">Contas a Receber</a></li>
-                    <li class="breadcrumb-item active">Baixa de Títulos</li>
-                </ol>
+<div class="fin-container">
+    <!-- ================================================================== -->
+    <!-- HEADER -->
+    <!-- ================================================================== -->
+    <header class="fin-header">
+        <div>
+            <nav class="fin-breadcrumb">
+                <a href="{{ url_for('financeiro.contas_receber_hub') }}" class="fin-breadcrumb__item">
+                    <i class="fas fa-wallet"></i> Contas a Receber
+                </a>
+                <span class="fin-breadcrumb__separator">/</span>
+                <span class="fin-breadcrumb__current">Baixa de Titulos</span>
             </nav>
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <h2 class="mb-0">
-                        <i class="fas fa-file-invoice-dollar text-success"></i>
-                        Baixa de Títulos via Excel
-                    </h2>
-                    <small class="text-muted">Gerencie baixas importadas e processe no Odoo</small>
-                </div>
-                <div class="d-flex gap-2">
-                    <a href="{{ url_for('financeiro.baixas_download_template') }}" class="btn btn-outline-secondary">
-                        <i class="fas fa-download me-1"></i> Template
-                    </a>
-                    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalImportar">
-                        <i class="fas fa-upload me-1"></i> Nova Importação
-                    </button>
-                </div>
-            </div>
+            <h1 class="fin-header__title">
+                <i class="fas fa-file-invoice-dollar"></i>
+                Baixa de Titulos via Excel
+            </h1>
+            <p class="fin-header__subtitle">
+                Gerencie baixas importadas e processe no Odoo
+            </p>
+        </div>
+        <div class="fin-header__actions">
+            <button class="theme-toggle" onclick="toggleTheme()" title="Alternar tema">
+                <i class="fas fa-sun theme-toggle__icon theme-toggle__icon--light"></i>
+                <i class="fas fa-moon theme-toggle__icon theme-toggle__icon--dark"></i>
+            </button>
+            <a href="{{ url_for('financeiro.baixas_download_template') }}" class="fin-btn fin-btn--ghost">
+                <i class="fas fa-download"></i> Template
+            </a>
+            <button class="fin-btn fin-btn--success" data-bs-toggle="modal" data-bs-target="#modalImportar">
+                <i class="fas fa-upload"></i> Nova Importacao
+            </button>
+        </div>
+    </header>
+
+    <!-- ================================================================== -->
+    <!-- STATS CARDS -->
+    <!-- ================================================================== -->
+    <div class="fin-stats">
+        <div class="fin-stat-card fin-stat-card--primary">
+            <div class="fin-stat-card__value" id="statTotal">{{ stats.total }}</div>
+            <div class="fin-stat-card__label">Total</div>
+        </div>
+        <div class="fin-stat-card fin-stat-card--warning">
+            <div class="fin-stat-card__value" id="statPendentes">{{ stats.pendentes }}</div>
+            <div class="fin-stat-card__label">Pendentes</div>
+        </div>
+        <div class="fin-stat-card fin-stat-card--info">
+            <div class="fin-stat-card__value" id="statValidos">{{ stats.validos }}</div>
+            <div class="fin-stat-card__label">Validos</div>
+        </div>
+        <div class="fin-stat-card fin-stat-card--danger">
+            <div class="fin-stat-card__value" id="statInvalidos">{{ stats.invalidos }}</div>
+            <div class="fin-stat-card__label">Invalidos</div>
+        </div>
+        <div class="fin-stat-card fin-stat-card--success">
+            <div class="fin-stat-card__value" id="statSucesso">{{ stats.sucesso }}</div>
+            <div class="fin-stat-card__label">Sucesso</div>
+        </div>
+        <div class="fin-stat-card" style="--stat-color: #cf222e;">
+            <div class="fin-stat-card__value" id="statErro">{{ stats.erro }}</div>
+            <div class="fin-stat-card__label">Erro</div>
         </div>
     </div>
 
-    <!-- Cards de Estatísticas -->
-    <div class="row g-3 mb-4">
-        <div class="col-6 col-md-2">
-            <div class="card stat-card h-100">
-                <div class="card-body text-center py-3">
-                    <div class="stat-value text-primary" id="statTotal">{{ stats.total }}</div>
-                    <div class="stat-label text-muted">Total</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-6 col-md-2">
-            <div class="card stat-card h-100">
-                <div class="card-body text-center py-3">
-                    <div class="stat-value text-warning" id="statPendentes">{{ stats.pendentes }}</div>
-                    <div class="stat-label text-muted">Pendentes</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-6 col-md-2">
-            <div class="card stat-card h-100">
-                <div class="card-body text-center py-3">
-                    <div class="stat-value text-info" id="statValidos">{{ stats.validos }}</div>
-                    <div class="stat-label text-muted">Válidos</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-6 col-md-2">
-            <div class="card stat-card h-100">
-                <div class="card-body text-center py-3">
-                    <div class="stat-value text-danger" id="statInvalidos">{{ stats.invalidos }}</div>
-                    <div class="stat-label text-muted">Inválidos</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-6 col-md-2">
-            <div class="card stat-card h-100">
-                <div class="card-body text-center py-3">
-                    <div class="stat-value text-success" id="statSucesso">{{ stats.sucesso }}</div>
-                    <div class="stat-label text-muted">Sucesso</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-6 col-md-2">
-            <div class="card stat-card h-100">
-                <div class="card-body text-center py-3">
-                    <div class="stat-value text-danger" id="statErro">{{ stats.erro }}</div>
-                    <div class="stat-label text-muted">Erro</div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Filtros -->
-    <div class="filter-bar">
-        <div class="row g-2 align-items-end">
-            <div class="col-md-2">
-                <label class="form-label small mb-1">Lote</label>
-                <select class="form-select form-select-sm" id="filtroLote">
+    <!-- ================================================================== -->
+    <!-- FILTROS -->
+    <!-- ================================================================== -->
+    <div class="fin-filters">
+        <div class="fin-filters__grid">
+            <div class="fin-filter-group">
+                <label class="fin-filter-group__label">Lote</label>
+                <select class="fin-filter-group__input fin-filter-group__select" id="filtroLote">
                     <option value="">Todos os lotes</option>
                     {% for lote in lotes %}
                     <option value="{{ lote.id }}" {% if filtro_lote == lote.id %}selected{% endif %}>
@@ -270,68 +100,75 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-2">
-                <label class="form-label small mb-1">Status</label>
-                <select class="form-select form-select-sm" id="filtroStatus">
+
+            <div class="fin-filter-group">
+                <label class="fin-filter-group__label">Status</label>
+                <select class="fin-filter-group__input fin-filter-group__select" id="filtroStatus">
                     <option value="">Todos</option>
                     <option value="PENDENTE" {% if filtro_status == 'PENDENTE' %}selected{% endif %}>Pendente</option>
-                    <option value="VALIDO" {% if filtro_status == 'VALIDO' %}selected{% endif %}>Válido</option>
-                    <option value="INVALIDO" {% if filtro_status == 'INVALIDO' %}selected{% endif %}>Inválido</option>
+                    <option value="VALIDO" {% if filtro_status == 'VALIDO' %}selected{% endif %}>Valido</option>
+                    <option value="INVALIDO" {% if filtro_status == 'INVALIDO' %}selected{% endif %}>Invalido</option>
                     <option value="SUCESSO" {% if filtro_status == 'SUCESSO' %}selected{% endif %}>Sucesso</option>
                     <option value="ERRO" {% if filtro_status == 'ERRO' %}selected{% endif %}>Erro</option>
                 </select>
             </div>
-            <div class="col-md-2">
-                <label class="form-label small mb-1">Ativo</label>
-                <select class="form-select form-select-sm" id="filtroAtivo">
+
+            <div class="fin-filter-group">
+                <label class="fin-filter-group__label">Ativo</label>
+                <select class="fin-filter-group__input fin-filter-group__select" id="filtroAtivo">
                     <option value="">Todos</option>
                     <option value="1" {% if filtro_ativo == '1' %}selected{% endif %}>Ativos</option>
                     <option value="0" {% if filtro_ativo == '0' %}selected{% endif %}>Inativos</option>
                 </select>
             </div>
-            <div class="col-md-3">
-                <label class="form-label small mb-1">Buscar NF</label>
-                <input type="text" class="form-control form-control-sm" id="filtroNF"
-                       placeholder="Número da NF..." value="{{ filtro_nf or '' }}">
+
+            <div class="fin-filter-group">
+                <label class="fin-filter-group__label">Buscar NF</label>
+                <input type="text" class="fin-filter-group__input" id="filtroNF"
+                       placeholder="Numero da NF..." value="{{ filtro_nf or '' }}">
             </div>
-            <div class="col-md-3 d-flex gap-2">
-                <button class="btn btn-primary btn-sm" onclick="aplicarFiltros()">
-                    <i class="fas fa-search"></i> Filtrar
-                </button>
-                <button class="btn btn-outline-secondary btn-sm" onclick="limparFiltros()">
-                    <i class="fas fa-times"></i> Limpar
-                </button>
+
+            <div class="fin-filter-group">
+                <label class="fin-filter-group__label">&nbsp;</label>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button class="fin-btn fin-btn--primary" onclick="aplicarFiltros()">
+                        <i class="fas fa-search"></i> Filtrar
+                    </button>
+                    <button class="fin-btn fin-btn--ghost" onclick="limparFiltros()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Tabela Principal -->
-    <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center py-2">
-            <div class="d-flex align-items-center gap-3">
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" id="checkTodosPagina"
-                           onchange="togglePagina(this.checked)">
-                    <label class="form-check-label small" for="checkTodosPagina">
-                        Página
-                    </label>
-                </div>
-                <button class="btn btn-sm btn-outline-primary" onclick="selecionarTodos()">
-                    <i class="fas fa-check-double"></i> Selecionar Todos ({{ stats.total }})
+    <!-- ================================================================== -->
+    <!-- TABELA PRINCIPAL -->
+    <!-- ================================================================== -->
+    <div class="fin-section">
+        <div class="fin-section__header">
+            <h2 class="fin-section__title">
+                <i class="fas fa-list"></i>
+                Itens Importados
+                <span class="fin-section__badge">{{ itens|length }} de {{ stats.total }}</span>
+            </h2>
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                    <input type="checkbox" class="fin-checkbox" id="checkTodosPagina" onchange="togglePagina(this.checked)">
+                    <span style="font-size: 0.8rem; color: var(--fin-text-secondary);">Pagina</span>
+                </label>
+                <button class="fin-btn fin-btn--ghost fin-btn--sm" onclick="selecionarTodos()">
+                    <i class="fas fa-check-double"></i> Todos ({{ stats.total }})
                 </button>
-                <span class="text-muted small" id="infoSelecionados">
-                    <span id="countSelecionados">0</span> selecionado(s)
-                </span>
-            </div>
-            <div>
-                <span class="text-muted small">
-                    Mostrando {{ itens|length }} de {{ stats.total }} itens
+                <span style="font-size: 0.8rem; color: var(--fin-text-secondary);">
+                    <strong id="countSelecionados">0</strong> selecionado(s)
                 </span>
             </div>
         </div>
-        <div class="card-body p-0">
-            <div class="table-responsive" style="max-height: 60vh; overflow-y: auto;">
-                <table class="table table-sm table-hover table-baixas mb-0">
+
+        <div class="fin-section__content">
+            <div class="fin-table-wrapper" style="max-height: 55vh; overflow-y: auto;">
+                <table class="fin-table">
                     <thead>
                         <tr>
                             <th width="40"></th>
@@ -345,7 +182,7 @@
                             <th width="80">Ativo</th>
                             <th width="90">Status</th>
                             <th>Mensagem</th>
-                            <th width="100">Resultado</th>
+                            <th width="40">Resultado</th>
                         </tr>
                     </thead>
                     <tbody id="tabelaBody">
@@ -358,77 +195,89 @@
                             data-status="{{ item.status }}"
                             data-ativo="{{ item.ativo|lower }}">
                             <td class="text-center">
-                                <input type="checkbox" class="form-check-input item-check"
+                                <input type="checkbox" class="fin-checkbox item-check"
                                        value="{{ item.id }}"
                                        {% if item.status in ['SUCESSO', 'PROCESSANDO'] %}disabled{% endif %}
                                        onchange="atualizarSelecao()">
                             </td>
                             <td>
-                                <span class="badge bg-secondary">#{{ item.lote_id }}</span>
+                                <span class="fin-badge fin-badge--muted">#{{ item.lote_id }}</span>
                             </td>
-                            <td>{{ item.linha_excel }}</td>
+                            <td class="mono">{{ item.linha_excel }}</td>
                             <td>
                                 <strong>{{ item.nf_excel }}</strong>
                                 {% if item.duplicidade %}
                                 <br><span class="warning-duplicidade">
-                                    <i class="fas fa-exclamation-triangle"></i> Possível duplicidade
+                                    <i class="fas fa-exclamation-triangle"></i> Possivel duplicidade
                                 </span>
                                 {% endif %}
                             </td>
-                            <td class="text-center">{{ item.parcela_excel }}</td>
-                            <td class="text-end">
+                            <td class="text-center mono">{{ item.parcela_excel }}</td>
+                            <td class="text-end mono">
                                 <strong>R$ {{ "%.2f"|format(item.valor_excel) }}</strong>
                             </td>
                             <td>
                                 {{ item.journal_excel }}
                                 {% if item.journal_odoo_id %}
-                                <i class="fas fa-check-circle text-success" title="Journal válido"></i>
+                                <i class="fas fa-check-circle" style="color: var(--fin-accent-success);" title="Journal valido"></i>
                                 {% else %}
-                                <i class="fas fa-times-circle text-danger" title="Journal não encontrado"></i>
+                                <i class="fas fa-times-circle" style="color: var(--fin-accent-danger);" title="Journal nao encontrado"></i>
                                 {% endif %}
                             </td>
-                            <td>{{ item.data_excel.strftime('%d/%m/%Y') if item.data_excel else '-' }}</td>
+                            <td class="mono">{{ item.data_excel.strftime('%d/%m/%Y') if item.data_excel else '-' }}</td>
                             <td class="text-center">
-                                <div class="form-check form-switch d-inline-block">
-                                    <input class="form-check-input" type="checkbox" role="switch"
-                                           id="ativo{{ item.id }}"
-                                           {% if item.ativo %}checked{% endif %}
-                                           {% if item.status in ['SUCESSO', 'PROCESSANDO', 'INVALIDO'] %}disabled{% endif %}
-                                           onchange="toggleAtivo({{ item.id }}, this.checked)">
-                                </div>
+                                <input type="checkbox" class="fin-checkbox"
+                                       id="ativo{{ item.id }}"
+                                       {% if item.ativo %}checked{% endif %}
+                                       {% if item.status in ['SUCESSO', 'PROCESSANDO', 'INVALIDO'] %}disabled{% endif %}
+                                       onchange="toggleAtivo({{ item.id }}, this.checked)">
                             </td>
                             <td>
-                                <span class="status-badge status-{{ item.status|lower }}">
-                                    {{ item.status }}
-                                </span>
+                                {% if item.status == 'PENDENTE' %}
+                                <span class="fin-badge fin-badge--muted">PENDENTE</span>
+                                {% elif item.status == 'VALIDO' %}
+                                <span class="fin-badge fin-badge--success">VALIDO</span>
+                                {% elif item.status == 'INVALIDO' %}
+                                <span class="fin-badge fin-badge--danger">INVALIDO</span>
+                                {% elif item.status == 'PROCESSANDO' %}
+                                <span class="fin-badge fin-badge--warning">PROCESSANDO</span>
+                                {% elif item.status == 'SUCESSO' %}
+                                <span class="fin-badge fin-badge--success">SUCESSO</span>
+                                {% elif item.status == 'ERRO' %}
+                                <span class="fin-badge fin-badge--danger">ERRO</span>
+                                {% endif %}
                             </td>
                             <td>
-                                <small class="text-muted" title="{{ item.mensagem or '' }}">
-                                    {{ (item.mensagem or '-')[:30] }}{% if item.mensagem and item.mensagem|length > 30 %}...{% endif %}
+                                <small style="color: var(--fin-text-muted);" title="{{ item.mensagem or '' }}">
+                                    {{ (item.mensagem or '-')[:100] }}{% if item.mensagem and item.mensagem|length > 100 %}...{% endif %}
                                 </small>
                             </td>
                             <td>
                                 {% if item.payment_odoo_name %}
-                                <small class="text-success">
+                                <small style="color: var(--fin-accent-success);">
                                     <i class="fas fa-check"></i> {{ item.payment_odoo_name }}
                                 </small>
                                 {% elif item.status == 'ERRO' %}
-                                <small class="text-danger">
+                                <small style="color: var(--fin-accent-danger);">
                                     <i class="fas fa-times"></i> Falha
                                 </small>
                                 {% else %}
-                                <small class="text-muted">-</small>
+                                <small style="color: var(--fin-text-muted);">-</small>
                                 {% endif %}
                             </td>
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="12" class="text-center py-4 text-muted">
-                                <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
-                                Nenhum item encontrado.
-                                <a href="#" data-bs-toggle="modal" data-bs-target="#modalImportar">
-                                    Importe um arquivo Excel
-                                </a>
+                            <td colspan="12">
+                                <div class="fin-empty">
+                                    <div class="fin-empty__icon"><i class="fas fa-inbox"></i></div>
+                                    <div class="fin-empty__title">Nenhum item encontrado</div>
+                                    <div class="fin-empty__text">
+                                        <a href="#" data-bs-toggle="modal" data-bs-target="#modalImportar" class="fin-link">
+                                            Importe um arquivo Excel
+                                        </a>
+                                    </div>
+                                </div>
                             </td>
                         </tr>
                         {% endfor %}
@@ -439,75 +288,72 @@
     </div>
 </div>
 
-<!-- Barra de Ações Flutuante -->
-<div class="action-bar" id="actionBar">
-    <span class="count" id="actionCount">0</span>
-    <span>selecionado(s)</span>
-    <div class="vr bg-light"></div>
-    <button class="btn btn-success btn-sm" onclick="processarSelecionados()">
-        <i class="fas fa-play me-1"></i> Processar no Odoo
-    </button>
-    <button class="btn btn-outline-light btn-sm" onclick="ativarSelecionados(true)">
-        <i class="fas fa-toggle-on"></i> Ativar
-    </button>
-    <button class="btn btn-outline-light btn-sm" onclick="ativarSelecionados(false)">
-        <i class="fas fa-toggle-off"></i> Inativar
-    </button>
-    <button class="btn btn-outline-light btn-sm" onclick="limparSelecao()">
-        <i class="fas fa-times"></i>
-    </button>
+<!-- Barra de Acoes Flutuante -->
+<div class="fin-bulk-bar" id="actionBar">
+    <div class="fin-bulk-bar__info">
+        <span class="fin-bulk-bar__count" id="actionCount">0</span>
+        <span>selecionado(s)</span>
+    </div>
+    <div class="fin-bulk-bar__actions">
+        <button class="fin-btn fin-btn--success" onclick="processarSelecionados()">
+            <i class="fas fa-play"></i> Processar no Odoo
+        </button>
+        <button class="fin-btn fin-btn--ghost" onclick="ativarSelecionados(true)">
+            <i class="fas fa-toggle-on"></i> Ativar
+        </button>
+        <button class="fin-btn fin-btn--ghost" onclick="ativarSelecionados(false)">
+            <i class="fas fa-toggle-off"></i> Inativar
+        </button>
+        <button class="fin-btn fin-btn--ghost" onclick="limparSelecao()">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
 </div>
 
 <!-- Modal Importar -->
 <div class="modal fade" id="modalImportar" tabindex="-1">
     <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
+        <div class="modal-content" style="background: var(--fin-bg-secondary); color: var(--fin-text-primary); border: 1px solid var(--fin-border);">
+            <div class="modal-header" style="border-color: var(--fin-border);">
                 <h5 class="modal-title">
-                    <i class="fas fa-upload me-2"></i>
+                    <i class="fas fa-upload"></i>
                     Importar Arquivo Excel
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" style="filter: var(--fin-text-primary) == '#f0f6fc' ? invert(1) : none;"></button>
             </div>
             <div class="modal-body">
-                <!-- Instruções -->
-                <div class="alert alert-info mb-4">
-                    <h6 class="mb-2"><i class="fas fa-info-circle"></i> Formato esperado</h6>
-                    <p class="mb-1">O arquivo deve conter as colunas:</p>
-                    <code>NF | PARCELA | VALOR | JOURNAL | DATA</code>
-                    <p class="mt-2 mb-0">
-                        <a href="{{ url_for('financeiro.baixas_download_template') }}">
+                <div class="fin-alert fin-alert--info" style="margin-bottom: 1.5rem;">
+                    <i class="fas fa-info-circle"></i>
+                    <div>
+                        <strong>Formato esperado:</strong><br>
+                        <code style="background: var(--fin-bg-tertiary); padding: 0.25rem 0.5rem; border-radius: 4px;">NF | PARCELA | VALOR | JOURNAL | DATA</code>
+                        <br><br>
+                        <a href="{{ url_for('financeiro.baixas_download_template') }}" class="fin-link">
                             <i class="fas fa-download"></i> Baixar modelo Excel
                         </a>
-                    </p>
+                    </div>
                 </div>
 
-                <!-- Upload Zone -->
-                <div class="upload-zone-modal" id="uploadZone">
+                <div class="fin-upload-zone" id="uploadZone">
                     <input type="file" id="fileInput" accept=".xlsx" style="display: none;">
-                    <i class="fas fa-cloud-upload-alt d-block"></i>
-                    <h5>Arraste o arquivo aqui</h5>
-                    <p class="text-muted mb-0">ou clique para selecionar</p>
+                    <div class="fin-upload-zone__icon"><i class="fas fa-cloud-upload-alt"></i></div>
+                    <h5 style="margin-bottom: 0.5rem;">Arraste o arquivo aqui</h5>
+                    <p style="color: var(--fin-text-muted); margin: 0;">ou clique para selecionar</p>
                 </div>
 
-                <!-- Progress -->
                 <div id="uploadProgress" class="mt-3" style="display: none;">
-                    <div class="progress">
-                        <div class="progress-bar progress-bar-striped progress-bar-animated"
-                             role="progressbar" style="width: 100%"></div>
+                    <div class="fin-progress">
+                        <div class="fin-progress__bar" style="flex: 1;">
+                            <div class="fin-progress__fill" style="width: 100%; animation: fin-progress-pulse 1s ease-in-out infinite;"></div>
+                        </div>
                     </div>
-                    <small class="text-muted">Processando arquivo...</small>
+                    <small style="color: var(--fin-text-muted);">Processando arquivo...</small>
                 </div>
 
-                <!-- Resultado da importação -->
-                <div id="uploadResultado" class="mt-3" style="display: none;">
-                    <div class="alert" id="uploadResultadoAlert">
-                        <span id="uploadResultadoMsg"></span>
-                    </div>
-                </div>
+                <div id="uploadResultado" class="mt-3" style="display: none;"></div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            <div class="modal-footer" style="border-color: var(--fin-border);">
+                <button type="button" class="fin-btn fin-btn--ghost" data-bs-dismiss="modal">Fechar</button>
             </div>
         </div>
     </div>
@@ -516,41 +362,39 @@
 <!-- Modal Processamento -->
 <div class="modal fade" id="modalProcessamento" tabindex="-1" data-bs-backdrop="static">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
+        <div class="modal-content" style="background: var(--fin-bg-secondary); color: var(--fin-text-primary); border: 1px solid var(--fin-border);">
             <div class="modal-body text-center py-5">
-                <div class="spinner-border text-success mb-3" role="status" style="width: 3rem; height: 3rem;">
-                    <span class="visually-hidden">Processando...</span>
-                </div>
+                <div class="fin-loading__spinner" style="margin: 0 auto 1rem; width: 48px; height: 48px;"></div>
                 <h5>Processando Baixas no Odoo</h5>
-                <p class="text-muted mb-0" id="processamentoStatus">Aguarde...</p>
+                <p style="color: var(--fin-text-muted); margin: 0;" id="processamentoStatus">Aguarde...</p>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Modal Confirmação -->
+<!-- Modal Confirmacao -->
 <div class="modal fade" id="modalConfirmacao" tabindex="-1">
     <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header bg-warning text-dark">
-                <h5 class="modal-title">
-                    <i class="fas fa-exclamation-triangle me-2"></i>
+        <div class="modal-content" style="background: var(--fin-bg-secondary); color: var(--fin-text-primary); border: 1px solid var(--fin-border);">
+            <div class="modal-header" style="background: var(--fin-bg-warning); border-color: var(--fin-border);">
+                <h5 class="modal-title" style="color: var(--fin-accent-warning);">
+                    <i class="fas fa-exclamation-triangle"></i>
                     Confirmar Processamento
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p>Você está prestes a processar <strong id="confirmQtd">0</strong> baixa(s) no Odoo.</p>
-                <div class="alert alert-warning">
+                <p>Voce esta prestes a processar <strong id="confirmQtd">0</strong> baixa(s) no Odoo.</p>
+                <div class="fin-alert fin-alert--warning">
                     <i class="fas fa-exclamation-circle"></i>
-                    <strong>Atenção:</strong> Esta ação criará pagamentos no Odoo e não pode ser desfeita facilmente.
+                    <span><strong>Atencao:</strong> Esta acao criara pagamentos no Odoo e nao pode ser desfeita facilmente.</span>
                 </div>
-                <p class="mb-0">Deseja continuar?</p>
+                <p style="margin: 0;">Deseja continuar?</p>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-success" id="btnConfirmarProcessar">
-                    <i class="fas fa-play me-1"></i> Sim, Processar
+            <div class="modal-footer" style="border-color: var(--fin-border);">
+                <button type="button" class="fin-btn fin-btn--ghost" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="fin-btn fin-btn--success" id="btnConfirmarProcessar">
+                    <i class="fas fa-play"></i> Sim, Processar
                 </button>
             </div>
         </div>
@@ -559,6 +403,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/financeiro/extrato.js') }}"></script>
 <script>
 // Estado global
 let itensSelecionados = new Set();
@@ -569,45 +414,23 @@ document.addEventListener('DOMContentLoaded', function() {
     setupFiltros();
 });
 
-// ============================================================================
-// UPLOAD
-// ============================================================================
-
 function setupUploadZone() {
     const zone = document.getElementById('uploadZone');
     const input = document.getElementById('fileInput');
 
     zone.addEventListener('click', () => input.click());
-
-    zone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        zone.classList.add('dragover');
-    });
-
-    zone.addEventListener('dragleave', () => {
-        zone.classList.remove('dragover');
-    });
-
+    zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('dragover'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
     zone.addEventListener('drop', (e) => {
         e.preventDefault();
         zone.classList.remove('dragover');
-        if (e.dataTransfer.files.length > 0) {
-            uploadFile(e.dataTransfer.files[0]);
-        }
+        if (e.dataTransfer.files.length > 0) uploadFile(e.dataTransfer.files[0]);
     });
-
-    input.addEventListener('change', () => {
-        if (input.files.length > 0) {
-            uploadFile(input.files[0]);
-        }
-    });
+    input.addEventListener('change', () => { if (input.files.length > 0) uploadFile(input.files[0]); });
 }
 
 function uploadFile(file) {
-    if (!file.name.endsWith('.xlsx')) {
-        toastr.error('Arquivo deve ser .xlsx', 'Erro');
-        return;
-    }
+    if (!file.name.endsWith('.xlsx')) { toastr.error('Arquivo deve ser .xlsx'); return; }
 
     const formData = new FormData();
     formData.append('arquivo', file);
@@ -615,99 +438,60 @@ function uploadFile(file) {
     document.getElementById('uploadProgress').style.display = 'block';
     document.getElementById('uploadResultado').style.display = 'none';
 
-    fetch("{{ url_for('financeiro.baixas_upload') }}", {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
+    fetch("{{ url_for('financeiro.baixas_upload') }}", { method: 'POST', body: formData })
+    .then(r => r.json())
     .then(data => {
         document.getElementById('uploadProgress').style.display = 'none';
-        document.getElementById('uploadResultado').style.display = 'block';
-
-        const alert = document.getElementById('uploadResultadoAlert');
-        const msg = document.getElementById('uploadResultadoMsg');
+        const resultado = document.getElementById('uploadResultado');
+        resultado.style.display = 'block';
 
         if (data.success) {
-            alert.className = 'alert alert-success';
-            msg.innerHTML = `
-                <i class="fas fa-check-circle"></i>
-                <strong>Importação concluída!</strong><br>
-                ${data.linhas_validas} válidas, ${data.linhas_invalidas} inválidas de ${data.total_linhas} linhas.
-                ${data.duplicidades > 0 ? '<br><span class="text-warning"><i class="fas fa-exclamation-triangle"></i> ' + data.duplicidades + ' possíveis duplicidade(s) detectada(s)</span>' : ''}
-            `;
-            toastr.success('Arquivo importado com sucesso!');
-
-            // Recarregar página após 2 segundos
+            resultado.innerHTML = `<div class="fin-alert fin-alert--success"><i class="fas fa-check-circle"></i>
+                <span><strong>Importacao concluida!</strong> ${data.linhas_validas} validas, ${data.linhas_invalidas} invalidas.</span></div>`;
+            toastr.success('Arquivo importado!');
             setTimeout(() => location.reload(), 2000);
         } else {
-            alert.className = 'alert alert-danger';
-            msg.innerHTML = `<i class="fas fa-times-circle"></i> ${data.error}`;
-            toastr.error(data.error, 'Erro na Importação');
+            resultado.innerHTML = `<div class="fin-alert fin-alert--danger"><i class="fas fa-times-circle"></i> <span>${data.error}</span></div>`;
+            toastr.error(data.error);
         }
     })
     .catch(error => {
         document.getElementById('uploadProgress').style.display = 'none';
-        console.error('Erro:', error);
-        toastr.error('Erro ao enviar arquivo', 'Erro');
+        toastr.error('Erro ao enviar arquivo');
     });
 }
 
-// ============================================================================
-// FILTROS
-// ============================================================================
-
 function setupFiltros() {
-    // Enter no campo de NF aplica filtro
-    document.getElementById('filtroNF').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') aplicarFiltros();
-    });
+    document.getElementById('filtroNF').addEventListener('keypress', function(e) { if (e.key === 'Enter') aplicarFiltros(); });
 }
 
 function aplicarFiltros() {
     const params = new URLSearchParams();
-
     const lote = document.getElementById('filtroLote').value;
     const status = document.getElementById('filtroStatus').value;
     const ativo = document.getElementById('filtroAtivo').value;
     const nf = document.getElementById('filtroNF').value;
-
     if (lote) params.set('lote', lote);
     if (status) params.set('status', status);
     if (ativo) params.set('ativo', ativo);
     if (nf) params.set('nf', nf);
-
     window.location.href = "{{ url_for('financeiro.baixas_hub') }}?" + params.toString();
 }
 
-function limparFiltros() {
-    window.location.href = "{{ url_for('financeiro.baixas_hub') }}";
-}
-
-// ============================================================================
-// SELEÇÃO
-// ============================================================================
+function limparFiltros() { window.location.href = "{{ url_for('financeiro.baixas_hub') }}"; }
 
 function togglePagina(checked) {
     document.querySelectorAll('.item-check:not(:disabled)').forEach(cb => {
         cb.checked = checked;
-        if (checked) {
-            itensSelecionados.add(parseInt(cb.value));
-        } else {
-            itensSelecionados.delete(parseInt(cb.value));
-        }
+        if (checked) itensSelecionados.add(parseInt(cb.value));
+        else itensSelecionados.delete(parseInt(cb.value));
     });
     atualizarSelecao();
 }
 
 function selecionarTodos() {
-    // Adiciona todos os IDs processáveis
     todosIds.forEach(id => itensSelecionados.add(id));
-
-    // Marca os checkboxes visíveis
-    document.querySelectorAll('.item-check:not(:disabled)').forEach(cb => {
-        cb.checked = true;
-    });
-
+    document.querySelectorAll('.item-check:not(:disabled)').forEach(cb => cb.checked = true);
     atualizarSelecao();
     toastr.info(`${itensSelecionados.size} itens selecionados`);
 }
@@ -720,141 +504,73 @@ function limparSelecao() {
 }
 
 function atualizarSelecao() {
-    // Sincronizar set com checkboxes visíveis
     document.querySelectorAll('.item-check').forEach(cb => {
         const id = parseInt(cb.value);
-        if (cb.checked) {
-            itensSelecionados.add(id);
-        } else {
-            itensSelecionados.delete(id);
-        }
+        if (cb.checked) itensSelecionados.add(id);
+        else itensSelecionados.delete(id);
     });
-
     const count = itensSelecionados.size;
     document.getElementById('countSelecionados').textContent = count;
     document.getElementById('actionCount').textContent = count;
-
-    const actionBar = document.getElementById('actionBar');
-    if (count > 0) {
-        actionBar.classList.add('show');
-    } else {
-        actionBar.classList.remove('show');
-    }
+    document.getElementById('actionBar').classList.toggle('visible', count > 0);
 }
-
-// ============================================================================
-// AÇÕES
-// ============================================================================
 
 function toggleAtivo(itemId, ativo) {
     fetch(`{{ url_for('financeiro.baixas_toggle_item', item_id=0) }}`.replace('/0/', `/${itemId}/`), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ativo: ativo })
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ativo: ativo })
     })
-    .then(response => response.json())
+    .then(r => r.json())
     .then(data => {
         if (data.success) {
-            // Atualizar visual da linha
             const row = document.querySelector(`tr[data-id="${itemId}"]`);
-            if (row) {
-                if (ativo) {
-                    row.classList.remove('row-inactive');
-                } else {
-                    row.classList.add('row-inactive');
-                }
-            }
+            if (row) row.classList.toggle('row-inactive', !ativo);
             toastr.success(ativo ? 'Item ativado' : 'Item inativado');
         } else {
-            toastr.error(data.error, 'Erro');
-            // Reverter checkbox
+            toastr.error(data.error);
             document.getElementById(`ativo${itemId}`).checked = !ativo;
         }
-    })
-    .catch(error => {
-        console.error('Erro:', error);
-        toastr.error('Erro ao atualizar item', 'Erro');
-        document.getElementById(`ativo${itemId}`).checked = !ativo;
     });
 }
 
 function ativarSelecionados(ativo) {
     if (itensSelecionados.size === 0) return;
-
-    const ids = Array.from(itensSelecionados);
-
     fetch("{{ url_for('financeiro.baixas_ativar_lote') }}", {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: ids, ativo: ativo })
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: Array.from(itensSelecionados), ativo: ativo })
     })
-    .then(response => response.json())
+    .then(r => r.json())
     .then(data => {
-        if (data.success) {
-            toastr.success(`${data.atualizados} itens ${ativo ? 'ativados' : 'inativados'}`);
-            setTimeout(() => location.reload(), 1000);
-        } else {
-            toastr.error(data.error, 'Erro');
-        }
-    })
-    .catch(error => {
-        console.error('Erro:', error);
-        toastr.error('Erro ao atualizar itens', 'Erro');
+        if (data.success) { toastr.success(`${data.atualizados} itens atualizados`); setTimeout(() => location.reload(), 1000); }
+        else toastr.error(data.error);
     });
 }
 
 function processarSelecionados() {
-    if (itensSelecionados.size === 0) {
-        toastr.warning('Nenhum item selecionado', 'Atenção');
-        return;
-    }
-
-    // Mostrar modal de confirmação
+    if (itensSelecionados.size === 0) { toastr.warning('Nenhum item selecionado'); return; }
     document.getElementById('confirmQtd').textContent = itensSelecionados.size;
-    const modalConfirm = new bootstrap.Modal(document.getElementById('modalConfirmacao'));
-    modalConfirm.show();
-
-    // Configurar botão de confirmação
-    document.getElementById('btnConfirmarProcessar').onclick = function() {
-        modalConfirm.hide();
-        executarProcessamento();
-    };
+    const modal = new bootstrap.Modal(document.getElementById('modalConfirmacao'));
+    modal.show();
+    document.getElementById('btnConfirmarProcessar').onclick = function() { modal.hide(); executarProcessamento(); };
 }
 
 function executarProcessamento() {
     const ids = Array.from(itensSelecionados);
-
-    // Mostrar modal de processamento
-    const modalProc = new bootstrap.Modal(document.getElementById('modalProcessamento'));
-    modalProc.show();
-    document.getElementById('processamentoStatus').textContent =
-        `Processando ${ids.length} baixa(s)...`;
+    const modal = new bootstrap.Modal(document.getElementById('modalProcessamento'));
+    modal.show();
+    document.getElementById('processamentoStatus').textContent = `Processando ${ids.length} baixa(s)...`;
 
     fetch("{{ url_for('financeiro.baixas_processar_itens') }}", {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: ids })
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: ids })
     })
-    .then(response => response.json())
+    .then(r => r.json())
     .then(data => {
-        modalProc.hide();
-
+        modal.hide();
         if (data.success) {
-            const res = data.resultado;
-            toastr.success(
-                `Sucesso: ${res.sucesso} | Erro: ${res.erro} | Total: ${res.processados}`,
-                'Processamento Concluído!'
-            );
+            toastr.success(`Sucesso: ${data.resultado.sucesso} | Erro: ${data.resultado.erro}`);
             setTimeout(() => location.reload(), 2000);
-        } else {
-            toastr.error(data.error, 'Erro no Processamento');
-        }
+        } else toastr.error(data.error);
     })
-    .catch(error => {
-        modalProc.hide();
-        console.error('Erro:', error);
-        toastr.error('Erro ao processar baixas', 'Erro');
-    });
+    .catch(() => { modal.hide(); toastr.error('Erro ao processar'); });
 }
 </script>
 {% endblock %}

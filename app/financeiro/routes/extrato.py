@@ -23,41 +23,218 @@ from flask_login import login_required, current_user
 
 from app import db
 from app.financeiro.routes import financeiro_bp
-from app.financeiro.models import ExtratoLote, ExtratoItem, ContasAReceber
+from app.financeiro.models import ExtratoLote, ExtratoItem, ContasAReceber, ContasAPagar
 from app.financeiro.services.extrato_service import ExtratoService
 
 
 # =============================================================================
-# HUB PRINCIPAL
+# HUB PRINCIPAL - TELA UNIFICADA
 # =============================================================================
 
 @financeiro_bp.route('/extrato/')
 @login_required
 def extrato_hub():
-    """Hub principal de conciliação via extrato."""
-    # Filtro por journal
-    journal_filter = request.args.get('journal')
+    """
+    Tela unificada de extratos bancários.
 
-    # Estatísticas dos lotes (consultas locais - rápidas)
-    total_lotes = ExtratoLote.query.count()
-    lotes_pendentes = ExtratoLote.query.filter(
-        ExtratoLote.status.in_(['IMPORTADO', 'AGUARDANDO_APROVACAO'])
-    ).count()
+    Combina:
+    - Extratos importados (com datas De/Até calculadas)
+    - Extratos pendentes de importação (do Odoo)
+    - Estatísticas de Recebimentos E Pagamentos
+    - Filtros inteligentes
+    """
+    from sqlalchemy import func, case
 
-    # Últimos lotes
-    ultimos_lotes = ExtratoLote.query.order_by(
-        ExtratoLote.criado_em.desc()
-    ).limit(5).all()
+    # === PARÂMETROS DE FILTRO ===
+    filtro_data_de = request.args.get('data_de')
+    filtro_data_ate = request.args.get('data_ate')
+    filtro_status = request.args.get('status')
+    filtro_journal = request.args.get('journal')
+    filtro_tipo = request.args.get('tipo')  # 'entrada', 'saida' ou vazio para todos
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
 
-    # NÃO buscar statements aqui - será feito via AJAX para não travar a página
-    # Os statements serão carregados pelo endpoint /extrato/api/statements
+    # === QUERY DE LOTES COM DATAS CALCULADAS ===
+    # Subquery para calcular MIN/MAX das datas das linhas de cada lote
+    datas_subquery = db.session.query(
+        ExtratoItem.lote_id,
+        func.min(ExtratoItem.data_transacao).label('data_de'),
+        func.max(ExtratoItem.data_transacao).label('data_ate'),
+        func.count(ExtratoItem.id).label('total_itens')
+    ).group_by(ExtratoItem.lote_id).subquery()
+
+    # Query principal com JOIN
+    query = db.session.query(
+        ExtratoLote,
+        datas_subquery.c.data_de,
+        datas_subquery.c.data_ate,
+        datas_subquery.c.total_itens
+    ).outerjoin(
+        datas_subquery, ExtratoLote.id == datas_subquery.c.lote_id
+    )
+
+    # === FILTRAR POR TIPO DE TRANSAÇÃO (se especificado) ===
+    if filtro_tipo:
+        query = query.filter(ExtratoLote.tipo_transacao == filtro_tipo)
+
+    # === APLICAR FILTROS ===
+    if filtro_status:
+        query = query.filter(ExtratoLote.status == filtro_status)
+
+    if filtro_journal:
+        query = query.filter(ExtratoLote.journal_code == filtro_journal)
+
+    if filtro_data_de:
+        try:
+            data_de = datetime.strptime(filtro_data_de, '%Y-%m-%d').date()
+            query = query.filter(datas_subquery.c.data_de >= data_de)
+        except ValueError:
+            pass
+
+    if filtro_data_ate:
+        try:
+            data_ate = datetime.strptime(filtro_data_ate, '%Y-%m-%d').date()
+            query = query.filter(datas_subquery.c.data_ate <= data_ate)
+        except ValueError:
+            pass
+
+    # Ordenar por data mais recente
+    query = query.order_by(ExtratoLote.criado_em.desc())
+
+    # Paginação
+    total_lotes = query.count()
+    lotes_raw = query.offset((page - 1) * per_page).limit(per_page).all()
+
+    # Transformar resultado em lista de dicts e AGRUPAR por statement_id
+    # Isso permite mostrar recebimentos e pagamentos do mesmo statement na mesma linha
+    lotes_por_statement = {}
+    lotes_sem_statement = []  # Lotes antigos sem statement_id
+
+    for lote, data_de, data_ate, total_itens in lotes_raw:
+        item = {
+            'lote': lote,
+            'data_de': data_de,
+            'data_ate': data_ate,
+            'total_itens': total_itens or lote.total_linhas
+        }
+
+        if lote.statement_id:
+            key = lote.statement_id
+            if key not in lotes_por_statement:
+                lotes_por_statement[key] = {
+                    'statement_id': lote.statement_id,
+                    'statement_name': lote.statement_name or lote.nome,
+                    'journal_code': lote.journal_code,
+                    'data_extrato': lote.data_extrato,
+                    'entrada': None,
+                    'saida': None,
+                    'data_de': data_de,
+                    'data_ate': data_ate,
+                }
+
+            # Atualizar datas (pegar a menor data_de e maior data_ate)
+            if data_de and (not lotes_por_statement[key]['data_de'] or data_de < lotes_por_statement[key]['data_de']):
+                lotes_por_statement[key]['data_de'] = data_de
+            if data_ate and (not lotes_por_statement[key]['data_ate'] or data_ate > lotes_por_statement[key]['data_ate']):
+                lotes_por_statement[key]['data_ate'] = data_ate
+
+            # Associar ao tipo correto
+            if lote.tipo_transacao == 'entrada':
+                lotes_por_statement[key]['entrada'] = item
+            elif lote.tipo_transacao == 'saida':
+                lotes_por_statement[key]['saida'] = item
+        else:
+            # Lotes sem statement_id (legado) - mostrar individualmente
+            lotes_sem_statement.append(item)
+
+    # Converter para lista ordenada por data
+    lotes_agrupados = list(lotes_por_statement.values())
+    lotes_agrupados.sort(key=lambda x: x.get('data_extrato') or x.get('data_de') or date.min, reverse=True)
+
+    # Adicionar lotes sem statement ao final
+    lotes = lotes_agrupados + [{'entrada': item, 'saida': None, 'statement_id': None, **item} for item in lotes_sem_statement]
+
+    # === ESTATÍSTICAS DE RECEBIMENTOS (entrada) ===
+    stats_recebimentos = {
+        'total_lotes': ExtratoLote.query.filter(ExtratoLote.tipo_transacao == 'entrada').count(),
+        'lotes_pendentes': ExtratoLote.query.filter(
+            ExtratoLote.tipo_transacao == 'entrada',
+            ExtratoLote.status.in_(['IMPORTADO', 'AGUARDANDO_APROVACAO'])
+        ).count(),
+        'lotes_concluidos': ExtratoLote.query.filter(
+            ExtratoLote.tipo_transacao == 'entrada',
+            ExtratoLote.status == 'CONCLUIDO'
+        ).count(),
+        'total_linhas': db.session.query(func.sum(ExtratoLote.total_linhas)).filter(
+            ExtratoLote.tipo_transacao == 'entrada'
+        ).scalar() or 0,
+        'linhas_conciliadas': db.session.query(func.sum(ExtratoLote.linhas_conciliadas)).filter(
+            ExtratoLote.tipo_transacao == 'entrada'
+        ).scalar() or 0,
+        'valor_total': db.session.query(func.sum(ExtratoLote.valor_total)).filter(
+            ExtratoLote.tipo_transacao == 'entrada'
+        ).scalar() or 0
+    }
+
+    # === ESTATÍSTICAS DE PAGAMENTOS (saida) ===
+    stats_pagamentos = {
+        'total_lotes': ExtratoLote.query.filter(ExtratoLote.tipo_transacao == 'saida').count(),
+        'lotes_pendentes': ExtratoLote.query.filter(
+            ExtratoLote.tipo_transacao == 'saida',
+            ExtratoLote.status.in_(['IMPORTADO', 'AGUARDANDO_APROVACAO'])
+        ).count(),
+        'lotes_concluidos': ExtratoLote.query.filter(
+            ExtratoLote.tipo_transacao == 'saida',
+            ExtratoLote.status == 'CONCLUIDO'
+        ).count(),
+        'total_linhas': db.session.query(func.sum(ExtratoLote.total_linhas)).filter(
+            ExtratoLote.tipo_transacao == 'saida'
+        ).scalar() or 0,
+        'linhas_conciliadas': db.session.query(func.sum(ExtratoLote.linhas_conciliadas)).filter(
+            ExtratoLote.tipo_transacao == 'saida'
+        ).scalar() or 0,
+        'valor_total': db.session.query(func.sum(ExtratoLote.valor_total)).filter(
+            ExtratoLote.tipo_transacao == 'saida'
+        ).scalar() or 0
+    }
+
+    # === ESTATÍSTICAS GERAIS (compatibilidade) ===
+    stats = {
+        'total_lotes': stats_recebimentos['total_lotes'] + stats_pagamentos['total_lotes'],
+        'lotes_pendentes': stats_recebimentos['lotes_pendentes'] + stats_pagamentos['lotes_pendentes'],
+        'lotes_concluidos': stats_recebimentos['lotes_concluidos'] + stats_pagamentos['lotes_concluidos'],
+        'total_linhas': stats_recebimentos['total_linhas'] + stats_pagamentos['total_linhas']
+    }
+
+    # === JOURNALS DISPONÍVEIS PARA FILTRO ===
+    journals = db.session.query(
+        ExtratoLote.journal_code
+    ).filter(
+        ExtratoLote.journal_code.isnot(None)
+    ).distinct().all()
+    journals = [j[0] for j in journals if j[0]]
+
+    # Calcular paginação
+    total_pages = (total_lotes + per_page - 1) // per_page
 
     return render_template(
-        'financeiro/extrato_hub.html',
+        'financeiro/extrato_unificado.html',
+        lotes=lotes,
+        stats=stats,
+        stats_recebimentos=stats_recebimentos,
+        stats_pagamentos=stats_pagamentos,
+        journals=journals,
+        # Filtros atuais
+        filtro_data_de=filtro_data_de,
+        filtro_data_ate=filtro_data_ate,
+        filtro_status=filtro_status,
+        filtro_journal=filtro_journal,
+        filtro_tipo=filtro_tipo,
+        # Paginação
+        page=page,
+        per_page=per_page,
         total_lotes=total_lotes,
-        lotes_pendentes=lotes_pendentes,
-        ultimos_lotes=ultimos_lotes,
-        journal_filter=journal_filter
+        total_pages=total_pages
     )
 
 
@@ -67,17 +244,47 @@ def extrato_api_statements():
     """
     API para buscar statements do Odoo de forma assíncrona.
     Evita travar a página principal.
+
+    Parâmetros:
+    - journal: Filtrar por código do journal
+    - tipo: 'entrada' (recebimentos), 'saida' (pagamentos), 'ambos' (default)
     """
     journal_filter = request.args.get('journal')
+    tipo_transacao = request.args.get('tipo', 'ambos')
 
     try:
         service = ExtratoService()
-        statements = service.listar_statements_disponiveis(journal_code=journal_filter)
-        journals = service.listar_journals_disponiveis()
+
+        # Buscar statements para recebimentos
+        statements_entrada = []
+        if tipo_transacao in ['entrada', 'ambos']:
+            statements_entrada = service.listar_statements_disponiveis(
+                journal_code=journal_filter,
+                tipo_transacao='entrada'
+            )
+            for st in statements_entrada:
+                st['tipo'] = 'entrada'
+
+        # Buscar statements para pagamentos
+        statements_saida = []
+        if tipo_transacao in ['saida', 'ambos']:
+            statements_saida = service.listar_statements_disponiveis(
+                journal_code=journal_filter,
+                tipo_transacao='saida'
+            )
+            for st in statements_saida:
+                st['tipo'] = 'saida'
+
+        # Combinar e ordenar por data
+        statements = statements_entrada + statements_saida
+
+        journals = service.listar_journals_disponiveis(tipo_transacao=tipo_transacao)
 
         return jsonify({
             'success': True,
             'statements': statements,
+            'statements_entrada': statements_entrada,
+            'statements_saida': statements_saida,
             'journals': journals
         })
     except Exception as e:
@@ -85,6 +292,8 @@ def extrato_api_statements():
             'success': False,
             'error': str(e),
             'statements': [],
+            'statements_entrada': [],
+            'statements_saida': [],
             'journals': []
         })
 
@@ -96,16 +305,25 @@ def extrato_api_statements():
 @financeiro_bp.route('/extrato/importar-statement/<int:statement_id>', methods=['POST'])
 @login_required
 def extrato_importar_statement(statement_id):
-    """Importa um statement específico do Odoo."""
+    """
+    Importa um statement específico do Odoo.
+
+    Parâmetros:
+    - tipo: 'entrada' (recebimentos) ou 'saida' (pagamentos) - via form ou query
+    """
+    tipo_transacao = request.form.get('tipo') or request.args.get('tipo', 'entrada')
+
     try:
         service = ExtratoService()
         lote = service.importar_statement(
             statement_id=statement_id,
-            criado_por=current_user.nome if current_user else 'Sistema'
+            criado_por=current_user.nome if current_user else 'Sistema',
+            tipo_transacao=tipo_transacao
         )
 
+        tipo_label = 'recebimentos' if tipo_transacao == 'entrada' else 'pagamentos'
         flash(
-            f'Importação concluída: {lote.total_linhas} linhas de "{lote.statement_name}". '
+            f'Importação concluída: {lote.total_linhas} linhas de "{lote.statement_name}" ({tipo_label}). '
             f'CNPJs identificados: {service.estatisticas["com_cnpj"]}',
             'success'
         )
@@ -152,9 +370,16 @@ def extrato_importar():
 @financeiro_bp.route('/extrato/importar-multiplos', methods=['POST'])
 @login_required
 def extrato_importar_multiplos():
-    """Importa múltiplos statements de uma vez."""
+    """
+    Importa múltiplos statements de uma vez.
+
+    Parâmetros JSON:
+    - statement_ids: Lista de IDs dos statements
+    - tipo: 'entrada' (recebimentos) ou 'saida' (pagamentos)
+    """
     data = request.get_json()
     statement_ids = data.get('statement_ids', [])
+    tipo_transacao = data.get('tipo', 'entrada')
 
     if not statement_ids:
         return jsonify({'success': False, 'error': 'Nenhum statement selecionado'}), 400
@@ -177,7 +402,8 @@ def extrato_importar_multiplos():
 
                 lote = service.importar_statement(
                     statement_id=int(statement_id),
-                    criado_por=current_user.nome if current_user else 'Sistema'
+                    criado_por=current_user.nome if current_user else 'Sistema',
+                    tipo_transacao=tipo_transacao
                 )
                 importados += 1
                 total_linhas += lote.total_linhas
@@ -204,33 +430,6 @@ def extrato_importar_multiplos():
 # =============================================================================
 # LOTES
 # =============================================================================
-
-@financeiro_bp.route('/extrato/lotes')
-@login_required
-def extrato_lotes():
-    """Lista todos os lotes de extrato."""
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 20, type=int)
-
-    query = ExtratoLote.query.order_by(ExtratoLote.criado_em.desc())
-
-    # Filtros
-    status = request.args.get('status')
-    if status:
-        query = query.filter(ExtratoLote.status == status)
-
-    journal = request.args.get('journal')
-    if journal:
-        query = query.filter(ExtratoLote.journal_code == journal)
-
-    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
-
-    return render_template(
-        'financeiro/extrato_lotes.html',
-        lotes=pagination.items,
-        pagination=pagination
-    )
-
 
 @financeiro_bp.route('/extrato/lote/<int:lote_id>')
 @login_required
@@ -441,6 +640,213 @@ def extrato_lotes_detalhe():
         filtro_data_inicio=filtro_data_inicio,
         filtro_data_fim=filtro_data_fim
     )
+
+
+# =============================================================================
+# LOTE DE PAGAMENTOS (SAÍDA)
+# =============================================================================
+
+@financeiro_bp.route('/extrato/pagamentos/lote/<int:lote_id>')
+@login_required
+def extrato_lote_pagamentos_detalhe(lote_id):
+    """
+    Detalhes de um lote de PAGAMENTOS (tipo_transacao='saida').
+    Similar ao extrato_lote_detalhe mas para pagamentos, usando ContasAPagar.
+    """
+    lote = ExtratoLote.query.get_or_404(lote_id)
+
+    # Verificar se é lote de pagamentos
+    if lote.tipo_transacao != 'saida':
+        flash('Este lote não é de pagamentos', 'warning')
+        return redirect(url_for('financeiro.extrato_lote_detalhe', lote_id=lote_id))
+
+    # Parâmetros de paginação
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+
+    # Filtros para itens
+    status_match = request.args.get('status_match')
+    status = request.args.get('status')
+    filtro_cnpj = request.args.get('cnpj', '').strip()
+    filtro_data_inicio = request.args.get('data_inicio')
+    filtro_data_fim = request.args.get('data_fim')
+
+    query = ExtratoItem.query.filter_by(lote_id=lote_id)
+
+    if status_match:
+        query = query.filter(ExtratoItem.status_match == status_match)
+    if status:
+        query = query.filter(ExtratoItem.status == status)
+
+    # Filtro por CNPJ (busca parcial)
+    if filtro_cnpj:
+        from sqlalchemy import or_, func
+        cnpj_limpo = ''.join(c for c in filtro_cnpj if c.isdigit())
+        query = query.filter(
+            or_(
+                ExtratoItem.cnpj_pagador.ilike(f'%{filtro_cnpj}%'),
+                func.regexp_replace(ExtratoItem.cnpj_pagador, r'\D', '', 'g').ilike(f'%{cnpj_limpo}%')
+            )
+        )
+
+    # Filtro por data
+    if filtro_data_inicio:
+        try:
+            data_inicio = datetime.strptime(filtro_data_inicio, '%Y-%m-%d').date()
+            query = query.filter(ExtratoItem.data_transacao >= data_inicio)
+        except ValueError:
+            pass
+
+    if filtro_data_fim:
+        try:
+            data_fim = datetime.strptime(filtro_data_fim, '%Y-%m-%d').date()
+            query = query.filter(ExtratoItem.data_transacao <= data_fim)
+        except ValueError:
+            pass
+
+    # Ordenar e paginar
+    query = query.order_by(ExtratoItem.data_transacao.desc(), ExtratoItem.id)
+
+    if per_page == 0:
+        itens = query.all()
+        pagination = None
+    else:
+        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+        itens = pagination.items
+
+    # Estatísticas
+    from sqlalchemy import func, case
+    stats_query = db.session.query(
+        func.count().label('total'),
+        func.sum(case((ExtratoItem.status_match == 'MATCH_ENCONTRADO', 1), else_=0)).label('com_match'),
+        func.sum(case((ExtratoItem.status_match == 'MULTIPLOS_MATCHES', 1), else_=0)).label('multiplos'),
+        func.sum(case((ExtratoItem.status_match == 'SEM_MATCH', 1), else_=0)).label('sem_match'),
+        func.sum(case((ExtratoItem.status_match == 'PENDENTE', 1), else_=0)).label('pendentes'),
+        func.sum(case((ExtratoItem.aprovado == True, 1), else_=0)).label('aprovados'),
+        func.sum(case((ExtratoItem.status == 'CONCILIADO', 1), else_=0)).label('conciliados'),
+    ).filter(ExtratoItem.lote_id == lote_id).first()
+
+    stats = {
+        'total': lote.total_linhas or (stats_query.total if stats_query else 0),
+        'com_match': stats_query.com_match or 0 if stats_query else 0,
+        'multiplos': stats_query.multiplos or 0 if stats_query else 0,
+        'sem_match': stats_query.sem_match or 0 if stats_query else 0,
+        'pendentes': stats_query.pendentes or 0 if stats_query else 0,
+        'aprovados': stats_query.aprovados or 0 if stats_query else 0,
+        'conciliados': stats_query.conciliados or 0 if stats_query else 0,
+    }
+
+    return render_template(
+        'financeiro/extrato_lote_pagamentos_detalhe.html',
+        lote=lote,
+        itens=itens,
+        stats=stats,
+        pagination=pagination,
+        per_page=per_page,
+        filtro_cnpj=filtro_cnpj,
+        filtro_data_inicio=filtro_data_inicio,
+        filtro_data_fim=filtro_data_fim
+    )
+
+
+@financeiro_bp.route('/extrato/pagamentos/executar-matching/<int:lote_id>', methods=['POST'])
+@login_required
+def extrato_pagamentos_executar_matching(lote_id):
+    """Executa o matching de títulos a PAGAR para um lote de pagamentos."""
+    lote = ExtratoLote.query.get_or_404(lote_id)
+
+    if lote.tipo_transacao != 'saida':
+        return jsonify({
+            'success': False,
+            'error': 'Este lote não é de pagamentos'
+        }), 400
+
+    try:
+        from app.financeiro.services.pagamento_matching_service import PagamentoMatchingService
+
+        service = PagamentoMatchingService()
+        resultado = service.executar_matching_lote(lote_id)
+
+        lote.status = 'AGUARDANDO_APROVACAO'
+        lote.linhas_com_match = resultado['com_match']
+        lote.linhas_sem_match = resultado['sem_match']
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'resultado': resultado
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@financeiro_bp.route('/extrato/pagamentos/api/titulos-candidatos/<int:item_id>')
+@login_required
+def extrato_pagamentos_titulos_candidatos(item_id):
+    """
+    Busca títulos A PAGAR candidatos para um item de extrato.
+    """
+    item = ExtratoItem.query.get_or_404(item_id)
+
+    try:
+        from app.financeiro.services.pagamento_matching_service import PagamentoMatchingService
+
+        service = PagamentoMatchingService()
+        # Valor do pagamento é negativo no extrato
+        valor = abs(item.valor) if item.valor else 0
+
+        candidatos = service.buscar_titulos_candidatos(
+            cnpj=item.cnpj_pagador,
+            valor=valor,
+            data_pagamento=item.data_transacao
+        )
+
+        return jsonify({
+            'success': True,
+            'item': item.to_dict(),
+            'candidatos': candidatos
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@financeiro_bp.route('/extrato/pagamentos/api/selecionar-titulo', methods=['POST'])
+@login_required
+def extrato_pagamentos_selecionar_titulo():
+    """Seleciona manualmente um título A PAGAR para um item de extrato."""
+    data = request.get_json()
+    item_id = data.get('item_id')
+    titulo_id = data.get('titulo_id')
+
+    if not item_id or not titulo_id:
+        return jsonify({'success': False, 'error': 'item_id e titulo_id são obrigatórios'}), 400
+
+    item = ExtratoItem.query.get_or_404(item_id)
+
+    try:
+        from app.financeiro.services.pagamento_matching_service import PagamentoMatchingService
+
+        service = PagamentoMatchingService()
+        service.vincular_titulo_manual(item, titulo_id)
+
+        return jsonify({
+            'success': True,
+            'message': f'Título {titulo_id} vinculado ao item {item_id}'
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 
 # =============================================================================

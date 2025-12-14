@@ -1,0 +1,466 @@
+{% extends "base.html" %}
+
+{% block title %}Lote de Pagamentos #{{ lote.id }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1">
+                <i class="bi bi-cash-stack text-danger me-2"></i>
+                {{ lote.nome }}
+            </h4>
+            <p class="text-muted mb-0">
+                <span class="badge bg-secondary me-2">{{ lote.journal_code }}</span>
+                {{ lote.data_inicio.strftime('%d/%m/%Y') if lote.data_inicio else '' }}
+                {% if lote.data_fim and lote.data_fim != lote.data_inicio %}
+                    a {{ lote.data_fim.strftime('%d/%m/%Y') }}
+                {% endif %}
+            </p>
+        </div>
+        <div>
+            <a href="{{ url_for('financeiro.pagamentos_baixas_hub') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-1"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    <!-- Cards de Estatísticas -->
+    <div class="row mb-4">
+        <div class="col-md-2">
+            <div class="card bg-light">
+                <div class="card-body py-2 text-center">
+                    <div class="h4 mb-0">{{ stats.total or 0 }}</div>
+                    <small class="text-muted">Total</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-success bg-opacity-10 border-success">
+                <div class="card-body py-2 text-center">
+                    <div class="h4 mb-0 text-success">{{ stats.com_match or 0 }}</div>
+                    <small class="text-muted">Com Match</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-warning bg-opacity-10 border-warning">
+                <div class="card-body py-2 text-center">
+                    <div class="h4 mb-0 text-warning">{{ stats.multiplos or 0 }}</div>
+                    <small class="text-muted">Múltiplos</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-secondary bg-opacity-10">
+                <div class="card-body py-2 text-center">
+                    <div class="h4 mb-0 text-secondary">{{ stats.sem_match or 0 }}</div>
+                    <small class="text-muted">Sem Match</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-primary bg-opacity-10 border-primary">
+                <div class="card-body py-2 text-center">
+                    <div class="h4 mb-0 text-primary">{{ stats.aprovados or 0 }}</div>
+                    <small class="text-muted">Aprovados</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-info bg-opacity-10 border-info">
+                <div class="card-body py-2 text-center">
+                    <div class="h4 mb-0 text-info">{{ stats.processados or 0 }}</div>
+                    <small class="text-muted">Processados</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ações -->
+    <div class="card mb-4">
+        <div class="card-body py-2">
+            <div class="d-flex gap-2 flex-wrap">
+                <!-- Matching -->
+                {% if lote.status in ['IMPORTADO', 'AGUARDANDO_APROVACAO'] %}
+                <button type="button" class="btn btn-outline-primary" onclick="executarMatching()">
+                    <i class="bi bi-search me-1"></i> Executar Matching
+                </button>
+                {% endif %}
+
+                <!-- Aprovar Todos -->
+                {% if stats.com_match and stats.com_match > stats.aprovados %}
+                <button type="button" class="btn btn-outline-success" onclick="aprovarTodos()">
+                    <i class="bi bi-check-all me-1"></i> Aprovar Todos ({{ stats.com_match - (stats.aprovados or 0) }})
+                </button>
+                {% endif %}
+
+                <!-- Processar -->
+                {% if stats.aprovados and stats.aprovados > stats.processados %}
+                <button type="button" class="btn btn-primary" onclick="processarLote()">
+                    <i class="bi bi-play-fill me-1"></i> Processar ({{ stats.aprovados - (stats.processados or 0) }})
+                </button>
+                {% endif %}
+
+                <div class="ms-auto">
+                    <span class="text-muted">
+                        Valor Total: <strong class="text-danger">R$ {{ '{:,.2f}'.format(lote.valor_total or 0) }}</strong>
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body py-2">
+            <form method="GET" class="row g-2 align-items-center">
+                <div class="col-auto">
+                    <label class="col-form-label">Match:</label>
+                </div>
+                <div class="col-auto">
+                    <select name="status_match" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="">Todos</option>
+                        <option value="MATCH_ENCONTRADO" {% if status_match_filtro == 'MATCH_ENCONTRADO' %}selected{% endif %}>Com Match</option>
+                        <option value="MULTIPLOS_MATCHES" {% if status_match_filtro == 'MULTIPLOS_MATCHES' %}selected{% endif %}>Múltiplos</option>
+                        <option value="SEM_MATCH" {% if status_match_filtro == 'SEM_MATCH' %}selected{% endif %}>Sem Match</option>
+                        <option value="PENDENTE" {% if status_match_filtro == 'PENDENTE' %}selected{% endif %}>Pendente</option>
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <label class="col-form-label">Status:</label>
+                </div>
+                <div class="col-auto">
+                    <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="">Todos</option>
+                        <option value="PENDENTE" {% if status_filtro == 'PENDENTE' %}selected{% endif %}>Pendente</option>
+                        <option value="APROVADO" {% if status_filtro == 'APROVADO' %}selected{% endif %}>Aprovado</option>
+                        <option value="SUCESSO" {% if status_filtro == 'SUCESSO' %}selected{% endif %}>Sucesso</option>
+                        <option value="ERRO" {% if status_filtro == 'ERRO' %}selected{% endif %}>Erro</option>
+                    </select>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Lista de Itens -->
+    <div class="card">
+        <div class="card-body p-0">
+            {% if itens.items %}
+            <div class="table-responsive">
+                <table class="table table-hover table-sm mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 40px;"></th>
+                            <th>Data</th>
+                            <th>Beneficiário</th>
+                            <th>CNPJ</th>
+                            <th class="text-end">Valor Extrato</th>
+                            <th>Match</th>
+                            <th>Título Vinculado</th>
+                            <th class="text-end">Valor Título</th>
+                            <th class="text-center">Status</th>
+                            <th class="text-end">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in itens.items %}
+                        <tr id="item-{{ item.id }}" class="{% if item.status == 'SUCESSO' %}table-success{% elif item.status == 'ERRO' %}table-danger{% endif %}">
+                            <td>
+                                {% if item.status_match == 'MATCH_ENCONTRADO' and not item.aprovado %}
+                                <input type="checkbox" class="form-check-input item-check" value="{{ item.id }}">
+                                {% elif item.aprovado %}
+                                <i class="bi bi-check-circle-fill text-success"></i>
+                                {% endif %}
+                            </td>
+                            <td>{{ item.data_transacao.strftime('%d/%m') if item.data_transacao else '-' }}</td>
+                            <td>
+                                <span title="{{ item.nome_beneficiario or '-' }}">
+                                    {{ (item.nome_beneficiario or '-')[:25] }}{% if item.nome_beneficiario and item.nome_beneficiario|length > 25 %}...{% endif %}
+                                </span>
+                                <br>
+                                <small class="text-muted">{{ item.tipo_transacao or '' }}</small>
+                            </td>
+                            <td>
+                                <small>{{ item.cnpj_beneficiario or '-' }}</small>
+                            </td>
+                            <td class="text-end fw-bold text-danger">
+                                R$ {{ '{:,.2f}'.format(item.valor or 0) }}
+                            </td>
+                            <td>
+                                <span class="badge
+                                    {% if item.status_match == 'MATCH_ENCONTRADO' %}bg-success
+                                    {% elif item.status_match == 'MULTIPLOS_MATCHES' %}bg-warning text-dark
+                                    {% elif item.status_match == 'SEM_MATCH' %}bg-secondary
+                                    {% else %}bg-light text-dark{% endif %}">
+                                    {% if item.match_score %}{{ item.match_score }}%{% endif %}
+                                    {{ item.status_match }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if item.titulo_id %}
+                                <span class="text-primary">
+                                    NF {{ item.titulo_nf }} P{{ item.titulo_parcela }}
+                                </span>
+                                <br>
+                                <small class="text-muted">{{ (item.partner_name or '')[:20] }}</small>
+                                {% elif item.status_match == 'MULTIPLOS_MATCHES' %}
+                                <button class="btn btn-sm btn-outline-warning" onclick="mostrarCandidatos({{ item.id }})">
+                                    <i class="bi bi-list-ul"></i> Ver Candidatos
+                                </button>
+                                {% else %}
+                                <button class="btn btn-sm btn-outline-secondary" onclick="buscarTitulo({{ item.id }}, '{{ item.cnpj_beneficiario }}', {{ item.valor }})">
+                                    <i class="bi bi-search"></i> Buscar
+                                </button>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                {% if item.titulo_valor %}
+                                R$ {{ '{:,.2f}'.format(item.titulo_valor) }}
+                                {% if item.titulo_vencimento %}
+                                <br><small class="text-muted">Venc: {{ item.titulo_vencimento.strftime('%d/%m') }}</small>
+                                {% endif %}
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <span class="badge
+                                    {% if item.status == 'SUCESSO' %}bg-success
+                                    {% elif item.status == 'ERRO' %}bg-danger
+                                    {% elif item.status == 'APROVADO' %}bg-primary
+                                    {% elif item.status == 'PROCESSANDO' %}bg-info
+                                    {% else %}bg-secondary{% endif %}">
+                                    {{ item.status }}
+                                </span>
+                                {% if item.payment_name %}
+                                <br><small class="text-success">{{ item.payment_name }}</small>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                {% if item.titulo_id and not item.aprovado %}
+                                <button class="btn btn-sm btn-success" onclick="aprovarItem({{ item.id }})" title="Aprovar">
+                                    <i class="bi bi-check"></i>
+                                </button>
+                                {% endif %}
+                                {% if item.aprovado and item.status == 'APROVADO' %}
+                                <button class="btn btn-sm btn-primary" onclick="processarItem({{ item.id }})" title="Processar">
+                                    <i class="bi bi-play-fill"></i>
+                                </button>
+                                {% endif %}
+                                {% if item.mensagem %}
+                                <button class="btn btn-sm btn-outline-danger" title="{{ item.mensagem }}">
+                                    <i class="bi bi-exclamation-triangle"></i>
+                                </button>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginação -->
+            {% if itens.pages > 1 %}
+            <div class="card-footer">
+                <nav>
+                    <ul class="pagination pagination-sm mb-0 justify-content-center">
+                        {% for page_num in itens.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                            {% if page_num %}
+                                <li class="page-item {% if page_num == itens.page %}active{% endif %}">
+                                    <a class="page-link" href="{{ url_for('financeiro.pagamentos_baixas_lote_detalhe', lote_id=lote.id, page=page_num, status_match=status_match_filtro, status=status_filtro) }}">
+                                        {{ page_num }}
+                                    </a>
+                                </li>
+                            {% else %}
+                                <li class="page-item disabled"><span class="page-link">...</span></li>
+                            {% endif %}
+                        {% endfor %}
+                    </ul>
+                </nav>
+            </div>
+            {% endif %}
+
+            {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
+                <p class="text-muted mt-3">Nenhum item encontrado com os filtros selecionados.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal Buscar Título -->
+<div class="modal fade" id="modalBuscarTitulo" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Buscar Título</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Buscar por NF:</label>
+                        <input type="text" id="busca-nf" class="form-control" placeholder="Número da NF">
+                    </div>
+                    <div class="col-md-6">
+                        <button type="button" class="btn btn-primary mt-4" onclick="buscarTitulosPorNF()">
+                            <i class="bi bi-search"></i> Buscar
+                        </button>
+                    </div>
+                </div>
+                <div id="resultado-busca"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const loteId = {{ lote.id }};
+let itemSelecionado = null;
+
+function executarMatching() {
+    if (!confirm('Executar matching automático para todos os itens pendentes?')) return;
+
+    fetch(`/financeiro/contas-pagar/baixas/executar-matching/${loteId}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('Erro: ' + data.message);
+        }
+    });
+}
+
+function aprovarTodos() {
+    if (!confirm('Aprovar todos os itens com match encontrado?')) return;
+
+    fetch(`/financeiro/contas-pagar/baixas/api/aprovar-todos/${loteId}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('Erro: ' + data.message);
+        }
+    });
+}
+
+function processarLote() {
+    if (!confirm('Processar todos os itens aprovados? Isso criará pagamentos no Odoo.')) return;
+
+    fetch(`/financeiro/contas-pagar/baixas/processar/${loteId}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('Erro: ' + data.message);
+        }
+    });
+}
+
+function aprovarItem(itemId) {
+    fetch('/financeiro/contas-pagar/baixas/api/aprovar-item', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({item_id: itemId, aprovar: true})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Erro: ' + data.message);
+        }
+    });
+}
+
+function processarItem(itemId) {
+    if (!confirm('Processar este item? Isso criará um pagamento no Odoo.')) return;
+
+    fetch(`/financeiro/contas-pagar/baixas/api/processar-item/${itemId}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('Erro: ' + data.message);
+        }
+    });
+}
+
+function buscarTitulo(itemId, cnpj, valor) {
+    itemSelecionado = itemId;
+    document.getElementById('busca-nf').value = '';
+    document.getElementById('resultado-busca').innerHTML = '';
+    new bootstrap.Modal(document.getElementById('modalBuscarTitulo')).show();
+}
+
+function buscarTitulosPorNF() {
+    const nf = document.getElementById('busca-nf').value;
+    if (!nf) return;
+
+    fetch(`/financeiro/contas-pagar/baixas/api/buscar-titulos?nf=${nf}`)
+    .then(r => r.json())
+    .then(data => {
+        if (data.success && data.titulos.length > 0) {
+            let html = '<table class="table table-sm table-hover"><thead><tr><th>NF</th><th>Parcela</th><th>Valor</th><th>Vencimento</th><th>Fornecedor</th><th></th></tr></thead><tbody>';
+            data.titulos.forEach(t => {
+                html += `<tr>
+                    <td>${t.nf}</td>
+                    <td>${t.parcela}</td>
+                    <td>R$ ${t.valor?.toFixed(2)}</td>
+                    <td>${t.vencimento}</td>
+                    <td>${t.partner_name || '-'}</td>
+                    <td><button class="btn btn-sm btn-success" onclick="vincularTitulo(${t.titulo_id})">Vincular</button></td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            document.getElementById('resultado-busca').innerHTML = html;
+        } else {
+            document.getElementById('resultado-busca').innerHTML = '<div class="alert alert-warning">Nenhum título encontrado</div>';
+        }
+    });
+}
+
+function vincularTitulo(tituloId) {
+    fetch('/financeiro/contas-pagar/baixas/api/vincular-titulo', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({item_id: itemSelecionado, titulo_id: tituloId})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Erro: ' + data.message);
+        }
+    });
+}
+
+function mostrarCandidatos(itemId) {
+    // Implementar modal com candidatos
+    alert('Funcionalidade em desenvolvimento');
+}
+</script>
+{% endblock %}

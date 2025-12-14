@@ -8,12 +8,14 @@ Estrutura:
 - pendencias.py          - Pendências antigas (importação, consulta, etc)
 - contas_receber.py      - Hub, listagem, exportação, sincronização
 - contas_receber_api.py  - APIs de CRUD (detalhes, obs, alerta, confirmação, ação)
+- contas_pagar.py        - Hub, listagem, sincronização de contas a pagar (NEW)
 - abatimentos.py         - APIs de abatimentos + listagem geral
 - tipos.py               - CRUD de tipos
 - liberacao.py           - CRUD de liberação antecipação
 - pendencias_modal.py    - APIs do modal de pendência financeira
 - baixas.py              - Baixa de títulos via Excel (NEW)
 - extrato.py             - Conciliação via extrato bancário (NEW)
+- pagamentos_baixas.py   - Baixa de pagamentos via extrato (NEW)
 """
 
 import os
@@ -38,3 +40,5 @@ from app.financeiro.routes import pendencias_modal
 from app.financeiro.routes import baixas
 from app.financeiro.routes import extrato
 from app.financeiro.routes import correcao_datas
+from app.financeiro.routes import pagamentos_baixas
+from app.financeiro.routes import contas_pagar

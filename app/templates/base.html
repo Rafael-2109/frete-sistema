@@ -306,6 +306,9 @@
               <li><a class="dropdown-item" href="{{ url_for('financeiro.contas_receber_hub') }}">
                   <i class="fas fa-file-invoice-dollar text-success"></i> Contas a Receber
                 </a></li>
+              <li><a class="dropdown-item" href="{{ url_for('financeiro.contas_pagar_hub') }}">
+                  <i class="fas fa-file-invoice-dollar text-danger"></i> Contas a Pagar
+                </a></li>
               {% endif %}
               {#<!--/***
             <li><hr class="dropdown-divider"></li>
@@ -626,7 +629,7 @@
   </nav>
   {% endif %}
 
-  <div class="container mt-3">
+  <div class="container">
     {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
     {% for category, message in messages %}

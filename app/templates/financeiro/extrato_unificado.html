@@ -1,0 +1,504 @@
+{% extends "base.html" %}
+
+{% block title %}Extratos Bancários - Financeiro{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/financeiro/extrato.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/financeiro/premium-effects.css') }}">
+{% endblock %}
+
+{% block content %}
+<!-- Aurora Background Effect -->
+<div class="aurora-bg"></div>
+
+<div class="extrato-container premium grain-overlay">
+    <!-- ================================================================== -->
+    <!-- HEADER -->
+    <!-- ================================================================== -->
+    <header class="extrato-header reveal">
+        <div>
+            <h1 class="extrato-header__title text-gradient-animated">
+                <i class="fas fa-university text-glow"></i>
+                Extratos Bancários
+            </h1>
+            <p class="extrato-header__subtitle">
+                Gerencie importações e conciliações de extratos do Odoo
+            </p>
+        </div>
+        <div class="extrato-header__actions">
+            <button class="theme-toggle" onclick="toggleTheme()" title="Alternar tema">
+                <i class="fas fa-sun theme-toggle__icon theme-toggle__icon--light"></i>
+                <i class="fas fa-moon theme-toggle__icon theme-toggle__icon--dark"></i>
+            </button>
+            <a href="{{ url_for('financeiro.contas_receber_hub') }}" class="btn-ext btn-ext--success btn-ext--sm btn-shine shadow-glow--success" title="Ir para Contas a Receber">
+                <i class="fas fa-arrow-down icon-morph"></i>
+                Recebimentos
+            </a>
+            <a href="{{ url_for('financeiro.contas_pagar_hub') }}" class="btn-ext btn-ext--danger btn-ext--sm btn-shine shadow-glow--danger" title="Ir para Contas a Pagar">
+                <i class="fas fa-arrow-up icon-morph"></i>
+                Pagamentos
+            </a>
+        </div>
+    </header>
+
+    <!-- ================================================================== -->
+    <!-- STATS CARDS - LINHA ÚNICA OTIMIZADA -->
+    <!-- ================================================================== -->
+    <div class="fin-stats-unified stagger-children">
+        <!-- RECEBIMENTOS (3 cards) -->
+        <div class="fin-stat-unified fin-stat-unified--rec spotlight">
+            <div class="fin-stat-unified__header">
+                <i class="fas fa-arrow-down fin-stat-unified__icon fin-stat-unified__icon--rec"></i>
+                <span class="fin-stat-unified__label fin-stat-unified__label--rec">Recebimentos</span>
+            </div>
+            <div class="fin-stat-unified__value fin-stat-unified__value--compact">{{ stats_recebimentos.total_lotes }}</div>
+            <div class="fin-stat-unified__title">Lotes</div>
+            <div class="fin-stat-unified__detail">
+                <small class="fin-stat-unified__detail-text">{{ stats_recebimentos.total_linhas }} linhas</small>
+            </div>
+        </div>
+        <div class="fin-stat-unified spotlight">
+            <div class="fin-stat-unified__value fin-stat-unified__value--compact">{{ stats_recebimentos.lotes_pendentes }}</div>
+            <div class="fin-stat-unified__title">Pend. Concil.</div>
+            <div class="fin-stat-unified__detail">
+                {% set pct_rec = ((stats_recebimentos.linhas_conciliadas or 0) / (stats_recebimentos.total_linhas or 1) * 100)|int %}
+                <small class="fin-stat-unified__detail-text">{{ pct_rec }}% concil.</small>
+            </div>
+        </div>
+        <div class="fin-stat-unified spotlight">
+            <div class="fin-stat-unified__value fin-stat-unified__value--compact" id="statPendentesRecebimentos">
+                <i class="fas fa-spinner fa-spin"></i>
+            </div>
+            <div class="fin-stat-unified__title">No Odoo</div>
+        </div>
+
+        <!-- PAGAMENTOS (3 cards) -->
+        <div class="fin-stat-unified fin-stat-unified--pag spotlight">
+            <div class="fin-stat-unified__header">
+                <i class="fas fa-arrow-up fin-stat-unified__icon fin-stat-unified__icon--pag"></i>
+                <span class="fin-stat-unified__label fin-stat-unified__label--pag">Pagamentos</span>
+            </div>
+            <div class="fin-stat-unified__value fin-stat-unified__value--compact">{{ stats_pagamentos.total_lotes }}</div>
+            <div class="fin-stat-unified__title">Lotes</div>
+            <div class="fin-stat-unified__detail">
+                <small class="fin-stat-unified__detail-text">{{ stats_pagamentos.total_linhas }} linhas</small>
+            </div>
+        </div>
+        <div class="fin-stat-unified spotlight">
+            <div class="fin-stat-unified__value fin-stat-unified__value--compact">{{ stats_pagamentos.lotes_pendentes }}</div>
+            <div class="fin-stat-unified__title">Pend. Concil.</div>
+            <div class="fin-stat-unified__detail">
+                {% set pct_pag = ((stats_pagamentos.linhas_conciliadas or 0) / (stats_pagamentos.total_linhas or 1) * 100)|int %}
+                <small class="fin-stat-unified__detail-text">{{ pct_pag }}% concil.</small>
+            </div>
+        </div>
+        <div class="fin-stat-unified spotlight">
+            <div class="fin-stat-unified__value fin-stat-unified__value--compact" id="statPendentesPagamentos">
+                <i class="fas fa-spinner fa-spin"></i>
+            </div>
+            <div class="fin-stat-unified__title">No Odoo</div>
+        </div>
+    </div>
+
+    <!-- ================================================================== -->
+    <!-- FILTROS -->
+    <!-- ================================================================== -->
+    <div class="extrato-filters reveal">
+        <div class="extrato-filters__header">
+            <div class="extrato-filters__title">
+                <i class="fas fa-filter"></i>
+                Filtros
+            </div>
+        </div>
+
+        <!-- Quick Filters - Status -->
+        <div class="quick-filters">
+            <button class="quick-filter {% if not filtro_status %}active{% endif %}" data-status="all">
+                Todos
+            </button>
+            <button class="quick-filter {% if filtro_status == 'IMPORTADO' %}active{% endif %}" data-status="IMPORTADO">
+                <i class="fas fa-download"></i> Importado
+            </button>
+            <button class="quick-filter {% if filtro_status == 'AGUARDANDO_APROVACAO' %}active{% endif %}" data-status="AGUARDANDO_APROVACAO">
+                <i class="fas fa-hourglass-half"></i> Aguardando
+            </button>
+            <button class="quick-filter {% if filtro_status == 'CONCILIANDO' %}active{% endif %}" data-status="CONCILIANDO">
+                <i class="fas fa-sync"></i> Conciliando
+            </button>
+            <button class="quick-filter {% if filtro_status == 'CONCLUIDO' %}active{% endif %}" data-status="CONCLUIDO">
+                <i class="fas fa-check"></i> Concluído
+            </button>
+        </div>
+
+        <form id="filterForm" class="extrato-filters__grid">
+            <div class="filter-group">
+                <label class="filter-group__label" for="filterDataDe">Período De</label>
+                <input type="date" id="filterDataDe" class="filter-group__input"
+                       value="{{ filtro_data_de or '' }}">
+            </div>
+            <div class="filter-group">
+                <label class="filter-group__label" for="filterDataAte">Período Até</label>
+                <input type="date" id="filterDataAte" class="filter-group__input"
+                       value="{{ filtro_data_ate or '' }}">
+            </div>
+            <div class="filter-group">
+                <label class="filter-group__label" for="filterJournal">Journal</label>
+                <select id="filterJournal" class="filter-group__input filter-group__select">
+                    <option value="">Todos</option>
+                    {% for journal in journals %}
+                    <option value="{{ journal }}" {% if filtro_journal == journal %}selected{% endif %}>
+                        {{ journal }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-group">
+                <label class="filter-group__label" for="filterStatus">Status</label>
+                <select id="filterStatus" class="filter-group__input filter-group__select">
+                    <option value="">Todos</option>
+                    <option value="IMPORTADO" {% if filtro_status == 'IMPORTADO' %}selected{% endif %}>Importado</option>
+                    <option value="AGUARDANDO_APROVACAO" {% if filtro_status == 'AGUARDANDO_APROVACAO' %}selected{% endif %}>Aguardando</option>
+                    <option value="CONCILIANDO" {% if filtro_status == 'CONCILIANDO' %}selected{% endif %}>Conciliando</option>
+                    <option value="CONCLUIDO" {% if filtro_status == 'CONCLUIDO' %}selected{% endif %}>Concluído</option>
+                </select>
+            </div>
+            <div class="extrato-filters__actions">
+                <button type="button" class="btn-ext btn-ext--ghost" onclick="clearFilters()">
+                    <i class="fas fa-times"></i>
+                    Limpar
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- ================================================================== -->
+    <!-- SEÇÃO: EXTRATOS IMPORTADOS -->
+    <!-- ================================================================== -->
+    <section class="extrato-section reveal" id="lotesSection">
+        <div class="extrato-section__header">
+            <h2 class="extrato-section__title">
+                <i class="fas fa-folder-open"></i>
+                Extratos Importados
+                <span class="extrato-section__badge">{{ total_lotes }}</span>
+            </h2>
+            <i class="fas fa-chevron-down extrato-section__toggle"></i>
+        </div>
+
+        <div class="extrato-section__content">
+            <div class="extrato-table-wrapper">
+                <table class="extrato-table">
+                    <thead>
+                        <tr>
+                            <th rowspan="2" class="fin-th-checkbox">
+                                <label class="fin-sr-only" for="selectAllLotes">Selecionar todos os lotes</label>
+                                <input type="checkbox" id="selectAllLotes" class="extrato-checkbox"
+                                       title="Selecionar todos">
+                            </th>
+                            <th rowspan="2">Extrato / Journal</th>
+                            <th rowspan="2">Período</th>
+                            <th colspan="2" class="fin-th-macro fin-th-macro--rec">
+                                <i class="fas fa-arrow-down"></i> RECEBIMENTO
+                            </th>
+                            <th colspan="2" class="fin-th-macro fin-th-macro--pag">
+                                <i class="fas fa-arrow-up"></i> PAGAMENTO
+                            </th>
+                            <th rowspan="2" class="fin-th-actions"></th>
+                        </tr>
+                        <tr>
+                            <th class="fin-th-sub">Linhas / Progresso</th>
+                            <th class="fin-th-sub">Valor</th>
+                            <th class="fin-th-sub">Linhas / Progresso</th>
+                            <th class="fin-th-sub">Valor</th>
+                        </tr>
+                    </thead>
+                    <tbody id="lotesTableBody">
+                        {% if lotes %}
+                            {% for item in lotes %}
+                            {# Dados agrupados por statement_id #}
+                            {% set entrada = item.entrada %}
+                            {% set saida = item.saida %}
+                            {% set lote_rec = entrada.lote if entrada else None %}
+                            {% set lote_pag = saida.lote if saida else None %}
+                            {% set lote_principal = lote_rec or lote_pag %}
+                            <tr data-statement-id="{{ item.statement_id }}"
+                                data-lote-rec="{{ lote_rec.id if lote_rec else '' }}"
+                                data-lote-pag="{{ lote_pag.id if lote_pag else '' }}">
+                                <td>
+                                    <label class="fin-sr-only" for="stmt-{{ item.statement_id or lote_principal.id }}">Selecionar extrato</label>
+                                    <input type="checkbox" id="stmt-{{ item.statement_id or lote_principal.id }}"
+                                           class="extrato-checkbox lote-checkbox"
+                                           value="{{ lote_rec.id if lote_rec else '' }},{{ lote_pag.id if lote_pag else '' }}"
+                                           data-lote-rec="{{ lote_rec.id if lote_rec else '' }}"
+                                           data-lote-pag="{{ lote_pag.id if lote_pag else '' }}"
+                                           onchange="toggleLoteAgrupado(this)">
+                                </td>
+                                <td>
+                                    <div class="extrato-link">
+                                        {{ item.statement_name[:35] if item.statement_name else (lote_principal.nome[:35] if lote_principal else '-') }}{% if (item.statement_name or lote_principal.nome)|length > 35 %}...{% endif %}
+                                    </div>
+                                    <span class="journal-badge">{{ item.journal_code or (lote_principal.journal_code if lote_principal else 'N/A') }}</span>
+                                    {% if item.statement_id %}
+                                    <small class="text-muted mono">ST#{{ item.statement_id }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="fin-periodo">
+                                        <div class="fin-periodo__row">
+                                            <span class="fin-periodo__label">De:</span>
+                                            <span class="fin-periodo__value">{{ item.data_de.strftime('%d/%m/%y') if item.data_de else '-' }}</span>
+                                        </div>
+                                        <div class="fin-periodo__row">
+                                            <span class="fin-periodo__label">Até:</span>
+                                            <span class="fin-periodo__value fin-periodo__value--sub">{{ item.data_ate.strftime('%d/%m/%y') if item.data_ate else '-' }}</span>
+                                        </div>
+                                    </div>
+                                </td>
+                                <!-- RECEBIMENTO -->
+                                <td class="fin-td-macro fin-td-macro--rec">
+                                    {% if lote_rec %}
+                                        {% set total = lote_rec.total_linhas or 1 %}
+                                        {% set conciliados = lote_rec.linhas_conciliadas or 0 %}
+                                        {% set percent = ((conciliados / total) * 100)|int if total > 0 else 0 %}
+                                        <div class="fin-cell-stacked">
+                                            <span class="fin-cell-stacked__main">{{ entrada.total_itens or lote_rec.total_linhas }} linhas</span>
+                                            <div class="fin-progress-inline">
+                                                <div class="fin-progress-inline__bar">
+                                                    <div class="fin-progress-inline__fill" style="width: {{ percent }}%;"></div>
+                                                </div>
+                                                <span class="fin-progress-inline__text">{{ percent }}%</span>
+                                            </div>
+                                        </div>
+                                    {% else %}
+                                        <span class="fin-na">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="fin-td-macro">
+                                    {% if lote_rec %}
+                                        <button class="fin-valor-btn fin-valor-btn--rec"
+                                                onclick="window.location='{{ url_for('financeiro.extrato_lote_detalhe', lote_id=lote_rec.id) }}'">
+                                            R$ {{ "{:,.0f}".format(lote_rec.valor_total or 0).replace(',', '.') }}
+                                            <i class="fas fa-chevron-right fin-valor-btn__icon"></i>
+                                        </button>
+                                    {% else %}
+                                        <span class="fin-na">-</span>
+                                    {% endif %}
+                                </td>
+                                <!-- PAGAMENTO -->
+                                <td class="fin-td-macro fin-td-macro--pag">
+                                    {% if lote_pag %}
+                                        {% set total = lote_pag.total_linhas or 1 %}
+                                        {% set conciliados = lote_pag.linhas_conciliadas or 0 %}
+                                        {% set percent = ((conciliados / total) * 100)|int if total > 0 else 0 %}
+                                        <div class="fin-cell-stacked">
+                                            <span class="fin-cell-stacked__main">{{ saida.total_itens or lote_pag.total_linhas }} linhas</span>
+                                            <div class="fin-progress-inline">
+                                                <div class="fin-progress-inline__bar">
+                                                    <div class="fin-progress-inline__fill fin-progress-inline__fill--pag" style="width: {{ percent }}%;"></div>
+                                                </div>
+                                                <span class="fin-progress-inline__text">{{ percent }}%</span>
+                                            </div>
+                                        </div>
+                                    {% else %}
+                                        <span class="fin-na">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="fin-td-macro">
+                                    {% if lote_pag %}
+                                        <button class="fin-valor-btn fin-valor-btn--pag"
+                                                onclick="window.location='{{ url_for('financeiro.extrato_lote_pagamentos_detalhe', lote_id=lote_pag.id) }}'">
+                                            R$ {{ "{:,.0f}".format((lote_pag.valor_total or 0)|abs).replace(',', '.') }}
+                                            <i class="fas fa-chevron-right fin-valor-btn__icon"></i>
+                                        </button>
+                                    {% else %}
+                                        <span class="fin-na">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if lote_rec and lote_pag %}
+                                    <div class="btn-group-vertical">
+                                        <a href="{{ url_for('financeiro.extrato_lote_detalhe', lote_id=lote_rec.id) }}"
+                                           class="btn-ext btn-ext--ghost btn-ext--icon btn-ext--xs"
+                                           data-tooltip="Ver Recebimentos">
+                                            <i class="fas fa-arrow-down" style="color: var(--fin-accent-success);"></i>
+                                        </a>
+                                        <a href="{{ url_for('financeiro.extrato_lote_pagamentos_detalhe', lote_id=lote_pag.id) }}"
+                                           class="btn-ext btn-ext--ghost btn-ext--icon btn-ext--xs"
+                                           data-tooltip="Ver Pagamentos">
+                                            <i class="fas fa-arrow-up" style="color: var(--fin-accent-danger);"></i>
+                                        </a>
+                                    </div>
+                                    {% elif lote_rec %}
+                                    <a href="{{ url_for('financeiro.extrato_lote_detalhe', lote_id=lote_rec.id) }}"
+                                       class="btn-ext btn-ext--ghost btn-ext--icon btn-ext--sm"
+                                       data-tooltip="Ver detalhes">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    {% elif lote_pag %}
+                                    <a href="{{ url_for('financeiro.extrato_lote_pagamentos_detalhe', lote_id=lote_pag.id) }}"
+                                       class="btn-ext btn-ext--ghost btn-ext--icon btn-ext--sm"
+                                       data-tooltip="Ver detalhes">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="8">
+                                    <div class="extrato-empty">
+                                        <div class="extrato-empty__icon">
+                                            <i class="fas fa-inbox"></i>
+                                        </div>
+                                        <div class="extrato-empty__title">Nenhum extrato encontrado</div>
+                                        <div class="extrato-empty__text">
+                                            Importe extratos do Odoo na seção abaixo
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginação -->
+            {% if total_pages > 1 %}
+            <div class="extrato-pagination">
+                <div class="extrato-pagination__info">
+                    Mostrando <strong>{{ ((page - 1) * per_page) + 1 }}</strong> a
+                    <strong>{{ [page * per_page, total_lotes]|min }}</strong> de
+                    <strong>{{ total_lotes }}</strong> extratos
+
+                    <label class="fin-sr-only" for="perPageSelect">Itens por página</label>
+                    <select id="perPageSelect" class="filter-group__input fin-filter-inline">
+                        <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
+                        <option value="20" {% if per_page == 20 %}selected{% endif %}>20</option>
+                        <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+                        <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+                    </select>
+                    por página
+                </div>
+                <nav class="extrato-pagination__nav" aria-label="Paginação de extratos">
+                    {% if page > 1 %}
+                    <a href="{{ url_for('financeiro.extrato_hub', page=page-1, data_de=filtro_data_de, data_ate=filtro_data_ate, status=filtro_status, journal=filtro_journal, per_page=per_page) }}"
+                       class="extrato-pagination__btn" aria-label="Página anterior">
+                        <i class="fas fa-chevron-left"></i>
+                    </a>
+                    {% else %}
+                    <button class="extrato-pagination__btn" disabled aria-label="Página anterior">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    {% endif %}
+
+                    {% for p in range(1, total_pages + 1) %}
+                        {% if p == page %}
+                            <span class="extrato-pagination__btn active" aria-current="page">{{ p }}</span>
+                        {% elif p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
+                            <a href="{{ url_for('financeiro.extrato_hub', page=p, data_de=filtro_data_de, data_ate=filtro_data_ate, status=filtro_status, journal=filtro_journal, per_page=per_page) }}"
+                               class="extrato-pagination__btn" aria-label="Página {{ p }}">{{ p }}</a>
+                        {% elif p == page - 3 or p == page + 3 %}
+                            <span class="extrato-pagination__btn fin-pagination__ellipsis" aria-hidden="true">...</span>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if page < total_pages %}
+                    <a href="{{ url_for('financeiro.extrato_hub', page=page+1, data_de=filtro_data_de, data_ate=filtro_data_ate, status=filtro_status, journal=filtro_journal, per_page=per_page) }}"
+                       class="extrato-pagination__btn" aria-label="Próxima página">
+                        <i class="fas fa-chevron-right"></i>
+                    </a>
+                    {% else %}
+                    <button class="extrato-pagination__btn" disabled aria-label="Próxima página">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                    {% endif %}
+                </nav>
+            </div>
+            {% endif %}
+        </div>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- SEÇÃO: EXTRATOS PENDENTES DE IMPORTAÇÃO (UNIFICADA) -->
+    <!-- ================================================================== -->
+    <section class="extrato-section reveal" id="pendentesSection">
+        <div class="extrato-section__header">
+            <h2 class="extrato-section__title">
+                <i class="fas fa-cloud-download-alt"></i>
+                Extratos Pendentes de Importação
+                <span class="extrato-section__badge" id="badgePendentesTotal">-</span>
+            </h2>
+            <i class="fas fa-chevron-down extrato-section__toggle"></i>
+        </div>
+
+        <div class="extrato-section__content">
+            <div class="fin-pendentes-wrapper">
+                <table class="extrato-table">
+                    <thead>
+                        <tr>
+                            <th class="fin-th-checkbox">
+                                <label class="fin-sr-only" for="selectAllPendentes">Selecionar todos os pendentes</label>
+                                <input type="checkbox" id="selectAllPendentes" class="extrato-checkbox"
+                                       title="Selecionar todos">
+                            </th>
+                            <th>Extrato / Journal</th>
+                            <th>Data</th>
+                            <th class="fin-th-macro fin-th-macro--rec">
+                                <i class="fas fa-arrow-down"></i> Rec.
+                            </th>
+                            <th class="fin-th-macro fin-th-macro--pag">
+                                <i class="fas fa-arrow-up"></i> Pag.
+                            </th>
+                            <th class="fin-th-actions">Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pendentesTableBody">
+                        <!-- Carregado via AJAX -->
+                        <tr>
+                            <td colspan="6">
+                                <div class="extrato-loading">
+                                    <div class="extrato-loading__spinner"></div>
+                                    <div class="extrato-loading__text">Buscando extratos do Odoo...</div>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- BULK ACTIONS BAR -->
+    <!-- ================================================================== -->
+    <div class="bulk-actions-bar glass pulse-glow" id="bulkActionsBar" role="toolbar" aria-label="Ações em lote">
+        <div class="bulk-actions-bar__info">
+            <span class="bulk-actions-bar__count text-gradient" id="bulkCount">0</span>
+            <span class="bulk-actions-bar__text" id="bulkText">extrato(s) selecionado(s)</span>
+        </div>
+        <div class="bulk-actions-bar__actions">
+            <button class="btn-ext btn-ext--ghost btn-liquid" onclick="clearSelection()">
+                <i class="fas fa-times icon-morph"></i>
+                Limpar
+            </button>
+            <button class="btn-ext btn-ext--success btn-shine shadow-glow--success" onclick="ExtratoApp.conciliarRecebimentos()" id="btnConciliarRec">
+                <i class="fas fa-arrow-down icon-morph"></i>
+                Conciliar Recebimentos
+            </button>
+            <button class="btn-ext btn-ext--danger btn-shine shadow-glow--danger" onclick="ExtratoApp.conciliarPagamentos()" id="btnConciliarPag">
+                <i class="fas fa-arrow-up icon-morph"></i>
+                Conciliar Pagamentos
+            </button>
+            <button class="btn-ext btn-ext--primary btn-shine shadow-glow" onclick="importarSelecionados()">
+                <i class="fas fa-download icon-morph"></i>
+                Importar Selecionados
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/financeiro/extrato.js') }}"></script>
+<script src="{{ url_for('static', filename='js/financeiro/premium-effects.js') }}"></script>
+{% endblock %}
