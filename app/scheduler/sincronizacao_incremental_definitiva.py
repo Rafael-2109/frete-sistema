@@ -42,6 +42,7 @@ JANELA_CTES = int(os.environ.get('JANELA_CTES', 90))  # ✅ 90 minutos para CTes
 DIAS_ENTRADAS = int(os.environ.get('DIAS_ENTRADAS', 7))  # 7 dias para entradas de materiais
 JANELA_CONTAS_RECEBER = int(os.environ.get('JANELA_CONTAS_RECEBER', 120))  # ✅ 120 minutos para Contas a Receber
 JANELA_BAIXAS = int(os.environ.get('JANELA_BAIXAS', 120))  # ✅ 120 minutos para Baixas/Reconciliações
+JANELA_CONTAS_PAGAR = int(os.environ.get('JANELA_CONTAS_PAGAR', 120))  # ✅ 120 minutos para Contas a Pagar
 MAX_RETRIES = 3
 RETRY_DELAY = 5
 
@@ -55,6 +56,7 @@ entrada_material_service = None
 cte_service = None  # ✅ Service de CTes
 contas_receber_service = None  # ✅ Service de Contas a Receber
 baixas_service = None  # ✅ Service de Baixas/Reconciliações
+contas_pagar_service = None  # ✅ Service de Contas a Pagar
 
 
 def inicializar_services():
@@ -63,7 +65,7 @@ def inicializar_services():
     Isso evita problemas de SSL e contexto que ocorrem quando
     instanciados dentro do app.app_context()
     """
-    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service
+    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service
 
     try:
         # IMPORTANTE: Importar e instanciar FORA do contexto
@@ -76,6 +78,7 @@ def inicializar_services():
         from app.odoo.services.cte_service import CteService  # ✅ Service de CTes
         from app.financeiro.services.sincronizacao_contas_receber_service import SincronizacaoContasReceberService  # ✅ Service de Contas a Receber
         from app.financeiro.services.sincronizacao_baixas_service import SincronizacaoBaixasService  # ✅ Service de Baixas
+        from app.financeiro.services.sincronizacao_contas_pagar_service import SincronizacaoContasAPagarService  # ✅ Service de Contas a Pagar
 
         logger.info("🔧 Inicializando services FORA do contexto...")
         faturamento_service = FaturamentoService()
@@ -87,6 +90,7 @@ def inicializar_services():
         cte_service = CteService()  # ✅ Instanciar service de CTes
         contas_receber_service = SincronizacaoContasReceberService()  # ✅ Instanciar service de Contas a Receber
         baixas_service = SincronizacaoBaixasService()  # ✅ Instanciar service de Baixas
+        contas_pagar_service = SincronizacaoContasAPagarService()  # ✅ Instanciar service de Contas a Pagar
         logger.info("✅ Services inicializados com sucesso")
 
         return True
@@ -101,7 +105,7 @@ def executar_sincronizacao():
     Executa sincronização usando services já instanciados
     Similar ao que funciona em SincronizacaoIntegradaService
     """
-    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service
+    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service
 
     logger.info("=" * 60)
     logger.info(f"🔄 SINCRONIZAÇÃO DEFINITIVA - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -117,10 +121,11 @@ def executar_sincronizacao():
     logger.info(f"   - Entradas: dias={DIAS_ENTRADAS}")
     logger.info(f"   - Contas a Receber: janela={JANELA_CONTAS_RECEBER}min")  # ✅ Adicionar Contas a Receber ao log
     logger.info(f"   - Baixas: janela={JANELA_BAIXAS}min")  # ✅ Adicionar Baixas ao log
+    logger.info(f"   - Contas a Pagar: janela={JANELA_CONTAS_PAGAR}min")  # ✅ Adicionar Contas a Pagar ao log
     logger.info("=" * 60)
 
     # Verificar se services estão inicializados
-    if not all([faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service]):
+    if not all([faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service]):
         logger.warning("⚠️ Services não inicializados, tentando inicializar...")
         if not inicializar_services():
             logger.error("❌ Falha ao inicializar services")
@@ -725,6 +730,63 @@ def executar_sincronizacao():
                 else:
                     break
 
+        # Limpar sessão entre services
+        try:
+            db.session.remove()
+            db.engine.dispose()
+            logger.info("♻️ Reconexão antes de Contas a Pagar")
+        except Exception as e:
+            pass
+
+        # 🔟 CONTAS A PAGAR - com retry
+        sucesso_contas_pagar = False
+        for tentativa in range(1, MAX_RETRIES + 1):
+            try:
+                logger.info(f"💸 Sincronizando Contas a Pagar (tentativa {tentativa}/{MAX_RETRIES})...")
+                logger.info(f"   Janela: {JANELA_CONTAS_PAGAR} minutos")
+
+                # Usar service já instanciado
+                resultado_contas_pagar = contas_pagar_service.sincronizar_incremental(
+                    minutos_janela=JANELA_CONTAS_PAGAR
+                )
+
+                if resultado_contas_pagar.get("sucesso"):
+                    sucesso_contas_pagar = True
+                    logger.info("✅ Contas a Pagar sincronizadas com sucesso!")
+                    logger.info(f"   - Novos: {resultado_contas_pagar.get('novos', 0)}")
+                    logger.info(f"   - Atualizados: {resultado_contas_pagar.get('atualizados', 0)}")
+                    logger.info(f"   - Erros: {resultado_contas_pagar.get('erros', 0)}")
+
+                    db.session.commit()
+                    break
+                else:
+                    erro = resultado_contas_pagar.get('erro', 'Erro desconhecido')
+                    logger.error(f"❌ Erro Contas a Pagar: {erro}")
+
+                    if tentativa < MAX_RETRIES:
+                        logger.info(f"🔄 Aguardando {RETRY_DELAY}s antes de tentar novamente...")
+                        sleep(RETRY_DELAY)
+                        # Reinicializar service
+                        from app.financeiro.services.sincronizacao_contas_pagar_service import SincronizacaoContasAPagarService
+                        contas_pagar_service = SincronizacaoContasAPagarService()
+                    else:
+                        break
+
+            except Exception as e:
+                logger.error(f"❌ Erro ao sincronizar Contas a Pagar: {e}")
+                if tentativa < MAX_RETRIES and ("SSL" in str(e) or "connection" in str(e).lower()):
+                    logger.info(f"🔄 Tentando reconectar ({tentativa}/{MAX_RETRIES})...")
+                    sleep(RETRY_DELAY)
+                    try:
+                        db.session.rollback()
+                        db.session.remove()
+                        from app.financeiro.services.sincronizacao_contas_pagar_service import SincronizacaoContasAPagarService
+                        contas_pagar_service = SincronizacaoContasAPagarService()
+                    except Exception as e:
+                        pass
+                else:
+                    break
+
         # Limpar conexões ao final
         try:
             db.session.remove()
@@ -734,12 +796,12 @@ def executar_sincronizacao():
 
         # Resumo final
         logger.info("=" * 60)
-        total_sucesso = sum([sucesso_faturamento, sucesso_carteira, sucesso_verificacao, sucesso_requisicoes, sucesso_pedidos, sucesso_alocacoes, sucesso_entradas, sucesso_ctes, sucesso_contas_receber, sucesso_baixas])
+        total_sucesso = sum([sucesso_faturamento, sucesso_carteira, sucesso_verificacao, sucesso_requisicoes, sucesso_pedidos, sucesso_alocacoes, sucesso_entradas, sucesso_ctes, sucesso_contas_receber, sucesso_baixas, sucesso_contas_pagar])
 
-        if total_sucesso == 10:
+        if total_sucesso == 11:
             logger.info("✅ SINCRONIZAÇÃO COMPLETA COM SUCESSO!")
-        elif total_sucesso >= 8:
-            logger.info(f"⚠️ Sincronização parcial - {total_sucesso}/10 módulos OK")
+        elif total_sucesso >= 9:
+            logger.info(f"⚠️ Sincronização parcial - {total_sucesso}/11 módulos OK")
             if not sucesso_faturamento:
                 logger.info("   ❌ Faturamento: FALHOU")
             if not sucesso_carteira:
@@ -760,8 +822,10 @@ def executar_sincronizacao():
                 logger.info("   ❌ Contas a Receber: FALHOU")
             if not sucesso_baixas:
                 logger.info("   ❌ Baixas/Reconciliações: FALHOU")
+            if not sucesso_contas_pagar:
+                logger.info("   ❌ Contas a Pagar: FALHOU")
         else:
-            logger.error(f"❌ Sincronização com falhas graves - apenas {total_sucesso}/10 módulos OK")
+            logger.error(f"❌ Sincronização com falhas graves - apenas {total_sucesso}/11 módulos OK")
         logger.info("=" * 60)
 
 

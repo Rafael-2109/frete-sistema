@@ -1,189 +1,233 @@
 {% extends 'base.html' %}
-{% block title %}Liberação Antecipação - Configurações{% endblock %}
+{% block title %}Liberacao Antecipacao - Configuracoes{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/financeiro/extrato.css') }}">
+{% endblock %}
 
 {% block content %}
-<div class="container-fluid mt-3">
-    <!-- Header -->
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <div>
-            <h4><i class="fas fa-clock text-success"></i> Liberação Antecipação</h4>
-            <small class="text-muted">Configurar dias úteis para liberação de antecipação por cliente</small>
+<div class="fin-container">
+    <!-- ================================================================== -->
+    <!-- HEADER                                                              -->
+    <!-- ================================================================== -->
+    <header class="fin-header">
+        <div class="fin-header__content">
+            <nav class="fin-breadcrumb">
+                <a href="{{ url_for('financeiro.contas_receber_hub') }}" class="fin-breadcrumb__item">
+                    <i class="fas fa-home"></i> Contas a Receber
+                </a>
+                <span class="fin-breadcrumb__separator">/</span>
+                <span class="fin-breadcrumb__current">Liberacao Antecipacao</span>
+            </nav>
+            <h1 class="fin-header__title">
+                <i class="fas fa-clock"></i>
+                Liberacao Antecipacao
+            </h1>
+            <p class="fin-header__subtitle">
+                Configurar dias uteis para liberacao de antecipacao por cliente
+            </p>
         </div>
-        <div class="d-flex gap-2">
-            <a href="{{ url_for('financeiro.contas_receber_hub') }}" class="btn btn-outline-secondary btn-sm">
+        <div class="fin-header__actions">
+            <a href="{{ url_for('financeiro.contas_receber_hub') }}" class="btn-ext btn-ext--ghost">
                 <i class="fas fa-arrow-left"></i> Voltar
             </a>
-            <button class="btn btn-success btn-sm" onclick="abrirModalNovo()">
-                <i class="fas fa-plus"></i> Nova Configuração
+            <button class="theme-toggle" onclick="toggleTheme()" title="Alternar tema">
+                <i class="fas fa-sun theme-toggle__icon theme-toggle__icon--light"></i>
+                <i class="fas fa-moon theme-toggle__icon theme-toggle__icon--dark"></i>
+            </button>
+            <button class="btn-ext btn-ext--success" onclick="abrirModalNovo()">
+                <i class="fas fa-plus"></i> Nova Configuracao
             </button>
         </div>
-    </div>
+    </header>
 
-    <!-- Info Card -->
-    <div class="alert alert-info mb-3">
-        <strong><i class="fas fa-info-circle"></i> Prioridade de Match:</strong>
-        <ol class="mb-0 mt-2">
-            <li><strong>Prefixo CNPJ</strong>: Primeiros 8 dígitos do CNPJ (XX.XXX.XXX)</li>
-            <li><strong>Nome Exato</strong>: Match exato da razão social</li>
-            <li><strong>Contém Nome</strong>: Substring no nome do cliente</li>
-        </ol>
-    </div>
-
-    <!-- Filtros -->
-    <div class="card mb-3">
-        <div class="card-body py-2">
-            <form method="GET" class="row g-2 align-items-end">
-                <div class="col-md-3">
-                    <label class="form-label small">Critério</label>
-                    <select name="criterio" class="form-select form-select-sm" onchange="this.form.submit()">
-                        <option value="">Todos</option>
-                        <option value="prefixo_cnpj" {% if request.args.get('criterio') == 'prefixo_cnpj' %}selected{% endif %}>Prefixo CNPJ</option>
-                        <option value="nome_exato" {% if request.args.get('criterio') == 'nome_exato' %}selected{% endif %}>Nome Exato</option>
-                        <option value="contem_nome" {% if request.args.get('criterio') == 'contem_nome' %}selected{% endif %}>Contém Nome</option>
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small">Status</label>
-                    <select name="ativo" class="form-select form-select-sm" onchange="this.form.submit()">
-                        <option value="">Todos</option>
-                        <option value="true" {% if request.args.get('ativo') == 'true' %}selected{% endif %}>Ativos</option>
-                        <option value="false" {% if request.args.get('ativo') == 'false' %}selected{% endif %}>Inativos</option>
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <a href="{{ url_for('financeiro.listar_liberacao_antecipacao') }}" class="btn btn-outline-secondary btn-sm w-100">
-                        <i class="fas fa-times"></i> Limpar
-                    </a>
-                </div>
-            </form>
+    <!-- ================================================================== -->
+    <!-- INFO CARD                                                           -->
+    <!-- ================================================================== -->
+    <div class="fin-alert fin-alert--info">
+        <i class="fas fa-info-circle"></i>
+        <div>
+            <strong>Prioridade de Match:</strong>
+            <ol style="margin: 0.5rem 0 0 1.25rem; padding: 0;">
+                <li><strong>Prefixo CNPJ</strong>: Primeiros 8 digitos do CNPJ (XX.XXX.XXX)</li>
+                <li><strong>Nome Exato</strong>: Match exato da razao social</li>
+                <li><strong>Contem Nome</strong>: Substring no nome do cliente</li>
+            </ol>
         </div>
     </div>
 
-    <!-- Tabela -->
-    <div class="card">
-        <div class="card-body p-0">
-            <table class="table table-striped table-hover mb-0">
-                <thead class="table-dark">
-                    <tr>
-                        <th>ID</th>
-                        <th>Critério</th>
-                        <th>Identificador</th>
-                        <th>UF</th>
-                        <th class="text-center">Dias Úteis</th>
-                        <th class="text-center">Status</th>
-                        <th class="text-center">Ações</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for config in configs %}
-                    <tr class="{% if not config.ativo %}table-secondary{% endif %}">
-                        <td>{{ config.id }}</td>
-                        <td>
-                            {% if config.criterio_identificacao == 'prefixo_cnpj' %}
-                                <span class="badge bg-primary">Prefixo CNPJ</span>
-                            {% elif config.criterio_identificacao == 'nome_exato' %}
-                                <span class="badge bg-success">Nome Exato</span>
-                            {% else %}
-                                <span class="badge bg-info">Contém Nome</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <strong>{{ config.identificador }}</strong>
-                        </td>
-                        <td>
-                            {% if config.uf == 'TODOS' %}
-                                <span class="text-muted">Todas UFs</span>
-                            {% else %}
-                                <code>{{ config.uf }}</code>
-                            {% endif %}
-                        </td>
-                        <td class="text-center">
-                            <span class="badge bg-dark fs-6">{{ config.dias_uteis_previsto }}</span>
-                        </td>
-                        <td class="text-center">
-                            {% if config.ativo %}
-                                <span class="badge bg-success">Ativo</span>
-                            {% else %}
-                                <span class="badge bg-secondary">Inativo</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-center">
-                            <button class="btn btn-sm btn-outline-primary" onclick="editarConfig({{ config.id }})" title="Editar">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                            {% if config.ativo %}
-                            <button class="btn btn-sm btn-outline-danger" onclick="desativarConfig({{ config.id }})" title="Desativar">
-                                <i class="fas fa-ban"></i>
-                            </button>
-                            {% else %}
-                            <button class="btn btn-sm btn-outline-success" onclick="ativarConfig({{ config.id }})" title="Ativar">
-                                <i class="fas fa-check"></i>
-                            </button>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="7" class="text-center text-muted py-4">
-                            <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
-                            Nenhuma configuração encontrada
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+    <!-- ================================================================== -->
+    <!-- FILTROS                                                             -->
+    <!-- ================================================================== -->
+    <div class="fin-filters">
+        <form method="GET" class="fin-filters__grid">
+            <div class="fin-filter-group">
+                <label class="fin-filter-group__label">Criterio</label>
+                <select name="criterio" class="fin-filter-group__input fin-filter-group__select" onchange="this.form.submit()">
+                    <option value="">Todos</option>
+                    <option value="prefixo_cnpj" {% if request.args.get('criterio') == 'prefixo_cnpj' %}selected{% endif %}>Prefixo CNPJ</option>
+                    <option value="nome_exato" {% if request.args.get('criterio') == 'nome_exato' %}selected{% endif %}>Nome Exato</option>
+                    <option value="contem_nome" {% if request.args.get('criterio') == 'contem_nome' %}selected{% endif %}>Contem Nome</option>
+                </select>
+            </div>
+            <div class="fin-filter-group">
+                <label class="fin-filter-group__label">Status</label>
+                <select name="ativo" class="fin-filter-group__input fin-filter-group__select" onchange="this.form.submit()">
+                    <option value="">Todos</option>
+                    <option value="true" {% if request.args.get('ativo') == 'true' %}selected{% endif %}>Ativos</option>
+                    <option value="false" {% if request.args.get('ativo') == 'false' %}selected{% endif %}>Inativos</option>
+                </select>
+            </div>
+            <div class="fin-filter-group" style="align-self: flex-end;">
+                <a href="{{ url_for('financeiro.listar_liberacao_antecipacao') }}" class="btn-ext btn-ext--ghost">
+                    <i class="fas fa-times"></i> Limpar
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <!-- ================================================================== -->
+    <!-- TABELA                                                              -->
+    <!-- ================================================================== -->
+    <div class="fin-section">
+        <div class="fin-section__header">
+            <h2 class="fin-section__title">
+                <i class="fas fa-table"></i>
+                Configuracoes
+                <span class="fin-section__badge">{{ configs|length }}</span>
+            </h2>
+        </div>
+        <div class="fin-section__content">
+            <div class="fin-table-wrapper">
+                <table class="fin-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 60px;">ID</th>
+                            <th>Criterio</th>
+                            <th>Identificador</th>
+                            <th>UF</th>
+                            <th class="text-center">Dias Uteis</th>
+                            <th class="text-center">Status</th>
+                            <th class="text-center">Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for config in configs %}
+                        <tr class="{% if not config.ativo %}fin-row--muted{% endif %}">
+                            <td class="fin-text-mono">{{ config.id }}</td>
+                            <td>
+                                {% if config.criterio_identificacao == 'prefixo_cnpj' %}
+                                    <span class="fin-badge fin-badge--primary">Prefixo CNPJ</span>
+                                {% elif config.criterio_identificacao == 'nome_exato' %}
+                                    <span class="fin-badge fin-badge--success">Nome Exato</span>
+                                {% else %}
+                                    <span class="fin-badge fin-badge--info">Contem Nome</span>
+                                {% endif %}
+                            </td>
+                            <td><strong>{{ config.identificador }}</strong></td>
+                            <td>
+                                {% if config.uf == 'TODOS' %}
+                                    <span class="text-muted">Todas UFs</span>
+                                {% else %}
+                                    <code class="fin-code">{{ config.uf }}</code>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <span class="fin-badge fin-badge--dark" style="font-size: 1rem; padding: 0.4rem 0.75rem;">
+                                    {{ config.dias_uteis_previsto }}
+                                </span>
+                            </td>
+                            <td class="text-center">
+                                {% if config.ativo %}
+                                    <span class="fin-badge fin-badge--success">Ativo</span>
+                                {% else %}
+                                    <span class="fin-badge fin-badge--muted">Inativo</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <button class="btn-ext btn-ext--ghost btn-ext--sm" onclick="editarConfig({{ config.id }})" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                {% if config.ativo %}
+                                <button class="btn-ext btn-ext--ghost btn-ext--sm" onclick="desativarConfig({{ config.id }})" title="Desativar" style="color: var(--fin-accent-danger);">
+                                    <i class="fas fa-ban"></i>
+                                </button>
+                                {% else %}
+                                <button class="btn-ext btn-ext--ghost btn-ext--sm" onclick="ativarConfig({{ config.id }})" title="Ativar" style="color: var(--fin-accent-success);">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7">
+                                <div class="fin-empty">
+                                    <div class="fin-empty__icon"><i class="fas fa-inbox"></i></div>
+                                    <div class="fin-empty__title">Nenhuma configuracao encontrada</div>
+                                    <div class="fin-empty__text">Nenhuma configuracao encontrada com os filtros aplicados.</div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 </div>
 
-<!-- Modal Config -->
-<div class="modal fade" id="modalConfig" tabindex="-1">
+<!-- ====================================================================== -->
+<!-- MODAL CONFIG                                                            -->
+<!-- ====================================================================== -->
+<div class="modal fade fin-modal" id="modalConfig" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="modalConfigTitle">Nova Configuração</h5>
+                <h5 class="modal-title" id="modalConfigTitle">
+                    <i class="fas fa-clock"></i>
+                    Nova Configuracao
+                </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <form id="formConfig">
                     <input type="hidden" id="config-id">
-                    <div class="mb-3">
-                        <label class="form-label">Critério de Identificação <span class="text-danger">*</span></label>
-                        <select class="form-select" id="config-criterio" required onchange="atualizarPlaceholder()">
+                    <div class="fin-form-group">
+                        <label class="fin-form-group__label">Criterio de Identificacao <span style="color: var(--fin-accent-danger);">*</span></label>
+                        <select class="fin-input" id="config-criterio" required onchange="atualizarPlaceholder()">
                             <option value="">Selecione...</option>
-                            <option value="prefixo_cnpj">Prefixo CNPJ (8 dígitos)</option>
+                            <option value="prefixo_cnpj">Prefixo CNPJ (8 digitos)</option>
                             <option value="nome_exato">Nome Exato</option>
-                            <option value="contem_nome">Contém Nome</option>
+                            <option value="contem_nome">Contem Nome</option>
                         </select>
-                        <small class="text-muted" id="criterio-help"></small>
+                        <small class="fin-form-group__hint" id="criterio-help"></small>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Identificador <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="config-identificador" required>
-                        <small class="text-muted" id="identificador-help"></small>
+                    <div class="fin-form-group" style="margin-top: 1rem;">
+                        <label class="fin-form-group__label">Identificador <span style="color: var(--fin-accent-danger);">*</span></label>
+                        <input type="text" class="fin-input" id="config-identificador" required>
+                        <small class="fin-form-group__hint" id="identificador-help"></small>
                     </div>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">UF(s)</label>
-                            <input type="text" class="form-control" id="config-uf" value="TODOS">
-                            <small class="text-muted">TODOS ou lista: SP,RJ,MG</small>
+                    <div class="fin-form-row" style="margin-top: 1rem;">
+                        <div>
+                            <label class="fin-form-col__label">UF(s)</label>
+                            <input type="text" class="fin-input" id="config-uf" value="TODOS">
+                            <small class="fin-form-group__hint">TODOS ou lista: SP,RJ,MG</small>
                         </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Dias Úteis <span class="text-danger">*</span></label>
-                            <input type="number" class="form-control" id="config-dias" min="1" max="365" required>
+                        <div>
+                            <label class="fin-form-col__label">Dias Uteis <span style="color: var(--fin-accent-danger);">*</span></label>
+                            <input type="number" class="fin-input" id="config-dias" min="1" max="365" required>
                         </div>
                     </div>
-                    <div class="form-check mb-3">
-                        <input class="form-check-input" type="checkbox" id="config-ativo" checked>
-                        <label class="form-check-label" for="config-ativo">
-                            Configuração Ativa
-                        </label>
+                    <div class="fin-checkbox-group" style="margin-top: 1rem;">
+                        <input type="checkbox" id="config-ativo" checked>
+                        <label for="config-ativo">Configuracao Ativa</label>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary" onclick="salvarConfig()">
+                <button type="button" class="btn-ext btn-ext--ghost" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn-ext btn-ext--primary" onclick="salvarConfig()">
                     <i class="fas fa-save"></i> Salvar
                 </button>
             </div>
@@ -193,6 +237,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/financeiro/extrato.js') }}"></script>
 <script>
 const URL_API = "{{ url_for('financeiro.api_liberacao_list') }}";
 let modalConfig = null;
@@ -208,15 +253,15 @@ function atualizarPlaceholder() {
 
     switch(criterio) {
         case 'prefixo_cnpj':
-            help.textContent = 'Ex: 12345678 (8 primeiros dígitos do CNPJ)';
+            help.textContent = 'Ex: 12345678 (8 primeiros digitos do CNPJ)';
             input.placeholder = '12345678';
             break;
         case 'nome_exato':
-            help.textContent = 'Razão social exata do cliente (será normalizado)';
+            help.textContent = 'Razao social exata do cliente (sera normalizado)';
             input.placeholder = 'EMPRESA XYZ LTDA';
             break;
         case 'contem_nome':
-            help.textContent = 'Substring que será buscada no nome do cliente';
+            help.textContent = 'Substring que sera buscada no nome do cliente';
             input.placeholder = 'CARREFOUR';
             break;
         default:
@@ -226,7 +271,7 @@ function atualizarPlaceholder() {
 }
 
 function abrirModalNovo() {
-    document.getElementById('modalConfigTitle').textContent = 'Nova Configuração';
+    document.getElementById('modalConfigTitle').innerHTML = '<i class="fas fa-clock"></i> Nova Configuracao';
     document.getElementById('formConfig').reset();
     document.getElementById('config-id').value = '';
     document.getElementById('config-uf').value = 'TODOS';
@@ -240,7 +285,7 @@ function editarConfig(configId) {
     .then(r => r.json())
     .then(data => {
         if (data.success) {
-            document.getElementById('modalConfigTitle').textContent = 'Editar Configuração';
+            document.getElementById('modalConfigTitle').innerHTML = '<i class="fas fa-clock"></i> Editar Configuracao';
             document.getElementById('config-id').value = data.config.id;
             document.getElementById('config-criterio').value = data.config.criterio_identificacao;
             document.getElementById('config-identificador').value = data.config.identificador;
@@ -289,12 +334,14 @@ function salvarConfig() {
 
 function desativarConfig(configId) {
     Swal.fire({
-        title: 'Desativar configuração?',
-        text: 'A regra não será mais aplicada aos clientes.',
+        title: 'Desativar configuracao?',
+        text: 'A regra nao sera mais aplicada aos clientes.',
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonColor: '#dc3545',
-        confirmButtonText: 'Sim, desativar'
+        confirmButtonColor: '#ef4444',
+        confirmButtonText: 'Sim, desativar',
+        background: getComputedStyle(document.documentElement).getPropertyValue('--fin-bg-secondary'),
+        color: getComputedStyle(document.documentElement).getPropertyValue('--fin-text-primary')
     }).then((result) => {
         if (result.isConfirmed) {
             fetch(`{{ url_for('financeiro.listar_liberacao_antecipacao') }}/api/${configId}`, {
@@ -322,7 +369,7 @@ function ativarConfig(configId) {
     .then(r => r.json())
     .then(data => {
         if (data.success) {
-            toastr.success('Configuração ativada com sucesso!');
+            toastr.success('Configuracao ativada com sucesso!');
             location.reload();
         } else {
             toastr.error(data.error);

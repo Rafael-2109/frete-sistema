@@ -2,220 +2,284 @@
 
 {% block title %}Listar Contas a Pagar{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/financeiro/extrato.css') }}">
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid py-4">
-    <!-- Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h4 class="mb-1">
-                <i class="fas fa-list text-primary me-2"></i>
-                Contas a Pagar
-            </h4>
-            <p class="text-muted mb-0">
+<div class="fin-container">
+    <!-- ================================================================== -->
+    <!-- HEADER                                                              -->
+    <!-- ================================================================== -->
+    <header class="fin-header">
+        <div class="fin-header__content">
+            <nav class="fin-breadcrumb">
+                <a href="{{ url_for('financeiro.contas_pagar_hub') }}" class="fin-breadcrumb__item">
+                    <i class="fas fa-home"></i> Contas a Pagar
+                </a>
+                <span class="fin-breadcrumb__separator">/</span>
+                <span class="fin-breadcrumb__current">Listagem</span>
+            </nav>
+            <h1 class="fin-header__title">
+                <i class="fas fa-list"></i>
+                Titulos a Pagar
+            </h1>
+            <p class="fin-header__subtitle">
                 {{ paginacao.total }} titulo(s) encontrado(s)
                 {% if valor_total > 0 %}
-                | Total: R$ {{ '{:,.2f}'.format(valor_total) }}
+                | Total: <strong class="fin-text-mono">R$ {{ '{:,.2f}'.format(valor_total) }}</strong>
                 {% endif %}
             </p>
         </div>
-        <div>
-            <a href="{{ url_for('financeiro.contas_pagar_hub') }}" class="btn btn-outline-secondary">
-                <i class="fas fa-arrow-left me-1"></i> Voltar ao Hub
+        <div class="fin-header__actions">
+            <a href="{{ url_for('financeiro.contas_pagar_hub') }}" class="btn-ext btn-ext--ghost">
+                <i class="fas fa-arrow-left"></i> Voltar ao Hub
             </a>
+            <button class="theme-toggle" onclick="toggleTheme()" title="Alternar tema">
+                <i class="fas fa-sun theme-toggle__icon theme-toggle__icon--light"></i>
+                <i class="fas fa-moon theme-toggle__icon theme-toggle__icon--dark"></i>
+            </button>
         </div>
-    </div>
+    </header>
 
-    <!-- Filtros -->
-    <div class="card border-0 shadow-sm mb-4">
-        <div class="card-body">
-            <form method="GET" class="row g-2 align-items-end">
-                <div class="col-md-2">
-                    <label class="form-label small text-muted">Empresa</label>
-                    <select name="empresa" class="form-select form-select-sm">
-                        <option value="">Todas</option>
-                        <option value="1" {{ 'selected' if request.args.get('empresa') == '1' }}>FB</option>
-                        <option value="2" {{ 'selected' if request.args.get('empresa') == '2' }}>SC</option>
-                        <option value="3" {{ 'selected' if request.args.get('empresa') == '3' }}>CD</option>
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small text-muted">NF</label>
-                    <input type="text" name="titulo_nf" class="form-control form-control-sm"
-                           value="{{ request.args.get('titulo_nf', '') }}" placeholder="Numero NF">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small text-muted">CNPJ</label>
-                    <input type="text" name="cnpj" class="form-control form-control-sm"
-                           value="{{ request.args.get('cnpj', '') }}" placeholder="CNPJ">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small text-muted">Fornecedor</label>
-                    <input type="text" name="fornecedor" class="form-control form-control-sm"
-                           value="{{ request.args.get('fornecedor', '') }}" placeholder="Nome">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small text-muted">Status</label>
-                    <select name="status" class="form-select form-select-sm">
-                        <option value="">Todos</option>
-                        <option value="aberto" {{ 'selected' if request.args.get('status') == 'aberto' }}>Em Aberto</option>
-                        <option value="vencido" {{ 'selected' if request.args.get('status') == 'vencido' }}>Vencidos</option>
-                        <option value="vence_hoje" {{ 'selected' if request.args.get('status') == 'vence_hoje' }}>Vence Hoje</option>
-                        <option value="vence_semana" {{ 'selected' if request.args.get('status') == 'vence_semana' }}>Vence em 7 dias</option>
-                        <option value="pago" {{ 'selected' if request.args.get('status') == 'pago' }}>Pagos</option>
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <button type="submit" class="btn btn-primary btn-sm w-100">
-                        <i class="fas fa-search me-1"></i> Filtrar
-                    </button>
-                </div>
-            </form>
-            <div class="row g-2 mt-2">
-                <div class="col-md-2">
-                    <label class="form-label small text-muted">Vencimento De</label>
-                    <input type="date" name="venc_de" class="form-control form-control-sm"
-                           value="{{ request.args.get('venc_de', '') }}" form="filterForm">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small text-muted">Vencimento Ate</label>
-                    <input type="date" name="venc_ate" class="form-control form-control-sm"
-                           value="{{ request.args.get('venc_ate', '') }}" form="filterForm">
-                </div>
+    <!-- ================================================================== -->
+    <!-- FILTROS                                                             -->
+    <!-- ================================================================== -->
+    <div class="fin-filters">
+        <div class="fin-filters__header">
+            <span class="fin-filters__title">
+                <i class="fas fa-filter"></i>
+                Filtros
+            </span>
+        </div>
+        <form method="GET" class="fin-filters__grid" id="formFiltros">
+            <div class="fin-filter-group">
+                <label class="fin-filter-group__label">Empresa</label>
+                <select name="empresa" class="fin-filter-group__input fin-filter-group__select" onchange="this.form.submit()">
+                    <option value="">Todas</option>
+                    <option value="1" {{ 'selected' if request.args.get('empresa') == '1' }}>FB (Fabrica)</option>
+                    <option value="2" {{ 'selected' if request.args.get('empresa') == '2' }}>SC (Santa Catarina)</option>
+                    <option value="3" {{ 'selected' if request.args.get('empresa') == '3' }}>CD (Centro Dist.)</option>
+                </select>
             </div>
-        </div>
+            <div class="fin-filter-group">
+                <label class="fin-filter-group__label">NF</label>
+                <input type="text" name="titulo_nf" class="fin-filter-group__input"
+                       value="{{ request.args.get('titulo_nf', '') }}" placeholder="Numero NF">
+            </div>
+            <div class="fin-filter-group">
+                <label class="fin-filter-group__label">CNPJ</label>
+                <input type="text" name="cnpj" class="fin-filter-group__input"
+                       value="{{ request.args.get('cnpj', '') }}" placeholder="CNPJ">
+            </div>
+            <div class="fin-filter-group">
+                <label class="fin-filter-group__label">Fornecedor</label>
+                <input type="text" name="fornecedor" class="fin-filter-group__input"
+                       value="{{ request.args.get('fornecedor', '') }}" placeholder="Nome">
+            </div>
+            <div class="fin-filter-group">
+                <label class="fin-filter-group__label">Status</label>
+                <select name="status" class="fin-filter-group__input fin-filter-group__select" onchange="this.form.submit()">
+                    <option value="">Todos</option>
+                    <option value="aberto" {{ 'selected' if request.args.get('status') == 'aberto' }}>Em Aberto</option>
+                    <option value="vencido" {{ 'selected' if request.args.get('status') == 'vencido' }}>Vencidos</option>
+                    <option value="vence_hoje" {{ 'selected' if request.args.get('status') == 'vence_hoje' }}>Vence Hoje</option>
+                    <option value="vence_semana" {{ 'selected' if request.args.get('status') == 'vence_semana' }}>Vence em 7 dias</option>
+                    <option value="pago" {{ 'selected' if request.args.get('status') == 'pago' }}>Pagos</option>
+                </select>
+            </div>
+            <div class="fin-filter-group">
+                <label class="fin-filter-group__label">Vencimento De</label>
+                <input type="date" name="venc_de" class="fin-filter-group__input"
+                       value="{{ request.args.get('venc_de', '') }}" onchange="this.form.submit()">
+            </div>
+            <div class="fin-filter-group">
+                <label class="fin-filter-group__label">Vencimento Ate</label>
+                <input type="date" name="venc_ate" class="fin-filter-group__input"
+                       value="{{ request.args.get('venc_ate', '') }}" onchange="this.form.submit()">
+            </div>
+            <div class="fin-filter-group" style="display: flex; flex-direction: row; gap: 0.5rem; align-items: flex-end;">
+                <button type="submit" class="btn-ext btn-ext--primary">
+                    <i class="fas fa-search"></i> Filtrar
+                </button>
+                <a href="{{ url_for('financeiro.listar_contas_pagar') }}" class="btn-ext btn-ext--ghost">
+                    <i class="fas fa-times"></i>
+                </a>
+            </div>
+        </form>
     </div>
 
-    <!-- Tabela -->
-    <div class="card border-0 shadow-sm">
-        <div class="table-responsive">
-            <table class="table table-hover table-sm mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th>Emp</th>
-                        <th>
-                            <a href="{{ url_for('financeiro.listar_contas_pagar', sort='titulo_nf', direction='asc' if sort != 'titulo_nf' or direction == 'desc' else 'desc', **request.args) }}"
-                               class="text-decoration-none text-dark">
-                                NF-Parcela
-                                {% if sort == 'titulo_nf' %}
-                                <i class="fas fa-sort-{{ 'down' if direction == 'desc' else 'up' }}"></i>
-                                {% endif %}
-                            </a>
-                        </th>
-                        <th>Fornecedor</th>
-                        <th>CNPJ</th>
-                        <th>
-                            <a href="{{ url_for('financeiro.listar_contas_pagar', sort='vencimento', direction='asc' if sort != 'vencimento' or direction == 'desc' else 'desc', **request.args) }}"
-                               class="text-decoration-none text-dark">
-                                Vencimento
-                                {% if sort == 'vencimento' %}
-                                <i class="fas fa-sort-{{ 'down' if direction == 'desc' else 'up' }}"></i>
-                                {% endif %}
-                            </a>
-                        </th>
-                        <th class="text-end">
-                            <a href="{{ url_for('financeiro.listar_contas_pagar', sort='valor_residual', direction='asc' if sort != 'valor_residual' or direction == 'desc' else 'desc', **request.args) }}"
-                               class="text-decoration-none text-dark">
-                                Valor
-                                {% if sort == 'valor_residual' %}
-                                <i class="fas fa-sort-{{ 'down' if direction == 'desc' else 'up' }}"></i>
-                                {% endif %}
-                            </a>
-                        </th>
-                        <th class="text-center">Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for conta in contas %}
-                    <tr class="{% if conta.parcela_paga %}table-success{% elif conta.vencimento and conta.vencimento < hoje %}table-danger{% elif conta.vencimento == hoje %}table-warning{% endif %}">
-                        <td>
-                            <span class="badge bg-secondary">
-                                {% if conta.empresa == 1 %}FB{% elif conta.empresa == 2 %}SC{% elif conta.empresa == 3 %}CD{% else %}{{ conta.empresa }}{% endif %}
-                            </span>
-                        </td>
-                        <td>
-                            <strong>{{ conta.titulo_nf }}</strong>-{{ conta.parcela }}
-                        </td>
-                        <td>
-                            <span title="{{ conta.raz_social or '-' }}">
-                                {{ (conta.raz_social or '-')[:30] }}{% if conta.raz_social and conta.raz_social|length > 30 %}...{% endif %}
-                            </span>
-                        </td>
-                        <td>
-                            <small>{{ conta.cnpj or '-' }}</small>
-                        </td>
-                        <td>
-                            {% if conta.vencimento %}
-                            {{ conta.vencimento.strftime('%d/%m/%Y') }}
-                            {% if conta.dias_vencidos > 0 and not conta.parcela_paga %}
-                            <small class="text-danger">({{ conta.dias_vencidos }}d)</small>
-                            {% elif conta.dias_vencidos < 0 and not conta.parcela_paga %}
-                            <small class="text-muted">({{ -conta.dias_vencidos }}d)</small>
-                            {% endif %}
-                            {% else %}
-                            -
-                            {% endif %}
-                        </td>
-                        <td class="text-end">
-                            <strong>R$ {{ '{:,.2f}'.format(conta.valor_residual or 0) }}</strong>
-                        </td>
-                        <td class="text-center">
-                            {% if conta.parcela_paga %}
-                            <span class="badge bg-success">Pago</span>
-                            {% elif conta.vencimento and conta.vencimento < hoje %}
-                            <span class="badge bg-danger">Vencido</span>
-                            {% elif conta.vencimento == hoje %}
-                            <span class="badge bg-warning text-dark">Hoje</span>
-                            {% else %}
-                            <span class="badge bg-secondary">Aberto</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="7" class="text-center py-5 text-muted">
-                            <i class="fas fa-inbox fa-3x mb-3 d-block"></i>
-                            Nenhum titulo encontrado com os filtros aplicados.
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+    <!-- ================================================================== -->
+    <!-- TABELA                                                              -->
+    <!-- ================================================================== -->
+    <div class="fin-section">
+        <div class="fin-section__header">
+            <h2 class="fin-section__title">
+                <i class="fas fa-table"></i>
+                Titulos
+                <span class="fin-section__badge">{{ paginacao.total }}</span>
+            </h2>
         </div>
-
-        <!-- Paginacao -->
-        {% if paginacao.pages > 1 %}
-        <div class="card-footer bg-white">
-            <nav aria-label="Paginacao">
-                <ul class="pagination pagination-sm mb-0 justify-content-center">
-                    {% if paginacao.has_prev %}
-                    <li class="page-item">
-                        <a class="page-link" href="{{ url_for('financeiro.listar_contas_pagar', page=paginacao.prev_num, **request.args) }}">
-                            <i class="fas fa-chevron-left"></i>
-                        </a>
-                    </li>
-                    {% endif %}
-
-                    {% for p in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
-                        {% if p %}
-                        <li class="page-item {% if p == paginacao.page %}active{% endif %}">
-                            <a class="page-link" href="{{ url_for('financeiro.listar_contas_pagar', page=p, **request.args) }}">{{ p }}</a>
-                        </li>
+        <div class="fin-section__content">
+            <div class="fin-table-wrapper">
+                <table class="fin-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 60px;">Emp</th>
+                            <th>
+                                <a href="{{ url_for('financeiro.listar_contas_pagar', sort='titulo_nf', direction='asc' if sort != 'titulo_nf' or direction == 'desc' else 'desc', **request.args) }}"
+                                   class="fin-sortable">
+                                    NF-Parcela
+                                    {% if sort == 'titulo_nf' %}
+                                    <i class="fas fa-sort-{{ 'down' if direction == 'desc' else 'up' }}"></i>
+                                    {% endif %}
+                                </a>
+                            </th>
+                            <th>Fornecedor</th>
+                            <th style="width: 170px;">CNPJ</th>
+                            <th style="width: 110px;">
+                                <a href="{{ url_for('financeiro.listar_contas_pagar', sort='vencimento', direction='asc' if sort != 'vencimento' or direction == 'desc' else 'desc', **request.args) }}"
+                                   class="fin-sortable">
+                                    Vencimento
+                                    {% if sort == 'vencimento' %}
+                                    <i class="fas fa-sort-{{ 'down' if direction == 'desc' else 'up' }}"></i>
+                                    {% endif %}
+                                </a>
+                            </th>
+                            <th class="text-end" style="width: 130px;">
+                                <a href="{{ url_for('financeiro.listar_contas_pagar', sort='valor_residual', direction='asc' if sort != 'valor_residual' or direction == 'desc' else 'desc', **request.args) }}"
+                                   class="fin-sortable">
+                                    Valor
+                                    {% if sort == 'valor_residual' %}
+                                    <i class="fas fa-sort-{{ 'down' if direction == 'desc' else 'up' }}"></i>
+                                    {% endif %}
+                                </a>
+                            </th>
+                            <th class="text-center" style="width: 100px;">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for conta in contas %}
+                        <tr class="{% if conta.parcela_paga %}fin-row--success{% elif conta.vencimento and conta.vencimento < hoje %}fin-row--danger{% elif conta.vencimento == hoje %}fin-row--warning{% endif %}">
+                            <td class="text-center">
+                                <span class="fin-badge fin-badge--muted">
+                                    {% if conta.empresa == 1 %}FB{% elif conta.empresa == 2 %}SC{% elif conta.empresa == 3 %}CD{% else %}{{ conta.empresa }}{% endif %}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="fin-text-mono">
+                                    <strong>{{ conta.titulo_nf }}</strong>-{{ conta.parcela }}
+                                </div>
+                            </td>
+                            <td>
+                                <span title="{{ conta.raz_social or '-' }}">
+                                    {{ (conta.raz_social or '-')[:35] }}{% if conta.raz_social and conta.raz_social|length > 35 %}...{% endif %}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="fin-text-mono fin-text-cnpj">{{ conta.cnpj or '-' }}</span>
+                            </td>
+                            <td class="text-center">
+                                {% if conta.vencimento %}
+                                <span class="fin-text-mono {% if conta.vencimento < hoje and not conta.parcela_paga %}text-danger{% endif %}">
+                                    {{ conta.vencimento.strftime('%d/%m/%Y') }}
+                                </span>
+                                {% if conta.dias_vencidos > 0 and not conta.parcela_paga %}
+                                <small class="text-danger">({{ conta.dias_vencidos }}d)</small>
+                                {% elif conta.dias_vencidos < 0 and not conta.parcela_paga %}
+                                <small class="text-muted">({{ -conta.dias_vencidos }}d)</small>
+                                {% endif %}
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                <span class="fin-text-mono fin-valor-destaque--sm">
+                                    R$ {{ '{:,.2f}'.format(conta.valor_residual or 0) }}
+                                </span>
+                            </td>
+                            <td class="text-center">
+                                {% if conta.parcela_paga %}
+                                <span class="fin-badge fin-badge--success">Pago</span>
+                                {% elif conta.vencimento and conta.vencimento < hoje %}
+                                <span class="fin-badge fin-badge--danger">Vencido</span>
+                                {% elif conta.vencimento == hoje %}
+                                <span class="fin-badge fin-badge--warning">Hoje</span>
+                                {% else %}
+                                <span class="fin-badge fin-badge--muted">Aberto</span>
+                                {% endif %}
+                            </td>
+                        </tr>
                         {% else %}
-                        <li class="page-item disabled"><span class="page-link">...</span></li>
-                        {% endif %}
+                        <tr>
+                            <td colspan="7">
+                                <div class="fin-empty">
+                                    <div class="fin-empty__icon"><i class="fas fa-inbox"></i></div>
+                                    <div class="fin-empty__title">Nenhum titulo encontrado</div>
+                                    <div class="fin-empty__text">Nenhum titulo encontrado com os filtros aplicados.</div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginacao -->
+            {% if paginacao.pages > 1 %}
+            <div class="fin-pagination">
+                <div class="fin-pagination__info">
+                    Exibindo <strong>{{ (paginacao.page - 1) * paginacao.per_page + 1 }}</strong>
+                    - <strong>{{ (paginacao.page - 1) * paginacao.per_page + contas|length }}</strong>
+                    de <strong>{{ paginacao.total }}</strong> registros
+                </div>
+                <nav class="fin-pagination__nav">
+                    {% set args_no_page = request.args.copy() %}
+                    {% if 'page' in args_no_page %}{% set _ = args_no_page.pop('page') %}{% endif %}
+
+                    <!-- Primeira -->
+                    <a href="{{ url_for('financeiro.listar_contas_pagar', page=1, **args_no_page) }}"
+                       class="fin-pagination__btn {% if not paginacao.has_prev %}disabled{% endif %}"
+                       {% if not paginacao.has_prev %}aria-disabled="true"{% endif %}>
+                        <i class="fas fa-angle-double-left"></i>
+                    </a>
+
+                    <!-- Anterior -->
+                    <a href="{{ url_for('financeiro.listar_contas_pagar', page=paginacao.prev_num, **args_no_page) }}"
+                       class="fin-pagination__btn {% if not paginacao.has_prev %}disabled{% endif %}"
+                       {% if not paginacao.has_prev %}aria-disabled="true"{% endif %}>
+                        <i class="fas fa-angle-left"></i>
+                    </a>
+
+                    <!-- Paginas -->
+                    {% for p in range(paginacao.page - 2, paginacao.page + 3) if p > 0 and p <= paginacao.pages %}
+                    <a href="{{ url_for('financeiro.listar_contas_pagar', page=p, **args_no_page) }}"
+                       class="fin-pagination__btn {% if p == paginacao.page %}active{% endif %}">
+                        {{ p }}
+                    </a>
                     {% endfor %}
 
-                    {% if paginacao.has_next %}
-                    <li class="page-item">
-                        <a class="page-link" href="{{ url_for('financeiro.listar_contas_pagar', page=paginacao.next_num, **request.args) }}">
-                            <i class="fas fa-chevron-right"></i>
-                        </a>
-                    </li>
-                    {% endif %}
-                </ul>
-            </nav>
+                    <!-- Proxima -->
+                    <a href="{{ url_for('financeiro.listar_contas_pagar', page=paginacao.next_num, **args_no_page) }}"
+                       class="fin-pagination__btn {% if not paginacao.has_next %}disabled{% endif %}"
+                       {% if not paginacao.has_next %}aria-disabled="true"{% endif %}>
+                        <i class="fas fa-angle-right"></i>
+                    </a>
+
+                    <!-- Ultima -->
+                    <a href="{{ url_for('financeiro.listar_contas_pagar', page=paginacao.pages, **args_no_page) }}"
+                       class="fin-pagination__btn {% if not paginacao.has_next %}disabled{% endif %}"
+                       {% if not paginacao.has_next %}aria-disabled="true"{% endif %}>
+                        <i class="fas fa-angle-double-right"></i>
+                    </a>
+                </nav>
+            </div>
+            {% endif %}
         </div>
-        {% endif %}
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/financeiro/extrato.js') }}"></script>
 {% endblock %}

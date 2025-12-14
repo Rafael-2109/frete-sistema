@@ -13,6 +13,17 @@
 {% if 'page' in filtros_atuais %}{% set _ = filtros_atuais.pop('page') %}{% endif %}
 
 <div class="container-fluid mt-3">
+    <!-- Toggle de tema e link de voltar -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <a href="{{ url_for('financeiro.contas_receber_hub') }}" class="btn-ext btn-ext--ghost">
+            <i class="fas fa-arrow-left"></i> Voltar ao Hub
+        </a>
+        <button class="theme-toggle" onclick="toggleTheme()" title="Alternar tema">
+            <i class="fas fa-sun theme-toggle__icon theme-toggle__icon--light"></i>
+            <i class="fas fa-moon theme-toggle__icon theme-toggle__icon--dark"></i>
+        </button>
+    </div>
+
     <!-- Accordion com Filtros e Totais -->
     <div class="accordion mb-3" id="accordionFiltros">
         <div class="accordion-item">
@@ -988,6 +999,7 @@
 
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="{{ url_for('static', filename='js/financeiro/extrato.js') }}"></script>
 <script src="{{ url_for('static', filename='js/contas_receber.js') }}"></script>
 <script src="{{ url_for('static', filename='js/contas_receber_comparativo.js') }}"></script>
 <script>

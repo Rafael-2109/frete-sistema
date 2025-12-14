@@ -2,116 +2,145 @@
 
 {% block title %}Baixa de Pagamentos - Contas a Pagar{% endblock %}
 
-{% block content %}
-<div class="container-fluid py-4">
-    <!-- Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h4 class="mb-1">
-                <i class="bi bi-cash-stack text-danger me-2"></i>
-                Baixa de Pagamentos
-            </h4>
-            <p class="text-muted mb-0">Vincular pagamentos do extrato a títulos de fornecedores</p>
-        </div>
-        <div>
-            <a href="{{ url_for('financeiro.contas_receber_hub') }}" class="btn btn-outline-secondary">
-                <i class="bi bi-arrow-left me-1"></i> Voltar
-            </a>
-        </div>
-    </div>
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/financeiro/extrato.css') }}">
+{% endblock %}
 
-    <!-- Importar do Extrato -->
-    <div class="card mb-4">
-        <div class="card-header bg-light">
-            <h6 class="mb-0">
-                <i class="bi bi-download me-2"></i>
-                Importar do Extrato Bancário
-            </h6>
-        </div>
-        <div class="card-body">
-            {% if extratos_disponiveis %}
-            <p class="text-muted small mb-3">
-                Selecione um extrato para importar as linhas de saída (pagamentos):
+{% block content %}
+<div class="fin-container">
+    <!-- ================================================================== -->
+    <!-- HEADER                                                              -->
+    <!-- ================================================================== -->
+    <header class="fin-header">
+        <div class="fin-header__content">
+            <nav class="fin-breadcrumb">
+                <a href="{{ url_for('financeiro.contas_pagar_hub') }}" class="fin-breadcrumb__item">
+                    <i class="fas fa-home"></i> Contas a Pagar
+                </a>
+                <span class="fin-breadcrumb__separator">/</span>
+                <span class="fin-breadcrumb__current">Baixa de Pagamentos</span>
+            </nav>
+            <h1 class="fin-header__title">
+                <i class="fas fa-file-import"></i>
+                Baixa de Pagamentos
+            </h1>
+            <p class="fin-header__subtitle">
+                Vincular pagamentos do extrato bancario a titulos de fornecedores
             </p>
-            <div class="table-responsive">
-                <table class="table table-sm table-hover">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Extrato</th>
-                            <th>Journal</th>
-                            <th>Data</th>
-                            <th>Status</th>
-                            <th class="text-end">Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for extrato in extratos_disponiveis %}
-                        <tr>
-                            <td>{{ extrato.statement_name or extrato.nome }}</td>
-                            <td><span class="badge bg-secondary">{{ extrato.journal_code }}</span></td>
-                            <td>{{ extrato.data_extrato.strftime('%d/%m/%Y') if extrato.data_extrato else '-' }}</td>
-                            <td>
-                                <span class="badge {% if extrato.status == 'CONCLUIDO' %}bg-success{% else %}bg-warning{% endif %}">
-                                    {{ extrato.status }}
-                                </span>
-                            </td>
-                            <td class="text-end">
-                                <form action="{{ url_for('financeiro.pagamentos_importar_extrato', extrato_lote_id=extrato.id) }}" method="POST" class="d-inline">
-                                    <button type="submit" class="btn btn-sm btn-outline-primary">
-                                        <i class="bi bi-download me-1"></i> Importar Saídas
-                                    </button>
-                                </form>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+        </div>
+        <div class="fin-header__actions">
+            <a href="{{ url_for('financeiro.contas_pagar_hub') }}" class="btn-ext btn-ext--ghost">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+            <button class="theme-toggle" onclick="toggleTheme()" title="Alternar tema">
+                <i class="fas fa-sun theme-toggle__icon theme-toggle__icon--light"></i>
+                <i class="fas fa-moon theme-toggle__icon theme-toggle__icon--dark"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- ================================================================== -->
+    <!-- IMPORTAR DO EXTRATO                                                 -->
+    <!-- ================================================================== -->
+    <div class="fin-section">
+        <div class="fin-section__header">
+            <h2 class="fin-section__title">
+                <i class="fas fa-download"></i>
+                Importar do Extrato Bancario
+            </h2>
+        </div>
+        <div class="fin-section__content">
+            {% if extratos_disponiveis %}
+            <div style="padding: 1.25rem;">
+                <p class="text-muted" style="font-size: 0.85rem; margin-bottom: 1rem;">
+                    Selecione um extrato para importar as linhas de saida (pagamentos):
+                </p>
+                <div class="fin-table-wrapper">
+                    <table class="fin-table">
+                        <thead>
+                            <tr>
+                                <th>Extrato</th>
+                                <th>Journal</th>
+                                <th>Data</th>
+                                <th class="text-center">Status</th>
+                                <th class="text-end">Acoes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for extrato in extratos_disponiveis %}
+                            <tr>
+                                <td>{{ extrato.statement_name or extrato.nome }}</td>
+                                <td><span class="fin-badge fin-badge--muted">{{ extrato.journal_code }}</span></td>
+                                <td class="fin-text-mono">{{ extrato.data_extrato.strftime('%d/%m/%Y') if extrato.data_extrato else '-' }}</td>
+                                <td class="text-center">
+                                    <span class="fin-badge {% if extrato.status == 'CONCLUIDO' %}fin-badge--success{% else %}fin-badge--warning{% endif %}">
+                                        {{ extrato.status }}
+                                    </span>
+                                </td>
+                                <td class="text-end">
+                                    <form action="{{ url_for('financeiro.pagamentos_importar_extrato', extrato_lote_id=extrato.id) }}" method="POST" style="display: inline;">
+                                        <button type="submit" class="btn-ext btn-ext--primary btn-ext--sm">
+                                            <i class="fas fa-download"></i> Importar Saidas
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
             {% else %}
-            <div class="alert alert-info mb-0">
-                <i class="bi bi-info-circle me-2"></i>
-                Nenhum extrato disponível. Importe um extrato primeiro em
-                <a href="{{ url_for('financeiro.extrato_hub') }}">Extrato Bancário</a>.
+            <div class="fin-empty">
+                <div class="fin-empty__icon"><i class="fas fa-file-invoice"></i></div>
+                <div class="fin-empty__title">Nenhum extrato disponivel</div>
+                <div class="fin-empty__text">
+                    Importe um extrato primeiro em
+                    <a href="{{ url_for('financeiro.extrato_hub') }}" class="fin-link">Extrato Bancario</a>.
+                </div>
             </div>
             {% endif %}
         </div>
     </div>
 
-    <!-- Filtros -->
-    <div class="card mb-4">
-        <div class="card-body py-2">
-            <form method="GET" class="row g-2 align-items-center">
-                <div class="col-auto">
-                    <label class="col-form-label">Status:</label>
-                </div>
-                <div class="col-auto">
-                    <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
-                        <option value="">Todos</option>
-                        <option value="IMPORTADO" {% if status_filtro == 'IMPORTADO' %}selected{% endif %}>Importado</option>
-                        <option value="AGUARDANDO_APROVACAO" {% if status_filtro == 'AGUARDANDO_APROVACAO' %}selected{% endif %}>Aguardando Aprovação</option>
-                        <option value="PROCESSANDO" {% if status_filtro == 'PROCESSANDO' %}selected{% endif %}>Processando</option>
-                        <option value="CONCLUIDO" {% if status_filtro == 'CONCLUIDO' %}selected{% endif %}>Concluído</option>
-                    </select>
-                </div>
-            </form>
-        </div>
+    <!-- ================================================================== -->
+    <!-- FILTROS                                                             -->
+    <!-- ================================================================== -->
+    <div class="fin-filters">
+        <form method="GET" class="fin-filters__grid">
+            <div class="fin-filter-group">
+                <label class="fin-filter-group__label">Status</label>
+                <select name="status" class="fin-filter-group__input fin-filter-group__select" onchange="this.form.submit()">
+                    <option value="">Todos</option>
+                    <option value="IMPORTADO" {% if status_filtro == 'IMPORTADO' %}selected{% endif %}>Importado</option>
+                    <option value="AGUARDANDO_APROVACAO" {% if status_filtro == 'AGUARDANDO_APROVACAO' %}selected{% endif %}>Aguardando Aprovacao</option>
+                    <option value="PROCESSANDO" {% if status_filtro == 'PROCESSANDO' %}selected{% endif %}>Processando</option>
+                    <option value="CONCLUIDO" {% if status_filtro == 'CONCLUIDO' %}selected{% endif %}>Concluido</option>
+                </select>
+            </div>
+        </form>
     </div>
 
-    <!-- Lista de Lotes -->
-    <div class="card">
-        <div class="card-header bg-light">
-            <h6 class="mb-0">
-                <i class="bi bi-collection me-2"></i>
+    <!-- ================================================================== -->
+    <!-- LISTA DE LOTES                                                      -->
+    <!-- ================================================================== -->
+    <div class="fin-section">
+        <div class="fin-section__header">
+            <h2 class="fin-section__title">
+                <i class="fas fa-layer-group"></i>
                 Lotes de Pagamentos
-            </h6>
+                {% if lotes.items %}
+                <span class="fin-section__badge">{{ lotes.total }}</span>
+                {% endif %}
+            </h2>
         </div>
-        <div class="card-body p-0">
+        <div class="fin-section__content">
             {% if lotes.items %}
-            <div class="table-responsive">
-                <table class="table table-hover mb-0">
-                    <thead class="table-light">
+            <div class="fin-table-wrapper">
+                <table class="fin-table">
+                    <thead>
                         <tr>
-                            <th>ID</th>
+                            <th style="width: 60px;">ID</th>
                             <th>Nome</th>
                             <th>Journal</th>
                             <th>Data</th>
@@ -119,49 +148,53 @@
                             <th class="text-end">Valor Total</th>
                             <th class="text-center">Status</th>
                             <th class="text-center">Progresso</th>
-                            <th class="text-end">Ações</th>
+                            <th class="text-end">Acoes</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for lote in lotes.items %}
                         <tr>
-                            <td>{{ lote.id }}</td>
+                            <td class="fin-text-mono">{{ lote.id }}</td>
                             <td>
-                                <a href="{{ url_for('financeiro.pagamentos_baixas_lote_detalhe', lote_id=lote.id) }}">
+                                <a href="{{ url_for('financeiro.pagamentos_baixas_lote_detalhe', lote_id=lote.id) }}" class="fin-link">
                                     {{ lote.nome[:50] }}{% if lote.nome|length > 50 %}...{% endif %}
                                 </a>
                             </td>
-                            <td><span class="badge bg-secondary">{{ lote.journal_code or '-' }}</span></td>
-                            <td>{{ lote.data_inicio.strftime('%d/%m/%Y') if lote.data_inicio else '-' }}</td>
-                            <td class="text-center">{{ lote.total_linhas }}</td>
-                            <td class="text-end">R$ {{ '{:,.2f}'.format(lote.valor_total or 0) }}</td>
+                            <td><span class="fin-badge fin-badge--muted">{{ lote.journal_code or '-' }}</span></td>
+                            <td class="fin-text-mono">{{ lote.data_inicio.strftime('%d/%m/%Y') if lote.data_inicio else '-' }}</td>
+                            <td class="text-center fin-text-mono">{{ lote.total_linhas }}</td>
+                            <td class="text-end">
+                                <span class="fin-valor-destaque--sm">R$ {{ '{:,.2f}'.format(lote.valor_total or 0) }}</span>
+                            </td>
                             <td class="text-center">
-                                <span class="badge
-                                    {% if lote.status == 'CONCLUIDO' %}bg-success
-                                    {% elif lote.status == 'PROCESSANDO' %}bg-primary
-                                    {% elif lote.status == 'AGUARDANDO_APROVACAO' %}bg-warning text-dark
-                                    {% elif lote.status == 'ERRO' %}bg-danger
-                                    {% else %}bg-secondary{% endif %}">
+                                <span class="fin-badge
+                                    {% if lote.status == 'CONCLUIDO' %}fin-badge--success
+                                    {% elif lote.status == 'PROCESSANDO' %}fin-badge--primary
+                                    {% elif lote.status == 'AGUARDANDO_APROVACAO' %}fin-badge--warning
+                                    {% elif lote.status == 'ERRO' %}fin-badge--danger
+                                    {% else %}fin-badge--muted{% endif %}">
                                     {{ lote.status }}
                                 </span>
                             </td>
                             <td class="text-center">
                                 {% if lote.total_linhas > 0 %}
-                                <div class="progress" style="height: 20px; min-width: 100px;">
-                                    <div class="progress-bar bg-success" style="width: {{ (lote.linhas_sucesso / lote.total_linhas * 100)|int }}%">
+                                <div class="fin-progress" style="min-width: 100px;">
+                                    <div class="fin-progress__bar fin-progress__bar--success" style="width: {{ (lote.linhas_sucesso / lote.total_linhas * 100)|int }}%">
                                         {{ lote.linhas_sucesso }}
                                     </div>
-                                    <div class="progress-bar bg-danger" style="width: {{ (lote.linhas_erro / lote.total_linhas * 100)|int }}%">
-                                        {{ lote.linhas_erro if lote.linhas_erro else '' }}
+                                    {% if lote.linhas_erro %}
+                                    <div class="fin-progress__bar fin-progress__bar--danger" style="width: {{ (lote.linhas_erro / lote.total_linhas * 100)|int }}%">
+                                        {{ lote.linhas_erro }}
                                     </div>
+                                    {% endif %}
                                 </div>
                                 {% else %}
                                 -
                                 {% endif %}
                             </td>
                             <td class="text-end">
-                                <a href="{{ url_for('financeiro.pagamentos_baixas_lote_detalhe', lote_id=lote.id) }}" class="btn btn-sm btn-outline-primary">
-                                    <i class="bi bi-eye"></i>
+                                <a href="{{ url_for('financeiro.pagamentos_baixas_lote_detalhe', lote_id=lote.id) }}" class="btn-ext btn-ext--ghost btn-ext--sm">
+                                    <i class="fas fa-eye"></i>
                                 </a>
                             </td>
                         </tr>
@@ -170,35 +203,39 @@
                 </table>
             </div>
 
-            <!-- Paginação -->
+            <!-- Paginacao -->
             {% if lotes.pages > 1 %}
-            <div class="card-footer">
-                <nav>
-                    <ul class="pagination pagination-sm mb-0 justify-content-center">
-                        {% for page_num in lotes.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
-                            {% if page_num %}
-                                <li class="page-item {% if page_num == lotes.page %}active{% endif %}">
-                                    <a class="page-link" href="{{ url_for('financeiro.pagamentos_baixas_hub', page=page_num, status=status_filtro) }}">
-                                        {{ page_num }}
-                                    </a>
-                                </li>
-                            {% else %}
-                                <li class="page-item disabled"><span class="page-link">...</span></li>
-                            {% endif %}
-                        {% endfor %}
-                    </ul>
+            <div class="fin-pagination">
+                <div class="fin-pagination__info">
+                    Pagina <strong>{{ lotes.page }}</strong> de <strong>{{ lotes.pages }}</strong>
+                </div>
+                <nav class="fin-pagination__nav">
+                    {% for page_num in lotes.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                        {% if page_num %}
+                            <a href="{{ url_for('financeiro.pagamentos_baixas_hub', page=page_num, status=status_filtro) }}"
+                               class="fin-pagination__btn {% if page_num == lotes.page %}active{% endif %}">
+                                {{ page_num }}
+                            </a>
+                        {% else %}
+                            <span class="fin-pagination__btn fin-pagination__ellipsis">...</span>
+                        {% endif %}
+                    {% endfor %}
                 </nav>
             </div>
             {% endif %}
 
             {% else %}
-            <div class="text-center py-5">
-                <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
-                <p class="text-muted mt-3">Nenhum lote de pagamentos encontrado.</p>
-                <p class="text-muted small">Importe um extrato bancário para começar.</p>
+            <div class="fin-empty">
+                <div class="fin-empty__icon"><i class="fas fa-inbox"></i></div>
+                <div class="fin-empty__title">Nenhum lote de pagamentos encontrado</div>
+                <div class="fin-empty__text">Importe um extrato bancario para comecar.</div>
             </div>
             {% endif %}
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/financeiro/extrato.js') }}"></script>
 {% endblock %}

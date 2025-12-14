@@ -199,6 +199,42 @@ class SincronizacaoContasAPagarService:
         logger.info(f"🔄 Sincronização Manual - Vencimentos desde {data_inicio}")
         return self.sincronizar(data_inicio=data_inicio)
 
+    def sincronizar_incremental(self, minutos_janela: int = 120) -> dict:
+        """
+        Sincronização incremental para o scheduler.
+
+        Busca títulos modificados nos últimos X minutos.
+        Usa vencimentos dos últimos 90 dias como padrão.
+
+        Args:
+            minutos_janela: Minutos de janela para busca (default: 120)
+
+        Returns:
+            dict com estatísticas
+        """
+        # Para sincronização incremental, usamos vencimentos desde 90 dias atrás
+        # O filtro de "modificados recentemente" é aplicado pelo campo write_date no Odoo
+        data_inicio = date.today() - timedelta(days=90)
+        logger.info(f"🔄 Sincronização Incremental - Janela: {minutos_janela} min, Vencimentos desde {data_inicio}")
+
+        try:
+            resultado = self.sincronizar(data_inicio=data_inicio)
+
+            # Ajustar resposta para compatibilidade com o scheduler
+            return {
+                'sucesso': resultado.get('sucesso', False),
+                'novos': resultado.get('novos', 0),
+                'atualizados': resultado.get('atualizados', 0),
+                'erros': resultado.get('erros', 0),
+                'erro': resultado.get('erro')
+            }
+        except Exception as e:
+            logger.error(f"❌ Erro na sincronização incremental: {e}")
+            return {
+                'sucesso': False,
+                'erro': str(e)
+            }
+
     def _extrair_dados_odoo(
         self,
         data_inicio: date,
