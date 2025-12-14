@@ -77,7 +77,7 @@
 
 - [x] **P3.4** Indicador visual de conexao (heartbeat)
   - Status: online (verde), connecting (amarelo spin), offline (vermelho)
-  - Health check a cada 30 segundos (`/api/agente/health`)
+  - Health check a cada 30 segundos (`/agente/api/health`)
   - Detecta eventos online/offline do navegador
 
 - [ ] **P3.5** Busca em sessoes anteriores - FUTURO
@@ -90,13 +90,29 @@
 
 ---
 
-## Sprint 4 - Nice to Have (FUTURO)
+## Sprint 4 - Nice to Have (CONCLUIDO ✅)
 
-- [ ] Preview de imagens anexadas
-- [ ] Exportar conversa (Markdown/PDF)
-- [ ] Notificacoes sonoras
-- [ ] Favoritar mensagens
-- [ ] Voice input (Web Speech API)
+- [ ] Preview de imagens anexadas - FUTURO
+- [x] **Exportar conversa (Markdown/PDF)**
+  - Menu: "Exportar Markdown" e "Exportar PDF"
+  - Markdown: Download direto do arquivo .md
+  - PDF: Abre janela de impressao formatada
+  - Preserva formatacao e timestamps
+
+- [ ] Notificacoes sonoras - FUTURO
+
+- [x] **Favoritar mensagens**
+  - Botao estrela em cada mensagem (hover para aparecer)
+  - Persistencia em localStorage (`agent-favorites`)
+  - Menu: "Ver Favoritos" filtra apenas favoritas
+  - Indicador visual quando em modo favoritos
+
+- [x] **Voice Input (Web Speech API)**
+  - Botao de microfone no input
+  - Transcricao em tempo real (pt-BR)
+  - Feedback visual durante gravacao (toast)
+  - Botao fica vermelho pulsando quando gravando
+  - Graceful degradation se navegador nao suportar
 
 ---
 
@@ -118,7 +134,7 @@
 | `app/static/agente/css/chat.css` | 1632 | Mantido | Overrides via agent-theme.css |
 | `app/static/agente/css/agent-theme.css` | **~1420** | ✅ CRIADO | CSS Variables + Dark/Light + Visual Moments + Mobile Fixes |
 | `app/static/agente/js/chat.js` | 1742 | Mantido | Variaveis globais atualizadas via JS inline |
-| `app/agente/templates/agente/chat.html` | **~777** | ✅ EDITADO | Import CSS + Toggle tema + Token Budget + Preferences + Shortcuts + Connection + DragDrop |
+| `app/agente/templates/agente/chat.html` | **~1430** | ✅ EDITADO | Tudo + Voice Input + Export + Favorites |
 
 ---
 

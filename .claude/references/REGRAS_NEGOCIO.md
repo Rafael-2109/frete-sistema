@@ -113,7 +113,7 @@ PCP:
 
 ## 1. Grupos Empresariais (por CNPJ)
 
-→ Ver [reference.md#grupos-empresariais](../skills/gerindo-expedicao/reference.md#grupos-empresariais) para prefixos CNPJ e queries SQL.
+→ Ver [business.md#grupos-empresariais](../skills/gerindo-expedicao/references/business.md#grupos-empresariais) para prefixos CNPJ e queries SQL.
 
 **Resumo rápido:** Atacadão, Assaí, Tenda - identificados por prefixo CNPJ.
 
@@ -316,7 +316,7 @@ concentracao = valor_item / valor_total_pedido
 
 ## 12. Termos Comuns (Glossario)
 
-→ Ver [reference.md#glossario-termos-do-dominio](../skills/gerindo-expedicao/reference.md#glossario---termos-do-dominio) para glossário completo.
+→ Ver [glossary.md](../skills/gerindo-expedicao/references/glossary.md) para glossário completo de termos do domínio.
 
 ---
 

@@ -24,6 +24,7 @@ from claude_agent_sdk import (
     ToolUseBlock,
     ToolResultBlock,   # Resultado de execução de ferramenta
     TextBlock,
+    ThinkingBlock,     # FEAT-002: Extended Thinking
 )
 
 # Fallback para API direta (health check)
@@ -233,7 +234,6 @@ Nunca invente informações."""
     def _format_system_prompt(
         self,
         user_name: str = "Usuário",
-        extra_context: str = "",
         user_id: int = None
     ) -> str:
         """
@@ -241,7 +241,6 @@ Nunca invente informações."""
 
         Args:
             user_name: Nome do usuário
-            extra_context: Contexto adicional
             user_id: ID do usuário (para Memory Tool)
 
         Returns:
@@ -259,18 +258,12 @@ Nunca invente informações."""
         else:
             prompt = prompt.replace("{user_id}", "NAO_DISPONIVEL")
 
-        if extra_context:
-            prompt = prompt.replace("{conhecimento_negocio}", extra_context)
-        else:
-            prompt = prompt.replace("{conhecimento_negocio}", "")
-
         return prompt
 
     def _build_options(
         self,
         session_id: Optional[str] = None,
         user_name: str = "Usuário",
-        extra_context: str = "",
         allowed_tools: Optional[List[str]] = None,
         permission_mode: str = "default",
         can_use_tool: Optional[Callable] = None,
@@ -297,7 +290,6 @@ Nunca invente informações."""
         Args:
             session_id: ID de sessão para retomar (do SDK)
             user_name: Nome do usuário
-            extra_context: Contexto adicional
             allowed_tools: Lista de tools permitidas
             permission_mode: Modo de permissão (default, acceptEdits, plan, bypassPermissions)
             can_use_tool: Callback de permissão (retorna {behavior, updatedInput})
@@ -305,6 +297,7 @@ Nunca invente informações."""
             fork_session: Se deve bifurcar a sessão
             model: Modelo a usar (FEAT-001) - sobrescreve settings.model
             thinking_enabled: Ativar Extended Thinking (FEAT-002)
+            user_id: ID do usuário (para Memory Tool)
 
         Returns:
             ClaudeAgentOptions configurado
@@ -312,7 +305,7 @@ Nunca invente informações."""
         import os
 
         # System prompt customizado (com user_id para Memory Tool)
-        custom_instructions = self._format_system_prompt(user_name, extra_context, user_id)
+        custom_instructions = self._format_system_prompt(user_name, user_id)
 
         # Diretório do projeto para carregar Skills
         # Skills estão em: .claude/skills/
@@ -371,13 +364,17 @@ Nunca invente informações."""
         if allowed_tools:
             options_dict["allowed_tools"] = allowed_tools
         else:
-            # Default: Apenas tools necessárias para Skills funcionarem
+            # Default: Tools necessárias para Skills funcionarem
+            # NOTA: Write e Edit são validados no can_use_tool para permitir APENAS /tmp
             options_dict["allowed_tools"] = [
-                "Skill",  # OBRIGATÓRIO - permite Claude invocar Skills
-                "Bash",   # OBRIGATÓRIO - executa scripts Python das Skills
-                "Read",   # Leitura de arquivos (útil para contexto)
-                "Glob",   # Busca de arquivos
-                "Grep",   # Busca em conteúdo
+                "Skill",      # OBRIGATÓRIO - permite Claude invocar Skills
+                "Bash",       # OBRIGATÓRIO - executa scripts Python das Skills
+                "Read",       # Leitura de arquivos (útil para contexto)
+                "Glob",       # Busca de arquivos
+                "Grep",       # Busca em conteúdo
+                "Write",      # Escrita de arquivos (RESTRITO a /tmp via can_use_tool)
+                "Edit",       # Edição de arquivos (RESTRITO a /tmp via can_use_tool)
+                "TodoWrite",  # Gerenciamento de tarefas (feedback visual)
             ]
 
         # Modo de permissão
@@ -407,7 +404,6 @@ Nunca invente informações."""
         prompt: str,
         session_id: Optional[str] = None,
         user_name: str = "Usuário",
-        extra_context: str = "",
         allowed_tools: Optional[List[str]] = None,
         can_use_tool: Optional[Callable] = None,
         max_turns: int = 10,
@@ -423,7 +419,6 @@ Nunca invente informações."""
             prompt: Mensagem do usuário
             session_id: ID de sessão para retomar
             user_name: Nome do usuário
-            extra_context: Contexto adicional
             allowed_tools: Lista de tools permitidas
             can_use_tool: Callback de permissão
             max_turns: Máximo de turnos
@@ -441,7 +436,6 @@ Nunca invente informações."""
         options = self._build_options(
             session_id=session_id,
             user_name=user_name,
-            extra_context=extra_context,
             allowed_tools=allowed_tools,
             permission_mode=permission_mode,
             can_use_tool=can_use_tool,
@@ -507,6 +501,16 @@ Nunca invente informações."""
 
                     if message.content:
                         for block in message.content:
+                            # FEAT-002: Extended Thinking (mostra raciocínio)
+                            if isinstance(block, ThinkingBlock):
+                                thinking_content = getattr(block, 'thinking', '')
+                                if thinking_content:
+                                    yield StreamEvent(
+                                        type='thinking',
+                                        content=thinking_content
+                                    )
+                                continue
+
                             # Texto
                             if isinstance(block, TextBlock):
                                 text_chunk = block.text
@@ -561,6 +565,9 @@ Nunca invente informações."""
                             if isinstance(block, ToolResultBlock):
                                 # Extrai conteúdo do resultado (pode ser string ou lista)
                                 result_content = block.content
+                                is_error = getattr(block, 'is_error', False) or False
+                                tool_use_id = getattr(block, 'tool_use_id', '')
+
                                 if isinstance(result_content, list):
                                     # Se for lista de dicts, converte para string
                                     result_content = str(result_content)[:500]
@@ -569,12 +576,43 @@ Nunca invente informações."""
                                 else:
                                     result_content = "(sem resultado)"
 
+                                # Encontra o nome da tool pelo tool_use_id
+                                tool_name = next(
+                                    (tc.name for tc in tool_calls if tc.id == tool_use_id),
+                                    'ferramenta'
+                                )
+
+                                # MELHORIA: Log detalhado de erros de tools
+                                # Erros esperados (arquivo não existe) usam debug
+                                # Erros inesperados usam warning
+                                if is_error:
+                                    expected_errors = [
+                                        'does not exist',
+                                        'not found',
+                                        'no such file',
+                                    ]
+                                    is_expected = any(
+                                        err in result_content.lower()
+                                        for err in expected_errors
+                                    )
+                                    if is_expected:
+                                        logger.debug(
+                                            f"[AGENT_CLIENT] Tool '{tool_name}' (esperado): "
+                                            f"{result_content[:100]}"
+                                        )
+                                    else:
+                                        logger.warning(
+                                            f"[AGENT_CLIENT] Tool '{tool_name}' retornou erro: "
+                                            f"{result_content[:200]}"
+                                        )
+
                                 yield StreamEvent(
                                     type='tool_result',
                                     content=result_content,
                                     metadata={
-                                        'tool_use_id': block.tool_use_id,
-                                        'is_error': getattr(block, 'is_error', False) or False,
+                                        'tool_use_id': tool_use_id,
+                                        'tool_name': tool_name,
+                                        'is_error': is_error,
                                     }
                                 )
                     continue
@@ -623,10 +661,33 @@ Nunca invente informações."""
                 )
 
         except Exception as e:
-            logger.error(f"[AGENT_CLIENT] Erro: {e}")
+            error_msg = str(e)
+            error_type = type(e).__name__
+
+            # Log detalhado do erro
+            logger.error(
+                f"[AGENT_CLIENT] Erro ({error_type}): {error_msg}",
+                exc_info=True
+            )
+
+            # Mensagem amigável para o usuário
+            user_message = error_msg
+            if 'timeout' in error_msg.lower():
+                user_message = "⏱️ Tempo limite excedido. Tente uma consulta mais simples."
+            elif 'connection' in error_msg.lower():
+                user_message = "🔌 Erro de conexão com a API. Tente novamente em alguns segundos."
+            elif 'permission' in error_msg.lower() or 'denied' in error_msg.lower():
+                user_message = f"🚫 Operação não permitida: {error_msg}"
+            elif 'rate' in error_msg.lower() and 'limit' in error_msg.lower():
+                user_message = "⚠️ Limite de requisições excedido. Aguarde um momento."
+
             yield StreamEvent(
                 type='error',
-                content=str(e)
+                content=user_message,
+                metadata={
+                    'error_type': error_type,
+                    'original_error': error_msg[:500]
+                }
             )
 
     async def get_response(
@@ -634,7 +695,6 @@ Nunca invente informações."""
         prompt: str,
         session_id: Optional[str] = None,
         user_name: str = "Usuário",
-        extra_context: str = "",
         allowed_tools: Optional[List[str]] = None,
     ) -> AgentResponse:
         """
@@ -644,7 +704,6 @@ Nunca invente informações."""
             prompt: Mensagem do usuário
             session_id: ID de sessão
             user_name: Nome do usuário
-            extra_context: Contexto adicional
             allowed_tools: Lista de tools permitidas
 
         Returns:
@@ -661,7 +720,6 @@ Nunca invente informações."""
             prompt=prompt,
             session_id=session_id,
             user_name=user_name,
-            extra_context=extra_context,
             allowed_tools=allowed_tools,
         ):
             if event.type == 'init':

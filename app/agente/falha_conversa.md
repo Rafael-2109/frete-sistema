@@ -704,7 +704,7 @@ Adicionar nas instruções gerais (CLAUDE.md ou background_information):
 ANTES de executar qualquer script da skill `gerindo-expedicao`:
 
 1. ✅ **LER** `.claude/skills/gerindo-expedicao/SKILL.md` seção "Decision Tree"
-2. ✅ **LER** `.claude/skills/gerindo-expedicao/examples.md` linha 1-30 (mapeamento rápido)
+2. ✅ **LER** `.claude/skills/gerindo-expedicao/references/examples.md` linha 1-30 (mapeamento rápido)
 3. ✅ **VERIFICAR** se a pergunta tem termo ambíguo no `glossario.md`
 4. ✅ **PERGUNTAR** se ambíguo (ex: "programação de entrega")
 5. ✅ **EXECUTAR** o script correto com parâmetros validados

@@ -516,15 +516,20 @@ python .claude/skills/gerindo-expedicao/scripts/consultando_programacao_producao
 
 ## Referencias
 
-Consulte os arquivos em `references/` conforme a necessidade:
+<progressive_disclosure>
+Os arquivos em `references/` sao carregados sob demanda.
+**NAO leia todos de uma vez** - consulte apenas quando necessario.
+</progressive_disclosure>
 
-| Arquivo | Conteudo | Quando Usar |
-|---------|----------|-------------|
-| [tables.md](references/tables.md) | Schemas das 6 tabelas principais | Quando precisar saber campos para queries |
-| [business.md](references/business.md) | Grupos empresariais, constantes, calculos | Quando precisar de regras de negocio ou constantes |
-| [glossary.md](references/glossary.md) | Termos do dominio (ruptura, matar pedido) | Quando encontrar termo desconhecido |
-| [synonyms.md](references/synonyms.md) | Sinonimos de entrada (ketchup→catchup) | Quando precisar normalizar input do usuario |
-| [products.md](references/products.md) | Abreviacoes de produtos (CI, AZ VF, BD) | Quando precisar resolver busca de produto |
-| [examples.md](examples.md) | Exemplos de perguntas e comandos | Quando precisar ver exemplos de uso |
+| Arquivo | Quando Consultar |
+|---------|------------------|
+| [tables.md](references/tables.md) | Precisa saber nome de campo ou tipo de dados |
+| [business.md](references/business.md) | Precisa de constantes, prefixos CNPJ, limites veiculos, ou formulas |
+| [glossary.md](references/glossary.md) | Encontrou termo desconhecido (ruptura, matar, FOB, RED) |
+| [synonyms.md](references/synonyms.md) | Usuario usou termo diferente do padrao (catchup, caixa, embarque) |
+| [products.md](references/products.md) | Usuario usou abreviacao de produto (CI, AZ VF, BD, IND) |
+| [examples.md](references/examples.md) | Precisa ver resposta esperada ou output de exemplo |
+| [context.md](references/context.md) | Precisa entender contexto da empresa, clientes, ou escalar decisao |
+| [communication.md](references/communication.md) | Vai gerar mensagem para PCP ou Comercial |
 
-**Grupos Empresariais:** `--grupo atacadao`, `--grupo assai`, `--grupo tenda` (detalhes em [business.md](references/business.md#grupos-empresariais))
+**Grupos Empresariais:** `--grupo atacadao`, `--grupo assai`, `--grupo tenda`

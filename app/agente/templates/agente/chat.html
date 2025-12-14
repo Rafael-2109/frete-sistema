@@ -131,6 +131,19 @@
                             <i class="fas fa-eraser me-2"></i>Limpar
                         </a></li>
                         <li><hr class="dropdown-divider"></li>
+                        <!-- SPRINT-4: Exportar conversa -->
+                        <li><a class="dropdown-item" href="#" onclick="exportConversation('markdown')">
+                            <i class="fas fa-file-alt me-2"></i>Exportar Markdown
+                        </a></li>
+                        <li><a class="dropdown-item" href="#" onclick="exportConversation('pdf')">
+                            <i class="fas fa-file-pdf me-2"></i>Exportar PDF
+                        </a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <!-- SPRINT-4: Favoritos -->
+                        <li><a class="dropdown-item" href="#" onclick="toggleFavoritesView()">
+                            <i class="fas fa-star me-2"></i>Ver Favoritos
+                        </a></li>
+                        <li><hr class="dropdown-divider"></li>
                         <li><a class="dropdown-item" href="#" onclick="showHelp()">
                             <i class="fas fa-question-circle me-2"></i>Ajuda
                         </a></li>
@@ -238,6 +251,11 @@
                 <!-- FEAT-028: Botão Anexar -->
                 <button type="button" class="btn-attach" onclick="document.getElementById('file-input').click()" title="Anexar arquivo (PDF, Excel, CSV, Imagens)">
                     <i class="fas fa-paperclip"></i>
+                </button>
+
+                <!-- SPRINT-4: Botão Voice Input -->
+                <button type="button" class="btn-voice" id="voice-btn" onclick="toggleVoiceInput()" title="Entrada por voz (clique para falar)">
+                    <i class="fas fa-microphone" id="voice-icon"></i>
                 </button>
 
                 <textarea
@@ -584,7 +602,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Verificar conexão periodicamente
     function checkConnection() {
-        fetch('/api/agente/health', { method: 'GET' })
+        fetch('/agente/api/health', { method: 'GET' })
             .then(response => {
                 if (response.ok) {
                     lastHeartbeat = Date.now();
@@ -772,5 +790,641 @@ document.addEventListener('DOMContentLoaded', function() {
 .status-indicator.offline i {
     color: var(--agent-danger, #ef4444) !important;
 }
+
+/* ============================================
+   SPRINT-4: VOICE INPUT STYLES
+   ============================================ */
+.btn-voice {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--agent-radius-md, 10px);
+    border: 1px solid var(--agent-border-color, rgba(240, 246, 252, 0.1));
+    background: var(--agent-bg-tertiary, #1a2942);
+    color: var(--agent-text-secondary, #8b949e);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    flex-shrink: 0;
+}
+
+.btn-voice:hover {
+    background: var(--agent-bg-hover, #243554);
+    color: var(--agent-accent-primary, #00d4aa);
+    border-color: var(--agent-accent-primary, #00d4aa);
+}
+
+.btn-voice.recording {
+    background: var(--agent-danger, #ef4444) !important;
+    color: white !important;
+    border-color: var(--agent-danger, #ef4444) !important;
+    animation: voicePulse 1s ease-in-out infinite;
+}
+
+.btn-voice.recording i {
+    animation: none;
+}
+
+.btn-voice:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+@keyframes voicePulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+    50% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+}
+
+/* Voice feedback toast */
+.voice-feedback {
+    position: fixed;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--agent-bg-secondary, #111d2e);
+    color: var(--agent-text-primary, #f0f6fc);
+    padding: 12px 24px;
+    border-radius: var(--agent-radius-lg, 16px);
+    box-shadow: var(--agent-shadow-xl, 0 20px 40px rgba(0,0,0,0.6));
+    display: none;
+    align-items: center;
+    gap: 12px;
+    z-index: 1100;
+    border: 1px solid var(--agent-border-color, rgba(240, 246, 252, 0.1));
+}
+
+.voice-feedback.active {
+    display: flex;
+    animation: fadeInUp 0.3s ease;
+}
+
+.voice-feedback i {
+    color: var(--agent-danger, #ef4444);
+    font-size: 1.2rem;
+}
+
+.voice-feedback .voice-text {
+    font-size: 0.9rem;
+}
+
+.voice-feedback .voice-transcript {
+    font-style: italic;
+    color: var(--agent-text-secondary, #8b949e);
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ============================================
+   SPRINT-4: FAVORITE BUTTON STYLES
+   ============================================ */
+.message-actions {
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    margin-top: 4px;
+}
+
+.message:hover .message-actions {
+    opacity: 1;
+}
+
+.btn-favorite {
+    width: 24px;
+    height: 24px;
+    border-radius: var(--agent-radius-sm, 6px);
+    border: none;
+    background: transparent;
+    color: var(--agent-text-muted, #6e7681);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    transition: all 0.2s ease;
+}
+
+.btn-favorite:hover {
+    background: var(--agent-warning-muted, rgba(245, 158, 11, 0.15));
+    color: var(--agent-warning, #f59e0b);
+}
+
+.btn-favorite.favorited {
+    color: var(--agent-warning, #f59e0b);
+}
+
+.btn-favorite.favorited i {
+    font-weight: 900;
+}
+
+/* Favorites view indicator */
+.favorites-mode-indicator {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: var(--agent-warning-muted, rgba(245, 158, 11, 0.15));
+    border-bottom: 1px solid var(--agent-warning, #f59e0b);
+    color: var(--agent-warning, #f59e0b);
+    font-size: 0.85rem;
+}
+
+.favorites-mode-indicator.active {
+    display: flex;
+}
+
+.favorites-mode-indicator button {
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: var(--agent-radius-sm, 6px);
+}
+
+.favorites-mode-indicator button:hover {
+    background: var(--agent-warning, #f59e0b);
+    color: var(--agent-bg-primary, #0a1628);
+}
+
+/* Hidden class for non-favorited messages in favorites view */
+.message.hidden-by-filter {
+    display: none !important;
+}
 </style>
+
+<!-- SPRINT-4: JavaScript para Voice Input, Export e Favoritos -->
+<script>
+// ============================================
+// VOICE INPUT (Web Speech API)
+// ============================================
+let recognition = null;
+let isRecording = false;
+
+// Verificar suporte
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+function initVoiceInput() {
+    const voiceBtn = document.getElementById('voice-btn');
+
+    if (!SpeechRecognition) {
+        if (voiceBtn) {
+            voiceBtn.disabled = true;
+            voiceBtn.title = 'Seu navegador não suporta entrada por voz';
+        }
+        console.log('[VOICE] Speech Recognition não suportado');
+        return;
+    }
+
+    recognition = new SpeechRecognition();
+    recognition.lang = 'pt-BR';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+
+    recognition.onstart = () => {
+        isRecording = true;
+        voiceBtn.classList.add('recording');
+        voiceBtn.querySelector('i').className = 'fas fa-stop';
+        showVoiceFeedback('Ouvindo...', '');
+        console.log('[VOICE] Gravação iniciada');
+    };
+
+    recognition.onresult = (event) => {
+        const textarea = document.getElementById('message-input');
+        let finalTranscript = '';
+        let interimTranscript = '';
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+            const transcript = event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+                finalTranscript += transcript;
+            } else {
+                interimTranscript += transcript;
+            }
+        }
+
+        // Mostrar transcrição em tempo real
+        if (interimTranscript) {
+            showVoiceFeedback('Ouvindo...', interimTranscript);
+        }
+
+        // Adicionar texto final ao textarea
+        if (finalTranscript) {
+            const currentText = textarea.value;
+            const separator = currentText && !currentText.endsWith(' ') ? ' ' : '';
+            textarea.value = currentText + separator + finalTranscript;
+            textarea.dispatchEvent(new Event('input', { bubbles: true }));
+            console.log('[VOICE] Transcrito:', finalTranscript);
+        }
+    };
+
+    recognition.onerror = (event) => {
+        console.error('[VOICE] Erro:', event.error);
+        stopVoiceInput();
+
+        if (event.error === 'not-allowed') {
+            alert('Permissão de microfone negada. Por favor, permita o acesso ao microfone nas configurações do navegador.');
+        }
+    };
+
+    recognition.onend = () => {
+        stopVoiceInput();
+        console.log('[VOICE] Gravação finalizada');
+    };
+
+    console.log('[VOICE] Voice input inicializado');
+}
+
+function toggleVoiceInput() {
+    if (!recognition) {
+        alert('Entrada por voz não suportada neste navegador.');
+        return;
+    }
+
+    if (isRecording) {
+        recognition.stop();
+    } else {
+        recognition.start();
+    }
+}
+
+function stopVoiceInput() {
+    isRecording = false;
+    const voiceBtn = document.getElementById('voice-btn');
+    if (voiceBtn) {
+        voiceBtn.classList.remove('recording');
+        voiceBtn.querySelector('i').className = 'fas fa-microphone';
+    }
+    hideVoiceFeedback();
+}
+
+function showVoiceFeedback(status, transcript) {
+    let feedback = document.querySelector('.voice-feedback');
+    if (!feedback) {
+        feedback = document.createElement('div');
+        feedback.className = 'voice-feedback';
+        feedback.innerHTML = `
+            <i class="fas fa-microphone"></i>
+            <div>
+                <div class="voice-text">${status}</div>
+                <div class="voice-transcript">${transcript}</div>
+            </div>
+        `;
+        document.body.appendChild(feedback);
+    }
+
+    feedback.querySelector('.voice-text').textContent = status;
+    feedback.querySelector('.voice-transcript').textContent = transcript;
+    feedback.classList.add('active');
+}
+
+function hideVoiceFeedback() {
+    const feedback = document.querySelector('.voice-feedback');
+    if (feedback) {
+        feedback.classList.remove('active');
+    }
+}
+
+// Inicializar voice input
+document.addEventListener('DOMContentLoaded', initVoiceInput);
+
+// ============================================
+// EXPORTAR CONVERSA
+// ============================================
+function exportConversation(format) {
+    const messages = document.querySelectorAll('#chat-messages .message');
+
+    if (messages.length <= 1) { // Apenas mensagem de boas-vindas
+        alert('Não há mensagens para exportar.');
+        return;
+    }
+
+    const conversationData = [];
+    const timestamp = new Date().toLocaleString('pt-BR');
+
+    messages.forEach((msg, index) => {
+        if (index === 0) return; // Pular mensagem de boas-vindas
+
+        const isUser = msg.classList.contains('user');
+        const bubble = msg.querySelector('.message-bubble');
+        const time = msg.querySelector('.message-time');
+
+        if (bubble) {
+            conversationData.push({
+                role: isUser ? 'Usuário' : 'Assistente',
+                content: bubble.innerText || bubble.textContent,
+                time: time ? time.textContent : ''
+            });
+        }
+    });
+
+    if (format === 'markdown') {
+        exportAsMarkdown(conversationData, timestamp);
+    } else if (format === 'pdf') {
+        exportAsPDF(conversationData, timestamp);
+    }
+}
+
+function exportAsMarkdown(data, timestamp) {
+    let markdown = `# Conversa com Nacom Goya IA\n\n`;
+    markdown += `**Exportado em:** ${timestamp}\n\n`;
+    markdown += `---\n\n`;
+
+    data.forEach(msg => {
+        const icon = msg.role === 'Usuário' ? '👤' : '🤖';
+        markdown += `### ${icon} ${msg.role}\n`;
+        if (msg.time) markdown += `*${msg.time}*\n\n`;
+        markdown += `${msg.content}\n\n`;
+        markdown += `---\n\n`;
+    });
+
+    // Download do arquivo
+    const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `conversa-nacom-${Date.now()}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    console.log('[EXPORT] Markdown exportado');
+}
+
+function exportAsPDF(data, timestamp) {
+    // Criar HTML para o PDF
+    let html = `
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <style>
+                body {
+                    font-family: 'Segoe UI', Arial, sans-serif;
+                    padding: 40px;
+                    max-width: 800px;
+                    margin: 0 auto;
+                    color: #1f2328;
+                    line-height: 1.6;
+                }
+                h1 {
+                    color: #00a88a;
+                    border-bottom: 2px solid #00a88a;
+                    padding-bottom: 10px;
+                }
+                .meta {
+                    color: #57606a;
+                    font-size: 0.9em;
+                    margin-bottom: 30px;
+                }
+                .message {
+                    margin: 20px 0;
+                    padding: 15px;
+                    border-radius: 10px;
+                    page-break-inside: avoid;
+                }
+                .user {
+                    background: #e8f4fd;
+                    border-left: 4px solid #0284c7;
+                }
+                .assistant {
+                    background: #f0fdf4;
+                    border-left: 4px solid #00a88a;
+                }
+                .role {
+                    font-weight: 600;
+                    margin-bottom: 8px;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+                .time {
+                    font-size: 0.8em;
+                    color: #8b949e;
+                }
+                .content {
+                    white-space: pre-wrap;
+                }
+                pre {
+                    background: #1f2328;
+                    color: #f0f6fc;
+                    padding: 12px;
+                    border-radius: 6px;
+                    overflow-x: auto;
+                }
+                code {
+                    background: #e8eef4;
+                    padding: 2px 6px;
+                    border-radius: 4px;
+                    font-size: 0.9em;
+                }
+            </style>
+        </head>
+        <body>
+            <h1>🤖 Conversa com Nacom Goya IA</h1>
+            <div class="meta">Exportado em: ${timestamp}</div>
+    `;
+
+    data.forEach(msg => {
+        const icon = msg.role === 'Usuário' ? '👤' : '🤖';
+        const cssClass = msg.role === 'Usuário' ? 'user' : 'assistant';
+        html += `
+            <div class="message ${cssClass}">
+                <div class="role">${icon} ${msg.role} <span class="time">${msg.time || ''}</span></div>
+                <div class="content">${escapeHtml(msg.content)}</div>
+            </div>
+        `;
+    });
+
+    html += '</body></html>';
+
+    // Abrir em nova janela para impressão
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(html);
+    printWindow.document.close();
+
+    // Aguardar carregamento e imprimir
+    printWindow.onload = function() {
+        printWindow.print();
+    };
+
+    console.log('[EXPORT] PDF gerado (via impressão)');
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// ============================================
+// FAVORITAR MENSAGENS
+// ============================================
+let favorites = JSON.parse(localStorage.getItem('agent-favorites') || '[]');
+let favoritesViewActive = false;
+
+function initFavorites() {
+    // Observar novas mensagens para adicionar botão de favorito
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            mutation.addedNodes.forEach((node) => {
+                if (node.nodeType === 1 && node.classList.contains('message')) {
+                    addFavoriteButton(node);
+                }
+            });
+        });
+    });
+
+    const chatMessages = document.getElementById('chat-messages');
+    if (chatMessages) {
+        observer.observe(chatMessages, { childList: true });
+
+        // Adicionar botão às mensagens existentes
+        chatMessages.querySelectorAll('.message').forEach(addFavoriteButton);
+    }
+
+    // Criar indicador de modo favoritos
+    createFavoritesModeIndicator();
+
+    console.log('[FAVS] Favoritos inicializados:', favorites.length);
+}
+
+function addFavoriteButton(messageEl) {
+    // Não adicionar à mensagem de boas-vindas
+    if (messageEl.querySelector('h6')) return;
+
+    // Verificar se já tem botão
+    if (messageEl.querySelector('.message-actions')) return;
+
+    const messageId = generateMessageId(messageEl);
+    messageEl.dataset.messageId = messageId;
+
+    const content = messageEl.querySelector('.message-content');
+    if (!content) return;
+
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'message-actions';
+
+    const isFavorited = favorites.includes(messageId);
+
+    actionsDiv.innerHTML = `
+        <button class="btn-favorite ${isFavorited ? 'favorited' : ''}"
+                onclick="toggleFavorite('${messageId}')"
+                title="${isFavorited ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}">
+            <i class="fa${isFavorited ? 's' : 'r'} fa-star"></i>
+        </button>
+    `;
+
+    content.appendChild(actionsDiv);
+}
+
+function generateMessageId(messageEl) {
+    const bubble = messageEl.querySelector('.message-bubble');
+    const content = bubble ? bubble.textContent.substring(0, 50) : '';
+    const isUser = messageEl.classList.contains('user');
+    return `${isUser ? 'user' : 'assistant'}-${hashCode(content)}`;
+}
+
+function hashCode(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash;
+    }
+    return Math.abs(hash).toString(36);
+}
+
+function toggleFavorite(messageId) {
+    const index = favorites.indexOf(messageId);
+    const btn = document.querySelector(`[data-message-id="${messageId}"] .btn-favorite`);
+
+    if (index === -1) {
+        favorites.push(messageId);
+        if (btn) {
+            btn.classList.add('favorited');
+            btn.querySelector('i').className = 'fas fa-star';
+            btn.title = 'Remover dos favoritos';
+        }
+        console.log('[FAVS] Adicionado:', messageId);
+    } else {
+        favorites.splice(index, 1);
+        if (btn) {
+            btn.classList.remove('favorited');
+            btn.querySelector('i').className = 'far fa-star';
+            btn.title = 'Adicionar aos favoritos';
+        }
+        console.log('[FAVS] Removido:', messageId);
+
+        // Se estiver no modo favoritos, esconder a mensagem
+        if (favoritesViewActive) {
+            const messageEl = document.querySelector(`[data-message-id="${messageId}"]`);
+            if (messageEl) {
+                messageEl.classList.add('hidden-by-filter');
+            }
+        }
+    }
+
+    localStorage.setItem('agent-favorites', JSON.stringify(favorites));
+}
+
+function createFavoritesModeIndicator() {
+    const chatContainer = document.querySelector('.chat-container');
+    if (!chatContainer) return;
+
+    const indicator = document.createElement('div');
+    indicator.className = 'favorites-mode-indicator';
+    indicator.id = 'favorites-indicator';
+    indicator.innerHTML = `
+        <i class="fas fa-star"></i>
+        <span>Mostrando apenas favoritos</span>
+        <button onclick="toggleFavoritesView()" title="Mostrar todas">
+            <i class="fas fa-times"></i> Sair
+        </button>
+    `;
+
+    // Inserir após o progress bar
+    const progressBar = document.getElementById('progress-bar-container');
+    if (progressBar) {
+        progressBar.after(indicator);
+    } else {
+        const header = document.querySelector('.chat-header');
+        if (header) {
+            header.after(indicator);
+        }
+    }
+}
+
+function toggleFavoritesView() {
+    favoritesViewActive = !favoritesViewActive;
+
+    const indicator = document.getElementById('favorites-indicator');
+    const messages = document.querySelectorAll('#chat-messages .message');
+
+    if (favoritesViewActive) {
+        indicator.classList.add('active');
+
+        messages.forEach((msg, index) => {
+            if (index === 0) return; // Manter boas-vindas
+
+            const messageId = msg.dataset.messageId;
+            if (!favorites.includes(messageId)) {
+                msg.classList.add('hidden-by-filter');
+            }
+        });
+
+        console.log('[FAVS] Modo favoritos ativado');
+    } else {
+        indicator.classList.remove('active');
+        messages.forEach(msg => msg.classList.remove('hidden-by-filter'));
+        console.log('[FAVS] Modo favoritos desativado');
+    }
+}
+
+// Inicializar favoritos
+document.addEventListener('DOMContentLoaded', initFavorites);
+</script>
 {% endblock %}

@@ -491,7 +491,12 @@ async function sendMessage(event) {
     clearThinking();
 
     // Mostra indicador e botão stop
-    showTyping('Processando...');
+    // FEAT-002: Indica quando pensamento profundo está ativo
+    if (thinkingEnabled) {
+        showTyping('🧠 Pensando profundamente...');
+    } else {
+        showTyping('Processando...');
+    }
     showStopButton(); // FEAT-026
 
     // FEAT-028: Obtém arquivos anexados
@@ -556,8 +561,26 @@ async function handleStreamResponse(response) {
     const state = {
         text: '',           // Texto acumulado
         msgElement: null,   // Elemento DOM da mensagem
-        bubbleElement: null // Elemento do bubble
+        bubbleElement: null, // Elemento do bubble
+        lastTextTime: Date.now() // FEAT-032: Timestamp do último texto recebido
     };
+
+    // FEAT-032: Timeout de feedback - mostra mensagem se ficar muito tempo sem texto
+    let feedbackShown = false;
+    const FEEDBACK_TIMEOUT = 15000; // 15 segundos
+
+    const feedbackTimer = setInterval(() => {
+        if (!isGenerating) {
+            clearInterval(feedbackTimer);
+            return;
+        }
+        const elapsed = Date.now() - state.lastTextTime;
+        if (elapsed > FEEDBACK_TIMEOUT && !feedbackShown) {
+            feedbackShown = true;
+            showTyping('⏳ Ainda processando, aguarde...');
+            console.log('[SSE] Timeout de feedback ativado após', elapsed, 'ms');
+        }
+    }, 5000); // Verifica a cada 5 segundos
 
     while (true) {
         // FEAT-026: Verifica se foi interrompido
@@ -600,6 +623,9 @@ async function handleStreamResponse(response) {
         }
     }
 
+    // FEAT-032: Limpa timer de feedback
+    clearInterval(feedbackTimer);
+
     hideTyping();
 
     // FIX: Garante que items pendentes sejam finalizados mesmo se stream terminar sem 'done'
@@ -626,6 +652,9 @@ function processSSEEvent(eventType, data, state) {
             break;
 
         case 'text':
+            // FEAT-032: Atualiza timestamp de último texto recebido
+            state.lastTextTime = Date.now();
+
             // Acumula texto no estado compartilhado
             state.text += data.content || '';
             if (state.bubbleElement) {
@@ -663,13 +692,26 @@ function processSSEEvent(eventType, data, state) {
 
         // FEAT-006: Timeline - Resultado de tool
         case 'tool_result':
-            showTyping('📊 Analisando dados...');
+            // MELHORIA: Trata erros de tools adequadamente
+            const toolIsError = data.is_error || false;
+            const toolName = data.tool_name || 'ferramenta';
 
-            // Atualiza último item da timeline
-            updateLastTimelineItem({
-                status: 'success',
-                duration_ms: data.duration_ms || 0
-            });
+            if (toolIsError) {
+                // Tool falhou - mostra feedback claro
+                showTyping(`⚠️ ${toolName} encontrou um problema...`);
+                updateLastTimelineItem({
+                    status: 'error',
+                    duration_ms: data.duration_ms || 0
+                });
+                console.warn(`[SSE] Tool '${toolName}' retornou erro:`, data.result);
+            } else {
+                // Tool executou com sucesso
+                showTyping('📊 Analisando dados...');
+                updateLastTimelineItem({
+                    status: 'success',
+                    duration_ms: data.duration_ms || 0
+                });
+            }
             break;
 
         // FEAT-008/FEAT-024: Evento de todos (vem do TodoWrite)

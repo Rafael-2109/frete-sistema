@@ -47,8 +47,8 @@ Sem estas correcoes, o agente continuara errando em conversas similares.
 | Arquivo | Alteracoes Planejadas |
 |---------|----------------------|
 | `.claude/skills/gerindo-expedicao/SKILL.md` | Decision Tree, Termos Ambiguos, Contexto, Description |
-| `.claude/skills/gerindo-expedicao/examples.md` | Links navegacao, Exemplos produto-cliente |
-| `.claude/skills/gerindo-expedicao/reference.md` | Expandir glossario (Rafael) |
+| `.claude/skills/gerindo-expedicao/references/examples.md` | Links navegacao, Exemplos produto-cliente |
+| `.claude/skills/gerindo-expedicao/references/glossary.md` | Expandir glossario (Rafael) |
 
 ---
 

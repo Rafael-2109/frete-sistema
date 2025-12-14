@@ -109,7 +109,7 @@ O termo tem **4 interpretacoes diferentes**:
 
 ### 2.4. Examples.md Nao Tem Caso de Uso
 
-**Arquivo**: `.claude/skills/gerindo-expedicao/examples.md` (395 linhas, 15 exemplos)
+**Arquivo**: `.claude/skills/gerindo-expedicao/references/examples.md` (395 linhas, 15 exemplos)
 
 **Faltando**: Exemplos de "produto - cliente/grupo" como:
 - "quantas caixas de ketchup tem pendentes pro atacadao 183"
@@ -309,8 +309,8 @@ Alem do examples.md, onde mais seria util ter links de navegacao?
 ### Arquivos Relacionados
 
 - `.claude/skills/gerindo-expedicao/SKILL.md` - Skill principal
-- `.claude/skills/gerindo-expedicao/examples.md` - Exemplos de uso
-- `.claude/skills/gerindo-expedicao/reference.md` - Referencia tecnica
+- `.claude/skills/gerindo-expedicao/references/examples.md` - Exemplos de uso
+- `.claude/skills/gerindo-expedicao/references/` - Arquivos de referencia (tables, glossary, synonyms, products, business)
 - `app/agente/falha_conversa.md` - Registro da conversa com falha
 
 ---

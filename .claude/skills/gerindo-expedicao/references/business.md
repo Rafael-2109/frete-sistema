@@ -10,12 +10,13 @@ Constantes, calculos e regras de negocio utilizadas pelos scripts desta skill.
 
 1. [Grupos Empresariais](#grupos-empresariais)
 2. [Constantes de Negocio](#constantes-de-negocio)
-3. [UFs para Regras de Expedicao](#ufs-para-regras-de-expedicao)
-4. [Leadtimes de Planejamento](#leadtimes-de-planejamento)
-5. [Calculos de Estoque](#calculos-de-estoque)
-6. [Calculos de Separacao](#calculos-de-separacao)
-7. [Identificacao de Gestores](#identificacao-de-gestores)
-8. [Normalizacao de Texto](#normalizacao-de-texto)
+3. [Limites de Veiculos](#limites-de-veiculos)
+4. [UFs para Regras de Expedicao](#ufs-para-regras-de-expedicao)
+5. [Leadtimes de Planejamento](#leadtimes-de-planejamento)
+6. [Calculos de Estoque](#calculos-de-estoque)
+7. [Calculos de Separacao](#calculos-de-separacao)
+8. [Identificacao de Gestores](#identificacao-de-gestores)
+9. [Normalizacao de Texto](#normalizacao-de-texto)
 
 ---
 
@@ -71,6 +72,20 @@ DIAS_DEMORA_PARA_PARCIAL = 3
 VALOR_MINIMO_CONSULTAR_COMERCIAL = 10000
 VALOR_PEDIDO_PEQUENO = 15000
 ```
+
+---
+
+## Limites de Veiculos
+
+| Veiculo | Limite Peso | Limite Pallets | Uso |
+|---------|-------------|----------------|-----|
+| Toco | Pelo peso | - | Cargas menores |
+| Truck | - | 16 pallets | Cargas medias |
+| Carreta | 24-32 ton | 26-30 pallets | Cargas diretas |
+
+**Regras de carga:**
+- Carga direta: >= 26 pallets OU >= 20.000 kg
+- Parcial obrigatorio: >= 30 pallets OU >= 25.000 kg (limite carreta)
 
 ---
 

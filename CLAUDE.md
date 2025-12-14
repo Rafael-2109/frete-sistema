@@ -448,6 +448,24 @@ app/agente/
 
 **Versao atual**: 3.0.0 (estrutura XML com hierarquia de prioridade)
 
+## Variaveis Injetadas no system_prompt.md
+
+O arquivo `app/agente/sdk/client.py` substitui variaveis antes de enviar ao SDK.
+
+**Codigo**: `client.py:234-261` (`_format_system_prompt`)
+
+| Variavel | Valor Injetado | Fonte |
+|----------|----------------|-------|
+| `{data_atual}` | `14/12/2025 15:50` | `datetime.now()` |
+| `{usuario_nome}` | `Rafael` | `current_user.nome` |
+| `{user_id}` | `1` | `current_user.id` |
+
+**Exemplo no system_prompt.md**:
+```markdown
+Data atual: {data_atual}
+Usuario: {usuario_nome}
+```
+
 ## Tabelas do Agente
 
 | Tabela | Modelo | Campos Principais |
@@ -484,3 +502,36 @@ app/agente/
 | `lendo-arquivos` | `.claude/skills/lendo-arquivos/` | Processar Excel/CSV enviados |
 | `frontend-design` | `.claude/skills/frontend-design/` | Criar interfaces web, componentes UI |
 | `skill_creator` | `.claude/skills/skill_creator/` | Criar/atualizar skills
+
+---
+
+# SUBAGENTES DISPONIVEIS
+
+## analista-carteira
+
+**Arquivo**: `.claude/agents/analista-carteira.md`
+**Modelo**: Opus (recomendado para tarefas complexas)
+**Tools**: Read, Bash, Write, Edit, Glob, Grep
+**Skills**: gerindo-expedicao
+
+**Descricao**: Clone do Rafael para analise de carteira. Substitui analise diaria (2-3h/dia).
+
+**Quando usar**:
+- Analise COMPLETA da carteira de pedidos
+- Decisoes de priorizacao P1-P7
+- Comunicacao estruturada com PCP/Comercial
+- Tarefas que requerem contexto profundo de regras de negocio
+
+**Exemplo de invocacao** (via Task tool):
+```python
+Task(
+    subagent_type="analista-carteira",
+    prompt="Analise a carteira do Atacadao para semana que vem"
+)
+```
+
+**Capacidades**:
+- Algoritmo P1-P7 de priorizacao
+- Decisao parcial vs aguardar
+- Templates de comunicacao PCP/Comercial
+- Conhecimento de leadtimes e gargalos

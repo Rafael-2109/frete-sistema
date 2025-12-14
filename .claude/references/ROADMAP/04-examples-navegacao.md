@@ -3,7 +3,7 @@
 **Status**: PENDENTE
 **Prioridade**: IMPORTANTE
 **Responsavel**: Claude + Rafael
-**Arquivo alvo**: `.claude/skills/gerindo-expedicao/examples.md`
+**Arquivo alvo**: `.claude/skills/gerindo-expedicao/references/examples.md`
 
 ---
 

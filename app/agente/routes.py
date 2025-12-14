@@ -349,6 +349,10 @@ def _stream_chat_response(
                             'result': event.content
                         }))
 
+                    elif event.type == 'thinking':
+                        # FEAT-002: Repassa thinking block para frontend
+                        event_queue.put(_sse_event('thinking', {'content': event.content}))
+
                     elif event.type == 'todos':
                         todos = event.content.get('todos', [])
                         if todos:
