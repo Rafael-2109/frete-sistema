@@ -4,6 +4,8 @@
 
 {% block extra_css %}
 <meta name="csrf-token" content="{{ csrf_token() }}">
+<!-- DESIGN-001: Agent Theme (Deep Ocean) - Carrega ANTES do chat.css -->
+<link rel="stylesheet" href="{{ url_for('static', filename='agente/css/agent-theme.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='agente/css/chat.css') }}">
 <!-- FEAT-023: Highlight.js para syntax highlighting -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/atom-one-dark.min.css">
@@ -82,6 +84,12 @@
                     <span class="token-cost" id="token-cost" title="Custo USD">$0.00</span>
                 </div>
                 {% endif %}
+
+                <!-- DESIGN-001: Toggle de Tema Dark/Light -->
+                <button class="theme-toggle" onclick="toggleAgentTheme()" title="Alternar tema">
+                    <i class="fas fa-sun theme-toggle__icon theme-toggle__icon--light"></i>
+                    <i class="fas fa-moon theme-toggle__icon theme-toggle__icon--dark"></i>
+                </button>
 
                 <span class="status-indicator online" title="Online">
                     <i class="fas fa-circle"></i>
@@ -324,4 +332,54 @@
 <script src="https://cdn.jsdelivr.net/npm/marked@13.0.0/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/highlight.min.js"></script>
 <script src="{{ url_for('static', filename='agente/js/chat.js') }}"></script>
+
+<!-- DESIGN-001: Theme Management -->
+<script>
+/**
+ * Agent Theme Manager
+ * Gerencia dark/light mode com persistência em localStorage
+ */
+
+// Inicializa tema ao carregar a página
+(function initAgentTheme() {
+    const savedTheme = localStorage.getItem('agent-theme');
+    const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const theme = savedTheme || (systemPrefersDark ? 'dark' : 'light');
+
+    document.documentElement.setAttribute('data-theme', theme);
+
+    // Também sincroniza com data-bs-theme para compatibilidade Bootstrap
+    document.documentElement.setAttribute('data-bs-theme', theme);
+
+    console.log('[THEME] Inicializado:', theme);
+})();
+
+/**
+ * Alterna entre dark e light mode
+ */
+function toggleAgentTheme() {
+    const html = document.documentElement;
+    const currentTheme = html.getAttribute('data-theme') || 'dark';
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+
+    // Aplica o novo tema
+    html.setAttribute('data-theme', newTheme);
+    html.setAttribute('data-bs-theme', newTheme);
+
+    // Persiste no localStorage
+    localStorage.setItem('agent-theme', newTheme);
+
+    console.log('[THEME] Alterado para:', newTheme);
+}
+
+// Escuta mudanças na preferência do sistema (se usuário não tiver escolhido)
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+    if (!localStorage.getItem('agent-theme')) {
+        const newTheme = e.matches ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', newTheme);
+        document.documentElement.setAttribute('data-bs-theme', newTheme);
+        console.log('[THEME] Sistema alterou para:', newTheme);
+    }
+});
+</script>
 {% endblock %}

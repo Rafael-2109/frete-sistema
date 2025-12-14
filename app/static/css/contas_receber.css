@@ -52,15 +52,136 @@
 }
 
 /* === CONTAINER PRINCIPAL === */
-body:has(.container-fluid) {
-    background: var(--cr-bg-primary);
-    color: var(--cr-text-primary);
+body {
+    background: var(--cr-bg-primary) !important;
+    color: var(--cr-text-primary) !important;
     font-family: var(--cr-font-display);
 }
 
-.container-fluid {
+/* === PROTEGER NAVBAR NO LIGHT MODE === */
+/* O navbar deve SEMPRE manter fundo escuro, independente do tema */
+[data-theme="light"] .navbar,
+[data-theme="light"] .navbar.navbar-dark,
+[data-theme="light"] .navbar.bg-dark,
+[data-theme="light"] .navbar.navbar-dark.bg-dark {
+    background-color: #212529 !important;
+    --bs-bg-opacity: 1 !important;
+}
+
+[data-theme="light"] .navbar .navbar-brand,
+[data-theme="light"] .navbar.navbar-dark .navbar-brand {
+    color: #ffffff !important;
+}
+
+[data-theme="light"] .navbar .nav-link,
+[data-theme="light"] .navbar.navbar-dark .nav-link {
+    color: rgba(255, 255, 255, 0.85) !important;
+}
+
+[data-theme="light"] .navbar .nav-link:hover,
+[data-theme="light"] .navbar .nav-link:focus,
+[data-theme="light"] .navbar.navbar-dark .nav-link:hover,
+[data-theme="light"] .navbar.navbar-dark .nav-link:focus {
+    color: #ffffff !important;
+}
+
+[data-theme="light"] .navbar .dropdown-menu,
+[data-theme="light"] .navbar.navbar-dark .dropdown-menu {
+    background-color: #212529 !important;
+    border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+[data-theme="light"] .navbar .dropdown-item,
+[data-theme="light"] .navbar.navbar-dark .dropdown-item {
+    color: rgba(255, 255, 255, 0.85) !important;
+}
+
+[data-theme="light"] .navbar .dropdown-item:hover,
+[data-theme="light"] .navbar .dropdown-item:focus,
+[data-theme="light"] .navbar.navbar-dark .dropdown-item:hover,
+[data-theme="light"] .navbar.navbar-dark .dropdown-item:focus {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+    color: #ffffff !important;
+}
+
+[data-theme="light"] .navbar .dropdown-header,
+[data-theme="light"] .navbar.navbar-dark .dropdown-header {
+    color: rgba(255, 255, 255, 0.6) !important;
+}
+
+[data-theme="light"] .navbar .dropdown-divider {
+    border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+/* Container principal - EXCLUIR o container dentro do navbar */
+.container-fluid:not(.navbar .container-fluid) {
     background: var(--cr-bg-primary);
     color: var(--cr-text-primary);
+}
+
+/* Garantir que o container do navbar seja transparente */
+.navbar .container-fluid {
+    background: transparent !important;
+    color: inherit !important;
+}
+
+/* === SOBRESCREVER BOOTSTRAP GLOBALMENTE === */
+.table {
+    --bs-table-color: var(--cr-text-primary);
+    --bs-table-bg: var(--cr-bg-secondary);
+    --bs-table-border-color: var(--cr-border);
+}
+
+/* Garantir cores em todos os elementos da tabela */
+.table td, .table th, .table tr {
+    color: inherit;
+}
+
+/* Elementos dentro de td precisam herdar cor */
+.table-contas td,
+.table-contas td span,
+.table-contas td a:not(.badge),
+.table-contas td div,
+.table-contas td strong,
+.table-contas td small,
+.table-contas td i {
+    color: var(--cr-text-primary) !important;
+}
+
+/* Classe cliente-col */
+.table-contas .cliente-col {
+    color: var(--cr-text-primary) !important;
+}
+
+/* Classe tipo-titulo */
+.table-contas .tipo-titulo {
+    color: var(--cr-text-muted) !important;
+}
+
+/* Exceções para badges que devem manter suas cores */
+.table-contas td .badge,
+.table-contas td .badge-empresa {
+    color: white !important;
+}
+
+/* Exceções para elementos com cores específicas */
+.table-contas .text-danger {
+    color: var(--cr-accent-danger) !important;
+}
+.table-contas .text-warning {
+    color: var(--cr-accent-warning) !important;
+}
+.table-contas .text-success {
+    color: var(--cr-accent-success) !important;
+}
+.table-contas .text-info {
+    color: var(--cr-accent-info) !important;
+}
+.table-contas .text-muted {
+    color: var(--cr-text-muted) !important;
+}
+.table-contas .text-secondary {
+    color: var(--cr-text-secondary) !important;
 }
 
 /* === ACCORDION CUSTOMIZADO === */
@@ -144,41 +265,62 @@ input[type="date"] {
 /* === TABELA === */
 .table-contas {
     font-size: 0.8rem;
-    background: var(--cr-bg-secondary);
+    background: var(--cr-bg-secondary) !important;
+    --bs-table-bg: var(--cr-bg-secondary);
+    --bs-table-striped-bg: var(--cr-bg-tertiary);
+    --bs-table-hover-bg: var(--cr-bg-hover);
+    --bs-table-border-color: var(--cr-border);
+    color: var(--cr-text-primary) !important;
 }
 
 .table-contas th {
-    background: var(--cr-bg-tertiary);
-    color: var(--cr-text-secondary);
+    background: var(--cr-bg-tertiary) !important;
+    color: var(--cr-text-secondary) !important;
     font-weight: 600;
     white-space: nowrap;
     position: sticky;
     top: 0;
     z-index: 10;
-    border-bottom-color: var(--cr-border);
+    border-color: var(--cr-border) !important;
 }
 
 .table-contas th a {
-    color: var(--cr-text-secondary);
+    color: var(--cr-text-secondary) !important;
     text-decoration: none;
 }
 
 .table-contas th a:hover {
-    color: var(--cr-accent-primary);
+    color: var(--cr-accent-primary) !important;
 }
 
 .table-contas td {
-    color: var(--cr-text-primary);
-    border-color: var(--cr-border);
+    color: var(--cr-text-primary) !important;
+    border-color: var(--cr-border) !important;
     vertical-align: middle;
+    background: transparent;
+}
+
+/* Sobrescrever table-striped do Bootstrap */
+.table-contas.table-striped > tbody > tr:nth-of-type(odd) > * {
+    background-color: var(--cr-bg-tertiary) !important;
+    --bs-table-accent-bg: var(--cr-bg-tertiary);
+    color: var(--cr-text-primary) !important;
+}
+
+.table-contas.table-striped > tbody > tr:nth-of-type(even) > * {
+    background-color: var(--cr-bg-secondary) !important;
+    --bs-table-accent-bg: var(--cr-bg-secondary);
+    color: var(--cr-text-primary) !important;
 }
 
 .table-contas tbody tr {
     transition: background 0.15s ease;
 }
 
-.table-hover tbody tr:hover {
+.table-contas.table-hover > tbody > tr:hover > * {
     background-color: var(--cr-bg-hover) !important;
+    --bs-table-accent-bg: var(--cr-bg-hover);
+    color: var(--cr-text-primary) !important;
 }
 
 /* === BADGES DE EMPRESA === */
@@ -418,10 +560,16 @@ input[type="date"] {
 .obs-clicavel {
     cursor: pointer;
     text-decoration: underline dotted;
-    color: var(--cr-text-muted);
+    color: var(--cr-text-muted) !important;
 }
 .obs-clicavel:hover {
-    color: var(--cr-accent-info);
+    color: var(--cr-accent-info) !important;
+}
+.obs-clicavel i {
+    color: inherit !important;
+}
+.obs-clicavel small {
+    color: inherit !important;
 }
 
 /* === PREVISAO ENTREGA === */
@@ -441,10 +589,13 @@ input[type="date"] {
 
 /* === LINK TITULO NF === */
 .titulo-nf-link {
-    color: var(--cr-text-primary);
+    color: var(--cr-text-primary) !important;
     text-decoration: none;
     cursor: pointer;
     transition: all 0.2s ease;
+}
+.titulo-nf-link strong {
+    color: var(--cr-text-primary) !important;
 }
 .titulo-nf-link:hover {
     color: var(--cr-accent-primary);
@@ -502,9 +653,54 @@ input[type="date"] {
     color: var(--cr-text-primary);
 }
 
-.modal-header {
+/* Modal header - NÃO sobrescrever se tiver classe Bootstrap de cor */
+.modal-header:not(.bg-primary):not(.bg-success):not(.bg-danger):not(.bg-warning):not(.bg-info):not(.bg-secondary):not(.bg-dark):not(.bg-light) {
     background: var(--cr-bg-tertiary);
     border-bottom-color: var(--cr-border);
+}
+
+/* Para modal headers com classes Bootstrap de cor - Usar cores do DESIGN SYSTEM */
+/* NÃO usar cores genéricas Bootstrap - usar paleta financeira única */
+.modal-header.bg-primary {
+    background: linear-gradient(135deg, var(--cr-accent-primary), var(--cr-accent-info)) !important;
+    border-bottom-color: rgba(0, 0, 0, 0.2);
+}
+
+.modal-header.bg-success {
+    background: linear-gradient(135deg, var(--cr-accent-success), #059669) !important;
+    border-bottom-color: rgba(0, 0, 0, 0.2);
+}
+
+.modal-header.bg-danger {
+    background: linear-gradient(135deg, var(--cr-accent-danger), #b91c1c) !important;
+    border-bottom-color: rgba(0, 0, 0, 0.2);
+}
+
+.modal-header.bg-warning {
+    background: linear-gradient(135deg, var(--cr-accent-warning), #d97706) !important;
+    border-bottom-color: rgba(0, 0, 0, 0.2);
+}
+
+.modal-header.bg-info {
+    background: linear-gradient(135deg, var(--cr-accent-info), #0284c7) !important;
+    border-bottom-color: rgba(0, 0, 0, 0.2);
+}
+
+/* Texto branco em headers coloridos - garantir visibilidade */
+.modal-header.bg-primary .modal-title,
+.modal-header.bg-success .modal-title,
+.modal-header.bg-danger .modal-title,
+.modal-header.bg-info .modal-title {
+    color: #ffffff !important;
+}
+
+/* Botão close em headers coloridos - branco */
+.modal-header.bg-primary .btn-close,
+.modal-header.bg-success .btn-close,
+.modal-header.bg-danger .btn-close,
+.modal-header.bg-info .btn-close {
+    filter: brightness(0) invert(1);
+    opacity: 0.8;
 }
 
 .modal-title {
@@ -513,6 +709,23 @@ input[type="date"] {
 
 .modal-body {
     background: var(--cr-bg-secondary);
+    color: var(--cr-text-primary);
+}
+
+/* Elementos de texto dentro do modal */
+.modal-body strong,
+.modal-body span:not(.badge):not([class*="text-"]),
+.modal-body small:not(.text-muted),
+.modal-body label,
+.modal-body p,
+.modal-body h5,
+.modal-body h6 {
+    color: inherit;
+}
+
+/* Light mode: garantir cores corretas no modal */
+[data-theme="light"] .modal-body {
+    color: #212529;
 }
 
 .modal-footer {
@@ -520,12 +733,14 @@ input[type="date"] {
     border-top-color: var(--cr-border);
 }
 
+/* Botão close padrão (dark mode) */
 .btn-close {
     filter: invert(1);
     opacity: 0.6;
 }
 
-[data-theme="light"] .btn-close {
+/* Light mode btn-close */
+[data-theme="light"] .btn-close:not(.btn-close-white) {
     filter: none;
 }
 
@@ -535,10 +750,24 @@ input[type="date"] {
     border-color: var(--cr-border);
 }
 
-.modal .card-header {
+/* Card header - NÃO sobrescrever se tiver classe Bootstrap de cor */
+.modal .card-header:not(.bg-light):not(.bg-primary):not(.bg-secondary):not(.bg-success):not(.bg-danger):not(.bg-warning):not(.bg-info) {
     background: var(--cr-bg-hover);
     border-bottom-color: var(--cr-border);
     color: var(--cr-text-primary);
+}
+
+/* Card header com bg-light - manter light e ajustar para o tema */
+.modal .card-header.bg-light {
+    background-color: var(--cr-bg-tertiary) !important;
+    border-bottom-color: var(--cr-border);
+    color: var(--cr-text-primary);
+}
+
+/* Light mode: card-header bg-light deve ser realmente light */
+[data-theme="light"] .modal .card-header.bg-light {
+    background-color: #f8f9fa !important;
+    color: #212529;
 }
 
 .modal .table-secondary {
@@ -550,9 +779,24 @@ input[type="date"] {
     color: var(--cr-text-secondary);
 }
 
+/* Light mode: table-secondary deve manter aparência light */
+[data-theme="light"] .modal .table-secondary {
+    background: #f8f9fa !important;
+}
+
+[data-theme="light"] .modal .table-secondary th {
+    background: #f8f9fa !important;
+    color: #6c757d;
+}
+
 .modal .table td {
     border-color: var(--cr-border);
     color: var(--cr-text-primary);
+}
+
+/* Modal table no light mode */
+[data-theme="light"] .modal .table td {
+    color: #212529;
 }
 
 /* Modal backdrop */
@@ -698,6 +942,14 @@ input[type="date"] {
 
 .text-info {
     color: var(--cr-accent-info) !important;
+}
+
+.text-primary {
+    color: var(--cr-accent-primary) !important;
+}
+
+.text-secondary {
+    color: var(--cr-text-secondary) !important;
 }
 
 /* === BADGE CLICAVEL === */

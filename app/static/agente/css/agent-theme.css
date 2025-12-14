@@ -1,0 +1,1359 @@
+/**
+ * ==========================================================================
+ * AGENT THEME - Deep Ocean Design System
+ * ==========================================================================
+ * Versao: 1.0.0
+ * Data: 14/12/2025
+ * Aesthetic: Deep Ocean (Teal/Cyan profissional)
+ *
+ * Este arquivo define o design system do Agente Logistico.
+ * Deve ser carregado ANTES do chat.css para que as variables sejam usadas.
+ *
+ * Baseado na skill frontend-design:
+ * - CSS Variables com prefix --agent-*
+ * - Dark Mode (default)
+ * - Light Mode completo
+ * - Atmospheric background
+ * - Signature visual moments
+ * - Typography excellence
+ * - Acessibilidade (prefers-reduced-motion, focus states)
+ * ==========================================================================
+ */
+
+/* === FONTS === */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+/* ==========================================================================
+   DARK MODE (Default)
+   ========================================================================== */
+:root,
+[data-theme="dark"] {
+    /* === Backgrounds === */
+    --agent-bg-primary: #0a1628;
+    --agent-bg-secondary: #111d2e;
+    --agent-bg-tertiary: #1a2942;
+    --agent-bg-hover: #243554;
+    --agent-bg-active: #2d4266;
+
+    /* === Text === */
+    --agent-text-primary: #f0f6fc;
+    --agent-text-secondary: #8b949e;
+    --agent-text-muted: #6e7681;
+    --agent-text-inverse: #0a1628;
+
+    /* === Accent Colors - Deep Ocean Palette === */
+    --agent-accent-primary: #00d4aa;
+    --agent-accent-primary-rgb: 0, 212, 170;
+    --agent-accent-primary-hover: #00eabb;
+    --agent-accent-primary-muted: rgba(0, 212, 170, 0.15);
+
+    --agent-accent-secondary: #0ea5e9;
+    --agent-accent-secondary-rgb: 14, 165, 233;
+    --agent-accent-secondary-hover: #38bdf8;
+    --agent-accent-secondary-muted: rgba(14, 165, 233, 0.15);
+
+    /* === Status Colors === */
+    --agent-success: #10b981;
+    --agent-success-rgb: 16, 185, 129;
+    --agent-success-muted: rgba(16, 185, 129, 0.15);
+
+    --agent-warning: #f59e0b;
+    --agent-warning-rgb: 245, 158, 11;
+    --agent-warning-muted: rgba(245, 158, 11, 0.15);
+
+    --agent-danger: #ef4444;
+    --agent-danger-rgb: 239, 68, 68;
+    --agent-danger-muted: rgba(239, 68, 68, 0.15);
+
+    --agent-info: #0ea5e9;
+    --agent-info-rgb: 14, 165, 233;
+    --agent-info-muted: rgba(14, 165, 233, 0.15);
+
+    /* === Borders === */
+    --agent-border-color: rgba(240, 246, 252, 0.1);
+    --agent-border-color-emphasis: rgba(240, 246, 252, 0.2);
+    --agent-border-color-active: rgba(0, 212, 170, 0.4);
+
+    /* === Shadows === */
+    --agent-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --agent-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+    --agent-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+    --agent-shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.6);
+    --agent-shadow-glow: 0 0 20px rgba(0, 212, 170, 0.2);
+    --agent-shadow-glow-strong: 0 0 40px rgba(0, 212, 170, 0.3);
+
+    /* === Typography === */
+    --agent-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --agent-font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+
+    /* === Spacing (consistent scale) === */
+    --agent-space-xs: 4px;
+    --agent-space-sm: 8px;
+    --agent-space-md: 12px;
+    --agent-space-lg: 16px;
+    --agent-space-xl: 24px;
+    --agent-space-2xl: 32px;
+
+    /* === Border Radius === */
+    --agent-radius-sm: 6px;
+    --agent-radius-md: 10px;
+    --agent-radius-lg: 16px;
+    --agent-radius-xl: 24px;
+    --agent-radius-full: 9999px;
+
+    /* === Transitions === */
+    --agent-transition-fast: 150ms ease;
+    --agent-transition-base: 250ms ease;
+    --agent-transition-slow: 400ms ease;
+    --agent-transition-spring: 500ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
+    /* === Z-Index Scale === */
+    --agent-z-base: 1;
+    --agent-z-dropdown: 100;
+    --agent-z-sticky: 200;
+    --agent-z-modal: 1000;
+    --agent-z-tooltip: 1100;
+    --agent-z-toast: 1200;
+
+    /* === Gradients === */
+    --agent-gradient-primary: linear-gradient(135deg, #00d4aa 0%, #0ea5e9 100%);
+    --agent-gradient-header: linear-gradient(135deg, #0a1628 0%, #111d2e 50%, #1a2942 100%);
+    --agent-gradient-glow: radial-gradient(ellipse at 50% 0%, rgba(0, 212, 170, 0.15) 0%, transparent 60%);
+
+    /* === Message Colors === */
+    --agent-msg-user-bg: var(--agent-accent-secondary);
+    --agent-msg-user-text: #ffffff;
+    --agent-msg-assistant-bg: var(--agent-bg-secondary);
+    --agent-msg-assistant-text: var(--agent-text-primary);
+    --agent-msg-assistant-border: var(--agent-border-color);
+
+    /* === Avatar Colors === */
+    --agent-avatar-user-bg: var(--agent-accent-secondary);
+    --agent-avatar-assistant-bg: var(--agent-gradient-primary);
+
+    /* === Input Colors === */
+    --agent-input-bg: var(--agent-bg-secondary);
+    --agent-input-border: var(--agent-border-color);
+    --agent-input-border-focus: var(--agent-accent-primary);
+    --agent-input-placeholder: var(--agent-text-muted);
+
+    /* === Panel Colors (Timeline, Todo) === */
+    --agent-panel-bg: var(--agent-bg-secondary);
+    --agent-panel-header-bg: var(--agent-gradient-primary);
+    --agent-panel-border: var(--agent-border-color);
+}
+
+/* ==========================================================================
+   LIGHT MODE
+   ========================================================================== */
+[data-theme="light"] {
+    /* === Backgrounds === */
+    --agent-bg-primary: #f4f7fa;
+    --agent-bg-secondary: #ffffff;
+    --agent-bg-tertiary: #e8eef4;
+    --agent-bg-hover: #dce4ed;
+    --agent-bg-active: #d0dae6;
+
+    /* === Text === */
+    --agent-text-primary: #1f2328;
+    --agent-text-secondary: #57606a;
+    --agent-text-muted: #8b949e;
+    --agent-text-inverse: #ffffff;
+
+    /* === Accent Colors - Darkened for contrast === */
+    --agent-accent-primary: #00a88a;
+    --agent-accent-primary-rgb: 0, 168, 138;
+    --agent-accent-primary-hover: #009679;
+    --agent-accent-primary-muted: rgba(0, 168, 138, 0.12);
+
+    --agent-accent-secondary: #0284c7;
+    --agent-accent-secondary-rgb: 2, 132, 199;
+    --agent-accent-secondary-hover: #0369a1;
+    --agent-accent-secondary-muted: rgba(2, 132, 199, 0.12);
+
+    /* === Status Colors - Darkened === */
+    --agent-success: #059669;
+    --agent-success-rgb: 5, 150, 105;
+    --agent-success-muted: rgba(5, 150, 105, 0.12);
+
+    --agent-warning: #d97706;
+    --agent-warning-rgb: 217, 119, 6;
+    --agent-warning-muted: rgba(217, 119, 6, 0.12);
+
+    --agent-danger: #dc2626;
+    --agent-danger-rgb: 220, 38, 38;
+    --agent-danger-muted: rgba(220, 38, 38, 0.12);
+
+    --agent-info: #0284c7;
+    --agent-info-rgb: 2, 132, 199;
+    --agent-info-muted: rgba(2, 132, 199, 0.12);
+
+    /* === Borders === */
+    --agent-border-color: rgba(31, 35, 40, 0.12);
+    --agent-border-color-emphasis: rgba(31, 35, 40, 0.2);
+    --agent-border-color-active: rgba(0, 168, 138, 0.4);
+
+    /* === Shadows - Softer for light mode === */
+    --agent-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+    --agent-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+    --agent-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+    --agent-shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.15);
+    --agent-shadow-glow: 0 0 20px rgba(0, 168, 138, 0.15);
+    --agent-shadow-glow-strong: 0 0 40px rgba(0, 168, 138, 0.2);
+
+    /* === Gradients === */
+    --agent-gradient-primary: linear-gradient(135deg, #00a88a 0%, #0284c7 100%);
+    --agent-gradient-header: linear-gradient(135deg, #ffffff 0%, #f4f7fa 100%);
+    --agent-gradient-glow: radial-gradient(ellipse at 50% 0%, rgba(0, 168, 138, 0.08) 0%, transparent 60%);
+
+    /* === Message Colors === */
+    --agent-msg-user-bg: var(--agent-accent-secondary);
+    --agent-msg-user-text: #ffffff;
+    --agent-msg-assistant-bg: var(--agent-bg-secondary);
+    --agent-msg-assistant-text: var(--agent-text-primary);
+    --agent-msg-assistant-border: var(--agent-border-color);
+
+    /* === Input Colors === */
+    --agent-input-bg: var(--agent-bg-secondary);
+    --agent-input-border: var(--agent-border-color-emphasis);
+    --agent-input-border-focus: var(--agent-accent-primary);
+    --agent-input-placeholder: var(--agent-text-muted);
+}
+
+/* ==========================================================================
+   ATMOSPHERIC BACKGROUND
+   Signature visual moment #1: Animated gradient glow
+   ========================================================================== */
+.chat-fullscreen-wrapper {
+    background: var(--agent-bg-primary) !important;
+    position: relative;
+}
+
+.chat-fullscreen-wrapper::before {
+    content: '';
+    position: fixed;
+    top: -20%;
+    right: -10%;
+    width: 70%;
+    height: 90%;
+    background: radial-gradient(
+        ellipse at 70% 30%,
+        rgba(var(--agent-accent-primary-rgb), 0.12) 0%,
+        rgba(var(--agent-accent-secondary-rgb), 0.06) 35%,
+        transparent 65%
+    );
+    pointer-events: none;
+    z-index: 0;
+    animation: agent-atmosphereFloat 25s ease-in-out infinite;
+}
+
+.chat-fullscreen-wrapper::after {
+    content: '';
+    position: fixed;
+    bottom: -30%;
+    left: -15%;
+    width: 60%;
+    height: 80%;
+    background: radial-gradient(
+        ellipse at 30% 70%,
+        rgba(var(--agent-accent-secondary-rgb), 0.08) 0%,
+        rgba(var(--agent-accent-primary-rgb), 0.04) 40%,
+        transparent 70%
+    );
+    pointer-events: none;
+    z-index: 0;
+    animation: agent-atmosphereFloat 30s ease-in-out infinite reverse;
+}
+
+@keyframes agent-atmosphereFloat {
+    0%, 100% {
+        transform: translate(0, 0) scale(1);
+        opacity: 1;
+    }
+    25% {
+        transform: translate(15px, -20px) scale(1.02);
+        opacity: 0.9;
+    }
+    50% {
+        transform: translate(25px, -15px) scale(1.05);
+        opacity: 0.85;
+    }
+    75% {
+        transform: translate(10px, -25px) scale(1.03);
+        opacity: 0.95;
+    }
+}
+
+/* Light mode: subtle atmospheric effect */
+[data-theme="light"] .chat-fullscreen-wrapper::before,
+[data-theme="light"] .chat-fullscreen-wrapper::after {
+    opacity: 0.6;
+}
+
+/* ==========================================================================
+   ENTRY ANIMATIONS
+   Signature visual moment #2: Blur + scale entry
+   ========================================================================== */
+@keyframes agent-fadeInUp {
+    0% {
+        opacity: 0;
+        transform: translateY(20px) scale(0.98);
+        filter: blur(4px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        filter: blur(0);
+    }
+}
+
+@keyframes agent-fadeInScale {
+    0% {
+        opacity: 0;
+        transform: scale(0.95);
+        filter: blur(3px);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1);
+        filter: blur(0);
+    }
+}
+
+@keyframes agent-slideInLeft {
+    0% {
+        opacity: 0;
+        transform: translateX(-30px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes agent-slideInRight {
+    0% {
+        opacity: 0;
+        transform: translateX(30px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* Apply to messages */
+.message {
+    animation: agent-fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) backwards !important;
+}
+
+.message.user {
+    animation-name: agent-slideInRight !important;
+}
+
+.message.assistant {
+    animation-name: agent-slideInLeft !important;
+}
+
+/* Staggered entry for panels */
+.action-timeline-container {
+    animation: agent-fadeInScale 0.5s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+    animation-delay: 0.2s;
+}
+
+.todo-panel-container {
+    animation: agent-fadeInScale 0.5s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+    animation-delay: 0.3s;
+}
+
+/* ==========================================================================
+   PROGRESSIVE GLOW LINE
+   Signature visual moment #3: Animated bottom border on hover
+   ========================================================================== */
+.message-bubble,
+.session-item,
+.timeline-item,
+.todo-item,
+.file-item {
+    position: relative;
+    overflow: hidden;
+}
+
+.message.assistant .message-bubble::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 0;
+    height: 2px;
+    background: var(--agent-gradient-primary);
+    transition: width 0.4s ease;
+    border-radius: 0 0 var(--agent-radius-sm) var(--agent-radius-sm);
+}
+
+.message.assistant:hover .message-bubble::after {
+    width: 100%;
+}
+
+/* Cards and panels glow line */
+.session-item::after,
+.confirmation-modal::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 0;
+    height: 3px;
+    background: var(--agent-gradient-primary);
+    transition: width 0.4s ease;
+}
+
+.session-item:hover::after,
+.confirmation-modal:hover::after {
+    width: 100%;
+}
+
+/* ==========================================================================
+   MULTI-LAYER SHADOW HOVER
+   Signature visual moment #4: Dramatic hover states
+   ========================================================================== */
+.session-item:hover,
+.confirmation-modal:hover {
+    transform: translateY(-2px);
+    box-shadow:
+        var(--agent-shadow-lg),
+        0 0 0 1px var(--agent-accent-primary),
+        var(--agent-shadow-glow) !important;
+}
+
+/* Button hover glow */
+.chat-input button[type="submit"]:hover:not(:disabled),
+.btn-new-session:hover,
+.btn-confirm:hover {
+    box-shadow:
+        0 4px 15px rgba(var(--agent-accent-primary-rgb), 0.4),
+        0 0 0 2px rgba(var(--agent-accent-primary-rgb), 0.2) !important;
+    transform: translateY(-2px) scale(1.02);
+}
+
+/* ==========================================================================
+   TYPOGRAPHY EXCELLENCE
+   ========================================================================== */
+.chat-fullscreen-wrapper {
+    font-family: var(--agent-font-sans);
+}
+
+/* Headers: Bold + Tight */
+.chat-title h5,
+.sessions-modal-header h5,
+.confirmation-modal h5,
+.timeline-header-title,
+.todo-header-title {
+    font-weight: 700 !important;
+    letter-spacing: -0.02em !important;
+}
+
+/* Values: Large + Monospace */
+.token-count,
+.token-cost,
+#progress-percentage,
+.tool-duration,
+.file-size {
+    font-family: var(--agent-font-mono) !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.03em !important;
+}
+
+/* Labels: Small Caps Style */
+.chat-title small,
+.message-time,
+.typing-text,
+.session-item-meta,
+.files-section-header,
+.input-hint small {
+    font-size: 0.7rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px !important;
+    font-weight: 500 !important;
+}
+
+/* Message text */
+.message-bubble {
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
+/* Code in messages */
+.message-bubble code {
+    font-family: var(--agent-font-mono) !important;
+    background: var(--agent-bg-tertiary) !important;
+    color: var(--agent-accent-primary) !important;
+    padding: 2px 6px;
+    border-radius: var(--agent-radius-sm);
+    font-size: 0.85em;
+}
+
+.message-bubble pre {
+    background: var(--agent-bg-primary) !important;
+    border: 1px solid var(--agent-border-color);
+    border-radius: var(--agent-radius-md);
+}
+
+.message-bubble pre code {
+    background: transparent !important;
+    color: var(--agent-text-primary) !important;
+}
+
+/* ==========================================================================
+   COMPONENT THEME OVERRIDES
+   Apply variables to existing chat.css components
+   ========================================================================== */
+
+/* === Container === */
+.chat-container {
+    background: var(--agent-bg-secondary) !important;
+    position: relative;
+    z-index: var(--agent-z-base);
+}
+
+/* === Header === */
+.chat-header {
+    background: var(--agent-gradient-header) !important;
+    border-bottom: 1px solid var(--agent-border-color);
+}
+
+[data-theme="light"] .chat-header {
+    background: var(--agent-bg-secondary) !important;
+    box-shadow: var(--agent-shadow-sm);
+}
+
+.chat-header-left,
+.chat-header-center,
+.chat-header-right {
+    color: var(--agent-text-primary);
+}
+
+/* === Sessions Button === */
+.btn-sessions {
+    background: var(--agent-accent-primary-muted) !important;
+    color: var(--agent-accent-primary) !important;
+    border: 1px solid var(--agent-accent-primary) !important;
+    transition: var(--agent-transition-base);
+}
+
+.btn-sessions:hover {
+    background: var(--agent-accent-primary) !important;
+    color: var(--agent-text-inverse) !important;
+}
+
+/* === Model Selector === */
+.model-select {
+    background: var(--agent-bg-tertiary) !important;
+    border: 1px solid var(--agent-border-color) !important;
+    color: var(--agent-text-primary) !important;
+    transition: var(--agent-transition-base);
+}
+
+.model-select:focus {
+    border-color: var(--agent-accent-primary) !important;
+    box-shadow: 0 0 0 3px var(--agent-accent-primary-muted) !important;
+}
+
+.model-select option {
+    background: var(--agent-bg-secondary);
+    color: var(--agent-text-primary);
+}
+
+/* === Toggle Switches === */
+.toggle-slider {
+    background: var(--agent-bg-tertiary) !important;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+    background: var(--agent-accent-primary) !important;
+}
+
+.toggle-switch.plan input:checked + .toggle-slider {
+    background: var(--agent-accent-secondary) !important;
+}
+
+.toggle-icon {
+    color: var(--agent-text-secondary) !important;
+}
+
+.toggle-switch input:checked ~ .toggle-icon {
+    color: var(--agent-accent-primary) !important;
+}
+
+/* === Control Tooltips === */
+.control-tooltip {
+    background: var(--agent-bg-secondary) !important;
+    color: var(--agent-text-primary) !important;
+    border: 1px solid var(--agent-border-color);
+    box-shadow: var(--agent-shadow-lg) !important;
+}
+
+.control-tooltip::before {
+    border-bottom-color: var(--agent-bg-secondary) !important;
+}
+
+.control-tooltip p,
+.control-tooltip small {
+    color: var(--agent-text-secondary) !important;
+}
+
+/* === Token Budget === */
+.token-budget-mini {
+    background: var(--agent-bg-tertiary) !important;
+    border: 1px solid var(--agent-border-color);
+}
+
+.token-count {
+    color: var(--agent-accent-primary) !important;
+}
+
+.token-cost {
+    color: var(--agent-text-secondary) !important;
+}
+
+/* === Status Indicator === */
+.status-indicator.online {
+    color: var(--agent-success) !important;
+}
+
+/* === Menu Button === */
+.btn-menu {
+    color: var(--agent-text-secondary) !important;
+    transition: var(--agent-transition-base);
+}
+
+.btn-menu:hover {
+    background: var(--agent-bg-tertiary) !important;
+    color: var(--agent-text-primary) !important;
+}
+
+/* === Dropdown Menu === */
+.dropdown-menu {
+    background: var(--agent-bg-secondary) !important;
+    border: 1px solid var(--agent-border-color) !important;
+    box-shadow: var(--agent-shadow-lg) !important;
+}
+
+.dropdown-item {
+    color: var(--agent-text-primary) !important;
+    transition: var(--agent-transition-fast);
+}
+
+.dropdown-item:hover {
+    background: var(--agent-bg-hover) !important;
+    color: var(--agent-accent-primary) !important;
+}
+
+.dropdown-divider {
+    border-color: var(--agent-border-color) !important;
+}
+
+/* === Progress Bar === */
+.progress-bar-container {
+    background: var(--agent-bg-tertiary) !important;
+    border-bottom: 1px solid var(--agent-border-color);
+}
+
+#progress-status {
+    color: var(--agent-text-secondary) !important;
+}
+
+#progress-percentage {
+    color: var(--agent-accent-primary) !important;
+}
+
+.progress-bar-track {
+    background: var(--agent-bg-primary) !important;
+}
+
+.progress-bar-fill {
+    background: var(--agent-gradient-primary) !important;
+}
+
+.progress-bar-fill.completed {
+    background: linear-gradient(90deg, var(--agent-success) 0%, #34d399 100%) !important;
+}
+
+/* === Messages Area === */
+.chat-messages {
+    background: var(--agent-bg-primary) !important;
+}
+
+.chat-messages::-webkit-scrollbar {
+    width: 8px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+    background: var(--agent-bg-secondary);
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+    background: var(--agent-bg-tertiary);
+    border-radius: var(--agent-radius-full);
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+    background: var(--agent-text-muted);
+}
+
+/* === Message Bubbles === */
+.message-avatar {
+    box-shadow: var(--agent-shadow-md);
+}
+
+.message.assistant .message-avatar {
+    background: var(--agent-gradient-primary) !important;
+    color: var(--agent-text-inverse) !important;
+}
+
+.message.user .message-avatar {
+    background: var(--agent-accent-secondary) !important;
+    color: var(--agent-text-inverse) !important;
+}
+
+.message.assistant .message-bubble {
+    background: var(--agent-bg-secondary) !important;
+    color: var(--agent-text-primary) !important;
+    border: 1px solid var(--agent-border-color);
+    box-shadow: var(--agent-shadow-sm);
+}
+
+.message.user .message-bubble {
+    background: var(--agent-accent-secondary) !important;
+    color: var(--agent-text-inverse) !important;
+    box-shadow: var(--agent-shadow-md);
+}
+
+.message-time {
+    color: var(--agent-text-muted) !important;
+}
+
+/* === Typing Indicator === */
+.typing-indicator {
+    background: var(--agent-bg-secondary) !important;
+    border: 1px solid var(--agent-border-color);
+    box-shadow: var(--agent-shadow-sm);
+}
+
+.typing-dots span {
+    background: var(--agent-accent-primary) !important;
+}
+
+.typing-text {
+    color: var(--agent-text-secondary) !important;
+}
+
+/* === Thinking Panel === */
+.thinking-panel {
+    background: var(--agent-bg-secondary) !important;
+    border-left: 3px solid var(--agent-accent-primary) !important;
+    border: 1px solid var(--agent-border-color);
+    border-left-width: 3px;
+}
+
+.thinking-label {
+    color: var(--agent-accent-primary) !important;
+}
+
+.thinking-body {
+    color: var(--agent-text-secondary) !important;
+}
+
+.btn-minimize {
+    color: var(--agent-text-muted) !important;
+}
+
+.btn-minimize:hover {
+    background: var(--agent-bg-hover) !important;
+    color: var(--agent-text-primary) !important;
+}
+
+/* === Chat Input === */
+.chat-input {
+    background: var(--agent-bg-secondary) !important;
+    border-top: 1px solid var(--agent-border-color);
+}
+
+.chat-input textarea {
+    background: var(--agent-bg-primary) !important;
+    border: 2px solid var(--agent-border-color) !important;
+    color: var(--agent-text-primary) !important;
+    transition: var(--agent-transition-base);
+}
+
+.chat-input textarea:focus {
+    border-color: var(--agent-accent-primary) !important;
+    box-shadow: 0 0 0 3px var(--agent-accent-primary-muted) !important;
+}
+
+.chat-input textarea::placeholder {
+    color: var(--agent-text-muted) !important;
+}
+
+.chat-input button[type="submit"] {
+    background: var(--agent-gradient-primary) !important;
+    color: var(--agent-text-inverse) !important;
+    box-shadow: var(--agent-shadow-md);
+    transition: var(--agent-transition-base);
+}
+
+.chat-input button[type="submit"]:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Stop Button */
+.btn-stop {
+    background: var(--agent-danger) !important;
+    box-shadow: 0 0 0 0 rgba(var(--agent-danger-rgb), 0.4);
+    animation: agent-pulseStop 1.5s infinite;
+}
+
+@keyframes agent-pulseStop {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(var(--agent-danger-rgb), 0.4); }
+    50% { box-shadow: 0 0 0 10px rgba(var(--agent-danger-rgb), 0); }
+}
+
+/* Attach Button */
+.btn-attach {
+    background: var(--agent-bg-tertiary) !important;
+    color: var(--agent-text-secondary) !important;
+    transition: var(--agent-transition-base);
+}
+
+.btn-attach:hover {
+    background: var(--agent-bg-hover) !important;
+    color: var(--agent-accent-primary) !important;
+}
+
+.btn-attach.has-files {
+    background: var(--agent-accent-primary) !important;
+    color: var(--agent-text-inverse) !important;
+}
+
+.input-hint small {
+    color: var(--agent-text-muted) !important;
+}
+
+/* === Sessions Modal === */
+.sessions-modal-backdrop {
+    background: rgba(10, 22, 40, 0.8) !important;
+    backdrop-filter: blur(4px);
+}
+
+.sessions-modal-content {
+    background: var(--agent-bg-secondary) !important;
+    border: 1px solid var(--agent-border-color);
+    box-shadow: var(--agent-shadow-xl) !important;
+}
+
+.sessions-modal-header {
+    border-bottom-color: var(--agent-border-color) !important;
+}
+
+.sessions-modal-header h5 {
+    color: var(--agent-text-primary) !important;
+}
+
+.btn-close-modal {
+    background: var(--agent-bg-tertiary) !important;
+    color: var(--agent-text-secondary) !important;
+    transition: var(--agent-transition-base);
+}
+
+.btn-close-modal:hover {
+    background: var(--agent-bg-hover) !important;
+    color: var(--agent-text-primary) !important;
+}
+
+.sessions-modal-actions {
+    border-bottom-color: var(--agent-border-color) !important;
+}
+
+.btn-new-session {
+    background: var(--agent-gradient-primary) !important;
+    color: var(--agent-text-inverse) !important;
+    transition: var(--agent-transition-base);
+}
+
+.sessions-loading,
+.sessions-empty {
+    color: var(--agent-text-muted) !important;
+}
+
+.sessions-empty i {
+    color: var(--agent-text-muted) !important;
+}
+
+/* Session Items */
+.session-item {
+    border-bottom-color: var(--agent-border-color) !important;
+    transition: var(--agent-transition-base);
+}
+
+.session-item:hover {
+    background: var(--agent-bg-hover) !important;
+}
+
+.session-item.active {
+    background: var(--agent-accent-primary-muted) !important;
+    border-left: 3px solid var(--agent-accent-primary) !important;
+}
+
+.session-item-title {
+    color: var(--agent-text-primary) !important;
+}
+
+.session-item-preview {
+    color: var(--agent-text-secondary) !important;
+}
+
+.session-item-meta {
+    color: var(--agent-text-muted) !important;
+}
+
+.session-item-actions button {
+    color: var(--agent-text-muted) !important;
+}
+
+.session-item-actions button:hover {
+    background: var(--agent-bg-tertiary) !important;
+    color: var(--agent-text-primary) !important;
+}
+
+.session-item-actions button.delete:hover {
+    background: var(--agent-danger-muted) !important;
+    color: var(--agent-danger) !important;
+}
+
+/* === Confirmation Modal === */
+.confirmation-overlay {
+    background: rgba(10, 22, 40, 0.8) !important;
+    backdrop-filter: blur(4px);
+}
+
+.confirmation-modal {
+    background: var(--agent-bg-secondary) !important;
+    border: 1px solid var(--agent-border-color);
+    box-shadow: var(--agent-shadow-xl) !important;
+}
+
+.confirmation-modal h5 {
+    color: var(--agent-text-primary) !important;
+}
+
+.confirmation-modal p {
+    color: var(--agent-text-secondary) !important;
+}
+
+.btn-cancel {
+    background: var(--agent-bg-tertiary) !important;
+    color: var(--agent-text-secondary) !important;
+    transition: var(--agent-transition-base);
+}
+
+.btn-cancel:hover {
+    background: var(--agent-bg-hover) !important;
+    color: var(--agent-text-primary) !important;
+}
+
+.btn-confirm {
+    background: var(--agent-success) !important;
+    color: var(--agent-text-inverse) !important;
+    transition: var(--agent-transition-base);
+}
+
+/* === Timeline Panel === */
+.action-timeline-container {
+    background: var(--agent-bg-secondary) !important;
+    border: 1px solid var(--agent-border-color);
+    box-shadow: var(--agent-shadow-lg) !important;
+}
+
+.timeline-header {
+    background: var(--agent-gradient-primary) !important;
+}
+
+.timeline-body {
+    background: var(--agent-bg-secondary);
+}
+
+.timeline-empty {
+    color: var(--agent-text-muted) !important;
+}
+
+.timeline-item {
+    border-bottom-color: var(--agent-border-color) !important;
+}
+
+.timeline-icon.pending {
+    background: var(--agent-warning-muted) !important;
+    color: var(--agent-warning) !important;
+}
+
+.timeline-icon.success {
+    background: var(--agent-success-muted) !important;
+    color: var(--agent-success) !important;
+}
+
+.timeline-icon.error {
+    background: var(--agent-danger-muted) !important;
+    color: var(--agent-danger) !important;
+}
+
+.timeline-info .tool-name {
+    color: var(--agent-text-primary) !important;
+}
+
+.timeline-info .tool-duration {
+    color: var(--agent-text-muted) !important;
+}
+
+.btn-close-panel {
+    background: rgba(255, 255, 255, 0.15) !important;
+    transition: var(--agent-transition-base);
+}
+
+.btn-close-panel:hover {
+    background: rgba(255, 255, 255, 0.25) !important;
+}
+
+/* === Todo Panel === */
+.todo-panel-container {
+    background: var(--agent-bg-secondary) !important;
+    border: 1px solid var(--agent-border-color);
+    box-shadow: var(--agent-shadow-lg) !important;
+}
+
+.todo-header {
+    background: var(--agent-success) !important;
+}
+
+.todo-body {
+    background: var(--agent-bg-secondary);
+}
+
+.todo-item {
+    border-bottom-color: var(--agent-border-color) !important;
+}
+
+.todo-status.pending {
+    background: var(--agent-bg-tertiary) !important;
+    color: var(--agent-text-muted) !important;
+}
+
+.todo-status.in_progress {
+    background: var(--agent-info-muted) !important;
+    color: var(--agent-info) !important;
+}
+
+.todo-status.completed {
+    background: var(--agent-success-muted) !important;
+    color: var(--agent-success) !important;
+}
+
+.todo-text {
+    color: var(--agent-text-primary) !important;
+}
+
+.todo-text.in_progress {
+    color: var(--agent-info) !important;
+}
+
+.todo-text.completed {
+    color: var(--agent-text-muted) !important;
+}
+
+.todo-progress-container {
+    border-top-color: var(--agent-border-color) !important;
+}
+
+.todo-progress {
+    background: var(--agent-bg-tertiary) !important;
+}
+
+.todo-progress-bar {
+    background: var(--agent-success) !important;
+}
+
+/* === Files Panel === */
+.files-panel {
+    background: var(--agent-bg-secondary) !important;
+    border-top-color: var(--agent-border-color) !important;
+}
+
+.files-section-header {
+    color: var(--agent-text-secondary) !important;
+}
+
+.btn-clear-files {
+    color: var(--agent-text-muted) !important;
+}
+
+.btn-clear-files:hover {
+    background: var(--agent-danger-muted) !important;
+    color: var(--agent-danger) !important;
+}
+
+.file-item {
+    background: var(--agent-bg-tertiary) !important;
+    border-color: var(--agent-border-color) !important;
+}
+
+.file-item.uploading {
+    background: var(--agent-warning-muted) !important;
+    border-color: var(--agent-warning) !important;
+}
+
+.file-item.error {
+    background: var(--agent-danger-muted) !important;
+    border-color: var(--agent-danger) !important;
+}
+
+.file-name {
+    color: var(--agent-text-primary) !important;
+}
+
+.file-size {
+    color: var(--agent-text-muted) !important;
+}
+
+.file-actions button {
+    color: var(--agent-text-muted) !important;
+}
+
+.file-actions button:hover {
+    background: var(--agent-bg-hover) !important;
+}
+
+.file-actions button.download:hover {
+    background: var(--agent-success-muted) !important;
+    color: var(--agent-success) !important;
+}
+
+.file-actions button.remove:hover {
+    background: var(--agent-danger-muted) !important;
+    color: var(--agent-danger) !important;
+}
+
+.downloads-section .file-item {
+    background: var(--agent-success-muted) !important;
+    border-color: var(--agent-success) !important;
+}
+
+.downloads-section .file-name {
+    color: var(--agent-success) !important;
+}
+
+.file-progress {
+    background: var(--agent-bg-primary) !important;
+}
+
+.file-progress-bar {
+    background: var(--agent-accent-primary) !important;
+}
+
+/* File icons */
+.file-icon.pdf { background: var(--agent-danger) !important; }
+.file-icon.excel { background: var(--agent-success) !important; }
+.file-icon.csv { background: var(--agent-info) !important; }
+.file-icon.image { background: #8b5cf6 !important; }
+.file-icon.file { background: var(--agent-text-muted) !important; }
+
+/* === Markdown Tables === */
+.message-bubble table {
+    border-color: var(--agent-border-color) !important;
+}
+
+.message-bubble th {
+    background: var(--agent-gradient-primary) !important;
+    color: var(--agent-text-inverse) !important;
+}
+
+.message-bubble td {
+    border-color: var(--agent-border-color) !important;
+}
+
+.message-bubble tr:nth-child(even) {
+    background: var(--agent-bg-tertiary) !important;
+}
+
+/* === Markdown Blockquotes === */
+.message-bubble blockquote {
+    border-left-color: var(--agent-accent-primary) !important;
+    background: var(--agent-bg-tertiary) !important;
+    color: var(--agent-text-secondary) !important;
+}
+
+/* === Markdown Links === */
+.message-bubble a {
+    color: var(--agent-accent-primary) !important;
+}
+
+.message-bubble a:hover {
+    color: var(--agent-accent-primary-hover) !important;
+}
+
+/* ==========================================================================
+   THEME TOGGLE BUTTON
+   Add this to the header
+   ========================================================================== */
+.theme-toggle {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--agent-radius-md);
+    border: 1px solid var(--agent-border-color);
+    background: var(--agent-bg-tertiary);
+    color: var(--agent-text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--agent-transition-base);
+    position: relative;
+    overflow: hidden;
+}
+
+.theme-toggle:hover {
+    background: var(--agent-bg-hover);
+    color: var(--agent-accent-primary);
+    border-color: var(--agent-accent-primary);
+}
+
+.theme-toggle__icon {
+    position: absolute;
+    transition: var(--agent-transition-base);
+}
+
+.theme-toggle__icon--light {
+    opacity: 1;
+    transform: rotate(0deg);
+}
+
+.theme-toggle__icon--dark {
+    opacity: 0;
+    transform: rotate(-90deg);
+}
+
+[data-theme="light"] .theme-toggle__icon--light {
+    opacity: 0;
+    transform: rotate(90deg);
+}
+
+[data-theme="light"] .theme-toggle__icon--dark {
+    opacity: 1;
+    transform: rotate(0deg);
+}
+
+/* ==========================================================================
+   ACCESSIBILITY
+   ========================================================================== */
+
+/* Focus visible states */
+.chat-input textarea:focus-visible,
+.model-select:focus-visible,
+.btn-sessions:focus-visible,
+.btn-menu:focus-visible,
+.theme-toggle:focus-visible,
+button:focus-visible {
+    outline: 2px solid var(--agent-accent-primary);
+    outline-offset: 2px;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    .chat-fullscreen-wrapper::before,
+    .chat-fullscreen-wrapper::after {
+        animation: none !important;
+    }
+
+    .message,
+    .action-timeline-container,
+    .todo-panel-container,
+    .session-item,
+    .confirmation-modal {
+        animation: none !important;
+    }
+
+    .message.assistant .message-bubble::after,
+    .session-item::after,
+    .confirmation-modal::after {
+        transition: none !important;
+    }
+
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    :root,
+    [data-theme="dark"] {
+        --agent-border-color: rgba(240, 246, 252, 0.3);
+        --agent-text-secondary: #b1bac4;
+    }
+
+    [data-theme="light"] {
+        --agent-border-color: rgba(31, 35, 40, 0.3);
+        --agent-text-secondary: #424a53;
+    }
+}
+
+/* ==========================================================================
+   RESPONSIVE ADJUSTMENTS
+   ========================================================================== */
+@media (max-width: 768px) {
+    /* Ensure text is readable on small screens */
+    .message-bubble {
+        font-size: 0.9rem;
+    }
+
+    /* Reduce padding */
+    .chat-messages {
+        padding: var(--agent-space-sm) !important;
+    }
+
+    /* Atmospheric effect lighter on mobile for performance */
+    .chat-fullscreen-wrapper::before,
+    .chat-fullscreen-wrapper::after {
+        opacity: 0.5;
+    }
+}
+
+/* ==========================================================================
+   PRINT STYLES
+   ========================================================================== */
+@media print {
+    .chat-fullscreen-wrapper::before,
+    .chat-fullscreen-wrapper::after {
+        display: none;
+    }
+
+    .chat-header,
+    .chat-input,
+    .action-timeline-container,
+    .todo-panel-container,
+    .files-panel {
+        display: none !important;
+    }
+
+    .chat-messages {
+        background: white !important;
+        color: black !important;
+    }
+
+    .message-bubble {
+        box-shadow: none !important;
+        border: 1px solid #ccc !important;
+    }
+}
