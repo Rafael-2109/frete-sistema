@@ -472,6 +472,305 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     console.log('[PREFS] Preferencias carregadas com sucesso');
+
+    // ============================================
+    // P3.2: ATALHOS DE TECLADO
+    // ============================================
+    document.addEventListener('keydown', function(e) {
+        const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+        const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
+
+        // Cmd/Ctrl + K: Abrir modal de sessões
+        if (cmdOrCtrl && e.key === 'k') {
+            e.preventDefault();
+            if (typeof openSessionsModal === 'function') {
+                openSessionsModal();
+            }
+            console.log('[KEYS] Cmd+K: Abrir sessões');
+        }
+
+        // Cmd/Ctrl + N: Nova sessão
+        if (cmdOrCtrl && e.key === 'n') {
+            e.preventDefault();
+            if (typeof startNewSession === 'function') {
+                startNewSession();
+            }
+            console.log('[KEYS] Cmd+N: Nova sessão');
+        }
+
+        // Cmd/Ctrl + Enter: Enviar mensagem (alternativo)
+        if (cmdOrCtrl && e.key === 'Enter') {
+            const textarea = document.getElementById('message-input');
+            const sendBtn = document.getElementById('send-btn');
+            if (document.activeElement === textarea && sendBtn && !sendBtn.disabled) {
+                e.preventDefault();
+                document.getElementById('chat-form').dispatchEvent(new Event('submit'));
+            }
+        }
+
+        // Esc: Fechar modais
+        if (e.key === 'Escape') {
+            // Fechar modal de sessões
+            const sessionsModal = document.getElementById('sessions-modal');
+            if (sessionsModal && sessionsModal.style.display !== 'none') {
+                if (typeof closeSessionsModal === 'function') {
+                    closeSessionsModal();
+                }
+                console.log('[KEYS] Esc: Fechar modal sessões');
+                return;
+            }
+
+            // Fechar modal de confirmação
+            const confirmModal = document.getElementById('confirmation-overlay');
+            if (confirmModal && confirmModal.style.display !== 'none') {
+                if (typeof cancelAction === 'function') {
+                    cancelAction();
+                }
+                console.log('[KEYS] Esc: Fechar modal confirmação');
+                return;
+            }
+
+            // Fechar timeline
+            const timeline = document.getElementById('action-timeline');
+            if (timeline && !timeline.classList.contains('hidden')) {
+                if (typeof hideTimeline === 'function') {
+                    hideTimeline();
+                }
+                console.log('[KEYS] Esc: Fechar timeline');
+                return;
+            }
+
+            // Fechar todo panel
+            const todoPanel = document.getElementById('todo-panel');
+            if (todoPanel && !todoPanel.classList.contains('hidden')) {
+                if (typeof hideTodoPanel === 'function') {
+                    hideTodoPanel();
+                }
+                console.log('[KEYS] Esc: Fechar todo panel');
+                return;
+            }
+        }
+    });
+
+    console.log('[KEYS] Atalhos registrados: Cmd/Ctrl+K (sessões), Cmd/Ctrl+N (nova), Esc (fechar)');
+
+    // ============================================
+    // P3.4: INDICADOR VISUAL DE CONEXÃO
+    // ============================================
+    const statusIndicator = document.querySelector('.status-indicator');
+    let connectionStatus = 'online';
+    let lastHeartbeat = Date.now();
+
+    function updateConnectionStatus(status) {
+        if (!statusIndicator) return;
+
+        connectionStatus = status;
+        statusIndicator.className = 'status-indicator ' + status;
+
+        const icon = statusIndicator.querySelector('i');
+        if (icon) {
+            if (status === 'online') {
+                statusIndicator.title = 'Conectado';
+                icon.className = 'fas fa-circle';
+            } else if (status === 'connecting') {
+                statusIndicator.title = 'Reconectando...';
+                icon.className = 'fas fa-circle-notch fa-spin';
+            } else {
+                statusIndicator.title = 'Desconectado';
+                icon.className = 'fas fa-exclamation-circle';
+            }
+        }
+    }
+
+    // Verificar conexão periodicamente
+    function checkConnection() {
+        fetch('/api/agente/health', { method: 'GET' })
+            .then(response => {
+                if (response.ok) {
+                    lastHeartbeat = Date.now();
+                    if (connectionStatus !== 'online') {
+                        updateConnectionStatus('online');
+                        console.log('[CONN] Conexão restaurada');
+                    }
+                } else {
+                    throw new Error('Health check failed');
+                }
+            })
+            .catch(() => {
+                const timeSinceLastHeartbeat = Date.now() - lastHeartbeat;
+                if (timeSinceLastHeartbeat > 10000) {
+                    updateConnectionStatus('offline');
+                    console.log('[CONN] Conexão perdida');
+                } else if (connectionStatus === 'online') {
+                    updateConnectionStatus('connecting');
+                    console.log('[CONN] Verificando conexão...');
+                }
+            });
+    }
+
+    // Verificar a cada 30 segundos
+    setInterval(checkConnection, 30000);
+
+    // Detectar mudanças de rede do navegador
+    window.addEventListener('online', () => {
+        updateConnectionStatus('connecting');
+        checkConnection();
+        console.log('[CONN] Navegador: online');
+    });
+
+    window.addEventListener('offline', () => {
+        updateConnectionStatus('offline');
+        console.log('[CONN] Navegador: offline');
+    });
+
+    // ============================================
+    // P3.6: DRAG & DROP PARA ARQUIVOS
+    // ============================================
+    const chatContainer = document.querySelector('.chat-container');
+    const fileInput = document.getElementById('file-input');
+    let dragCounter = 0;
+
+    if (chatContainer && fileInput) {
+        // Criar overlay de drop
+        const dropOverlay = document.createElement('div');
+        dropOverlay.className = 'drop-overlay';
+        dropOverlay.innerHTML = `
+            <div class="drop-overlay-content">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <span>Solte os arquivos aqui</span>
+                <small>PDF, Excel, CSV, Imagens</small>
+            </div>
+        `;
+        chatContainer.appendChild(dropOverlay);
+
+        // Prevenir comportamento padrão em todo o documento
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            document.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            });
+        });
+
+        // Mostrar overlay quando arrastar sobre o chat
+        chatContainer.addEventListener('dragenter', (e) => {
+            dragCounter++;
+            if (e.dataTransfer.types.includes('Files')) {
+                dropOverlay.classList.add('active');
+            }
+        });
+
+        chatContainer.addEventListener('dragleave', () => {
+            dragCounter--;
+            if (dragCounter === 0) {
+                dropOverlay.classList.remove('active');
+            }
+        });
+
+        chatContainer.addEventListener('dragover', (e) => {
+            if (e.dataTransfer.types.includes('Files')) {
+                e.dataTransfer.dropEffect = 'copy';
+            }
+        });
+
+        // Processar arquivos soltos
+        chatContainer.addEventListener('drop', (e) => {
+            dragCounter = 0;
+            dropOverlay.classList.remove('active');
+
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                // Adicionar arquivos ao input
+                const dataTransfer = new DataTransfer();
+
+                // Manter arquivos existentes
+                if (fileInput.files) {
+                    for (let i = 0; i < fileInput.files.length; i++) {
+                        dataTransfer.items.add(fileInput.files[i]);
+                    }
+                }
+
+                // Adicionar novos arquivos
+                for (let i = 0; i < files.length; i++) {
+                    dataTransfer.items.add(files[i]);
+                }
+
+                fileInput.files = dataTransfer.files;
+
+                // Disparar evento change para processar arquivos
+                fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+                console.log('[DROP] Arquivos adicionados:', files.length);
+            }
+        });
+
+        console.log('[DROP] Drag & drop habilitado');
+    }
 });
 </script>
+
+<!-- P3.6: Estilos do Drop Overlay (inline para não precisar editar CSS) -->
+<style>
+.drop-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 212, 170, 0.1);
+    border: 3px dashed var(--agent-accent-primary, #00d4aa);
+    border-radius: var(--agent-radius-lg, 16px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+    transition: all 0.3s ease;
+}
+
+.drop-overlay.active {
+    display: flex;
+}
+
+.drop-overlay-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 40px;
+    background: var(--agent-bg-secondary, #111d2e);
+    border-radius: var(--agent-radius-lg, 16px);
+    box-shadow: var(--agent-shadow-xl, 0 20px 40px rgba(0,0,0,0.6));
+    animation: dropPulse 1.5s ease-in-out infinite;
+}
+
+.drop-overlay-content i {
+    font-size: 3rem;
+    color: var(--agent-accent-primary, #00d4aa);
+}
+
+.drop-overlay-content span {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--agent-text-primary, #f0f6fc);
+}
+
+.drop-overlay-content small {
+    font-size: 0.8rem;
+    color: var(--agent-text-muted, #6e7681);
+}
+
+@keyframes dropPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+}
+
+/* Status indicator styles */
+.status-indicator.connecting i {
+    color: var(--agent-warning, #f59e0b) !important;
+}
+
+.status-indicator.offline i {
+    color: var(--agent-danger, #ef4444) !important;
+}
+</style>
 {% endblock %}

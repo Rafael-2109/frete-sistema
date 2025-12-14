@@ -65,20 +65,28 @@
 
 ---
 
-## Sprint 3 - Funcionalidades (PENDENTE)
+## Sprint 3 - Funcionalidades (CONCLUIDO ✅)
 
-- [ ] **P3.2** Atalhos de teclado
-  - `Cmd/Ctrl+K` - Buscar
+- [x] **P3.2** Atalhos de teclado
+  - `Cmd/Ctrl+K` - Abrir modal de sessoes
   - `Cmd/Ctrl+N` - Nova sessao
-  - `Esc` - Fechar modais
+  - `Cmd/Ctrl+Enter` - Enviar mensagem (alternativo)
+  - `Esc` - Fechar modais (sessoes, confirmacao, timeline, todo)
 
-- [ ] **P3.3** Autocomplete de comandos (`/`)
+- [ ] **P3.3** Autocomplete de comandos (`/`) - FUTURO
 
-- [ ] **P3.4** Indicador visual de conexao (heartbeat)
+- [x] **P3.4** Indicador visual de conexao (heartbeat)
+  - Status: online (verde), connecting (amarelo spin), offline (vermelho)
+  - Health check a cada 30 segundos (`/api/agente/health`)
+  - Detecta eventos online/offline do navegador
 
-- [ ] **P3.5** Busca em sessoes anteriores
+- [ ] **P3.5** Busca em sessoes anteriores - FUTURO
 
-- [ ] **P3.6** Drag & drop para arquivos
+- [x] **P3.6** Drag & drop para arquivos
+  - Overlay visual ao arrastar arquivos sobre o chat
+  - Suporta multiplos arquivos simultaneos
+  - Integra com o sistema de upload existente
+  - Feedback visual com animacao pulse
 
 ---
 
@@ -108,9 +116,9 @@
 | Arquivo | Linhas | Status | Acao |
 |---------|--------|--------|------|
 | `app/static/agente/css/chat.css` | 1632 | Mantido | Overrides via agent-theme.css |
-| `app/static/agente/css/agent-theme.css` | **~1080** | ✅ CRIADO | CSS Variables + Dark/Light + Visual Moments + Mobile Fixes |
+| `app/static/agente/css/agent-theme.css` | **~1420** | ✅ CRIADO | CSS Variables + Dark/Light + Visual Moments + Mobile Fixes |
 | `app/static/agente/js/chat.js` | 1742 | Mantido | Variaveis globais atualizadas via JS inline |
-| `app/agente/templates/agente/chat.html` | **~478** | ✅ EDITADO | Import CSS + Toggle tema + Token Budget + Preferences |
+| `app/agente/templates/agente/chat.html` | **~777** | ✅ EDITADO | Import CSS + Toggle tema + Token Budget + Preferences + Shortcuts + Connection + DragDrop |
 
 ---
 
