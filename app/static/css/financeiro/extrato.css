@@ -2392,8 +2392,7 @@ input[type="date"].fin-input::-webkit-calendar-picker-indicator {
 }
 
 .fin-section-header--titulo-pagar {
-    color: #ffffff;
-    background: linear-gradient(135deg, var(--fin-accent-danger), var(--fin-accent-danger-light));
+    color: var(--fin-accent-danger);
     border-color: var(--fin-accent-danger);
 }
 

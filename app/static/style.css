@@ -59,6 +59,32 @@
     border-radius: 0.375rem;
     box-shadow: 0 0.5rem 1rem rgba(0,0,0,.175);
 }
+
+/* Dropdown menu no tema dark */
+[data-theme="dark"] .dropdown-menu,
+[data-bs-theme="dark"] .dropdown-menu,
+.navbar-dark .dropdown-menu {
+    background-color: #1a2332 !important;
+    color: #f0f6fc !important;
+    border-color: rgba(240, 246, 252, 0.15) !important;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.4) !important;
+}
+
+[data-theme="dark"] .dropdown-item,
+[data-bs-theme="dark"] .dropdown-item,
+.navbar-dark .dropdown-item {
+    color: #f0f6fc !important;
+}
+
+[data-theme="dark"] .dropdown-item:hover,
+[data-theme="dark"] .dropdown-item:focus,
+[data-bs-theme="dark"] .dropdown-item:hover,
+[data-bs-theme="dark"] .dropdown-item:focus,
+.navbar-dark .dropdown-item:hover,
+.navbar-dark .dropdown-item:focus {
+    background-color: #2d3a4d !important;
+    color: #ffffff !important;
+}
 /* Correção específica para o popover funcionar corretamente */
 .popover {
     max-width: none !important;

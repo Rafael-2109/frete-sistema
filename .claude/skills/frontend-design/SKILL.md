@@ -100,6 +100,28 @@ The user provides frontend requirements: a component, page, application, or inte
 | Buttons | `.fin-btn--primary/success/ghost` | Actions |
 | Forms | `.fin-input`, `.fin-form-group` | Form elements |
 
+**Opções não implementadas**
+<opcoes>
+| Skeleton | `.fin-skeleton`, `.fin-skeleton--text/value/card/row` | Loading states |
+| Timeline | `.fin-timeline`, `.fin-timeline__item` | History/events |
+| Progress Ring | `.fin-progress-ring` | Circular KPIs |
+| Toast | `.fin-toast`, `.fin-toast--success/warning/danger/info` | Notifications |
+| Row Hover | `.fin-row-hover`, `.fin-row-selected` | Table row effects |
+| Chips | `.fin-chip`, `.fin-chip--success/warning/danger/info` | Tags/labels |
+| Empty State | `.fin-empty-state` | No data placeholder |
+| Spinner | `.fin-spinner`, `.fin-spinner-dots` | Loading indicators |
+
+**JavaScript Helpers (premium-effects.js):**
+| Helper | Usage | Description |
+|--------|-------|-------------|
+| `FinToast.success(title, message)` | `FinToast.success('Sucesso!', 'Operação concluída')` | Show success toast |
+| `FinToast.danger(title, message)` | `FinToast.error('Erro', 'Algo deu errado')` | Show error toast |
+| `FinCounter.animate(el, value, opts)` | `FinCounter.animate(el, 1234, {prefix: 'R$ '})` | Animated number |
+| `FinProgressRing.create(percent, opts)` | `FinProgressRing.create(75, {color: 'success'})` | Create SVG ring |
+| `FinSkeleton.table(rows, cols)` | `FinSkeleton.table(5, 4)` | Table skeleton HTML |
+| `FinTimeline.create(items)` | `FinTimeline.create([{time, title, status}])` | Timeline HTML |
+| `FinChip.create(text, opts)` | `FinChip.create('Tag', {type: 'success'})` | Chip HTML |
+</opcoes>
 ---
 
 ## PART 2: Creating New Design Systems
