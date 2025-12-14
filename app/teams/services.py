@@ -7,6 +7,8 @@ e retorna a resposta formatada como Adaptive Card.
 
 import logging
 import asyncio
+import json
+import re
 from datetime import datetime
 from typing import Optional
 
@@ -24,7 +26,10 @@ def processar_mensagem_teams(mensagem: str, usuario: str) -> dict:
     Returns:
         dict: Adaptive Card JSON com a resposta do agente
     """
+    logger.info(f"[TEAMS] Processando mensagem de '{usuario}': {mensagem[:100]}...")
+    
     if not mensagem or not mensagem.strip():
+        logger.warning("[TEAMS] Mensagem vazia recebida")
         return criar_card_erro("Mensagem vazia recebida.")
 
     try:
@@ -32,14 +37,26 @@ def processar_mensagem_teams(mensagem: str, usuario: str) -> dict:
         resposta_texto = _obter_resposta_agente(mensagem, usuario)
 
         if not resposta_texto:
+            logger.warning("[TEAMS] Agente não retornou resposta")
             return criar_card_erro("O agente não retornou uma resposta.")
 
+        logger.info(f"[TEAMS] Resposta obtida: {len(resposta_texto)} caracteres")
+        
         # Formata como Adaptive Card
-        return criar_card_resposta(resposta_texto, usuario)
+        card = criar_card_resposta(resposta_texto, usuario)
+        
+        # Valida se o card é JSON serializável
+        try:
+            json.dumps(card, ensure_ascii=False)
+        except (TypeError, ValueError) as e:
+            logger.error(f"[TEAMS] Card não é JSON válido: {e}")
+            return criar_card_erro("Erro ao formatar resposta.")
+        
+        return card
 
     except Exception as e:
         logger.error(f"[TEAMS] Erro ao processar mensagem: {e}", exc_info=True)
-        return criar_card_erro(f"Erro ao processar: {str(e)}")
+        return criar_card_erro(f"Erro ao processar sua solicitação. Tente novamente.")
 
 
 def _obter_resposta_agente(mensagem: str, usuario: str) -> Optional[str]:
@@ -53,53 +70,139 @@ def _obter_resposta_agente(mensagem: str, usuario: str) -> Optional[str]:
     Returns:
         str: Texto da resposta do agente
     """
-    from app.agente.sdk import get_client
-
-    client = get_client()
+    try:
+        from app.agente.sdk import get_client
+        client = get_client()
+    except Exception as e:
+        logger.error(f"[TEAMS] Erro ao obter client: {e}")
+        return None
 
     # Contexto especial para Teams: instruir agente a dar resposta direta
-    contexto_teams = """
-IMPORTANTE - Resposta via Microsoft Teams (Adaptive Card):
-- Esta mensagem vem do Microsoft Teams
-- Você terá APENAS UMA chance de responder
-- NÃO diga "vou consultar...", "deixa eu verificar...", "um momento..."
-- Faça todas as consultas necessárias SILENCIOSAMENTE
-- Responda APENAS quando tiver a informação completa e final
+    # Inclui diretamente no prompt já que get_response não aceita extra_context
+    contexto_teams = """[CONTEXTO: Resposta via Microsoft Teams - Adaptive Card]
+REGRAS OBRIGATÓRIAS:
+• Você terá APENAS UMA chance de responder
+• NÃO diga "vou consultar...", "deixa eu verificar..." - faça silenciosamente
+• Responda APENAS com a informação final e completa
+• NÃO use tabelas markdown (| col1 | col2 |) - não renderiza
+• NÃO use headers (##, ###)
+• USE apenas texto simples com quebras de linha
+• Para listas use: "• item" em linhas separadas
+• Mantenha resposta CONCISA (máximo 2000 caracteres)
 
-FORMATAÇÃO OBRIGATÓRIA (Adaptive Card não suporta markdown):
-- NÃO use tabelas markdown (| col1 | col2 |)
-- NÃO use headers (##, ###)
-- NÃO use listas com asterisco (*)
-- USE apenas texto simples com quebras de linha
-- USE **negrito** e _itálico_ (únicos suportados)
-- Para listar itens, use: "• item" ou "- item" em linhas separadas
-- Para dados estruturados, use formato: "Campo: Valor" em linhas separadas
-
-Exemplo de resposta BEM formatada:
-📦 Pedido VCD123456
-• Cliente: Atacadão
-• Cidade: São Paulo/SP
-• Valor: R$ 15.000,00
-• Status: Disponível ✅
+PERGUNTA DO USUÁRIO:
 """
 
-    # Executa a coroutine de forma síncrona
-    # (Flask não é async, então usamos asyncio.run)
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+    # Combina contexto + mensagem no prompt
+    prompt_completo = contexto_teams + mensagem
 
+    # Executa a coroutine de forma síncrona
     try:
+        # Tenta usar loop existente ou cria novo
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_closed():
+                raise RuntimeError("Loop fechado")
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
         response = loop.run_until_complete(
             client.get_response(
-                prompt=mensagem,
+                prompt=prompt_completo,
                 user_name=usuario,
-                extra_context=contexto_teams,
             )
         )
-        return response.text
+        
+        # Extrai o texto da resposta
+        resposta_texto = _extrair_texto_resposta(response)
+        
+        return resposta_texto
 
-    finally:
-        loop.close()
+    except asyncio.TimeoutError:
+        logger.error("[TEAMS] Timeout ao aguardar resposta do agente")
+        return "Desculpe, a consulta demorou muito. Tente novamente com uma pergunta mais específica."
+    
+    except Exception as e:
+        logger.error(f"[TEAMS] Erro ao obter resposta do agente: {e}", exc_info=True)
+        return None
+
+
+def _extrair_texto_resposta(response) -> Optional[str]:
+    """
+    Extrai texto da resposta do SDK, tratando diferentes formatos.
+    
+    Args:
+        response: Objeto de resposta do SDK
+        
+    Returns:
+        str: Texto extraído e limpo
+    """
+    texto = None
+    
+    # Tenta diferentes formas de extrair o texto
+    if hasattr(response, 'text') and response.text:
+        texto = response.text
+    elif hasattr(response, 'content') and response.content:
+        # Se content é uma lista de blocos
+        if isinstance(response.content, list):
+            partes = []
+            for bloco in response.content:
+                if hasattr(bloco, 'text'):
+                    partes.append(bloco.text)
+                elif isinstance(bloco, dict) and 'text' in bloco:
+                    partes.append(bloco['text'])
+                elif isinstance(bloco, str):
+                    partes.append(bloco)
+            texto = '\n'.join(partes)
+        else:
+            texto = str(response.content)
+    elif isinstance(response, str):
+        texto = response
+    elif isinstance(response, bytes):
+        texto = response.decode('utf-8', errors='replace')
+    else:
+        # Último recurso: converte para string
+        texto = str(response)
+    
+    if texto:
+        # Limpa e sanitiza o texto
+        texto = _sanitizar_texto(texto)
+    
+    return texto
+
+
+def _sanitizar_texto(texto: str) -> str:
+    """
+    Sanitiza o texto para ser seguro em JSON/Adaptive Card.
+    
+    Args:
+        texto: Texto bruto
+        
+    Returns:
+        str: Texto sanitizado
+    """
+    if not texto:
+        return ""
+    
+    # Garante que é string
+    if isinstance(texto, bytes):
+        texto = texto.decode('utf-8', errors='replace')
+    
+    # Remove caracteres de controle (exceto newline e tab)
+    texto = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', texto)
+    
+    # Normaliza quebras de linha
+    texto = texto.replace('\r\n', '\n').replace('\r', '\n')
+    
+    # Remove múltiplas quebras de linha consecutivas
+    texto = re.sub(r'\n{3,}', '\n\n', texto)
+    
+    # Limita tamanho (Teams tem limite)
+    if len(texto) > 2500:
+        texto = texto[:2497] + "..."
+    
+    return texto.strip()
 
 
 def criar_card_resposta(texto: str, usuario: str) -> dict:
@@ -115,9 +218,9 @@ def criar_card_resposta(texto: str, usuario: str) -> dict:
     """
     agora = datetime.now().strftime("%d/%m/%Y %H:%M")
 
-    # Trunca texto muito longo (limite do Teams)
-    if len(texto) > 3000:
-        texto = texto[:2997] + "..."
+    # Sanitiza o texto novamente por segurança
+    texto = _sanitizar_texto(texto) or "Resposta não disponível."
+    usuario = _sanitizar_texto(usuario) or "Usuário"
 
     return {
         "type": "AdaptiveCard",
@@ -142,18 +245,11 @@ def criar_card_resposta(texto: str, usuario: str) -> dict:
             },
             {
                 "type": "TextBlock",
-                "text": f"_{usuario} • {agora}_",
+                "text": f"{usuario} • {agora}",
                 "size": "Small",
                 "color": "Light",
                 "spacing": "Medium",
                 "horizontalAlignment": "Right"
-            }
-        ],
-        "actions": [
-            {
-                "type": "Action.OpenUrl",
-                "title": "Abrir Sistema",
-                "url": "https://sistema-fretes.onrender.com/agente"
             }
         ]
     }
@@ -169,6 +265,8 @@ def criar_card_erro(mensagem: str) -> dict:
     Returns:
         dict: Adaptive Card JSON
     """
+    mensagem = _sanitizar_texto(mensagem) or "Erro desconhecido"
+    
     return {
         "type": "AdaptiveCard",
         "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
