@@ -1310,6 +1310,83 @@ button:focus-visible {
 }
 
 /* ==========================================================================
+   FIX P1.1: TOKEN BUDGET CONTAINER (Admin)
+   Estilos para o container completo de budget de tokens
+   ========================================================================== */
+.token-budget-container {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    padding: 6px 10px;
+    background: var(--agent-bg-tertiary);
+    border: 1px solid var(--agent-border-color);
+    border-radius: var(--agent-radius-md);
+    font-size: 0.7rem;
+    min-width: 120px;
+}
+
+.token-budget-stats {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.token-stat {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    color: var(--agent-text-secondary);
+}
+
+.token-stat i {
+    font-size: 0.6rem;
+}
+
+.token-stat.total {
+    font-weight: 600;
+    color: var(--agent-accent-primary);
+}
+
+.token-budget-bar {
+    width: 100%;
+    height: 3px;
+    background: var(--agent-bg-primary);
+    border-radius: var(--agent-radius-full);
+    overflow: hidden;
+}
+
+.token-progress-bar {
+    height: 100%;
+    background: var(--agent-gradient-primary);
+    border-radius: var(--agent-radius-full);
+    transition: width 0.3s ease;
+}
+
+.token-progress-bar.warning {
+    background: var(--agent-warning) !important;
+}
+
+.token-progress-bar.danger {
+    background: var(--agent-danger) !important;
+}
+
+.token-percentage {
+    font-family: var(--agent-font-mono);
+    font-size: 0.65rem;
+    color: var(--agent-text-muted);
+    font-weight: 600;
+}
+
+.token-cost {
+    font-family: var(--agent-font-mono);
+    color: var(--agent-success);
+    font-weight: 600;
+}
+
+/* ==========================================================================
    RESPONSIVE ADJUSTMENTS
    ========================================================================== */
 @media (max-width: 768px) {
@@ -1327,6 +1404,80 @@ button:focus-visible {
     .chat-fullscreen-wrapper::before,
     .chat-fullscreen-wrapper::after {
         opacity: 0.5;
+    }
+
+    /* FIX P1.2: Manter controles visiveis em tablet */
+    /* Override do chat.css que escondia .chat-header-center */
+    .chat-header-center {
+        display: flex !important;
+        gap: 6px;
+    }
+
+    /* Compactar seletor de modelo */
+    .model-select {
+        min-width: 80px;
+        padding: 3px 6px;
+        font-size: 0.7rem;
+    }
+
+    /* Token budget mais compacto */
+    .token-budget-container {
+        display: none;
+    }
+}
+
+/* FIX P1.2: Mobile pequeno (480px) */
+@media (max-width: 480px) {
+    /* Manter header-center com toggles essenciais */
+    .chat-header-center {
+        display: flex !important;
+        gap: 4px;
+    }
+
+    /* Esconder seletor de modelo mas manter toggles */
+    .chat-header-center .header-control:first-child {
+        display: none;
+    }
+
+    /* Manter botao de anexar visivel */
+    .btn-attach {
+        display: flex !important;
+        width: 36px;
+        height: 36px;
+    }
+
+    /* Compactar toggles */
+    .toggle-switch {
+        transform: scale(0.9);
+    }
+
+    /* Esconder tooltips em mobile */
+    .control-tooltip {
+        display: none !important;
+    }
+
+    /* Ajustar header */
+    .chat-header {
+        padding: 4px 8px;
+    }
+
+    .chat-title h5 {
+        font-size: 0.8rem;
+    }
+
+    .chat-title small {
+        display: none;
+    }
+
+    /* Botoes menores */
+    .btn-sessions {
+        width: 32px;
+        height: 32px;
+    }
+
+    .theme-toggle {
+        width: 32px;
+        height: 32px;
     }
 }
 

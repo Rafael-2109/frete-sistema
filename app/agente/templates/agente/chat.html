@@ -77,11 +77,27 @@
             </div>
 
             <div class="chat-header-right">
-                <!-- FEAT-004: Budget de Tokens (Admin) -->
+                <!-- FEAT-004: Budget de Tokens (Admin) - FIX: Elementos DOM completos -->
                 {% if current_user.perfil == 'administrador' %}
-                <div class="token-budget-mini" id="token-budget" style="display: none;">
-                    <span class="token-count" id="token-total" title="Tokens usados">0</span>
-                    <span class="token-cost" id="token-cost" title="Custo USD">$0.00</span>
+                <div class="token-budget-container" id="token-budget" style="display: none;">
+                    <div class="token-budget-stats">
+                        <span class="token-stat">
+                            <i class="fas fa-arrow-down"></i>
+                            <span id="token-input" title="Tokens de entrada">0</span>
+                        </span>
+                        <span class="token-stat">
+                            <i class="fas fa-arrow-up"></i>
+                            <span id="token-output" title="Tokens de saída">0</span>
+                        </span>
+                        <span class="token-stat total">
+                            <span class="token-count" id="token-total" title="Total de tokens">0</span>
+                        </span>
+                        <span class="token-cost" id="token-cost" title="Custo USD">$0.00</span>
+                    </div>
+                    <div class="token-budget-bar">
+                        <div class="token-progress-bar" id="token-progress-bar" style="width: 0%"></div>
+                    </div>
+                    <span class="token-percentage" id="token-percentage">0%</span>
                 </div>
                 {% endif %}
 
@@ -333,53 +349,129 @@
 <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/highlight.min.js"></script>
 <script src="{{ url_for('static', filename='agente/js/chat.js') }}"></script>
 
-<!-- DESIGN-001: Theme Management -->
+<!-- DESIGN-001: Theme Management + FIX P3.1: Preferences Persistence -->
 <script>
 /**
- * Agent Theme Manager
- * Gerencia dark/light mode com persistência em localStorage
+ * Agent Preferences Manager
+ * Gerencia tema, modelo, thinking e plan mode com persistência em localStorage
  */
 
-// Inicializa tema ao carregar a página
+// Chaves do localStorage
+const STORAGE_KEYS = {
+    theme: 'agent-theme',
+    model: 'agent-model',
+    thinking: 'agent-thinking',
+    planMode: 'agent-plan-mode'
+};
+
+// ============================================
+// TEMA (Dark/Light)
+// ============================================
 (function initAgentTheme() {
-    const savedTheme = localStorage.getItem('agent-theme');
+    const savedTheme = localStorage.getItem(STORAGE_KEYS.theme);
     const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     const theme = savedTheme || (systemPrefersDark ? 'dark' : 'light');
 
     document.documentElement.setAttribute('data-theme', theme);
-
-    // Também sincroniza com data-bs-theme para compatibilidade Bootstrap
     document.documentElement.setAttribute('data-bs-theme', theme);
 
-    console.log('[THEME] Inicializado:', theme);
+    console.log('[PREFS] Tema inicializado:', theme);
 })();
 
-/**
- * Alterna entre dark e light mode
- */
 function toggleAgentTheme() {
     const html = document.documentElement;
     const currentTheme = html.getAttribute('data-theme') || 'dark';
     const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
 
-    // Aplica o novo tema
     html.setAttribute('data-theme', newTheme);
     html.setAttribute('data-bs-theme', newTheme);
+    localStorage.setItem(STORAGE_KEYS.theme, newTheme);
 
-    // Persiste no localStorage
-    localStorage.setItem('agent-theme', newTheme);
-
-    console.log('[THEME] Alterado para:', newTheme);
+    console.log('[PREFS] Tema alterado para:', newTheme);
 }
 
-// Escuta mudanças na preferência do sistema (se usuário não tiver escolhido)
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-    if (!localStorage.getItem('agent-theme')) {
+    if (!localStorage.getItem(STORAGE_KEYS.theme)) {
         const newTheme = e.matches ? 'dark' : 'light';
         document.documentElement.setAttribute('data-theme', newTheme);
         document.documentElement.setAttribute('data-bs-theme', newTheme);
-        console.log('[THEME] Sistema alterou para:', newTheme);
+        console.log('[PREFS] Sistema alterou tema para:', newTheme);
     }
+});
+
+// ============================================
+// FIX P3.1: MODELO, THINKING, PLAN MODE
+// ============================================
+document.addEventListener('DOMContentLoaded', function() {
+    // --- Restaurar Modelo ---
+    const modelSelector = document.getElementById('model-selector');
+    const savedModel = localStorage.getItem(STORAGE_KEYS.model);
+    if (modelSelector && savedModel) {
+        // Verifica se o modelo salvo existe nas opções
+        const optionExists = Array.from(modelSelector.options).some(opt => opt.value === savedModel);
+        if (optionExists) {
+            modelSelector.value = savedModel;
+            // Atualiza variável global do chat.js
+            if (typeof currentModel !== 'undefined') {
+                currentModel = savedModel;
+            }
+            // Dispara evento change para atualizar display
+            modelSelector.dispatchEvent(new Event('change'));
+            console.log('[PREFS] Modelo restaurado:', savedModel);
+        }
+    }
+
+    // Salvar modelo quando alterado
+    if (modelSelector) {
+        modelSelector.addEventListener('change', function() {
+            localStorage.setItem(STORAGE_KEYS.model, this.value);
+            console.log('[PREFS] Modelo salvo:', this.value);
+        });
+    }
+
+    // --- Restaurar Thinking Toggle ---
+    const thinkingToggle = document.getElementById('thinking-toggle');
+    const savedThinking = localStorage.getItem(STORAGE_KEYS.thinking);
+    if (thinkingToggle && savedThinking !== null) {
+        const isEnabled = savedThinking === 'true';
+        thinkingToggle.checked = isEnabled;
+        // Atualiza variável global do chat.js
+        if (typeof thinkingEnabled !== 'undefined') {
+            thinkingEnabled = isEnabled;
+        }
+        console.log('[PREFS] Thinking restaurado:', isEnabled);
+    }
+
+    // Salvar thinking quando alterado
+    if (thinkingToggle) {
+        thinkingToggle.addEventListener('change', function() {
+            localStorage.setItem(STORAGE_KEYS.thinking, this.checked.toString());
+            console.log('[PREFS] Thinking salvo:', this.checked);
+        });
+    }
+
+    // --- Restaurar Plan Mode Toggle ---
+    const planModeToggle = document.getElementById('plan-mode-toggle');
+    const savedPlanMode = localStorage.getItem(STORAGE_KEYS.planMode);
+    if (planModeToggle && savedPlanMode !== null) {
+        const isEnabled = savedPlanMode === 'true';
+        planModeToggle.checked = isEnabled;
+        // Atualiza variável global do chat.js
+        if (typeof planModeEnabled !== 'undefined') {
+            planModeEnabled = isEnabled;
+        }
+        console.log('[PREFS] Plan Mode restaurado:', isEnabled);
+    }
+
+    // Salvar plan mode quando alterado
+    if (planModeToggle) {
+        planModeToggle.addEventListener('change', function() {
+            localStorage.setItem(STORAGE_KEYS.planMode, this.checked.toString());
+            console.log('[PREFS] Plan Mode salvo:', this.checked);
+        });
+    }
+
+    console.log('[PREFS] Preferencias carregadas com sucesso');
 });
 </script>
 {% endblock %}

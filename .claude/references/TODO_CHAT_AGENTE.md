@@ -6,24 +6,26 @@
 
 ---
 
-## Sprint 1 - Correcoes Criticas (PENDENTE)
+## Sprint 1 - Correcoes Criticas (CONCLUIDO ✅)
 
-- [ ] **P1.1** Corrigir elementos DOM inexistentes no HTML
-  - `token-percentage`, `token-input`, `token-output`, `token-progress-bar`
-  - `thinking-label-text`, `plan-mode-label-text`
+- [x] **P1.1** Corrigir elementos DOM inexistentes no HTML
+  - Adicionado `token-percentage`, `token-input`, `token-output`, `token-progress-bar`
+  - Container completo: `token-budget-container` com stats e barra de progresso
+  - Nota: `thinking-label-text` e `plan-mode-label-text` tem null-check no JS
 
-- [ ] **P1.2** Restaurar controles no mobile
-  - Seletor de modelo visivel em tablet/mobile
-  - Toggle thinking/plan mode acessivel
-  - Botao anexar visivel em mobile pequeno
+- [x] **P1.2** Restaurar controles no mobile
+  - Override CSS para `.chat-header-center` visivel em tablet (768px)
+  - Toggles de thinking/plan mode acessiveis em mobile (480px)
+  - Botao anexar visivel: `.btn-attach { display: flex !important }`
+  - Compactacao automatica dos elementos em telas pequenas
 
-- [ ] **P2.6** Implementar `prefers-reduced-motion`
+- [x] **P2.6** Implementar `prefers-reduced-motion` (feito no Sprint 2)
 
-- [ ] **P3.1** Persistir preferencias no localStorage
-  - Modelo selecionado
-  - Thinking toggle
-  - Plan mode toggle
-  - Tema (dark/light)
+- [x] **P3.1** Persistir preferencias no localStorage
+  - Modelo selecionado: `agent-model`
+  - Thinking toggle: `agent-thinking`
+  - Plan mode toggle: `agent-plan-mode`
+  - Tema (dark/light): `agent-theme` (feito no Sprint 2)
 
 ---
 
@@ -106,9 +108,9 @@
 | Arquivo | Linhas | Status | Acao |
 |---------|--------|--------|------|
 | `app/static/agente/css/chat.css` | 1632 | Mantido | Overrides via agent-theme.css |
-| `app/static/agente/css/agent-theme.css` | **910** | ✅ CRIADO | CSS Variables + Dark/Light + Visual Moments |
-| `app/static/agente/js/chat.js` | 1742 | Mantido | Funcoes de tema inline no HTML |
-| `app/agente/templates/agente/chat.html` | **386** | ✅ EDITADO | Import CSS + Toggle tema + JS tema |
+| `app/static/agente/css/agent-theme.css` | **~1080** | ✅ CRIADO | CSS Variables + Dark/Light + Visual Moments + Mobile Fixes |
+| `app/static/agente/js/chat.js` | 1742 | Mantido | Variaveis globais atualizadas via JS inline |
+| `app/agente/templates/agente/chat.html` | **~478** | ✅ EDITADO | Import CSS + Toggle tema + Token Budget + Preferences |
 
 ---
 
