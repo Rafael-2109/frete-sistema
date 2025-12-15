@@ -41,15 +41,17 @@
                             <small class="d-block text-muted">Cadastre um novo mapeamento manualmente</small>
                         </a>
                         <a href="{{ url_for('portal.portal_depara.importar') }}" class="btn btn-outline-info text-start">
-                            <i class="fas fa-file-excel"></i> Importar CSV
-                            <small class="d-block text-muted">Importe múltiplos mapeamentos via arquivo</small>
+                            <i class="fas fa-file-upload"></i> Importar Planilha
+                            <small class="d-block text-muted">Importe ou atualize mapeamentos via xlsx/csv</small>
                         </a>
-                        <!-- Exportar (Em desenvolvimento)
-                        <a href="#" class="btn btn-outline-warning text-start disabled">
-                            <i class="fas fa-download"></i> Exportar CSV
-                            <small class="d-block text-muted">Baixe todos os mapeamentos atuais</small>
+                        <a href="{{ url_for('portal.portal_depara.exportar') }}" class="btn btn-outline-warning text-start">
+                            <i class="fas fa-file-download"></i> Exportar Planilha
+                            <small class="d-block text-muted">Baixe todos os mapeamentos atuais em xlsx</small>
                         </a>
-                        -->
+                        <a href="{{ url_for('portal.portal_depara.baixar_modelo') }}" class="btn btn-outline-secondary text-start">
+                            <i class="fas fa-file-excel"></i> Baixar Modelo
+                            <small class="d-block text-muted">Modelo xlsx para importação com instruções</small>
+                        </a>
                     </div>
                 </div>
             </div>
@@ -94,47 +96,60 @@
             <div class="card">
                 <div class="card-header">
                     <h6 class="mb-0">
-                        <i class="fas fa-table"></i> Formato CSV para Importação
+                        <i class="fas fa-table"></i> Formato de Planilha para Importação
                     </h6>
                 </div>
                 <div class="card-body">
-                    <p>Para importar via arquivo CSV, use o seguinte formato:</p>
+                    <p>Para importar via arquivo xlsx/csv, use o seguinte formato (ou baixe o modelo acima):</p>
                     <div class="table-responsive">
                         <table class="table table-sm table-bordered">
                             <thead class="table-light">
                                 <tr>
-                                    <th>codigo_nosso</th>
-                                    <th>descricao_nosso</th>
-                                    <th>codigo_atacadao</th>
-                                    <th>descricao_atacadao</th>
-                                    <th>fator_conversao</th>
-                                    <th>cnpj_cliente</th>
+                                    <th>cod atacadao <span class="text-danger">*</span></th>
+                                    <th>descricao atacadao</th>
+                                    <th>nosso cod <span class="text-danger">*</span></th>
+                                    <th>descricao nosso</th>
+                                    <th>fator conversao</th>
+                                    <th>cnpj cliente</th>
+                                    <th>observacoes</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr>
-                                    <td>PROD001</td>
-                                    <td>Produto Exemplo</td>
-                                    <td>AT123456</td>
-                                    <td>Produto no Atacadão</td>
+                                    <td>82545</td>
+                                    <td>AZEITONA VERDE CAMPO BELO FAT.POUCH 30x80G</td>
+                                    <td>4310146</td>
+                                    <td><em class="text-muted">auto</em></td>
                                     <td>1.0</td>
-                                    <td>12345678901234</td>
+                                    <td></td>
+                                    <td></td>
                                 </tr>
                                 <tr>
-                                    <td>PROD002</td>
-                                    <td>Outro Produto</td>
-                                    <td>AT789012</td>
-                                    <td>Descrição Atacadão</td>
-                                    <td>12.0</td>
+                                    <td>46624</td>
+                                    <td>AZEITONA VERDE CAMPO BELO POUCH 18x180G</td>
+                                    <td>4310152</td>
+                                    <td><em class="text-muted">auto</em></td>
+                                    <td>1.0</td>
+                                    <td></td>
                                     <td></td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
-                    
-                    <div class="alert alert-info mt-3">
-                        <strong>Dica:</strong> O campo cnpj_cliente é opcional. Use-o apenas quando 
-                        o mesmo produto tiver códigos diferentes para clientes específicos.
+
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <div class="alert alert-success mb-0">
+                                <i class="fas fa-check-circle"></i> <strong>Ao reimportar:</strong>
+                                Se o mapeamento já existir, a descrição do Atacadão será atualizada automaticamente.
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="alert alert-info mb-0">
+                                <i class="fas fa-info-circle"></i> <strong>Dica:</strong>
+                                Use "Exportar Planilha" para baixar os mapeamentos atuais, edite e reimporte.
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

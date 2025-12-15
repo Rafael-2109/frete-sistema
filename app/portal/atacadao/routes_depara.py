@@ -233,57 +233,108 @@ def importar():
                             os.remove(temp_path)
                             return redirect(request.url)
             
+            # Normalizar nomes das colunas (lowercase)
+            df.columns = [col.lower().strip() for col in df.columns]
+
             # Validar colunas obrigatórias
-            colunas_obrigatorias = ['cod atacadao', 'descricao atacadao', 'nosso cod']
-            colunas_existentes = [col.lower() for col in df.columns]
-            
+            colunas_obrigatorias = ['cod atacadao', 'nosso cod']
+            colunas_existentes = list(df.columns)
+
             for col in colunas_obrigatorias:
                 if col not in colunas_existentes:
                     flash(f'Coluna obrigatória não encontrada: {col}', 'danger')
                     return redirect(request.url)
-            
+
             # Processar linhas
-            contador_sucesso = 0
+            contador_criados = 0
+            contador_atualizados = 0
             contador_erro = 0
             erros = []
-            
+
             for index, row in df.iterrows():
                 try:
                     codigo_nosso = str(row['nosso cod']).strip()
                     codigo_atacadao = str(row['cod atacadao']).strip()
-                    descricao_atacadao = str(row['descricao atacadao']).strip()
-                    
-                    # Verificar se já existe
-                    existe = ProdutoDeParaAtacadao.query.filter_by(
+
+                    # Pular linhas vazias
+                    if not codigo_nosso or not codigo_atacadao or codigo_nosso == 'nan' or codigo_atacadao == 'nan':
+                        continue
+
+                    # Descrição do Atacadão (opcional)
+                    descricao_atacadao = ''
+                    if 'descricao atacadao' in df.columns:
+                        descricao_atacadao = str(row.get('descricao atacadao', '') or '').strip()
+                        if descricao_atacadao == 'nan':
+                            descricao_atacadao = ''
+
+                    # Fator de conversão (opcional)
+                    fator_conversao = 1.0
+                    if 'fator conversao' in df.columns:
+                        try:
+                            fator_val = row.get('fator conversao', 1.0)
+                            if pd.notna(fator_val):
+                                fator_conversao = float(fator_val)
+                        except (ValueError, TypeError):
+                            fator_conversao = 1.0
+
+                    # CNPJ cliente (opcional)
+                    cnpj_cliente = None
+                    if 'cnpj cliente' in df.columns:
+                        cnpj_val = str(row.get('cnpj cliente', '') or '').strip()
+                        if cnpj_val and cnpj_val != 'nan':
+                            cnpj_cliente = cnpj_val
+
+                    # Observações (opcional)
+                    observacoes = ''
+                    if 'observacoes' in df.columns:
+                        obs_val = str(row.get('observacoes', '') or '').strip()
+                        if obs_val != 'nan':
+                            observacoes = obs_val
+
+                    # Verificar se já existe (considera CNPJ se informado)
+                    query = ProdutoDeParaAtacadao.query.filter_by(
                         codigo_nosso=codigo_nosso,
                         codigo_atacadao=codigo_atacadao
-                    ).first()
-                    
+                    )
+                    if cnpj_cliente:
+                        query = query.filter_by(cnpj_cliente=cnpj_cliente)
+                    else:
+                        query = query.filter(ProdutoDeParaAtacadao.cnpj_cliente.is_(None))
+
+                    existe = query.first()
+
                     if existe:
-                        # Atualizar existente
-                        existe.descricao_atacadao = descricao_atacadao
+                        # Atualizar existente - atualiza descrição e outros campos
+                        if descricao_atacadao:
+                            existe.descricao_atacadao = descricao_atacadao
+                        if fator_conversao != 1.0:
+                            existe.fator_conversao = fator_conversao
+                        if observacoes:
+                            existe.observacoes = observacoes
                         existe.atualizado_em = datetime.utcnow()
+                        contador_atualizados += 1
                     else:
                         # Buscar descrição do nosso produto
                         descricao_nosso = ''
                         produto = CadastroPalletizacao.query.filter_by(cod_produto=codigo_nosso).first()
                         if produto:
                             descricao_nosso = produto.nome_produto
-                        
+
                         # Criar novo
                         mapeamento = ProdutoDeParaAtacadao(
                             codigo_nosso=codigo_nosso,
                             descricao_nosso=descricao_nosso,
                             codigo_atacadao=codigo_atacadao,
                             descricao_atacadao=descricao_atacadao,
-                            fator_conversao=1.0,
+                            cnpj_cliente=cnpj_cliente,
+                            fator_conversao=fator_conversao,
+                            observacoes=observacoes,
                             ativo=True,
                             criado_por=current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
                         )
                         db.session.add(mapeamento)
-                    
-                    contador_sucesso += 1
-                    
+                        contador_criados += 1
+
                 except Exception as e:
                     contador_erro += 1
                     erros.append(f"Linha {index + 2}: {str(e)}")  # type: ignore
@@ -291,10 +342,12 @@ def importar():
                         break
             
             # Commit se tudo ok
-            if contador_sucesso > 0:
+            total_processados = contador_criados + contador_atualizados
+            if total_processados > 0:
                 db.session.commit()
-                flash(f'✅ {contador_sucesso} mapeamentos importados com sucesso!', 'success')
-            
+                msg = f'✅ Importação concluída: {contador_criados} criados, {contador_atualizados} atualizados'
+                flash(msg, 'success')
+
             if contador_erro > 0:
                 flash(f'⚠️ {contador_erro} linhas com erro', 'warning')
                 for erro in erros[:5]:  # Mostrar até 5 erros
@@ -377,26 +430,26 @@ def api_criar():
     """API para criar mapeamento De-Para via AJAX"""
     try:
         data = request.get_json()
-        
+
         # Validar dados obrigatórios
         if not data.get('codigo_nosso') or not data.get('codigo_atacadao'):
             return jsonify({
                 'success': False,
                 'message': 'Códigos são obrigatórios'
             }), 400
-        
+
         # Verificar se já existe
         existe = ProdutoDeParaAtacadao.query.filter_by(
             codigo_nosso=data['codigo_nosso'],
             codigo_atacadao=data['codigo_atacadao']
         ).first()
-        
+
         if existe:
             return jsonify({
                 'success': False,
                 'message': 'Mapeamento já existe'
             }), 400
-        
+
         # Buscar descrição do nosso produto
         descricao_nosso = ''
         produto = CadastroPalletizacao.query.filter_by(
@@ -404,7 +457,7 @@ def api_criar():
         ).first()
         if produto:
             descricao_nosso = produto.nome_produto
-        
+
         # Criar novo mapeamento
         mapeamento = ProdutoDeParaAtacadao(
             codigo_nosso=data['codigo_nosso'],
@@ -415,16 +468,16 @@ def api_criar():
             ativo=True,
             criado_por=current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
         )
-        
+
         db.session.add(mapeamento)
         db.session.commit()
-        
+
         return jsonify({
             'success': True,
             'message': 'Mapeamento criado com sucesso',
             'id': mapeamento.id
         })
-        
+
     except Exception as e:
         db.session.rollback()
         logger.error(f"Erro ao criar mapeamento via API: {e}")
@@ -432,3 +485,157 @@ def api_criar():
             'success': False,
             'message': str(e)
         }), 500
+
+
+@bp.route('/exportar')
+@login_required
+def exportar():
+    """Exportar todos os mapeamentos De-Para em xlsx"""
+    from io import BytesIO
+    from flask import send_file
+
+    try:
+        # Buscar todos os mapeamentos ativos
+        mapeamentos = ProdutoDeParaAtacadao.query.filter_by(ativo=True).order_by(
+            ProdutoDeParaAtacadao.codigo_nosso
+        ).all()
+
+        # Criar DataFrame
+        dados = []
+        for m in mapeamentos:
+            dados.append({
+                'cod atacadao': m.codigo_atacadao,
+                'descricao atacadao': m.descricao_atacadao or '',
+                'nosso cod': m.codigo_nosso,
+                'descricao nosso': m.descricao_nosso or '',
+                'fator conversao': float(m.fator_conversao) if m.fator_conversao else 1.0,
+                'cnpj cliente': m.cnpj_cliente or '',
+                'observacoes': m.observacoes or ''
+            })
+
+        df = pd.DataFrame(dados)
+
+        # Criar arquivo Excel em memória
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='De-Para Atacadao', index=False)
+
+            # Ajustar largura das colunas
+            worksheet = writer.sheets['De-Para Atacadao']
+            for idx, col in enumerate(df.columns):
+                max_length = max(
+                    df[col].astype(str).apply(len).max(),
+                    len(col)
+                ) + 2
+                worksheet.column_dimensions[chr(65 + idx)].width = min(max_length, 50)
+
+        output.seek(0)
+
+        # Nome do arquivo com data
+        from datetime import datetime
+        filename = f"depara_atacadao_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=filename
+        )
+
+    except Exception as e:
+        logger.error(f"Erro ao exportar De-Para: {e}")
+        flash(f'Erro ao exportar: {str(e)}', 'danger')
+        return redirect(url_for('portal.portal_depara.index'))
+
+
+@bp.route('/modelo')
+@login_required
+def baixar_modelo():
+    """Baixar modelo de planilha xlsx para importação"""
+    from io import BytesIO
+    from flask import send_file
+
+    try:
+        # Criar DataFrame com colunas do modelo
+        dados_exemplo = [
+            {
+                'cod atacadao': '82545',
+                'descricao atacadao': 'AZEITONA VERDE CAMPO BELO FAT.POUCH 30x80G',
+                'nosso cod': '4310146',
+                'descricao nosso': '',  # Será preenchido automaticamente se existir no cadastro
+                'fator conversao': 1.0,
+                'cnpj cliente': '',  # Opcional - para mapeamento específico por cliente
+                'observacoes': ''
+            },
+            {
+                'cod atacadao': '46624',
+                'descricao atacadao': 'AZEITONA VERDE CAMPO BELO POUCH 18x180G',
+                'nosso cod': '4310152',
+                'descricao nosso': '',
+                'fator conversao': 1.0,
+                'cnpj cliente': '',
+                'observacoes': ''
+            }
+        ]
+
+        df = pd.DataFrame(dados_exemplo)
+
+        # Criar arquivo Excel em memória
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='De-Para Atacadao', index=False)
+
+            # Ajustar largura das colunas
+            worksheet = writer.sheets['De-Para Atacadao']
+            larguras = {
+                'A': 15,  # cod atacadao
+                'B': 50,  # descricao atacadao
+                'C': 15,  # nosso cod
+                'D': 50,  # descricao nosso
+                'E': 15,  # fator conversao
+                'F': 20,  # cnpj cliente
+                'G': 30   # observacoes
+            }
+            for col, width in larguras.items():
+                worksheet.column_dimensions[col].width = width
+
+            # Adicionar comentários/instruções
+            from openpyxl.comments import Comment
+            worksheet['A1'].comment = Comment(
+                'Código do produto no Atacadão (sem zeros à esquerda)',
+                'Sistema'
+            )
+            worksheet['B1'].comment = Comment(
+                'Descrição do produto no Atacadão (até 255 caracteres)',
+                'Sistema'
+            )
+            worksheet['C1'].comment = Comment(
+                'Nosso código interno do produto',
+                'Sistema'
+            )
+            worksheet['D1'].comment = Comment(
+                'Deixe em branco - será preenchido automaticamente',
+                'Sistema'
+            )
+            worksheet['E1'].comment = Comment(
+                'Fator de conversão (padrão 1.0)',
+                'Sistema'
+            )
+            worksheet['F1'].comment = Comment(
+                'CNPJ do cliente (opcional, para mapeamento específico)',
+                'Sistema'
+            )
+
+        output.seek(0)
+
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name='modelo_depara_atacadao.xlsx'
+        )
+
+    except Exception as e:
+        logger.error(f"Erro ao gerar modelo: {e}")
+        flash(f'Erro ao gerar modelo: {str(e)}', 'danger')
+        return redirect(url_for('portal.portal_depara.index'))

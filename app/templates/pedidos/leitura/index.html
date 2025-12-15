@@ -572,13 +572,16 @@ $(document).ready(function() {
                 const nossoCodigoClass = produto.nosso_codigo ? '' : 'text-danger';
                 const nossoCodigoText = produto.nosso_codigo || '<i class="fas fa-exclamation-triangle"></i> Sem De-Para';
 
+                // Usa nossa descrição quando disponível, senão usa descrição do PDF
+                const descricaoExibir = produto.nossa_descricao || produto.descricao || '';
+
                 const rowClass = divergente ? 'table-danger' : (produto.nosso_codigo ? '' : 'table-warning');
 
                 cardHtml += `
                     <tr class="${rowClass}">
                         <td><span class="badge bg-secondary">${produto.codigo || ''}</span></td>
                         <td class="${nossoCodigoClass}"><strong>${nossoCodigoText}</strong></td>
-                        <td>${produto.descricao || ''}</td>
+                        <td>${descricaoExibir}</td>
                         <td class="text-end">${produto.quantidade || 0}</td>
                         <td class="text-end">R$ ${formatMoney(produto.valor_unitario || 0)}</td>
                         <td class="text-end">${precoTabela !== null && precoTabela !== undefined ? 'R$ ' + formatMoney(precoTabela) : '-'}</td>
