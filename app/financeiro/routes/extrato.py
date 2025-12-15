@@ -971,11 +971,13 @@ def extrato_desvincular_titulo():
 
     # Limpar dados do título
     titulo_antigo = item.titulo_nf
-    item.titulo_id = None
+    item.titulo_receber_id = None  # FK correta para clientes
     item.titulo_nf = None
     item.titulo_parcela = None
     item.titulo_valor = None
     item.titulo_vencimento = None
+    item.titulo_cliente = None
+    item.titulo_cnpj = None
     item.match_score = None
     item.match_criterio = None
     item.status_match = 'PENDENTE'
@@ -1002,7 +1004,7 @@ def extrato_aprovar_item():
 
     item = ExtratoItem.query.get_or_404(item_id)
 
-    if aprovar and not item.titulo_id:
+    if aprovar and not item.titulo_receber_id:
         return jsonify({
             'success': False,
             'error': 'Item não possui título vinculado'
@@ -1040,7 +1042,7 @@ def extrato_aprovar_todos():
 
     aprovados = 0
     for item in itens:
-        if item.titulo_id:
+        if item.titulo_receber_id:  # FK correta para clientes
             item.aprovado = True
             item.aprovado_em = datetime.utcnow()
             item.aprovado_por = current_user.nome if current_user else 'Sistema'
@@ -1074,7 +1076,7 @@ def extrato_conciliar_item():
             'error': 'Item não está aprovado'
         }), 400
 
-    if not item.titulo_id:
+    if not item.titulo_receber_id:
         return jsonify({
             'success': False,
             'error': 'Item não possui título vinculado'
@@ -1164,7 +1166,7 @@ def extrato_aprovar_todos_multiplos():
 
     aprovados = 0
     for item in itens:
-        if item.titulo_id:
+        if item.titulo_receber_id:  # FK correta para clientes
             item.aprovado = True
             item.aprovado_em = datetime.utcnow()
             item.aprovado_por = current_user.nome if current_user else 'Sistema'

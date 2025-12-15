@@ -266,7 +266,7 @@
 
                         {% if item.status != 'CONCILIADO' %}
                         <div class="mt-3 pt-2 border-top d-flex gap-1 flex-wrap">
-                            {% if item.titulo_id and not item.aprovado %}
+                            {% if item.titulo_pagar_id and not item.aprovado %}
                             <button class="btn btn-sm btn-success" onclick="aprovarItem({{ item.id }})">
                                 <i class="fas fa-check"></i> Aprovar
                             </button>
@@ -289,7 +289,7 @@
                             <i class="fas fa-balance-scale"></i> COMPARAÇÃO
                         </div>
 
-                        {% if item.titulo_id %}
+                        {% if item.titulo_pagar_id %}
                         <div class="fin-comparacao-box">
                             <div class="text-center mb-2">
                                 {% if item.match_score >= 100 %}
@@ -359,7 +359,7 @@
                         </div>
 
                         <div id="titulos-container-{{ item.id }}">
-                            {% if item.titulo_id %}
+                            {% if item.titulo_pagar_id %}
                             <div class="fin-titulo-candidato fin-titulo-candidato--selecionado">
                                 <div class="d-flex justify-content-between align-items-start">
                                     <div>
@@ -384,14 +384,25 @@
                                 </div>
 
                                 <div class="mt-2 small">
-                                    {% if item.titulo %}
+                                    {# Usa titulo_pagar (relationship correta para fornecedores) #}
+                                    {% if item.titulo_pagar %}
                                     <div class="fin-info-line">
                                         <i class="fas fa-building"></i>
-                                        <strong>{{ item.titulo.raz_social or 'N/A' }}</strong>
+                                        <strong>{{ item.titulo_pagar.raz_social or item.titulo_cliente or 'N/A' }}</strong>
                                     </div>
                                     <div class="fin-info-line">
                                         <i class="fas fa-id-card"></i>
-                                        <code class="fin-cnpj">{{ item.titulo.cnpj or 'N/A' }}</code>
+                                        <code class="fin-cnpj">{{ item.titulo_pagar.cnpj or item.titulo_cnpj or 'N/A' }}</code>
+                                    </div>
+                                    {% else %}
+                                    {# Fallback para campos de cache #}
+                                    <div class="fin-info-line">
+                                        <i class="fas fa-building"></i>
+                                        <strong>{{ item.titulo_cliente or 'N/A' }}</strong>
+                                    </div>
+                                    <div class="fin-info-line">
+                                        <i class="fas fa-id-card"></i>
+                                        <code class="fin-cnpj">{{ item.titulo_cnpj or 'N/A' }}</code>
                                     </div>
                                     {% endif %}
                                     <div class="fin-info-line">

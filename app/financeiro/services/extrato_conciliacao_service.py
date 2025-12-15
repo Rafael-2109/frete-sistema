@@ -157,7 +157,7 @@ class ExtratoConciliacaoService:
         """
         logger.info(f"Conciliando item {item.id}: NF {item.titulo_nf} P{item.titulo_parcela}")
 
-        if not item.titulo_id:
+        if not item.titulo_receber_id:
             raise ValueError("Item não possui título vinculado")
 
         if not item.credit_line_id:
@@ -166,10 +166,10 @@ class ExtratoConciliacaoService:
             if not item.credit_line_id:
                 raise ValueError(f"Linha de crédito não encontrada para move_id {item.move_id}")
 
-        # Buscar título local
-        titulo = ContasAReceber.query.get(item.titulo_id)
+        # Buscar título local (usando titulo_receber_id para clientes)
+        titulo = ContasAReceber.query.get(item.titulo_receber_id)
         if not titulo:
-            raise ValueError(f"Título {item.titulo_id} não encontrado no sistema")
+            raise ValueError(f"Título {item.titulo_receber_id} não encontrado no sistema")
 
         # Buscar título no Odoo (SEM filtro de empresa - vamos buscar por NF+parcela)
         titulo_odoo = self._buscar_titulo_odoo_multicompany(

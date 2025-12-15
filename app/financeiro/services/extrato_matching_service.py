@@ -456,18 +456,23 @@ class ExtratoMatchingService:
 
     def _vincular_titulo(self, item: ExtratoItem, match: Dict) -> None:
         """
-        Vincula um título ao item de extrato.
+        Vincula um título A RECEBER ao item de extrato.
+        Usa titulo_receber_id para manter integridade referencial correta.
         """
-        item.titulo_id = match['titulo_id']
+        item.titulo_receber_id = match['titulo_id']  # FK correta para ContasAReceber
         item.titulo_nf = match['titulo_nf']
         item.titulo_parcela = match['parcela']
         item.titulo_valor = match['valor']
         item.titulo_cliente = match['cliente']
+        item.titulo_cnpj = match.get('cnpj')
 
-        if match.get('vencimento'):
+        if match.get('vencimento_date'):
+            item.titulo_vencimento = match['vencimento_date']
+        elif match.get('vencimento'):
             try:
                 item.titulo_vencimento = datetime.strptime(match['vencimento'], '%d/%m/%Y').date()
-            except:
+            except Exception as e:
+                logger.error(f"Erro ao converter vencimento: {e}")
                 pass
 
         item.match_score = match['score']
@@ -475,17 +480,18 @@ class ExtratoMatchingService:
 
     def vincular_titulo_manual(self, item: ExtratoItem, titulo_id: int) -> None:
         """
-        Vincula manualmente um título ao item de extrato.
+        Vincula manualmente um título A RECEBER ao item de extrato.
         """
         titulo = ContasAReceber.query.get(titulo_id)
         if not titulo:
             raise ValueError(f"Título {titulo_id} não encontrado")
 
-        item.titulo_id = titulo.id
+        item.titulo_receber_id = titulo.id  # FK correta para ContasAReceber
         item.titulo_nf = titulo.titulo_nf
         item.titulo_parcela = titulo.parcela
         item.titulo_valor = titulo.valor_titulo
         item.titulo_cliente = titulo.raz_social_red or titulo.raz_social
+        item.titulo_cnpj = titulo.cnpj
         item.titulo_vencimento = titulo.vencimento
 
         # Calcular score

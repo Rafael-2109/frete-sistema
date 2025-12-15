@@ -1311,17 +1311,33 @@ class ExtratoItem(db.Model):
     # Status do match: PENDENTE, MATCH_ENCONTRADO, MULTIPLOS_MATCHES, SEM_MATCH
     status_match = db.Column(db.String(30), default='PENDENTE', nullable=False, index=True)
 
-    # Título encontrado (se único match)
-    # NOTA: titulo_id é o ID da tabela local contas_a_receber (não do Odoo)
-    titulo_id = db.Column(db.Integer, db.ForeignKey('contas_a_receber.id'), nullable=True)
-    titulo_nf = db.Column(db.String(50), nullable=True)  # Número da NF-e (cache)
-    titulo_parcela = db.Column(db.Integer, nullable=True)  # Número da parcela (cache)
-    titulo_valor = db.Column(db.Float, nullable=True)  # Valor do título (cache)
-    titulo_vencimento = db.Column(db.Date, nullable=True)  # Vencimento do título (cache)
-    titulo_cliente = db.Column(db.String(255), nullable=True)  # Nome do cliente (cache)
+    # -------------------------------------------------------------------------
+    # TÍTULOS A RECEBER (clientes) - usado quando lote.tipo_transacao = 'entrada'
+    # -------------------------------------------------------------------------
+    titulo_receber_id = db.Column(db.Integer, db.ForeignKey('contas_a_receber.id'), nullable=True)
+    titulo_receber = db.relationship('ContasAReceber', foreign_keys=[titulo_receber_id], lazy='joined')
 
-    # Relationship para acessar dados completos do título
-    titulo = db.relationship('ContasAReceber', foreign_keys=[titulo_id], lazy='joined')
+    # -------------------------------------------------------------------------
+    # TÍTULOS A PAGAR (fornecedores) - usado quando lote.tipo_transacao = 'saida'
+    # -------------------------------------------------------------------------
+    titulo_pagar_id = db.Column(db.Integer, db.ForeignKey('contas_a_pagar.id'), nullable=True)
+    titulo_pagar = db.relationship('ContasAPagar', foreign_keys=[titulo_pagar_id], lazy='joined')
+
+    # -------------------------------------------------------------------------
+    # CAMPOS LEGADO (deprecados - manter para compatibilidade)
+    # TODO: Remover após migração completa
+    # -------------------------------------------------------------------------
+    titulo_id = db.Column(db.Integer, nullable=True)  # DEPRECADO: usar titulo_receber_id ou titulo_pagar_id
+
+    # -------------------------------------------------------------------------
+    # CAMPOS DE CACHE (comuns para ambos os tipos)
+    # -------------------------------------------------------------------------
+    titulo_nf = db.Column(db.String(50), nullable=True)  # Número da NF-e
+    titulo_parcela = db.Column(db.Integer, nullable=True)  # Número da parcela
+    titulo_valor = db.Column(db.Float, nullable=True)  # Valor do título
+    titulo_vencimento = db.Column(db.Date, nullable=True)  # Vencimento do título
+    titulo_cliente = db.Column(db.String(255), nullable=True)  # Nome do cliente/fornecedor
+    titulo_cnpj = db.Column(db.String(20), nullable=True)  # CNPJ do cliente/fornecedor
 
     # Múltiplos matches (JSON com lista de títulos candidatos)
     matches_candidatos = db.Column(db.Text, nullable=True)
@@ -1329,6 +1345,21 @@ class ExtratoItem(db.Model):
     # Score de confiança do match (0-100)
     match_score = db.Column(db.Integer, nullable=True)
     match_criterio = db.Column(db.String(100), nullable=True)  # Ex: "CNPJ+VALOR_EXATO"
+
+    # -------------------------------------------------------------------------
+    # PROPRIEDADES HELPER
+    # -------------------------------------------------------------------------
+    @property
+    def titulo(self):
+        """Retorna o título correto baseado no tipo de transação do lote."""
+        if self.titulo_pagar_id:
+            return self.titulo_pagar
+        return self.titulo_receber
+
+    @property
+    def titulo_id_efetivo(self):
+        """Retorna o ID do título efetivo (receber ou pagar)."""
+        return self.titulo_pagar_id or self.titulo_receber_id
 
     # =========================================================================
     # CONTROLE DE PROCESSAMENTO
@@ -1397,12 +1428,16 @@ class ExtratoItem(db.Model):
             'journal_code': self.journal_code,
             # Matching
             'status_match': self.status_match,
-            'titulo_id': self.titulo_id,
+            'titulo_receber_id': self.titulo_receber_id,
+            'titulo_pagar_id': self.titulo_pagar_id,
+            'titulo_id': self.titulo_id,  # DEPRECADO
+            'titulo_id_efetivo': self.titulo_id_efetivo,  # Helper: retorna receber ou pagar
             'titulo_nf': self.titulo_nf,
             'titulo_parcela': self.titulo_parcela,
             'titulo_valor': self.titulo_valor,
             'titulo_vencimento': self.titulo_vencimento.isoformat() if self.titulo_vencimento else None,
             'titulo_cliente': self.titulo_cliente,
+            'titulo_cnpj': self.titulo_cnpj,
             'match_score': self.match_score,
             'match_criterio': self.match_criterio,
             # Controle
