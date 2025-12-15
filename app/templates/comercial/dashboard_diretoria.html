@@ -3,48 +3,24 @@
 {% block title %}Acompanhamento Comercial - Diretoria{% endblock %}
 
 {% block extra_css %}
-<!-- CSS Responsivo -->
 <link rel="stylesheet" href="{{ url_for('static', filename='comercial/css/dashboard_diretoria_responsive.css') }}">
-{% endblock %}
-
-{% block content %}
 <style>
-    /* ChatGPT Dark Theme */
-    .comercial-container {
-        background-color: #202123;
-        min-height: 100vh;
-        margin-top: -1.5rem;
-        padding-top: 2rem;
-        color: #ececf1;
-    }
-
-    /* Cards principais */
-    .dark-card {
-        background-color: #343541;
-        border: 1px solid #444654;
+    /* Metric Cards */
+    .metric-card {
+        background: var(--bs-secondary-bg);
+        border: 1px solid var(--bs-border-color);
         border-radius: 12px;
-        color: #ececf1;
+        padding: 1.5rem;
         transition: all 0.3s ease;
     }
 
-    .dark-card:hover {
-        background-color: #40414f;
-        border-color: #565869;
+    .metric-card:hover {
         transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    }
-
-    /* Cards de métricas */
-    .metric-card {
-        background: linear-gradient(135deg, #343541 0%, #40414f 100%);
-        border: 1px solid #444654;
-        border-radius: 12px;
-        padding: 1.5rem;
-        color: #ececf1;
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
     }
 
     .metric-card h5 {
-        color: #c5c5d2;
+        color: var(--bs-secondary-color);
         font-size: 0.875rem;
         font-weight: 500;
         text-transform: uppercase;
@@ -53,215 +29,178 @@
     }
 
     .metric-card h2 {
-        color: #ececf1;
-        font-weight: 600;
+        font-weight: 700;
         margin: 0;
+        font-family: 'JetBrains Mono', monospace;
     }
 
-    /* Badge de equipe */
+    /* Equipe Badge Cards */
     .equipe-badge {
-        background-color: #343541;
-        border: 1px solid #444654;
+        background: var(--bs-secondary-bg);
+        border: 1px solid var(--bs-border-color);
+        border-radius: 12px;
         transition: all 0.3s ease;
         cursor: pointer;
     }
 
     .equipe-badge:hover {
-        background-color: #40414f;
-        border-color: #565869;
+        background: var(--bs-tertiary-bg);
+        border-color: var(--bs-primary);
         transform: translateY(-4px);
-        box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
     }
 
     .equipe-badge .card-title {
-        color: #ececf1 !important;
         font-weight: 600;
     }
 
     .equipe-badge small {
-        color: #8e8ea0;
-    }
-
-    .equipe-badge p {
-        color: #ececf1;
-    }
-
-    /* Ícones coloridos */
-    .icon-primary { color: #7289da; }
-    .icon-success { color: #43b581; }
-    .icon-warning { color: #faa61a; }
-    .icon-info { color: #5865f2; }
-
-    /* Botões */
-    .btn-dark-primary {
-        background-color: #5865f2;
-        border: none;
-        color: white;
-        padding: 0.5rem 1.5rem;
-        border-radius: 8px;
-        transition: all 0.2s ease;
-    }
-
-    .btn-dark-primary:hover {
-        background-color: #4752c4;
-        transform: translateY(-1px);
-    }
-
-    .btn-dark-secondary {
-        background-color: transparent;
-        border: 1px solid #444654;
-        color: #c5c5d2;
-        padding: 0.5rem 1.5rem;
-        border-radius: 8px;
-        transition: all 0.2s ease;
-    }
-
-    .btn-dark-secondary:hover {
-        background-color: #40414f;
-        border-color: #565869;
-        color: #ececf1;
-    }
-
-    /* Títulos e textos */
-    h2, h4 {
-        color: #ececf1;
-    }
-
-    .text-muted {
-        color: #8e8ea0 !important;
-    }
-
-    hr {
-        border-color: #444654;
-        opacity: 0.5;
-    }
-
-    /* Alertas */
-    .alert-dark-info {
-        background-color: #343541;
-        border: 1px solid #444654;
-        color: #c5c5d2;
+        color: var(--bs-secondary-color);
     }
 
     /* Valor em destaque */
     .valor-destaque {
-        color: #43b581;
+        color: var(--bs-success);
         font-weight: 600;
     }
 
-    /* Animações suaves */
-    * {
-        transition: background-color 0.2s ease, border-color 0.2s ease;
+    /* Icon colors */
+    .icon-primary { color: var(--bs-primary); }
+    .icon-success { color: var(--bs-success); }
+    .icon-warning { color: var(--bs-warning); }
+    .icon-info { color: var(--bs-info); }
+
+    /* Alert custom */
+    .alert-custom {
+        background: var(--bs-secondary-bg);
+        border: 1px solid var(--bs-border-color);
+        color: var(--bs-secondary-color);
+        border-radius: 8px;
     }
 </style>
+{% endblock %}
 
-<div class="comercial-container">
-    <div class="container-fluid">
-        <div class="row mb-4">
-            <div class="col-12">
-                <h2><i class="fas fa-chart-line icon-warning"></i> Acompanhamento Comercial - Visão Diretoria</h2>
-                <hr>
+{% block content %}
+<div class="container-fluid">
+    <!-- Header da Página -->
+    <header class="page-header">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1 class="h3 mb-0">
+                    <i class="fas fa-chart-line icon-warning me-2"></i>
+                    Acompanhamento Comercial - Visão Diretoria
+                </h1>
+                <small class="text-muted">
+                    Panorama geral das equipes de vendas
+                </small>
+            </div>
+            {% if current_user.perfil == 'admin' %}
+            <div class="btn-toolbar" role="toolbar">
+                <a href="{{ url_for('comercial.admin_permissoes') }}" class="btn btn-outline-secondary btn-sm">
+                    <i class="fas fa-user-shield me-1"></i> Gerenciar Permissões
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </header>
+
+    <!-- Resumo Geral -->
+    <section class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="metric-card">
+                <h5><i class="fas fa-users me-1"></i> Total de Equipes</h5>
+                <h2>{{ equipes|length }}</h2>
             </div>
         </div>
-
-        <!-- Resumo Geral -->
-        <div class="row mb-4">
-            <div class="col-md-3 mb-3">
-                <div class="metric-card">
-                    <h5><i class="fas fa-users"></i> Total de Equipes</h5>
-                    <h2>{{ equipes|length }}</h2>
-                </div>
-            </div>
-            <div class="col-md-3 mb-3">
-                <div class="metric-card">
-                    <h5><i class="fas fa-building"></i> Total de Clientes</h5>
-                    <h2>{{ equipes|sum(attribute='total_clientes') }}</h2>
-                </div>
-            </div>
-            <div class="col-md-3 mb-3">
-                <div class="metric-card">
-                    <h5><i class="fas fa-dollar-sign"></i> Valor em Aberto</h5>
-                    <h2 class="valor-destaque">R$ {{ "{:,.2f}".format(equipes|sum(attribute='valor_em_aberto')).replace(',', 'X').replace('.', ',').replace('X', '.') }}</h2>
-                </div>
-            </div>
-            <div class="col-md-3 mb-3">
-                <div class="metric-card">
-                    <h5><i class="fas fa-chart-bar"></i> Ticket Médio</h5>
-                    <h2>
-                        {% if equipes|sum(attribute='total_clientes') > 0 %}
-                            R$ {{ "{:,.2f}".format(equipes|sum(attribute='valor_em_aberto') / equipes|sum(attribute='total_clientes')).replace(',', 'X').replace('.', ',').replace('X', '.') }}
-                        {% else %}
-                            R$ 0,00
-                        {% endif %}
-                    </h2>
-                </div>
+        <div class="col-md-3 mb-3">
+            <div class="metric-card">
+                <h5><i class="fas fa-building me-1"></i> Total de Clientes</h5>
+                <h2>{{ equipes|sum(attribute='total_clientes') }}</h2>
             </div>
         </div>
-
-        <!-- Filtros -->
-        <div class="row mb-3">
-            <div class="col-12">
-                <div class="btn-group" role="group">
-                    <a href="{{ url_for('comercial.lista_clientes', posicao='em_aberto') }}"
-                       class="btn btn-dark-primary">
-                        <i class="fas fa-list"></i> Ver Todos os Clientes (Em Aberto)
-                    </a>
-                    <a href="{{ url_for('comercial.lista_clientes', posicao='todos') }}"
-                       class="btn btn-dark-secondary">
-                        <i class="fas fa-list"></i> Ver Todos os Clientes (Total)
-                    </a>
-                </div>
+        <div class="col-md-3 mb-3">
+            <div class="metric-card">
+                <h5><i class="fas fa-dollar-sign me-1"></i> Valor em Aberto</h5>
+                <h2 class="valor-destaque">R$ {{ "{:,.2f}".format(equipes|sum(attribute='valor_em_aberto')).replace(',', 'X').replace('.', ',').replace('X', '.') }}</h2>
             </div>
         </div>
-
-        <!-- Cards de Equipes -->
-        <div class="row">
-            <div class="col-12">
-                <h4 class="mb-3">Equipes de Vendas</h4>
-                <p class="text-muted">Clique em uma equipe para ver os vendedores</p>
+        <div class="col-md-3 mb-3">
+            <div class="metric-card">
+                <h5><i class="fas fa-chart-bar me-1"></i> Ticket Médio</h5>
+                <h2>
+                    {% if equipes|sum(attribute='total_clientes') > 0 %}
+                        R$ {{ "{:,.2f}".format(equipes|sum(attribute='valor_em_aberto') / equipes|sum(attribute='total_clientes')).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                    {% else %}
+                        R$ 0,00
+                    {% endif %}
+                </h2>
             </div>
         </div>
+    </section>
 
-        <div class="row">
-            {% for equipe in equipes %}
-            <div class="col-md-4 col-lg-3 mb-4">
-                <a href="{{ url_for('comercial.vendedores_equipe', equipe_nome=equipe.nome) }}"
-                   class="text-decoration-none">
-                    <div class="card h-100 equipe-badge">
-                        <div class="card-body text-center">
-                            <div class="mb-3">
-                                <i class="fas fa-users fa-3x icon-info"></i>
+    <!-- Filtros -->
+    <section class="row mb-4">
+        <div class="col-12">
+            <div class="btn-group" role="group">
+                <a href="{{ url_for('comercial.lista_clientes', posicao='em_aberto') }}"
+                   class="btn btn-primary">
+                    <i class="fas fa-list"></i> Ver Todos os Clientes (Em Aberto)
+                </a>
+                <a href="{{ url_for('comercial.lista_clientes', posicao='todos') }}"
+                   class="btn btn-outline-secondary">
+                    <i class="fas fa-list"></i> Ver Todos os Clientes (Total)
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Cards de Equipes -->
+    <section class="row">
+        <div class="col-12 mb-3">
+            <h4 class="mb-2">Equipes de Vendas</h4>
+            <p class="text-muted">Clique em uma equipe para ver os vendedores</p>
+        </div>
+    </section>
+
+    <div class="row">
+        {% for equipe in equipes %}
+        <div class="col-md-4 col-lg-3 mb-4">
+            <a href="{{ url_for('comercial.vendedores_equipe', equipe_nome=equipe.nome) }}"
+               class="text-decoration-none">
+                <div class="card h-100 equipe-badge">
+                    <div class="card-body text-center">
+                        <div class="mb-3">
+                            <i class="fas fa-users fa-3x icon-info"></i>
+                        </div>
+                        <h5 class="card-title">{{ equipe.nome }}</h5>
+                        <hr>
+                        <div class="row">
+                            <div class="col-6">
+                                <small>Clientes</small>
+                                <p class="mb-0 fw-bold">{{ equipe.total_clientes }}</p>
                             </div>
-                            <h5 class="card-title">{{ equipe.nome }}</h5>
-                            <hr>
-                            <div class="row">
-                                <div class="col-6">
-                                    <small>Clientes</small>
-                                    <p class="mb-0 font-weight-bold">{{ equipe.total_clientes }}</p>
-                                </div>
-                                <div class="col-6">
-                                    <small>Em Aberto</small>
-                                    <p class="mb-0 font-weight-bold valor-destaque">
-                                        R$ {{ "{:,.0f}".format(equipe.valor_em_aberto).replace(',', '.') }}
-                                    </p>
-                                </div>
+                            <div class="col-6">
+                                <small>Em Aberto</small>
+                                <p class="mb-0 fw-bold valor-destaque">
+                                    R$ {{ "{:,.0f}".format(equipe.valor_em_aberto).replace(',', '.') }}
+                                </p>
                             </div>
                         </div>
                     </div>
-                </a>
-            </div>
-            {% endfor %}
-        </div>
-
-        {% if not equipes %}
-        <div class="row">
-            <div class="col-12">
-                <div class="alert alert-dark-info">
-                    <i class="fas fa-info-circle"></i> Nenhuma equipe encontrada no sistema.
                 </div>
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if not equipes %}
+    <div class="row">
+        <div class="col-12">
+            <div class="alert alert-custom">
+                <i class="fas fa-info-circle me-1"></i> Nenhuma equipe encontrada no sistema.
             </div>
         </div>
-        {% endif %}
     </div>
+    {% endif %}
 </div>
 {% endblock %}

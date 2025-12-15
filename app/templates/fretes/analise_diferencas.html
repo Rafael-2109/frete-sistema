@@ -2,6 +2,148 @@
 
 {% block title %}Análise Detalhada das Diferenças - Frete #{{ frete.id }}{% endblock %}
 
+{% block extra_css %}
+<style>
+/* ==========================================================================
+   ANALISE DIFERENCAS - Theme-aware Styles
+   ========================================================================== */
+
+/* Card headers theme-aware */
+.card-header-theme-dark {
+    background: linear-gradient(135deg, var(--bs-tertiary-bg) 0%, var(--bs-secondary-bg) 100%) !important;
+    color: var(--bs-body-color) !important;
+    border-bottom: 1px solid var(--bs-border-color) !important;
+}
+
+.card-header-theme-dark h5 {
+    color: var(--bs-body-color) !important;
+}
+
+/* Light mode adjustment */
+[data-bs-theme="light"] .card-header-theme-dark,
+[data-theme="light"] .card-header-theme-dark {
+    background: linear-gradient(135deg, var(--bs-secondary-bg) 0%, var(--bs-tertiary-bg) 100%) !important;
+    color: var(--bs-body-color) !important;
+}
+
+/* Table thead theme-aware */
+.table-thead-theme {
+    background-color: var(--bs-tertiary-bg) !important;
+}
+
+.table-thead-theme th {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+    border-bottom: 2px solid var(--bs-border-color) !important;
+    font-weight: 600;
+}
+
+/* Badge valor calculado - theme-aware */
+.badge-valor-calculado {
+    background-color: rgba(var(--bs-primary-rgb), 0.15) !important;
+    color: var(--bs-primary) !important;
+    border: 1px solid rgba(var(--bs-primary-rgb), 0.3);
+}
+
+/* Badge valor destaque */
+.badge-valor-destaque {
+    background-color: rgba(var(--bs-success-rgb), 0.15) !important;
+    color: var(--bs-success) !important;
+    border: 1px solid rgba(var(--bs-success-rgb), 0.3);
+}
+
+/* Light mode badges - usar variáveis do tema */
+[data-bs-theme="light"] .badge-valor-calculado,
+[data-theme="light"] .badge-valor-calculado {
+    background-color: rgba(var(--bs-primary-rgb), 0.1) !important;
+    color: var(--bs-primary) !important;
+}
+
+[data-bs-theme="light"] .badge-valor-destaque,
+[data-theme="light"] .badge-valor-destaque {
+    background-color: rgba(var(--bs-success-rgb), 0.1) !important;
+    color: var(--bs-success) !important;
+}
+
+/* Table-active theme-aware */
+.table-active-theme,
+tr.table-active-theme td {
+    background-color: var(--bs-tertiary-bg) !important;
+}
+
+/* Destaque para linhas de subtotal e total */
+.table-active {
+    background-color: var(--bs-tertiary-bg) !important;
+}
+
+/* Badges personalizados */
+.badge-sm {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    margin-left: 0.25rem;
+}
+
+/* Badge light theme-aware */
+.badge.bg-light {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+    border: 1px solid var(--bs-border-color);
+}
+
+/* Alerta de configuração */
+.alert-info h6 {
+    margin-bottom: 0.5rem;
+}
+
+/* Destaque para componentes com valor mínimo aplicado */
+.tem-minimo-aplicado {
+    background-color: rgba(var(--bs-warning-rgb), 0.15) !important;
+}
+
+/* Table success theme-aware */
+[data-bs-theme="dark"] .table-success,
+[data-theme="dark"] .table-success {
+    --bs-table-bg: rgba(16, 185, 129, 0.15) !important;
+    --bs-table-color: var(--bs-body-color) !important;
+    background-color: rgba(16, 185, 129, 0.15) !important;
+}
+
+/* Table warning theme-aware */
+[data-bs-theme="dark"] .table-warning,
+[data-theme="dark"] .table-warning {
+    --bs-table-bg: rgba(245, 158, 11, 0.15) !important;
+    --bs-table-color: var(--bs-body-color) !important;
+    background-color: rgba(245, 158, 11, 0.15) !important;
+}
+
+@media print {
+    .btn {
+        display: none !important;
+    }
+
+    .card {
+        border: 1px solid #333 !important;
+        margin-bottom: 1rem !important;
+    }
+
+    .card-header {
+        background-color: #f8f9fa !important;
+        color: #333 !important;
+        border-bottom: 1px solid #333 !important;
+    }
+
+    input[type="text"] {
+        border: 1px solid #333 !important;
+    }
+
+    .alert {
+        border: 1px solid #333 !important;
+        page-break-inside: avoid;
+    }
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
     <div class="row">
@@ -59,7 +201,7 @@
     <div class="row mb-4">
         <div class="col-12">
             <div class="card">
-                <div class="card-header bg text-white" style="background-color: #0d1c29; color: #a4d4fc !important;">
+                <div class="card-header card-header-theme-dark">
                     <h5 class="mb-0">
                         <i class="fas fa-truck"></i> Informações do Frete
                     </h5>
@@ -96,24 +238,24 @@
     <div class="row mb-4">
         <div class="col-12">
             <div class="card">
-                <div class="card-header bg text-white" style="background-color: #0d1c29; color: #93c5e5 !important;">
+                <div class="card-header card-header-theme-dark">
                     <h5 class="mb-0">
                         <i class="fas fa-table"></i> Componentes da Tabela de Frete
                     </h5>
                 </div>
                 <div class="card-body">
                     <div class="table-responsive">
-                        <table class="table table-striped table-hover table-sm">
-                            <thead class="thead-dark">
+                        <table class="table table-hover table-sm">
+                            <thead class="table-thead-theme">
                                 <tr>
                                     <th width="140">Componente</th>
                                     <th width="100">Valor Tabela</th>
                                     <th width="100">Valor Usado</th>
                                     <th width="150">Fórmula de Cálculo</th>
-                                    <th width="100" style="text-align: right;">Valor Calculado</th>
-                                    <th width="100" style="text-align: center;">Valor CTe</th>
-                                    <th width="100" style="text-align: center;">Tabela CTe</th>
-                                    <th width="80" style="text-align: right;">Diferença</th>
+                                    <th width="100" class="text-end">Valor Calculado</th>
+                                    <th width="100" class="text-center">Valor CTe</th>
+                                    <th width="100" class="text-center">Tabela CTe</th>
+                                    <th width="80" class="text-end">Diferença</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -170,14 +312,13 @@
                                     <td><small><strong>{{ componente.valor_tabela }}</strong></small></td>
                                     <td><small>{{ componente.valor_usado }}</small></td>
                                     <td><code style="font-size: 11px;">{{ componente.formula }}</code></td>
-                                    <td style="text-align: right;">
+                                    <td class="text-end">
                                         {% if componente.unidade == 'R$' %}
-                                        <span class="badge bg-light"
-                                            style="background-color: #a8d5ff; color: #0a3d16 !important;">
+                                        <span class="badge badge-valor-destaque">
                                             {{ (componente.valor_calculado)|moeda_carteira }}
                                         </span>
                                         {% else %}
-                                        <span class="badge bg-primary text-white" style="background-color: #007bff;">
+                                        <span class="badge badge-valor-calculado">
                                             {{ (componente.valor_calculado)|moeda_carteira }} {{ componente.unidade }}
                                         </span>
                                         {% endif %}
@@ -237,9 +378,8 @@
                     <table class="table table-sm">
                         <tr>
                             <td><strong>Total Líquido:</strong></td>
-                            <td style="text-align: right;">
-                                <span class="badge bg-light"
-                                    style="background-color: #d4edda; color: #155724 !important;">
+                            <td class="text-end">
+                                <span class="badge badge-valor-destaque">
                                     {{ (resumo_cotacao.total_liquido)|moeda_carteira }}
                                 </span>
                             </td>
@@ -281,9 +421,8 @@
                     <table class="table table-sm">
                         <tr>
                             <td><strong>Total Líquido CTe:</strong></td>
-                            <td style="text-align: right;">
-                                <span class="badge bg-light"
-                                    style="background-color: #d4edda; color: #155724 !important;"
+                            <td class="text-end">
+                                <span class="badge badge-valor-destaque"
                                     id="total-liquido-cte-display">
                                     R$ 0,00
                                 </span>
@@ -299,9 +438,8 @@
                         </tr>
                         <tr>
                             <td><strong>Valor ICMS CTe:</strong></td>
-                            <td style="text-align: right;">
-                                <span id="valor-icms-cte" class="badge bg-light"
-                                    style="background-color: #d4edda; color: #155724 !important;">
+                            <td class="text-end">
+                                <span id="valor-icms-cte" class="badge badge-valor-destaque">
                                     R$ 0,00
                                 </span>
                             </td>
@@ -618,53 +756,4 @@
 });
 </script>
 
-<style>
-    /* Destaque para linhas de subtotal e total */
-    .table-active {
-        background-color: #f5f5f5 !important;
-    }
-
-    /* Badges personalizados */
-    .badge-sm {
-        font-size: 0.75rem;
-        padding: 0.25rem 0.5rem;
-        margin-left: 0.25rem;
-    }
-
-    /* Alerta de configuração */
-    .alert-info h6 {
-        margin-bottom: 0.5rem;
-    }
-
-    /* Destaque para componentes com valor mínimo aplicado */
-    .tem-minimo-aplicado {
-        background-color: #fff3cd !important;
-    }
-
-    @media print {
-        .btn {
-            display: none !important;
-        }
-
-        .card {
-            border: 1px solid #333 !important;
-            margin-bottom: 1rem !important;
-        }
-
-        .card-header {
-            background-color: #f8f9fa !important;
-            color: #333 !important;
-            border-bottom: 1px solid #333 !important;
-        }
-
-        input[type="text"] {
-            border: 1px solid #333 !important;
-        }
-
-        .alert {
-            border: 1px solid #333 !important;
-            page-break-inside: avoid;
-        }
-    }
-</style>
 {% endblock %}

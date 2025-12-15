@@ -3,9 +3,9 @@
 {% block title %}Carteira Agrupada{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
+<div class="container-fluid premium-page">
     <!-- Header da Página -->
-    <header class="page-header">
+    <header class="page-header reveal">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
                 <h1 class="h3 mb-0 text-gray-800">
@@ -140,29 +140,25 @@
                     <div class="d-flex align-items-center">
                         <span class="text-muted small me-2">Agendamento:</span>
                         <div class="badges-agendamento-wrapper">
-                            <span class="badge bg-filtro badge-agendamento"
-                                style="background-color: transparent; color: #dc3545; border: 2px solid #dc3545;"
+                            <span class="badge bg-filtro badge-filtro badge-agendamento-sem"
                                 data-tipo="agendamento" data-valor="sem">
                                 <i class="fas fa-times-circle me-1"></i>
                                 Sem Agendamento
                             </span>
-                            <span class="badge bg-filtro badge-agendamento"
-                                style="background-color: transparent; color: #198754; border: 2px solid #198754;"
+                            <span class="badge bg-filtro badge-filtro badge-agendamento-com"
                                 data-tipo="agendamento" data-valor="com">
                                 <i class="fas fa-check-circle me-1"></i>
                                 Com Agendamento
                             </span>
 
                             <!-- FILTROS DE SEPARAÇÃO COM PROTOCOLO -->
-                            <span class="badge bg-filtro badge-agendamento ms-3"
-                                style="background-color: transparent; color: #fd7e14; border: 2px solid #fd7e14;"
+                            <span class="badge bg-filtro badge-filtro badge-agendamento-aguardando ms-3"
                                 data-tipo="agendamento" data-valor="sep-aguardando"
                                 title="Pedidos com separação que têm protocolo mas não foram confirmados">
                                 <i class="fas fa-box-open me-1"></i>
                                 Sep. (Aguardando)
                             </span>
-                            <span class="badge bg-filtro badge-agendamento"
-                                style="background-color: transparent; color: #0dcaf0; border: 2px solid #0dcaf0;"
+                            <span class="badge bg-filtro badge-filtro badge-agendamento-confirmado"
                                 data-tipo="agendamento" data-valor="sep-confirmado"
                                 title="Pedidos com separação que têm protocolo e foram confirmados">
                                 <i class="fas fa-check-double me-1"></i>
@@ -181,24 +177,21 @@
                     <div class="d-flex align-items-center">
                         <span class="text-muted small me-2">Atendimento da Entrega:</span>
                         <div class="badges-atendimento-wrapper">
-                            <span class="badge bg-filtro badge-atendimento"
-                                style="background-color: transparent; color: #6f42c1; border: 2px solid #6f42c1;"
+                            <span class="badge bg-filtro badge-filtro badge-atendimento-programar"
                                 data-tipo="atendimento" data-valor="programar"
                                 title="Pedidos com data de entrega que precisam de agendamento">
                                 <i class="fas fa-calendar-plus me-1"></i>
                                 Programar
                             </span>
-                            <span class="badge bg-filtro badge-atendimento ms-2"
-                                style="background-color: transparent; color: #e83e8c; border: 2px solid #e83e8c;"
+                            <span class="badge bg-filtro badge-filtro badge-atendimento-revisar ms-2"
                                 data-tipo="atendimento" data-valor="revisar-data"
                                 title="Pedidos com agendamento da 1ª separação diferente da data de entrega">
                                 <i class="fas fa-exclamation-triangle me-1"></i>
                                 Revisar Data
                             </span>
 
-                            <!-- ⭐ FILTRO DE IMPORTANTE -->
-                            <span class="badge bg-filtro badge-importante ms-3"
-                                style="background-color: transparent; color: #ff6b00; border: 2px solid #ff6b00;"
+                            <!-- FILTRO DE IMPORTANTE -->
+                            <span class="badge bg-filtro badge-filtro badge-atendimento-importante ms-3"
                                 data-tipo="importante" data-valor="importante"
                                 title="Pedidos marcados como importantes">
                                 <i class="fas fa-star me-1"></i>
@@ -221,20 +214,17 @@
                     <div class="d-flex align-items-center mb-2">
                         <span class="text-muted small me-2">Clientes:</span>
                         <div class="badges-clientes-wrapper">
-                            <span class="badge bg-filtro badge-cliente"
-                                style="background-color: transparent; color: #0056b3; border: 2px solid #0056b3;"
+                            <span class="badge bg-filtro badge-filtro badge-cliente-atacadao"
                                 data-tipo="cliente" data-valor="atacadao" title="Clientes Atacadão">
                                 <i class="fas fa-store me-1"></i>
                                 Atacadão
                             </span>
-                            <span class="badge bg-filtro badge-cliente ms-2"
-                                style="background-color: transparent; color: #dc3545; border: 2px solid #dc3545;"
+                            <span class="badge bg-filtro badge-filtro badge-cliente-sendas ms-2"
                                 data-tipo="cliente" data-valor="sendas" title="Clientes Sendas/Assaí">
                                 <i class="fas fa-shopping-cart me-1"></i>
                                 Sendas
                             </span>
-                            <span class="badge bg-filtro badge-cliente ms-2"
-                                style="background-color: transparent; color: #6c757d; border: 2px solid #6c757d;"
+                            <span class="badge bg-filtro badge-filtro badge-cliente-outros ms-2"
                                 data-tipo="cliente" data-valor="outros" title="Outros clientes">
                                 <i class="fas fa-users me-1"></i>
                                 Outros
@@ -254,50 +244,36 @@
                         <div class="badges-rotas-wrapper">
                             <!-- Primeira linha de badges (7 badges) -->
                             <div class="badges-linha mb-1">
-                                <span class="badge bg-filtro badge-rota"
-                                    style="background-color: transparent; color: #0d6efd; border: 2px solid #0d6efd;"
+                                <span class="badge bg-filtro badge-filtro badge-rota"
                                     data-tipo="rota" data-valor="SP">SP</span>
-                                <span class="badge bg-filtro badge-rota"
-                                    style="background-color: transparent; color: #0d6efd; border: 2px solid #0d6efd;"
+                                <span class="badge bg-filtro badge-filtro badge-rota"
                                     data-tipo="rota" data-valor="RJ">RJ</span>
-                                <span class="badge bg-filtro badge-rota"
-                                    style="background-color: transparent; color: #0d6efd; border: 2px solid #0d6efd;"
+                                <span class="badge bg-filtro badge-filtro badge-rota"
                                     data-tipo="rota" data-valor="MG">MG</span>
-                                <span class="badge bg-filtro badge-rota"
-                                    style="background-color: transparent; color: #0d6efd; border: 2px solid #0d6efd;"
+                                <span class="badge bg-filtro badge-filtro badge-rota"
                                     data-tipo="rota" data-valor="ES">ES</span>
-                                <span class="badge bg-filtro badge-rota"
-                                    style="background-color: transparent; color: #0d6efd; border: 2px solid #0d6efd;"
+                                <span class="badge bg-filtro badge-filtro badge-rota"
                                     data-tipo="rota" data-valor="SUL">SUL</span>
-                                <span class="badge bg-filtro badge-rota"
-                                    style="background-color: transparent; color: #0d6efd; border: 2px solid #0d6efd;"
+                                <span class="badge bg-filtro badge-filtro badge-rota"
                                     data-tipo="rota" data-valor="MS-MT">MS-MT</span>
-                                <span class="badge bg-filtro badge-rota"
-                                    style="background-color: transparent; color: #0d6efd; border: 2px solid #0d6efd;"
+                                <span class="badge bg-filtro badge-filtro badge-rota"
                                     data-tipo="rota" data-valor="DF-GO-TO">DF-GO-TO</span>
                             </div>
                             <!-- Segunda linha de badges (7 badges) -->
                             <div class="badges-linha">
-                                <span class="badge bg-filtro badge-rota"
-                                    style="background-color: transparent; color: #0d6efd; border: 2px solid #0d6efd;"
+                                <span class="badge bg-filtro badge-filtro badge-rota"
                                     data-tipo="rota" data-valor="BA">BA</span>
-                                <span class="badge bg-filtro badge-rota"
-                                    style="background-color: transparent; color: #0d6efd; border: 2px solid #0d6efd;"
+                                <span class="badge bg-filtro badge-filtro badge-rota"
                                     data-tipo="rota" data-valor="NE">NE</span>
-                                <span class="badge bg-filtro badge-rota"
-                                    style="background-color: transparent; color: #0d6efd; border: 2px solid #0d6efd;"
+                                <span class="badge bg-filtro badge-filtro badge-rota"
                                     data-tipo="rota" data-valor="NE2">NE2</span>
-                                <span class="badge bg-filtro badge-rota"
-                                    style="background-color: transparent; color: #0d6efd; border: 2px solid #0d6efd;"
+                                <span class="badge bg-filtro badge-filtro badge-rota"
                                     data-tipo="rota" data-valor="NO">NO</span>
-                                <span class="badge bg-filtro badge-rota"
-                                    style="background-color: transparent; color: #0d6efd; border: 2px solid #0d6efd;"
+                                <span class="badge bg-filtro badge-filtro badge-rota"
                                     data-tipo="rota" data-valor="MARIT.">MARIT.</span>
-                                <span class="badge bg-filtro badge-incoterm"
-                                    style="background-color: transparent; color: #ffc107; border: 2px solid #ffc107;"
+                                <span class="badge bg-filtro badge-filtro badge-incoterm badge-incoterm-fob"
                                     data-tipo="incoterm" data-valor="FOB">FOB</span>
-                                <span class="badge bg-filtro badge-incoterm"
-                                    style="background-color: transparent; color: #dc3545; border: 2px solid #dc3545;"
+                                <span class="badge bg-filtro badge-filtro badge-incoterm badge-incoterm-red"
                                     data-tipo="incoterm" data-valor="RED">RED</span>
                             </div>
                         </div>
@@ -314,38 +290,28 @@
                             <div class="badges-subrotas-wrapper">
                                 <!-- Primeira linha (subrotas com LITORAL) -->
                                 <div class="badges-linha mb-1">
-                                    <span class="badge bg-filtro badge-subrota"
-                                        style="background-color: transparent; color: #6c757d; border: 2px solid #6c757d;"
+                                    <span class="badge bg-filtro badge-filtro badge-subrota"
                                         data-tipo="subrota" data-valor="LITORAL - A">Litoral - A</span>
-                                    <span class="badge bg-filtro badge-subrota"
-                                        style="background-color: transparent; color: #6c757d; border: 2px solid #6c757d;"
+                                    <span class="badge bg-filtro badge-filtro badge-subrota"
                                         data-tipo="subrota" data-valor="LITORAL - B">Litoral - B</span>
-                                    <span class="badge bg-filtro badge-subrota"
-                                        style="background-color: transparent; color: #6c757d; border: 2px solid #6c757d;"
+                                    <span class="badge bg-filtro badge-filtro badge-subrota"
                                         data-tipo="subrota" data-valor="LITORAL - C">Litoral - C</span>
                                 </div>
                                 <!-- Segunda linha (outras subrotas) -->
                                 <div class="badges-linha">
-                                    <span class="badge bg-filtro badge-subrota"
-                                        style="background-color: transparent; color: #6c757d; border: 2px solid #6c757d;"
+                                    <span class="badge bg-filtro badge-filtro badge-subrota"
                                         data-tipo="subrota" data-valor="A">A</span>
-                                    <span class="badge bg-filtro badge-subrota"
-                                        style="background-color: transparent; color: #6c757d; border: 2px solid #6c757d;"
+                                    <span class="badge bg-filtro badge-filtro badge-subrota"
                                         data-tipo="subrota" data-valor="ABC">ABC</span>
-                                    <span class="badge bg-filtro badge-subrota"
-                                        style="background-color: transparent; color: #6c757d; border: 2px solid #6c757d;"
+                                    <span class="badge bg-filtro badge-filtro badge-subrota"
                                         data-tipo="subrota" data-valor="B">B</span>
-                                    <span class="badge bg-filtro badge-subrota"
-                                        style="background-color: transparent; color: #6c757d; border: 2px solid #6c757d;"
+                                    <span class="badge bg-filtro badge-filtro badge-subrota"
                                         data-tipo="subrota" data-valor="C">C</span>
-                                    <span class="badge bg-filtro badge-subrota"
-                                        style="background-color: transparent; color: #6c757d; border: 2px solid #6c757d;"
+                                    <span class="badge bg-filtro badge-filtro badge-subrota"
                                         data-tipo="subrota" data-valor="D">D</span>
-                                    <span class="badge bg-filtro badge-subrota"
-                                        style="background-color: transparent; color: #6c757d; border: 2px solid #6c757d;"
+                                    <span class="badge bg-filtro badge-filtro badge-subrota"
                                         data-tipo="subrota" data-valor="E">E</span>
-                                    <span class="badge bg-filtro badge-subrota"
-                                        style="background-color: transparent; color: #6c757d; border: 2px solid #6c757d;"
+                                    <span class="badge bg-filtro badge-filtro badge-subrota"
                                         data-tipo="subrota" data-valor="SP">SP</span>
                                 </div>
                             </div>
@@ -368,14 +334,14 @@
                 <h6 class="mb-0">
                     <i class="fas fa-table me-2"></i>
                     Pedidos Agrupados
-                    <span class="badge bg-light text-dark ms-2">{{ total_pedidos }}</span>
+                    <span class="badge badge-contador-theme ms-2">{{ total_pedidos }}</span>
                 </h6>
             </div>
 
             <div class="card-body p-0">
                 <div class="table-responsive">
                     <table class="table table-hover table-sm mb-0" id="tabela-carteira">
-                        <thead class="table-light">
+                        <thead class="table-thead-theme">
                             <tr>
                                 <th width="30px"><i class="fas fa-chevron-right text-muted"></i></th>
                                 <th>Vendedor</th>
@@ -659,15 +625,10 @@
 </div>
 {% endblock %}
 
-{% block styles %}
+{% block extra_css %}
 <style>
-    {
-        % include 'carteira/css/agrupados.css' %
-    }
-
-        {
-        % include 'carteira/css/workspace-montagem.css' %
-    }
+{% include 'carteira/css/agrupados.css' %}
+{% include 'carteira/css/workspace-montagem.css' %}
 </style>
 {% endblock %}
 
@@ -954,145 +915,7 @@
 <!-- Sistema Assíncrono Redis Queue (DEVE VIR DEPOIS DO SWEETALERT) -->
 <script src="{{ url_for('static', filename='js/portal-async-integration.js') }}"></script>
 
-<!-- CSS de animações fluidas -->
-<style>
-    /* Animação pulse para feedback visual do botão standby */
-    @keyframes pulse {
-        0% {
-            transform: scale(1);
-        }
-
-        50% {
-            transform: scale(1.1);
-            box-shadow: 0 0 15px rgba(40, 167, 69, 0.5);
-        }
-
-        100% {
-            transform: scale(1);
-        }
-    }
-
-    /* Estilos para badges de filtros clicáveis */
-    .bg-filtro {
-        cursor: pointer !important;
-        transition: all 0.2s ease;
-        user-select: none;
-    }
-
-    .bg-filtro:hover {
-        transform: scale(1.05);
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    }
-
-    .bg-filtro:active {
-        transform: scale(0.98);
-    }
-
-    .bg-filtro.ativo {
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-    }
-
-    /* Animações fluidas para atualizações parciais */
-    .update-animation {
-        animation: highlightUpdate 1s ease-in-out;
-    }
-
-    @keyframes highlightUpdate {
-        0% {
-            background-color: rgba(40, 167, 69, 0.2);
-        }
-
-        100% {
-            background-color: transparent;
-        }
-
-    /* 🏷️ Estilos para Tags do Pedido (Odoo) */
-    .badge-tag {
-        font-size: 0.7rem;
-        padding: 0.25rem 0.5rem;
-        margin-right: 0.25rem;
-        margin-bottom: 0.25rem;
-        display: inline-block;
-        border-radius: 0.25rem;
-        font-weight: 500;
-        color: white !important; /* Forçar texto branco por padrão */
-    }
-
-    /* Mapeamento de cores do Odoo para Bootstrap */
-    .badge-tag[data-color="0"] { background-color: #6c757d !important; } /* Cinza */
-    .badge-tag[data-color="1"] { background-color: #dc3545 !important; } /* Vermelho */
-    .badge-tag[data-color="2"] { background-color: #fd7e14 !important; } /* Laranja */
-    .badge-tag[data-color="3"] { background-color: #ffc107 !important; color: #212529 !important; } /* Amarelo - texto escuro */
-    .badge-tag[data-color="4"] { background-color: #20c997 !important; } /* Turquesa */
-    .badge-tag[data-color="5"] { background-color: #198754 !important; } /* Verde */
-    .badge-tag[data-color="6"] { background-color: #0dcaf0 !important; color: #212529 !important; } /* Cyan - texto escuro */
-    .badge-tag[data-color="7"] { background-color: #0d6efd !important; } /* Azul */
-    .badge-tag[data-color="8"] { background-color: #6f42c1 !important; } /* Roxo */
-    .badge-tag[data-color="9"] { background-color: #d63384 !important; } /* Rosa */
-    .badge-tag[data-color="10"] { background-color: #495057 !important; } /* Cinza escuro */
-    .badge-tag[data-color="11"] { background-color: #343a40 !important; } /* Preto */
-    }
-
-    .pulse-animation {
-        animation: pulse 0.5s ease-in-out;
-    }
-
-    @keyframes pulse {
-
-        0%,
-        100% {
-            transform: scale(1);
-        }
-
-        50% {
-            transform: scale(1.1);
-            color: #28a745;
-        }
-    }
-
-    .deleting {
-        opacity: 0.5;
-        pointer-events: none;
-        transition: opacity 0.3s ease;
-    }
-
-    .separacao-criada-animation {
-        animation: sucessoPulse 0.5s ease-in-out;
-    }
-
-    @keyframes sucessoPulse {
-        0% {
-            transform: scale(1);
-            box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.4);
-        }
-
-        50% {
-            transform: scale(1.02);
-            box-shadow: 0 0 20px 10px rgba(40, 167, 69, 0.2);
-        }
-
-        100% {
-            transform: scale(1);
-            box-shadow: 0 0 0 0 rgba(40, 167, 69, 0);
-        }
-    }
-
-    /* Acessibilidade - respeitar preferências de movimento reduzido */
-    @media (prefers-reduced-motion: reduce) {
-        * {
-            animation-duration: 0.01ms !important;
-            animation-iteration-count: 1 !important;
-            transition-duration: 0.01ms !important;
-            scroll-behavior: auto !important;
-        }
-
-        .update-animation,
-        .pulse-animation,
-        .separacao-criada-animation {
-            animation: none !important;
-        }
-    }
-</style>
+<!-- CSS de animações fluidas já movido para agrupados.css -->
 
 <!-- Modal de Importação da Planilha Sendas -->
 <div class="modal fade" id="modalImportarPlanilhaSendas" tabindex="-1" aria-labelledby="modalImportarPlanilhaLabel"

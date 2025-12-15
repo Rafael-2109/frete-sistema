@@ -2,6 +2,97 @@
 
 {% block title %}Lista de Fretes{% endblock %}
 
+{% block extra_css %}
+<style>
+/* ==========================================================================
+   LISTAR FRETES - Theme-aware Status Badges
+   ========================================================================== */
+
+/* Badge base */
+.badge-status {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.35em 0.65em;
+    border-radius: 0.375rem;
+}
+
+/* Status: PENDENTE - Amarelo */
+.badge-status-pendente {
+    background-color: var(--bs-warning) !important;
+    color: #ffffff !important;
+}
+
+/* Status: EM_TRATATIVA - Info/Cyan */
+.badge-status-tratativa {
+    background-color: var(--bs-info) !important;
+    color: #fff !important;
+}
+
+/* Status: APROVADO - Verde */
+.badge-status-aprovado {
+    background-color: var(--bs-success) !important;
+    color: #fff !important;
+}
+
+/* Status: REJEITADO - Vermelho */
+.badge-status-rejeitado {
+    background-color: var(--bs-danger) !important;
+    color: #fff !important;
+}
+
+/* Status: PAGO - Primário */
+.badge-status-pago {
+    background-color: var(--bs-primary) !important;
+    color: #0a1628 !important;
+}
+
+/* Status: LANCADO - Theme-aware */
+.badge-status-lancado {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+    border: 1px solid var(--bs-border-color);
+}
+
+/* Status: CANCELADO - Secundário */
+.badge-status-cancelado {
+    background-color: var(--bs-secondary) !important;
+    color: #fff !important;
+}
+
+/* Odoo status badges */
+.badge-odoo-ok {
+    background-color: var(--bs-success) !important;
+    color: #fff !important;
+}
+
+.badge-odoo-pendente {
+    background-color: var(--bs-warning) !important;
+    color: #212529 !important;
+}
+
+/* ==========================================================================
+   COMPONENTES - Theme-aware
+   ========================================================================== */
+
+.card-header-theme {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+    border-bottom: 1px solid var(--bs-border-color) !important;
+}
+
+.table-thead-theme {
+    background-color: var(--bs-tertiary-bg) !important;
+}
+
+.table-thead-theme th {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+    border-bottom: 2px solid var(--bs-border-color) !important;
+    font-weight: 600;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
     <div class="row">
@@ -14,7 +105,7 @@
 
     <!-- Filtros -->
     <div class="card mb-4">
-        <div class="card-header">
+        <div class="card-header card-header-theme">
             <h5 class="mb-0">
                 <button class="btn btn-link" type="button" data-bs-toggle="collapse" data-bs-target="#filtrosFrete"
                     aria-expanded="false">
@@ -112,8 +203,8 @@
         <div class="card-body">
             {% if fretes.items %}
             <div class="table-responsive">
-                <table class="table table-striped">
-                    <thead>
+                <table class="table table-hover">
+                    <thead class="table-thead-theme">
                         <tr>
                             <th>ID</th>
                             <th>Cliente</th>
@@ -195,29 +286,21 @@
                             </td>
                             <td>
                                 {% if frete.status == 'PENDENTE' %}
-                                <span class="badge bg-warning" style="background-color: #ffc107; color: #212529;">{{
-                                    frete.status }}</span>
+                                <span class="badge badge-status badge-status-pendente">{{ frete.status }}</span>
                                 {% elif frete.status == 'EM_TRATATIVA' %}
-                                <span class="badge bg-info" style="background-color: #17a2b8; color: white;">EM
-                                    TRATATIVA</span>
+                                <span class="badge badge-status badge-status-tratativa">EM TRATATIVA</span>
                                 {% elif frete.status == 'APROVADO' %}
-                                <span class="badge bg-success" style="background-color: #28a745; color: white;">{{
-                                    frete.status }}</span>
+                                <span class="badge badge-status badge-status-aprovado">{{ frete.status }}</span>
                                 {% elif frete.status == 'REJEITADO' %}
-                                <span class="badge bg-danger" style="background-color: #dc3545; color: white;">{{
-                                    frete.status }}</span>
+                                <span class="badge badge-status badge-status-rejeitado">{{ frete.status }}</span>
                                 {% elif frete.status == 'PAGO' %}
-                                <span class="badge bg-primary" style="background-color: #007bff; color: white;">{{
-                                    frete.status }}</span>
+                                <span class="badge badge-status badge-status-pago">{{ frete.status }}</span>
                                 {% elif frete.status == 'LANCADO' %}
-                                <span class="badge bg-dark" style="background-color: #343a40; color: white;">{{
-                                    frete.status }}</span>
+                                <span class="badge badge-status badge-status-lancado">{{ frete.status }}</span>
                                 {% elif frete.status == 'CANCELADO' %}
-                                <span class="badge bg-secondary" style="background-color: #6c757d; color: white;">{{
-                                    frete.status }}</span>
+                                <span class="badge badge-status badge-status-cancelado">{{ frete.status }}</span>
                                 {% else %}
-                                <span class="badge bg-secondary" style="background-color: #6c757d; color: white;">{{
-                                    frete.status }}</span>
+                                <span class="badge badge-status badge-status-cancelado">{{ frete.status }}</span>
                                 {% endif %}
                             </td>
                             <td class="text-center">
@@ -225,12 +308,12 @@
                                     <a href="{{ url_for('fretes.visualizar_frete', frete_id=frete.id) }}#odoo-status"
                                        title="Lançado no Odoo - Invoice ID: {{ frete.odoo_invoice_id }}"
                                        class="text-decoration-none">
-                                        <span class="badge bg-success" style="background-color: #28a745; color: white;">
+                                        <span class="badge badge-status badge-odoo-ok">
                                             <i class="fas fa-check-circle"></i> OK
                                         </span>
                                     </a>
                                 {% else %}
-                                    <span class="badge bg-warning" style="background-color: #ffc107; color: #212529;"
+                                    <span class="badge badge-status badge-odoo-pendente"
                                           title="Ainda não lançado no Odoo">
                                         <i class="fas fa-clock"></i> Pendente
                                     </span>

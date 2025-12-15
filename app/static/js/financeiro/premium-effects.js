@@ -13,11 +13,30 @@ const PremiumEffects = {
             return;
         }
 
+        this.initAuroraBackground();
         this.initScrollReveal();
         this.initStaggeredChildren();
         this.initSpotlight();
 
         console.log('PremiumEffects: Initialized');
+    },
+
+    // Auto-inject Aurora Background para páginas com classe .premium-page
+    initAuroraBackground() {
+        const premiumPage = document.querySelector('.premium-page');
+        if (!premiumPage) return;
+
+        // Verifica se já existe aurora (evita duplicação)
+        if (document.querySelector('.aurora-bg')) return;
+
+        // Cria e injeta o elemento aurora
+        const aurora = document.createElement('div');
+        aurora.className = 'aurora-bg';
+
+        // Insere como primeiro filho do body
+        document.body.insertBefore(aurora, document.body.firstChild);
+
+        console.log('PremiumEffects: Aurora background injected');
     },
 
     // Scroll Reveal - para elementos com classe .reveal

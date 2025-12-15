@@ -1,14 +1,14 @@
 /* ========================================
-   LISTA DE MATERIAIS - Estilos Customizados
+   LISTA DE MATERIAIS - Theme-aware CSS
    Nova estrutura com cards hierárquicos
    ======================================== */
 
 /* Container principal da árvore BOM */
 .bom-tree {
     padding: 0;
-    background: white;
+    background: var(--bs-body-bg, white);
     border-radius: 8px;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--bs-border-color, #dee2e6);
     overflow: hidden;
 }
 
@@ -23,13 +23,13 @@
 }
 
 .bom-table thead th {
-    background-color: #f8f9fa;
+    background-color: var(--bs-tertiary-bg, #f8f9fa);
     font-weight: 600;
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.3px;
-    color: #495057;
-    border-bottom: 2px solid #dee2e6;
+    color: var(--bs-body-color, #495057);
+    border-bottom: 2px solid var(--bs-border-color, #dee2e6);
     padding: 12px 10px;
     vertical-align: middle;
 }
@@ -74,14 +74,14 @@
 }
 
 .bom-table tbody tr.bom-row:hover {
-    background-color: #f8f9fa;
-    border-left-color: #0d6efd;
+    background-color: var(--bs-tertiary-bg, #f8f9fa);
+    border-left-color: var(--bs-primary, #0d6efd);
 }
 
 .bom-table tbody tr.bom-row td {
     vertical-align: middle;
     font-size: 13px;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--bs-border-color, #f0f0f0);
 }
 
 /* Código com tag <code> */
@@ -89,17 +89,15 @@
     font-family: 'Courier New', Consolas, Monaco, monospace;
     font-size: 12px;
     font-weight: 600;
-    color: #212529;
+    color: var(--bs-body-color, #212529);
     background: transparent;
     padding: 0;
 }
 
 /* ========================================
    INDENTAÇÃO PROGRESSIVA COM TABS VISUAIS
-   Sistema de árvore com tabs de 25px por nível
    ======================================== */
 
-/* Variável de tab: 25px por nível */
 .bom-row-nivel-0 td:first-child,
 .bom-row-nivel-0 .bom-col-icon {
     padding-left: 10px;
@@ -110,7 +108,7 @@
 }
 
 .bom-row-nivel-1 .bom-col-icon {
-    padding-left: 35px; /* 10 base + 25 tab */
+    padding-left: 35px;
 }
 
 .bom-row-nivel-2 td:first-child {
@@ -118,7 +116,7 @@
 }
 
 .bom-row-nivel-2 .bom-col-icon {
-    padding-left: 60px; /* 10 base + 50 tab (2x25) */
+    padding-left: 60px;
 }
 
 .bom-row-nivel-3 td:first-child {
@@ -126,7 +124,7 @@
 }
 
 .bom-row-nivel-3 .bom-col-icon {
-    padding-left: 85px; /* 10 base + 75 tab (3x25) */
+    padding-left: 85px;
 }
 
 .bom-row-nivel-4 td:first-child {
@@ -134,51 +132,28 @@
 }
 
 .bom-row-nivel-4 .bom-col-icon {
-    padding-left: 110px; /* 10 base + 100 tab (4x25) */
+    padding-left: 110px;
 }
 
-/* Linha conectora horizontal (do chevron até o ícone) */
-.bom-row-nivel-1 .bom-col-expand::after {
-    content: '';
-    position: absolute;
-    left: 20px;
-    top: 50%;
-    width: 15px;
-    height: 1px;
-    background-color: #d0d7de;
-}
-
-.bom-row-nivel-2 .bom-col-expand::after {
-    content: '';
-    position: absolute;
-    left: 20px;
-    top: 50%;
-    width: 40px;
-    height: 1px;
-    background-color: #d0d7de;
-}
-
-.bom-row-nivel-3 .bom-col-expand::after {
-    content: '';
-    position: absolute;
-    left: 20px;
-    top: 50%;
-    width: 65px;
-    height: 1px;
-    background-color: #d0d7de;
-}
-
+/* Linha conectora horizontal */
+.bom-row-nivel-1 .bom-col-expand::after,
+.bom-row-nivel-2 .bom-col-expand::after,
+.bom-row-nivel-3 .bom-col-expand::after,
 .bom-row-nivel-4 .bom-col-expand::after {
     content: '';
     position: absolute;
     left: 20px;
     top: 50%;
-    width: 90px;
     height: 1px;
-    background-color: #d0d7de;
+    background-color: var(--bs-border-color, #d0d7de);
 }
 
-/* Linha vertical conectando ao pai (apenas para níveis > 0) */
+.bom-row-nivel-1 .bom-col-expand::after { width: 15px; }
+.bom-row-nivel-2 .bom-col-expand::after { width: 40px; }
+.bom-row-nivel-3 .bom-col-expand::after { width: 65px; }
+.bom-row-nivel-4 .bom-col-expand::after { width: 90px; }
+
+/* Linha vertical conectando ao pai */
 .bom-row-nivel-1 .bom-col-expand::before,
 .bom-row-nivel-2 .bom-col-expand::before,
 .bom-row-nivel-3 .bom-col-expand::before,
@@ -189,14 +164,14 @@
     top: -10px;
     height: calc(50% + 10px);
     width: 1px;
-    background-color: #d0d7de;
+    background-color: var(--bs-border-color, #d0d7de);
 }
 
 /* Botão de expansão do accordion */
 .btn-expand-accordion {
     background: none;
     border: none;
-    color: #6c757d;
+    color: var(--bs-secondary-color, #6c757d);
     cursor: pointer;
     padding: 4px 6px;
     border-radius: 4px;
@@ -204,8 +179,8 @@
 }
 
 .btn-expand-accordion:hover {
-    background-color: #e9ecef;
-    color: #0d6efd;
+    background-color: var(--bs-tertiary-bg, #e9ecef);
+    color: var(--bs-primary, #0d6efd);
 }
 
 .btn-expand-accordion i {
@@ -225,7 +200,7 @@
 
 /* Container de filhos (sub-estrutura) */
 .bom-row-children {
-    background-color: #fafbfc;
+    background-color: var(--bs-secondary-bg, #fafbfc);
 }
 
 .bom-children-cell {
@@ -240,11 +215,11 @@
 }
 
 .bom-children-container .bom-row {
-    background-color: #fafbfc;
+    background-color: var(--bs-secondary-bg, #fafbfc);
 }
 
 .bom-children-container .bom-row:hover {
-    background-color: #f0f2f5;
+    background-color: var(--bs-tertiary-bg, #f0f2f5);
 }
 
 /* Loading */
@@ -279,7 +254,7 @@
 
 /* Card do produto */
 .bom-card {
-    background: white;
+    background: var(--bs-body-bg, white);
     border-radius: 6px;
     padding: 6px 10px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
@@ -299,18 +274,18 @@
 
 /* Estados do card por tipo */
 .bom-card.tipo-acabado {
-    border-left-color: #198754;
-    background: linear-gradient(to right, #f0f9f4 0%, white 30%);
+    border-left-color: var(--bs-success, #198754);
+    background: linear-gradient(to right, rgba(var(--bs-success-rgb, 25, 135, 84), 0.08) 0%, var(--bs-body-bg, white) 30%);
 }
 
 .bom-card.tipo-intermediario {
-    border-left-color: #ffc107;
-    background: linear-gradient(to right, #fffbf0 0%, white 30%);
+    border-left-color: var(--bs-warning, #ffc107);
+    background: linear-gradient(to right, rgba(var(--bs-warning-rgb, 255, 193, 7), 0.08) 0%, var(--bs-body-bg, white) 30%);
 }
 
 .bom-card.tipo-componente {
-    border-left-color: #0dcaf0;
-    background: linear-gradient(to right, #f0f9fc 0%, white 30%);
+    border-left-color: var(--bs-info, #0dcaf0);
+    background: linear-gradient(to right, rgba(var(--bs-info-rgb, 13, 202, 240), 0.08) 0%, var(--bs-body-bg, white) 30%);
 }
 
 /* Ícone do tipo de produto */
@@ -326,18 +301,18 @@
 }
 
 .tipo-acabado .bom-icon {
-    background: #d1e7dd;
-    color: #198754;
+    background: rgba(var(--bs-success-rgb, 25, 135, 84), 0.2);
+    color: var(--bs-success, #198754);
 }
 
 .tipo-intermediario .bom-icon {
-    background: #fff3cd;
+    background: rgba(var(--bs-warning-rgb, 255, 193, 7), 0.2);
     color: #ff9800;
 }
 
 .tipo-componente .bom-icon {
-    background: #cff4fc;
-    color: #0dcaf0;
+    background: rgba(var(--bs-info-rgb, 13, 202, 240), 0.2);
+    color: var(--bs-info, #0dcaf0);
 }
 
 /* Conteúdo do card */
@@ -356,14 +331,14 @@
 .bom-codigo {
     font-weight: 700;
     font-size: 11px;
-    color: #212529;
+    color: var(--bs-body-color, #212529);
     font-family: 'Courier New', monospace;
     white-space: nowrap;
 }
 
 .bom-nome {
     font-size: 11px;
-    color: #495057;
+    color: var(--bs-secondary-color, #495057);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -390,13 +365,13 @@
 }
 
 .bom-badge.qtd {
-    background: #6c757d;
+    background: var(--bs-secondary, #6c757d);
     color: white;
 }
 
 .bom-badge.tipo {
-    background: #e9ecef;
-    color: #495057;
+    background: var(--bs-tertiary-bg, #e9ecef);
+    color: var(--bs-body-color, #495057);
 }
 
 /* Botão de expansão */
@@ -404,25 +379,26 @@
     width: 24px;
     height: 24px;
     border-radius: 5px;
-    border: 2px solid #dee2e6;
-    background: white;
+    border: 2px solid var(--bs-border-color, #dee2e6);
+    background: var(--bs-body-bg, white);
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     transition: all 0.2s;
     flex-shrink: 0;
+    color: var(--bs-body-color, #212529);
 }
 
 .bom-expand-btn:hover {
-    background: #0d6efd;
-    border-color: #0d6efd;
+    background: var(--bs-primary, #0d6efd);
+    border-color: var(--bs-primary, #0d6efd);
     color: white;
 }
 
 .bom-expand-btn.expanded {
-    background: #0d6efd;
-    border-color: #0d6efd;
+    background: var(--bs-primary, #0d6efd);
+    border-color: var(--bs-primary, #0d6efd);
     color: white;
     transform: rotate(90deg);
 }
@@ -437,7 +413,7 @@
     margin-top: 4px;
     margin-left: 24px;
     padding-left: 12px;
-    border-left: 2px solid #dee2e6;
+    border-left: 2px solid var(--bs-border-color, #dee2e6);
     position: relative;
     display: none;
 }
@@ -455,7 +431,7 @@
     top: 0;
     bottom: 0;
     width: 2px;
-    background: linear-gradient(to bottom, #dee2e6 0%, transparent 100%);
+    background: linear-gradient(to bottom, var(--bs-border-color, #dee2e6) 0%, transparent 100%);
 }
 
 /* Loading spinner */
@@ -464,7 +440,7 @@
     align-items: center;
     justify-content: center;
     padding: 20px;
-    color: #6c757d;
+    color: var(--bs-secondary-color, #6c757d);
 }
 
 .bom-loading .spinner-border {
@@ -478,7 +454,7 @@
 .bom-empty {
     text-align: center;
     padding: 20px;
-    color: #6c757d;
+    color: var(--bs-secondary-color, #6c757d);
     font-size: 13px;
 }
 
@@ -499,17 +475,18 @@
     height: 24px;
     border-radius: 4px;
     border: none;
-    background: #e9ecef;
+    background: var(--bs-tertiary-bg, #e9ecef);
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     transition: all 0.2s;
     font-size: 11px;
+    color: var(--bs-body-color, #212529);
 }
 
 .bom-action-btn:hover {
-    background: #0d6efd;
+    background: var(--bs-primary, #0d6efd);
     color: white;
 }
 
@@ -538,7 +515,6 @@
    COMPATIBILIDADE COM CÓDIGO ANTIGO
    ======================================== */
 
-/* Manter estilos antigos do jsTree para não quebrar */
 .jstree-default .jstree-node {
     margin: 4px 0;
 }
@@ -550,17 +526,17 @@
 }
 
 .jstree-default .jstree-hovered {
-    background: #e9ecef;
+    background: var(--bs-tertiary-bg, #e9ecef);
 }
 
 .jstree-default .jstree-clicked {
-    background: #0d6efd !important;
+    background: var(--bs-primary, #0d6efd) !important;
     color: white !important;
 }
 
 /* Badge de quantidade */
 .badge-quantidade {
-    background: #6c757d;
+    background: var(--bs-secondary, #6c757d);
     color: white;
     padding: 2px 8px;
     border-radius: 12px;
@@ -570,7 +546,7 @@
 
 /* Badge de unificação */
 .badge-unificado {
-    background: #6610f2;
+    background: #8b5cf6;
     color: white;
     padding: 2px 8px;
     border-radius: 12px;
@@ -602,16 +578,16 @@
 }
 
 #tabela-produtos tbody tr:hover {
-    background-color: #f8f9fa;
+    background-color: var(--bs-tertiary-bg, #f8f9fa);
 }
 
 /* Badge de status */
 .badge-tem-estrutura {
-    background: #198754;
+    background: var(--bs-success, #198754);
 }
 
 .badge-sem-estrutura {
-    background: #6c757d;
+    background: var(--bs-secondary, #6c757d);
 }
 
 /* Loading spinner customizado */
@@ -640,31 +616,31 @@
 .explosao-nivel-0 {
     font-weight: bold;
     font-size: 1.1em;
-    color: #198754;
+    color: var(--bs-success, #198754);
 }
 
 .explosao-nivel-1 {
     padding-left: 20px;
-    color: #ffc107;
+    color: var(--bs-warning, #ffc107);
 }
 
 .explosao-nivel-2 {
     padding-left: 40px;
-    color: #0dcaf0;
+    color: var(--bs-info, #0dcaf0);
 }
 
 .explosao-nivel-3 {
     padding-left: 60px;
-    color: #6c757d;
+    color: var(--bs-secondary-color, #6c757d);
 }
 
 /* Card de viabilidade */
 .card-viabilidade {
-    border-left: 4px solid #198754;
+    border-left: 4px solid var(--bs-success, #198754);
 }
 
 .card-viabilidade.com-bloqueio {
-    border-left-color: #dc3545;
+    border-left-color: var(--bs-danger, #dc3545);
 }
 
 /* ========================================
@@ -672,13 +648,11 @@
    ======================================== */
 
 @media (max-width: 768px) {
-    /* Container principal */
     .bom-tree {
         max-height: 400px;
         padding: 10px;
     }
 
-    /* Cards em mobile */
     .bom-card {
         padding: 10px 12px;
         gap: 8px;
@@ -704,19 +678,16 @@
         padding: 2px 6px;
     }
 
-    /* Botão de expansão menor */
     .bom-expand-btn {
         width: 24px;
         height: 24px;
     }
 
-    /* Reduzir margem dos filhos */
     .bom-children {
         margin-left: 20px;
         padding-left: 12px;
     }
 
-    /* Ações sempre visíveis em mobile */
     .bom-actions {
         opacity: 1;
     }
@@ -727,7 +698,6 @@
         font-size: 12px;
     }
 
-    /* Tabela de produtos */
     #tabela-produtos {
         font-size: 0.9em;
     }
@@ -739,7 +709,6 @@
 }
 
 @media (max-width: 480px) {
-    /* Mobile muito pequeno */
     .bom-card {
         padding: 8px 10px;
     }
@@ -769,11 +738,9 @@
    MELHORIAS VISUAIS EXTRAS
    ======================================== */
 
-/* Remover efeito de hover que causa scroll */
-
 /* Badge animado de quantidade */
 .bom-badge.qtd {
-    background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+    background: linear-gradient(135deg, var(--bs-secondary, #6c757d) 0%, #495057 100%);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
@@ -784,10 +751,10 @@
 
 @keyframes pulse {
     0%, 100% {
-        box-shadow: 0 0 0 0 rgba(13, 110, 253, 0.4);
+        box-shadow: 0 0 0 0 rgba(var(--bs-primary-rgb, 13, 110, 253), 0.4);
     }
     50% {
-        box-shadow: 0 0 0 4px rgba(13, 110, 253, 0);
+        box-shadow: 0 0 0 4px rgba(var(--bs-primary-rgb, 13, 110, 253), 0);
     }
 }
 
@@ -806,7 +773,7 @@
 
 /* Skeleton loading para melhor UX */
 .bom-loading.skeleton {
-    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background: linear-gradient(90deg, var(--bs-secondary-bg, #f0f0f0) 25%, var(--bs-tertiary-bg, #e0e0e0) 50%, var(--bs-secondary-bg, #f0f0f0) 75%);
     background-size: 200% 100%;
     animation: loading 1.5s infinite;
 }
@@ -825,19 +792,7 @@
     animation: fadeIn 0.3s ease-in;
 }
 
-/* Animações */
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(-10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* Contexto menu customizado (se implementado) */
+/* Contexto menu customizado */
 .jstree-contextmenu {
     border-radius: 8px;
     box-shadow: 0 4px 6px rgba(0,0,0,0.1);
@@ -855,12 +810,103 @@
     left: 50%;
     transform: translateX(-50%);
     bottom: 100%;
-    background: #333;
-    color: white;
+    background: var(--bs-body-color, #333);
+    color: var(--bs-body-bg, white);
     padding: 4px 8px;
     border-radius: 4px;
     font-size: 0.75em;
     white-space: nowrap;
     z-index: 1000;
     margin-bottom: 5px;
+}
+
+/* ========================================
+   DARK MODE SPECIFIC
+   ======================================== */
+
+[data-bs-theme="dark"] .bom-card,
+[data-theme="dark"] .bom-card {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+[data-bs-theme="dark"] .bom-card:hover,
+[data-theme="dark"] .bom-card:hover {
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+[data-bs-theme="dark"] .tipo-intermediario .bom-icon,
+[data-theme="dark"] .tipo-intermediario .bom-icon {
+    color: #fbbf24;
+}
+
+[data-bs-theme="dark"] .explosao-nivel-0,
+[data-theme="dark"] .explosao-nivel-0 {
+    color: #4ade80;
+}
+
+[data-bs-theme="dark"] .explosao-nivel-1,
+[data-theme="dark"] .explosao-nivel-1 {
+    color: #fbbf24;
+}
+
+[data-bs-theme="dark"] .explosao-nivel-2,
+[data-theme="dark"] .explosao-nivel-2 {
+    color: #22d3ee;
+}
+
+/* ========================================
+   CLASSES PARA JS (theme-aware icons e badges)
+   ======================================== */
+
+/* Linha expandida da estrutura BOM */
+.linha-estrutura-bom-cell {
+    padding: 10px 20px;
+    background-color: var(--bs-tertiary-bg, #f8f9fa);
+}
+
+/* Ícones de tipo - Theme-aware */
+.bom-icon-acabado {
+    color: var(--bs-success, #198754);
+}
+.bom-icon-intermediario {
+    color: var(--bs-warning, #ffc107);
+}
+.bom-icon-componente {
+    color: var(--bs-info, #0dcaf0);
+}
+
+/* Dark mode - ícones mais vibrantes */
+[data-bs-theme="dark"] .bom-icon-acabado,
+[data-theme="dark"] .bom-icon-acabado {
+    color: #4ade80;
+}
+[data-bs-theme="dark"] .bom-icon-intermediario,
+[data-theme="dark"] .bom-icon-intermediario {
+    color: #fbbf24;
+}
+[data-bs-theme="dark"] .bom-icon-componente,
+[data-theme="dark"] .bom-icon-componente {
+    color: #22d3ee;
+}
+
+/* Badges de estoque - Theme-aware */
+.bom-badge-estoque-ok {
+    background: rgba(var(--bs-success-rgb), 0.2);
+    color: var(--bs-success, #0f5132);
+}
+.bom-badge-estoque-falta {
+    background: rgba(var(--bs-danger-rgb), 0.2);
+    color: var(--bs-danger, #842029);
+}
+
+/* Dark mode - badges de estoque */
+[data-bs-theme="dark"] .bom-badge-estoque-ok,
+[data-theme="dark"] .bom-badge-estoque-ok {
+    background: rgba(74, 222, 128, 0.2);
+    color: #4ade80;
+}
+[data-bs-theme="dark"] .bom-badge-estoque-falta,
+[data-theme="dark"] .bom-badge-estoque-falta {
+    background: rgba(248, 113, 113, 0.2);
+    color: #f87171;
 }

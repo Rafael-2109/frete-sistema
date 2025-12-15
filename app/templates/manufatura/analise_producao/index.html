@@ -5,74 +5,121 @@
 
 {% block extra_css %}
 <style>
-    .nivel-indent {
-        padding-left: calc(var(--nivel) * 1.5rem);
-    }
-    .nivel-0 { --nivel: 0; }
-    .nivel-1 { --nivel: 1; }
-    .nivel-2 { --nivel: 2; }
-    .nivel-3 { --nivel: 3; }
-    .nivel-4 { --nivel: 4; }
+/* ==========================================================================
+   ANALISE PRODUCAO - Theme-aware Styles
+   ========================================================================== */
 
-    .tipo-badge-INTERMEDIARIO {
-        background-color: #6f42c1;
-        color: white;
-    }
-    .tipo-badge-COMPONENTE {
-        background-color: #17a2b8;
-        color: white;
-    }
-    .tipo-badge-ACABADO {
-        background-color: #28a745;
-        color: white;
-    }
+.nivel-indent {
+    padding-left: calc(var(--nivel) * 1.5rem);
+}
+.nivel-0 { --nivel: 0; }
+.nivel-1 { --nivel: 1; }
+.nivel-2 { --nivel: 2; }
+.nivel-3 { --nivel: 3; }
+.nivel-4 { --nivel: 4; }
 
-    .ajuste-positivo {
-        color: #28a745;
-        font-weight: bold;
-    }
-    .ajuste-negativo {
-        color: #dc3545;
-        font-weight: bold;
-    }
+/* Badges de tipo - Theme-aware */
+.tipo-badge-INTERMEDIARIO {
+    background-color: #8b5cf6 !important;
+    color: white !important;
+}
+.tipo-badge-COMPONENTE {
+    background-color: var(--bs-info) !important;
+    color: white !important;
+}
+.tipo-badge-ACABADO {
+    background-color: var(--bs-success) !important;
+    color: white !important;
+}
 
-    .input-ajuste {
-        width: 100px;
-        text-align: right;
-    }
+/* Ajustes - Theme-aware */
+.ajuste-positivo {
+    color: var(--bs-success) !important;
+    font-weight: bold;
+}
+.ajuste-negativo {
+    color: var(--bs-danger) !important;
+    font-weight: bold;
+}
 
-    .componente-row {
-        transition: background-color 0.2s;
-    }
-    .componente-row:hover {
-        background-color: #f8f9fa;
-    }
-    .componente-row.modificado {
-        background-color: #fff3cd;
-    }
+/* Dark mode - cores mais vibrantes */
+[data-bs-theme="dark"] .ajuste-positivo,
+[data-theme="dark"] .ajuste-positivo {
+    color: #4ade80 !important;
+}
+[data-bs-theme="dark"] .ajuste-negativo,
+[data-theme="dark"] .ajuste-negativo {
+    color: #f87171 !important;
+}
 
-    .tree-icon {
-        color: #6c757d;
-        margin-right: 0.5rem;
-    }
+.input-ajuste {
+    width: 100px;
+    text-align: right;
+}
 
-    .modal-xl-custom {
-        max-width: 95%;
-    }
+/* Componente row - Theme-aware */
+.componente-row {
+    transition: background-color 0.2s;
+}
+.componente-row:hover {
+    background-color: var(--bs-tertiary-bg) !important;
+}
+.componente-row.modificado {
+    background-color: rgba(var(--bs-warning-rgb), 0.2) !important;
+}
 
-    .sticky-header {
-        position: sticky;
-        top: 0;
-        background: white;
-        z-index: 10;
-    }
+.tree-icon {
+    color: var(--bs-secondary-color);
+    margin-right: 0.5rem;
+}
+
+.modal-xl-custom {
+    max-width: 95%;
+}
+
+/* Sticky header - Theme-aware */
+.sticky-header {
+    position: sticky;
+    top: 0;
+    background: var(--bs-tertiary-bg) !important;
+    z-index: 10;
+}
+
+/* Table thead theme-aware */
+.table-thead-theme {
+    background-color: var(--bs-tertiary-bg) !important;
+}
+.table-thead-theme th {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+    border-bottom: 2px solid var(--bs-border-color) !important;
+    font-weight: 600;
+}
+
+/* Card header theme-aware */
+.card-header-theme {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+    border-bottom: 1px solid var(--bs-border-color) !important;
+}
+
+/* Modal headers - Keep colored but ensure visibility */
+.modal-header.bg-primary,
+.modal-header.bg-success {
+    border-bottom: none;
+}
+
+/* Card header bg-success em modal */
+.card .card-header.bg-success {
+    background-color: var(--bs-success) !important;
+}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid px-4 py-4">
+<div class="container-fluid px-4 py-4 premium-page">
     <!-- Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 reveal">
         <div>
             <h1 class="h3 mb-1">
                 <i class="fas fa-microscope text-primary me-2"></i>
@@ -139,7 +186,7 @@
             {% if producoes and producoes.items %}
             <div class="table-responsive">
                 <table class="table table-striped table-hover">
-                    <thead class="table-dark">
+                    <thead class="table-thead-theme">
                         <tr>
                             <th>ID</th>
                             <th>Data</th>
@@ -289,7 +336,7 @@
 
                 <!-- Tabela de Componentes -->
                 <div class="card">
-                    <div class="card-header bg-light">
+                    <div class="card-header card-header-theme">
                         <div class="d-flex justify-content-between align-items-center">
                             <h6 class="mb-0"><i class="fas fa-cubes me-2"></i>Componentes da BOM</h6>
                             <div>
@@ -303,7 +350,7 @@
                     <div class="card-body p-0">
                         <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
                             <table class="table table-sm table-hover mb-0" id="tabelaComponentes">
-                                <thead class="table-secondary sticky-header">
+                                <thead class="table-thead-theme sticky-header">
                                     <tr>
                                         <th style="min-width: 250px;">Componente</th>
                                         <th class="text-center">Tipo</th>

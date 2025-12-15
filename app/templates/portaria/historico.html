@@ -1,8 +1,111 @@
 {% extends "base.html" %}
 
+{% block extra_css %}
+<style>
+/* ==========================================================================
+   HISTÓRICO PORTARIA - Dark Mode Support (NUCLEAR OVERRIDE)
+   ========================================================================== */
+
+/* === Card Header Theme Aware === */
+.card-header-theme {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+    border-bottom: 1px solid var(--bs-border-color) !important;
+}
+
+.card-header-theme h5,
+.card-header-theme h6 {
+    color: var(--bs-body-color) !important;
+}
+
+/* === Thead Theme Aware === */
+.table thead.table-thead-theme {
+    background-color: var(--bs-tertiary-bg) !important;
+}
+
+.table thead.table-thead-theme th {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+    border-bottom: 2px solid var(--bs-border-color) !important;
+    font-weight: 600;
+}
+
+/* ==========================================================================
+   DARK MODE: Reset variáveis de tabela do Bootstrap
+   ========================================================================== */
+[data-bs-theme="dark"] #tabela-historico,
+[data-theme="dark"] #tabela-historico {
+    --bs-table-bg: transparent;
+    --bs-table-hover-bg: rgba(var(--bs-primary-rgb), 0.12);
+    --bs-table-color: var(--bs-body-color);
+    --bs-table-hover-color: var(--bs-body-color);
+}
+
+/* === Reset células base === */
+[data-bs-theme="dark"] #tabela-historico tbody tr td,
+[data-theme="dark"] #tabela-historico tbody tr td {
+    background-color: transparent !important;
+    color: var(--bs-body-color) !important;
+}
+
+/* === STATUS: table-light (SAIU) - Cinza sutil === */
+[data-bs-theme="dark"] #tabela-historico tbody tr.table-light td,
+[data-theme="dark"] #tabela-historico tbody tr.table-light td {
+    background-color: rgba(108, 117, 125, 0.12) !important;
+}
+
+/* === STATUS: table-success (DENTRO) - Verde sutil === */
+[data-bs-theme="dark"] #tabela-historico tbody tr.table-success td,
+[data-theme="dark"] #tabela-historico tbody tr.table-success td {
+    background-color: rgba(16, 185, 129, 0.15) !important;
+}
+
+/* === STATUS: table-warning (AGUARDANDO) - Amarelo sutil === */
+[data-bs-theme="dark"] #tabela-historico tbody tr.table-warning td,
+[data-theme="dark"] #tabela-historico tbody tr.table-warning td {
+    background-color: rgba(251, 191, 36, 0.15) !important;
+}
+
+/* === STATUS: table-secondary === */
+[data-bs-theme="dark"] #tabela-historico tbody tr.table-secondary td,
+[data-theme="dark"] #tabela-historico tbody tr.table-secondary td {
+    background-color: rgba(108, 117, 125, 0.15) !important;
+}
+
+/* === HOVER: Intensificar cor === */
+[data-bs-theme="dark"] #tabela-historico tbody tr.table-light:hover td,
+[data-theme="dark"] #tabela-historico tbody tr.table-light:hover td {
+    background-color: rgba(108, 117, 125, 0.25) !important;
+}
+
+[data-bs-theme="dark"] #tabela-historico tbody tr.table-success:hover td,
+[data-theme="dark"] #tabela-historico tbody tr.table-success:hover td {
+    background-color: rgba(16, 185, 129, 0.28) !important;
+}
+
+[data-bs-theme="dark"] #tabela-historico tbody tr.table-warning:hover td,
+[data-theme="dark"] #tabela-historico tbody tr.table-warning:hover td {
+    background-color: rgba(251, 191, 36, 0.28) !important;
+}
+
+[data-bs-theme="dark"] #tabela-historico tbody tr.table-secondary:hover td,
+[data-theme="dark"] #tabela-historico tbody tr.table-secondary:hover td {
+    background-color: rgba(108, 117, 125, 0.28) !important;
+}
+
+/* === Cards/Badges coloridos - text-dark deve permanecer escuro === */
+.bg-warning .text-dark,
+.bg-warning .card-title,
+.bg-warning .card-text,
+.badge.bg-warning.text-dark {
+    color: #212529 !important;
+}
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid mt-4">
-  <div class="d-flex justify-content-between align-items-center mb-4">
+<div class="container-fluid mt-4 premium-page">
+  <div class="d-flex justify-content-between align-items-center mb-4 reveal">
     <h1><i class="fas fa-history me-2"></i>Histórico da Portaria</h1>
     <div>
       <a href="{{ url_for('portaria.dashboard') }}" class="btn btn-outline-primary">
@@ -13,7 +116,7 @@
 
   <!-- Filtros -->
   <div class="card mb-4">
-    <div class="card-header bg-secondary text-white">
+    <div class="card-header card-header-theme">
       <h6 class="mb-0"><i class="fas fa-filter me-2"></i>Filtros</h6>
     </div>
     <div class="card-body">
@@ -94,10 +197,10 @@
       </div>
     </div>
     <div class="col-md-3">
-      <div class="card bg-warning text-dark">
+      <div class="card bg-warning">
         <div class="card-body text-center">
-          <h5 class="card-title">{{ registros|selectattr('status', 'equalto', 'DENTRO')|list|length }}</h5>
-          <p class="card-text">Veículos Dentro</p>
+          <h5 class="card-title text-dark">{{ registros|selectattr('status', 'equalto', 'DENTRO')|list|length }}</h5>
+          <p class="card-text text-dark">Veículos Dentro</p>
         </div>
       </div>
     </div>
@@ -114,14 +217,14 @@
 
   <!-- Tabela do Histórico -->
   <div class="card">
-    <div class="card-header bg-dark text-white">
+    <div class="card-header card-header-theme">
       <h5 class="mb-0"><i class="fas fa-table me-2"></i>Registros</h5>
     </div>
     <div class="card-body p-0">
       {% if registros %}
       <div class="table-responsive">
-        <table class="table table-striped table-hover mb-0" id="tabela-historico">
-          <thead class="table-dark">
+        <table class="table table-hover mb-0" id="tabela-historico">
+          <thead class="table-thead-theme">
             <tr>
               <th>Data</th>
               <th>Motorista</th>
@@ -191,7 +294,7 @@
                   {% if registro.status == 'SAIU' %}bg-secondary
                   {% elif registro.status == 'DENTRO' %}bg-success
                   {% elif registro.status == 'AGUARDANDO' %}bg-warning text-dark
-                  {% else %}bg-light text-dark{% endif %}
+                  {% else %}bg-secondary{% endif %}
                 ">
                   {{ registro.status }}
                 </span>

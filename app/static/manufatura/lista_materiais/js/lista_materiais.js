@@ -193,7 +193,7 @@ const ListaMateriais = {
         const numColunas = $linhaClicada.find('td').length;
         const $linhaEstrutura = $(`
             <tr class="linha-estrutura-bom">
-                <td colspan="${numColunas}" style="padding: 10px 20px; background-color: #f8f9fa;">
+                <td colspan="${numColunas}" class="linha-estrutura-bom-cell">
                     <div id="estrutura-expandida" style="max-width: 100%; overflow-x: hidden;">
                         <div class="d-flex justify-content-end align-items-center mb-2">
                             <div class="btn-group" role="group">
@@ -320,17 +320,17 @@ const ListaMateriais = {
             const podeExpandir = isIntermediate || produtoProduzido;
             const rowId = `row-${comp.cod_produto_componente}-${Math.random().toString(36).substring(2, 11)}`;
 
-            // Ícone baseado no tipo (usando classes do Font Awesome corretamente)
+            // Ícone baseado no tipo (usando classes CSS theme-aware)
             let iconeClass = 'fa-leaf';
-            let iconeCor = '#0dcaf0';
+            let iconeColorClass = 'bom-icon-componente';
             if (comp.tipo_componente) {
                 const tipo = comp.tipo_componente.toUpperCase();
                 if (tipo === 'ACABADO') {
                     iconeClass = 'fa-cube';
-                    iconeCor = '#198754';
+                    iconeColorClass = 'bom-icon-acabado';
                 } else if (tipo === 'INTERMEDIARIO') {
                     iconeClass = 'fa-cog';
-                    iconeCor = '#ffc107';
+                    iconeColorClass = 'bom-icon-intermediario';
                 }
             }
 
@@ -345,7 +345,7 @@ const ListaMateriais = {
                         ` : '<span class="tree-spacer"></span>'}
                     </td>
                     <td class="bom-col-icon">
-                        <i class="fas ${iconeClass}" style="color: ${iconeCor};"></i>
+                        <i class="fas ${iconeClass} ${iconeColorClass}"></i>
                     </td>
                     <td class="bom-col-codigo">
                         <code>${comp.cod_produto_componente}</code>
@@ -436,7 +436,7 @@ const ListaMateriais = {
                                 </span>
                             ` : ''}
                             ${item.estoque_atual !== undefined && item.estoque_atual !== null ? `
-                                <span class="bom-badge" style="background: ${item.estoque_atual > 0 ? '#d1e7dd' : '#f8d7da'}; color: ${item.estoque_atual > 0 ? '#0f5132' : '#842029'};">
+                                <span class="bom-badge ${item.estoque_atual > 0 ? 'bom-badge-estoque-ok' : 'bom-badge-estoque-falta'}">
                                     <i class="fas fa-boxes"></i> ${this.formatarNumero(item.estoque_atual)}
                                 </span>
                             ` : ''}
@@ -628,7 +628,7 @@ const ListaMateriais = {
                 } catch (error) {
                     console.error('Erro ao carregar sub-estrutura:', error);
                     $children.html(`
-                        <div class="bom-empty" style="color: #dc3545;">
+                        <div class="bom-empty text-danger">
                             <i class="fas fa-exclamation-triangle"></i> Erro ao carregar
                         </div>
                     `);

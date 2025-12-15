@@ -1328,22 +1328,22 @@ class CarteiraAgrupada {
 
         // Renderizar tabela compacta
         return `
-            <div class="separacoes-compactas-container bg-white p-2 border-bottom">
+            <div class="separacoes-compactas-container p-2 border-bottom">
                 <div class="table-responsive">
-                    <table class="table table-sm table-hover mb-0">
-                        <thead style="background-color: #1a2332 !important; border-bottom: 2px solid #2a3442;">
+                    <table class="table table-sm table-hover mb-0 table-separacoes-compactas">
+                        <thead>
                             <tr>
-                                <th width="80" style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Tipo</th>
-                                <th width="70" style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Status</th>
-                                <th width="90" class="text-end" style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Valor</th>
-                                <th width="70" class="text-end" style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Peso</th>
-                                <th width="60" class="text-end" style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Pallet</th>
-                                <th width="85" class="text-center" style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Expedição</th>
-                                <th width="85" class="text-center" style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Agendamento</th>
-                                <th width="80" style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Protocolo</th>
-                                <th width="90" class="text-center" style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Confirmação</th>
-                                <th width="200" style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Obs. Separação</th>
-                                <th width="280" class="text-center" style="background-color: #1a2332 !important; color: #a8c8e8 !important; border: none !important;">Ações</th>
+                                <th width="80">Tipo</th>
+                                <th width="70">Status</th>
+                                <th width="90" class="text-end">Valor</th>
+                                <th width="70" class="text-end">Peso</th>
+                                <th width="60" class="text-end">Pallet</th>
+                                <th width="85" class="text-center">Expedição</th>
+                                <th width="85" class="text-center">Agendamento</th>
+                                <th width="80">Protocolo</th>
+                                <th width="90" class="text-center">Confirmação</th>
+                                <th width="200">Obs. Separação</th>
+                                <th width="280" class="text-center">Ações</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1375,9 +1375,8 @@ class CarteiraAgrupada {
 
         // Observação da separação com tooltip
         const obsSeparacao = item.obs_separacao ?
-            `<span class="obs-separacao-texto"
-                   title="${item.obs_separacao.replace(/"/g, '&quot;')}"
-                   style="cursor: help; display: inline-block; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            `<span class="obs-separacao-texto obs-ellipsis"
+                   title="${item.obs_separacao.replace(/"/g, '&quot;')}">
                 <i class="fas fa-comment-alt text-muted me-1"></i>${item.obs_separacao}
              </span>` : '-';
 

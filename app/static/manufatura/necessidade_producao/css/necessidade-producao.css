@@ -1,8 +1,108 @@
 /* ==================================================
+   NECESSIDADE PRODUCAO - Theme-aware CSS
+   Suporte completo a Light/Dark mode
+   ================================================== */
+
+/* ==================================================
+   CSS CUSTOM PROPERTIES - TEMA
+   ================================================== */
+:root {
+    /* Cores base do tema */
+    --np-bg-primary: var(--bs-body-bg, #ffffff);
+    --np-bg-secondary: var(--bs-tertiary-bg, #f8f9fa);
+    --np-bg-tertiary: var(--bs-secondary-bg, #e9ecef);
+    --np-text-primary: var(--bs-body-color, #212529);
+    --np-text-secondary: var(--bs-secondary-color, #6c757d);
+    --np-text-muted: var(--bs-tertiary-color, #adb5bd);
+    --np-border: var(--bs-border-color, #dee2e6);
+    --np-border-strong: #343a40;
+
+    /* Cores semânticas */
+    --np-success: var(--bs-success, #28a745);
+    --np-success-light: rgba(40, 167, 69, 0.15);
+    --np-danger: var(--bs-danger, #dc3545);
+    --np-danger-light: rgba(220, 53, 69, 0.15);
+    --np-warning: var(--bs-warning, #ffc107);
+    --np-warning-light: rgba(255, 193, 7, 0.15);
+    --np-info: var(--bs-info, #0dcaf0);
+    --np-info-light: rgba(13, 202, 240, 0.15);
+    --np-primary: var(--bs-primary, #0d6efd);
+    --np-primary-light: rgba(13, 110, 253, 0.1);
+
+    /* Backgrounds de projeção */
+    --np-proj-negative-bg: #ffe6e6;
+    --np-proj-negative-text: #dc3545;
+    --np-proj-zero-bg: #fff3cd;
+    --np-proj-zero-text: #856404;
+    --np-proj-positive-text: #28a745;
+
+    /* Sticky columns */
+    --np-sticky-bg: var(--bs-body-bg, #ffffff);
+    --np-sticky-header-bg: var(--bs-tertiary-bg, #f8f9fa);
+
+    /* Tamanhos dinâmicos */
+    --font-base: 0.45rem;
+    --font-header: 0.4rem;
+    --font-codigo: 0.5rem;
+    --font-produto: 0.5rem;
+    --font-projecao: 0.4rem;
+    --font-badge: 0.42rem;
+
+    --width-codigo: 45px;
+    --width-produto: 250px;
+    --width-dados: 52px;
+    --width-projecao: 42px;
+    --width-criticidade: 58px;
+
+    --padding-cell: 0.2rem 0.1rem;
+    --padding-header: 0.2rem 0.1rem;
+    --padding-projecao: 0.15rem 0.05rem;
+    --padding-badge: 0.15rem 0.25rem;
+
+    --line-height: 1.1;
+}
+
+/* Dark mode overrides */
+[data-bs-theme="dark"],
+[data-theme="dark"] {
+    --np-bg-primary: var(--bs-body-bg, #1a1d21);
+    --np-bg-secondary: var(--bs-tertiary-bg, #2b3035);
+    --np-bg-tertiary: var(--bs-secondary-bg, #343a40);
+    --np-text-primary: var(--bs-body-color, #dee2e6);
+    --np-text-secondary: var(--bs-secondary-color, #adb5bd);
+    --np-text-muted: var(--bs-tertiary-color, #6c757d);
+    --np-border: var(--bs-border-color, #495057);
+    --np-border-strong: #6c757d;
+
+    /* Cores semânticas - mais vibrantes no dark */
+    --np-success: #4ade80;
+    --np-success-light: rgba(74, 222, 128, 0.2);
+    --np-danger: #f87171;
+    --np-danger-light: rgba(248, 113, 113, 0.2);
+    --np-warning: #fbbf24;
+    --np-warning-light: rgba(251, 191, 36, 0.2);
+    --np-info: #22d3ee;
+    --np-info-light: rgba(34, 211, 238, 0.2);
+    --np-primary: #60a5fa;
+    --np-primary-light: rgba(96, 165, 250, 0.2);
+
+    /* Backgrounds de projeção - dark */
+    --np-proj-negative-bg: rgba(248, 113, 113, 0.2);
+    --np-proj-negative-text: #f87171;
+    --np-proj-zero-bg: rgba(251, 191, 36, 0.2);
+    --np-proj-zero-text: #fbbf24;
+    --np-proj-positive-text: #4ade80;
+
+    /* Sticky columns */
+    --np-sticky-bg: var(--bs-body-bg, #1a1d21);
+    --np-sticky-header-bg: var(--bs-tertiary-bg, #2b3035);
+}
+
+/* ==================================================
    BARRA COMPACTA (FULLSCREEN)
    ================================================== */
 .barra-compacta {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--bs-primary, #667eea) 0%, #8b5cf6 100%);
     color: white;
     padding: 0.3rem 0.75rem;
     border-radius: 0;
@@ -10,7 +110,7 @@
 }
 
 .barra-compacta-success {
-    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    background: linear-gradient(135deg, var(--np-success) 0%, #20c997 100%);
 }
 
 .barra-compacta .titulo-compacto {
@@ -52,8 +152,8 @@
 
 /* Filtros expandidos */
 .filtros-expandidos {
-    background: #f8f9fa;
-    border: 1px solid #dee2e6;
+    background: var(--np-bg-secondary);
+    border: 1px solid var(--np-border);
     border-radius: 0;
     padding: 0.4rem 0.75rem;
 }
@@ -71,12 +171,11 @@
 
 .form-check-sm .form-check-label {
     font-size: 0.7rem;
-    padding-left: 0.1rem;
 }
 
 /* Card tabela sem header */
 .card-tabela {
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--np-border);
     border-radius: 0;
     overflow: hidden;
 }
@@ -86,30 +185,8 @@
 }
 
 /* ==================================================
-   CSS VARIABLES - TAMANHOS DINÂMICOS
+   TAMANHOS DINÂMICOS
    ================================================== */
-:root {
-    /* Tamanho MUITO PEQUENO (padrão atual) */
-    --font-base: 0.45rem;
-    --font-header: 0.4rem;
-    --font-codigo: 0.5rem;
-    --font-produto: 0.5rem;
-    --font-projecao: 0.4rem;
-    --font-badge: 0.42rem;
-
-    --width-codigo: 45px;
-    --width-produto: 250px;
-    --width-dados: 52px;
-    --width-projecao: 42px;
-    --width-criticidade: 58px;
-
-    --padding-cell: 0.2rem 0.1rem;
-    --padding-header: 0.2rem 0.1rem;
-    --padding-projecao: 0.15rem 0.05rem;
-    --padding-badge: 0.15rem 0.25rem;
-
-    --line-height: 1.1;
-}
 
 /* TAMANHO PEQUENO */
 .size-small {
@@ -181,7 +258,7 @@
 }
 
 .card-header-custom {
-    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    background: linear-gradient(135deg, var(--np-success) 0%, #20c997 100%);
     color: white;
     font-weight: 600;
 }
@@ -193,26 +270,28 @@
 /* Inputs editáveis inline */
 .input-edit-data,
 .input-edit-qtd {
-    border: 1px solid #e0e0e0;
+    border: 1px solid var(--np-border);
     transition: all 0.2s ease;
+    background-color: var(--np-bg-primary);
+    color: var(--np-text-primary);
 }
 
 .input-edit-data:hover,
 .input-edit-qtd:hover {
-    border-color: #28a745;
+    border-color: var(--np-success);
     box-shadow: 0 0 0 0.1rem rgba(40, 167, 69, 0.25);
 }
 
 .input-edit-data:focus,
 .input-edit-qtd:focus {
-    border-color: #28a745;
+    border-color: var(--np-success);
     box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
 }
 
 /* Animação de sucesso ao salvar */
 @keyframes flashSuccess {
     0%, 100% { background-color: transparent; }
-    50% { background-color: rgba(40, 167, 69, 0.2); }
+    50% { background-color: var(--np-success-light); }
 }
 
 .flash-success {
@@ -225,20 +304,19 @@
 }
 
 .programacao-item:hover {
-    background-color: rgba(0, 0, 0, 0.02);
+    background-color: var(--np-bg-secondary);
 }
 
 /* Destaque do produto modal */
 .produto-destaque {
-    background-color: rgba(255, 193, 7, 0.1);
-    border-left: 3px solid #ffc107;
+    background-color: var(--np-warning-light);
+    border-left: 3px solid var(--np-warning);
 }
 
 /* ==================================================
-   SOBRESCREVER BOOTSTRAP 5 - MÁXIMA PRIORIDADE
+   TABELA PRINCIPAL - HEADERS
    ================================================== */
 
-/* Resetar estilos Bootstrap na tabela */
 .table-container table.table.table-necessidade,
 .table-container table.table.table-necessidade * {
     font-size: var(--font-base) !important;
@@ -255,16 +333,16 @@
     border-spacing: 0 !important;
 }
 
-/* Forçar fonte em TODAS as células */
 .table-container table.table-necessidade th,
 .table-container table.table-necessidade td {
     font-size: var(--font-base) !important;
 }
 
-/* HEADERS - SOBRESCREVER BOOTSTRAP */
+/* HEADERS */
 .table-container table.table.table-necessidade thead th {
-    background-color: #f8f9fa !important;
-    border-bottom: 2px solid #dee2e6 !important;
+    background-color: var(--np-sticky-header-bg) !important;
+    color: var(--np-text-primary) !important;
+    border-bottom: 2px solid var(--np-border) !important;
     font-weight: 600 !important;
     position: sticky !important;
     top: 0 !important;
@@ -275,26 +353,26 @@
     vertical-align: middle !important;
 }
 
-/* CELLS - SOBRESCREVER BOOTSTRAP */
+/* CELLS */
 .table-container table.table.table-necessidade tbody td {
     padding: var(--padding-cell) !important;
     vertical-align: middle !important;
     font-size: var(--font-base) !important;
     line-height: var(--line-height) !important;
+    color: var(--np-text-primary) !important;
 }
 
 /* ==================================================
    COLUNAS STICKY (TRAVADAS) - CÓDIGO E PRODUTO
    ================================================== */
 
-/* COLUNA CÓDIGO - TRAVADA - SOBRESCREVER BOOTSTRAP */
 .table-container table.table.table-necessidade th.sticky-col-codigo,
 .table-container table.table.table-necessidade td.sticky-col-codigo {
     position: sticky !important;
     left: 0px !important;
-    background-color: #ffffff !important;
+    background-color: var(--np-sticky-bg) !important;
     z-index: 100 !important;
-    border-right: 3px solid #343a40 !important;
+    border-right: 3px solid var(--np-border-strong) !important;
     font-weight: 700 !important;
     min-width: var(--width-codigo) !important;
     max-width: var(--width-codigo) !important;
@@ -303,28 +381,26 @@
     box-shadow: 2px 0 5px rgba(0,0,0,0.1) !important;
 }
 
-/* COLUNA PRODUTO - TRAVADA - SOBRESCREVER BOOTSTRAP */
 .table-container table.table.table-necessidade th.sticky-col-produto,
 .table-container table.table.table-necessidade td.sticky-col-produto {
     position: sticky !important;
     left: var(--width-codigo) !important;
-    background-color: #ffffff !important;
+    background-color: var(--np-sticky-bg) !important;
     z-index: 100 !important;
-    border-right: 3px solid #343a40 !important;
+    border-right: 3px solid var(--np-border-strong) !important;
     min-width: var(--width-produto) !important;
     max-width: var(--width-produto) !important;
     width: var(--width-produto) !important;
     white-space: normal !important;
     word-wrap: break-word !important;
-    overflow: visible !important; /* DROPDOWN PRECISA APARECER */
+    overflow: visible !important;
     font-size: var(--font-produto) !important;
     box-shadow: 2px 0 5px rgba(0,0,0,0.1) !important;
 }
 
-/* HEADERS STICKY - MAIOR Z-INDEX - SOBRESCREVER BOOTSTRAP */
 .table-container table.table.table-necessidade thead th.sticky-col-codigo,
 .table-container table.table.table-necessidade thead th.sticky-col-produto {
-    background-color: #f8f9fa !important;
+    background-color: var(--np-sticky-header-bg) !important;
     z-index: 200 !important;
 }
 
@@ -332,7 +408,6 @@
    COLUNAS DE PROJEÇÃO D0-D60
    ================================================== */
 
-/* Colunas de projeção */
 table.table-necessidade th.col-projecao,
 table.table-necessidade td.col-projecao {
     min-width: var(--width-projecao) !important;
@@ -345,7 +420,6 @@ table.table-necessidade td.col-projecao {
     vertical-align: middle !important;
 }
 
-/* Headers de projeção centralizados */
 table.table-necessidade thead th.col-projecao {
     text-align: center !important;
     font-size: var(--font-projecao) !important;
@@ -356,27 +430,28 @@ table.table-necessidade .col-projecao br {
     padding: 0 !important;
 }
 
-/* Cores de projeção */
+/* Cores de projeção - NEGATIVO */
 table.table-necessidade td.col-projecao.negativo {
-    background-color: #ffe6e6 !important;
-    color: #dc3545 !important;
+    background-color: var(--np-proj-negative-bg) !important;
+    color: var(--np-proj-negative-text) !important;
     font-weight: 700 !important;
 }
 
+/* Cores de projeção - ZERO */
 table.table-necessidade td.col-projecao.zero {
-    background-color: #fff3cd !important;
-    color: #856404 !important;
+    background-color: var(--np-proj-zero-bg) !important;
+    color: var(--np-proj-zero-text) !important;
 }
 
+/* Cores de projeção - POSITIVO */
 table.table-necessidade td.col-projecao.positivo {
-    color: #28a745 !important;
+    color: var(--np-proj-positive-text) !important;
 }
 
 /* ==================================================
    COLUNAS DE DADOS
    ================================================== */
 
-/* ✅ COLUNAS DE DADOS - CadastroPalletizacao e Necessidade */
 table.table-necessidade th.col-embalagem,
 table.table-necessidade td.col-embalagem,
 table.table-necessidade th.col-mp,
@@ -429,16 +504,24 @@ table.table-necessidade td.col-criticidade {
     line-height: 1 !important;
 }
 
-.badge-alta { background-color: #dc3545 !important; color: white !important; }
-.badge-media { background-color: #ffc107 !important; color: #333 !important; }
-.badge-baixa { background-color: #28a745 !important; color: white !important; }
+.badge-alta {
+    background-color: var(--np-danger) !important;
+    color: white !important;
+}
+.badge-media {
+    background-color: var(--np-warning) !important;
+    color: #212529 !important;
+}
+.badge-baixa {
+    background-color: var(--np-success) !important;
+    color: white !important;
+}
 
 .btn-programar {
     font-size: var(--font-badge) !important;
     padding: var(--padding-badge) !important;
 }
 
-/* Dropdown de Ações */
 .btn-group .btn-sm {
     font-size: var(--font-badge) !important;
     padding: var(--padding-badge) !important;
@@ -448,15 +531,18 @@ table.table-necessidade td.col-criticidade {
     font-size: var(--font-base) !important;
     min-width: 200px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    background-color: var(--np-bg-primary);
+    border-color: var(--np-border);
 }
 
 .dropdown-item {
     padding: 0.5rem 1rem;
     transition: all 0.2s;
+    color: var(--np-text-primary);
 }
 
 .dropdown-item:hover {
-    background-color: #f8f9fa;
+    background-color: var(--np-bg-secondary);
     transform: translateX(2px);
 }
 
@@ -465,56 +551,55 @@ table.table-necessidade td.col-criticidade {
     text-align: center;
 }
 
-/* DROPDOWN DE AÇÕES - BÁSICO E FUNCIONAL */
+/* DROPDOWN DE AÇÕES */
 .dropdown-acoes-produto {
     position: relative;
-    z-index: 1000; /* Acima de outros elementos da linha */
+    z-index: 1000;
 }
 
 .btn-menu-acoes {
-    background: #f8f9fa;
-    border: 1px solid #dee2e6;
+    background: var(--np-bg-secondary);
+    border: 1px solid var(--np-border);
     padding: 0.25rem 0.5rem;
     cursor: pointer;
-    color: #495057;
+    color: var(--np-text-primary);
     border-radius: 4px;
     font-size: 0.9em;
 }
 
 .btn-menu-acoes:hover {
-    background: #e9ecef;
-    border-color: #ced4da;
+    background: var(--np-bg-tertiary);
+    border-color: var(--np-border);
 }
 
 .menu-acoes-lista {
-    position: fixed; /* ✅ FIXED para coordenadas relativas à viewport */
-    background: white;
-    border: 1px solid #dee2e6;
+    position: fixed;
+    background: var(--np-bg-primary);
+    border: 1px solid var(--np-border);
     border-radius: 4px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.2);
     min-width: 180px;
-    z-index: 99999; /* BEM ACIMA DE TUDO */
+    z-index: 99999;
     padding: 5px 0;
-    /* Posições serão definidas dinamicamente por JS */
 }
 
 .menu-acoes-lista a {
     display: block;
     padding: 8px 15px;
-    color: #212529;
+    color: var(--np-text-primary);
     text-decoration: none;
     white-space: nowrap;
 }
 
 .menu-acoes-lista a:hover {
-    background: #f8f9fa;
+    background: var(--np-bg-secondary);
 }
 
 .menu-acoes-lista a i {
     width: 20px;
     text-align: center;
     margin-right: 8px;
-    color: #0d6efd;
+    color: var(--np-primary);
 }
 
 /* ==================================================
@@ -524,7 +609,7 @@ table.table-necessidade td.col-criticidade {
     display: flex;
     gap: 0.5rem;
     align-items: center;
-    background: white;
+    background: var(--np-bg-primary);
     padding: 0.5rem 1rem;
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
@@ -532,9 +617,9 @@ table.table-necessidade td.col-criticidade {
 
 .font-size-selector .btn-size {
     padding: 0.4rem 0.8rem;
-    border: 2px solid #dee2e6;
-    background: white;
-    color: #495057;
+    border: 2px solid var(--np-border);
+    background: var(--np-bg-primary);
+    color: var(--np-text-primary);
     cursor: pointer;
     border-radius: 6px;
     transition: all 0.2s;
@@ -542,13 +627,13 @@ table.table-necessidade td.col-criticidade {
 }
 
 .font-size-selector .btn-size:hover {
-    border-color: #28a745;
-    background: #f8f9fa;
+    border-color: var(--np-success);
+    background: var(--np-bg-secondary);
 }
 
 .font-size-selector .btn-size.active {
-    border-color: #28a745;
-    background: #28a745;
+    border-color: var(--np-success);
+    background: var(--np-success);
     color: white;
     font-weight: 600;
 }
@@ -556,28 +641,28 @@ table.table-necessidade td.col-criticidade {
 .font-size-selector label {
     margin: 0;
     font-weight: 600;
-    color: #495057;
+    color: var(--np-text-primary);
 }
 
 /* ==================================================
    CATEGORIZAÇÃO VISUAL DE GRUPOS DE COLUNAS
    ================================================== */
 
-/* GRUPO 1: Previsão / Pedidos Inseridos / Saldo Demanda - AZUL */
+/* GRUPO 1: Previsão / Pedidos / Saldo Demanda - AZUL */
 table.table-necessidade th.col-previsao,
 table.table-necessidade td.col-previsao,
 table.table-necessidade th.col-pedidos,
 table.table-necessidade td.col-pedidos,
 table.table-necessidade th.col-saldo-demanda,
 table.table-necessidade td.col-saldo-demanda {
-    background-color: rgba(13, 110, 253, 0.04) !important;
-    border-left: 3px solid #0d6efd !important;
+    background-color: var(--np-primary-light) !important;
+    border-left: 3px solid var(--np-primary) !important;
 }
 
 table.table-necessidade thead th.col-previsao,
 table.table-necessidade thead th.col-pedidos,
 table.table-necessidade thead th.col-saldo-demanda {
-    background-color: rgba(13, 110, 253, 0.1) !important;
+    background-color: rgba(var(--bs-primary-rgb, 13, 110, 253), 0.15) !important;
     font-weight: 700 !important;
 }
 
@@ -588,32 +673,32 @@ table.table-necessidade th.col-ruptura,
 table.table-necessidade td.col-ruptura,
 table.table-necessidade th.col-carteira-sem-data,
 table.table-necessidade td.col-carteira-sem-data {
-    background-color: rgba(255, 193, 7, 0.06) !important;
-    border-left: 3px solid #ffc107 !important;
+    background-color: var(--np-warning-light) !important;
+    border-left: 3px solid var(--np-warning) !important;
 }
 
 table.table-necessidade thead th.col-carteira,
 table.table-necessidade thead th.col-ruptura,
 table.table-necessidade thead th.col-carteira-sem-data {
-    background-color: rgba(255, 193, 7, 0.15) !important;
+    background-color: rgba(var(--bs-warning-rgb, 255, 193, 7), 0.2) !important;
     font-weight: 700 !important;
 }
 
-/* GRUPO 3: Saldo Vendas / Programação / Necessidade - CINZA */
+/* GRUPO 3: Saldo / Programação / Necessidade - CINZA */
 table.table-necessidade th.col-saldo,
 table.table-necessidade td.col-saldo,
 table.table-necessidade th.col-programacao,
 table.table-necessidade td.col-programacao,
 table.table-necessidade th.col-necessidade,
 table.table-necessidade td.col-necessidade {
-    background-color: rgba(108, 117, 125, 0.04) !important;
-    border-left: 3px solid #6c757d !important;
+    background-color: rgba(var(--bs-secondary-rgb, 108, 117, 125), 0.08) !important;
+    border-left: 3px solid var(--np-text-secondary) !important;
 }
 
 table.table-necessidade thead th.col-saldo,
 table.table-necessidade thead th.col-programacao,
 table.table-necessidade thead th.col-necessidade {
-    background-color: rgba(108, 117, 125, 0.1) !important;
+    background-color: rgba(var(--bs-secondary-rgb, 108, 117, 125), 0.15) !important;
     font-weight: 700 !important;
 }
 
@@ -622,31 +707,31 @@ table.table-necessidade thead th.col-necessidade {
    ================================================== */
 
 .numero-positivo {
-    color: #28a745 !important;
+    color: var(--np-success) !important;
     font-weight: 600 !important;
 }
 
 .numero-zero {
-    color: #6c757d !important;
+    color: var(--np-text-secondary) !important;
 }
 
 .filtros-card {
-    background-color: #f8f9fa;
+    background-color: var(--np-bg-secondary);
     border-radius: 8px;
     padding: 1.5rem;
     margin-bottom: 1.5rem;
 }
 
 .info-box {
-    background-color: #e7f3ff;
-    border-left: 4px solid #007bff;
+    background-color: var(--np-info-light);
+    border-left: 4px solid var(--np-primary);
     padding: 1rem;
     border-radius: 4px;
     margin-bottom: 1.5rem;
 }
 
 .table-container {
-    max-height: calc(100vh - 100px); /* Ajustado via JS para precisão dinâmica */
+    max-height: calc(100vh - 100px);
     overflow: auto;
     position: relative;
 }
@@ -660,7 +745,7 @@ table.table-necessidade thead th.col-necessidade {
 }
 
 /* ==================================================
-   AUTOCOMPLETE - FILTROS DE PRODUTO
+   AUTOCOMPLETE
    ================================================== */
 
 .autocomplete-container {
@@ -672,8 +757,8 @@ table.table-necessidade thead th.col-necessidade {
     top: 100%;
     left: 0;
     right: 0;
-    background: white;
-    border: 1px solid #ced4da;
+    background: var(--np-bg-primary);
+    border: 1px solid var(--np-border);
     border-top: none;
     border-radius: 0 0 4px 4px;
     max-height: 250px;
@@ -690,22 +775,22 @@ table.table-necessidade thead th.col-necessidade {
 .autocomplete-item {
     padding: 8px 12px;
     cursor: pointer;
-    border-bottom: 1px solid #f1f3f5;
+    border-bottom: 1px solid var(--np-border);
     transition: background-color 0.15s;
 }
 
 .autocomplete-item:hover,
 .autocomplete-item.active {
-    background-color: #e7f3ff;
+    background-color: var(--np-info-light);
 }
 
 .autocomplete-item strong {
-    color: #0d6efd;
+    color: var(--np-primary);
 }
 
 .autocomplete-item small {
     display: block;
-    color: #6c757d;
+    color: var(--np-text-secondary);
     font-size: 0.85em;
     margin-top: 2px;
 }
@@ -713,20 +798,20 @@ table.table-necessidade thead th.col-necessidade {
 .autocomplete-loading {
     padding: 12px;
     text-align: center;
-    color: #6c757d;
+    color: var(--np-text-secondary);
 }
 
 .autocomplete-no-results {
     padding: 12px;
     text-align: center;
-    color: #dc3545;
+    color: var(--np-danger);
     font-style: italic;
 }
 
 /* Customizador de colunas */
 .customizador-colunas {
-    background: white;
-    border: 1px solid #dee2e6;
+    background: var(--np-bg-primary);
+    border: 1px solid var(--np-border);
     border-radius: 8px;
     padding: 1rem;
     margin-bottom: 1rem;
@@ -748,13 +833,13 @@ table.table-necessidade thead th.col-necessidade {
     font-size: 0.85rem;
 }
 
-/* ✅ Células de projeção clicáveis */
+/* Células de projeção clicáveis */
 .cursor-pointer {
     cursor: pointer;
 }
 
 .col-projecao.cursor-pointer:hover {
-    background-color: rgba(25, 135, 84, 0.1);
+    background-color: var(--np-success-light);
     transform: scale(1.05);
     transition: all 0.2s;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
@@ -764,7 +849,6 @@ table.table-necessidade thead th.col-necessidade {
    ORDENAÇÃO DE COLUNAS
    ================================================== */
 
-/* Headers clicáveis para ordenação */
 .sortable {
     cursor: pointer;
     user-select: none;
@@ -772,7 +856,7 @@ table.table-necessidade thead th.col-necessidade {
 }
 
 .sortable:hover {
-    background-color: #e9ecef !important;
+    background-color: var(--np-bg-tertiary) !important;
 }
 
 .sortable .sort-icon {
@@ -786,20 +870,17 @@ table.table-necessidade thead th.col-necessidade {
     opacity: 1;
 }
 
-/* Ícone ativo quando coluna está ordenada */
 .sortable .sort-icon.fa-sort-up,
 .sortable .sort-icon.fa-sort-down {
     opacity: 1;
-    color: #28a745;
+    color: var(--np-success);
     font-weight: bold;
 }
 
 /* ==================================================
-   ESTILOS PARA MODAL DE SEPARAÇÕES E ESTOQUE
+   MODAIS ANINHADOS
    ================================================== */
 
-/* ✅ Z-INDEX PARA MODAIS ANINHADOS */
-/* Modal principal (separações) */
 #modalSeparacoesProduto {
     z-index: 1055 !important;
 }
@@ -808,7 +889,6 @@ table.table-necessidade thead th.col-necessidade {
     z-index: 1050 !important;
 }
 
-/* Modal secundário (detalhes) - DEVE FICAR POR CIMA */
 #modalDetalhesSeparacao {
     z-index: 1060 !important;
 }
@@ -817,24 +897,26 @@ table.table-necessidade thead th.col-necessidade {
     z-index: 1059 !important;
 }
 
-/* Garantir que o backdrop do segundo modal não cubra o modal */
 .modal-backdrop.show:nth-of-type(2) {
     z-index: 1059 !important;
 }
 
-/* 1. DESTAQUE PARA PRODUTO DO MODAL NA PROGRAMAÇÃO */
+/* Destaque produto modal */
 .produto-destaque {
-    background-color: rgba(40, 167, 69, 0.15) !important; /* Verde leve */
-    border-left: 3px solid #28a745 !important;
+    background-color: var(--np-success-light) !important;
+    border-left: 3px solid var(--np-success) !important;
     font-weight: 600 !important;
 }
 
-/* 2. TABELA BOM COM SCROLL LATERAL E COLUNAS FIXAS */
+/* ==================================================
+   TABELA BOM COM SCROLL
+   ================================================== */
+
 .table-bom-wrapper {
     overflow-x: auto;
     overflow-y: visible;
     max-width: 100%;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--np-border);
     border-radius: 0.25rem;
     position: relative;
 }
@@ -846,11 +928,10 @@ table.table-necessidade thead th.col-necessidade {
     margin: 0;
 }
 
-/* Colunas fixas (código e nome) */
 .table-bom-fixed .col-fixed-codigo,
 .table-bom-fixed .col-fixed-nome {
     position: sticky;
-    background-color: white;
+    background-color: var(--np-bg-primary);
     z-index: 10;
 }
 
@@ -859,7 +940,7 @@ table.table-necessidade thead th.col-necessidade {
     min-width: 120px;
     width: 120px;
     max-width: 120px;
-    border-right: 2px solid #dee2e6;
+    border-right: 2px solid var(--np-border);
 }
 
 .table-bom-fixed .col-fixed-nome {
@@ -867,10 +948,9 @@ table.table-necessidade thead th.col-necessidade {
     min-width: 300px;
     width: 300px;
     max-width: 300px;
-    border-right: 2px solid #dee2e6;
+    border-right: 2px solid var(--np-border);
 }
 
-/* Colunas de projeção D0-D60 (REDIMENSIONÁVEIS) */
 .table-bom-fixed .col-projecao {
     min-width: 70px;
     width: 70px;
@@ -880,41 +960,40 @@ table.table-necessidade thead th.col-necessidade {
     overflow: auto;
 }
 
-/* Header com background fixo */
 .table-bom-fixed thead th {
     position: sticky;
     top: 0;
-    background-color: #f8f9fa;
+    background-color: var(--np-sticky-header-bg);
     z-index: 20;
-    border-bottom: 2px solid #dee2e6;
+    border-bottom: 2px solid var(--np-border);
     resize: horizontal;
     overflow: auto;
 }
 
-/* Header das colunas fixas (maior z-index) */
 .table-bom-fixed thead th.col-fixed-codigo,
 .table-bom-fixed thead th.col-fixed-nome {
     z-index: 30;
 }
 
-/* Ajustes para melhor visualização */
 .table-bom-fixed tbody tr:hover {
-    background-color: #f1f3f5;
+    background-color: var(--np-bg-secondary);
 }
 
 .table-bom-fixed tbody tr:hover .col-fixed-codigo,
 .table-bom-fixed tbody tr:hover .col-fixed-nome {
-    background-color: #e9ecef;
+    background-color: var(--np-bg-tertiary);
 }
 
-/* ✅ VALORES NEGATIVOS: Fundo vermelho leve (SEM negrito/texto vermelho) */
 .table-bom-fixed .valor-negativo {
-    background-color: rgba(220, 53, 69, 0.15) !important; /* Vermelho leve */
-    color: inherit !important; /* Mantém cor do texto normal */
-    font-weight: normal !important; /* Remove negrito */
+    background-color: var(--np-danger-light) !important;
+    color: inherit !important;
+    font-weight: normal !important;
 }
 
-/* 3. ESTILOS PARA ACCORDION DE PROGRAMAÇÃO */
+/* ==================================================
+   ACCORDION DE PROGRAMAÇÃO
+   ================================================== */
+
 #accordion-programacao-producao .accordion-body {
     padding: 0;
 }
@@ -923,22 +1002,23 @@ table.table-necessidade thead th.col-necessidade {
     margin-bottom: 0;
 }
 
-/* Divs de programação empilhadas */
 #accordion-programacao-producao .p-2 {
     transition: all 0.2s ease;
 }
 
 #accordion-programacao-producao .p-2:hover {
-    background-color: #f8f9fa;
+    background-color: var(--np-bg-secondary);
     transform: translateX(2px);
 }
 
-/* 4. ESTILOS PARA FORMULÁRIO DE PROGRAMAÇÃO */
 .card.border-success .card-header {
     font-weight: 600;
 }
 
-/* 5. RESPONSIVIDADE */
+/* ==================================================
+   RESPONSIVIDADE
+   ================================================== */
+
 @media (max-width: 768px) {
     .table-bom-fixed .col-fixed-nome {
         min-width: 180px;

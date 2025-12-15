@@ -4,23 +4,24 @@
 
 {% block extra_css %}
 <style>
-    /* Estilo customizado para as abas */
+    /* Estilo customizado para as abas - theme-aware */
     #despesasTabs .nav-link {
         font-size: 1.1rem;
         padding: 1rem 1.5rem;
-        color: #495057;
+        color: var(--bs-secondary-color);
         border: 2px solid transparent;
     }
 
     #despesasTabs .nav-link:hover {
-        border-color: #dee2e6;
-        background-color: #f8f9fa;
+        border-color: var(--bs-border-color);
+        background-color: var(--bs-tertiary-bg);
     }
 
     #despesasTabs .nav-link.active {
         font-weight: 600;
-        border-bottom: 3px solid #0d6efd;
-        background-color: #fff;
+        border-bottom: 3px solid var(--bs-primary);
+        background-color: var(--bs-body-bg);
+        color: var(--bs-body-color);
     }
 
     .tab-content {

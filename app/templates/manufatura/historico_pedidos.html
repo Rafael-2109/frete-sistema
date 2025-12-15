@@ -4,33 +4,72 @@
 
 {% block extra_css %}
 <style>
-    .stats-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border-radius: 10px;
-        padding: 20px;
-        margin-bottom: 20px;
-    }
-    .stats-card h4 {
-        margin: 0;
-        font-size: 2rem;
-        font-weight: bold;
-    }
-    .stats-card p {
-        margin: 5px 0 0 0;
-        opacity: 0.9;
-    }
-    .table-sm td, .table-sm th {
-        padding: 0.5rem;
-        font-size: 0.875rem;
-    }
-    .sync-btn {
-        position: relative;
-    }
-    .sync-btn .spinner-border {
-        width: 1rem;
-        height: 1rem;
-    }
+/* ==========================================================================
+   HISTORICO PEDIDOS - Theme-aware Styles
+   ========================================================================== */
+
+/* Stats cards - Theme-aware com gradientes preservados */
+.stats-card {
+    color: white;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+.stats-card h4 {
+    margin: 0;
+    font-size: 2rem;
+    font-weight: bold;
+    color: white;
+}
+.stats-card p {
+    margin: 5px 0 0 0;
+    opacity: 0.9;
+    color: white;
+}
+
+/* Stats card variants */
+.stats-card-primary {
+    background: linear-gradient(135deg, var(--bs-primary) 0%, #8b5cf6 100%);
+}
+.stats-card-pink {
+    background: linear-gradient(135deg, #ec4899 0%, #f43f5e 100%);
+}
+.stats-card-cyan {
+    background: linear-gradient(135deg, var(--bs-info) 0%, #06b6d4 100%);
+}
+.stats-card-green {
+    background: linear-gradient(135deg, var(--bs-success) 0%, #14b8a6 100%);
+}
+
+.table-sm td, .table-sm th {
+    padding: 0.5rem;
+    font-size: 0.875rem;
+}
+.sync-btn {
+    position: relative;
+}
+.sync-btn .spinner-border {
+    width: 1rem;
+    height: 1rem;
+}
+
+/* Card header theme-aware */
+.card-header-theme {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+    border-bottom: 1px solid var(--bs-border-color) !important;
+}
+
+/* Table thead theme-aware */
+.table-thead-theme {
+    background-color: var(--bs-tertiary-bg) !important;
+}
+.table-thead-theme th {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+    border-bottom: 2px solid var(--bs-border-color) !important;
+    font-weight: 600;
+}
 </style>
 {% endblock %}
 
@@ -38,8 +77,8 @@
 <!-- Token CSRF -->
 <meta name="csrf-token" content="{{ csrf_token() }}">
 
-<div class="container-fluid px-4 py-3">
-    <div class="row mb-4">
+<div class="container-fluid px-4 py-3 premium-page">
+    <div class="row mb-4 reveal">
         <div class="col-12">
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb">
@@ -57,25 +96,25 @@
     <!-- Estatísticas -->
     <div class="row mb-4" id="estatisticas-container">
         <div class="col-md-3">
-            <div class="stats-card">
+            <div class="stats-card stats-card-primary">
                 <h4 id="stat-registros">-</h4>
                 <p>Total de Registros</p>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="stats-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+            <div class="stats-card stats-card-pink">
                 <h4 id="stat-pedidos">-</h4>
                 <p>Pedidos Únicos</p>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="stats-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+            <div class="stats-card stats-card-cyan">
                 <h4 id="stat-produtos">-</h4>
                 <p>Produtos Únicos</p>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="stats-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+            <div class="stats-card stats-card-green">
                 <h4 id="stat-valor">-</h4>
                 <p>Valor Total</p>
             </div>
@@ -84,8 +123,8 @@
 
     <!-- Filtros e Ações -->
     <div class="card shadow mb-4">
-        <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">
+        <div class="card-header card-header-theme py-3">
+            <h6 class="m-0 fw-bold">
                 <i class="fas fa-filter me-2"></i>Filtros e Sincronização
             </h6>
         </div>
@@ -129,15 +168,15 @@
 
     <!-- Tabela de Dados -->
     <div class="card shadow">
-        <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">
+        <div class="card-header card-header-theme py-3">
+            <h6 class="m-0 fw-bold">
                 <i class="fas fa-table me-2"></i>Registros do Histórico
             </h6>
         </div>
         <div class="card-body">
             <div class="table-responsive">
                 <table class="table table-bordered table-hover table-sm" id="tabela-historico">
-                    <thead>
+                    <thead class="table-thead-theme">
                         <tr>
                             <th>Pedido</th>
                             <th>Data</th>

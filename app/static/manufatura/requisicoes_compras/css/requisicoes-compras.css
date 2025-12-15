@@ -1,5 +1,5 @@
 /**
- * Estilos para Requisições de Compras
+ * Estilos para Requisições de Compras - Theme-aware
  * Módulo: Manufatura
  */
 
@@ -24,7 +24,7 @@
    Tabelas
 ======================================== */
 .table-hover tbody tr:hover {
-    background-color: rgba(0, 123, 255, 0.05);
+    background-color: rgba(var(--bs-primary-rgb, 0, 123, 255), 0.05);
     cursor: pointer;
 }
 
@@ -33,11 +33,16 @@
     font-size: 0.9rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    border-bottom: 2px solid #dee2e6;
+    border-bottom: 2px solid var(--bs-border-color, #dee2e6);
 }
 
 .table-striped tbody tr:nth-of-type(odd) {
     background-color: rgba(0, 0, 0, 0.02);
+}
+
+[data-bs-theme="dark"] .table-striped tbody tr:nth-of-type(odd),
+[data-theme="dark"] .table-striped tbody tr:nth-of-type(odd) {
+    background-color: rgba(255, 255, 255, 0.02);
 }
 
 /* ========================================
@@ -50,24 +55,24 @@
 }
 
 .badge.bg-success {
-    background-color: #28a745 !important;
+    background-color: var(--bs-success, #28a745) !important;
 }
 
 .badge.bg-primary {
-    background-color: #007bff !important;
+    background-color: var(--bs-primary, #007bff) !important;
 }
 
 .badge.bg-info {
-    background-color: #17a2b8 !important;
+    background-color: var(--bs-info, #17a2b8) !important;
 }
 
 .badge.bg-warning {
-    background-color: #ffc107 !important;
+    background-color: var(--bs-warning, #ffc107) !important;
     color: #212529 !important;
 }
 
 .badge.bg-secondary {
-    background-color: #6c757d !important;
+    background-color: var(--bs-secondary, #6c757d) !important;
 }
 
 /* ========================================
@@ -75,14 +80,14 @@
 ======================================== */
 .form-label {
     font-weight: 500;
-    color: #495057;
+    color: var(--bs-body-color, #495057);
     margin-bottom: 0.3rem;
     font-size: 0.9rem;
 }
 
 .form-control:focus {
-    border-color: #80bdff;
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    border-color: var(--bs-primary, #80bdff);
+    box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb, 0, 123, 255), 0.25);
 }
 
 /* ========================================
@@ -112,25 +117,25 @@
 }
 
 .page-link {
-    color: #007bff;
+    color: var(--bs-primary, #007bff);
     border-radius: 6px;
     margin: 0 3px;
 }
 
 .page-item.active .page-link {
-    background-color: #007bff;
-    border-color: #007bff;
+    background-color: var(--bs-primary, #007bff);
+    border-color: var(--bs-primary, #007bff);
 }
 
 .page-link:hover {
-    background-color: #e9ecef;
+    background-color: var(--bs-tertiary-bg, #e9ecef);
 }
 
 /* ========================================
    Estados Vazios
 ======================================== */
 .text-muted {
-    color: #6c757d !important;
+    color: var(--bs-secondary-color, #6c757d) !important;
 }
 
 /* ========================================
@@ -143,16 +148,27 @@
 }
 
 .table-sm tbody tr:hover {
-    background-color: rgba(255, 193, 7, 0.1);
+    background-color: rgba(var(--bs-warning-rgb, 255, 193, 7), 0.1);
 }
 
 /* Cores para valor antes/depois */
 .text-danger {
-    color: #dc3545 !important;
+    color: var(--bs-danger, #dc3545) !important;
 }
 
 .text-success {
-    color: #28a745 !important;
+    color: var(--bs-success, #28a745) !important;
+}
+
+/* Dark mode - cores mais vibrantes */
+[data-bs-theme="dark"] .text-danger,
+[data-theme="dark"] .text-danger {
+    color: #f87171 !important;
+}
+
+[data-bs-theme="dark"] .text-success,
+[data-theme="dark"] .text-success {
+    color: #4ade80 !important;
 }
 
 /* ========================================
@@ -212,11 +228,11 @@ dl.row {
 
 dl.row dt {
     font-weight: 600;
-    color: #6c757d;
+    color: var(--bs-secondary-color, #6c757d);
 }
 
 dl.row dd {
-    color: #212529;
+    color: var(--bs-body-color, #212529);
 }
 
 /* ========================================
@@ -228,7 +244,7 @@ dl.row dd {
 }
 
 #info-periodo strong {
-    color: #495057;
+    color: var(--bs-body-color, #495057);
 }
 
 /* ========================================
@@ -240,13 +256,13 @@ dl.row dd {
 }
 
 .alert-info {
-    background-color: #d1ecf1;
-    color: #0c5460;
+    background-color: rgba(var(--bs-info-rgb, 13, 202, 240), 0.2);
+    color: var(--bs-info-text-emphasis, #0c5460);
 }
 
 .alert-secondary {
-    background-color: #e2e3e5;
-    color: #383d41;
+    background-color: var(--bs-secondary-bg, #e2e3e5);
+    color: var(--bs-secondary-text-emphasis, #383d41);
 }
 
 .alert-heading {
@@ -278,7 +294,7 @@ dl.row dd {
     top: 0;
     bottom: 0;
     width: 2px;
-    background: #dee2e6;
+    background: var(--bs-border-color, #dee2e6);
 }
 
 .timeline-item {
@@ -294,14 +310,14 @@ dl.row dd {
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    background: #007bff;
-    border: 2px solid #fff;
-    box-shadow: 0 0 0 3px #007bff33;
+    background: var(--bs-primary, #007bff);
+    border: 2px solid var(--bs-body-bg, #fff);
+    box-shadow: 0 0 0 3px rgba(var(--bs-primary-rgb, 0, 123, 255), 0.2);
 }
 
 .timeline-item:first-child::before {
-    background: #28a745;
-    box-shadow: 0 0 0 3px #28a74533;
+    background: var(--bs-success, #28a745);
+    box-shadow: 0 0 0 3px rgba(var(--bs-success-rgb, 40, 167, 69), 0.2);
 }
 
 .timeline-item .card {
@@ -310,8 +326,8 @@ dl.row dd {
 }
 
 .timeline-item .card-header {
-    background-color: #f8f9fa;
-    border-bottom: 2px solid #dee2e6;
+    background-color: var(--bs-tertiary-bg, #f8f9fa);
+    border-bottom: 2px solid var(--bs-border-color, #dee2e6);
     font-weight: 500;
 }
 

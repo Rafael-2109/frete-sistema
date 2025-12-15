@@ -5,61 +5,73 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='manufatura/requisicoes_compras/css/requisicoes-compras.css') }}">
 <style>
-    .req-card {
-        margin-bottom: 0.5rem;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-    .req-card .card-header {
-        padding: 0.5rem 1rem;
-        background-color: #c9dbec;
-        border-bottom: 1px solid #8696a7;
-    }
-    .req-card .card-body {
-        padding: 0;
-    }
-    .linha-produto {
-        cursor: pointer;
-        transition: background-color 0.2s;
-    }
-    .linha-produto:hover {
-        background-color: rgba(0,123,255,0.05);
-    }
-    .table-linhas {
-        margin-bottom: 0;
-        font-size: 0.9rem;
-    }
-    .table-linhas th {
-        font-weight: 600;
-        background-color: #e6f1fd;
-        padding: 0.5rem;
-        border-bottom: 2px solid #dee2e6;
-    }
-    .table-linhas td {
-        padding: 0.5rem;
-        vertical-align: middle;
-    }
-    .btn-toggle-projecao {
-        padding: 0;
-        width: 24px;
-        height: 24px;
-        line-height: 1;
-        color: #6c757d;
-    }
-    .btn-toggle-projecao:hover {
-        color: #0d6efd;
-    }
-    .projecao-row td {
-        background-color: #f8f9fa;
-        border-top: none !important;
-    }
+/* ==========================================================================
+   REQUISICOES COMPRAS - Theme-aware Styles
+   ========================================================================== */
+
+.req-card {
+    margin-bottom: 0.5rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+.req-card .card-header {
+    padding: 0.5rem 1rem;
+    background-color: var(--bs-tertiary-bg);
+    border-bottom: 1px solid var(--bs-border-color);
+}
+.req-card .card-body {
+    padding: 0;
+}
+.linha-produto {
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+.linha-produto:hover {
+    background-color: rgba(var(--bs-primary-rgb), 0.05);
+}
+.table-linhas {
+    margin-bottom: 0;
+    font-size: 0.9rem;
+}
+.table-linhas th {
+    font-weight: 600;
+    background-color: var(--bs-tertiary-bg);
+    padding: 0.5rem;
+    border-bottom: 2px solid var(--bs-border-color);
+    color: var(--bs-body-color);
+}
+.table-linhas td {
+    padding: 0.5rem;
+    vertical-align: middle;
+}
+.btn-toggle-projecao {
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    line-height: 1;
+    color: var(--bs-secondary-color);
+}
+.btn-toggle-projecao:hover {
+    color: var(--bs-primary);
+}
+.projecao-row td {
+    background-color: var(--bs-tertiary-bg);
+    border-top: none !important;
+}
+.projecao-content-wrapper {
+    background-color: var(--bs-tertiary-bg);
+}
+.badge-tipo-unknown {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid mt-4">
+<div class="container-fluid mt-4 premium-page">
 
     <!-- Header -->
-    <div class="row mb-4">
+    <div class="row mb-4 reveal">
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
@@ -251,7 +263,7 @@
                                     {% elif linha.purchase_state == 'cancel' %}
                                     <span class="badge bg-danger">Cancelado</span>
                                     {% elif linha.purchase_state and linha.purchase_state != False %}
-                                    <span class="badge bg-light text-dark">{{ linha.purchase_state }}</span>
+                                    <span class="badge badge-tipo-unknown">{{ linha.purchase_state }}</span>
                                     {% else %}
                                     <span class="text-muted">-</span>
                                     {% endif %}
@@ -299,7 +311,7 @@
                             {% if linha.data_necessidade %}
                             <tr class="projecao-row collapse" id="projecao-{{ linha.id }}">
                                 <td colspan="8" class="p-0">
-                                    <div class="p-3 bg-light">
+                                    <div class="p-3 projecao-content-wrapper">
                                         <div class="d-flex justify-content-end align-items-center mb-2">
                                             <span class="spinner-border spinner-border-sm text-primary loading-spinner" role="status">
                                                 <span class="visually-hidden">Carregando...</span>

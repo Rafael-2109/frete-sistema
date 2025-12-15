@@ -4,21 +4,17 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/financeiro/extrato.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/financeiro/premium-effects.css') }}">
 {% endblock %}
 
 {% block content %}
-<!-- Aurora Background Effect -->
-<div class="aurora-bg"></div>
-
-<div class="extrato-container premium grain-overlay">
+<div class="extrato-container premium premium-page">
     <!-- ================================================================== -->
     <!-- HEADER -->
     <!-- ================================================================== -->
     <header class="extrato-header reveal">
         <div>
-            <h1 class="extrato-header__title text-gradient-animated">
-                <i class="fas fa-university text-glow"></i>
+            <h1 class="extrato-header__title">
+                <i class="fas fa-university"></i>
                 Extratos Bancários
             </h1>
             <p class="extrato-header__subtitle">
@@ -46,7 +42,7 @@
     <!-- ================================================================== -->
     <div class="fin-stats-unified stagger-children">
         <!-- RECEBIMENTOS (3 cards) -->
-        <div class="fin-stat-unified fin-stat-unified--rec spotlight">
+        <div class="fin-stat-unified fin-stat-unified--rec">
             <div class="fin-stat-unified__header">
                 <i class="fas fa-arrow-down fin-stat-unified__icon fin-stat-unified__icon--rec"></i>
                 <span class="fin-stat-unified__label fin-stat-unified__label--rec">Recebimentos</span>
@@ -57,7 +53,7 @@
                 <small class="fin-stat-unified__detail-text">{{ stats_recebimentos.total_linhas }} linhas</small>
             </div>
         </div>
-        <div class="fin-stat-unified spotlight">
+        <div class="fin-stat-unified">
             <div class="fin-stat-unified__value fin-stat-unified__value--compact">{{ stats_recebimentos.lotes_pendentes }}</div>
             <div class="fin-stat-unified__title">Pend. Concil.</div>
             <div class="fin-stat-unified__detail">
@@ -65,7 +61,7 @@
                 <small class="fin-stat-unified__detail-text">{{ pct_rec }}% concil.</small>
             </div>
         </div>
-        <div class="fin-stat-unified spotlight">
+        <div class="fin-stat-unified">
             <div class="fin-stat-unified__value fin-stat-unified__value--compact" id="statPendentesRecebimentos">
                 <i class="fas fa-spinner fa-spin"></i>
             </div>
@@ -73,7 +69,7 @@
         </div>
 
         <!-- PAGAMENTOS (3 cards) -->
-        <div class="fin-stat-unified fin-stat-unified--pag spotlight">
+        <div class="fin-stat-unified fin-stat-unified--pag">
             <div class="fin-stat-unified__header">
                 <i class="fas fa-arrow-up fin-stat-unified__icon fin-stat-unified__icon--pag"></i>
                 <span class="fin-stat-unified__label fin-stat-unified__label--pag">Pagamentos</span>
@@ -84,7 +80,7 @@
                 <small class="fin-stat-unified__detail-text">{{ stats_pagamentos.total_linhas }} linhas</small>
             </div>
         </div>
-        <div class="fin-stat-unified spotlight">
+        <div class="fin-stat-unified">
             <div class="fin-stat-unified__value fin-stat-unified__value--compact">{{ stats_pagamentos.lotes_pendentes }}</div>
             <div class="fin-stat-unified__title">Pend. Concil.</div>
             <div class="fin-stat-unified__detail">
@@ -92,7 +88,7 @@
                 <small class="fin-stat-unified__detail-text">{{ pct_pag }}% concil.</small>
             </div>
         </div>
-        <div class="fin-stat-unified spotlight">
+        <div class="fin-stat-unified">
             <div class="fin-stat-unified__value fin-stat-unified__value--compact" id="statPendentesPagamentos">
                 <i class="fas fa-spinner fa-spin"></i>
             </div>
@@ -362,8 +358,7 @@
                 </table>
             </div>
 
-            <!-- Paginação -->
-            {% if total_pages > 1 %}
+            <!-- Paginação - sempre mostra info e seletor de per_page -->
             <div class="extrato-pagination">
                 <div class="extrato-pagination__info">
                     Mostrando <strong>{{ ((page - 1) * per_page) + 1 }}</strong> a
@@ -379,6 +374,7 @@
                     </select>
                     por página
                 </div>
+                {% if total_pages > 1 %}
                 <nav class="extrato-pagination__nav" aria-label="Paginação de extratos">
                     {% if page > 1 %}
                     <a href="{{ url_for('financeiro.extrato_hub', page=page-1, data_de=filtro_data_de, data_ate=filtro_data_ate, status=filtro_status, journal=filtro_journal, per_page=per_page) }}"
@@ -413,8 +409,8 @@
                     </button>
                     {% endif %}
                 </nav>
+                {% endif %}
             </div>
-            {% endif %}
         </div>
     </section>
 
@@ -500,5 +496,4 @@
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/financeiro/extrato.js') }}"></script>
-<script src="{{ url_for('static', filename='js/financeiro/premium-effects.js') }}"></script>
 {% endblock %}

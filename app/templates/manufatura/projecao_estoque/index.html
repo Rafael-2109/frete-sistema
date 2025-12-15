@@ -2,9 +2,23 @@
 
 {% block title %}Projeção de Estoque - Componentes{% endblock %}
 
+{% block extra_css %}
+<style>
+/* Table thead theme-aware */
+.table-thead-theme {
+    background-color: var(--bs-tertiary-bg) !important;
+}
+.table-thead-theme th {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+    border-bottom: 2px solid var(--bs-border-color) !important;
+}
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid mt-4">
-    <div class="row mb-4">
+<div class="container-fluid mt-4 premium-page">
+    <div class="row mb-4 reveal">
         <div class="col-md-12">
             <h2><i class="bi bi-graph-up-arrow"></i> Projeção de Estoque - Componentes (60 dias)</h2>
             <p class="text-muted">Entradas (Pedidos + Saldo Requisições) vs Saídas (Consumo por BOM)</p>
@@ -137,7 +151,7 @@ function renderizarProjecaoUnica(projecao) {
             <h6>Projeção Diária (apenas dias com movimento):</h6>
             <div class="table-responsive">
                 <table class="table table-sm table-hover">
-                    <thead class="table-light">
+                    <thead class="table-thead-theme">
                         <tr>
                             <th>Data</th>
                             <th class="text-end">Est. Inicial</th>

@@ -1,68 +1,109 @@
-/* 🎯 WORKSPACE DE MONTAGEM DE CARGA */
+/* ==========================================================================
+   WORKSPACE DE MONTAGEM DE CARGA - Com Suporte a Dark/Light Mode
+   Usa CSS Variables do bootstrap-overrides.css e agrupados.css
+   ========================================================================== */
 
+/* ==========================================================================
+   CSS VARIABLES - Cores específicas do workspace
+   ========================================================================== */
+:root {
+    --ws-header-bg: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    --ws-lotes-bg: #f8f9fa;
+    --ws-produto-bg: #f8f9fa;
+    --ws-produto-hover: #e9ecef;
+    --ws-produto-selected: #e3f2fd;
+    --ws-produto-border: #1976d2;
+    --ws-totais-bg: linear-gradient(135deg, #f8f9fc 0%, #fff 100%);
+    --ws-border-color: #dee2e6;
+    --ws-scrollbar-track: #f1f1f1;
+    --ws-scrollbar-thumb: #007bff;
+    --ws-scrollbar-thumb-hover: #0056b3;
+    --ws-cardex-header-bg: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+}
+
+[data-bs-theme="dark"],
+[data-theme="dark"] {
+    --ws-header-bg: linear-gradient(135deg, var(--bs-primary) 0%, color-mix(in srgb, var(--bs-primary) 70%, black) 100%);
+    --ws-lotes-bg: var(--bs-secondary-bg);
+    --ws-produto-bg: var(--bs-tertiary-bg);
+    --ws-produto-hover: var(--bs-secondary-bg);
+    --ws-produto-selected: rgba(96, 165, 250, 0.15);
+    --ws-produto-border: var(--bs-primary);
+    --ws-totais-bg: linear-gradient(135deg, var(--bs-secondary-bg) 0%, var(--bs-body-bg) 100%);
+    --ws-border-color: var(--bs-border-color);
+    --ws-scrollbar-track: var(--bs-tertiary-bg);
+    --ws-scrollbar-thumb: var(--bs-primary);
+    --ws-scrollbar-thumb-hover: color-mix(in srgb, var(--bs-primary) 80%, white);
+    --ws-cardex-header-bg: linear-gradient(135deg, var(--bs-primary) 0%, color-mix(in srgb, var(--bs-primary) 70%, black) 100%);
+}
+
+/* ==========================================================================
+   WORKSPACE BASE
+   ========================================================================== */
 .workspace-montagem {
     border-radius: 0.5rem;
     box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.1);
     margin: 1rem 0;
-    /* Garantir que não seja coberto por outros elementos */
     position: relative;
     z-index: 1;
-}
-
-/* Estilos para seleção de produtos */
-.produto-origem {
-    transition: all 0.2s ease;
-    position: relative;
-}
-
-.produto-origem:hover {
-    background-color: rgba(0, 123, 255, 0.05) !important;
-}
-
-.produto-origem.selected {
-    background-color: #e3f2fd !important;
-    box-shadow: inset 0 0 0 2px #1976d2;
-}
-
-/* Garantir visibilidade dos lotes */
-.workspace-lotes {
-    min-height: 300px;
-    background-color: #f8f9fa;
-}
-
-.lotes-container {
-    min-height: 250px;
+    background-color: var(--bs-body-bg);
 }
 
 .workspace-header {
     border-radius: 0.5rem 0.5rem 0 0 !important;
+    background: var(--ws-header-bg) !important;
+    color: white;
 }
 
 .workspace-resumo {
     font-size: 0.9rem;
 }
 
-/* 📋 TABELA DE PRODUTOS */
+/* ==========================================================================
+   SELECAO DE PRODUTOS
+   ========================================================================== */
+.produto-origem {
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.produto-origem:hover {
+    background-color: var(--ws-produto-hover) !important;
+}
+
+.produto-origem.selected {
+    background-color: var(--ws-produto-selected) !important;
+    box-shadow: inset 0 0 0 2px var(--ws-produto-border);
+}
+
+/* ==========================================================================
+   AREA DE LOTES
+   ========================================================================== */
+.workspace-lotes {
+    background-color: var(--ws-lotes-bg);
+    border: 1px solid var(--ws-border-color);
+    border-radius: 0 0 0.5rem 0.5rem;
+    min-height: 300px;
+}
+
+.lotes-container {
+    min-height: 250px;
+}
+
+/* ==========================================================================
+   TABELA DE PRODUTOS
+   ========================================================================== */
 .workspace-produtos {
-    border-left: 1px solid #dee2e6;
-    border-right: 1px solid #dee2e6;
+    border-left: 1px solid var(--ws-border-color);
+    border-right: 1px solid var(--ws-border-color);
 }
 
 .workspace-produtos-table {
     margin-bottom: 0;
 }
 
-/* 🎯 COLUNAS CALCULADAS */
-.workspace-produtos-table .valor-calculado {
-    font-weight: 600;
-    font-size: 0.9rem;
-}
-
-.workspace-produtos-table .peso-calculado {
-    font-weight: 600;
-    font-size: 0.9rem;
-}
-
+.workspace-produtos-table .valor-calculado,
+.workspace-produtos-table .peso-calculado,
 .workspace-produtos-table .pallet-calculado {
     font-weight: 600;
     font-size: 0.9rem;
@@ -73,8 +114,8 @@
 }
 
 .workspace-produtos-table .qtd-editavel:focus {
-    border-color: #007bff;
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.25);
 }
 
 /* Input group para quantidade com saldo */
@@ -84,11 +125,15 @@
 }
 
 .workspace-produtos-table .input-group-text.text-warning {
-    background-color: #fff3cd;
-    border-color: #ffeaa7;
-    color: #856404;
+    background-color: rgba(255, 193, 7, 0.15);
+    border-color: var(--cart-badge-yellow, #ffc107);
+    color: var(--cart-badge-yellow, #856404);
 }
 
+[data-bs-theme="dark"] .workspace-produtos-table .input-group-text.text-warning,
+[data-theme="dark"] .workspace-produtos-table .input-group-text.text-warning {
+    background-color: rgba(252, 211, 77, 0.15);
+}
 
 .produto-info strong {
     font-size: 0.9rem;
@@ -98,51 +143,37 @@
     font-size: 0.8rem;
 }
 
-/* 📦 ÁREA DE LOTES */
-.workspace-lotes {
-    background: #f8f9fa;
-    border: 1px solid #dee2e6;
-    border-radius: 0 0 0.5rem 0.5rem;
-    min-height: 300px;
-}
-
-.lotes-container {
-    min-height: 250px;
-}
-
-/* 🎯 CARDS DE LOTE */
+/* ==========================================================================
+   CARDS DE LOTE
+   ========================================================================== */
 .lote-card {
-    border: 2px solid #e9ecef;
+    border: 2px solid var(--ws-border-color);
     transition: all 0.3s ease;
     min-height: 250px;
-    position: relative; /* Fix para posicionamento dos botões */
+    position: relative;
+    background-color: var(--bs-body-bg);
 }
 
 .lote-card .card-footer {
     position: relative;
     z-index: 1;
+    background-color: var(--bs-body-bg);
+    border-top: 1px solid var(--ws-border-color);
 }
 
 .lote-card:hover {
-    border-color: #007bff;
-    box-shadow: 0 0.25rem 0.5rem rgba(0, 123, 255, 0.15);
-}
-
-
-@keyframes pulse {
-    0% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.8; transform: scale(1.05); }
-    100% { opacity: 1; transform: scale(1); }
+    border-color: var(--bs-primary);
+    box-shadow: 0 0.25rem 0.5rem rgba(var(--bs-primary-rgb), 0.15);
 }
 
 .lote-card .card-header {
-    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%) !important;
+    background: var(--ws-header-bg) !important;
     border: none;
     color: white;
 }
 
 .lote-placeholder {
-    border: 2px dashed #6c757d;
+    border: 2px dashed var(--bs-secondary-color);
     background: transparent;
     cursor: pointer;
     transition: all 0.3s ease;
@@ -150,30 +181,33 @@
 }
 
 .lote-placeholder:hover {
-    border-color: #007bff;
-    background-color: rgba(0, 123, 255, 0.05);
+    border-color: var(--bs-primary);
+    background-color: rgba(var(--bs-primary-rgb), 0.05);
 }
 
-
-/* 📋 PRODUTOS NO LOTE */
+/* ==========================================================================
+   PRODUTOS NO LOTE
+   ========================================================================== */
 .produto-lote {
     padding: 0.25rem 0.5rem;
-    background: #f8f9fa;
+    background: var(--ws-produto-bg);
     border-radius: 0.25rem;
-    border-left: 3px solid #007bff;
+    border-left: 3px solid var(--bs-primary);
 }
 
 .produto-lote:hover {
-    background: #e9ecef;
+    background: var(--ws-produto-hover);
 }
 
 .produto-lote small {
     line-height: 1.2;
 }
 
-/* 📊 TOTAIS DO LOTE */
+/* ==========================================================================
+   TOTAIS DO LOTE
+   ========================================================================== */
 .totais-lote {
-    background: linear-gradient(135deg, #f8f9fc 0%, #fff 100%);
+    background: var(--ws-totais-bg);
     border-radius: 0.25rem;
     padding: 0.5rem;
 }
@@ -184,73 +218,42 @@
 
 .totais-lote small {
     font-size: 0.75rem;
-    color: #6c757d;
+    color: var(--bs-secondary-color);
 }
 
-/* 🎨 BADGES DE STATUS */
+/* ==========================================================================
+   BADGES DE STATUS
+   ========================================================================== */
 .workspace-produtos-table .badge {
     font-size: 0.75rem;
     padding: 0.25rem 0.5rem;
 }
 
-
-/* 📱 RESPONSIVIDADE */
-@media (max-width: 768px) {
-    .workspace-header .row {
-        text-align: center;
-    }
-    
-    .workspace-resumo {
-        margin-top: 0.5rem;
-    }
-    
-    .workspace-produtos-table {
-        font-size: 0.85rem;
-    }
-    
-    .lote-card {
-        margin-bottom: 1rem;
-    }
-    
-}
-
-@media (max-width: 576px) {
-    .workspace-produtos-table th:nth-child(4),
-    .workspace-produtos-table th:nth-child(5),
-    .workspace-produtos-table td:nth-child(4),
-    .workspace-produtos-table td:nth-child(5) {
-        display: none; /* Ocultar colunas extras em telas pequenas */
-    }
-    
-    .workspace-montagem {
-        margin: 0.5rem 0;
-    }
-    
-    .workspace-header {
-        padding: 1rem !important;
-    }
-    
-    .workspace-produtos,
-    .workspace-lotes {
-        padding: 1rem !important;
-    }
-}
-
-/* 🎯 ESTADOS ESPECIAIS */
+/* ==========================================================================
+   ESTADOS ESPECIAIS
+   ========================================================================== */
 .lote-card.sem-produtos {
     opacity: 0.8;
 }
 
 .lote-card.com-estoque .card-header {
-    background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%) !important;
+    background: linear-gradient(135deg, var(--cart-badge-success) 0%, color-mix(in srgb, var(--cart-badge-success) 80%, black) 100%) !important;
 }
 
 .lote-card.sem-estoque .card-header {
-    background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%) !important;
+    background: linear-gradient(135deg, var(--cart-badge-yellow) 0%, color-mix(in srgb, var(--cart-badge-yellow) 80%, black) 100%) !important;
     color: #212529 !important;
 }
 
-/* 🎨 ANIMAÇÕES */
+/* ==========================================================================
+   ANIMACOES
+   ========================================================================== */
+@keyframes pulse {
+    0% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.8; transform: scale(1.05); }
+    100% { opacity: 1; transform: scale(1); }
+}
+
 .lote-card {
     animation: slideInUp 0.3s ease-out;
 }
@@ -281,10 +284,12 @@
     }
 }
 
-/* 🎯 SCROLLBAR CUSTOMIZADA */
+/* ==========================================================================
+   SCROLLBAR CUSTOMIZADA
+   ========================================================================== */
 .workspace-montagem {
     scrollbar-width: thin;
-    scrollbar-color: #007bff #f1f1f1;
+    scrollbar-color: var(--ws-scrollbar-thumb) var(--ws-scrollbar-track);
 }
 
 .workspace-montagem::-webkit-scrollbar {
@@ -292,33 +297,41 @@
 }
 
 .workspace-montagem::-webkit-scrollbar-track {
-    background: #f1f1f1;
+    background: var(--ws-scrollbar-track);
     border-radius: 3px;
 }
 
 .workspace-montagem::-webkit-scrollbar-thumb {
-    background: #007bff;
+    background: var(--ws-scrollbar-thumb);
     border-radius: 3px;
 }
 
 .workspace-montagem::-webkit-scrollbar-thumb:hover {
-    background: #0056b3;
+    background: var(--ws-scrollbar-thumb-hover);
 }
 
-/* 📊 MODAL DE CARDEX */
+/* ==========================================================================
+   MODAL DE CARDEX
+   ========================================================================== */
 #modal-cardex .modal-dialog {
     max-width: 90vw;
 }
 
 #modal-cardex .modal-header {
-    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%) !important;
+    background: var(--ws-cardex-header-bg) !important;
+    color: white;
+}
+
+#modal-cardex .modal-content {
+    background-color: var(--bs-body-bg);
+    border-color: var(--ws-border-color);
 }
 
 .produto-cardex-header {
-    background: linear-gradient(135deg, #f8f9fc 0%, #fff 100%);
+    background: var(--ws-totais-bg);
     border-radius: 0.5rem;
     padding: 1rem;
-    border: 1px solid #e9ecef;
+    border: 1px solid var(--ws-border-color);
 }
 
 .cardex-resumo {
@@ -326,8 +339,9 @@
 }
 
 .cardex-resumo-visual .stat-card {
-    border: 1px solid rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--ws-border-color);
     transition: all 0.3s ease;
+    background-color: var(--bs-body-bg);
 }
 
 .cardex-resumo-visual .stat-card:hover {
@@ -335,8 +349,68 @@
     box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.1);
 }
 
+/* ==========================================================================
+   STAT-CARD - Melhoria de legibilidade no Dark Mode
+   ========================================================================== */
+
+/* Texto muted mais visível no dark mode */
+[data-bs-theme="dark"] .cardex-resumo-visual .stat-card .text-muted,
+[data-theme="dark"] .cardex-resumo-visual .stat-card .text-muted {
+    color: var(--bs-secondary-color) !important;
+    opacity: 0.9;
+}
+
+/* Cores semânticas mais vibrantes no dark mode para melhor contraste */
+[data-bs-theme="dark"] .cardex-resumo-visual .stat-card .text-success,
+[data-theme="dark"] .cardex-resumo-visual .stat-card .text-success {
+    color: #4ade80 !important; /* Verde mais brilhante */
+}
+
+[data-bs-theme="dark"] .cardex-resumo-visual .stat-card .text-warning,
+[data-theme="dark"] .cardex-resumo-visual .stat-card .text-warning {
+    color: #fbbf24 !important; /* Amarelo mais brilhante */
+}
+
+[data-bs-theme="dark"] .cardex-resumo-visual .stat-card .text-info,
+[data-theme="dark"] .cardex-resumo-visual .stat-card .text-info {
+    color: #38bdf8 !important; /* Cyan mais brilhante */
+}
+
+[data-bs-theme="dark"] .cardex-resumo-visual .stat-card .text-danger,
+[data-theme="dark"] .cardex-resumo-visual .stat-card .text-danger {
+    color: #f87171 !important; /* Vermelho mais brilhante */
+}
+
+/* Fundos bg-opacity-10 mais visíveis no dark mode */
+[data-bs-theme="dark"] .cardex-resumo-visual .stat-card.bg-success,
+[data-theme="dark"] .cardex-resumo-visual .stat-card.bg-success {
+    background-color: rgba(74, 222, 128, 0.15) !important;
+}
+
+[data-bs-theme="dark"] .cardex-resumo-visual .stat-card.bg-warning,
+[data-theme="dark"] .cardex-resumo-visual .stat-card.bg-warning {
+    background-color: rgba(251, 191, 36, 0.15) !important;
+}
+
+[data-bs-theme="dark"] .cardex-resumo-visual .stat-card.bg-info,
+[data-theme="dark"] .cardex-resumo-visual .stat-card.bg-info {
+    background-color: rgba(56, 189, 248, 0.15) !important;
+}
+
+[data-bs-theme="dark"] .cardex-resumo-visual .stat-card.bg-danger,
+[data-theme="dark"] .cardex-resumo-visual .stat-card.bg-danger {
+    background-color: rgba(248, 113, 113, 0.15) !important;
+}
+
+/* Headers h5 dentro dos stat-cards */
+[data-bs-theme="dark"] .cardex-resumo-visual .stat-card h5,
+[data-theme="dark"] .cardex-resumo-visual .stat-card h5 {
+    font-weight: 700;
+    text-shadow: 0 0 10px currentColor;
+}
+
 .cardex-tabela {
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--ws-border-color);
     border-radius: 0.5rem;
     overflow: hidden;
 }
@@ -346,11 +420,12 @@
 }
 
 .cardex-tabela thead th {
-    border-bottom: 2px solid #495057;
+    border-bottom: 2px solid var(--bs-secondary-color);
     font-weight: 600;
     font-size: 0.85rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    background-color: var(--bs-tertiary-bg);
 }
 
 .cardex-tabela tbody td {
@@ -359,24 +434,24 @@
 }
 
 .cardex-tabela .table-striped > tbody > tr:nth-of-type(odd) > td {
-    background-color: rgba(0, 0, 0, 0.02);
+    background-color: rgba(var(--bs-secondary-rgb), 0.05);
 }
 
 /* Status das linhas */
 .cardex-tabela .table-danger {
-    background-color: rgba(220, 53, 69, 0.1) !important;
+    background-color: rgba(var(--bs-danger-rgb), 0.1) !important;
 }
 
 .cardex-tabela .table-warning {
-    background-color: rgba(255, 193, 7, 0.1) !important;
+    background-color: rgba(var(--bs-warning-rgb), 0.1) !important;
 }
 
 /* Alertas do cardex */
 .cardex-alertas {
-    background: #f8f9fa;
+    background: var(--ws-lotes-bg);
     border-radius: 0.5rem;
     padding: 1rem;
-    border: 1px solid #e9ecef;
+    border: 1px solid var(--ws-border-color);
 }
 
 .cardex-alertas .list-group-item {
@@ -384,21 +459,22 @@
     border-left: 4px solid transparent;
     margin-bottom: 0.5rem;
     border-radius: 0.375rem;
+    background-color: var(--bs-body-bg);
 }
 
 .cardex-alertas .list-group-item-danger {
-    border-left-color: #dc3545;
-    background-color: rgba(220, 53, 69, 0.1);
+    border-left-color: var(--bs-danger);
+    background-color: rgba(var(--bs-danger-rgb), 0.1);
 }
 
 .cardex-alertas .list-group-item-warning {
-    border-left-color: #ffc107;
-    background-color: rgba(255, 193, 7, 0.1);
+    border-left-color: var(--bs-warning);
+    background-color: rgba(var(--bs-warning-rgb), 0.1);
 }
 
 .cardex-alertas .list-group-item-info {
-    border-left-color: #0dcaf0;
-    background-color: rgba(13, 202, 240, 0.1);
+    border-left-color: var(--bs-info);
+    background-color: rgba(var(--bs-info-rgb), 0.1);
 }
 
 /* Badges especiais do cardex */
@@ -407,49 +483,29 @@
     padding: 0.25rem 0.5rem;
 }
 
-/* Responsividade do modal */
-@media (max-width: 768px) {
-    #modal-cardex .modal-dialog {
-        max-width: 95vw;
-        margin: 0.5rem;
-    }
-    
-    .cardex-resumo-visual .col-3 {
-        margin-bottom: 1rem;
-    }
-    
-    .cardex-tabela {
-        font-size: 0.8rem;
-    }
-    
-    .cardex-tabela th:nth-child(3),
-    .cardex-tabela th:nth-child(4),
-    .cardex-tabela td:nth-child(3),
-    .cardex-tabela td:nth-child(4) {
-        display: none; /* Ocultar colunas em mobile */
-    }
+/* Scrollbar da tabela */
+.cardex-tabela .table-responsive::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
 }
 
-@media (max-width: 576px) {
-    .cardex-resumo-visual .row {
-        flex-direction: column;
-    }
-    
-    .cardex-resumo-visual .col-3 {
-        flex: 0 0 100%;
-        max-width: 100%;
-    }
-    
-    .produto-cardex-header .row {
-        text-align: center;
-    }
-    
-    .cardex-resumo {
-        margin-top: 1rem;
-    }
+.cardex-tabela .table-responsive::-webkit-scrollbar-track {
+    background: var(--ws-scrollbar-track);
+    border-radius: 4px;
 }
 
-/* Animações do modal */
+.cardex-tabela .table-responsive::-webkit-scrollbar-thumb {
+    background: var(--ws-scrollbar-thumb);
+    border-radius: 4px;
+}
+
+.cardex-tabela .table-responsive::-webkit-scrollbar-thumb:hover {
+    background: var(--ws-scrollbar-thumb-hover);
+}
+
+/* ==========================================================================
+   ANIMACOES DO MODAL
+   ========================================================================== */
 #modal-cardex .modal-content {
     animation: modalSlideIn 0.3s ease-out;
 }
@@ -480,32 +536,107 @@
     }
 }
 
-/* Scrollbar da tabela */
-.cardex-tabela .table-responsive::-webkit-scrollbar {
-    height: 8px;
-    width: 8px;
-}
-
-.cardex-tabela .table-responsive::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 4px;
-}
-
-.cardex-tabela .table-responsive::-webkit-scrollbar-thumb {
-    background: #007bff;
-    border-radius: 4px;
-}
-
-.cardex-tabela .table-responsive::-webkit-scrollbar-thumb:hover {
-    background: #0056b3;
-}
-
-/* 🎯 ANIMAÇÕES DE FEEDBACK */
+/* ==========================================================================
+   ANIMACOES DE FEEDBACK
+   ========================================================================== */
 @keyframes slideIn {
     from { transform: translateX(100%); opacity: 0; }
     to { transform: translateX(0); opacity: 1; }
 }
+
 @keyframes slideOut {
     from { transform: translateX(0); opacity: 1; }
     to { transform: translateX(100%); opacity: 0; }
+}
+
+/* ==========================================================================
+   RESPONSIVIDADE
+   ========================================================================== */
+@media (max-width: 768px) {
+    .workspace-header .row {
+        text-align: center;
+    }
+
+    .workspace-resumo {
+        margin-top: 0.5rem;
+    }
+
+    .workspace-produtos-table {
+        font-size: 0.85rem;
+    }
+
+    .lote-card {
+        margin-bottom: 1rem;
+    }
+
+    #modal-cardex .modal-dialog {
+        max-width: 95vw;
+        margin: 0.5rem;
+    }
+
+    .cardex-resumo-visual .col-3 {
+        margin-bottom: 1rem;
+    }
+
+    .cardex-tabela {
+        font-size: 0.8rem;
+    }
+
+    .cardex-tabela th:nth-child(3),
+    .cardex-tabela th:nth-child(4),
+    .cardex-tabela td:nth-child(3),
+    .cardex-tabela td:nth-child(4) {
+        display: none;
+    }
+}
+
+@media (max-width: 576px) {
+    .workspace-produtos-table th:nth-child(4),
+    .workspace-produtos-table th:nth-child(5),
+    .workspace-produtos-table td:nth-child(4),
+    .workspace-produtos-table td:nth-child(5) {
+        display: none;
+    }
+
+    .workspace-montagem {
+        margin: 0.5rem 0;
+    }
+
+    .workspace-header {
+        padding: 1rem !important;
+    }
+
+    .workspace-produtos,
+    .workspace-lotes {
+        padding: 1rem !important;
+    }
+
+    .cardex-resumo-visual .row {
+        flex-direction: column;
+    }
+
+    .cardex-resumo-visual .col-3 {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+
+    .produto-cardex-header .row {
+        text-align: center;
+    }
+
+    .cardex-resumo {
+        margin-top: 1rem;
+    }
+}
+
+/* ==========================================================================
+   ACESSIBILIDADE - Preferencia de movimento reduzido
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+    .lote-card,
+    .produto-lote,
+    .stat-card,
+    #modal-cardex .modal-content {
+        animation: none !important;
+    }
 }

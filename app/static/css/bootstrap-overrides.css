@@ -5,7 +5,7 @@
    ========================================================================== */
 
 /* === FONTS === */
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 /* === PREVENT GITHUB-CLONE SYNDROME === */
 /* Bootstrap 5.3+ uses CSS variables - override them ALL */
@@ -414,6 +414,231 @@ input[type="time"].form-control {
 }
 
 /* ==========================================================================
+   INLINE STYLE OVERRIDE - FORCE THEME COLORS
+   Sobrescreve estilos inline hardcoded (style="background-color: #xxx")
+   que não respeitam o sistema de variáveis CSS
+   ========================================================================== */
+
+/*
+ * PROBLEMA: Templates usam style="color: #212529; background-color: #ffc107;"
+ * que são cores do Bootstrap padrão, não do nosso sistema de variáveis.
+ *
+ * SOLUÇÃO: Usar seletores de alta especificidade com [style*=] para
+ * sobrescrever estilos inline.
+ */
+
+/* --- SUCCESS (#28a745, #198754) → var(--bs-success) --- */
+.badge[style*="background-color: #28a745"],
+.badge[style*="background-color:#28a745"],
+.badge[style*="background-color: #198754"],
+.badge[style*="background-color:#198754"],
+span[style*="background-color: #28a745"],
+span[style*="background-color:#28a745"] {
+    background-color: var(--bs-success) !important;
+    color: #ffffff !important;
+}
+
+/* --- WARNING (#ffc107) → var(--bs-warning) --- */
+/* CRÍTICO: No tema light, --bs-warning é #b45309 (escuro), requer texto branco */
+.badge[style*="background-color: #ffc107"],
+.badge[style*="background-color:#ffc107"],
+span[style*="background-color: #ffc107"],
+span[style*="background-color:#ffc107"] {
+    background-color: var(--bs-warning) !important;
+    color: #ffffff !important;
+}
+
+/* --- DANGER (#dc3545) → var(--bs-danger) --- */
+.badge[style*="background-color: #dc3545"],
+.badge[style*="background-color:#dc3545"],
+span[style*="background-color: #dc3545"],
+span[style*="background-color:#dc3545"] {
+    background-color: var(--bs-danger) !important;
+    color: #ffffff !important;
+}
+
+/* --- INFO (#17a2b8) → var(--bs-info) --- */
+.badge[style*="background-color: #17a2b8"],
+.badge[style*="background-color:#17a2b8"],
+span[style*="background-color: #17a2b8"],
+span[style*="background-color:#17a2b8"] {
+    background-color: var(--bs-info) !important;
+    color: #ffffff !important;
+}
+
+/* --- PRIMARY (#007bff) → var(--bs-primary) --- */
+.badge[style*="background-color: #007bff"],
+.badge[style*="background-color:#007bff"],
+span[style*="background-color: #007bff"],
+span[style*="background-color:#007bff"] {
+    background-color: var(--bs-primary) !important;
+    color: #ffffff !important;
+}
+
+/* --- SECONDARY (#6c757d) → var(--bs-secondary) --- */
+.badge[style*="background-color: #6c757d"],
+.badge[style*="background-color:#6c757d"],
+span[style*="background-color: #6c757d"],
+span[style*="background-color:#6c757d"] {
+    background-color: var(--bs-secondary) !important;
+    color: #ffffff !important;
+}
+
+/* --- DARK (#343a40) → usar secondary-bg --- */
+.badge[style*="background-color: #343a40"],
+.badge[style*="background-color:#343a40"],
+span[style*="background-color: #343a40"],
+span[style*="background-color:#343a40"] {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+    border: 1px solid var(--bs-border-color);
+}
+
+/* --- LIGHT backgrounds (#f8f9fa, #fff, #f1f3f5) --- */
+/* No dark mode, estes precisam de ajuste */
+.badge[style*="background-color: #f8f9fa"],
+.badge[style*="background-color:#f8f9fa"],
+span[style*="background-color: #f8f9fa"],
+span[style*="background-color:#f8f9fa"],
+.badge[style*="background-color: #fff"],
+.badge[style*="background-color:#fff"] {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+}
+
+/* ==========================================================================
+   STATUS BADGE CLASSES - USE THESE INSTEAD OF INLINE STYLES
+   Classes centralizadas para badges de status em todo o sistema
+   ========================================================================== */
+
+/* Base para todos os badges de status */
+.badge-status {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.35em 0.65em;
+    border-radius: 0.375rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+/* PENDENTE - Warning (amber) */
+.badge-status-pendente,
+.badge-pendente {
+    background-color: var(--bs-warning) !important;
+    color: #ffffff !important;
+}
+
+/* EM TRATATIVA - Info (sky blue) */
+.badge-status-tratativa,
+.badge-tratativa,
+.badge-em-tratativa {
+    background-color: var(--bs-info) !important;
+    color: #ffffff !important;
+}
+
+/* APROVADO - Success (emerald) */
+.badge-status-aprovado,
+.badge-aprovado {
+    background-color: var(--bs-success) !important;
+    color: #ffffff !important;
+}
+
+/* REJEITADO / REPROVADO - Danger (red) */
+.badge-status-rejeitado,
+.badge-status-reprovado,
+.badge-rejeitado,
+.badge-reprovado {
+    background-color: var(--bs-danger) !important;
+    color: #ffffff !important;
+}
+
+/* PAGO / LANÇADO - Primary (teal) */
+.badge-status-pago,
+.badge-status-lancado,
+.badge-pago,
+.badge-lancado {
+    background-color: var(--bs-primary) !important;
+    color: #ffffff !important;
+}
+
+/* CANCELADO / INATIVO - Secondary */
+.badge-status-cancelado,
+.badge-status-inativo,
+.badge-cancelado,
+.badge-inativo {
+    background-color: var(--bs-secondary) !important;
+    color: #ffffff !important;
+}
+
+/* CONFERIDO - Success */
+.badge-status-conferido,
+.badge-conferido {
+    background-color: var(--bs-success) !important;
+    color: #ffffff !important;
+}
+
+/* RASCUNHO - Light with border */
+.badge-status-rascunho,
+.badge-rascunho {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+    border: 1px solid var(--bs-border-color);
+}
+
+/* CONCLUIDO - Success subtle */
+.badge-status-concluido,
+.badge-concluido {
+    background-color: rgba(var(--bs-success-rgb), 0.15) !important;
+    color: var(--bs-success) !important;
+    border: 1px solid var(--bs-success);
+}
+
+/* ==========================================================================
+   FORCE CORRECT TEXT COLOR ON BG-* CLASSES
+   Garante texto legível em badges com classes bg-*
+   ========================================================================== */
+
+/* Warning sempre precisa de texto branco (fundo é escuro no light mode) */
+.badge.bg-warning,
+span.badge.bg-warning {
+    color: #ffffff !important;
+}
+
+/* Todos os outros bg-* também precisam de texto branco para consistência */
+.badge.bg-success,
+.badge.bg-danger,
+.badge.bg-info,
+.badge.bg-primary,
+.badge.bg-secondary,
+.badge.bg-dark {
+    color: #ffffff !important;
+}
+
+/* bg-light precisa de texto escuro no light mode e claro no dark mode */
+.badge.bg-light {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+    border: 1px solid var(--bs-border-color);
+}
+
+/* ==========================================================================
+   TD/CELL INLINE STYLE OVERRIDE
+   Sobrescreve estilos inline em células de tabela
+   ========================================================================== */
+
+td[style*="background-color: #198754"],
+td[style*="background-color:#198754"] {
+    background-color: var(--bs-success) !important;
+    color: #ffffff !important;
+}
+
+td[style*="background-color: #f8f9fa"],
+td[style*="background-color:#f8f9fa"] {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+}
+
+/* ==========================================================================
    MODAL ENHANCEMENT
    ========================================================================== */
 
@@ -585,4 +810,277 @@ input[type="time"].form-control {
 [data-theme="light"] .card {
     background: var(--bs-body-bg);
     border-color: var(--bs-border-color);
+}
+
+/* ==========================================================================
+   BOOTSTRAP COLOR UTILITY FIXES FOR DARK MODE
+   Inverte classes de cor que ficam ilegíveis no dark mode
+   ========================================================================== */
+
+/* text-dark: No dark mode, usar cor de texto principal (clara) */
+[data-bs-theme="dark"] .text-dark,
+[data-theme="dark"] .text-dark {
+    color: var(--bs-body-color) !important;
+}
+
+/* bg-light com text-dark: Ajustar background também */
+[data-bs-theme="dark"] .bg-light,
+[data-theme="dark"] .bg-light {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+}
+
+/* bg-light + text-dark em badges e elementos pequenos */
+[data-bs-theme="dark"] .badge.bg-light,
+[data-theme="dark"] .badge.bg-light {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+    border: 1px solid var(--bs-border-color);
+}
+
+/* bg-white: No dark mode, usar fundo do tema */
+[data-bs-theme="dark"] .bg-white,
+[data-theme="dark"] .bg-white {
+    background-color: var(--bs-secondary-bg) !important;
+    color: var(--bs-body-color) !important;
+}
+
+/* card-header com bg-white no dark mode */
+[data-bs-theme="dark"] .card-header.bg-white,
+[data-theme="dark"] .card-header.bg-white {
+    background-color: var(--bs-tertiary-bg) !important;
+    border-bottom-color: var(--bs-border-color) !important;
+}
+
+/* table-light: No dark mode, usar cor escura adaptada */
+[data-bs-theme="dark"] .table-light,
+[data-theme="dark"] .table-light,
+[data-bs-theme="dark"] thead.table-light,
+[data-theme="dark"] thead.table-light {
+    --bs-table-bg: var(--bs-tertiary-bg) !important;
+    --bs-table-color: var(--bs-body-color) !important;
+    --bs-table-border-color: var(--bs-border-color) !important;
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+}
+
+[data-bs-theme="dark"] .table-light th,
+[data-theme="dark"] .table-light th,
+[data-bs-theme="dark"] thead.table-light th,
+[data-theme="dark"] thead.table-light th {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+    border-color: var(--bs-border-color) !important;
+}
+
+/* table-success: Manter legível no dark mode */
+[data-bs-theme="dark"] .table-success,
+[data-theme="dark"] .table-success {
+    --bs-table-bg: rgba(16, 185, 129, 0.15);
+    --bs-table-color: var(--bs-body-color);
+    --bs-table-border-color: var(--bs-border-color);
+}
+
+/* ==========================================================================
+   FLASH MESSAGES / ALERTS ENHANCEMENT
+   ========================================================================== */
+
+.alert {
+    border: none;
+    border-radius: var(--bs-border-radius);
+    padding: 1rem 1.25rem;
+    border-left: 4px solid;
+    animation: alertSlideIn 0.3s ease-out;
+    position: relative;
+}
+
+@keyframes alertSlideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.alert .btn-close {
+    position: absolute;
+    right: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 0.5rem;
+}
+
+/* ==========================================================================
+   SCROLLBAR CUSTOMIZATION
+   ========================================================================== */
+
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bs-tertiary-bg);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--bs-border-color);
+    border-radius: 4px;
+    transition: background 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--bs-secondary-color);
+}
+
+/* Firefox */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--bs-border-color) var(--bs-tertiary-bg);
+}
+
+/* ==========================================================================
+   UTILITY ANIMATIONS
+   ========================================================================== */
+
+/* Fade in up */
+.animate-fade-in {
+    animation: fadeInUp 0.5s ease-out;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Staggered children animation */
+.stagger-children > * {
+    animation: fadeInUp 0.4s ease-out backwards;
+}
+
+.stagger-children > *:nth-child(1) { animation-delay: 0.05s; }
+.stagger-children > *:nth-child(2) { animation-delay: 0.1s; }
+.stagger-children > *:nth-child(3) { animation-delay: 0.15s; }
+.stagger-children > *:nth-child(4) { animation-delay: 0.2s; }
+.stagger-children > *:nth-child(5) { animation-delay: 0.25s; }
+.stagger-children > *:nth-child(6) { animation-delay: 0.3s; }
+
+/* Pulse animation */
+.animate-pulse {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* ==========================================================================
+   DROPDOWN ENHANCEMENT (Global)
+   ========================================================================== */
+
+.dropdown-menu {
+    background-color: var(--bs-secondary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    padding: 0.5rem;
+    animation: dropdownFadeIn 0.15s ease-out;
+}
+
+@keyframes dropdownFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.dropdown-item {
+    color: var(--bs-body-color);
+    padding: 0.5rem 1rem;
+    border-radius: var(--bs-border-radius-sm);
+    transition: all 0.15s ease;
+    font-size: 0.875rem;
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus {
+    background-color: rgba(var(--bs-primary-rgb), 0.1);
+    color: var(--bs-primary);
+}
+
+.dropdown-item.active,
+.dropdown-item:active {
+    background-color: var(--bs-primary);
+    color: #0a1628;
+}
+
+.dropdown-item i {
+    width: 1.25rem;
+    text-align: center;
+    margin-right: 0.5rem;
+    opacity: 0.7;
+}
+
+.dropdown-item:hover i {
+    opacity: 1;
+}
+
+.dropdown-header {
+    color: var(--bs-secondary-color);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 0.5rem 1rem 0.25rem;
+}
+
+.dropdown-divider {
+    border-color: var(--bs-border-color);
+    margin: 0.5rem 0;
+    opacity: 0.5;
+}
+
+/* ==========================================================================
+   PRINT STYLES
+   ========================================================================== */
+
+@media print {
+    body {
+        background: white !important;
+        color: black !important;
+    }
+
+    .card {
+        border: 1px solid #ddd !important;
+        box-shadow: none !important;
+    }
+
+    .card::after {
+        display: none;
+    }
+
+    .btn {
+        border: 1px solid #ddd !important;
+    }
+
+    .navbar,
+    .btn-close,
+    .dropdown-menu {
+        display: none !important;
+    }
 }

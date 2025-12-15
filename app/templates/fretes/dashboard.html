@@ -2,6 +2,111 @@
 
 {% block title %}Sistema de Fretes - Dashboard{% endblock %}
 
+{% block extra_css %}
+<style>
+/* ==========================================================================
+   FRETES DASHBOARD - Theme-aware Status Badges
+   ========================================================================== */
+
+/* Badge base com variáveis de cor */
+.badge-status {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.35em 0.65em;
+    border-radius: 0.375rem;
+}
+
+/* Status: PENDENTE - Amarelo */
+.badge-status-pendente {
+    background-color: var(--bs-warning) !important;
+    color: #ffffff !important;
+}
+
+/* Status: EM_TRATATIVA - Info/Cyan */
+.badge-status-tratativa {
+    background-color: var(--bs-info) !important;
+    color: #fff !important;
+}
+
+/* Status: APROVADO - Verde */
+.badge-status-aprovado {
+    background-color: var(--bs-success) !important;
+    color: #fff !important;
+}
+
+/* Status: REJEITADO - Vermelho */
+.badge-status-rejeitado {
+    background-color: var(--bs-danger) !important;
+    color: #fff !important;
+}
+
+/* Status: PAGO - Primário */
+.badge-status-pago {
+    background-color: var(--bs-primary) !important;
+    color: #0a1628 !important;
+}
+
+/* Status: LANCADO - Escuro com suporte a tema */
+.badge-status-lancado {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+    border: 1px solid var(--bs-border-color);
+}
+
+/* Status: CANCELADO - Secundário */
+.badge-status-cancelado {
+    background-color: var(--bs-secondary) !important;
+    color: #fff !important;
+}
+
+/* ==========================================================================
+   BOTÕES - Theme-aware fixes
+   ========================================================================== */
+
+/* btn-dark no dark mode precisa de borda para visibilidade */
+[data-bs-theme="dark"] .btn-dark,
+[data-theme="dark"] .btn-dark {
+    background-color: var(--bs-tertiary-bg) !important;
+    border-color: var(--bs-border-color) !important;
+    color: var(--bs-body-color) !important;
+}
+
+[data-bs-theme="dark"] .btn-dark:hover,
+[data-theme="dark"] .btn-dark:hover {
+    background-color: var(--bs-secondary-bg) !important;
+    border-color: var(--bs-primary) !important;
+    color: var(--bs-primary) !important;
+}
+
+/* ==========================================================================
+   THEAD - Theme-aware
+   ========================================================================== */
+.table-thead-theme {
+    background-color: var(--bs-tertiary-bg) !important;
+}
+
+.table-thead-theme th {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+    border-bottom: 2px solid var(--bs-border-color) !important;
+    font-weight: 600;
+}
+
+/* ==========================================================================
+   CARD HEADER - Theme-aware
+   ========================================================================== */
+.card-header-theme {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+    border-bottom: 1px solid var(--bs-border-color) !important;
+}
+
+.card-header-theme .card-title {
+    color: var(--bs-body-color) !important;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
     <div class="row">
@@ -195,7 +300,7 @@
     <div class="row">
         <div class="col-12">
             <div class="card">
-                <div class="card-header">
+                <div class="card-header card-header-theme">
                     <h5 class="card-title mb-0">
                         <i class="fas fa-history"></i> Fretes Recentes
                     </h5>
@@ -203,8 +308,8 @@
                 <div class="card-body">
                     {% if fretes_recentes %}
                         <div class="table-responsive">
-                            <table class="table table-sm">
-                                <thead>
+                            <table class="table table-sm table-hover">
+                                <thead class="table-thead-theme">
                                     <tr>
                                         <th>Frete</th>
                                         <th>Cliente</th>
@@ -234,21 +339,21 @@
                                         <td>{{ (frete.valor_cotado)|moeda_carteira }}</td>
                                         <td>
                                             {% if frete.status == 'PENDENTE' %}
-                                                <span class="badge" style="background-color: #ffc107; color: #212529;">Pendente</span>
+                                                <span class="badge badge-status badge-status-pendente">Pendente</span>
                                             {% elif frete.status == 'EM_TRATATIVA' %}
-                                                <span class="badge" style="background-color: #17a2b8; color: white;">Em Tratativa</span>
+                                                <span class="badge badge-status badge-status-tratativa">Em Tratativa</span>
                                             {% elif frete.status == 'APROVADO' %}
-                                                <span class="badge" style="background-color: #28a745; color: white;">Aprovado</span>
+                                                <span class="badge badge-status badge-status-aprovado">Aprovado</span>
                                             {% elif frete.status == 'REJEITADO' %}
-                                                <span class="badge" style="background-color: #dc3545; color: white;">Rejeitado</span>
+                                                <span class="badge badge-status badge-status-rejeitado">Rejeitado</span>
                                             {% elif frete.status == 'PAGO' %}
-                                                <span class="badge" style="background-color: #007bff; color: white;">Pago</span>
+                                                <span class="badge badge-status badge-status-pago">Pago</span>
                                             {% elif frete.status == 'LANCADO' %}
-                                                <span class="badge" style="background-color: #343a40; color: white;">Lançado</span>
+                                                <span class="badge badge-status badge-status-lancado">Lançado</span>
                                             {% elif frete.status == 'CANCELADO' %}
-                                                <span class="badge" style="background-color: #6c757d; color: white;">Cancelado</span>
+                                                <span class="badge badge-status badge-status-cancelado">Cancelado</span>
                                             {% else %}
-                                                <span class="badge" style="background-color: #6c757d; color: white;">{{ frete.status }}</span>
+                                                <span class="badge badge-status badge-status-cancelado">{{ frete.status }}</span>
                                             {% endif %}
                                         </td>
                                         <td>{{ frete.criado_em | formatar_data_hora_brasil }}</td>

@@ -4,97 +4,124 @@
 
 {% block extra_css %}
 <style>
-    .comparison-selector {
-        display: flex;
-        gap: 5px;
-        flex-wrap: wrap;
-    }
-    .comparison-selector button {
-        padding: 5px 12px;
-        font-size: 0.85rem;
-        border-radius: 20px;
-    }
-    .comparison-selector button.active {
-        background-color: #007bff;
-        color: white;
-    }
-    .editable-cell {
-        cursor: pointer;
-        position: relative;
-    }
-    .editable-cell:hover {
-        background-color: #f8f9fa;
-    }
-    .editable-cell input {
-        border: none;
-        background: transparent;
-        width: 100%;
-        text-align: right;
-        padding: 5px;
-    }
-    .editable-cell input:focus {
-        outline: 2px solid #007bff;
-        background: white;
-    }
-    .editable-select {
-        border: none;
-        background: transparent;
-        cursor: pointer;
-    }
-    .editable-select:focus {
-        outline: 2px solid #007bff;
-        background: white;
-    }
-    .comparison-header {
-        background-color: #f8f9fa;
-        font-weight: 600;
-    }
-    .grupo-restante {
-        font-style: italic;
-        color: #6c757d;
-    }
-    .save-indicator {
-        position: absolute;
-        right: -20px;
-        top: 50%;
-        transform: translateY(-50%);
-        color: #28a745;
-        display: none;
-    }
-    .save-indicator.show {
-        display: block;
-    }
-    .comparison-value {
-        color: #6c757d;
-        font-size: 0.9rem;
-    }
-    .previsto-value {
-        font-weight: 600;
-        color: #212529;
-    }
-    .table-sticky {
-        position: sticky;
-        left: 0;
-        background: white;
-        z-index: 10;
-    }
-    .sortable {
-        cursor: pointer;
-        user-select: none;
-    }
-    .sortable:hover {
-        background-color: #e9ecef;
-    }
-    .produto-info {
-        min-width: 200px;
-    }
-    .table-sortable thead th i {
-        font-size: 0.8rem;
-        opacity: 0.6;
-    }
-    .table-sortable thead th:hover i {
-        opacity: 1;
-    }
+/* ==========================================================================
+   PREVISAO DEMANDA - Theme-aware Styles
+   ========================================================================== */
+
+.comparison-selector {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+}
+.comparison-selector button {
+    padding: 5px 12px;
+    font-size: 0.85rem;
+    border-radius: 20px;
+}
+.comparison-selector button.active {
+    background-color: var(--bs-primary, #007bff);
+    color: white;
+}
+.editable-cell {
+    cursor: pointer;
+    position: relative;
+}
+.editable-cell:hover {
+    background-color: var(--bs-tertiary-bg, #f8f9fa);
+}
+.editable-cell input {
+    border: none;
+    background: transparent;
+    width: 100%;
+    text-align: right;
+    padding: 5px;
+    color: var(--bs-body-color);
+}
+.editable-cell input:focus {
+    outline: 2px solid var(--bs-primary, #007bff);
+    background: var(--bs-body-bg, white);
+}
+.editable-select {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: var(--bs-body-color);
+}
+.editable-select:focus {
+    outline: 2px solid var(--bs-primary, #007bff);
+    background: var(--bs-body-bg, white);
+}
+.comparison-header {
+    background-color: var(--bs-tertiary-bg, #f8f9fa) !important;
+    font-weight: 600;
+}
+.grupo-restante {
+    font-style: italic;
+    color: var(--bs-secondary-color, #6c757d);
+}
+.save-indicator {
+    position: absolute;
+    right: -20px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--bs-success, #28a745);
+    display: none;
+}
+.save-indicator.show {
+    display: block;
+}
+.comparison-value {
+    color: var(--bs-secondary-color, #6c757d);
+    font-size: 0.9rem;
+}
+.previsto-value {
+    font-weight: 600;
+    color: var(--bs-body-color, #212529);
+}
+.table-sticky {
+    position: sticky;
+    left: 0;
+    background: var(--bs-body-bg, white);
+    z-index: 10;
+}
+.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+.sortable:hover {
+    background-color: var(--bs-tertiary-bg, #e9ecef);
+}
+.produto-info {
+    min-width: 200px;
+}
+.table-sortable thead th i {
+    font-size: 0.8rem;
+    opacity: 0.6;
+}
+.table-sortable thead th:hover i {
+    opacity: 1;
+}
+
+/* Card headers - Theme-aware */
+.card-header-theme {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+    border-bottom: 1px solid var(--bs-border-color) !important;
+}
+
+/* Colunas especiais da tabela - Theme-aware */
+.col-prevista {
+    background-color: rgba(var(--bs-primary-rgb), 0.1) !important;
+}
+.col-realizada {
+    background-color: rgba(var(--bs-warning-rgb), 0.1) !important;
+}
+
+/* Dark mode - cores mais vibrantes */
+[data-bs-theme="dark"] .save-indicator,
+[data-theme="dark"] .save-indicator {
+    color: #4ade80;
+}
 </style>
 {% endblock %}
 
@@ -102,8 +129,8 @@
 <!-- Token CSRF para requisições AJAX -->
 <meta name="csrf-token" content="{{ csrf_token() }}">
 
-<div class="container-fluid px-4 py-3">
-    <div class="row mb-4">
+<div class="container-fluid px-4 py-3 premium-page">
+    <div class="row mb-4 reveal">
         <div class="col-12">
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb">
@@ -125,8 +152,8 @@
 
     <!-- Configuração de Análise -->
     <div class="card shadow mb-4">
-        <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">
+        <div class="card-header card-header-theme py-3">
+            <h6 class="m-0 fw-bold">
                 <i class="fas fa-cog me-2"></i>Configuração de Análise
             </h6>
         </div>
@@ -276,8 +303,8 @@
 
     <!-- Tabela de Resultados -->
     <div class="card shadow">
-        <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">
+        <div class="card-header card-header-theme py-3">
+            <h6 class="m-0 fw-bold">
                 <i class="fas fa-table me-2"></i>Análise de Previsão
             </h6>
         </div>
@@ -311,10 +338,10 @@
                                 <i class="fas fa-sort ms-1"></i>
                             </th>
                             <th colspan="3" class="text-center comparison-header">Comparações</th>
-                            <th rowspan="2" class="align-middle text-center" style="background-color: #e7f3ff;">
+                            <th rowspan="2" class="align-middle text-center col-prevista">
                                 Demanda<br>Prevista
                             </th>
-                            <th rowspan="2" class="align-middle text-center" style="background-color: #fff3e7;">
+                            <th rowspan="2" class="align-middle text-center col-realizada">
                                 Demanda<br>Realizada
                             </th>
                             <th rowspan="2" class="align-middle text-center">Disparo</th>
@@ -362,7 +389,7 @@
             <div class="modal-body">
                 <!-- Formulário de Cadastro -->
                 <div class="card mb-3">
-                    <div class="card-header bg-light">
+                    <div class="card-header card-header-theme">
                         <h6 class="mb-0">Novo Grupo / Editar Grupo</h6>
                     </div>
                     <div class="card-body">
@@ -408,7 +435,7 @@
                 
                 <!-- Lista de Grupos Existentes -->
                 <div class="card">
-                    <div class="card-header bg-light">
+                    <div class="card-header card-header-theme">
                         <h6 class="mb-0">Grupos Cadastrados</h6>
                     </div>
                     <div class="card-body">
@@ -811,8 +838,7 @@ function renderizarTabela() {
         
         // Coluna Demanda Realizada (somente leitura - vem de FaturamentoProduto)
         var demandaRealizada = comparacoes.demanda_realizada || 0;
-        var $tdRealizada = $('<td>').addClass('text-right')
-            .css('background-color', '#fff9f3')
+        var $tdRealizada = $('<td>').addClass('text-right col-realizada')
             .html('<strong>' + formatarNumero(demandaRealizada) + '</strong>');
         $tr.append($tdRealizada);
         

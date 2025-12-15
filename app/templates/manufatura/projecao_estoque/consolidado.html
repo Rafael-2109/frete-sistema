@@ -13,11 +13,20 @@
     nav.navbar + .container:not(:has(.alert)) { display: none !important; }
     /* Container principal desta página */
     .container-fluid.px-1 { margin-top: 0 !important; }
+
+    /* Table thead theme-aware */
+    .table-thead-theme {
+        background-color: var(--bs-tertiary-bg) !important;
+    }
+    .table-thead-theme th {
+        background-color: var(--bs-tertiary-bg) !important;
+        color: var(--bs-body-color) !important;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid px-1 py-0 m-0">
+<div class="container-fluid px-1 py-0 m-0 premium-page">
     <!-- ========== BARRA COMPACTA (sempre visível) ========== -->
     <div class="barra-compacta d-flex align-items-center justify-content-between gap-2">
         <!-- Esquerda: Título + Badge -->
@@ -183,7 +192,7 @@
 
                     <div class="table-responsive">
                         <table class="table table-sm table-bordered">
-                            <thead class="table-light">
+                            <thead class="table-thead-theme">
                                 <tr>
                                     <th>Tipo</th>
                                     <th>Requisição</th>

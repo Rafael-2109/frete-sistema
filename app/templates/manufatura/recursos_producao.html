@@ -8,26 +8,74 @@
 
 {% block extra_css %}
 <style>
-    .table-recursos {
-        font-size: 0.85rem;
-    }
-    .badge-disponivel {
-        background-color: #28a745;
-    }
-    .badge-indisponivel {
-        background-color: #6c757d;
-    }
-    .card-stats {
-        border-left: 4px solid #28a745;
-    }
+/* ==========================================================================
+   RECURSOS PRODUCAO - Theme-aware Styles
+   ========================================================================== */
+
+.table-recursos {
+    font-size: 0.85rem;
+}
+
+/* Badges - Theme-aware */
+.badge-disponivel {
+    background-color: var(--bs-success) !important;
+    color: white !important;
+}
+.badge-indisponivel {
+    background-color: var(--bs-secondary) !important;
+    color: white !important;
+}
+
+/* Card stats - Theme-aware */
+.card-stats {
+    border-left: 4px solid var(--bs-success);
+}
+
+/* Card header theme-aware */
+.card-header-theme {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+    border-bottom: 1px solid var(--bs-border-color) !important;
+}
+
+/* Table thead theme-aware */
+.table-thead-theme {
+    background-color: var(--bs-tertiary-bg) !important;
+}
+.table-thead-theme th {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+    border-bottom: 2px solid var(--bs-border-color) !important;
+    font-weight: 600;
+}
+
+/* Colored th cells in dark mode - adjust opacity */
+[data-bs-theme="dark"] .bg-info,
+[data-theme="dark"] .bg-info {
+    background-color: var(--bs-info) !important;
+}
+[data-bs-theme="dark"] .bg-success,
+[data-theme="dark"] .bg-success {
+    background-color: var(--bs-success) !important;
+}
+
+/* Subtle backgrounds - Theme-aware */
+[data-bs-theme="dark"] .bg-info-subtle,
+[data-theme="dark"] .bg-info-subtle {
+    background-color: rgba(var(--bs-info-rgb), 0.15) !important;
+}
+[data-bs-theme="dark"] .bg-success-subtle,
+[data-theme="dark"] .bg-success-subtle {
+    background-color: rgba(var(--bs-success-rgb), 0.15) !important;
+}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid px-4 py-4">
+<div class="container-fluid px-4 py-4 premium-page">
 
     <!-- Cabeçalho -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 reveal">
         <div>
             <h2 class="mb-1">
                 <i class="fas fa-industry text-success me-2"></i>
@@ -142,7 +190,7 @@
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-recursos table-hover table-striped mb-0">
-                    <thead class="table-light">
+                    <thead class="table-thead-theme">
                         <tr>
                             <th rowspan="2" class="align-middle">Código</th>
                             <th rowspan="2" class="align-middle">Produto</th>

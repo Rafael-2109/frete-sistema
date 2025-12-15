@@ -13,18 +13,24 @@
     nav.navbar + .container { margin: 0 !important; padding: 0 !important; min-height: 0 !important; }
     nav.navbar + .container:not(:has(.alert)) { display: none !important; }
     .container-fluid.px-1 { margin-top: 0 !important; }
+
+    /* Badge theme-aware */
+    .badge-count {
+        background-color: var(--bs-tertiary-bg) !important;
+        color: var(--bs-body-color) !important;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid px-1 py-0 m-0">
+<div class="container-fluid px-1 py-0 m-0 premium-page">
     <!-- ========== BARRA COMPACTA (sempre visível) ========== -->
     <div class="barra-compacta barra-compacta-success d-flex align-items-center justify-content-between gap-2">
         <!-- Esquerda: Título + Badge -->
         <div class="d-flex align-items-center gap-2">
             <i class="fas fa-cogs"></i>
             <span class="titulo-compacto fw-semibold">Necessidade Produção</span>
-            <span id="total-produtos" class="badge bg-light text-dark badge-compacto">0</span>
+            <span id="total-produtos" class="badge badge-count badge-compacto">0</span>
         </div>
 
         <!-- Centro: Filtros principais + Calcular -->

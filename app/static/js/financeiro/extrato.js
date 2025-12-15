@@ -2,25 +2,32 @@
  * Sistema Financeiro - JavaScript
  * ================================
  * Gerencia interações das telas financeiras
- * Suporte a Dark/Light Mode
+ * Suporte a Dark/Light Mode (sincronizado com sistema global)
  */
 
 // =============================================================================
-// GERENCIADOR DE TEMA
+// GERENCIADOR DE TEMA (Sincronizado com NacomTheme global)
 // =============================================================================
 
 const ThemeManager = {
-    STORAGE_KEY: 'fin-theme',
+    STORAGE_KEY: 'nacom-theme', // Usa mesma chave do sistema global
     LIGHT: 'light',
     DARK: 'dark',
 
     init() {
-        // Carregar tema salvo ou detectar preferência do sistema
-        const savedTheme = localStorage.getItem(this.STORAGE_KEY);
-        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-
-        const theme = savedTheme || (prefersDark ? this.DARK : this.LIGHT);
-        this.apply(theme);
+        // Sincroniza com o tema global já aplicado pelo theme-manager.js
+        // Se NacomTheme existir, usa ele como fonte de verdade
+        if (window.NacomTheme) {
+            this.syncWithGlobal();
+            // Escuta mudanças do tema global
+            document.addEventListener('themechange', () => this.syncWithGlobal());
+        } else {
+            // Fallback se theme-manager.js não carregou ainda
+            const savedTheme = localStorage.getItem(this.STORAGE_KEY);
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const theme = savedTheme || (prefersDark ? this.DARK : this.LIGHT);
+            this.apply(theme);
+        }
 
         // Listener para mudança de preferência do sistema
         window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
@@ -30,18 +37,30 @@ const ThemeManager = {
         });
     },
 
-    apply(theme) {
-        if (theme === this.LIGHT) {
-            document.documentElement.setAttribute('data-theme', 'light');
-        } else {
-            document.documentElement.removeAttribute('data-theme');
+    syncWithGlobal() {
+        // Sincroniza com o estado do NacomTheme
+        if (window.NacomTheme) {
+            this.updateToggleIcons();
         }
+    },
+
+    apply(theme) {
+        // Aplica ambos os atributos para compatibilidade
+        document.documentElement.setAttribute('data-bs-theme', theme);
+        document.documentElement.setAttribute('data-theme', theme);
         this.updateToggleIcons();
     },
 
     toggle() {
-        const isLight = document.documentElement.getAttribute('data-theme') === 'light';
-        const newTheme = isLight ? this.DARK : this.LIGHT;
+        // Se NacomTheme existe, delega para ele
+        if (window.NacomTheme) {
+            return window.NacomTheme.toggle();
+        }
+
+        // Fallback
+        const currentTheme = document.documentElement.getAttribute('data-theme') ||
+                            document.documentElement.getAttribute('data-bs-theme') || 'dark';
+        const newTheme = currentTheme === 'light' ? this.DARK : this.LIGHT;
 
         localStorage.setItem(this.STORAGE_KEY, newTheme);
         this.apply(newTheme);
@@ -50,7 +69,10 @@ const ThemeManager = {
     },
 
     updateToggleIcons() {
-        const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+        const currentTheme = document.documentElement.getAttribute('data-theme') ||
+                            document.documentElement.getAttribute('data-bs-theme') || 'dark';
+        const isLight = currentTheme === 'light';
+
         document.querySelectorAll('.theme-toggle__icon--light').forEach(el => {
             el.style.display = isLight ? 'none' : 'inline';
         });
@@ -60,14 +82,20 @@ const ThemeManager = {
     },
 
     getCurrent() {
-        return document.documentElement.getAttribute('data-theme') === 'light' ? this.LIGHT : this.DARK;
+        const theme = document.documentElement.getAttribute('data-theme') ||
+                     document.documentElement.getAttribute('data-bs-theme') || 'dark';
+        return theme === 'light' ? this.LIGHT : this.DARK;
     }
 };
 
-// Inicializar tema imediatamente para evitar flash
-ThemeManager.init();
+// Inicializar tema após um pequeno delay para garantir que NacomTheme carregou
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => ThemeManager.init());
+} else {
+    ThemeManager.init();
+}
 
-// Função global para toggle de tema
+// Função global para toggle de tema (compatibilidade)
 function toggleTheme() {
     return ThemeManager.toggle();
 }

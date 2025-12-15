@@ -11,16 +11,44 @@
         border-radius: 0.375rem;
     }
 
-    .status-concluido { background-color: #d1fae5; color: #065f46; }
-    .status-rateio { background-color: #fef3c7; color: #92400e; }
-    .status-po { background-color: #dbeafe; color: #1e40af; }
-    .status-ciencia { background-color: #e0e7ff; color: #3730a3; }
-    .status-sincronizado { background-color: #f3f4f6; color: #374151; }
-    .status-rascunho { background-color: #fee2e2; color: #991b1b; }
-    .status-rejeitado { background-color: #fecaca; color: #7f1d1d; }
+    /* Status badges usando variáveis CSS do tema */
+    .status-concluido {
+        background-color: rgba(var(--bs-success-rgb), 0.15);
+        color: var(--bs-success);
+    }
+    .status-rateio {
+        background-color: rgba(var(--bs-warning-rgb), 0.15);
+        color: var(--bs-warning);
+    }
+    .status-po {
+        background-color: rgba(var(--bs-info-rgb), 0.15);
+        color: var(--bs-info);
+    }
+    .status-ciencia {
+        background-color: rgba(var(--bs-primary-rgb), 0.15);
+        color: var(--bs-primary);
+    }
+    .status-sincronizado {
+        background-color: var(--bs-tertiary-bg);
+        color: var(--bs-secondary-color);
+    }
+    .status-rascunho {
+        background-color: rgba(var(--bs-danger-rgb), 0.15);
+        color: var(--bs-danger);
+    }
+    .status-rejeitado {
+        background-color: rgba(var(--bs-danger-rgb), 0.2);
+        color: var(--bs-danger);
+    }
 
-    .vinculado-badge { background-color: #d1fae5; color: #065f46; }
-    .nao-vinculado-badge { background-color: #fee2e2; color: #991b1b; }
+    .vinculado-badge {
+        background-color: rgba(var(--bs-success-rgb), 0.15);
+        color: var(--bs-success);
+    }
+    .nao-vinculado-badge {
+        background-color: rgba(var(--bs-danger-rgb), 0.15);
+        color: var(--bs-danger);
+    }
 
     .card-stat {
         border-left: 4px solid;

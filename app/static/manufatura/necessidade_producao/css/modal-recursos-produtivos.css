@@ -1,12 +1,12 @@
 /* ==================================================
-   MODAL RECURSOS PRODUTIVOS - CALENDÁRIOS DINÂMICOS
+   MODAL RECURSOS PRODUTIVOS - Theme-aware CSS
    ================================================== */
 
 /* Container de calendário por linha */
 .recursos-calendario-linha {
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--bs-border-color, #dee2e6);
     border-radius: 8px;
-    background: #f8f9fa;
+    background: var(--bs-tertiary-bg, #f8f9fa);
     padding: 15px;
     margin-bottom: 20px;
 }
@@ -16,7 +16,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: linear-gradient(135deg, #198754 0%, #20c997 100%);
+    background: linear-gradient(135deg, var(--bs-success, #198754) 0%, #20c997 100%);
     color: white;
     padding: 6px 12px;
     border-radius: 4px;
@@ -50,7 +50,7 @@
 
 /* Calendário */
 .recursos-calendario {
-    background: white;
+    background: var(--bs-body-bg, white);
     border-radius: 6px;
     padding: 10px;
     overflow-x: auto;
@@ -61,10 +61,10 @@
     text-align: center;
     font-weight: bold;
     font-size: 1.1rem;
-    color: #198754;
+    color: var(--bs-success, #198754);
     margin-bottom: 10px;
     padding: 8px;
-    background: #e7f5ec;
+    background: rgba(var(--bs-success-rgb, 25, 135, 84), 0.15);
     border-radius: 4px;
 }
 
@@ -80,9 +80,9 @@
 
 /* Cada dia */
 .recursos-dia {
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--bs-border-color, #dee2e6);
     border-radius: 4px;
-    background: white;
+    background: var(--bs-body-bg, white);
     min-height: 120px;
     padding: 6px;
     position: relative;
@@ -101,26 +101,26 @@
     text-align: center;
     font-weight: bold;
     font-size: 0.9rem;
-    color: #495057;
+    color: var(--bs-body-color, #495057);
     margin-bottom: 4px;
     padding-bottom: 4px;
-    border-bottom: 1px solid #e9ecef;
-    z-index: 10;  /* ✅ MAIOR que as barras (1, 2, 3) */
+    border-bottom: 1px solid var(--bs-border-color, #e9ecef);
+    z-index: 10;
     position: relative;
 }
 
 .recursos-dia-numero {
     font-size: 1.2rem;
-    color: #198754;
+    color: var(--bs-success, #198754);
 }
 
 .recursos-dia-semana {
     font-size: 0.75rem;
-    color: #6c757d;
+    color: var(--bs-secondary-color, #6c757d);
     text-transform: uppercase;
 }
 
-/* ✅ SISTEMA DE BARRAS SOBREPOSTAS - Cada turno sobrepõe o anterior */
+/* SISTEMA DE BARRAS SOBREPOSTAS */
 .recursos-ocupacao-turno {
     position: absolute;
     bottom: 0;
@@ -132,35 +132,35 @@
 
 /* Turno 1 - Base (verde claro) */
 .recursos-ocupacao-turno-1 {
-    background: #b8e6c0;
+    background: rgba(var(--bs-success-rgb, 40, 167, 69), 0.3);
     opacity: 0.85;
     z-index: 1;
 }
 
 /* Turno 2 - Sobrepõe turno 1 (verde médio) */
 .recursos-ocupacao-turno-2 {
-    background: #7dd88f;
+    background: rgba(var(--bs-success-rgb, 40, 167, 69), 0.5);
     opacity: 0.85;
     z-index: 2;
 }
 
 /* Turno 3 - Sobrepõe todos (verde forte) */
 .recursos-ocupacao-turno-3 {
-    background: #28a745;
+    background: var(--bs-success, #28a745);
     opacity: 0.85;
     z-index: 3;
 }
 
-/* ✅ NOVO: Dados de estoque do produto no dia */
+/* Dados de estoque do produto no dia */
 .recursos-estoque-dia {
-    background: rgba(25, 135, 84, 0.1);
-    border-left: 3px solid #198754;
+    background: rgba(var(--bs-success-rgb, 25, 135, 84), 0.1);
+    border-left: 3px solid var(--bs-success, #198754);
     padding: 3px 5px;
     margin-bottom: 4px;
     font-size: 0.65rem;
     line-height: 1.2;
     position: relative;
-    z-index: 10;  /* ✅ MAIOR que as barras (1, 2, 3) */
+    z-index: 10;
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
@@ -174,12 +174,12 @@
 /* Produtos programados */
 .recursos-produtos-programados {
     position: relative;
-    z-index: 10;  /* ✅ MAIOR que as barras (1, 2, 3) */
+    z-index: 10;
 }
 
 .recursos-produto-item {
-    background: rgba(255, 255, 255, 0.95);
-    border: 1px solid #198754;
+    background: var(--bs-body-bg, rgba(255, 255, 255, 0.95));
+    border: 1px solid var(--bs-success, #198754);
     border-radius: 3px;
     padding: 3px 5px;
     margin-bottom: 3px;
@@ -189,7 +189,7 @@
 }
 
 .recursos-produto-item:hover {
-    background: #198754;
+    background: var(--bs-success, #198754);
     color: white;
     transform: scale(1.05);
 }
@@ -197,7 +197,7 @@
 .recursos-produto-cod {
     font-weight: bold;
     display: block;
-    color: #198754;
+    color: var(--bs-success, #198754);
 }
 
 .recursos-produto-item:hover .recursos-produto-cod {
@@ -206,7 +206,7 @@
 
 .recursos-produto-qtd {
     font-size: 0.7rem;
-    color: #6c757d;
+    color: var(--bs-secondary-color, #6c757d);
     display: block;
 }
 
@@ -230,7 +230,7 @@
 
 /* Dia vazio */
 .recursos-dia-vazio {
-    color: #adb5bd;
+    color: var(--bs-tertiary-color, #adb5bd);
     font-size: 0.75rem;
     text-align: center;
     padding-top: 20px;
@@ -241,11 +241,11 @@
 
 /* Indicador de weekend */
 .recursos-dia.weekend {
-    background: #f8f9fa;
+    background: var(--bs-tertiary-bg, #f8f9fa);
 }
 
 .recursos-dia.weekend .recursos-dia-header {
-    color: #dc3545;
+    color: var(--bs-danger, #dc3545);
 }
 
 /* Responsividade */
@@ -271,12 +271,12 @@
 }
 
 .recursos-calendario-grid::-webkit-scrollbar-track {
-    background: #f1f1f1;
+    background: var(--bs-tertiary-bg, #f1f1f1);
     border-radius: 4px;
 }
 
 .recursos-calendario-grid::-webkit-scrollbar-thumb {
-    background: #198754;
+    background: var(--bs-success, #198754);
     border-radius: 4px;
 }
 

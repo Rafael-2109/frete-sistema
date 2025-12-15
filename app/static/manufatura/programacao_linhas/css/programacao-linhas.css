@@ -1,51 +1,42 @@
 /* ==================================================
-   PROGRAMAÇÃO POR LINHA - ESTILOS
-   Reutiliza estilos do modal-recursos-produtivos.css
+   PROGRAMAÇÃO POR LINHA - Theme-aware CSS
    ================================================== */
 
 /* Accordion customizado */
 .accordion-item {
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--bs-border-color, #dee2e6);
     margin-bottom: 10px;
     border-radius: 8px;
     overflow: hidden;
 }
 
 .accordion-button {
-    background-color: #f8f9fa;
-    color: #212529;
+    background-color: var(--bs-tertiary-bg, #f8f9fa);
+    color: var(--bs-body-color, #212529);
     font-weight: 500;
     padding: 1rem 1.25rem;
 }
 
 .accordion-button:not(.collapsed) {
-    background-color: #e7f5ec;
-    color: #198754;
+    background-color: rgba(var(--bs-success-rgb, 25, 135, 84), 0.15);
+    color: var(--bs-success, #198754);
     box-shadow: none;
 }
 
 .accordion-button:focus {
-    box-shadow: 0 0 0 0.25rem rgba(25, 135, 84, 0.25);
-    border-color: #198754;
-}
-
-.accordion-button::after {
-    filter: brightness(0) saturate(100%) invert(45%) sepia(8%) saturate(870%) hue-rotate(169deg) brightness(92%) contrast(85%);
-}
-
-.accordion-button:not(.collapsed)::after {
-    filter: brightness(0) saturate(100%) invert(37%) sepia(92%) saturate(409%) hue-rotate(93deg) brightness(95%) contrast(93%);
+    box-shadow: 0 0 0 0.25rem rgba(var(--bs-success-rgb, 25, 135, 84), 0.25);
+    border-color: var(--bs-success, #198754);
 }
 
 /* ============================================================
-   ESTILOS DO CALENDÁRIO (REUTILIZADOS DO MODAL)
+   ESTILOS DO CALENDÁRIO
    ============================================================ */
 
 /* Container de calendário por linha */
 .recursos-calendario-linha {
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--bs-border-color, #dee2e6);
     border-radius: 8px;
-    background: #f8f9fa;
+    background: var(--bs-tertiary-bg, #f8f9fa);
     padding: 15px;
     margin-bottom: 0;
 }
@@ -55,7 +46,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: linear-gradient(135deg, #198754 0%, #20c997 100%);
+    background: linear-gradient(135deg, var(--bs-success, #198754) 0%, #20c997 100%);
     color: white;
     padding: 6px 12px;
     border-radius: 4px;
@@ -89,7 +80,7 @@
 
 /* Calendário */
 .recursos-calendario {
-    background: white;
+    background: var(--bs-body-bg, white);
     border-radius: 6px;
     padding: 10px;
     overflow-x: auto;
@@ -100,10 +91,10 @@
     text-align: center;
     font-weight: bold;
     font-size: 1.1rem;
-    color: #198754;
+    color: var(--bs-success, #198754);
     margin-bottom: 10px;
     padding: 8px;
-    background: #e7f5ec;
+    background: rgba(var(--bs-success-rgb, 25, 135, 84), 0.15);
     border-radius: 4px;
 }
 
@@ -119,16 +110,16 @@
 
 /* Cada dia */
 .recursos-dia {
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--bs-border-color, #dee2e6);
     border-radius: 6px;
-    background: white;
+    background: var(--bs-body-bg, white);
     min-height: auto;
     padding: 8px;
     display: flex;
     flex-direction: column;
     gap: 6px;
     transition: all 0.2s;
-    position: relative; /* ✅ Para barras absolutas */
+    position: relative;
     overflow: hidden;
 }
 
@@ -142,20 +133,20 @@
 .dia-header {
     text-align: center;
     padding-bottom: 6px;
-    border-bottom: 2px solid #e9ecef;
-    z-index: 10; /* ✅ Acima das barras */
+    border-bottom: 2px solid var(--bs-border-color, #e9ecef);
+    z-index: 10;
     position: relative;
 }
 
 .dia-numero {
     font-size: 1.3rem;
     font-weight: bold;
-    color: #198754;
+    color: var(--bs-success, #198754);
 }
 
 .dia-semana {
     font-size: 0.7rem;
-    color: #6c757d;
+    color: var(--bs-secondary-color, #6c757d);
     text-transform: uppercase;
     font-weight: 600;
 }
@@ -164,7 +155,7 @@
 .dia-ocupacao {
     position: relative;
     height: 20px;
-    background: #e9ecef;
+    background: var(--bs-tertiary-bg, #e9ecef);
     border-radius: 4px;
     overflow: hidden;
 }
@@ -174,7 +165,7 @@
     left: 0;
     top: 0;
     height: 100%;
-    background: linear-gradient(90deg, #28a745, #20c997);
+    background: linear-gradient(90deg, var(--bs-success, #28a745), #20c997);
     transition: width 0.3s ease;
 }
 
@@ -185,21 +176,21 @@
     line-height: 20px;
     font-size: 0.7rem;
     font-weight: bold;
-    color: #495057;
+    color: var(--bs-body-color, #495057);
     z-index: 1;
 }
 
 /* Produtos programados */
 .dia-produtos {
     flex: 1;
-    z-index: 10; /* ✅ Acima das barras */
+    z-index: 10;
     position: relative;
 }
 
 .dia-produto {
-    background: rgba(255, 255, 255, 0.95);
-    border: 1px solid #198754;
-    border-left: 3px solid #198754;
+    background: var(--bs-body-bg, rgba(255, 255, 255, 0.95));
+    border: 1px solid var(--bs-success, #198754);
+    border-left: 3px solid var(--bs-success, #198754);
     padding: 3px 6px;
     margin-bottom: 3px;
     font-size: 0.72rem;
@@ -212,7 +203,7 @@
 }
 
 .dia-produto:hover {
-    background: #198754;
+    background: var(--bs-success, #198754);
     color: white;
     transform: scale(1.05);
 }
@@ -223,17 +214,17 @@
 }
 
 .dia-produto strong {
-    color: #198754;
+    color: var(--bs-success, #198754);
 }
 
 .dia-produto span {
-    color: #6c757d;
+    color: var(--bs-secondary-color, #6c757d);
     font-size: 0.65rem;
 }
 
 .dia-vazio {
     text-align: center;
-    color: #adb5bd;
+    color: var(--bs-tertiary-color, #adb5bd);
     font-size: 0.8rem;
     padding: 8px;
 }
@@ -242,14 +233,14 @@
 .dia-footer {
     text-align: center;
     padding-top: 4px;
-    border-top: 1px solid #e9ecef;
+    border-top: 1px solid var(--bs-border-color, #e9ecef);
     font-size: 0.65rem;
-    color: #6c757d;
-    z-index: 10; /* ✅ Acima das barras */
+    color: var(--bs-secondary-color, #6c757d);
+    z-index: 10;
     position: relative;
 }
 
-/* ✅ BARRAS DE OCUPAÇÃO SOBREPOSTAS (igual modal recursos) */
+/* BARRAS DE OCUPAÇÃO SOBREPOSTAS */
 .recursos-ocupacao-turno {
     position: absolute;
     bottom: 0;
@@ -260,31 +251,31 @@
 }
 
 .recursos-ocupacao-turno-1 {
-    background: #b8e6c0;
+    background: rgba(var(--bs-success-rgb, 40, 167, 69), 0.3);
     opacity: 0.85;
     z-index: 1;
 }
 
 .recursos-ocupacao-turno-2 {
-    background: #7dd88f;
+    background: rgba(var(--bs-success-rgb, 40, 167, 69), 0.5);
     opacity: 0.85;
     z-index: 2;
 }
 
 .recursos-ocupacao-turno-3 {
-    background: #28a745;
+    background: var(--bs-success, #28a745);
     opacity: 0.85;
     z-index: 3;
 }
 
 /* Dia de hoje */
 .dia-hoje {
-    border: 2px solid #ffc107;
-    box-shadow: 0 0 8px rgba(255, 193, 7, 0.4);
+    border: 2px solid var(--bs-warning, #ffc107);
+    box-shadow: 0 0 8px rgba(var(--bs-warning-rgb, 255, 193, 7), 0.4);
 }
 
 .dia-hoje .dia-numero {
-    color: #ffc107;
+    color: var(--bs-warning, #ffc107);
 }
 
 /* Loading spinner */
@@ -305,7 +296,7 @@
 }
 
 #table-view .clickable-produto {
-    color: #0d6efd;
+    color: var(--bs-primary, #0d6efd);
     transition: all 0.2s;
 }
 
@@ -316,15 +307,15 @@
 }
 
 #table-view code.clickable-produto {
-    background-color: #f8f9fa;
+    background-color: var(--bs-tertiary-bg, #f8f9fa);
     padding: 2px 6px;
     border-radius: 3px;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--bs-border-color, #dee2e6);
 }
 
 #table-view code.clickable-produto:hover {
-    background-color: #e7f1ff;
-    border-color: #0d6efd;
+    background-color: rgba(var(--bs-primary-rgb, 13, 110, 253), 0.1);
+    border-color: var(--bs-primary, #0d6efd);
 }
 
 /* Botões de ação na tabela */
@@ -336,12 +327,12 @@
 
 /* Toggle de agrupamento */
 .btn-check:checked + label {
-    background-color: #0d6efd;
+    background-color: var(--bs-primary, #0d6efd);
     color: white;
 }
 
 /* ============================================================
-   ESTILOS PARA AGRUPAMENTOS (REPLICANDO MODAL)
+   ESTILOS PARA AGRUPAMENTOS
    ============================================================ */
 
 #programacao-container .accordion-body {
@@ -352,28 +343,30 @@
     margin-bottom: 0;
 }
 
-/* Divs de programação empilhadas (igual ao modal) */
+/* Divs de programação empilhadas */
 .programacao-item {
     transition: all 0.2s ease;
-    background-color: white;
+    background-color: var(--bs-body-bg, white);
 }
 
 .programacao-item:hover {
-    background-color: #f8f9fa;
+    background-color: var(--bs-tertiary-bg, #f8f9fa);
     transform: translateX(2px);
 }
 
 /* Inputs de edição inline */
 .input-edit-data,
 .input-edit-qtd {
-    border: 1px solid #ced4da;
+    border: 1px solid var(--bs-border-color, #ced4da);
     transition: border-color 0.2s;
+    background-color: var(--bs-body-bg, white);
+    color: var(--bs-body-color, #212529);
 }
 
 .input-edit-data:focus,
 .input-edit-qtd:focus {
-    border-color: #0d6efd;
-    box-shadow: 0 0 0 0.2rem rgba(13, 110, 252, 0.25);
+    border-color: var(--bs-primary, #0d6efd);
+    box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb, 13, 110, 253), 0.25);
 }
 
 /* Produto clicável */
@@ -402,8 +395,8 @@
 #filtro-linha:focus,
 #filtro-produto:focus,
 #filtro-data:focus {
-    border-color: #0d6efd;
-    box-shadow: 0 0 0 0.2rem rgba(13, 110, 252, 0.25);
+    border-color: var(--bs-primary, #0d6efd);
+    box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb, 13, 110, 253), 0.25);
 }
 
 /* ============================================================
@@ -423,8 +416,8 @@
     z-index: 1050;
     max-height: 300px;
     overflow-y: auto;
-    background: white;
-    border: 1px solid #dee2e6;
+    background: var(--bs-body-bg, white);
+    border: 1px solid var(--bs-border-color, #dee2e6);
     border-top: none;
     border-radius: 0 0 0.375rem 0.375rem;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
@@ -434,8 +427,9 @@
 .autocomplete-item {
     padding: 10px 15px;
     cursor: pointer;
-    border-bottom: 1px solid #f1f3f5;
+    border-bottom: 1px solid var(--bs-border-color, #f1f3f5);
     transition: all 0.2s;
+    color: var(--bs-body-color, #212529);
 }
 
 .autocomplete-item:last-child {
@@ -443,12 +437,12 @@
 }
 
 .autocomplete-item:hover {
-    background-color: #e7f5ec;
-    color: #198754;
+    background-color: rgba(var(--bs-success-rgb, 25, 135, 84), 0.15);
+    color: var(--bs-success, #198754);
 }
 
 .autocomplete-item strong {
-    color: #198754;
+    color: var(--bs-success, #198754);
 }
 
 /* Modal body scroll */
@@ -461,6 +455,35 @@
 #modalAdicionarProgramacao input:focus,
 #modalAdicionarProgramacao select:focus,
 #modalAdicionarProgramacao textarea:focus {
-    border-color: #0d6efd;
-    box-shadow: 0 0 0 0.2rem rgba(13, 110, 252, 0.25);
+    border-color: var(--bs-primary, #0d6efd);
+    box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb, 13, 110, 253), 0.25);
+}
+
+/* ============================================================
+   DARK MODE SPECIFIC
+   ============================================================ */
+
+[data-bs-theme="dark"] .dia-numero,
+[data-theme="dark"] .dia-numero {
+    color: #4ade80;
+}
+
+[data-bs-theme="dark"] .dia-hoje .dia-numero,
+[data-theme="dark"] .dia-hoje .dia-numero {
+    color: #fbbf24;
+}
+
+[data-bs-theme="dark"] .recursos-calendario-mes,
+[data-theme="dark"] .recursos-calendario-mes {
+    color: #4ade80;
+}
+
+[data-bs-theme="dark"] .dia-produto strong,
+[data-theme="dark"] .dia-produto strong {
+    color: #4ade80;
+}
+
+[data-bs-theme="dark"] .autocomplete-item strong,
+[data-theme="dark"] .autocomplete-item strong {
+    color: #4ade80;
 }

@@ -1,10 +1,10 @@
 /* ============================================================
-   PROJEÇÃO DE ESTOQUE - LAYOUT CONSOLIDADO (COMPACTO)
+   PROJEÇÃO DE ESTOQUE - Theme-aware CSS
    ============================================================ */
 
 /* ========== BARRA COMPACTA ========== */
 .barra-compacta {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--bs-primary, #667eea) 0%, #8b5cf6 100%);
     color: white;
     padding: 0.3rem 0.75rem;
     border-radius: 4px;
@@ -41,8 +41,8 @@
 
 /* ========== FILTROS EXPANDIDOS ========== */
 .filtros-expandidos {
-    background: #f8f9fa;
-    border: 1px solid #dee2e6;
+    background: var(--bs-tertiary-bg, #f8f9fa);
+    border: 1px solid var(--bs-border-color, #dee2e6);
     border-radius: 4px;
     padding: 0.4rem 0.75rem;
 }
@@ -65,7 +65,7 @@
 
 /* ========== CARD TABELA (sem header) ========== */
 .card-tabela {
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--bs-border-color, #dee2e6);
     border-radius: 4px;
     overflow: hidden;
 }
@@ -75,10 +75,6 @@
 }
 
 /* ========== CONTAINER DA TABELA (MAXIMIZADO) ========== */
-/*
-   Cálculo: 100vh - navbar(56px) - barra compacta(36px) - margins(8px) = ~100px
-   Ajustado via JS para precisão dinâmica
-*/
 .table-container {
     max-height: calc(100vh - 100px);
     overflow: auto;
@@ -95,9 +91,10 @@
     position: sticky;
     top: 0;
     z-index: 10;
-    background: #f8f9fa !important;
+    background: var(--bs-tertiary-bg, #f8f9fa) !important;
+    color: var(--bs-body-color);
     font-weight: 600;
-    border-bottom: 2px solid #dee2e6;
+    border-bottom: 2px solid var(--bs-border-color, #dee2e6);
     vertical-align: middle;
     padding: 0.4rem 0.5rem;
     line-height: 1.2;
@@ -113,7 +110,7 @@
     position: sticky !important;
     left: 0;
     z-index: 5 !important;
-    background: white;
+    background: var(--bs-body-bg, white);
 }
 
 .sticky-col-codigo {
@@ -133,7 +130,7 @@
 thead .sticky-col-codigo,
 thead .sticky-col-produto {
     z-index: 15 !important;
-    background: #f8f9fa !important;
+    background: var(--bs-tertiary-bg, #f8f9fa) !important;
 }
 
 /* Colunas de dados */
@@ -153,17 +150,28 @@ thead .sticky-col-produto {
 
 /* Cores para valores */
 .valor-positivo {
-    color: #198754;
+    color: var(--bs-success, #198754);
     font-weight: 500;
 }
 
 .valor-negativo {
-    color: #dc3545;
+    color: var(--bs-danger, #dc3545);
     font-weight: 600;
 }
 
 .valor-zero {
-    color: #6c757d;
+    color: var(--bs-secondary-color, #6c757d);
+}
+
+/* Dark mode - cores mais vibrantes */
+[data-bs-theme="dark"] .valor-positivo,
+[data-theme="dark"] .valor-positivo {
+    color: #4ade80;
+}
+
+[data-bs-theme="dark"] .valor-negativo,
+[data-theme="dark"] .valor-negativo {
+    color: #f87171;
 }
 
 /* Botões de tamanho de fonte (na barra compacta) */
@@ -173,9 +181,9 @@ thead .sticky-col-produto {
 }
 
 .barra-compacta .btn-group .btn.active {
-    background: #0d6efd;
+    background: var(--bs-primary, #0d6efd);
     color: white;
-    border-color: #0d6efd;
+    border-color: var(--bs-primary, #0d6efd);
 }
 
 /* Botão XS */
@@ -191,7 +199,8 @@ thead .sticky-col-produto {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(255, 255, 255, 0.9);
+    background: var(--bs-body-bg);
+    opacity: 0.95;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -275,7 +284,7 @@ body.font-large .col-detalhes .btn i {
 
 /* Hover em linhas */
 .table-projecao tbody tr:hover {
-    background-color: #f1f3f5 !important;
+    background-color: rgba(var(--bs-primary-rgb), 0.08) !important;
 }
 
 /* Responsivo */

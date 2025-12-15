@@ -4,27 +4,27 @@
 <style>
 /* 🎯 PAGINAÇÃO HÍBRIDA - FUNCIONA EM QUALQUER NAVEGADOR */
 #hybrid-pagination {
-  position: relative !important; /* Começa normal */
-  background: #ffffff !important;
-  border-bottom: 2px solid #28a745 !important;
+  position: relative !important;
+  background: var(--bs-body-bg, #ffffff) !important;
+  border-bottom: 2px solid var(--bs-success, #28a745) !important;
   box-shadow: 0 3px 15px rgba(0,0,0,0.2) !important;
   padding: 8px 0 !important;
   margin: 0 !important;
   transition: all 0.3s ease !important;
-  z-index: 104 !important; /* ABAIXO do navbar (1050) */
+  z-index: 50 !important; /* Abaixo dos dropdowns (1000) */
 }
 
 /* 🔒 QUANDO GRUDADO (via JavaScript) */
 #hybrid-pagination.is-stuck {
   position: fixed !important;
-  top: 56px !important; /* Abaixo do navbar */
+  top: 56px !important;
   left: 0 !important;
   right: 0 !important;
   width: 100% !important;
-  border: 3px solid #dc3545 !important; /* Borda vermelha quando grudado */
-  background: #f8f9fa !important; /* Fundo ligeiramente diferente */
+  border: 3px solid var(--bs-danger, #dc3545) !important;
+  background: var(--bs-secondary-bg, #f8f9fa) !important;
   transform: translateY(0) !important;
-  z-index: 104 !important; /* ABAIXO do navbar (1050) */
+  z-index: 50 !important; /* Abaixo dos dropdowns (1000) */
 }
 
 /* 🎨 Estilos da paginação híbrida */
@@ -40,9 +40,9 @@
 }
 
 #hybrid-pagination .page-link {
-  color: #28a745 !important;
-  background-color: #ffffff !important;
-  border: 2px solid #28a745 !important;
+  color: var(--bs-success, #28a745) !important;
+  background-color: var(--bs-body-bg, #ffffff) !important;
+  border: 2px solid var(--bs-success, #28a745) !important;
   padding: 8px 16px !important;
   margin: 0 2px !important;
   font-weight: 600 !important;
@@ -52,15 +52,15 @@
 }
 
 #hybrid-pagination .page-item.active .page-link {
-  background-color: #28a745 !important;
+  background-color: var(--bs-success, #28a745) !important;
   color: #ffffff !important;
-  border-color: #28a745 !important;
+  border-color: var(--bs-success, #28a745) !important;
 }
 
 #hybrid-pagination .page-link:hover {
-  background-color: #218838 !important;
+  background-color: var(--bs-success, #218838) !important;
   color: #ffffff !important;
-  border-color: #218838 !important;
+  border-color: var(--bs-success, #218838) !important;
   transform: scale(1.05) !important;
 }
 
@@ -84,12 +84,87 @@ body {
 .bg-light {
   margin-top: 0 !important; /* Posição normal no fluxo */
   position: relative !important;
-  z-index: 103 !important; /* Abaixo da paginação mas acima do conteúdo */
+  z-index: 60 !important; /* Acima da paginação (50) mas abaixo do navbar principal */
 }
 
 /* 🎯 ESTILOS DA NOVA NAVBAR DE FILTROS */
 #navbarFiltros {
   background: transparent;
+}
+
+/* 🎨 NAVBAR DE FILTROS ADAPTATIVA - ALTA ESPECIFICIDADE */
+nav.navbar.nc-filter-navbar {
+  background: var(--bs-secondary-bg, #ffffff) !important;
+  position: relative;
+  z-index: 100; /* Acima da paginação para dropdowns funcionarem */
+}
+
+/* Dropdowns do navbar de filtros devem ficar acima de tudo */
+.nc-filter-navbar .dropdown-menu {
+  z-index: 1050 !important; /* Acima do navbar principal (1030) */
+}
+
+nav.navbar.nc-filter-navbar .navbar-brand,
+nav.navbar.nc-filter-navbar .nav-link,
+.nc-filter-navbar .navbar-brand,
+.nc-filter-navbar .nav-link {
+  color: var(--bs-body-color, #212529) !important;
+}
+
+nav.navbar.nc-filter-navbar .nav-link:hover,
+.nc-filter-navbar .nav-link:hover {
+  background: rgba(var(--bs-primary-rgb), 0.1) !important;
+  color: var(--bs-primary) !important;
+}
+
+nav.navbar.nc-filter-navbar .nav-link.fw-bold,
+.nc-filter-navbar .nav-link.fw-bold {
+  background: rgba(var(--bs-primary-rgb), 0.15) !important;
+  color: var(--bs-primary) !important;
+}
+
+/* Light mode - garantir cores escuras */
+[data-bs-theme="light"] nav.navbar.nc-filter-navbar .navbar-brand,
+[data-bs-theme="light"] nav.navbar.nc-filter-navbar .nav-link,
+[data-theme="light"] nav.navbar.nc-filter-navbar .navbar-brand,
+[data-theme="light"] nav.navbar.nc-filter-navbar .nav-link {
+  color: #212529 !important;
+}
+
+[data-bs-theme="light"] nav.navbar.nc-filter-navbar .nav-link:hover,
+[data-theme="light"] nav.navbar.nc-filter-navbar .nav-link:hover {
+  color: var(--bs-primary) !important;
+}
+
+/* Dark mode para filter navbar */
+[data-bs-theme="dark"] nav.navbar.nc-filter-navbar,
+[data-theme="dark"] nav.navbar.nc-filter-navbar {
+  background: var(--bs-secondary-bg, #1a2942) !important;
+  border-color: var(--bs-border-color, #2d4a6a) !important;
+}
+
+[data-bs-theme="dark"] nav.navbar.nc-filter-navbar .navbar-brand,
+[data-bs-theme="dark"] nav.navbar.nc-filter-navbar .nav-link,
+[data-theme="dark"] nav.navbar.nc-filter-navbar .navbar-brand,
+[data-theme="dark"] nav.navbar.nc-filter-navbar .nav-link {
+  color: var(--bs-body-color, #f0f6fc) !important;
+}
+
+[data-bs-theme="dark"] .nc-filter-navbar .dropdown-menu,
+[data-theme="dark"] .nc-filter-navbar .dropdown-menu {
+  background: var(--bs-secondary-bg, #1a2942) !important;
+  border-color: var(--bs-border-color, #2d4a6a) !important;
+}
+
+[data-bs-theme="dark"] .nc-filter-navbar .dropdown-item,
+[data-theme="dark"] .nc-filter-navbar .dropdown-item {
+  color: var(--bs-body-color, #f0f6fc) !important;
+}
+
+[data-bs-theme="dark"] .nc-filter-navbar .dropdown-item:hover,
+[data-theme="dark"] .nc-filter-navbar .dropdown-item:hover {
+  background: rgba(var(--bs-primary-rgb), 0.15) !important;
+  color: var(--bs-primary) !important;
 }
 
 /* Estilo melhorado para a navbar de filtros */
@@ -105,35 +180,43 @@ nav.navbar.navbar-light {
   box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2) !important;
 }
 
-/* 🌙 ADAPTAÇÃO PARA TEMA DARK */
-[data-theme="dark"] nav.navbar.navbar-light {
+/* 🌙 ADAPTAÇÃO PARA TEMA DARK (suporta data-theme E data-bs-theme) */
+[data-theme="dark"] nav.navbar.navbar-light,
+[data-bs-theme="dark"] nav.navbar.navbar-light {
   background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%) !important;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5) !important;
 }
 
-[data-theme="dark"] .bg-light {
-  background-color: #22262e !important;
+[data-theme="dark"] .bg-light,
+[data-bs-theme="dark"] .bg-light {
+  background-color: var(--bs-secondary-bg, #22262e) !important;
 }
 
-[data-theme="dark"] .table {
-  background-color: #22262e;
-  color: #e4e6eb;
+[data-theme="dark"] .table,
+[data-bs-theme="dark"] .table {
+  background-color: var(--bs-secondary-bg, #22262e);
+  color: var(--bs-body-color, #e4e6eb);
 }
 
-[data-theme="dark"] .table-striped tbody tr:nth-of-type(odd) {
-  background-color: #262a32;
+[data-theme="dark"] .table-striped tbody tr:nth-of-type(odd),
+[data-bs-theme="dark"] .table-striped tbody tr:nth-of-type(odd) {
+  background-color: var(--bs-tertiary-bg, #262a32);
 }
 
-[data-theme="dark"] .table-hover tbody tr:hover {
-  background-color: #2d3139;
+[data-theme="dark"] .table-hover tbody tr:hover,
+[data-bs-theme="dark"] .table-hover tbody tr:hover {
+  background-color: rgba(var(--bs-primary-rgb, 0, 212, 170), 0.05);
 }
 
 [data-theme="dark"] .sticky-col,
 [data-theme="dark"] .sticky-col-2,
-[data-theme="dark"] .sticky-col-3 {
-  background: #22262e !important;
+[data-theme="dark"] .sticky-col-3,
+[data-bs-theme="dark"] .sticky-col,
+[data-bs-theme="dark"] .sticky-col-2,
+[data-bs-theme="dark"] .sticky-col-3 {
+  background: var(--bs-body-bg, #0a1628) !important;
   box-shadow: 2px 0 5px rgba(0,0,0,0.3);
-  border-right: 2px solid #3a3f47 !important;
+  border-right: 1px solid var(--bs-border-color, #3a3f47) !important;
 }
 
 [data-theme="dark"] .btn-outline-secondary,
@@ -142,10 +225,17 @@ nav.navbar.navbar-light {
 [data-theme="dark"] .btn-outline-success,
 [data-theme="dark"] .btn-outline-info,
 [data-theme="dark"] .btn-outline-primary,
-[data-theme="dark"] .btn-outline-dark {
-  background-color: #2d3139;
-  border-color: #3a3f47;
-  color: #e4e6eb;
+[data-theme="dark"] .btn-outline-dark,
+[data-bs-theme="dark"] .btn-outline-secondary,
+[data-bs-theme="dark"] .btn-outline-danger,
+[data-bs-theme="dark"] .btn-outline-warning,
+[data-bs-theme="dark"] .btn-outline-success,
+[data-bs-theme="dark"] .btn-outline-info,
+[data-bs-theme="dark"] .btn-outline-primary,
+[data-bs-theme="dark"] .btn-outline-dark {
+  background-color: var(--bs-tertiary-bg, #2d3139);
+  border-color: var(--bs-border-color, #3a3f47);
+  color: var(--bs-body-color, #e4e6eb);
 }
 
 [data-theme="dark"] .btn-outline-secondary:hover,
@@ -154,19 +244,26 @@ nav.navbar.navbar-light {
 [data-theme="dark"] .btn-outline-success:hover,
 [data-theme="dark"] .btn-outline-info:hover,
 [data-theme="dark"] .btn-outline-primary:hover,
-[data-theme="dark"] .btn-outline-dark:hover {
-  background-color: #383d47;
-  border-color: #4a5057;
+[data-theme="dark"] .btn-outline-dark:hover,
+[data-bs-theme="dark"] .btn-outline-secondary:hover,
+[data-bs-theme="dark"] .btn-outline-danger:hover,
+[data-bs-theme="dark"] .btn-outline-warning:hover,
+[data-bs-theme="dark"] .btn-outline-success:hover,
+[data-bs-theme="dark"] .btn-outline-info:hover,
+[data-bs-theme="dark"] .btn-outline-primary:hover,
+[data-bs-theme="dark"] .btn-outline-dark:hover {
+  background-color: rgba(var(--bs-primary-rgb, 0, 212, 170), 0.1);
+  border-color: var(--bs-primary, #00d4aa);
 }
 
-/* Brand da navbar - SEMPRE BRANCO por causa do fundo roxo */
-nav.navbar .navbar-brand {
+/* Brand da navbar - SEMPRE BRANCO por causa do fundo roxo (EXCETO navbars do design system) */
+nav.navbar:not(.nc-filter-navbar):not(.nc-navbar) .navbar-brand {
   color: white !important;
   font-weight: 600;
 }
 
-/* Links da navbar - SEMPRE BRANCO por causa do fundo roxo/escuro */
-nav.navbar .nav-link {
+/* Links da navbar - SEMPRE BRANCO por causa do fundo roxo/escuro (EXCETO navbars do design system) */
+nav.navbar:not(.nc-filter-navbar):not(.nc-navbar) .nav-link {
   color: white !important;
   font-weight: 500;
   transition: all 0.3s ease;
@@ -210,14 +307,14 @@ nav.navbar .nav-link {
   color: #212529 !important;
 }
 
-/* Hover nos links */
-nav.navbar .nav-link:hover {
+/* Hover nos links (EXCETO navbars do design system) */
+nav.navbar:not(.nc-filter-navbar):not(.nc-navbar) .nav-link:hover {
   background: rgba(255, 255, 255, 0.2);
   color: white !important;
 }
 
-/* Link ativo/selecionado */
-nav.navbar .nav-link.fw-bold {
+/* Link ativo/selecionado (EXCETO navbars do design system) */
+nav.navbar:not(.nc-filter-navbar):not(.nc-navbar) .nav-link.fw-bold {
   background: rgba(255, 255, 255, 0.25);
   color: white !important;
 }
@@ -295,14 +392,23 @@ nav.navbar .badge.rounded-pill {
   margin: 8px 10px;
 }
 
-/* Botão toggle para mobile */
-.navbar-toggler {
-  border: 2px solid rgba(255, 255, 255, 0.5);
+/* Botão toggle para mobile - Adaptativo ao tema */
+.nc-filter-navbar .navbar-toggler {
+  border: 2px solid var(--bs-border-color);
   padding: 4px 8px;
+  background: transparent;
 }
 
-.navbar-toggler-icon {
-  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28255, 255, 255, 0.9%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+/* Light mode - ícone escuro */
+[data-bs-theme="light"] .nc-filter-navbar .navbar-toggler-icon,
+[data-theme="light"] .nc-filter-navbar .navbar-toggler-icon {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%2833, 37, 41, 0.85%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+}
+
+/* Dark mode - ícone claro */
+[data-bs-theme="dark"] .nc-filter-navbar .navbar-toggler-icon,
+[data-theme="dark"] .nc-filter-navbar .navbar-toggler-icon {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28230, 237, 243, 0.9%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
 }
 
 /* Botão limpar filtro */
@@ -390,9 +496,9 @@ nav.navbar .navbar-brand .badge.bg-primary {
 /* Melhorias nas colunas sticky da tabela */
 .sticky-col, .sticky-col-2, .sticky-col-3 {
   position: sticky;
-  background: #fff !important;
+  background: var(--bs-body-bg, #ffffff) !important;
   box-shadow: 2px 0 5px rgba(0,0,0,0.1);
-  border-right: 2px solid #e9ecef !important;
+  border-right: 2px solid var(--bs-border-color, #e9ecef) !important;
 }
 
 .sticky-col {
@@ -460,8 +566,8 @@ nav.navbar .navbar-brand .badge.bg-primary {
 
 /* ✅ PAGINAÇÃO SIMPLES - SEM BURACO */
 .sticky-pagination-simple {
-  background: #ffffff !important;
-  border-bottom: 2px solid #28a745 !important;
+  background: var(--bs-body-bg, #ffffff) !important;
+  border-bottom: 2px solid var(--bs-success, #28a745) !important;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
   margin: 0 !important;
   padding: 0 !important;
@@ -469,9 +575,15 @@ nav.navbar .navbar-brand .badge.bg-primary {
 
 /* 🎯 INDICADOR VISUAL QUANDO GRUDADA */
 .sticky-pagination-simple.stuck {
-  border-color: #dc3545 !important;
-  background: #ffe6e6 !important;
+  border-color: var(--bs-danger, #dc3545) !important;
+  background: var(--bs-secondary-bg, #f8f9fa) !important;
   box-shadow: 0 5px 20px rgba(220, 53, 69, 0.3) !important;
+}
+
+/* Dark mode stuck state */
+[data-bs-theme="dark"] .sticky-pagination-simple.stuck,
+[data-theme="dark"] .sticky-pagination-simple.stuck {
+  background: var(--bs-tertiary-bg, #2d3139) !important;
 }
 
 /* 📋 CABEÇALHO DA TABELA STICKY */
@@ -479,10 +591,10 @@ nav.navbar .navbar-brand .badge.bg-primary {
   position: -webkit-sticky !important; /* Safari */
   position: sticky !important;
   top: 40px !important; /* Abaixo da paginação (~40px de altura) */
-  z-index: 102 !important; /* Abaixo da paginação (1040) mas acima do conteúdo */
-  background: #212529 !important; /* Fundo escuro (table-dark) */
-  color: #ffffff !important;
-  border-bottom: 2px solid #28a745 !important;
+  z-index: 40 !important; /* Abaixo da paginação (50) mas acima do conteúdo */
+  background: var(--bs-tertiary-bg, #212529) !important;
+  color: var(--bs-body-color, #ffffff) !important;
+  border-bottom: 2px solid var(--bs-success, #28a745) !important;
   box-shadow: 0 2px 10px rgba(0,0,0,0.1) !important;
 }
 
@@ -490,15 +602,15 @@ nav.navbar .navbar-brand .badge.bg-primary {
 .table thead th.sticky-col,
 .table thead th.sticky-col-2,
 .table thead th.sticky-col-3 {
-  z-index: 102 !important; /* Ligeiramente maior que headers normais */
-  background: #212529 !important;
+  z-index: 45 !important; /* Ligeiramente maior que headers normais (40) */
+  background: var(--bs-tertiary-bg, #212529) !important;
 }
 
 /* 📋 AJUSTE PARA CÉLULAS DO BODY COM STICKY COLUMNS */
 .table tbody td.sticky-col,
 .table tbody td.sticky-col-2,
 .table tbody td.sticky-col-3 {
-  background: #ffffff !important;
+  background: var(--bs-body-bg, #ffffff) !important;
   /* z-index já definido nas classes acima (1015, 1014, 1013) */
 }
 
@@ -575,23 +687,23 @@ nav.navbar .navbar-brand .badge.bg-primary {
 }
 
 .obs-inline-input:hover {
-  border-color: #ced4da;
-  background: #fff;
+  border-color: var(--bs-border-color, #ced4da);
+  background: var(--bs-body-bg, #fff);
 }
 
 .obs-inline-input:focus {
   outline: none;
-  border-color: #80bdff;
-  background: #fff;
-  box-shadow: 0 1px 4px rgba(0,123,255,0.15);
+  border-color: var(--bs-primary, #80bdff);
+  background: var(--bs-body-bg, #fff);
+  box-shadow: 0 1px 4px rgba(var(--bs-primary-rgb), 0.15);
 }
 
 /* Estado expandido - cresce para cima */
 .obs-inline-input.expanded {
   height: 60px;
   overflow-y: auto;
-  border-color: #80bdff;
-  background: #fff;
+  border-color: var(--bs-primary, #80bdff);
+  background: var(--bs-body-bg, #fff);
   box-shadow: 0 2px 8px rgba(0,0,0,0.15);
 }
 
@@ -666,7 +778,7 @@ nav.navbar .navbar-brand .badge.bg-primary {
 {% block content %}
 
 <!-- 🔧 CONTAINER COM CORREÇÕES PARA STICKY -->
-<div class="pagination-container">
+<div class="pagination-container premium-page">
 
 <!-- 1) Se quiser um fundo claro só para os filtros, use algo como: -->
 <div class="bg-light py-2">
@@ -790,7 +902,7 @@ nav.navbar .navbar-brand .badge.bg-primary {
   </form>
 
     <!-- 🎯 NOVA NAVBAR DE FILTROS CATEGORIZADOS -->
-    <nav class="navbar navbar-expand-lg navbar-light bg-white border rounded shadow-sm mt-3 p-2">
+    <nav class="navbar navbar-expand-lg nc-filter-navbar border rounded shadow-sm mt-3 p-2">
       <div class="container-fluid">
         <!-- Título/Brand da navbar de filtros -->
         <span class="navbar-brand mb-0 h6">
@@ -1977,9 +2089,10 @@ document.addEventListener('DOMContentLoaded', function() {
   if (stickyPagination) {
     // 🔧 FORÇA estilos para garantir que sticky funcione
     stickyPagination.style.setProperty('position', 'sticky', 'important');
-    stickyPagination.style.setProperty('top', '0px', 'important');
-    stickyPagination.style.setProperty('z-index', '104', 'important');
-    stickyPagination.style.setProperty('background', '#ffffff', 'important');
+    stickyPagination.style.setProperty('top', '56px', 'important'); // Abaixo do navbar principal (56px)
+    stickyPagination.style.setProperty('z-index', '50', 'important'); // Abaixo dos dropdowns do navbar (1000)
+    // Background usa variável CSS para suportar dark/light mode
+    stickyPagination.style.setProperty('background', 'var(--bs-body-bg)', 'important');
     
     // Força o parent a ter overflow visible
     let parent = stickyPagination.parentElement;

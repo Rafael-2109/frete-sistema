@@ -35,11 +35,6 @@ from app.financeiro.models import BaixaTituloLote, BaixaTituloItem
 # CONSTANTES - JOURNALS ESPECIAIS (HARDCODED)
 # =============================================================================
 
-# Journal de JUROS RECEBIDOS - valores podem ultrapassar saldo do titulo
-JOURNAL_JUROS_RECEBIDOS_ID = 1066
-JOURNAL_JUROS_RECEBIDOS_CODE = 'JUROS'
-JOURNAL_JUROS_RECEBIDOS_NAME = 'JUROS RECEBIDOS'
-
 # Journal de DESCONTO CONCEDIDO - limitado ao saldo do titulo
 JOURNAL_DESCONTO_CONCEDIDO_ID = 886
 JOURNAL_DESCONTO_CONCEDIDO_CODE = 'DESCO'
@@ -534,10 +529,21 @@ def baixas_upload():
             erros = []
             if not nf:
                 erros.append('NF vazia')
-            if valor <= 0:
-                erros.append('Valor invalido')
-            if not journal_info:
-                erros.append(f'Journal "{journal_nome}" nao encontrado')
+
+            # Verificar se tem algum valor preenchido
+            tem_valor_principal = valor > 0
+            tem_juros = juros > 0
+            tem_desconto = desconto > 0
+            tem_acordo = acordo > 0
+            tem_devolucao = devolucao > 0
+            tem_algum_valor = tem_valor_principal or tem_juros or tem_desconto or tem_acordo or tem_devolucao
+
+            if not tem_algum_valor:
+                erros.append('Nenhum valor preenchido (VALOR, JUROS, DESCONTO, ACORDO ou DEVOLUCAO)')
+
+            # Journal é obrigatório quando há qualquer valor a lançar
+            if tem_algum_valor and not journal_info:
+                erros.append(f'Journal "{journal_nome}" obrigatorio para lancar valores')
 
             status = 'VALIDO' if not erros else 'INVALIDO'
             mensagem = '; '.join(erros) if erros else None

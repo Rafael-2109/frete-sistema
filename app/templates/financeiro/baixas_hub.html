@@ -185,11 +185,11 @@
 {% endblock %}
 
 {% block content %}
-<div class="fin-container">
+<div class="fin-container premium-page">
     <!-- ================================================================== -->
     <!-- HEADER -->
     <!-- ================================================================== -->
-    <header class="fin-header">
+    <header class="fin-header reveal">
         <div>
             <nav class="fin-breadcrumb">
                 <a href="{{ url_for('financeiro.contas_receber_hub') }}" class="fin-breadcrumb__item">
@@ -572,19 +572,6 @@
     </div>
 </div>
 
-<!-- Modal Processamento -->
-<div class="modal fade" id="modalProcessamento" tabindex="-1" data-bs-backdrop="static">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content" style="background: var(--fin-bg-secondary); color: var(--fin-text-primary); border: 1px solid var(--fin-border);">
-            <div class="modal-body text-center py-5">
-                <div class="fin-loading__spinner" style="margin: 0 auto 1rem; width: 48px; height: 48px;"></div>
-                <h5>Processando Baixas no Odoo</h5>
-                <p style="color: var(--fin-text-muted); margin: 0;" id="processamentoStatus">Aguarde...</p>
-            </div>
-        </div>
-    </div>
-</div>
-
 <!-- Modal Confirmacao -->
 <div class="modal fade" id="modalConfirmacao" tabindex="-1">
     <div class="modal-dialog">
@@ -943,7 +930,15 @@ function executarProcessamento() {
     fetch("{{ url_for('financeiro.baixas_processar_itens') }}", {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: ids })
     })
-    .then(r => r.json())
+    .then(r => {
+        if (!r.ok && r.status === 409) {
+            // Conflito - itens ja em processamento
+            return r.json().then(data => {
+                throw new Error(data.error || 'Itens ja estao sendo processados');
+            });
+        }
+        return r.json();
+    })
     .then(data => {
         if (data.success) {
             // Salvar job_id e iniciar polling
@@ -953,13 +948,13 @@ function executarProcessamento() {
             startJobPolling();
         } else {
             hideJobProgress();
-            toastr.error(data.error);
+            toastr.error(data.error || 'Erro desconhecido');
         }
     })
     .catch((err) => {
         hideJobProgress();
-        toastr.error('Erro ao enfileirar processamento');
-        console.error(err);
+        toastr.error(err.message || 'Erro ao enfileirar processamento');
+        console.error('Erro no processamento:', err);
     });
 }
 </script>

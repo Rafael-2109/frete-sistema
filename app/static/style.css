@@ -107,25 +107,37 @@
   .sticky-col {
     position: sticky;
     left: 0;          /* primeiríssima coluna */
-    background: #fff; /* fundo pra não vazar texto ao rolar */
+    background: var(--bs-body-bg, #fff); /* fundo adaptável ao tema */
     z-index: 10;
-    min-width: 100px; /* ou algo que não permita “atropelar” o texto */
+    min-width: 100px; /* ou algo que não permita "atropelar" o texto */
   }
-  
+
   .sticky-col-2 {
     position: sticky;
     left: 100px;      /* igual ao min-width da 1ª col. Ajuste conforme sua tabela */
-    background: #fff;
+    background: var(--bs-body-bg, #fff);
     z-index: 10;
     min-width: 120px; /* ou outra largura */
   }
-  
+
   .sticky-col-3 {
     position: sticky;
     left: 220px; /* some a largura das duas anteriores */
-    background: #fff;
+    background: var(--bs-body-bg, #fff);
     z-index: 10;
     min-width: 150px;
+  }
+
+  /* Dark mode para sticky columns */
+  [data-bs-theme="dark"] .sticky-col,
+  [data-bs-theme="dark"] .sticky-col-2,
+  [data-bs-theme="dark"] .sticky-col-3,
+  [data-theme="dark"] .sticky-col,
+  [data-theme="dark"] .sticky-col-2,
+  [data-theme="dark"] .sticky-col-3 {
+    background: var(--bs-body-bg, #0a1628);
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.3);
+    border-right: 1px solid var(--bs-border-color, rgba(255, 255, 255, 0.1));
   }
   /* etc. */
   
