@@ -1003,6 +1003,11 @@ class BaixaTituloItem(db.Model):
     data_excel = db.Column(db.Date, nullable=False)  # Data do pagamento
     juros_excel = db.Column(db.Float, nullable=True, default=0)  # Valor de juros recebidos (lancamento separado)
 
+    # Colunas adicionais de baixa (limitadas ao saldo do titulo)
+    desconto_concedido_excel = db.Column(db.Float, nullable=True, default=0)  # Desconto concedido ao cliente
+    acordo_comercial_excel = db.Column(db.Float, nullable=True, default=0)  # Acordo comercial
+    devolucao_excel = db.Column(db.Float, nullable=True, default=0)  # Devolucao
+
     # =========================================================================
     # DADOS RESOLVIDOS DO ODOO (apos validacao)
     # =========================================================================
@@ -1046,6 +1051,14 @@ class BaixaTituloItem(db.Model):
     # IDs do lancamento de JUROS (se houver)
     payment_juros_odoo_id = db.Column(db.Integer, nullable=True)  # account.payment ID do juros
     payment_juros_odoo_name = db.Column(db.String(100), nullable=True)  # Nome do pagamento de juros
+
+    # IDs dos lancamentos adicionais (desconto, acordo, devolucao)
+    payment_desconto_odoo_id = db.Column(db.Integer, nullable=True)
+    payment_desconto_odoo_name = db.Column(db.String(100), nullable=True)
+    payment_acordo_odoo_id = db.Column(db.Integer, nullable=True)
+    payment_acordo_odoo_name = db.Column(db.String(100), nullable=True)
+    payment_devolucao_odoo_id = db.Column(db.Integer, nullable=True)
+    payment_devolucao_odoo_name = db.Column(db.String(100), nullable=True)
 
     # Saldo apos baixa
     saldo_depois = db.Column(db.Float, nullable=True)  # amount_residual DEPOIS
@@ -1092,6 +1105,9 @@ class BaixaTituloItem(db.Model):
             'journal_excel': self.journal_excel,
             'data_excel': self.data_excel.isoformat() if self.data_excel else None,
             'juros_excel': self.juros_excel,
+            'desconto_concedido_excel': self.desconto_concedido_excel,
+            'acordo_comercial_excel': self.acordo_comercial_excel,
+            'devolucao_excel': self.devolucao_excel,
             # Dados Odoo resolvidos
             'titulo_odoo_id': self.titulo_odoo_id,
             'move_odoo_id': self.move_odoo_id,
@@ -1111,6 +1127,12 @@ class BaixaTituloItem(db.Model):
             'partial_reconcile_id': self.partial_reconcile_id,
             'payment_juros_odoo_id': self.payment_juros_odoo_id,
             'payment_juros_odoo_name': self.payment_juros_odoo_name,
+            'payment_desconto_odoo_id': self.payment_desconto_odoo_id,
+            'payment_desconto_odoo_name': self.payment_desconto_odoo_name,
+            'payment_acordo_odoo_id': self.payment_acordo_odoo_id,
+            'payment_acordo_odoo_name': self.payment_acordo_odoo_name,
+            'payment_devolucao_odoo_id': self.payment_devolucao_odoo_id,
+            'payment_devolucao_odoo_name': self.payment_devolucao_odoo_name,
             'saldo_depois': self.saldo_depois,
             # Snapshots
             'snapshot_antes': json.loads(self.snapshot_antes) if self.snapshot_antes else None,

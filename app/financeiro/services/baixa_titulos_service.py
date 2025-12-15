@@ -29,14 +29,28 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# CONSTANTES - JOURNAL JUROS RECEBIDOS
+# CONSTANTES - JOURNALS ESPECIAIS (HARDCODED)
 # =============================================================================
 
-# ID do journal especial para lancamento de juros recebidos
-# Este journal permite valores acima do saldo do titulo
+# Journal de JUROS RECEBIDOS - valores podem ultrapassar saldo do titulo
 JOURNAL_JUROS_RECEBIDOS_ID = 1066
 JOURNAL_JUROS_RECEBIDOS_CODE = 'JUROS'
 JOURNAL_JUROS_RECEBIDOS_NAME = 'JUROS RECEBIDOS'
+
+# Journal de DESCONTO CONCEDIDO - limitado ao saldo do titulo
+JOURNAL_DESCONTO_CONCEDIDO_ID = 886
+JOURNAL_DESCONTO_CONCEDIDO_CODE = 'DESCO'
+JOURNAL_DESCONTO_CONCEDIDO_NAME = 'DESCONTO CONCEDIDO'
+
+# Journal de ACORDO COMERCIAL - limitado ao saldo do titulo
+JOURNAL_ACORDO_COMERCIAL_ID = 885
+JOURNAL_ACORDO_COMERCIAL_CODE = 'ACORD'
+JOURNAL_ACORDO_COMERCIAL_NAME = 'ACORDO COMERCIAL'
+
+# Journal de DEVOLUCAO - limitado ao saldo do titulo
+JOURNAL_DEVOLUCAO_ID = 879
+JOURNAL_DEVOLUCAO_CODE = 'DEVOL'
+JOURNAL_DEVOLUCAO_NAME = 'DEVOLUCAO'
 
 
 # Campos criticos para snapshot do titulo
@@ -139,15 +153,38 @@ class BaixaTitulosService:
         """
         Processa um item de baixa individual.
 
-        Suporta lancamento de juros:
-        - Se juros_excel > 0: verifica se nao existe juros no Odoo e cria lancamento separado
-        - Valor do juros pode ser acima do saldo do titulo
-        - Usa journal JUROS RECEBIDOS (ID 1066)
-        """
-        juros_excel = getattr(item, 'juros_excel', 0) or 0
+        Ordem de processamento:
+        1. Valor Principal (journal do usuario)
+        2. Desconto Concedido (DESCO - ID 886)
+        3. Acordo Comercial (ACORD - ID 885)
+        4. Devolucao (DEVOL - ID 879)
+        5. Juros Recebidos (JUROS - ID 1066) - ultimo, pode ultrapassar saldo
 
-        logger.info(f"Processando: NF {item.nf_excel} P{item.parcela_excel} R$ {item.valor_excel}" +
-                    (f" + JUROS R$ {juros_excel}" if juros_excel > 0 else ""))
+        Validacoes:
+        - SOMA de principal + desconto + acordo + devolucao deve respeitar saldo
+        - Juros NAO valida saldo (pode ser acima)
+        - Desconto Concedido deve ser unico por titulo/parcela
+        """
+        # Extrair valores das colunas
+        juros_excel = getattr(item, 'juros_excel', 0) or 0
+        desconto_excel = getattr(item, 'desconto_concedido_excel', 0) or 0
+        acordo_excel = getattr(item, 'acordo_comercial_excel', 0) or 0
+        devolucao_excel = getattr(item, 'devolucao_excel', 0) or 0
+
+        # Log de inicio
+        partes_log = [f"NF {item.nf_excel} P{item.parcela_excel}"]
+        if item.valor_excel > 0:
+            partes_log.append(f"Principal R$ {item.valor_excel}")
+        if desconto_excel > 0:
+            partes_log.append(f"Desconto R$ {desconto_excel}")
+        if acordo_excel > 0:
+            partes_log.append(f"Acordo R$ {acordo_excel}")
+        if devolucao_excel > 0:
+            partes_log.append(f"Devolucao R$ {devolucao_excel}")
+        if juros_excel > 0:
+            partes_log.append(f"Juros R$ {juros_excel}")
+
+        logger.info(f"Processando: {' | '.join(partes_log)}")
 
         item.status = 'PROCESSANDO'
         db.session.commit()
@@ -175,7 +212,17 @@ class BaixaTitulosService:
 
         # NOTA: O Odoo permite usar journal de outra empresa!
         journal_id_final = item.journal_odoo_id
-        logger.info(f"  Usando journal: {item.journal_excel} (ID={journal_id_final})")
+        logger.info(f"  Usando journal principal: {item.journal_excel} (ID={journal_id_final})")
+
+        # =================================================================
+        # VALIDACAO DE DUPLICIDADE - Desconto Concedido (unico por titulo)
+        # =================================================================
+        if desconto_excel > 0:
+            desconto_existente = self._verificar_desconto_existente_odoo(item.nf_excel, item.parcela_excel)
+            if desconto_existente:
+                raise ValueError(
+                    f"Ja existe baixa de DESCONTO CONCEDIDO para NF {item.nf_excel} P{item.parcela_excel}"
+                )
 
         # =================================================================
         # VALIDACAO DE JUROS - Verificar se ja existe no Odoo
@@ -188,17 +235,17 @@ class BaixaTitulosService:
                 )
 
         # =================================================================
-        # VALIDACAO DE SALDO
-        # - Valor principal deve respeitar saldo (exceto se for 0)
-        # - Juros NAO valida saldo (pode ser acima)
+        # VALIDACAO DE SALDO (SOMA de valores que consomem saldo)
+        # - Principal + Desconto + Acordo + Devolucao devem respeitar saldo
+        # - Juros NAO entra na soma (pode ser acima)
         # =================================================================
-        tem_valor_principal = item.valor_excel > 0
+        soma_valores_saldo = item.valor_excel + desconto_excel + acordo_excel + devolucao_excel
 
-        if tem_valor_principal:
-            if item.valor_excel > item.saldo_antes + 0.01:  # Tolerancia de 1 centavo
-                raise ValueError(
-                    f"Valor ({item.valor_excel}) maior que saldo ({item.saldo_antes})"
-                )
+        if soma_valores_saldo > item.saldo_antes + 0.01:  # Tolerancia de 1 centavo
+            raise ValueError(
+                f"Soma dos valores ({soma_valores_saldo:.2f}) maior que saldo ({item.saldo_antes:.2f}). "
+                f"Principal={item.valor_excel}, Desconto={desconto_excel}, Acordo={acordo_excel}, Devolucao={devolucao_excel}"
+            )
 
         # 2. Capturar snapshot ANTES
         snapshot_antes = self._capturar_snapshot(item.titulo_odoo_id, item.move_odoo_id)
@@ -207,8 +254,7 @@ class BaixaTitulosService:
         # =================================================================
         # LANCAMENTO 1: VALOR PRINCIPAL (se > 0)
         # =================================================================
-        if tem_valor_principal:
-            # 3. Criar pagamento no Odoo (na mesma empresa do titulo!)
+        if item.valor_excel > 0:
             payment_id, payment_name = self._criar_pagamento(
                 partner_id=item.partner_odoo_id,
                 valor=item.valor_excel,
@@ -221,23 +267,82 @@ class BaixaTitulosService:
             item.payment_odoo_id = payment_id
             item.payment_odoo_name = payment_name
 
-            # 4. Postar pagamento
             self._postar_pagamento(payment_id)
-
-            # 5. Buscar linha de credito criada
             credit_line_id = self._buscar_linha_credito(payment_id)
             if not credit_line_id:
-                raise ValueError("Linha de credito nao encontrada apos postar pagamento")
+                raise ValueError("Linha de credito nao encontrada apos postar pagamento principal")
 
-            # 6. Reconciliar
             self._reconciliar(credit_line_id, item.titulo_odoo_id)
-
-            logger.info(f"  Pagamento principal criado: {payment_name}")
-        else:
-            logger.info(f"  Sem valor principal (R$ 0), apenas juros sera lancado")
+            logger.info(f"  [1] Pagamento PRINCIPAL criado: {payment_name}")
 
         # =================================================================
-        # LANCAMENTO 2: JUROS (se > 0)
+        # LANCAMENTO 2: DESCONTO CONCEDIDO (se > 0)
+        # =================================================================
+        if desconto_excel > 0:
+            payment_id, payment_name = self._criar_pagamento_especial(
+                partner_id=item.partner_odoo_id,
+                valor=desconto_excel,
+                journal_id=JOURNAL_DESCONTO_CONCEDIDO_ID,
+                ref=f"DESCONTO - {item.move_odoo_name}",
+                data=item.data_excel,
+                company_id=company_id
+            )
+
+            item.payment_desconto_odoo_id = payment_id
+            item.payment_desconto_odoo_name = payment_name
+
+            credit_line_id = self._buscar_linha_credito(payment_id)
+            if credit_line_id:
+                self._reconciliar(credit_line_id, item.titulo_odoo_id)
+
+            logger.info(f"  [2] Pagamento DESCONTO criado: {payment_name}")
+
+        # =================================================================
+        # LANCAMENTO 3: ACORDO COMERCIAL (se > 0)
+        # =================================================================
+        if acordo_excel > 0:
+            payment_id, payment_name = self._criar_pagamento_especial(
+                partner_id=item.partner_odoo_id,
+                valor=acordo_excel,
+                journal_id=JOURNAL_ACORDO_COMERCIAL_ID,
+                ref=f"ACORDO - {item.move_odoo_name}",
+                data=item.data_excel,
+                company_id=company_id
+            )
+
+            item.payment_acordo_odoo_id = payment_id
+            item.payment_acordo_odoo_name = payment_name
+
+            credit_line_id = self._buscar_linha_credito(payment_id)
+            if credit_line_id:
+                self._reconciliar(credit_line_id, item.titulo_odoo_id)
+
+            logger.info(f"  [3] Pagamento ACORDO criado: {payment_name}")
+
+        # =================================================================
+        # LANCAMENTO 4: DEVOLUCAO (se > 0)
+        # =================================================================
+        if devolucao_excel > 0:
+            payment_id, payment_name = self._criar_pagamento_especial(
+                partner_id=item.partner_odoo_id,
+                valor=devolucao_excel,
+                journal_id=JOURNAL_DEVOLUCAO_ID,
+                ref=f"DEVOLUCAO - {item.move_odoo_name}",
+                data=item.data_excel,
+                company_id=company_id
+            )
+
+            item.payment_devolucao_odoo_id = payment_id
+            item.payment_devolucao_odoo_name = payment_name
+
+            credit_line_id = self._buscar_linha_credito(payment_id)
+            if credit_line_id:
+                self._reconciliar(credit_line_id, item.titulo_odoo_id)
+
+            logger.info(f"  [4] Pagamento DEVOLUCAO criado: {payment_name}")
+
+        # =================================================================
+        # LANCAMENTO 5: JUROS (se > 0) - ULTIMO, nao reconcilia
         # =================================================================
         if juros_excel > 0:
             payment_juros_id, payment_juros_name = self._criar_pagamento_juros(
@@ -251,7 +356,7 @@ class BaixaTitulosService:
             item.payment_juros_odoo_id = payment_juros_id
             item.payment_juros_odoo_name = payment_juros_name
 
-            logger.info(f"  Pagamento JUROS criado: {payment_juros_name}")
+            logger.info(f"  [5] Pagamento JUROS criado: {payment_juros_name}")
 
         # 7. Capturar snapshot DEPOIS
         snapshot_depois = self._capturar_snapshot(item.titulo_odoo_id, item.move_odoo_id)
@@ -266,7 +371,7 @@ class BaixaTitulosService:
         item.saldo_depois = titulo_atualizado.get('amount_residual', 0) if titulo_atualizado else None
 
         # 10. Buscar partial_reconcile criado (se houve valor principal)
-        if tem_valor_principal:
+        if item.valor_excel > 0:
             item.partial_reconcile_id = self._buscar_partial_reconcile(item.titulo_odoo_id)
 
         item.status = 'SUCESSO'
@@ -276,9 +381,15 @@ class BaixaTitulosService:
         # Log de conclusao
         pagamentos_criados = []
         if item.payment_odoo_name:
-            pagamentos_criados.append(item.payment_odoo_name)
+            pagamentos_criados.append(f"Principal: {item.payment_odoo_name}")
+        if item.payment_desconto_odoo_name:
+            pagamentos_criados.append(f"Desconto: {item.payment_desconto_odoo_name}")
+        if item.payment_acordo_odoo_name:
+            pagamentos_criados.append(f"Acordo: {item.payment_acordo_odoo_name}")
+        if item.payment_devolucao_odoo_name:
+            pagamentos_criados.append(f"Devolucao: {item.payment_devolucao_odoo_name}")
         if item.payment_juros_odoo_name:
-            pagamentos_criados.append(f"JUROS: {item.payment_juros_odoo_name}")
+            pagamentos_criados.append(f"Juros: {item.payment_juros_odoo_name}")
 
         logger.info(f"  OK - Payments: {', '.join(pagamentos_criados)}, Saldo: {item.saldo_antes} -> {item.saldo_depois}")
 
@@ -640,3 +751,120 @@ class BaixaTitulosService:
         payment_name = payment[0]['name'] if payment else f'Payment #{payment_id}'
 
         return payment_id, payment_name
+
+    def _criar_pagamento_especial(
+        self,
+        partner_id: int,
+        valor: float,
+        journal_id: int,
+        ref: str,
+        data,
+        company_id: int
+    ) -> Tuple[int, str]:
+        """
+        Cria um pagamento especial (desconto, acordo ou devolucao) no Odoo.
+
+        Diferente do pagamento de juros:
+        - E reconciliado com o titulo (limitado ao saldo)
+        - Usa journal especifico passado como parametro
+
+        Args:
+            partner_id: ID do parceiro
+            valor: Valor do pagamento
+            journal_id: ID do journal especial (DESCO, ACORD ou DEVOL)
+            ref: Referencia (com prefixo do tipo)
+            data: Data do pagamento
+            company_id: ID da empresa
+
+        Returns:
+            Tuple com (payment_id, payment_name)
+        """
+        # Converter data para string se necessario
+        data_str = data.strftime('%Y-%m-%d') if hasattr(data, 'strftime') else str(data)
+
+        payment_data = {
+            'payment_type': 'inbound',
+            'partner_type': 'customer',
+            'partner_id': partner_id,
+            'amount': valor,
+            'journal_id': journal_id,
+            'ref': ref,
+            'date': data_str,
+            'company_id': company_id
+        }
+
+        logger.info(f"  Criando pagamento especial: Journal={journal_id}, Valor={valor}")
+
+        payment_id = self.connection.execute_kw(
+            'account.payment',
+            'create',
+            [payment_data]
+        )
+
+        # Postar pagamento
+        try:
+            self.connection.execute_kw(
+                'account.payment',
+                'action_post',
+                [[payment_id]]
+            )
+        except Exception as e:
+            # Ignorar erro de serializacao - operacao foi executada
+            if "cannot marshal None" not in str(e):
+                raise
+
+        # Buscar nome gerado
+        payment = self.connection.search_read(
+            'account.payment',
+            [['id', '=', payment_id]],
+            fields=['name'],
+            limit=1
+        )
+
+        payment_name = payment[0]['name'] if payment else f'Payment #{payment_id}'
+
+        return payment_id, payment_name
+
+    def _verificar_desconto_existente_odoo(self, nf: str, parcela: int) -> bool:
+        """
+        Verifica se ja existe baixa de desconto concedido no Odoo para NF+parcela.
+
+        Busca no account.payment com journal_id = JOURNAL_DESCONTO_CONCEDIDO_ID
+        e ref contendo o numero da NF.
+
+        Args:
+            nf: Numero da NF-e
+            parcela: Numero da parcela
+
+        Returns:
+            True se ja existe baixa de desconto, False caso contrario
+        """
+        try:
+            # Buscar pagamentos com journal de desconto que referenciam esta NF
+            pagamentos = self.connection.search_read(
+                'account.payment',
+                [
+                    ['journal_id', '=', JOURNAL_DESCONTO_CONCEDIDO_ID],
+                    ['ref', 'ilike', nf],
+                    ['state', '=', 'posted']
+                ],
+                fields=['id', 'name', 'ref', 'amount'],
+                limit=10
+            )
+
+            if not pagamentos:
+                return False
+
+            # Verificar se algum pagamento corresponde a esta NF
+            for pagamento in pagamentos:
+                ref = pagamento.get('ref', '') or ''
+                # Verificar se a ref contem a NF
+                if nf in ref:
+                    logger.info(f"  Desconto ja existe para NF {nf}: Payment {pagamento.get('name')}")
+                    return True
+
+            return False
+
+        except Exception as e:
+            logger.warning(f"Erro ao verificar desconto existente: {e}")
+            return False

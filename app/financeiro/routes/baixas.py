@@ -32,14 +32,28 @@ from app.financeiro.models import BaixaTituloLote, BaixaTituloItem
 
 
 # =============================================================================
-# CONSTANTES - JOURNAL JUROS RECEBIDOS
+# CONSTANTES - JOURNALS ESPECIAIS (HARDCODED)
 # =============================================================================
 
-# ID do journal especial para lancamento de juros recebidos
-# Este journal permite valores acima do saldo do titulo
+# Journal de JUROS RECEBIDOS - valores podem ultrapassar saldo do titulo
 JOURNAL_JUROS_RECEBIDOS_ID = 1066
 JOURNAL_JUROS_RECEBIDOS_CODE = 'JUROS'
 JOURNAL_JUROS_RECEBIDOS_NAME = 'JUROS RECEBIDOS'
+
+# Journal de DESCONTO CONCEDIDO - limitado ao saldo do titulo
+JOURNAL_DESCONTO_CONCEDIDO_ID = 886
+JOURNAL_DESCONTO_CONCEDIDO_CODE = 'DESCO'
+JOURNAL_DESCONTO_CONCEDIDO_NAME = 'DESCONTO CONCEDIDO'
+
+# Journal de ACORDO COMERCIAL - limitado ao saldo do titulo
+JOURNAL_ACORDO_COMERCIAL_ID = 885
+JOURNAL_ACORDO_COMERCIAL_CODE = 'ACORD'
+JOURNAL_ACORDO_COMERCIAL_NAME = 'ACORDO COMERCIAL'
+
+# Journal de DEVOLUCAO - limitado ao saldo do titulo
+JOURNAL_DEVOLUCAO_ID = 879
+JOURNAL_DEVOLUCAO_CODE = 'DEVOL'
+JOURNAL_DEVOLUCAO_NAME = 'DEVOLUCAO'
 
 
 # =============================================================================
@@ -312,14 +326,22 @@ def baixas_download_template():
 
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             # Aba 1: Baixas (template para preenchimento)
-            # Coluna JUROS: valor de juros recebidos (gera lancamento separado com journal JUROS RECEBIDOS)
+            # Colunas especiais (ordem de processamento):
+            # 1. VALOR (principal) - journal informado
+            # 2. DESCONTO - journal DESCONTO CONCEDIDO (886)
+            # 3. ACORDO - journal ACORDO COMERCIAL (885)
+            # 4. DEVOLUCAO - journal DEVOLUCAO (879)
+            # 5. JUROS - journal JUROS RECEBIDOS (1066) - pode ultrapassar saldo
             df_baixas = pd.DataFrame({
                 'NF': ['92234', '92235', '92236'],
                 'PARCELA': [1, 1, 2],
                 'VALOR': [1500.00, 2000.00, 3500.50],
-                'JOURNAL': ['GRAFENO', 'DEVOLUCAO', 'SICOOB'],
+                'JOURNAL': ['GRAFENO', 'SICOOB', 'AGIS'],
                 'DATA': [date.today().strftime('%Y-%m-%d')] * 3,
-                'JUROS': [50.00, '', 25.00]  # Opcional: valor de juros recebidos
+                'DESCONTO': ['', 100.00, ''],  # Desconto concedido (limitado ao saldo)
+                'ACORDO': ['', '', 50.00],  # Acordo comercial (limitado ao saldo)
+                'DEVOLUCAO': [200.00, '', ''],  # Devolucao (limitado ao saldo)
+                'JUROS': [50.00, '', 25.00]  # Juros recebidos (pode ultrapassar saldo)
             })
             df_baixas.to_excel(writer, index=False, sheet_name='Baixas')
 
@@ -475,6 +497,24 @@ def baixas_upload():
             except (ValueError, TypeError):
                 juros = 0
 
+            # Desconto concedido (coluna opcional)
+            try:
+                desconto = round(float(row['DESCONTO']), 2) if 'DESCONTO' in df.columns and pd.notna(row.get('DESCONTO')) else 0
+            except (ValueError, TypeError):
+                desconto = 0
+
+            # Acordo comercial (coluna opcional)
+            try:
+                acordo = round(float(row['ACORDO']), 2) if 'ACORDO' in df.columns and pd.notna(row.get('ACORDO')) else 0
+            except (ValueError, TypeError):
+                acordo = 0
+
+            # Devolucao (coluna opcional)
+            try:
+                devolucao = round(float(row['DEVOLUCAO']), 2) if 'DEVOLUCAO' in df.columns and pd.notna(row.get('DEVOLUCAO')) else 0
+            except (ValueError, TypeError):
+                devolucao = 0
+
             # Data
             try:
                 if pd.notna(row['DATA']):
@@ -526,6 +566,9 @@ def baixas_upload():
                 journal_excel=journal_nome,
                 data_excel=data_baixa,
                 juros_excel=juros,
+                desconto_concedido_excel=desconto,
+                acordo_comercial_excel=acordo,
+                devolucao_excel=devolucao,
                 journal_odoo_id=journal_info['id'] if journal_info else None,
                 journal_odoo_code=journal_info['code'] if journal_info else None,
                 ativo=status == 'VALIDO',
