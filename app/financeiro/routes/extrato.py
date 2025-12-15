@@ -101,9 +101,9 @@ def extrato_hub():
     # Ordenar por data mais recente
     query = query.order_by(ExtratoLote.criado_em.desc())
 
-    # Paginação
-    total_lotes = query.count()
-    lotes_raw = query.offset((page - 1) * per_page).limit(per_page).all()
+    # Buscar TODOS os lotes para agrupar corretamente
+    # A paginação será aplicada após o agrupamento por statement
+    lotes_raw = query.all()
 
     # Transformar resultado em lista de dicts e AGRUPAR por statement_id
     # Isso permite mostrar recebimentos e pagamentos do mesmo statement na mesma linha
@@ -152,7 +152,12 @@ def extrato_hub():
     lotes_agrupados.sort(key=lambda x: x.get('data_extrato') or x.get('data_de') or date.min, reverse=True)
 
     # Adicionar lotes sem statement ao final
-    lotes = lotes_agrupados + [{'entrada': item, 'saida': None, 'statement_id': None, **item} for item in lotes_sem_statement]
+    todos_lotes = lotes_agrupados + [{'entrada': item, 'saida': None, 'statement_id': None, **item} for item in lotes_sem_statement]
+
+    # PAGINAÇÃO: Aplicar sobre os statements agrupados (não lotes individuais)
+    total_lotes = len(todos_lotes)  # Total de linhas VISÍVEIS na tabela
+    offset = (page - 1) * per_page
+    lotes = todos_lotes[offset:offset + per_page]  # Aplicar paginação
 
     # === ESTATÍSTICAS DE RECEBIMENTOS (entrada) ===
     stats_recebimentos = {

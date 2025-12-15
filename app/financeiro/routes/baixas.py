@@ -702,7 +702,7 @@ def baixas_processar_itens():
     Retorna job_id para acompanhamento de progresso.
     """
     try:
-        from app.portal.workers import enqueue_job
+        from app.portal.workers import enqueue_job, get_redis_connection
         from app.financeiro.workers.baixa_titulos_jobs import processar_itens_baixa_job
 
         data = request.get_json()
@@ -723,6 +723,33 @@ def baixas_processar_itens():
 
         # IDs validos para processar
         item_ids = [i.id for i in itens]
+
+        # Verificar se algum item ja esta sendo processado (lock no Redis)
+        try:
+            redis_conn = get_redis_connection()
+            itens_bloqueados = []
+            for item_id in item_ids:
+                lock_key = f'baixa_item_lock:{item_id}'
+                if redis_conn.exists(lock_key):
+                    itens_bloqueados.append(item_id)
+
+            if itens_bloqueados:
+                # Buscar info dos itens bloqueados para mensagem amigavel
+                itens_info = BaixaTituloItem.query.filter(BaixaTituloItem.id.in_(itens_bloqueados)).all()
+                nfs_bloqueadas = [f"NF {i.nf_excel} P{i.parcela_excel}" for i in itens_info[:5]]
+                msg_nfs = ", ".join(nfs_bloqueadas)
+                if len(itens_bloqueados) > 5:
+                    msg_nfs += f" e mais {len(itens_bloqueados) - 5} itens"
+
+                return jsonify({
+                    'success': False,
+                    'error': f'{len(itens_bloqueados)} itens ja estao sendo processados: {msg_nfs}',
+                    'itens_bloqueados': itens_bloqueados
+                }), 409  # 409 Conflict
+        except Exception as e:
+            # Se falhar verificacao do Redis, prosseguir (lock sera verificado no job)
+            pass
+
         usuario_nome = current_user.nome if current_user else 'Sistema'
 
         # Enfileirar job

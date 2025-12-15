@@ -798,14 +798,23 @@ class LancamentoOdooService:
 
             # ========================================
             # ETAPA 6: Gerar Purchase Order
-            # ⏱️ TIMEOUT ESTENDIDO: 90 segundos (operação pode demorar no Odoo)
+            # ⏱️ TIMEOUT ESTENDIDO: 180 segundos (operação pode demorar MUITO no Odoo)
             # ========================================
             if continuar_de_etapa < 7:  # Só executa se não está retomando de etapa posterior
                 contexto = {'validate_analytic': True}
 
-                # 🔧 Timeout estendido de 90s para action_gerar_po_dfe
-                # Esta operação pode demorar quando o Odoo está ocupado
-                TIMEOUT_GERAR_PO = 90
+                # 🔧 CORREÇÃO 15/12/2025: Timeout aumentado para 180s
+                # A etapa action_gerar_po_dfe é a mais pesada do processo:
+                # - Cria Purchase Order
+                # - Configura linhas do PO
+                # - Calcula impostos automaticamente
+                # - Pode demorar 60-90s quando Odoo está ocupado
+                # O timeout de 90s estava causando falhas intermitentes
+                TIMEOUT_GERAR_PO = 180
+
+                current_app.logger.info(
+                    f"⏱️ [ETAPA 06] Iniciando geração de PO com timeout de {TIMEOUT_GERAR_PO}s..."
+                )
 
                 sucesso, po_result, erro = self._executar_com_auditoria(
                     funcao=lambda: self.odoo.execute_kw(
@@ -934,7 +943,10 @@ class LancamentoOdooService:
                                         {'l10n_br_operacao_id': operacao_correta_id}
                                     )
 
-                                    # 4. Verificar se valores foram zerados e RESTAURAR
+                                    # 4. Verificar se valores foram ALTERADOS e RESTAURAR
+                                    # 🔧 CORREÇÃO 15/12/2025: Verificar QUALQUER alteração de valor
+                                    # Antes só verificava se foi zerado (== 0), mas a operação fiscal
+                                    # pode RECALCULAR o valor (ex: incluir/excluir impostos)
                                     linhas_apos = self.odoo.read(
                                         'purchase.order.line',
                                         linhas_para_corrigir,
@@ -946,14 +958,25 @@ class LancamentoOdooService:
                                         valor_original = backup.get('price_unit', 0)
                                         valor_atual = linha.get('price_unit', 0)
 
-                                        if valor_atual == 0 and valor_original > 0:
+                                        # Tolerância de 0.01 para comparação de floats
+                                        diferenca = abs(valor_atual - valor_original)
+                                        valor_foi_alterado = diferenca > 0.01
+
+                                        if valor_foi_alterado and valor_original > 0:
                                             current_app.logger.warning(
-                                                f"  ⚠️ Linha {linha['id']} foi ZERADA! Restaurando R$ {valor_original:.2f}"
+                                                f"  ⚠️ Linha {linha['id']} teve valor ALTERADO! "
+                                                f"R$ {valor_original:.2f} → R$ {valor_atual:.2f} (diff: R$ {diferenca:.2f}). "
+                                                f"Restaurando valor original..."
                                             )
                                             self.odoo.write(
                                                 'purchase.order.line',
                                                 [linha['id']],
                                                 backup
+                                            )
+                                        elif valor_foi_alterado:
+                                            current_app.logger.warning(
+                                                f"  ⚠️ Linha {linha['id']} alterada mas original era R$ 0. "
+                                                f"Mantendo valor atual: R$ {valor_atual:.2f}"
                                             )
 
                                     current_app.logger.info(

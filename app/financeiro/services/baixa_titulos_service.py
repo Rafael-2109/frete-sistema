@@ -247,6 +247,12 @@ class BaixaTitulosService:
                 f"Principal={item.valor_excel}, Desconto={desconto_excel}, Acordo={acordo_excel}, Devolucao={devolucao_excel}"
             )
 
+        # =================================================================
+        # VARIAVEL DE CONTROLE: Saldo consumido acumulado
+        # Para rastrear quanto saldo ja foi usado nos pagamentos anteriores
+        # =================================================================
+        saldo_atual_titulo = item.saldo_antes
+
         # 2. Capturar snapshot ANTES
         snapshot_antes = self._capturar_snapshot(item.titulo_odoo_id, item.move_odoo_id)
         item.set_snapshot_antes(snapshot_antes)
@@ -255,6 +261,17 @@ class BaixaTitulosService:
         # LANCAMENTO 1: VALOR PRINCIPAL (se > 0)
         # =================================================================
         if item.valor_excel > 0:
+            # VALIDACAO DE SALDO EM TEMPO REAL (rebuscar do Odoo)
+            titulo_atual = self._buscar_titulo_por_id(item.titulo_odoo_id)
+            if titulo_atual:
+                saldo_atual_titulo = titulo_atual.get('amount_residual', 0)
+                if item.valor_excel > saldo_atual_titulo + 0.01:
+                    raise ValueError(
+                        f"Saldo insuficiente no titulo para PRINCIPAL. "
+                        f"Valor={item.valor_excel:.2f}, Saldo atual={saldo_atual_titulo:.2f}. "
+                        f"O titulo pode ter sido baixado por outro processo."
+                    )
+
             payment_id, payment_name = self._criar_pagamento(
                 partner_id=item.partner_odoo_id,
                 valor=item.valor_excel,
@@ -279,6 +296,17 @@ class BaixaTitulosService:
         # LANCAMENTO 2: DESCONTO CONCEDIDO (se > 0)
         # =================================================================
         if desconto_excel > 0:
+            # VALIDACAO DE SALDO EM TEMPO REAL (rebuscar do Odoo)
+            titulo_atual = self._buscar_titulo_por_id(item.titulo_odoo_id)
+            if titulo_atual:
+                saldo_atual_titulo = titulo_atual.get('amount_residual', 0)
+                if desconto_excel > saldo_atual_titulo + 0.01:
+                    raise ValueError(
+                        f"Saldo insuficiente no titulo para DESCONTO. "
+                        f"Valor={desconto_excel:.2f}, Saldo atual={saldo_atual_titulo:.2f}. "
+                        f"O titulo pode ter sido baixado por outro processo."
+                    )
+
             payment_id, payment_name = self._criar_pagamento_especial(
                 partner_id=item.partner_odoo_id,
                 valor=desconto_excel,
@@ -301,6 +329,17 @@ class BaixaTitulosService:
         # LANCAMENTO 3: ACORDO COMERCIAL (se > 0)
         # =================================================================
         if acordo_excel > 0:
+            # VALIDACAO DE SALDO EM TEMPO REAL (rebuscar do Odoo)
+            titulo_atual = self._buscar_titulo_por_id(item.titulo_odoo_id)
+            if titulo_atual:
+                saldo_atual_titulo = titulo_atual.get('amount_residual', 0)
+                if acordo_excel > saldo_atual_titulo + 0.01:
+                    raise ValueError(
+                        f"Saldo insuficiente no titulo para ACORDO. "
+                        f"Valor={acordo_excel:.2f}, Saldo atual={saldo_atual_titulo:.2f}. "
+                        f"O titulo pode ter sido baixado por outro processo."
+                    )
+
             payment_id, payment_name = self._criar_pagamento_especial(
                 partner_id=item.partner_odoo_id,
                 valor=acordo_excel,
@@ -323,6 +362,17 @@ class BaixaTitulosService:
         # LANCAMENTO 4: DEVOLUCAO (se > 0)
         # =================================================================
         if devolucao_excel > 0:
+            # VALIDACAO DE SALDO EM TEMPO REAL (rebuscar do Odoo)
+            titulo_atual = self._buscar_titulo_por_id(item.titulo_odoo_id)
+            if titulo_atual:
+                saldo_atual_titulo = titulo_atual.get('amount_residual', 0)
+                if devolucao_excel > saldo_atual_titulo + 0.01:
+                    raise ValueError(
+                        f"Saldo insuficiente no titulo para DEVOLUCAO. "
+                        f"Valor={devolucao_excel:.2f}, Saldo atual={saldo_atual_titulo:.2f}. "
+                        f"O titulo pode ter sido baixado por outro processo."
+                    )
+
             payment_id, payment_name = self._criar_pagamento_especial(
                 partner_id=item.partner_odoo_id,
                 valor=devolucao_excel,

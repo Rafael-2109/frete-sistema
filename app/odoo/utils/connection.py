@@ -95,6 +95,17 @@ class OdooConnection:
         """
         def _do_authenticate():
             """Função interna para autenticação"""
+            # 🔧 CORREÇÃO 15/12/2025: Garantir timeout configurado ANTES da autenticação
+            # Isso evita que a primeira conexão use o timeout padrão do Python (None/indefinido)
+            current_timeout = socket.getdefaulttimeout()
+            if current_timeout != self.timeout:
+                logger.info(
+                    f"⏱️ Configurando timeout inicial: {self.timeout}s (atual: {current_timeout}s)"
+                )
+                socket.setdefaulttimeout(self.timeout)
+                # Forçar reconexão para aplicar novo timeout
+                self._common = None
+
             common = self._get_common()
 
             # ✅ CORRIGIDO: Sem retry interno - Circuit Breaker gerencia tentativas
@@ -114,6 +125,10 @@ class OdooConnection:
                     error_msg = "Credenciais inválidas ou UID não retornado"
                     logger.error(f"❌ Falha na autenticação: {error_msg}")
                     raise Exception(error_msg)
+
+            except socket.timeout as e:
+                logger.error(f"⏰ TIMEOUT na autenticação após {self.timeout}s: {e}")
+                raise Exception(f"Timeout de {self.timeout}s excedido na autenticação")
 
             except Exception as e:
                 # ✅ Lançar exceção imediatamente para Circuit Breaker detectar
@@ -150,6 +165,12 @@ class OdooConnection:
             kwargs: Argumentos nomeados
             timeout_override: Timeout específico em segundos (sobrescreve o padrão para operações longas)
         """
+        # 🔧 CORREÇÃO 15/12/2025: Determinar timeout efetivo ANTES da execução
+        # O timeout_override SEMPRE deve ser aplicado quando especificado,
+        # independentemente de ser maior ou menor que o padrão
+        timeout_efetivo = timeout_override if timeout_override else self.timeout
+        usar_timeout_customizado = timeout_override is not None
+
         def _do_execute():
             """Função interna para execução"""
             if not self._uid:
@@ -160,15 +181,19 @@ class OdooConnection:
 
             # 🔧 CORREÇÃO: Timeout específico para operações longas
             # socket.setdefaulttimeout() só afeta sockets NOVOS, não conexões já estabelecidas
-            # Por isso, forçamos reconexão quando há timeout_override maior
-            if timeout_override and timeout_override > self.timeout:
-                logger.info(f"⏱️ Reconectando com timeout estendido: {timeout_override}s para {model}.{method}")
-                self._models = None  # Força reconexão
-                socket.setdefaulttimeout(timeout_override)
+            # Por isso, SEMPRE forçamos reconexão quando há timeout_override especificado
+            if usar_timeout_customizado:
+                logger.info(
+                    f"⏱️ Aplicando timeout customizado: {timeout_efetivo}s para {model}.{method} "
+                    f"(padrão seria {self.timeout}s)"
+                )
+                self._models = None  # Força reconexão com novo timeout
+                socket.setdefaulttimeout(timeout_efetivo)
 
             models = self._get_models()
 
             try:
+                logger.debug(f"🔌 Executando {model}.{method} com timeout={timeout_efetivo}s...")
                 result = models.execute_kw(
                     self.database,
                     self._uid,
@@ -180,14 +205,22 @@ class OdooConnection:
                 )
                 return result
 
+            except socket.timeout as e:
+                # ✅ Log específico para timeout de socket
+                logger.error(
+                    f"⏰ TIMEOUT de socket após {timeout_efetivo}s em {model}.{method}: {e}"
+                )
+                raise Exception(f"Timeout de {timeout_efetivo}s excedido em {model}.{method}")
+
             except Exception as e:
                 # ✅ Lançar exceção imediatamente para Circuit Breaker detectar
                 logger.error(f"❌ Erro na execução de {model}.{method}: {e}")
                 raise
 
             finally:
-                # 🔧 Restaurar timeout padrão após operação longa
-                if timeout_override and timeout_override > self.timeout:
+                # 🔧 Restaurar timeout padrão após operação com timeout customizado
+                if usar_timeout_customizado:
+                    logger.debug(f"🔄 Restaurando timeout padrão: {self.timeout}s")
                     socket.setdefaulttimeout(self.timeout)
                     self._models = None  # Força reconexão na próxima chamada com timeout normal
 

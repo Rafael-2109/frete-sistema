@@ -38,6 +38,113 @@ TIMEOUT_BAIXA_LOTE = 1800
 
 
 # ========================================
+# LOCK PARA EVITAR DUPLICACAO DE JOBS
+# ========================================
+
+
+def _criar_lock_processamento(item_ids: List[int], job_id: str, ttl: int = 1800) -> bool:
+    """
+    Cria lock no Redis para evitar processamento duplicado dos mesmos itens.
+
+    Args:
+        item_ids: Lista de IDs de itens a processar
+        job_id: ID do job que esta adquirindo o lock
+        ttl: Tempo de vida do lock em segundos (default: 30 minutos)
+
+    Returns:
+        True se lock criado com sucesso, False se ja existe lock ativo
+    """
+    try:
+        redis_conn = _get_redis_connection()
+        if not redis_conn:
+            logger.warning("[Lock] Redis nao disponivel, prosseguindo sem lock")
+            return True
+
+        # Criar locks individuais para cada item
+        locks_criados = []
+        for item_id in item_ids:
+            lock_key = f'baixa_item_lock:{item_id}'
+
+            # Tentar criar lock (SET NX = apenas se nao existe)
+            resultado = redis_conn.set(lock_key, job_id, nx=True, ex=ttl)
+
+            if resultado:
+                locks_criados.append(item_id)
+            else:
+                # Lock ja existe - verificar quem tem o lock
+                dono_lock = redis_conn.get(lock_key)
+                if dono_lock:
+                    dono_lock = dono_lock.decode('utf-8') if isinstance(dono_lock, bytes) else dono_lock
+                    if dono_lock != job_id:
+                        logger.warning(f"[Lock] Item {item_id} ja esta sendo processado pelo job {dono_lock}")
+                        # Reverter locks criados
+                        for criado_id in locks_criados:
+                            redis_conn.delete(f'baixa_item_lock:{criado_id}')
+                        return False
+
+        logger.info(f"[Lock] Locks criados para {len(locks_criados)} itens (Job: {job_id})")
+        return True
+
+    except Exception as e:
+        logger.error(f"[Lock] Erro ao criar lock: {e}")
+        return True  # Em caso de erro, prosseguir
+
+
+def _liberar_lock_processamento(item_ids: List[int], job_id: str):
+    """
+    Libera locks dos itens apos processamento.
+
+    Apenas libera se o lock pertence ao job atual (evita liberar lock de outro job).
+    """
+    try:
+        redis_conn = _get_redis_connection()
+        if not redis_conn:
+            return
+
+        liberados = 0
+        for item_id in item_ids:
+            lock_key = f'baixa_item_lock:{item_id}'
+
+            # Verificar se o lock pertence a este job antes de deletar
+            dono_lock = redis_conn.get(lock_key)
+            if dono_lock:
+                dono_lock = dono_lock.decode('utf-8') if isinstance(dono_lock, bytes) else dono_lock
+                if dono_lock == job_id:
+                    redis_conn.delete(lock_key)
+                    liberados += 1
+
+        logger.info(f"[Lock] Liberados {liberados} locks (Job: {job_id})")
+
+    except Exception as e:
+        logger.error(f"[Lock] Erro ao liberar locks: {e}")
+
+
+def _verificar_item_em_processamento(item_id: int, job_id: str) -> bool:
+    """
+    Verifica se um item especifico esta sendo processado por outro job.
+
+    Returns:
+        True se pode processar, False se outro job esta processando
+    """
+    try:
+        redis_conn = _get_redis_connection()
+        if not redis_conn:
+            return True
+
+        lock_key = f'baixa_item_lock:{item_id}'
+        dono_lock = redis_conn.get(lock_key)
+
+        if not dono_lock:
+            return True
+
+        dono_lock = dono_lock.decode('utf-8') if isinstance(dono_lock, bytes) else dono_lock
+        return dono_lock == job_id
+
+    except Exception:
+        return True
+
+
+# ========================================
 # PROGRESSO EM TEMPO REAL VIA REDIS
 # ========================================
 
@@ -184,6 +291,7 @@ def processar_itens_baixa_job(
         'total_itens': len(item_ids),
         'itens_sucesso': 0,
         'itens_erro': 0,
+        'itens_pulados': 0,
         'detalhes': [],
         'tempo_segundos': 0,
         'error': None,
@@ -199,6 +307,7 @@ def processar_itens_baixa_job(
         'itens_processados': 0,
         'itens_sucesso': 0,
         'itens_erro': 0,
+        'itens_pulados': 0,
         'item_atual': 'Iniciando...',
         'inicio': datetime.now().isoformat(),
         'detalhes': []
@@ -206,6 +315,19 @@ def processar_itens_baixa_job(
 
     if job_id:
         _atualizar_progresso_baixa(job_id, progresso)
+
+    # Tentar criar locks para os itens
+    if job_id and not _criar_lock_processamento(item_ids, job_id):
+        resultado['error'] = 'Itens ja estao sendo processados por outro job'
+        resultado['success'] = False
+        logger.warning(f"[Job Baixa] Lock falhou - itens ja em processamento")
+
+        if job_id:
+            progresso['status'] = 'bloqueado'
+            progresso['item_atual'] = 'Itens ja em processamento por outro job'
+            _atualizar_progresso_baixa(job_id, progresso)
+
+        return resultado
 
     try:
         with _app_context_safe():
@@ -253,6 +375,17 @@ def processar_itens_baixa_job(
                     _atualizar_progresso_baixa(job_id, progresso)
 
                 try:
+                    # Verificar se este item especifico pode ser processado
+                    if job_id and not _verificar_item_em_processamento(item.id, job_id):
+                        logger.warning(f"[Job Baixa] Item {item.id} pulado - sendo processado por outro job")
+                        item_resultado['success'] = False
+                        item_resultado['message'] = 'Item pulado - sendo processado por outro job'
+                        resultado['itens_pulados'] += 1
+                        progresso['itens_pulados'] += 1
+                        resultado['detalhes'].append(item_resultado)
+                        progresso['detalhes'].append(item_resultado)
+                        continue
+
                     logger.info(f"[Job Baixa] Processando item {idx + 1}/{len(itens)}: NF {item.nf_excel} P{item.parcela_excel}")
 
                     # Processar item via servico
@@ -302,10 +435,12 @@ def processar_itens_baixa_job(
 
             if job_id:
                 _atualizar_progresso_baixa(job_id, progresso)
+                # Liberar locks apos processamento
+                _liberar_lock_processamento(item_ids, job_id)
 
             logger.info(
                 f"[Job Baixa] Concluido em {tempo_total:.1f}s - "
-                f"Sucesso: {resultado['itens_sucesso']}, Erro: {resultado['itens_erro']}"
+                f"Sucesso: {resultado['itens_sucesso']}, Erro: {resultado['itens_erro']}, Pulados: {resultado['itens_pulados']}"
             )
 
             return resultado
@@ -325,6 +460,8 @@ def processar_itens_baixa_job(
             progresso['item_atual'] = f'Erro: {str(e)[:100]}'
             progresso['fim'] = datetime.now().isoformat()
             _atualizar_progresso_baixa(job_id, progresso)
+            # Liberar locks mesmo em caso de erro
+            _liberar_lock_processamento(item_ids, job_id)
 
         return resultado
 
