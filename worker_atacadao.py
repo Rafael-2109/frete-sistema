@@ -157,7 +157,6 @@ def run_worker(workers, verbose, burst, queues):
 def run_single_worker(config, burst=False):
     """Executa um worker individual"""
     # Usar PID do processo atual + timestamp + random para garantir nome único
-    import time
     import random
     worker_name = f'atacadao-worker-{os.getpid()}-{int(time.time())}-{random.randint(1000, 9999)}'
     

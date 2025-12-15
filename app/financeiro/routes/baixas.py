@@ -690,17 +690,20 @@ def baixas_ativar_lote():
 
 
 # =============================================================================
-# PROCESSAR ITENS SELECIONADOS
+# PROCESSAR ITENS SELECIONADOS (VIA WORKER)
 # =============================================================================
 
 @financeiro_bp.route('/contas-receber/baixas/processar-itens', methods=['POST'])
 @login_required
 def baixas_processar_itens():
     """
-    Processa os itens selecionados no Odoo.
+    Enfileira os itens selecionados para processamento assincrono via worker.
+
+    Retorna job_id para acompanhamento de progresso.
     """
     try:
-        from app.financeiro.services.baixa_titulos_service import BaixaTitulosService
+        from app.portal.workers import enqueue_job
+        from app.financeiro.workers.baixa_titulos_jobs import processar_itens_baixa_job
 
         data = request.get_json()
         ids = data.get('ids', [])
@@ -708,7 +711,7 @@ def baixas_processar_itens():
         if not ids:
             return jsonify({'success': False, 'error': 'Nenhum item selecionado'}), 400
 
-        # Buscar itens
+        # Verificar se existem itens validos
         itens = BaixaTituloItem.query.filter(
             BaixaTituloItem.id.in_(ids),
             BaixaTituloItem.ativo == True,
@@ -718,32 +721,24 @@ def baixas_processar_itens():
         if not itens:
             return jsonify({'success': False, 'error': 'Nenhum item valido para processar'}), 400
 
-        # Processar
-        service = BaixaTitulosService()
-        estatisticas = {
-            'processados': 0,
-            'sucesso': 0,
-            'erro': 0
-        }
+        # IDs validos para processar
+        item_ids = [i.id for i in itens]
+        usuario_nome = current_user.nome if current_user else 'Sistema'
 
-        for item in itens:
-            try:
-                service._processar_item(item)
-                item.status = 'SUCESSO'
-                item.processado_em = datetime.utcnow()
-                estatisticas['sucesso'] += 1
-            except Exception as e:
-                item.status = 'ERRO'
-                item.mensagem = str(e)
-                item.processado_em = datetime.utcnow()
-                estatisticas['erro'] += 1
-
-            estatisticas['processados'] += 1
-            db.session.commit()
+        # Enfileirar job
+        job = enqueue_job(
+            processar_itens_baixa_job,
+            item_ids,
+            usuario_nome,
+            queue_name='default',
+            timeout='30m'
+        )
 
         return jsonify({
             'success': True,
-            'resultado': estatisticas
+            'job_id': job.id,
+            'total_itens': len(item_ids),
+            'message': f'{len(item_ids)} itens enfileirados para processamento'
         })
 
     except Exception as e:
@@ -792,17 +787,20 @@ def baixas_get_lote(lote_id):
 
 
 # =============================================================================
-# PROCESSAR LOTE COMPLETO (LEGADO - manter para compatibilidade)
+# PROCESSAR LOTE COMPLETO (VIA WORKER)
 # =============================================================================
 
 @financeiro_bp.route('/contas-receber/baixas/lote/<int:lote_id>/processar', methods=['POST'])
 @login_required
 def baixas_processar_lote(lote_id):
     """
-    Processa todas as baixas ativas de um lote no Odoo.
+    Enfileira todas as baixas ativas de um lote para processamento assincrono.
+
+    Retorna job_id para acompanhamento de progresso.
     """
     try:
-        from app.financeiro.services.baixa_titulos_service import BaixaTitulosService
+        from app.portal.workers import enqueue_job
+        from app.financeiro.workers.baixa_titulos_jobs import processar_lote_baixa_job
 
         lote = BaixaTituloLote.query.get_or_404(lote_id)
 
@@ -812,16 +810,36 @@ def baixas_processar_lote(lote_id):
                 'error': f'Lote nao pode ser processado (status: {lote.status})'
             }), 400
 
-        lote.status = 'PROCESSANDO'
-        lote.processado_por = current_user.nome if current_user else 'Sistema'
-        db.session.commit()
+        # Contar itens validos
+        total_itens = BaixaTituloItem.query.filter_by(
+            lote_id=lote_id,
+            ativo=True,
+            status='VALIDO'
+        ).count()
 
-        service = BaixaTitulosService()
-        resultado = service.processar_lote(lote_id)
+        if total_itens == 0:
+            return jsonify({
+                'success': False,
+                'error': 'Nenhum item valido para processar no lote'
+            }), 400
+
+        usuario_nome = current_user.nome if current_user else 'Sistema'
+
+        # Enfileirar job
+        job = enqueue_job(
+            processar_lote_baixa_job,
+            lote_id,
+            usuario_nome,
+            queue_name='default',
+            timeout='30m'
+        )
 
         return jsonify({
             'success': True,
-            'resultado': resultado
+            'job_id': job.id,
+            'lote_id': lote_id,
+            'total_itens': total_itens,
+            'message': f'Lote {lote_id} enfileirado para processamento ({total_itens} itens)'
         })
 
     except Exception as e:
@@ -843,3 +861,73 @@ def baixas_listar_journals():
         'success': True,
         'journals': JOURNALS_DISPONIVEIS
     })
+
+
+# =============================================================================
+# STATUS DO JOB (API)
+# =============================================================================
+
+@financeiro_bp.route('/contas-receber/baixas/job/<job_id>/status')
+@login_required
+def baixas_job_status(job_id):
+    """
+    Retorna o status de um job de processamento de baixa.
+
+    Usado para acompanhamento de progresso em tempo real.
+    """
+    try:
+        from app.financeiro.workers.baixa_titulos_jobs import get_job_status, obter_progresso_baixa
+
+        # Obter status do job RQ
+        status = get_job_status(job_id)
+
+        # Adicionar progresso do Redis se disponivel
+        progresso = obter_progresso_baixa(job_id)
+        if progresso:
+            status['progresso'] = progresso
+
+        return jsonify({
+            'success': True,
+            **status
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'job_id': job_id,
+            'status': 'error'
+        }), 500
+
+
+@financeiro_bp.route('/contas-receber/baixas/job/<job_id>/resultado')
+@login_required
+def baixas_job_resultado(job_id):
+    """
+    Retorna o resultado final de um job concluido.
+    """
+    try:
+        from rq.job import Job
+        from app.portal.workers import get_redis_connection
+
+        conn = get_redis_connection()
+        job = Job.fetch(job_id, connection=conn)
+
+        if not job.is_finished:
+            return jsonify({
+                'success': False,
+                'error': 'Job ainda nao foi concluido',
+                'status': job.get_status()
+            }), 400
+
+        return jsonify({
+            'success': True,
+            'job_id': job_id,
+            'resultado': job.result
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500

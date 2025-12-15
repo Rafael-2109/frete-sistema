@@ -15,6 +15,172 @@
     color: var(--fin-accent-warning);
     font-size: 0.75rem;
 }
+
+/* ================================================================== */
+/* PAINEL DE PROGRESSO DO JOB */
+/* ================================================================== */
+.fin-job-progress {
+    background: var(--fin-bg-secondary);
+    border: 1px solid var(--fin-border);
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.fin-job-progress__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    background: linear-gradient(90deg, var(--fin-accent-primary), var(--fin-accent-success));
+    color: white;
+}
+
+.fin-job-progress__title {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.fin-job-progress__title i {
+    font-size: 1.1rem;
+}
+
+.fin-job-progress__actions {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.fin-job-progress__actions .fin-btn {
+    color: white;
+    opacity: 0.8;
+}
+
+.fin-job-progress__actions .fin-btn:hover {
+    opacity: 1;
+}
+
+.fin-job-progress__body {
+    padding: 1rem;
+}
+
+.fin-job-progress__bar {
+    height: 8px;
+    background: var(--fin-bg-tertiary);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 1rem;
+}
+
+.fin-job-progress__bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--fin-accent-primary), var(--fin-accent-success));
+    border-radius: 4px;
+    transition: width 0.3s ease;
+    position: relative;
+}
+
+.fin-job-progress__bar-fill::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+    animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+.fin-job-progress__stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.fin-job-progress__stat {
+    text-align: center;
+    padding: 0.5rem;
+    background: var(--fin-bg-tertiary);
+    border-radius: 6px;
+}
+
+.fin-job-progress__stat-value {
+    display: block;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--fin-text-primary);
+}
+
+.fin-job-progress__stat-label {
+    display: block;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    color: var(--fin-text-muted);
+    letter-spacing: 0.5px;
+}
+
+.fin-job-progress__stat--success .fin-job-progress__stat-value {
+    color: var(--fin-accent-success);
+}
+
+.fin-job-progress__stat--danger .fin-job-progress__stat-value {
+    color: var(--fin-accent-danger);
+}
+
+.fin-job-progress__item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--fin-bg-tertiary);
+    border-radius: 6px;
+    font-size: 0.85rem;
+    color: var(--fin-text-secondary);
+}
+
+.fin-job-progress__item i {
+    color: var(--fin-accent-primary);
+}
+
+/* Estado minimizado */
+.fin-job-progress.minimized .fin-job-progress__body {
+    display: none;
+}
+
+/* Estado concluido */
+.fin-job-progress.completed .fin-job-progress__header {
+    background: linear-gradient(90deg, var(--fin-accent-success), #28a745);
+}
+
+.fin-job-progress.completed .fin-job-progress__bar-fill::after {
+    animation: none;
+}
+
+/* Estado com erro */
+.fin-job-progress.has-errors .fin-job-progress__header {
+    background: linear-gradient(90deg, var(--fin-accent-warning), #e36209);
+}
+
+/* Responsivo */
+@media (max-width: 768px) {
+    .fin-job-progress__stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
 </style>
 {% endblock %}
 
@@ -53,6 +219,53 @@
             </button>
         </div>
     </header>
+
+    <!-- ================================================================== -->
+    <!-- PAINEL DE PROGRESSO DO JOB -->
+    <!-- ================================================================== -->
+    <div class="fin-job-progress" id="jobProgressPanel" style="display: none;">
+        <div class="fin-job-progress__header">
+            <div class="fin-job-progress__title">
+                <i class="fas fa-cog fa-spin" id="jobProgressIcon"></i>
+                <span id="jobProgressTitle">Processando baixas...</span>
+            </div>
+            <div class="fin-job-progress__actions">
+                <button class="fin-btn fin-btn--ghost fin-btn--sm" onclick="toggleJobProgressMinimize()" title="Minimizar">
+                    <i class="fas fa-minus" id="minimizeIcon"></i>
+                </button>
+                <button class="fin-btn fin-btn--ghost fin-btn--sm" onclick="closeJobProgress()" title="Fechar" id="btnCloseProgress" style="display: none;">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+        <div class="fin-job-progress__body" id="jobProgressBody">
+            <div class="fin-job-progress__bar">
+                <div class="fin-job-progress__bar-fill" id="jobProgressFill" style="width: 0%;"></div>
+            </div>
+            <div class="fin-job-progress__stats">
+                <div class="fin-job-progress__stat">
+                    <span class="fin-job-progress__stat-value" id="jobProgressPercent">0%</span>
+                    <span class="fin-job-progress__stat-label">Progresso</span>
+                </div>
+                <div class="fin-job-progress__stat">
+                    <span class="fin-job-progress__stat-value" id="jobProgressProcessados">0/0</span>
+                    <span class="fin-job-progress__stat-label">Processados</span>
+                </div>
+                <div class="fin-job-progress__stat fin-job-progress__stat--success">
+                    <span class="fin-job-progress__stat-value" id="jobProgressSucesso">0</span>
+                    <span class="fin-job-progress__stat-label">Sucesso</span>
+                </div>
+                <div class="fin-job-progress__stat fin-job-progress__stat--danger">
+                    <span class="fin-job-progress__stat-value" id="jobProgressErro">0</span>
+                    <span class="fin-job-progress__stat-label">Erro</span>
+                </div>
+            </div>
+            <div class="fin-job-progress__item" id="jobProgressItem">
+                <i class="fas fa-spinner fa-spin"></i>
+                <span id="jobProgressItemText">Aguardando...</span>
+            </div>
+        </div>
+    </div>
 
     <!-- ================================================================== -->
     <!-- STATS CARDS -->
@@ -408,11 +621,167 @@
 // Estado global
 let itensSelecionados = new Set();
 let todosIds = {{ todos_ids|tojson|default('[]') }};
+let jobPollingInterval = null;
+let currentJobId = null;
 
 document.addEventListener('DOMContentLoaded', function() {
     setupUploadZone();
     setupFiltros();
+    checkPendingJob();
 });
+
+// ================================================================
+// GERENCIAMENTO DE JOB E PROGRESSO
+// ================================================================
+
+function checkPendingJob() {
+    // Verificar se há um job em andamento salvo no localStorage
+    const savedJob = localStorage.getItem('baixa_job_id');
+    if (savedJob) {
+        currentJobId = savedJob;
+        showJobProgress();
+        startJobPolling();
+    }
+}
+
+function showJobProgress() {
+    document.getElementById('jobProgressPanel').style.display = 'block';
+}
+
+function hideJobProgress() {
+    document.getElementById('jobProgressPanel').style.display = 'none';
+}
+
+function toggleJobProgressMinimize() {
+    const panel = document.getElementById('jobProgressPanel');
+    const icon = document.getElementById('minimizeIcon');
+    panel.classList.toggle('minimized');
+    icon.classList.toggle('fa-minus');
+    icon.classList.toggle('fa-expand');
+}
+
+function closeJobProgress() {
+    hideJobProgress();
+    stopJobPolling();
+    localStorage.removeItem('baixa_job_id');
+    currentJobId = null;
+}
+
+function startJobPolling() {
+    if (jobPollingInterval) clearInterval(jobPollingInterval);
+
+    // Polling a cada 2 segundos
+    jobPollingInterval = setInterval(pollJobStatus, 2000);
+    // Executar imediatamente
+    pollJobStatus();
+}
+
+function stopJobPolling() {
+    if (jobPollingInterval) {
+        clearInterval(jobPollingInterval);
+        jobPollingInterval = null;
+    }
+}
+
+function pollJobStatus() {
+    if (!currentJobId) return;
+
+    fetch(`/financeiro/contas-receber/baixas/job/${currentJobId}/status`)
+    .then(r => r.json())
+    .then(data => {
+        if (!data.success) {
+            console.error('Erro ao buscar status:', data.error);
+            return;
+        }
+
+        updateJobProgressUI(data);
+
+        // Verificar se o job terminou
+        if (data.status === 'finished' || data.status === 'failed') {
+            stopJobPolling();
+            onJobCompleted(data);
+        }
+    })
+    .catch(err => {
+        console.error('Erro no polling:', err);
+    });
+}
+
+function updateJobProgressUI(data) {
+    const panel = document.getElementById('jobProgressPanel');
+    const progresso = data.progresso || {};
+
+    // Calcular progresso
+    const total = progresso.total_itens || data.result?.total_itens || 0;
+    const processados = progresso.itens_processados || data.result?.total_itens || 0;
+    const sucesso = progresso.itens_sucesso || data.result?.itens_sucesso || 0;
+    const erro = progresso.itens_erro || data.result?.itens_erro || 0;
+    const itemAtual = progresso.item_atual || 'Processando...';
+
+    const percent = total > 0 ? Math.round((processados / total) * 100) : 0;
+
+    // Atualizar UI
+    document.getElementById('jobProgressFill').style.width = `${percent}%`;
+    document.getElementById('jobProgressPercent').textContent = `${percent}%`;
+    document.getElementById('jobProgressProcessados').textContent = `${processados}/${total}`;
+    document.getElementById('jobProgressSucesso').textContent = sucesso;
+    document.getElementById('jobProgressErro').textContent = erro;
+    document.getElementById('jobProgressItemText').textContent = itemAtual;
+
+    // Atualizar título baseado no status
+    const statusMap = {
+        'queued': 'Aguardando na fila...',
+        'started': 'Processando baixas...',
+        'finished': 'Processamento concluido!',
+        'failed': 'Erro no processamento'
+    };
+    document.getElementById('jobProgressTitle').textContent = statusMap[data.status] || 'Processando...';
+
+    // Atualizar classes do painel
+    panel.classList.remove('completed', 'has-errors');
+    if (data.status === 'finished') {
+        panel.classList.add('completed');
+        if (erro > 0) panel.classList.add('has-errors');
+    }
+
+    // Atualizar icone
+    const icon = document.getElementById('jobProgressIcon');
+    if (data.status === 'finished') {
+        icon.classList.remove('fa-cog', 'fa-spin');
+        icon.classList.add('fa-check-circle');
+    } else if (data.status === 'failed') {
+        icon.classList.remove('fa-cog', 'fa-spin');
+        icon.classList.add('fa-times-circle');
+    }
+}
+
+function onJobCompleted(data) {
+    const result = data.result || {};
+    const sucesso = result.itens_sucesso || 0;
+    const erro = result.itens_erro || 0;
+
+    // Mostrar botao de fechar
+    document.getElementById('btnCloseProgress').style.display = 'inline-flex';
+
+    // Atualizar item atual
+    document.getElementById('jobProgressItem').innerHTML = `
+        <i class="fas fa-flag-checkered"></i>
+        <span>Finalizado! Sucesso: ${sucesso} | Erro: ${erro}</span>
+    `;
+
+    // Notificacao
+    if (erro > 0) {
+        toastr.warning(`Processamento concluido com ${erro} erro(s)`);
+    } else {
+        toastr.success(`${sucesso} baixa(s) processada(s) com sucesso!`);
+    }
+
+    // Recarregar pagina apos 3 segundos para atualizar a tabela
+    setTimeout(() => {
+        localStorage.removeItem('baixa_job_id');
+        location.reload();
+    }, 3000);
+}
 
 function setupUploadZone() {
     const zone = document.getElementById('uploadZone');
@@ -555,22 +924,43 @@ function processarSelecionados() {
 
 function executarProcessamento() {
     const ids = Array.from(itensSelecionados);
-    const modal = new bootstrap.Modal(document.getElementById('modalProcessamento'));
-    modal.show();
-    document.getElementById('processamentoStatus').textContent = `Processando ${ids.length} baixa(s)...`;
+
+    // Mostrar painel de progresso imediatamente
+    document.getElementById('jobProgressPercent').textContent = '0%';
+    document.getElementById('jobProgressProcessados').textContent = `0/${ids.length}`;
+    document.getElementById('jobProgressSucesso').textContent = '0';
+    document.getElementById('jobProgressErro').textContent = '0';
+    document.getElementById('jobProgressItemText').textContent = 'Enfileirando job...';
+    document.getElementById('jobProgressIcon').className = 'fas fa-cog fa-spin';
+    document.getElementById('jobProgressTitle').textContent = 'Iniciando processamento...';
+    document.getElementById('jobProgressPanel').classList.remove('completed', 'has-errors');
+    document.getElementById('btnCloseProgress').style.display = 'none';
+    showJobProgress();
+
+    // Limpar selecao
+    limparSelecao();
 
     fetch("{{ url_for('financeiro.baixas_processar_itens') }}", {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: ids })
     })
     .then(r => r.json())
     .then(data => {
-        modal.hide();
         if (data.success) {
-            toastr.success(`Sucesso: ${data.resultado.sucesso} | Erro: ${data.resultado.erro}`);
-            setTimeout(() => location.reload(), 2000);
-        } else toastr.error(data.error);
+            // Salvar job_id e iniciar polling
+            currentJobId = data.job_id;
+            localStorage.setItem('baixa_job_id', data.job_id);
+            toastr.info(`${data.total_itens} itens enfileirados para processamento`);
+            startJobPolling();
+        } else {
+            hideJobProgress();
+            toastr.error(data.error);
+        }
     })
-    .catch(() => { modal.hide(); toastr.error('Erro ao processar'); });
+    .catch((err) => {
+        hideJobProgress();
+        toastr.error('Erro ao enfileirar processamento');
+        console.error(err);
+    });
 }
 </script>
 {% endblock %}
