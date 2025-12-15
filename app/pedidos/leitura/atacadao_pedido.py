@@ -366,7 +366,12 @@ class AtacadaoPedidoExtractor(PDFExtractor):
         }
 
     def _get_nosso_codigo(self, codigo_atacadao: str) -> Dict[str, Any]:
-        """Busca nosso código via De-Para"""
+        """
+        Busca nosso código via De-Para
+
+        IMPORTANTE: Normaliza códigos removendo zeros à esquerda para garantir
+        compatibilidade entre formatos (ex: '082545' vs '82545')
+        """
         if codigo_atacadao in self.depara_cache:
             return self.depara_cache[codigo_atacadao]
 
@@ -374,10 +379,21 @@ class AtacadaoPedidoExtractor(PDFExtractor):
             from app.portal.atacadao.models import ProdutoDeParaAtacadao
             from app import db
 
+            # Normaliza código removendo zeros à esquerda
+            codigo_normalizado = codigo_atacadao.lstrip('0') if codigo_atacadao else ''
+
+            # Busca no banco - primeiro tenta código normalizado (sem zeros à esquerda)
             depara = db.session.query(ProdutoDeParaAtacadao).filter(
-                ProdutoDeParaAtacadao.codigo_atacadao == codigo_atacadao,
+                ProdutoDeParaAtacadao.codigo_atacadao == codigo_normalizado,
                 ProdutoDeParaAtacadao.ativo == True
             ).first()
+
+            # Se não encontrou, tenta com código original (com zeros)
+            if not depara and codigo_normalizado != codigo_atacadao:
+                depara = db.session.query(ProdutoDeParaAtacadao).filter(
+                    ProdutoDeParaAtacadao.codigo_atacadao == codigo_atacadao,
+                    ProdutoDeParaAtacadao.ativo == True
+                ).first()
 
             if depara:
                 result = {

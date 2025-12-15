@@ -256,22 +256,35 @@ class AtacadaoExtractor(PDFExtractor):
         """
         Busca nosso código interno baseado no código do Atacadão
         Usa cache para evitar múltiplas consultas ao banco
+
+        IMPORTANTE: Normaliza códigos removendo zeros à esquerda para garantir
+        compatibilidade entre formatos (ex: '082545' vs '82545')
         """
         # Verifica cache primeiro
         if codigo_atacadao in self.depara_cache:
             return self.depara_cache[codigo_atacadao]
-        
+
         try:
             # Importa aqui para evitar dependência circular
             from app.portal.atacadao.models import ProdutoDeParaAtacadao
             from app import db
-            
-            # Busca no banco
+
+            # Normaliza código removendo zeros à esquerda
+            codigo_normalizado = codigo_atacadao.lstrip('0') if codigo_atacadao else ''
+
+            # Busca no banco - primeiro tenta código normalizado (sem zeros à esquerda)
             depara = db.session.query(ProdutoDeParaAtacadao).filter(
-                ProdutoDeParaAtacadao.codigo_atacadao == codigo_atacadao,
+                ProdutoDeParaAtacadao.codigo_atacadao == codigo_normalizado,
                 ProdutoDeParaAtacadao.ativo == True
             ).first()
-            
+
+            # Se não encontrou, tenta com código original (com zeros)
+            if not depara and codigo_normalizado != codigo_atacadao:
+                depara = db.session.query(ProdutoDeParaAtacadao).filter(
+                    ProdutoDeParaAtacadao.codigo_atacadao == codigo_atacadao,
+                    ProdutoDeParaAtacadao.ativo == True
+                ).first()
+
             if depara:
                 result = {
                     'nosso_codigo': depara.codigo_nosso,
@@ -284,11 +297,11 @@ class AtacadaoExtractor(PDFExtractor):
                     'nossa_descricao': None,
                     'fator_conversao': 1.0
                 }
-            
+
             # Adiciona ao cache
             self.depara_cache[codigo_atacadao] = result
             return result
-            
+
         except Exception as e:
             self.warnings.append(f"Erro ao buscar De-Para para código {codigo_atacadao}: {e}")
             return {
