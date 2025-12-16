@@ -27,7 +27,7 @@ from datetime import datetime, date
 from typing import Dict, List, Optional, Tuple
 
 from app import db
-from app.financeiro.models import ExtratoLote, ExtratoItem, ContasAReceber
+from app.financeiro.models import ExtratoLote, ExtratoItem, ContasAReceber, ContasAPagar, ExtratoItemTitulo
 
 logger = logging.getLogger(__name__)
 
@@ -169,7 +169,8 @@ class ExtratoMatchingService:
         self,
         cnpj: Optional[str],
         valor: float,
-        data_pagamento: Optional[date] = None
+        data_pagamento: Optional[date] = None,
+        incluir_agrupamentos: bool = True
     ) -> List[Dict]:
         """
         Busca títulos candidatos para um recebimento.
@@ -178,14 +179,19 @@ class ExtratoMatchingService:
         1. CNPJ exato - maior confiança
         2. CNPJ raiz (grupo empresarial) - quando matriz paga por filial
         3. Apenas valor - quando não tem CNPJ
+        4. Agrupamentos - múltiplos títulos que somam o valor (se habilitado)
 
         Args:
             cnpj: CNPJ do pagador (pode ser None)
             valor: Valor do recebimento
             data_pagamento: Data do pagamento
+            incluir_agrupamentos: Se True, busca combinações de múltiplos títulos
 
         Returns:
             Lista de candidatos ordenada por score (desc)
+            Se houver sugestão de agrupamento, inclui item especial com:
+            - tipo: 'agrupamento'
+            - titulos: lista de títulos sugeridos
         """
         candidatos = []
 
@@ -200,6 +206,31 @@ class ExtratoMatchingService:
         # 3. Se ainda não encontrou, busca por valor (mais arriscado)
         if not candidatos and valor > 0:
             candidatos = self._buscar_por_valor(valor, data_pagamento)
+
+        # 4. Verificar se há sugestão de agrupamento (múltiplos títulos)
+        # Só sugere se não encontrou match único com score alto
+        match_alto = any(c['score'] >= SCORE_MINIMO_AUTO for c in candidatos)
+
+        if incluir_agrupamentos and cnpj and not match_alto:
+            agrupamento = self.buscar_titulos_agrupados(cnpj, valor, data_pagamento)
+            if agrupamento and agrupamento['qtd_titulos'] > 1:
+                # Adicionar como candidato especial
+                candidatos.append({
+                    'tipo': 'agrupamento',
+                    'titulo_id': None,  # Não é um título único
+                    'titulo_nf': f"AGRUPADO ({agrupamento['qtd_titulos']} NFs)",
+                    'parcela': None,
+                    'valor': agrupamento['soma'],
+                    'vencimento': None,
+                    'vencimento_date': None,
+                    'cliente': agrupamento['titulos'][0]['cliente'] if agrupamento['titulos'] else None,
+                    'cnpj': cnpj,
+                    'score': agrupamento['score'],
+                    'criterio': agrupamento['criterio'],
+                    'diferenca_valor': agrupamento['diferenca'],
+                    # Dados específicos do agrupamento
+                    'agrupamento': agrupamento
+                })
 
         # Ordenar por score decrescente
         candidatos.sort(key=lambda x: x['score'], reverse=True)
@@ -512,6 +543,387 @@ class ExtratoMatchingService:
         item.mensagem = 'Título vinculado manualmente'
 
         db.session.commit()
+
+    # =========================================================================
+    # MÉTODOS PARA MÚLTIPLOS TÍTULOS (M:N)
+    # =========================================================================
+
+    def vincular_multiplos_titulos(
+        self,
+        item: ExtratoItem,
+        titulos: List[Dict],
+        tipo: str = 'receber',
+        usuario: str = None
+    ) -> List[ExtratoItemTitulo]:
+        """
+        Vincula múltiplos títulos a um item de extrato.
+
+        Usa a tabela de associação ExtratoItemTitulo para relacionamento M:N.
+
+        Args:
+            item: ExtratoItem a vincular
+            titulos: Lista de dicts com:
+                - titulo_id: ID do título (ContasAReceber ou ContasAPagar)
+                - valor_alocado: Valor a alocar deste título
+            tipo: 'receber' ou 'pagar' (default: 'receber')
+            usuario: Nome do usuário que está vinculando (opcional)
+
+        Returns:
+            Lista de ExtratoItemTitulo criados
+
+        Raises:
+            ValueError: Se soma dos valores > valor do extrato
+        """
+        # Validar soma dos valores
+        valor_extrato = abs(item.valor) if item.valor else 0
+        soma_alocada = sum(t.get('valor_alocado', 0) for t in titulos)
+        if soma_alocada > valor_extrato * 1.01:  # 1% tolerância
+            raise ValueError(
+                f"Soma dos valores alocados (R$ {soma_alocada:.2f}) "
+                f"excede o valor do extrato (R$ {valor_extrato:.2f})"
+            )
+
+        # Remover vinculações anteriores (se houver)
+        self.desvincular_titulos(item)
+
+        vinculos_criados = []
+
+        # Selecionar modelo baseado no tipo
+        if tipo == 'pagar':
+            TituloModel = ContasAPagar
+        else:
+            TituloModel = ContasAReceber
+
+        for t in titulos:
+            titulo = TituloModel.query.get(t['titulo_id'])
+            if not titulo:
+                raise ValueError(f"Título {t['titulo_id']} não encontrado")
+
+            # Obter valor do título (ContasAReceber usa valor_titulo, ContasAPagar usa valor_original)
+            valor_titulo = getattr(titulo, 'valor_titulo', None) or getattr(titulo, 'valor_original', None) or 0
+            valor_alocado = t.get('valor_alocado', valor_titulo)
+
+            # Criar vinculação M:N (com FK correta baseada no tipo)
+            vinculo = ExtratoItemTitulo(
+                extrato_item_id=item.id,
+                valor_alocado=valor_alocado
+            )
+
+            # Definir FK correta baseada no tipo
+            if tipo == 'pagar':
+                vinculo.titulo_pagar_id = titulo.id
+            else:
+                vinculo.titulo_receber_id = titulo.id
+
+            # Preencher cache (passa título diretamente pois relação ainda não foi carregada)
+            vinculo.preencher_cache(titulo)
+
+            # Calcular score
+            score, criterio, _ = self._calcular_score_valor(
+                valor_alocado, valor_titulo
+            )
+
+            # Aplicar desconto de vencimento
+            desconto_venc, criterio_venc = self._calcular_desconto_vencimento(
+                item.data_transacao, titulo.vencimento
+            )
+            score = max(0, score - desconto_venc)
+            if criterio_venc:
+                criterio = f'{criterio}+{criterio_venc}'
+
+            vinculo.match_score = score
+            vinculo.match_criterio = f'MULTIPLO+{criterio}'
+            vinculo.status = 'PENDENTE'
+
+            db.session.add(vinculo)
+            vinculos_criados.append(vinculo)
+
+        # Limpar FK legacy (usar apenas M:N)
+        item.titulo_receber_id = None
+        item.titulo_pagar_id = None
+        item.titulo_id = None
+
+        # Atualizar status do item
+        item.status_match = 'MULTIPLOS_VINCULADOS'
+        item.mensagem = f'{len(titulos)} títulos vinculados (total: R$ {soma_alocada:.2f})'
+
+        # Cache do primeiro título para exibição rápida
+        if vinculos_criados:
+            primeiro = vinculos_criados[0]
+            item.titulo_nf = primeiro.titulo_nf
+            item.titulo_parcela = primeiro.titulo_parcela
+            item.titulo_valor = float(soma_alocada)
+            item.titulo_cliente = primeiro.titulo_cliente
+            item.titulo_cnpj = primeiro.titulo_cnpj
+            item.match_score = min(v.match_score for v in vinculos_criados)
+            item.match_criterio = f'AGRUPADO_{len(titulos)}_TITULOS'
+
+        db.session.commit()
+
+        logger.info(
+            f"Vinculados {len(vinculos_criados)} títulos ao item {item.id} "
+            f"(total: R$ {soma_alocada:.2f})"
+        )
+
+        return vinculos_criados
+
+    def desvincular_titulos(self, item: ExtratoItem) -> int:
+        """
+        Remove todas as vinculações de títulos de um item.
+
+        Remove tanto o FK legacy quanto os registros M:N.
+
+        Args:
+            item: ExtratoItem a desvincular
+
+        Returns:
+            Número de vinculações removidas
+        """
+        # Remover FK legacy
+        item.titulo_receber_id = None
+        item.titulo_pagar_id = None
+        item.titulo_id = None
+        item.titulo_nf = None
+        item.titulo_parcela = None
+        item.titulo_valor = None
+        item.titulo_cliente = None
+        item.titulo_cnpj = None
+        item.titulo_vencimento = None
+        item.match_score = None
+        item.match_criterio = None
+
+        # Remover vinculações M:N
+        count = ExtratoItemTitulo.query.filter_by(
+            extrato_item_id=item.id
+        ).delete()
+
+        item.status_match = 'PENDENTE'
+        item.mensagem = None
+
+        logger.info(f"Desvinculados {count} títulos do item {item.id}")
+
+        return count
+
+    def buscar_titulos_agrupados(
+        self,
+        cnpj: Optional[str],
+        valor: float,
+        data_pagamento: Optional[date] = None,
+        tolerancia_percentual: float = 0.02
+    ) -> Optional[Dict]:
+        """
+        Busca combinações de títulos do mesmo CNPJ cuja soma aproxima do valor.
+
+        Estratégia: Busca gulosa (greedy) - ordena por valor decrescente e
+        vai adicionando títulos até atingir o valor ou ultrapassar.
+
+        Args:
+            cnpj: CNPJ do pagador
+            valor: Valor do extrato
+            data_pagamento: Data do pagamento
+            tolerancia_percentual: Tolerância para considerar "exato" (default 2%)
+
+        Returns:
+            Dict com:
+                - titulos: Lista de títulos sugeridos
+                - soma: Soma dos valores
+                - diferenca: Diferença para o valor do extrato
+                - score: Score do agrupamento
+                - criterio: Descrição do critério
+            Ou None se não encontrar combinação válida
+        """
+        if not cnpj or valor <= 0:
+            return None
+
+        cnpj_limpo = self._normalizar_cnpj(cnpj)
+        raiz_cnpj = cnpj_limpo[:8] if len(cnpj_limpo) >= 8 else cnpj_limpo
+
+        # Buscar títulos não pagos do mesmo CNPJ ou grupo
+        titulos = ContasAReceber.query.filter(
+            ContasAReceber.parcela_paga == False,
+            ContasAReceber.cnpj.isnot(None)
+        ).all()
+
+        # Filtrar por CNPJ exato ou raiz
+        titulos_cnpj = []
+        for titulo in titulos:
+            titulo_cnpj = self._normalizar_cnpj(titulo.cnpj)
+
+            # Ignorar vencimento 01/01/2000 e NFs canceladas
+            if titulo.vencimento == DATA_VENCIMENTO_IGNORAR:
+                continue
+            if titulo.nf_cancelada:
+                continue
+
+            # Match exato ou por raiz
+            if titulo_cnpj == cnpj_limpo or (
+                len(titulo_cnpj) >= 8 and titulo_cnpj[:8] == raiz_cnpj
+            ):
+                titulos_cnpj.append(titulo)
+
+        if not titulos_cnpj:
+            return None
+
+        # Se só tem 1 título, não é agrupamento
+        if len(titulos_cnpj) == 1:
+            return None
+
+        # Ordenar por valor decrescente (greedy)
+        titulos_cnpj.sort(key=lambda t: t.valor_titulo or 0, reverse=True)
+
+        # Tentar encontrar combinação que fecha o valor
+        melhor_combinacao = self._encontrar_combinacao_valores(
+            titulos_cnpj, valor, tolerancia_percentual
+        )
+
+        if not melhor_combinacao:
+            return None
+
+        titulos_selecionados, soma = melhor_combinacao
+        diferenca = abs(soma - valor)
+        diferenca_pct = (diferenca / valor * 100) if valor > 0 else 0
+
+        # Calcular score baseado na diferença
+        if diferenca_pct <= tolerancia_percentual * 100:
+            score = 92
+            criterio = 'AGRUPADO+VALOR_EXATO'
+        elif diferenca_pct <= 1:
+            score = 88
+            criterio = f'AGRUPADO+VALOR_APROX_{diferenca_pct:.1f}%'
+        elif diferenca_pct <= 5:
+            score = 82
+            criterio = f'AGRUPADO+VALOR_DIF_{diferenca_pct:.1f}%'
+        else:
+            score = 70
+            criterio = f'AGRUPADO+VALOR_DIF_{diferenca_pct:.1f}%'
+
+        # Preparar resultado
+        titulos_result = []
+        for titulo in titulos_selecionados:
+            # Calcular desconto de vencimento individual
+            desconto_venc, criterio_venc = self._calcular_desconto_vencimento(
+                data_pagamento, titulo.vencimento
+            )
+
+            titulos_result.append({
+                'titulo_id': titulo.id,
+                'titulo_nf': titulo.titulo_nf,
+                'parcela': titulo.parcela,
+                'valor': titulo.valor_titulo,
+                'valor_alocado': titulo.valor_titulo,  # Inicialmente aloca 100%
+                'vencimento': titulo.vencimento.strftime('%d/%m/%Y') if titulo.vencimento else None,
+                'vencimento_date': titulo.vencimento,
+                'cliente': titulo.raz_social_red or titulo.raz_social,
+                'cnpj': titulo.cnpj,
+                'desconto_vencimento': desconto_venc,
+                'criterio_vencimento': criterio_venc
+            })
+
+        return {
+            'titulos': titulos_result,
+            'soma': soma,
+            'diferenca': diferenca,
+            'diferenca_pct': diferenca_pct,
+            'score': score,
+            'criterio': criterio,
+            'qtd_titulos': len(titulos_result)
+        }
+
+    def _encontrar_combinacao_valores(
+        self,
+        titulos: List[ContasAReceber],
+        valor_alvo: float,
+        tolerancia: float = 0.02
+    ) -> Optional[Tuple[List[ContasAReceber], float]]:
+        """
+        Encontra combinação de títulos que soma próximo ao valor alvo.
+
+        Usa algoritmo subset sum simplificado (greedy + backtracking limitado).
+
+        Args:
+            titulos: Lista de títulos candidatos (já filtrados por CNPJ)
+            valor_alvo: Valor a atingir
+            tolerancia: Tolerância percentual
+
+        Returns:
+            Tuple (lista de títulos, soma) ou None
+        """
+        # Limite para considerar "exato"
+        limite_inferior = valor_alvo * (1 - tolerancia)
+        limite_superior = valor_alvo * (1 + tolerancia)
+
+        # Tentar combinações com subset sum simplificado
+        # Começamos com greedy e refinamos se necessário
+
+        # 1. Greedy: adicionar títulos até atingir ou ultrapassar
+        selecionados = []
+        soma = 0
+
+        for titulo in titulos:
+            valor_titulo = titulo.valor_titulo or 0
+            if soma + valor_titulo <= limite_superior:
+                selecionados.append(titulo)
+                soma += valor_titulo
+
+                # Se chegou no range, retorna
+                if limite_inferior <= soma <= limite_superior:
+                    return (selecionados, soma)
+
+        # Se greedy encontrou algo próximo, retorna
+        if selecionados and limite_inferior <= soma <= limite_superior:
+            return (selecionados, soma)
+
+        # 2. Se greedy falhou mas está próximo (< 20% diferença), retorna mesmo assim
+        if selecionados and soma >= valor_alvo * 0.8 and soma <= valor_alvo * 1.2:
+            return (selecionados, soma)
+
+        # 3. Tentar subset sum com backtracking limitado (até 10 títulos)
+        if len(titulos) <= 10:
+            melhor = self._subset_sum_limitado(titulos, valor_alvo, tolerancia)
+            if melhor:
+                return melhor
+
+        # Não encontrou combinação válida
+        return None
+
+    def _subset_sum_limitado(
+        self,
+        titulos: List[ContasAReceber],
+        valor_alvo: float,
+        tolerancia: float
+    ) -> Optional[Tuple[List[ContasAReceber], float]]:
+        """
+        Subset sum com backtracking limitado.
+        Tenta todas as combinações de até N títulos.
+        """
+        from itertools import combinations
+
+        limite_inferior = valor_alvo * (1 - tolerancia)
+        limite_superior = valor_alvo * (1 + tolerancia)
+
+        melhor_diff = float('inf')
+        melhor_combo = None
+
+        # Tentar combinações de 2 a min(len, 5) títulos
+        for r in range(2, min(len(titulos) + 1, 6)):
+            for combo in combinations(titulos, r):
+                soma = sum(t.valor_titulo or 0 for t in combo)
+
+                # Match exato
+                if limite_inferior <= soma <= limite_superior:
+                    return (list(combo), soma)
+
+                # Guardar melhor aproximação
+                diff = abs(soma - valor_alvo)
+                if diff < melhor_diff and soma <= valor_alvo * 1.2:
+                    melhor_diff = diff
+                    melhor_combo = (list(combo), soma)
+
+        # Retorna melhor aproximação se diferença < 10%
+        if melhor_combo and melhor_diff / valor_alvo <= 0.1:
+            return melhor_combo
+
+        return None
 
     def _normalizar_cnpj(self, cnpj: str) -> str:
         """

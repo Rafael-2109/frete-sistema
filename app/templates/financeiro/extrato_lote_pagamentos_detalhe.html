@@ -266,7 +266,8 @@
 
                         {% if item.status != 'CONCILIADO' %}
                         <div class="mt-3 pt-2 border-top d-flex gap-1 flex-wrap">
-                            {% if item.titulo_pagar_id and not item.aprovado %}
+                            {# Mostrar botão Aprovar se tem título vinculado (1:1 OU M:N) #}
+                            {% if (item.titulo_pagar_id or item.tem_multiplos_titulos) and not item.aprovado %}
                             <button class="btn btn-sm btn-success" onclick="aprovarItem({{ item.id }})">
                                 <i class="fas fa-check"></i> Aprovar
                             </button>
@@ -289,7 +290,71 @@
                             <i class="fas fa-balance-scale"></i> COMPARAÇÃO
                         </div>
 
-                        {% if item.titulo_pagar_id %}
+                        {# === COMPARAÇÃO PARA MÚLTIPLOS TÍTULOS === #}
+                        {% if item.tem_multiplos_titulos %}
+                        <div class="fin-comparacao-box">
+                            <div class="text-center mb-2">
+                                <span class="badge bg-info fs-6">
+                                    <i class="fas fa-layer-group me-1"></i>
+                                    {{ item.titulos_vinculados.count() }} Títulos
+                                </span>
+                            </div>
+
+                            {# Valor do Extrato #}
+                            <div class="fin-comparacao-item">
+                                <span class="text-muted">Extrato:</span>
+                                <span class="fw-bold font-mono">
+                                    R$ {{ "{:,.2f}".format((item.valor or 0)|abs) }}
+                                </span>
+                            </div>
+
+                            {# Soma dos Títulos #}
+                            <div class="fin-comparacao-item">
+                                <span class="text-muted">Σ Títulos:</span>
+                                <span class="fw-bold font-mono">
+                                    R$ {{ "{:,.2f}".format(item.valor_alocado_total or 0) }}
+                                </span>
+                            </div>
+
+                            {# Diferença #}
+                            {% set diff_valor = ((item.valor or 0)|abs) - (item.valor_alocado_total or 0) %}
+                            <div class="fin-comparacao-item border-top pt-2 mt-2">
+                                <span class="text-muted">Δ Diferença:</span>
+                                <span class="fw-bold {% if diff_valor|abs < 0.01 %}fin-diff--zero{% elif diff_valor > 0 %}fin-diff--positivo{% else %}fin-diff--negativo{% endif %}">
+                                    {% if diff_valor|abs < 0.01 %}
+                                    R$ 0,00 ✓
+                                    {% elif diff_valor > 0 %}
+                                    +R$ {{ "{:,.2f}".format(diff_valor) }}
+                                    {% else %}
+                                    -R$ {{ "{:,.2f}".format(diff_valor|abs) }}
+                                    {% endif %}
+                                </span>
+                            </div>
+
+                            {# Status de fechamento #}
+                            {% if diff_valor|abs < 0.01 %}
+                            <div class="text-center mt-2">
+                                <span class="badge bg-success">
+                                    <i class="fas fa-check-circle me-1"></i>Valores fecham
+                                </span>
+                            </div>
+                            {% elif diff_valor > 0 %}
+                            <div class="text-center mt-2">
+                                <span class="badge bg-warning text-dark">
+                                    <i class="fas fa-exclamation-triangle me-1"></i>Sobra no extrato
+                                </span>
+                            </div>
+                            {% else %}
+                            <div class="text-center mt-2">
+                                <span class="badge bg-danger">
+                                    <i class="fas fa-exclamation-circle me-1"></i>Falta no extrato
+                                </span>
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        {# === COMPARAÇÃO PARA TÍTULO ÚNICO === #}
+                        {% elif item.titulo_pagar_id %}
                         <div class="fin-comparacao-box">
                             <div class="text-center mb-2">
                                 {% if item.match_score >= 100 %}
@@ -355,11 +420,79 @@
                     {# SEÇÃO 3: TÍTULO A PAGAR #}
                     <div class="col-md-5 fin-item-col">
                         <div class="fin-section-header fin-section-header--titulo-pagar">
-                            <i class="fas fa-file-invoice-dollar"></i> TÍTULO A PAGAR
+                            <i class="fas fa-file-invoice-dollar"></i> TÍTULO(S) A PAGAR
+                            {% if item.tem_multiplos_titulos %}
+                            <span class="badge bg-info ms-2">{{ item.titulos_vinculados.count() }} títulos</span>
+                            {% endif %}
                         </div>
 
                         <div id="titulos-container-{{ item.id }}">
-                            {% if item.titulo_pagar_id %}
+                            {# === MÚLTIPLOS TÍTULOS (M:N) === #}
+                            {% if item.tem_multiplos_titulos %}
+                            <div class="fin-titulos-multiplos">
+                                {% for vinculo in item.titulos_vinculados %}
+                                <div class="fin-titulo-candidato fin-titulo-candidato--selecionado mb-2 {{ 'fin-titulo-candidato--conciliado' if vinculo.status == 'CONCILIADO' }}">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <strong>NF {{ vinculo.titulo_nf }}</strong>
+                                            <span class="badge bg-secondary ms-1">P{{ vinculo.titulo_parcela }}</span>
+                                            {% if vinculo.status == 'CONCILIADO' %}
+                                            <span class="badge bg-info ms-1"><i class="fas fa-check"></i></span>
+                                            {% elif vinculo.status == 'ERRO' %}
+                                            <span class="badge bg-danger ms-1"><i class="fas fa-times"></i></span>
+                                            {% endif %}
+                                        </div>
+                                        <div class="text-end">
+                                            <div class="h6 mb-0 text-danger font-mono fw-bold">
+                                                R$ {{ "{:,.2f}".format(vinculo.valor_alocado or 0) }}
+                                            </div>
+                                            {% if vinculo.valor_titulo_original and vinculo.valor_titulo_original != vinculo.valor_alocado %}
+                                            <small class="text-muted">(de R$ {{ "{:,.2f}".format(vinculo.valor_titulo_original) }})</small>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <div class="mt-1 small">
+                                        <span class="text-muted">{{ vinculo.titulo_cliente or 'Fornecedor N/A' }}</span>
+                                        {% if vinculo.titulo_vencimento %}
+                                        | Venc: {{ vinculo.titulo_vencimento.strftime('%d/%m/%Y') }}
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% endfor %}
+
+                                {# TOTALIZADOR #}
+                                <div class="fin-titulos-total mt-2 pt-2 border-top">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <strong><i class="fas fa-calculator me-1"></i> Total Alocado:</strong>
+                                        <span class="h5 mb-0 font-mono fw-bold text-danger">
+                                            R$ {{ "{:,.2f}".format(item.valor_alocado_total or 0) }}
+                                        </span>
+                                    </div>
+                                    {% set saldo = ((item.valor or 0)|abs) - (item.valor_alocado_total or 0) %}
+                                    {% if saldo|abs > 0.01 %}
+                                    <div class="d-flex justify-content-between align-items-center mt-1">
+                                        <span class="text-muted">Saldo:</span>
+                                        <span class="font-mono {% if saldo > 0 %}text-warning{% else %}text-danger{% endif %}">
+                                            R$ {{ "{:,.2f}".format(saldo) }}
+                                        </span>
+                                    </div>
+                                    {% endif %}
+                                </div>
+
+                                {% if item.status != 'CONCILIADO' %}
+                                <div class="mt-2 d-flex gap-1">
+                                    <button class="btn btn-sm btn-outline-primary" onclick="buscarCandidatos({{ item.id }})" title="Adicionar mais títulos">
+                                        <i class="fas fa-plus me-1"></i>Adicionar
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger" onclick="desvincularMultiplosTitulos({{ item.id }})" title="Remover todos">
+                                        <i class="fas fa-unlink"></i>
+                                    </button>
+                                </div>
+                                {% endif %}
+                            </div>
+
+                            {# === TÍTULO ÚNICO (1:1 legacy) === #}
+                            {% elif item.titulo_pagar_id %}
                             <div class="fin-titulo-candidato fin-titulo-candidato--selecionado">
                                 <div class="d-flex justify-content-between align-items-start">
                                     <div>
@@ -503,14 +636,14 @@
     </div>
 </div>
 
-{# === MODAL DE CANDIDATOS === #}
+{# === MODAL DE CANDIDATOS (Suporte a Múltipla Seleção) === #}
 <div class="modal fade fin-modal" id="modalCandidatos" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">
                     <i class="fas fa-search me-2"></i>
-                    Títulos Candidatos
+                    Selecionar Títulos a Pagar
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
@@ -518,6 +651,23 @@
                 <div class="fin-loading">
                     <div class="fin-loading__spinner"></div>
                     <p class="fin-loading__text">Buscando títulos...</p>
+                </div>
+            </div>
+            <div class="modal-footer" id="modalCandidatosFooter" style="display: none;">
+                <div class="d-flex justify-content-between align-items-center w-100">
+                    <div id="titulosSelecionadosInfo" class="text-muted">
+                        <span id="qtdSelecionados">0</span> título(s) selecionado(s)
+                        | Total: <span id="totalSelecionados" class="font-mono fw-bold">R$ 0,00</span>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                            Cancelar
+                        </button>
+                        <button type="button" class="btn btn-success" id="btnVincularSelecionados" onclick="vincularTitulosSelecionados()" disabled>
+                            <i class="fas fa-link me-1"></i>
+                            Vincular Selecionados
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -530,6 +680,8 @@
 <script>
 const loteId = {{ lote.id }};
 let itemAtual = null;
+let valorExtrato = 0;
+let titulosSelecionados = {}; // {titulo_id: {valor, titulo_nf, parcela, ...}}
 
 function executarMatching() {
     if (!confirm('Executar matching automático para todos os itens pendentes?')) return;
@@ -658,6 +810,26 @@ function desvincularTitulo(itemId) {
     });
 }
 
+// === FUNÇÃO PARA DESVINCULAR MÚLTIPLOS TÍTULOS ===
+function desvincularMultiplosTitulos(itemId) {
+    if (!confirm('Deseja remover TODOS os títulos vinculados a este item?\n\nO item voltará para o status PENDENTE.')) return;
+
+    fetch('/financeiro/extrato/api/desvincular-multiplos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item_id: itemId })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            toastr.success(data.message || 'Títulos desvinculados');
+            location.reload();
+        } else {
+            toastr.error(data.error || 'Erro ao desvincular');
+        }
+    });
+}
+
 function conciliarItem(itemId, btn) {
     if (!confirm('Conciliar este título no Odoo?')) return;
 
@@ -673,12 +845,9 @@ function conciliarItem(itemId, btn) {
     .then(r => r.json())
     .then(data => {
         if (data.success) {
-            // Mostrar mensagem apropriada
             if (data.extrato_reconciliado) {
-                // Título já quitado, extrato reconciliado com payment existente
                 toastr.success('Título quitado - extrato reconciliado com payment existente');
             } else if (data.sincronizado_do_odoo) {
-                // Título já quitado, mas extrato não pôde ser reconciliado
                 toastr.warning('Título quitado - extrato NÃO reconciliado (verificar no Odoo)');
             } else {
                 toastr.success('Item conciliado no Odoo');
@@ -697,8 +866,12 @@ function conciliarItem(itemId, btn) {
     });
 }
 
+// === MODAL DE CANDIDATOS COM SELEÇÃO MÚLTIPLA ===
 function buscarCandidatos(itemId) {
     itemAtual = itemId;
+    titulosSelecionados = {};
+    valorExtrato = 0;
+
     const modal = new bootstrap.Modal(document.getElementById('modalCandidatos'));
     modal.show();
 
@@ -708,12 +881,16 @@ function buscarCandidatos(itemId) {
             <p class="fin-loading__text">Buscando títulos a pagar...</p>
         </div>
     `;
+    document.getElementById('modalCandidatosFooter').style.display = 'none';
 
     fetch(`/financeiro/extrato/pagamentos/api/titulos-candidatos/${itemId}`)
     .then(r => r.json())
     .then(data => {
         if (data.success) {
+            valorExtrato = Math.abs(data.item.valor || 0);
             renderizarCandidatos(data.item, data.candidatos);
+            document.getElementById('modalCandidatosFooter').style.display = 'flex';
+            atualizarResumoSelecionados();
         } else {
             document.getElementById('modalCandidatosBody').innerHTML = `
                 <div class="alert alert-danger">
@@ -726,65 +903,167 @@ function buscarCandidatos(itemId) {
 }
 
 function renderizarCandidatos(item, candidatos) {
+    const valorAbs = Math.abs(item.valor || 0);
     let html = `
-        <div class="mb-3 p-3 rounded" style="background: var(--fin-bg-tertiary, var(--bs-tertiary-bg));">
-            <strong>Extrato:</strong> ${item.tipo_transacao || 'N/A'} - R$ ${item.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
-            <br><strong>CNPJ:</strong> ${item.cnpj_pagador || 'Não identificado'}
-            <br><strong>Pagador:</strong> ${item.nome_pagador || 'Não identificado'}
+        <div class="d-flex justify-content-between align-items-center mb-2 p-2 rounded" style="background: var(--fin-bg-tertiary, var(--bs-tertiary-bg));">
+            <div class="small">
+                <strong>${item.nome_pagador || 'N/A'}</strong>
+                <code class="ms-2">${item.cnpj_pagador || ''}</code>
+            </div>
+            <div class="text-end">
+                <span class="h5 mb-0 font-mono fw-bold text-danger">R$ ${valorAbs.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+            </div>
         </div>
     `;
 
     if (candidatos.length === 0) {
-        html += `
-            <div class="alert alert-warning">
-                <i class="fas fa-search me-2"></i>
-                Nenhum título candidato encontrado para os critérios atuais.
-            </div>
-        `;
+        html += `<div class="alert alert-warning py-2"><i class="fas fa-search me-2"></i>Nenhum título encontrado.</div>`;
     } else {
-        html += `<p class="text-muted">Encontrados ${candidatos.length} título(s) candidato(s):</p>`;
+        html += `
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <small class="text-muted">${candidatos.length} título(s)</small>
+                <button class="btn btn-sm btn-outline-secondary py-0" onclick="limparSelecao()">
+                    <i class="fas fa-eraser"></i> Limpar
+                </button>
+            </div>
+            <div class="fin-candidatos-lista" style="max-height: 350px; overflow-y: auto;">
+        `;
 
-        candidatos.forEach((t, idx) => {
-            let scoreClass = 'fin-score-badge--low';
-            if (t.score >= 100) scoreClass = 'fin-score-badge--100';
-            else if (t.score >= 90) scoreClass = 'fin-score-badge--90';
-            else if (t.score >= 80) scoreClass = 'fin-score-badge--80';
-            else if (t.score >= 70) scoreClass = 'fin-score-badge--70';
+        candidatos.forEach((t) => {
+            const scoreColor = t.score >= 100 ? 'success' : t.score >= 90 ? 'primary' : t.score >= 80 ? 'info' : t.score >= 70 ? 'warning' : 'secondary';
 
             html += `
-                <div class="fin-titulo-candidato ${t.score >= 100 ? 'fin-titulo-candidato--perfeito' : ''}"
-                     onclick="selecionarTitulo(${item.id}, ${t.titulo_id})">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <span class="fin-score-badge ${scoreClass} me-2">${t.score}%</span>
-                            <strong>NF ${t.titulo_nf} - P${t.parcela}</strong>
-                        </div>
-                        <div class="text-end">
-                            <div class="h5 mb-0 font-mono fw-bold">R$ ${(t.valor || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div>
-                        </div>
+                <div class="fin-candidato-row py-2 px-2 mb-1 rounded ${t.score >= 100 ? 'border border-success' : 'border'}"
+                     id="candidato-${t.titulo_id}">
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <input class="form-check-input titulo-checkbox m-0" type="checkbox" id="check-${t.titulo_id}"
+                               onchange="toggleTituloSelecionado(${t.titulo_id}, ${t.valor || 0}, '${t.titulo_nf}', '${t.parcela}')">
+                        <span class="badge bg-${scoreColor}" style="min-width: 40px;">${t.score}%</span>
+                        <strong>NF ${t.titulo_nf}</strong>
+                        <span class="badge bg-secondary">P${t.parcela}</span>
+                        <code class="small bg-dark text-light px-1 rounded">${t.cnpj || '-'}</code>
+                        <span class="font-mono fw-bold text-danger ms-auto">R$ ${(t.valor || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                        <button class="btn btn-sm btn-success py-0 px-1" onclick="adicionarTituloIndividual(${t.titulo_id}, ${t.valor || 0}, '${t.titulo_nf}', '${t.parcela}')" title="Adicionar">
+                            <i class="fas fa-plus"></i>
+                        </button>
                     </div>
-                    <div class="mt-2 small">
-                        <div class="fin-info-line">
-                            <i class="fas fa-building"></i>
-                            ${t.fornecedor || 'Fornecedor não informado'}
-                        </div>
-                        <div class="fin-info-line">
-                            <i class="fas fa-id-card"></i>
-                            <code class="fin-cnpj">${t.cnpj || 'CNPJ não informado'}</code>
-                        </div>
-                        <div class="fin-info-line">
-                            <i class="fas fa-calendar-check"></i>
-                            Venc: ${t.vencimento || 'N/A'}
-                        </div>
-                    </div>
+                    <div class="small ps-4 mt-1">${t.fornecedor || '-'} <span class="text-muted">| Venc: ${t.vencimento || '-'}</span></div>
                 </div>
             `;
         });
+
+        html += '</div>'; // fecha fin-candidatos-lista
     }
 
     document.getElementById('modalCandidatosBody').innerHTML = html;
 }
 
+// === FUNÇÕES DE SELEÇÃO MÚLTIPLA ===
+function toggleTituloSelecionado(tituloId, valor, nf, parcela) {
+    const checkbox = document.getElementById(`check-${tituloId}`);
+    const row = document.getElementById(`candidato-${tituloId}`);
+
+    if (checkbox.checked) {
+        titulosSelecionados[tituloId] = { titulo_id: tituloId, valor_alocado: valor, titulo_nf: nf, parcela: parcela };
+        row.classList.add('bg-success', 'bg-opacity-10');
+    } else {
+        delete titulosSelecionados[tituloId];
+        row.classList.remove('bg-success', 'bg-opacity-10');
+    }
+    atualizarResumoSelecionados();
+}
+
+function adicionarTituloIndividual(tituloId, valor, nf, parcela) {
+    const checkbox = document.getElementById(`check-${tituloId}`);
+    if (!checkbox.checked) {
+        checkbox.checked = true;
+        toggleTituloSelecionado(tituloId, valor, nf, parcela);
+    }
+}
+
+function limparSelecao() {
+    titulosSelecionados = {};
+    document.querySelectorAll('.titulo-checkbox').forEach(cb => cb.checked = false);
+    document.querySelectorAll('.bg-success.bg-opacity-10').forEach(el => el.classList.remove('bg-success', 'bg-opacity-10'));
+    atualizarResumoSelecionados();
+}
+
+function atualizarResumoSelecionados() {
+    const qtd = Object.keys(titulosSelecionados).length;
+    const total = Object.values(titulosSelecionados).reduce((sum, t) => sum + t.valor_alocado, 0);
+    const diferenca = valorExtrato - total;
+
+    document.getElementById('qtdSelecionados').textContent = qtd;
+    document.getElementById('totalSelecionados').textContent = `R$ ${total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
+
+    const btn = document.getElementById('btnVincularSelecionados');
+    btn.disabled = qtd === 0;
+
+    // Mostrar diferença
+    const info = document.getElementById('titulosSelecionadosInfo');
+    if (qtd > 0) {
+        let difClass = diferenca >= 0 ? 'text-success' : 'text-danger';
+        let difText = diferenca >= 0 ? `+R$ ${diferenca.toLocaleString('pt-BR', {minimumFractionDigits: 2})}` : `-R$ ${Math.abs(diferenca).toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
+        info.innerHTML = `
+            <span id="qtdSelecionados">${qtd}</span> título(s)
+            | Total: <span id="totalSelecionados" class="font-mono fw-bold">R$ ${total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+            | Diferença: <span class="font-mono fw-bold ${difClass}">${difText}</span>
+        `;
+    } else {
+        info.innerHTML = `
+            <span id="qtdSelecionados">0</span> título(s) selecionado(s)
+            | Total: <span id="totalSelecionados" class="font-mono fw-bold">R$ 0,00</span>
+        `;
+    }
+}
+
+function vincularTitulosSelecionados() {
+    const titulos = Object.values(titulosSelecionados);
+    if (titulos.length === 0) {
+        toastr.warning('Selecione pelo menos um título');
+        return;
+    }
+
+    const total = titulos.reduce((sum, t) => sum + t.valor_alocado, 0);
+    const msg = titulos.length === 1
+        ? `Vincular título NF ${titulos[0].titulo_nf} P${titulos[0].parcela} (R$ ${total.toLocaleString('pt-BR', {minimumFractionDigits: 2})})?`
+        : `Vincular ${titulos.length} títulos (Total: R$ ${total.toLocaleString('pt-BR', {minimumFractionDigits: 2})})?`;
+
+    if (!confirm(msg)) return;
+
+    const btn = document.getElementById('btnVincularSelecionados');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Vinculando...';
+
+    fetch('/financeiro/extrato/api/vincular-multiplos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            item_id: itemAtual,
+            titulos: titulos,
+            tipo: 'pagar'
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            toastr.success(data.message || 'Títulos vinculados com sucesso');
+            bootstrap.Modal.getInstance(document.getElementById('modalCandidatos')).hide();
+            location.reload();
+        } else {
+            toastr.error(data.error || 'Erro ao vincular títulos');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-link me-1"></i>Vincular Selecionados';
+        }
+    })
+    .catch(err => {
+        toastr.error('Erro de conexão');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-link me-1"></i>Vincular Selecionados';
+    });
+}
+
+// === FUNÇÃO LEGADA PARA SELEÇÃO ÚNICA (mantida para compatibilidade) ===
 function selecionarTitulo(itemId, tituloId) {
     if (!confirm('Vincular este título ao pagamento?')) return;
 

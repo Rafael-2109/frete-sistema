@@ -87,12 +87,12 @@
         }
 
         // 2. Verifica preferência do sistema
-        if (window.matchMedia('(prefers-color-scheme: light)').matches) {
-            return THEMES.LIGHT;
+        if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            return THEMES.DARK;
         }
 
-        // 3. Default: dark
-        return THEMES.DARK;
+        // 3. Default: light (mantém experiência familiar para usuários existentes)
+        return THEMES.LIGHT;
     };
 
     /**

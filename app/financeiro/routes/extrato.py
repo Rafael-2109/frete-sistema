@@ -501,21 +501,26 @@ def extrato_lote_detalhe(lote_id):
         itens = pagination.items
 
     # OTIMIZAÇÃO: Estatísticas em uma única query com GROUP BY
-    from sqlalchemy import func, case
+    from sqlalchemy import func, case, or_
     stats_query = db.session.query(
         func.count().label('total'),
         func.sum(case((ExtratoItem.status_match == 'MATCH_ENCONTRADO', 1), else_=0)).label('com_match'),
         func.sum(case((ExtratoItem.status_match == 'MULTIPLOS_MATCHES', 1), else_=0)).label('multiplos'),
+        func.sum(case((ExtratoItem.status_match == 'MULTIPLOS_VINCULADOS', 1), else_=0)).label('vinculados'),
         func.sum(case((ExtratoItem.status_match == 'SEM_MATCH', 1), else_=0)).label('sem_match'),
         func.sum(case((ExtratoItem.status_match == 'PENDENTE', 1), else_=0)).label('pendentes'),
         func.sum(case((ExtratoItem.aprovado == True, 1), else_=0)).label('aprovados'),
         func.sum(case((ExtratoItem.status == 'CONCILIADO', 1), else_=0)).label('conciliados'),
     ).filter(ExtratoItem.lote_id == lote_id).first()
 
+    # com_match inclui MATCH_ENCONTRADO e MULTIPLOS_VINCULADOS (ambos prontos para aprovar)
+    com_match_total = (stats_query.com_match or 0) + (stats_query.vinculados or 0) if stats_query else 0
+
     stats = {
         'total': lote.total_linhas or (stats_query.total if stats_query else 0),
-        'com_match': stats_query.com_match or 0 if stats_query else 0,
+        'com_match': com_match_total,
         'multiplos': stats_query.multiplos or 0 if stats_query else 0,
+        'vinculados': stats_query.vinculados or 0 if stats_query else 0,
         'sem_match': stats_query.sem_match or 0 if stats_query else 0,
         'pendentes': stats_query.pendentes or 0 if stats_query else 0,
         'aprovados': stats_query.aprovados or 0 if stats_query else 0,
@@ -720,21 +725,26 @@ def extrato_lote_pagamentos_detalhe(lote_id):
         itens = pagination.items
 
     # Estatísticas
-    from sqlalchemy import func, case
+    from sqlalchemy import func, case, or_
     stats_query = db.session.query(
         func.count().label('total'),
         func.sum(case((ExtratoItem.status_match == 'MATCH_ENCONTRADO', 1), else_=0)).label('com_match'),
         func.sum(case((ExtratoItem.status_match == 'MULTIPLOS_MATCHES', 1), else_=0)).label('multiplos'),
+        func.sum(case((ExtratoItem.status_match == 'MULTIPLOS_VINCULADOS', 1), else_=0)).label('vinculados'),
         func.sum(case((ExtratoItem.status_match == 'SEM_MATCH', 1), else_=0)).label('sem_match'),
         func.sum(case((ExtratoItem.status_match == 'PENDENTE', 1), else_=0)).label('pendentes'),
         func.sum(case((ExtratoItem.aprovado == True, 1), else_=0)).label('aprovados'),
         func.sum(case((ExtratoItem.status == 'CONCILIADO', 1), else_=0)).label('conciliados'),
     ).filter(ExtratoItem.lote_id == lote_id).first()
 
+    # com_match inclui MATCH_ENCONTRADO e MULTIPLOS_VINCULADOS (ambos prontos para aprovar)
+    com_match_total = (stats_query.com_match or 0) + (stats_query.vinculados or 0) if stats_query else 0
+
     stats = {
         'total': lote.total_linhas or (stats_query.total if stats_query else 0),
-        'com_match': stats_query.com_match or 0 if stats_query else 0,
+        'com_match': com_match_total,
         'multiplos': stats_query.multiplos or 0 if stats_query else 0,
+        'vinculados': stats_query.vinculados or 0 if stats_query else 0,
         'sem_match': stats_query.sem_match or 0 if stats_query else 0,
         'pendentes': stats_query.pendentes or 0 if stats_query else 0,
         'aprovados': stats_query.aprovados or 0 if stats_query else 0,
@@ -1054,6 +1064,223 @@ def extrato_aprovar_todos():
     return jsonify({
         'success': True,
         'aprovados': aprovados
+    })
+
+
+# =============================================================================
+# VINCULAÇÃO MÚLTIPLA (M:N)
+# =============================================================================
+
+@financeiro_bp.route('/extrato/api/vincular-multiplos', methods=['POST'])
+@login_required
+def extrato_vincular_multiplos():
+    """
+    Vincula múltiplos títulos a uma linha de extrato.
+
+    Body:
+    {
+        "item_id": 123,
+        "titulos": [
+            {"titulo_id": 1, "valor_alocado": 5000.00},
+            {"titulo_id": 2, "valor_alocado": 7000.00},
+            {"titulo_id": 3, "valor_alocado": 3000.00}
+        ],
+        "tipo": "receber"  # ou "pagar"
+    }
+    """
+    data = request.get_json()
+    item_id = data.get('item_id')
+    titulos = data.get('titulos', [])
+    tipo = data.get('tipo', 'receber')  # 'receber' ou 'pagar'
+
+    if not item_id:
+        return jsonify({'success': False, 'error': 'item_id é obrigatório'}), 400
+
+    if not titulos:
+        return jsonify({'success': False, 'error': 'Lista de títulos é obrigatória'}), 400
+
+    item = ExtratoItem.query.get_or_404(item_id)
+
+    # Não permitir vincular se já foi conciliado
+    if item.status == 'CONCILIADO':
+        return jsonify({
+            'success': False,
+            'error': 'Item já foi conciliado, não é possível vincular novos títulos'
+        }), 400
+
+    try:
+        from app.financeiro.services.extrato_matching_service import ExtratoMatchingService
+
+        service = ExtratoMatchingService()
+        service.vincular_multiplos_titulos(
+            item=item,
+            titulos=titulos,
+            tipo=tipo,
+            usuario=current_user.nome if current_user else 'Sistema'
+        )
+
+        return jsonify({
+            'success': True,
+            'message': f'{len(titulos)} títulos vinculados ao item {item_id}',
+            'item': item.to_dict()
+        })
+
+    except ValueError as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 400
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@financeiro_bp.route('/extrato/api/desvincular-multiplos', methods=['POST'])
+@login_required
+def extrato_desvincular_multiplos():
+    """
+    Remove todos os títulos vinculados (M:N) de um item de extrato.
+
+    Body:
+    {
+        "item_id": 123
+    }
+    """
+    data = request.get_json()
+    item_id = data.get('item_id')
+
+    if not item_id:
+        return jsonify({'success': False, 'error': 'item_id é obrigatório'}), 400
+
+    item = ExtratoItem.query.get_or_404(item_id)
+
+    # Não permitir desvincular se já foi conciliado
+    if item.status == 'CONCILIADO':
+        return jsonify({
+            'success': False,
+            'error': 'Item já foi conciliado, não é possível desvincular'
+        }), 400
+
+    try:
+        from app.financeiro.services.extrato_matching_service import ExtratoMatchingService
+
+        service = ExtratoMatchingService()
+        removidos = service.desvincular_titulos(item)
+
+        return jsonify({
+            'success': True,
+            'message': f'{removidos} títulos desvinculados do item {item_id}',
+            'item': item.to_dict()
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@financeiro_bp.route('/extrato/api/titulos-agrupados/<int:item_id>')
+@login_required
+def extrato_titulos_agrupados(item_id):
+    """
+    Busca sugestões de agrupamento de títulos para um item de extrato.
+
+    Retorna combinações de títulos cujas somas aproximam ou igualam o valor do extrato.
+
+    Query params:
+    - tipo: 'receber' ou 'pagar' (default: inferido do lote)
+    - tolerancia: tolerância percentual para match (default: 0.05 = 5%)
+    """
+    item = ExtratoItem.query.get_or_404(item_id)
+
+    # Inferir tipo do lote
+    lote = item.lote
+    if lote and lote.tipo_transacao == 'saida':
+        tipo_default = 'pagar'
+    else:
+        tipo_default = 'receber'
+
+    tipo = request.args.get('tipo', tipo_default)
+    tolerancia = request.args.get('tolerancia', 0.05, type=float)
+
+    try:
+        from app.financeiro.services.extrato_matching_service import ExtratoMatchingService
+
+        service = ExtratoMatchingService()
+        valor = abs(item.valor) if item.valor else 0
+
+        sugestoes = service.buscar_titulos_agrupados(
+            cnpj=item.cnpj_pagador,
+            valor_total=valor,
+            tolerancia=tolerancia,
+            tipo=tipo
+        )
+
+        return jsonify({
+            'success': True,
+            'item': item.to_dict(),
+            'valor_extrato': float(valor),
+            'sugestoes': sugestoes,
+            'total_sugestoes': len(sugestoes)
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@financeiro_bp.route('/extrato/api/titulos-vinculados/<int:item_id>')
+@login_required
+def extrato_titulos_vinculados(item_id):
+    """
+    Lista os títulos vinculados a um item de extrato (via M:N).
+    """
+    from app.financeiro.models import ExtratoItemTitulo
+
+    item = ExtratoItem.query.get_or_404(item_id)
+
+    # Buscar vínculos M:N
+    vinculos = ExtratoItemTitulo.query.filter_by(extrato_item_id=item_id).all()
+
+    titulos = []
+    for v in vinculos:
+        titulos.append({
+            'vinculo_id': v.id,
+            'titulo_id': v.titulo_receber_id or v.titulo_pagar_id,
+            'tipo': 'receber' if v.titulo_receber_id else 'pagar',
+            'valor_alocado': float(v.valor_alocado) if v.valor_alocado else 0,
+            'valor_titulo_original': float(v.valor_titulo_original) if v.valor_titulo_original else None,
+            'percentual_alocado': float(v.percentual_alocado) if v.percentual_alocado else None,
+            'titulo_nf': v.titulo_nf,
+            'titulo_parcela': v.titulo_parcela,
+            'titulo_vencimento': v.titulo_vencimento.isoformat() if v.titulo_vencimento else None,
+            'titulo_cliente': v.titulo_cliente,
+            'titulo_cnpj': v.titulo_cnpj,
+            'status': v.status,
+            'aprovado': v.aprovado,
+            'match_score': v.match_score,
+            'match_criterio': v.match_criterio
+        })
+
+    # Calcular totais
+    valor_total_alocado = sum(t['valor_alocado'] for t in titulos)
+    valor_extrato = abs(item.valor) if item.valor else 0
+    diferenca = valor_extrato - valor_total_alocado
+
+    return jsonify({
+        'success': True,
+        'item_id': item_id,
+        'valor_extrato': float(valor_extrato),
+        'valor_total_alocado': float(valor_total_alocado),
+        'diferenca': float(diferenca),
+        'tem_multiplos_titulos': len(titulos) > 1,
+        'titulos': titulos,
+        'total_titulos': len(titulos)
     })
 
 

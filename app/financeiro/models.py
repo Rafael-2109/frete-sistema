@@ -1482,17 +1482,24 @@ class ExtratoItem(db.Model):
     @property
     def valor_alocado_total(self) -> float:
         """Soma dos valores alocados em todos os títulos vinculados."""
-        return sum(t.valor_alocado or 0 for t in self.titulos_vinculados)
+        total = sum(float(t.valor_alocado or 0) for t in self.titulos_vinculados)
+        return float(total)
 
     @property
     def valor_pendente_alocacao(self) -> float:
         """Valor do extrato ainda não alocado a títulos."""
-        return (self.valor or 0) - self.valor_alocado_total
+        return float(self.valor or 0) - self.valor_alocado_total
 
     @property
     def tem_multiplos_titulos(self) -> bool:
-        """Retorna True se há mais de um título vinculado."""
-        return self.titulos_vinculados.count() > 1
+        """
+        Retorna True se há títulos vinculados via M:N.
+
+        IMPORTANTE: Retorna True mesmo para 1 único título vinculado via M:N,
+        pois nesse caso o FK legacy (titulo_receber_id/titulo_pagar_id) foi limpo
+        e precisamos usar o fluxo de múltiplos no template.
+        """
+        return self.titulos_vinculados.count() > 0
 
 
 class ExtratoItemTitulo(db.Model):
@@ -1689,21 +1696,32 @@ class ExtratoItemTitulo(db.Model):
             'processado_em': self.processado_em.isoformat() if self.processado_em else None,
         }
 
-    def preencher_cache(self):
-        """Preenche campos de cache a partir do título relacionado."""
-        titulo = self.titulo
+    def preencher_cache(self, titulo=None):
+        """
+        Preenche campos de cache a partir do título relacionado.
+
+        Args:
+            titulo: Título opcional a usar. Se não fornecido, usa self.titulo.
+                   Passar o título diretamente é útil quando a FK foi definida
+                   mas a relação ainda não foi carregada (lazy loading).
+        """
+        if titulo is None:
+            titulo = self.titulo
         if titulo:
             self.titulo_nf = titulo.titulo_nf
             self.titulo_parcela = titulo.parcela
             self.titulo_vencimento = titulo.vencimento
             self.titulo_cliente = getattr(titulo, 'raz_social_red', None) or titulo.raz_social
             self.titulo_cnpj = titulo.cnpj
-            self.valor_titulo_original = titulo.valor_titulo
+
+            # Obter valor do título (ContasAReceber usa valor_titulo, ContasAPagar usa valor_original)
+            valor_titulo = getattr(titulo, 'valor_titulo', None) or getattr(titulo, 'valor_original', None)
+            self.valor_titulo_original = valor_titulo
 
             # Calcular percentual alocado
-            if self.valor_alocado and titulo.valor_titulo:
+            if self.valor_alocado and valor_titulo:
                 self.percentual_alocado = (
-                    float(self.valor_alocado) / float(titulo.valor_titulo) * 100
+                    float(self.valor_alocado) / float(valor_titulo) * 100
                 )
 
 

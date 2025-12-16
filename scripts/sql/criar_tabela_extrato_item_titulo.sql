@@ -1,36 +1,16 @@
-"""
-Script de migracao para criar tabelas do IA Trainer.
+-- ============================================================================
+-- CRIAÇÃO: Tabela extrato_item_titulo (associação M:N)
+-- ============================================================================
+-- Permite vincular múltiplos títulos a uma única linha de extrato.
+--
+-- Cenários:
+-- 1. Pagamento agrupado: Cliente paga 3 NFs de uma vez
+-- 2. Alocação parcial: Extrato R$ 10.000, título R$ 12.000 (paga 83,3%)
+--
+-- Data: 2025-12-15
+-- ============================================================================
 
-Tabelas:
-- codigo_sistema_gerado: Codigo gerado pelo Claude
-- versao_codigo_gerado: Historico de versoes
-- sessao_ensino_ia: Sessoes de ensino
-
-Uso:
-    python scripts/migrations/criar_tabelas_ia_trainer.py
-
-Criado em: 23/11/2025
-"""
-
-import sys
-import os
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-
-from app import create_app, db
-from sqlalchemy import text
-
-
-def criar_tabelas():
-    """Cria as tabelas do IA Trainer."""
-    app = create_app()
-
-    with app.app_context():
-        try:
-            # === TABELA: sessao_ensino_ia ===
-            print("Criando tabela sessao_ensino_ia...")
-            db.session.execute(text("""
-                -- 1. CRIAR TABELA
+-- 1. CRIAR TABELA
 CREATE TABLE IF NOT EXISTS extrato_item_titulo (
     id SERIAL PRIMARY KEY,
 
@@ -89,29 +69,11 @@ COMMENT ON TABLE extrato_item_titulo IS 'Associação M:N entre linhas de extrat
 COMMENT ON COLUMN extrato_item_titulo.valor_alocado IS 'Valor deste título alocado ao pagamento';
 COMMENT ON COLUMN extrato_item_titulo.percentual_alocado IS 'Percentual do título que está sendo pago';
 COMMENT ON COLUMN extrato_item_titulo.status IS 'PENDENTE, APROVADO, CONCILIADO, ERRO';
-            """))
 
-            db.session.commit()
-            print("\n✓ Todas as tabelas do IA Trainer criadas com sucesso!")
-            return True
-
-        except Exception as e:
-            db.session.rollback()
-            print(f"\n✗ Erro ao criar tabelas: {e}")
-            return False
-
-
-
-if __name__ == "__main__":
-    print("=" * 60)
-    print("Migracao: Criar tabelas do IA Trainer")
-    print("=" * 60)
-
-
-    # Cria tabelas do IA Trainer
-    print("\n2. Criando tabelas do IA Trainer...")
-    sucesso = criar_tabelas()
-
-
-    print("\n" + "=" * 60)
-    print("Migracao finalizada.")
+-- ============================================================================
+-- VERIFICAÇÃO
+-- ============================================================================
+SELECT
+    'extrato_item_titulo' as tabela,
+    (SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'extrato_item_titulo') as num_colunas,
+    (SELECT COUNT(*) FROM pg_indexes WHERE tablename = 'extrato_item_titulo') as num_indices;

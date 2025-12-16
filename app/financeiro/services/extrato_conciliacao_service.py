@@ -38,7 +38,9 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 from app import db
-from app.financeiro.models import ExtratoLote, ExtratoItem, ContasAReceber
+from app.financeiro.models import (
+    ExtratoLote, ExtratoItem, ContasAReceber, ContasAPagar, ExtratoItemTitulo
+)
 from app.financeiro.services.baixa_titulos_service import BaixaTitulosService
 
 logger = logging.getLogger(__name__)
@@ -145,7 +147,12 @@ class ExtratoConciliacaoService:
         """
         Concilia um item individual no Odoo.
 
-        FLUXO MULTI-COMPANY:
+        FLUXO:
+        1. Verifica se item tem múltiplos títulos vinculados (M:N via ExtratoItemTitulo)
+        2. Se sim: chama _conciliar_multiplos_titulos()
+        3. Se não: fluxo original (1:1 via FK legacy)
+
+        FLUXO MULTI-COMPANY (1:1):
         1. Se título tem payment vinculado (CNAB): reconcilia linha PENDENTES com linha EXTRATO
         2. Se título não tem payment: tenta reconciliar diretamente (mesma empresa)
 
@@ -155,6 +162,19 @@ class ExtratoConciliacaoService:
         Returns:
             Dict com resultado
         """
+        # =========================================================================
+        # VERIFICAR SE TEM MÚLTIPLOS TÍTULOS VINCULADOS (M:N)
+        # =========================================================================
+        if item.tem_multiplos_titulos:
+            logger.info(
+                f"Conciliando item {item.id} com MÚLTIPLOS títulos "
+                f"({item.titulos_vinculados.count()} títulos)"
+            )
+            return self._conciliar_multiplos_titulos(item)
+
+        # =========================================================================
+        # FLUXO ORIGINAL (1:1)
+        # =========================================================================
         logger.info(f"Conciliando item {item.id}: NF {item.titulo_nf} P{item.titulo_parcela}")
 
         if not item.titulo_receber_id:
@@ -1133,4 +1153,251 @@ class ExtratoConciliacaoService:
             'sincronizado_do_odoo': True,
             'extrato_reconciliado': extrato_reconciliado,
             'mensagem': mensagem_resultado
+        }
+
+    # =========================================================================
+    # MÉTODOS PARA MÚLTIPLOS TÍTULOS (M:N)
+    # =========================================================================
+
+    def _conciliar_multiplos_titulos(self, item: ExtratoItem) -> Dict:
+        """
+        Concilia múltiplos títulos vinculados a um item de extrato.
+
+        Este método processa cada ExtratoItemTitulo individualmente:
+        1. Busca título no Odoo
+        2. Cria payment com valor_alocado (se necessário)
+        3. Reconcilia payment ↔ título
+        4. Atualiza status do ExtratoItemTitulo
+
+        O extrato será marcado como CONCILIADO apenas se TODOS os títulos
+        forem processados com sucesso.
+
+        Args:
+            item: ExtratoItem com titulos_vinculados (M:N)
+
+        Returns:
+            Dict com resultado da conciliação
+        """
+        vinculos = item.titulos_vinculados.all()
+
+        if not vinculos:
+            raise ValueError("Item não possui títulos vinculados (M:N)")
+
+        logger.info(f"=" * 60)
+        logger.info(f"CONCILIANDO MÚLTIPLOS TÍTULOS - Item {item.id}")
+        logger.info(f"Total de títulos: {len(vinculos)}")
+        logger.info(f"Valor extrato: R$ {item.valor:.2f}")
+        logger.info(f"=" * 60)
+
+        resultados = []
+        total_conciliados = 0
+        total_erros = 0
+
+        for i, vinculo in enumerate(vinculos, 1):
+            logger.info(f"\n--- Processando título {i}/{len(vinculos)} ---")
+            logger.info(
+                f"  Vínculo ID: {vinculo.id}, "
+                f"Título: {vinculo.titulo_nf} P{vinculo.titulo_parcela}, "
+                f"Valor alocado: R$ {vinculo.valor_alocado:.2f}"
+            )
+
+            try:
+                resultado = self._conciliar_titulo_individual(item, vinculo)
+                vinculo.status = 'CONCILIADO'
+                vinculo.processado_em = datetime.utcnow()
+                vinculo.mensagem = resultado.get('mensagem', 'OK')
+                resultados.append(resultado)
+                total_conciliados += 1
+                logger.info(f"  ✅ Título conciliado com sucesso")
+
+            except Exception as e:
+                logger.error(f"  ❌ Erro no título: {e}")
+                vinculo.status = 'ERRO'
+                vinculo.processado_em = datetime.utcnow()
+                vinculo.mensagem = str(e)
+                resultados.append({
+                    'vinculo_id': vinculo.id,
+                    'erro': str(e),
+                    'titulo_id': vinculo.titulo_receber_id or vinculo.titulo_pagar_id
+                })
+                total_erros += 1
+
+            db.session.flush()  # Salvar progresso de cada vínculo
+
+        # Determinar status final do item
+        todos_ok = all(v.status == 'CONCILIADO' for v in vinculos)
+
+        if todos_ok:
+            item.status = 'CONCILIADO'
+            item.mensagem = f"Todos os {len(vinculos)} títulos conciliados"
+        elif total_conciliados > 0:
+            item.status = 'PARCIAL'
+            item.mensagem = f"{total_conciliados}/{len(vinculos)} títulos conciliados"
+        else:
+            item.status = 'ERRO'
+            item.mensagem = f"Nenhum título conciliado (0/{len(vinculos)})"
+
+        item.processado_em = datetime.utcnow()
+
+        logger.info(f"\n{'=' * 60}")
+        logger.info(f"RESULTADO FINAL - Item {item.id}")
+        logger.info(f"Status: {item.status}")
+        logger.info(f"Conciliados: {total_conciliados}/{len(vinculos)}")
+        logger.info(f"Erros: {total_erros}")
+        logger.info(f"{'=' * 60}")
+
+        return {
+            'item_id': item.id,
+            'status': item.status,
+            'total_titulos': len(vinculos),
+            'conciliados': total_conciliados,
+            'erros': total_erros,
+            'resultados': resultados
+        }
+
+    def _conciliar_titulo_individual(
+        self, item: ExtratoItem, vinculo: ExtratoItemTitulo
+    ) -> Dict:
+        """
+        Concilia um título individual do vínculo M:N.
+
+        IMPORTANTE: O valor a reconciliar é o valor_alocado do vínculo,
+        não o valor total do extrato.
+
+        Args:
+            item: ExtratoItem pai
+            vinculo: ExtratoItemTitulo com os dados do título
+
+        Returns:
+            Dict com resultado
+        """
+        # Determinar tipo de título (receber ou pagar)
+        if vinculo.titulo_receber_id:
+            titulo_local = ContasAReceber.query.get(vinculo.titulo_receber_id)
+            tipo = 'receber'
+        elif vinculo.titulo_pagar_id:
+            titulo_local = ContasAPagar.query.get(vinculo.titulo_pagar_id)
+            tipo = 'pagar'
+        else:
+            raise ValueError("Vínculo não possui título associado")
+
+        if not titulo_local:
+            raise ValueError(f"Título ID {vinculo.titulo_receber_id or vinculo.titulo_pagar_id} não encontrado")
+
+        # Buscar título no Odoo
+        titulo_odoo = self._buscar_titulo_odoo_multicompany(
+            titulo_local.titulo_nf, titulo_local.parcela
+        )
+        if not titulo_odoo:
+            raise ValueError(
+                f"Título NF {titulo_local.titulo_nf} P{titulo_local.parcela} "
+                f"não encontrado no Odoo"
+            )
+
+        titulo_odoo_id = titulo_odoo['id']
+        titulo_company = titulo_odoo.get('company_id')
+        titulo_company_id = titulo_company[0] if isinstance(titulo_company, (list, tuple)) else titulo_company
+
+        logger.info(f"    Título Odoo: ID={titulo_odoo_id}, Empresa={titulo_company_id}")
+
+        # Verificar se título já foi baixado
+        matched_credit_ids = titulo_odoo.get('matched_credit_ids', [])
+        l10n_br_paga = titulo_odoo.get('l10n_br_paga', False)
+        saldo_titulo = titulo_odoo.get('amount_residual', 0)
+
+        # Salvar saldo antes
+        vinculo.titulo_saldo_antes = saldo_titulo
+
+        # Valor a processar é o valor_alocado do vínculo
+        valor_alocado = float(vinculo.valor_alocado)
+        logger.info(f"    Valor alocado: R$ {valor_alocado:.2f}, Saldo título: R$ {saldo_titulo:.2f}")
+
+        # =========================================================================
+        # CENÁRIO 1: Título já pago (tem payment vinculado)
+        # =========================================================================
+        if matched_credit_ids and (saldo_titulo <= 0 or l10n_br_paga):
+            logger.info(f"    Título já quitado - marcando como conciliado")
+            vinculo.titulo_saldo_depois = 0
+            return {
+                'vinculo_id': vinculo.id,
+                'titulo_id': titulo_odoo_id,
+                'saldo_antes': saldo_titulo,
+                'saldo_depois': 0,
+                'mensagem': 'Título já quitado'
+            }
+
+        # =========================================================================
+        # CENÁRIO 2: Título com saldo - criar payment parcial
+        # =========================================================================
+        if saldo_titulo > 0:
+            # Determinar valor do payment (menor entre alocado e saldo)
+            valor_payment = min(valor_alocado, saldo_titulo)
+
+            logger.info(f"    Criando payment de R$ {valor_payment:.2f}")
+
+            # Extrair dados do título
+            partner_id = titulo_odoo.get('partner_id')
+            partner_id_num = partner_id[0] if isinstance(partner_id, (list, tuple)) else partner_id
+
+            move = titulo_odoo.get('move_id')
+            move_name = move[1] if isinstance(move, (list, tuple)) else str(move)
+
+            # Criar payment na empresa do título
+            payment_id, payment_name = self.baixa_service._criar_pagamento(
+                partner_id=partner_id_num,
+                valor=valor_payment,
+                journal_id=883,  # GRAFENO
+                ref=f"{move_name} (Extrato {item.id})",
+                data=item.data_transacao or datetime.now().date(),
+                company_id=titulo_company_id
+            )
+            logger.info(f"    Payment criado: {payment_name} (ID {payment_id})")
+
+            # Postar payment
+            self.baixa_service._postar_pagamento(payment_id)
+            logger.info(f"    Payment postado")
+
+            # Buscar linha de crédito do payment e reconciliar com título
+            credit_line_id = self.baixa_service._buscar_linha_credito(payment_id)
+            if credit_line_id:
+                self._executar_reconcile(credit_line_id, titulo_odoo_id)
+                logger.info(f"    Título reconciliado com payment")
+
+            # Salvar IDs de referência
+            vinculo.payment_id = payment_id
+            vinculo.partial_reconcile_id = self._buscar_partial_reconcile(titulo_odoo_id)
+
+            # Buscar saldo atualizado
+            titulo_atualizado = self._buscar_titulo_por_id(titulo_odoo_id)
+            vinculo.titulo_saldo_depois = titulo_atualizado.get('amount_residual', 0) if titulo_atualizado else None
+
+            # Verificar full_reconcile
+            if titulo_atualizado and titulo_atualizado.get('full_reconcile_id'):
+                full_rec = titulo_atualizado.get('full_reconcile_id')
+                if isinstance(full_rec, (list, tuple)) and len(full_rec) > 0:
+                    vinculo.full_reconcile_id = full_rec[0]
+
+            return {
+                'vinculo_id': vinculo.id,
+                'titulo_id': titulo_odoo_id,
+                'payment_id': payment_id,
+                'payment_name': payment_name,
+                'valor_payment': valor_payment,
+                'saldo_antes': saldo_titulo,
+                'saldo_depois': vinculo.titulo_saldo_depois,
+                'partial_reconcile_id': vinculo.partial_reconcile_id,
+                'mensagem': f'Payment criado: {payment_name}'
+            }
+
+        # =========================================================================
+        # CENÁRIO 3: Título sem saldo (já quitado por outro meio)
+        # =========================================================================
+        logger.info(f"    Título já sem saldo - apenas marcando")
+        vinculo.titulo_saldo_depois = 0
+        return {
+            'vinculo_id': vinculo.id,
+            'titulo_id': titulo_odoo_id,
+            'saldo_antes': saldo_titulo,
+            'saldo_depois': 0,
+            'mensagem': 'Título já quitado (sem saldo)'
         }
