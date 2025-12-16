@@ -1,12 +1,12 @@
 ---
 name: integracao-odoo
-description: "Skill para CRIAR novas integracoes com Odoo. Cobre lancamento de CTes, despesas extras e documentos fiscais seguindo o processo de 16 etapas. Use quando precisar IMPLEMENTAR novos fluxos de lancamento ou MODIFICAR existentes. Para CONSULTAS use a skill consultando-odoo."
+description: "Skill para CRIAR novas integracoes com Odoo. Cobre lancamento de CTes, despesas extras e documentos fiscais seguindo o processo de 16 etapas. Use quando precisar IMPLEMENTAR novos fluxos de lancamento ou MODIFICAR existentes. Para CONSULTAS use a skill rastreando-odoo."
 ---
 
 # Integracao Odoo - Sistema de Fretes
 
 > **ATENCAO**: Esta skill eh para DESENVOLVIMENTO (criar/modificar integracoes).
-> Para CONSULTAS em producao, use a skill `consultando-odoo`.
+> Para CONSULTAS e rastreamento de fluxos, use a skill `rastreando-odoo`.
 
 Skill de desenvolvimento que documenta o processo completo de integracao com o Odoo ERP para lancamento de documentos fiscais (CTe) no sistema de fretes.
 
@@ -252,11 +252,7 @@ odoo.execute_method(modelo, metodo, args)
 
 | Skill | Uso |
 |-------|-----|
-| consultando-odoo-dfe | Para CONSULTAS em producao (DFE, devolucoes, CTe, tributos) |
-| consultando-odoo-cadastros | Para CONSULTAS de parceiros e transportadoras |
-| consultando-odoo-financeiro | Para CONSULTAS de contas a pagar/receber, vencimentos |
-| consultando-odoo-compras | Para CONSULTAS de pedidos de compra (purchase.order) |
-| consultando-odoo-produtos | Para CONSULTAS de catalogo de produtos (product.product) |
+| rastreando-odoo | Para CONSULTAS e rastreamento de fluxos (NF, PO, SO, titulos, conciliacoes) |
 | descobrindo-odoo-estrutura | Para descobrir campos/modelos nao mapeados |
 | gerindo-expedicao | Para consultas de carteira, separacoes e estoque |
 

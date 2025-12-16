@@ -498,13 +498,9 @@ claude --model sonnet
 | Skill | Descricao |
 |-------|-----------|
 | gerindo-expedicao | Separacoes e estoque |
-| consultando-odoo-produtos | Produtos Odoo |
-| consultando-odoo-compras | Pedidos de compra |
-| consultando-odoo-dfe | Documentos fiscais |
-| consultando-odoo-cadastros | Fornecedores/Clientes |
-| consultando-odoo-financeiro | Contas a pagar/receber |
-| descobrindo-odoo-estrutura | Exploracao de modelos |
-| integracao-odoo | Desenvolvimento |
+| rastreando-odoo | Rastreamento de fluxos documentais (NF, PO, SO, titulos, conciliacoes) |
+| descobrindo-odoo-estrutura | Exploracao de modelos nao mapeados |
+| integracao-odoo | Desenvolvimento de integracoes |
 
 ---
 

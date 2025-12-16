@@ -297,7 +297,7 @@ Ou então:
 python .claude/skills/gerindo-expedicao/scripts/consultando_situacao_pedidos.py \
   --grupo atacadao --produto ketchup
 ❌ O que eu FIZ:
-Provavelmente consultei o catálogo de produtos via skill consultando-odoo-produtos ou busca direta, que retorna TODOS os ketchups do sistema, não o que está pendente para aquele cliente.
+Provavelmente consultei o catálogo de produtos via descobrindo-odoo-estrutura ou busca direta, que retorna TODOS os ketchups do sistema, não o que está pendente para aquele cliente.
 
 Por que aconteceu:
 

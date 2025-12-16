@@ -171,8 +171,7 @@ Quando o usuario pedir "exporte os 10 maiores pedidos para Excel":
 |-------|-----|
 | lendo-arquivos | LER arquivos enviados pelo usuario |
 | gerindo-expedicao | Consultas de carteira para exportar |
-| consultando-odoo-produtos | Consultas de produtos para exportar |
-| consultando-odoo-cadastros | Consultas de cadastros para exportar |
+| rastreando-odoo | Consultas Odoo (NF, PO, SO, titulos) para exportar |
 
 > **NOTA**: Esta skill eh para CRIAR arquivos para download.
 > Para ler arquivos do usuario, use `lendo-arquivos`.

@@ -46,19 +46,22 @@ Os principais dominios de dados relevantes para o sistema de fretes sao:
 
 ## Status de Implementacao
 
-| Modelo | Status | Documentacao | Skill/Script |
-|--------|--------|--------------|--------------|
-| DFE (Documentos Fiscais) | ✅ IMPLEMENTADO | [DFE.md](DFE.md) | consultando-odoo-dfe |
-| DFE Lines | ✅ IMPLEMENTADO | [DFE.md](DFE.md#linhas) | consultando-odoo-dfe |
-| DFE Pagamentos | ✅ IMPLEMENTADO | [DFE.md](DFE.md#pagamentos) | consultando-odoo-dfe |
-| res.partner | ✅ IMPLEMENTADO | consultando-odoo-cadastros/reference/PARTNER.md | consultando-odoo-cadastros |
-| delivery.carrier | ✅ IMPLEMENTADO | consultando-odoo-cadastros/reference/CARRIER.md | consultando-odoo-cadastros |
-| account.move | ✅ IMPLEMENTADO | consultando-odoo-financeiro/reference/FINANCEIRO.md | consultando-odoo-financeiro |
-| account.move.line | ✅ IMPLEMENTADO | consultando-odoo-financeiro/reference/FINANCEIRO.md | consultando-odoo-financeiro |
-| purchase.order | ✅ IMPLEMENTADO | consultando-odoo-compras/reference/PURCHASE.md | consultando-odoo-compras |
-| purchase.order.line | ✅ IMPLEMENTADO | consultando-odoo-compras/reference/PURCHASE.md | consultando-odoo-compras |
-| product.product | ✅ IMPLEMENTADO | consultando-odoo-produtos/reference/PRODUCT.md | consultando-odoo-produtos |
-| product.template | ✅ IMPLEMENTADO | consultando-odoo-produtos/reference/PRODUCT.md | consultando-odoo-produtos |
+| Modelo | Status | Skill |
+|--------|--------|-------|
+| DFE (Documentos Fiscais) | ✅ IMPLEMENTADO | rastreando-odoo |
+| DFE Lines | ✅ IMPLEMENTADO | rastreando-odoo |
+| DFE Pagamentos | ✅ IMPLEMENTADO | rastreando-odoo |
+| res.partner | ✅ IMPLEMENTADO | rastreando-odoo |
+| account.move | ✅ IMPLEMENTADO | rastreando-odoo |
+| account.move.line | ✅ IMPLEMENTADO | rastreando-odoo |
+| purchase.order | ✅ IMPLEMENTADO | rastreando-odoo |
+| purchase.order.line | ✅ IMPLEMENTADO | rastreando-odoo |
+| sale.order | ✅ IMPLEMENTADO | rastreando-odoo |
+| stock.picking | ✅ IMPLEMENTADO | rastreando-odoo |
+| account.full.reconcile | ✅ IMPLEMENTADO | rastreando-odoo |
+| product.product | 🔍 | descobrindo-odoo-estrutura |
+
+> **NOTA**: Skills `consultando-odoo-*` foram consolidadas em `rastreando-odoo` (16/12/2025)
 
 **Legenda:**
 - ✅ IMPLEMENTADO: Script funcional e documentacao completa

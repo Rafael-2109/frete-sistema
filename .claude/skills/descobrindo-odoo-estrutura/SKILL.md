@@ -19,7 +19,7 @@ Skill para **descoberta de campos e estrutura** de modelos do Odoo.
 2. **Implementar nova consulta**
    - Descobrir estrutura do modelo
    - Mapear campos relevantes
-   - Documentar em skill especifica (ex: consultando-odoo-dfe)
+   - Documentar em rastreando-odoo (references/relacionamentos.md)
 
 3. **Debug de integracoes**
    - Inspecionar registro especifico
@@ -86,12 +86,13 @@ python .../descobrindo.py \
 
 | Modelo | Descricao | Skill Relacionada |
 |--------|-----------|-------------------|
-| `l10n_br_ciel_it_account.dfe` | Documentos Fiscais | consultando-odoo-dfe |
-| `l10n_br_ciel_it_account.dfe.line` | Linhas dos DFE | consultando-odoo-dfe |
-| `res.partner` | Parceiros (clientes, fornecedores) | - |
-| `account.move` | Faturas/Lancamentos | - |
-| `account.move.line` | Linhas de fatura | - |
-| `purchase.order` | Pedidos de compra | - |
+| `l10n_br_ciel_it_account.dfe` | Documentos Fiscais | rastreando-odoo |
+| `l10n_br_ciel_it_account.dfe.line` | Linhas dos DFE | rastreando-odoo |
+| `res.partner` | Parceiros (clientes, fornecedores) | rastreando-odoo |
+| `account.move` | Faturas/Lancamentos | rastreando-odoo |
+| `account.move.line` | Linhas de fatura | rastreando-odoo |
+| `purchase.order` | Pedidos de compra | rastreando-odoo |
+| `sale.order` | Pedidos de venda | rastreando-odoo |
 | `product.product` | Produtos | - |
 
 ## Fluxo de Trabalho
@@ -102,7 +103,7 @@ Usuario pergunta sobre dado desconhecido
         ▼
 Agent verifica: modelo/campo conhecido?
         │
-        ├── SIM → Usa skill especifica (ex: consultando-odoo-dfe)
+        ├── SIM → Usa rastreando-odoo para consultar fluxos
         │
         └── NAO → Usa esta skill para descobrir
                     │
@@ -111,19 +112,12 @@ Agent verifica: modelo/campo conhecido?
                     │
                     ▼
               Retorna informacao ao usuario
-                    │
-                    ▼
-              (Opcional) Documenta em skill especifica
 ```
 
 ## Relacionado
 
 | Skill | Uso |
 |-------|-----|
-| consultando-odoo-dfe | Consultas DFE em producao (campos ja mapeados) |
-| consultando-odoo-cadastros | Consultas de parceiros e transportadoras |
-| consultando-odoo-financeiro | Consultas de contas a pagar/receber, vencimentos |
-| consultando-odoo-compras | Consultas de pedidos de compra (purchase.order) |
-| consultando-odoo-produtos | Consultas de catalogo de produtos (product.product) |
+| rastreando-odoo | Consultas e rastreamento de fluxos documentais (NF, PO, SO, titulos) |
 | integracao-odoo | Desenvolvimento de novas integracoes |
 | gerindo-expedicao | Consultas de carteira, separacoes e estoque |

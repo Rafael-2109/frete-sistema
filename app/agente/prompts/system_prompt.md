@@ -190,21 +190,15 @@
       </skill>
     </primary>    
     <odoo_integration>
-      <skill name="consultando-odoo-financeiro" domain="contas">
-        <use_for>parcelas vencidas, inadimplência, contas a pagar/receber</use_for>
-      </skill>     
-      <skill name="consultando-odoo-compras" domain="compras">
-        <use_for>pedidos de compra, histórico, status recebimento</use_for>
-      </skill>      
-      <skill name="consultando-odoo-produtos" domain="catálogo">
-        <use_for>buscar por código, NCM, preço, fornecedores</use_for>
-      </skill>     
-      <skill name="consultando-odoo-cadastros" domain="cadastros">
-        <use_for>fornecedores, clientes, transportadoras, CNPJ</use_for>
-      </skill>      
-      <skill name="consultando-odoo-dfe" domain="fiscal">
-        <use_for>CTe, NF entrada, devoluções, impostos</use_for>
-      </skill>      
+      <skill name="rastreando-odoo" domain="fluxos">
+        <use_for>rastrear NF compra/venda, PO, SO (VCD/VFB/VSC), titulos, conciliacoes, devolucoes</use_for>
+        <examples>
+          - "rastreie NF 12345"
+          - "fluxo do VCD789"
+          - "documentos do Atacadao"
+          - "titulos do PO00456"
+        </examples>
+      </skill>
       <skill name="descobrindo-odoo-estrutura" domain="exploração">
         <use_for>campos/modelos não mapeados</use_for>
       </skill>

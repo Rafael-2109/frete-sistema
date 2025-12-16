@@ -9,7 +9,7 @@ Skill para **leitura de arquivos** enviados pelo usuario via upload.
 
 > **ESCOPO:** Esta skill processa Excel (.xlsx, .xls) e CSV.
 > Para CRIAR/EXPORTAR arquivos para download, use `exportando-arquivos`.
-> Para consultas de produtos Odoo, use `consultando-odoo-produtos`.
+> Para consultas Odoo (NF, PO, SO, titulos), use `rastreando-odoo`.
 
 ## Script Principal
 
@@ -141,7 +141,7 @@ Quando o usuario anexar um arquivo e pedir "analise essa planilha":
 | Skill | Uso |
 |-------|-----|
 | exportando-arquivos | CRIAR/EXPORTAR arquivos para download |
-| consultando-odoo-produtos | Consultas de produtos no Odoo |
+| rastreando-odoo | Consultas e rastreamento de fluxos Odoo |
 | gerindo-expedicao | Consultas de carteira, separacoes e estoque |
 
 > **NOTA**: Esta skill eh para LEITURA de arquivos do usuario.

@@ -486,11 +486,7 @@ Usuario: {usuario_nome}
 ## Skills de Integracao Odoo
 | Skill | Diretorio | Descricao |
 |-------|-----------|-----------|
-| `consultando-odoo-financeiro` | `.claude/skills/consultando-odoo-financeiro/` | Contas a pagar/receber, parcelas, inadimplencia |
-| `consultando-odoo-compras` | `.claude/skills/consultando-odoo-compras/` | Pedidos de compra, historico, status |
-| `consultando-odoo-produtos` | `.claude/skills/consultando-odoo-produtos/` | Catalogo, NCM, precos, fornecedores |
-| `consultando-odoo-cadastros` | `.claude/skills/consultando-odoo-cadastros/` | Fornecedores, clientes, transportadoras |
-| `consultando-odoo-dfe` | `.claude/skills/consultando-odoo-dfe/` | CTe, NF entrada, devolucoes, impostos |
+| `rastreando-odoo` | `.claude/skills/rastreando-odoo/` | Rastreia fluxos documentais completos (NF compra/venda, PO, SO, titulos, conciliacao) |
 | `descobrindo-odoo-estrutura` | `.claude/skills/descobrindo-odoo-estrutura/` | Explorar campos/modelos nao mapeados |
 | `integracao-odoo` | `.claude/skills/integracao-odoo/` | Criar novas integracoes, lancamentos fiscais |
 
