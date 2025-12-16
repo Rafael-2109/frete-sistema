@@ -178,19 +178,8 @@ class RupturaEstoqueManager {
 
         const indicator = document.createElement('div');
         indicator.id = 'ruptura-progresso';
-        indicator.style.cssText = `
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: white;
-            border: 1px solid #dee2e6;
-            border-radius: 8px;
-            padding: 10px 15px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            z-index: 1000;
-            font-size: 0.9rem;
-            display: none;
-        `;
+        indicator.className = 'ruptura-progresso-indicator';
+        indicator.style.display = 'none';
         document.body.appendChild(indicator);
     }
 

@@ -968,3 +968,357 @@ tr.table-success > td,
     background-color: rgba(255, 255, 255, 0.15) !important;
     color: #fff !important;
 }
+
+/* ==========================================================================
+   INDICADOR DE PROGRESSO - Análise de Ruptura
+   ========================================================================== */
+.ruptura-progresso-indicator {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background-color: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 8px;
+    padding: 10px 15px;
+    box-shadow: 0 2px 10px var(--cart-card-shadow);
+    z-index: 1000;
+    font-size: 0.9rem;
+    color: var(--bs-body-color);
+}
+
+[data-bs-theme="dark"] .ruptura-progresso-indicator,
+[data-theme="dark"] .ruptura-progresso-indicator {
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+/* ==========================================================================
+   SWEETALERT2 - Suporte a Dark Mode
+   ========================================================================== */
+[data-bs-theme="dark"] .swal2-popup,
+[data-theme="dark"] .swal2-popup {
+    background-color: var(--bs-secondary-bg) !important;
+    color: var(--bs-body-color) !important;
+}
+
+[data-bs-theme="dark"] .swal2-title,
+[data-theme="dark"] .swal2-title {
+    color: var(--bs-body-color) !important;
+}
+
+[data-bs-theme="dark"] .swal2-html-container,
+[data-theme="dark"] .swal2-html-container {
+    color: var(--bs-secondary-color) !important;
+}
+
+[data-bs-theme="dark"] .swal2-input,
+[data-bs-theme="dark"] .swal2-textarea,
+[data-bs-theme="dark"] .swal2-select,
+[data-theme="dark"] .swal2-input,
+[data-theme="dark"] .swal2-textarea,
+[data-theme="dark"] .swal2-select {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+    border-color: var(--bs-border-color) !important;
+}
+
+[data-bs-theme="dark"] .swal2-input:focus,
+[data-bs-theme="dark"] .swal2-textarea:focus,
+[data-bs-theme="dark"] .swal2-select:focus,
+[data-theme="dark"] .swal2-input:focus,
+[data-theme="dark"] .swal2-textarea:focus,
+[data-theme="dark"] .swal2-select:focus {
+    border-color: var(--bs-primary) !important;
+    box-shadow: 0 0 0 3px rgba(var(--bs-primary-rgb), 0.25) !important;
+}
+
+[data-bs-theme="dark"] .swal2-validation-message,
+[data-theme="dark"] .swal2-validation-message {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+}
+
+[data-bs-theme="dark"] .swal2-footer,
+[data-theme="dark"] .swal2-footer {
+    border-top-color: var(--bs-border-color) !important;
+    color: var(--bs-secondary-color) !important;
+}
+
+/* Close button */
+[data-bs-theme="dark"] .swal2-close,
+[data-theme="dark"] .swal2-close {
+    color: var(--bs-secondary-color) !important;
+}
+
+[data-bs-theme="dark"] .swal2-close:hover,
+[data-theme="dark"] .swal2-close:hover {
+    color: var(--bs-body-color) !important;
+}
+
+/* Timer progress bar */
+[data-bs-theme="dark"] .swal2-timer-progress-bar,
+[data-theme="dark"] .swal2-timer-progress-bar {
+    background-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* ==========================================================================
+   MODAL RUPTURA - Botões no Header
+   ========================================================================== */
+/* Botões outline dentro de headers coloridos precisam de maior contraste */
+#modalRuptura .modal-header .btn-group .btn-outline-danger,
+#modalRuptura .modal-header .btn-group .btn-outline-success,
+#modalRuptura .modal-header .btn-group .btn-outline-primary {
+    background-color: rgba(255, 255, 255, 0.9);
+    border-width: 2px;
+}
+
+#modalRuptura .modal-header .btn-group .btn-outline-danger:hover,
+#modalRuptura .modal-header .btn-group .btn-outline-success:hover,
+#modalRuptura .modal-header .btn-group .btn-outline-primary:hover {
+    color: #fff !important;
+}
+
+#modalRuptura .modal-header .btn-group .btn-outline-danger.active {
+    background-color: var(--bs-danger) !important;
+    color: #fff !important;
+    border-color: var(--bs-danger) !important;
+}
+
+#modalRuptura .modal-header .btn-group .btn-outline-success.active {
+    background-color: var(--bs-success) !important;
+    color: #fff !important;
+    border-color: var(--bs-success) !important;
+}
+
+#modalRuptura .modal-header .btn-group .btn-outline-primary.active {
+    background-color: var(--bs-primary) !important;
+    color: #fff !important;
+    border-color: var(--bs-primary) !important;
+}
+
+/* Dark mode - manter legibilidade */
+[data-bs-theme="dark"] #modalRuptura .modal-header .btn-group .btn-outline-danger,
+[data-bs-theme="dark"] #modalRuptura .modal-header .btn-group .btn-outline-success,
+[data-bs-theme="dark"] #modalRuptura .modal-header .btn-group .btn-outline-primary,
+[data-theme="dark"] #modalRuptura .modal-header .btn-group .btn-outline-danger,
+[data-theme="dark"] #modalRuptura .modal-header .btn-group .btn-outline-success,
+[data-theme="dark"] #modalRuptura .modal-header .btn-group .btn-outline-primary {
+    background-color: rgba(0, 0, 0, 0.3);
+    color: #fff !important;
+    border-color: rgba(255, 255, 255, 0.5) !important;
+}
+
+[data-bs-theme="dark"] #modalRuptura .modal-header .btn-group .btn-outline-danger:hover,
+[data-bs-theme="dark"] #modalRuptura .modal-header .btn-group .btn-outline-success:hover,
+[data-bs-theme="dark"] #modalRuptura .modal-header .btn-group .btn-outline-primary:hover,
+[data-theme="dark"] #modalRuptura .modal-header .btn-group .btn-outline-danger:hover,
+[data-theme="dark"] #modalRuptura .modal-header .btn-group .btn-outline-success:hover,
+[data-theme="dark"] #modalRuptura .modal-header .btn-group .btn-outline-primary:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+/* ==========================================================================
+   TABLE-SECONDARY - Dark Mode Fix
+   Linhas separadoras "Itens com Ruptura" / "Itens Disponíveis"
+   ========================================================================== */
+[data-bs-theme="dark"] .table-secondary,
+[data-bs-theme="dark"] tr.table-secondary,
+[data-bs-theme="dark"] tr.table-secondary > td,
+[data-theme="dark"] .table-secondary,
+[data-theme="dark"] tr.table-secondary,
+[data-theme="dark"] tr.table-secondary > td {
+    --bs-table-bg: var(--bs-tertiary-bg) !important;
+    --bs-table-color: var(--bs-body-color) !important;
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+    border-color: var(--bs-border-color) !important;
+}
+
+/* Modal Ruptura específico - linhas de separação */
+[data-bs-theme="dark"] #modalRuptura .table-secondary td,
+[data-theme="dark"] #modalRuptura .table-secondary td {
+    background-color: var(--bs-secondary-bg) !important;
+    color: var(--bs-body-color) !important;
+}
+
+/* ==========================================================================
+   MODALS - Dark Mode Global Fix
+   ========================================================================== */
+/* Modal content background */
+[data-bs-theme="dark"] .modal-content,
+[data-theme="dark"] .modal-content {
+    background-color: var(--bs-body-bg) !important;
+    color: var(--bs-body-color) !important;
+    border-color: var(--bs-border-color) !important;
+}
+
+/* Modal header sem bg-* */
+[data-bs-theme="dark"] .modal-header,
+[data-theme="dark"] .modal-header {
+    border-color: var(--bs-border-color) !important;
+}
+
+/* Modal body */
+[data-bs-theme="dark"] .modal-body,
+[data-theme="dark"] .modal-body {
+    color: var(--bs-body-color) !important;
+}
+
+/* Modal footer */
+[data-bs-theme="dark"] .modal-footer,
+[data-theme="dark"] .modal-footer {
+    border-color: var(--bs-border-color) !important;
+}
+
+/* Cards dentro de modais */
+[data-bs-theme="dark"] .modal .card,
+[data-theme="dark"] .modal .card {
+    background-color: var(--bs-secondary-bg) !important;
+    border-color: var(--bs-border-color) !important;
+}
+
+[data-bs-theme="dark"] .modal .card-body,
+[data-theme="dark"] .modal .card-body {
+    color: var(--bs-body-color) !important;
+}
+
+/* Card headers com cores específicas - manter cores mas garantir legibilidade */
+[data-bs-theme="dark"] .modal .card-header.bg-info,
+[data-bs-theme="dark"] .modal .card-header.bg-success,
+[data-bs-theme="dark"] .modal .card-header.bg-warning,
+[data-bs-theme="dark"] .modal .card-header.bg-danger,
+[data-bs-theme="dark"] .modal .card-header.bg-primary,
+[data-bs-theme="dark"] .modal .card-header.bg-secondary,
+[data-bs-theme="dark"] .modal .card-header.bg-dark,
+[data-theme="dark"] .modal .card-header.bg-info,
+[data-theme="dark"] .modal .card-header.bg-success,
+[data-theme="dark"] .modal .card-header.bg-warning,
+[data-theme="dark"] .modal .card-header.bg-danger,
+[data-theme="dark"] .modal .card-header.bg-primary,
+[data-theme="dark"] .modal .card-header.bg-secondary,
+[data-theme="dark"] .modal .card-header.bg-dark {
+    border-color: transparent !important;
+}
+
+/* bg-warning precisa de texto escuro */
+[data-bs-theme="dark"] .modal .card-header.bg-warning,
+[data-theme="dark"] .modal .card-header.bg-warning {
+    color: #212529 !important;
+}
+
+/* Inputs dentro de modais */
+[data-bs-theme="dark"] .modal .form-control,
+[data-bs-theme="dark"] .modal .form-select,
+[data-theme="dark"] .modal .form-control,
+[data-theme="dark"] .modal .form-select {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+    border-color: var(--bs-border-color) !important;
+}
+
+[data-bs-theme="dark"] .modal .form-control:focus,
+[data-bs-theme="dark"] .modal .form-select:focus,
+[data-theme="dark"] .modal .form-control:focus,
+[data-theme="dark"] .modal .form-select:focus {
+    border-color: var(--bs-primary) !important;
+    box-shadow: 0 0 0 0.25rem rgba(var(--bs-primary-rgb), 0.25) !important;
+}
+
+/* Tabelas dentro de modais */
+[data-bs-theme="dark"] .modal .table,
+[data-theme="dark"] .modal .table {
+    --bs-table-bg: transparent;
+    --bs-table-color: var(--bs-body-color);
+    color: var(--bs-body-color) !important;
+}
+
+[data-bs-theme="dark"] .modal .table thead,
+[data-theme="dark"] .modal .table thead {
+    background-color: var(--bs-tertiary-bg) !important;
+}
+
+[data-bs-theme="dark"] .modal .table th,
+[data-bs-theme="dark"] .modal .table td,
+[data-theme="dark"] .modal .table th,
+[data-theme="dark"] .modal .table td {
+    border-color: var(--bs-border-color) !important;
+}
+
+[data-bs-theme="dark"] .modal .table-hover tbody tr:hover,
+[data-theme="dark"] .modal .table-hover tbody tr:hover {
+    background-color: var(--cart-hover-bg) !important;
+}
+
+/* Alerts dentro de modais */
+[data-bs-theme="dark"] .modal .alert-info,
+[data-theme="dark"] .modal .alert-info {
+    background-color: rgba(var(--bs-info-rgb), 0.15) !important;
+    border-color: rgba(var(--bs-info-rgb), 0.3) !important;
+    color: var(--bs-info) !important;
+}
+
+[data-bs-theme="dark"] .modal .alert-success,
+[data-theme="dark"] .modal .alert-success {
+    background-color: rgba(var(--bs-success-rgb), 0.15) !important;
+    border-color: rgba(var(--bs-success-rgb), 0.3) !important;
+    color: var(--bs-success) !important;
+}
+
+[data-bs-theme="dark"] .modal .alert-warning,
+[data-theme="dark"] .modal .alert-warning {
+    background-color: rgba(var(--bs-warning-rgb), 0.15) !important;
+    border-color: rgba(var(--bs-warning-rgb), 0.3) !important;
+    color: var(--bs-warning) !important;
+}
+
+[data-bs-theme="dark"] .modal .alert-danger,
+[data-theme="dark"] .modal .alert-danger {
+    background-color: rgba(var(--bs-danger-rgb), 0.15) !important;
+    border-color: rgba(var(--bs-danger-rgb), 0.3) !important;
+    color: var(--bs-danger) !important;
+}
+
+[data-bs-theme="dark"] .modal .alert-light,
+[data-theme="dark"] .modal .alert-light {
+    background-color: var(--bs-tertiary-bg) !important;
+    border-color: var(--bs-border-color) !important;
+    color: var(--bs-body-color) !important;
+}
+
+/* Text muted dentro de modais */
+[data-bs-theme="dark"] .modal .text-muted,
+[data-theme="dark"] .modal .text-muted {
+    color: var(--bs-secondary-color) !important;
+}
+
+/* ==========================================================================
+   MODAIS DE COMPARAÇÃO SENDAS - Específicos
+   ========================================================================== */
+/* Lista de CNPJs */
+[data-bs-theme="dark"] #lista-cnpjs-lote .card,
+[data-theme="dark"] #lista-cnpjs-lote .card {
+    background-color: var(--bs-tertiary-bg) !important;
+}
+
+/* Accordion dentro de modais */
+[data-bs-theme="dark"] .modal .accordion-item,
+[data-theme="dark"] .modal .accordion-item {
+    background-color: var(--bs-secondary-bg) !important;
+    border-color: var(--bs-border-color) !important;
+}
+
+[data-bs-theme="dark"] .modal .accordion-button,
+[data-theme="dark"] .modal .accordion-button {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+}
+
+[data-bs-theme="dark"] .modal .accordion-button:not(.collapsed),
+[data-theme="dark"] .modal .accordion-button:not(.collapsed) {
+    background-color: var(--bs-secondary-bg) !important;
+    color: var(--bs-primary) !important;
+}
+
+[data-bs-theme="dark"] .modal .accordion-body,
+[data-theme="dark"] .modal .accordion-body {
+    background-color: var(--bs-body-bg) !important;
+}
