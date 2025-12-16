@@ -300,6 +300,79 @@
                                 </span>
                             </div>
 
+                            {# === CRITÉRIOS DETALHADOS (para múltiplos também) === #}
+                            {% if item.match_criterio %}
+                            <div class="fin-criterios-detalhados small mb-2">
+                                {# Tipo de match CNPJ #}
+                                {% if 'CNPJ_EXATO' in (item.match_criterio or '') %}
+                                <div class="fin-criterio-item text-success">
+                                    <i class="fas fa-check-circle"></i> CNPJ exato
+                                </div>
+                                {% elif 'GRUPO_CNPJ' in (item.match_criterio or '') %}
+                                <div class="fin-criterio-item text-warning">
+                                    <i class="fas fa-sitemap"></i> Grupo empresarial (mesma raiz)
+                                </div>
+                                {% elif 'MANUAL' in (item.match_criterio or '') %}
+                                <div class="fin-criterio-item text-info">
+                                    <i class="fas fa-hand-pointer"></i> Seleção manual
+                                </div>
+                                {% elif 'VALOR' in (item.match_criterio or '') and 'SEM_CNPJ' in (item.match_criterio or '') %}
+                                <div class="fin-criterio-item text-danger">
+                                    <i class="fas fa-exclamation-triangle"></i> Apenas valor (sem CNPJ)
+                                </div>
+                                {% endif %}
+
+                                {# Tipo de match VALOR #}
+                                {% if 'VALOR_EXATO' in (item.match_criterio or '') %}
+                                <div class="fin-criterio-item text-success">
+                                    <i class="fas fa-equals"></i> Valor exato
+                                </div>
+                                {% elif 'VALOR_PROXIMO' in (item.match_criterio or '') %}
+                                <div class="fin-criterio-item text-success">
+                                    <i class="fas fa-approximately-equal"></i> Valor próximo (≤ R$ 1)
+                                </div>
+                                {% elif 'VALOR_APROX' in (item.match_criterio or '') %}
+                                <div class="fin-criterio-item text-warning">
+                                    <i class="fas fa-not-equal"></i> Valor aproximado (≤ 5%)
+                                </div>
+                                {% elif 'VALOR_DIF' in (item.match_criterio or '') %}
+                                <div class="fin-criterio-item text-danger">
+                                    <i class="fas fa-not-equal"></i> Valor diferente
+                                </div>
+                                {% elif 'POSSIVEL_PARCIAL' in (item.match_criterio or '') %}
+                                <div class="fin-criterio-item text-warning">
+                                    <i class="fas fa-percentage"></i> Possível pagamento parcial
+                                </div>
+                                {% elif 'MULTIPLOS' in (item.match_criterio or '') %}
+                                <div class="fin-criterio-item text-info">
+                                    <i class="fas fa-layer-group"></i> Múltiplos títulos vinculados
+                                </div>
+                                {% endif %}
+
+                                {# Status de vencimento #}
+                                {% if 'ATRASO_' in (item.match_criterio or '') %}
+                                    {% if '_OK' in (item.match_criterio or '') %}
+                                    <div class="fin-criterio-item text-success">
+                                        <i class="fas fa-clock"></i> Atraso tolerável (≤ 4 dias)
+                                    </div>
+                                    {% else %}
+                                    <div class="fin-criterio-item text-warning">
+                                        <i class="fas fa-clock"></i> Pagamento atrasado
+                                    </div>
+                                    {% endif %}
+                                {% elif 'ANTECIPADO' in (item.match_criterio or '') %}
+                                <div class="fin-criterio-item text-info">
+                                    <i class="fas fa-clock"></i> Pagamento antecipado
+                                </div>
+                                {% endif %}
+                            </div>
+
+                            {# Critério completo para debug/hover #}
+                            <div class="fin-criterio-raw text-muted small mb-2" style="font-size: 0.7rem; word-break: break-all;" title="{{ item.match_criterio }}">
+                                {{ item.match_criterio[:50] }}{% if (item.match_criterio|length) > 50 %}...{% endif %}
+                            </div>
+                            {% endif %}
+
                             {# Valor do Extrato #}
                             <div class="fin-comparacao-item">
                                 <span class="text-muted">Extrato:</span>
@@ -370,23 +443,77 @@
                                 {% endif %}
                             </div>
 
-                            <div class="fin-comparacao-item">
-                                <span class="text-muted">Critério:</span>
-                                <span class="fw-bold">
-                                    {% if 'CNPJ_EXATO' in (item.match_criterio or '') %}
-                                    <span class="text-success"><i class="fas fa-check-circle"></i> CNPJ</span>
-                                    {% elif 'GRUPO_CNPJ' in (item.match_criterio or '') %}
-                                    <span class="text-warning"><i class="fas fa-sitemap"></i> Grupo</span>
-                                    {% elif 'VALOR' in (item.match_criterio or '') %}
-                                    <span class="text-info"><i class="fas fa-dollar-sign"></i> Valor</span>
+                            {# === CRITÉRIOS DETALHADOS === #}
+                            {% if item.match_criterio %}
+                            <div class="fin-criterios-detalhados small mb-2">
+                                {# Tipo de match CNPJ #}
+                                {% if 'CNPJ_EXATO' in (item.match_criterio or '') %}
+                                <div class="fin-criterio-item text-success">
+                                    <i class="fas fa-check-circle"></i> CNPJ exato
+                                </div>
+                                {% elif 'GRUPO_CNPJ' in (item.match_criterio or '') %}
+                                <div class="fin-criterio-item text-warning">
+                                    <i class="fas fa-sitemap"></i> Grupo empresarial (mesma raiz)
+                                </div>
+                                {% elif 'MANUAL' in (item.match_criterio or '') %}
+                                <div class="fin-criterio-item text-info">
+                                    <i class="fas fa-hand-pointer"></i> Seleção manual
+                                </div>
+                                {% elif 'VALOR' in (item.match_criterio or '') and 'SEM_CNPJ' in (item.match_criterio or '') %}
+                                <div class="fin-criterio-item text-danger">
+                                    <i class="fas fa-exclamation-triangle"></i> Apenas valor (sem CNPJ)
+                                </div>
+                                {% endif %}
+
+                                {# Tipo de match VALOR #}
+                                {% if 'VALOR_EXATO' in (item.match_criterio or '') %}
+                                <div class="fin-criterio-item text-success">
+                                    <i class="fas fa-equals"></i> Valor exato
+                                </div>
+                                {% elif 'VALOR_PROXIMO' in (item.match_criterio or '') %}
+                                <div class="fin-criterio-item text-success">
+                                    <i class="fas fa-approximately-equal"></i> Valor próximo (≤ R$ 1)
+                                </div>
+                                {% elif 'VALOR_APROX' in (item.match_criterio or '') %}
+                                <div class="fin-criterio-item text-warning">
+                                    <i class="fas fa-not-equal"></i> Valor aproximado (≤ 5%)
+                                </div>
+                                {% elif 'VALOR_DIF' in (item.match_criterio or '') %}
+                                <div class="fin-criterio-item text-danger">
+                                    <i class="fas fa-not-equal"></i> Valor diferente
+                                </div>
+                                {% elif 'POSSIVEL_PARCIAL' in (item.match_criterio or '') %}
+                                <div class="fin-criterio-item text-warning">
+                                    <i class="fas fa-percentage"></i> Possível pagamento parcial
+                                </div>
+                                {% endif %}
+
+                                {# Status de vencimento #}
+                                {% if 'ATRASO_' in (item.match_criterio or '') %}
+                                    {% if '_OK' in (item.match_criterio or '') %}
+                                    <div class="fin-criterio-item text-success">
+                                        <i class="fas fa-clock"></i> Atraso tolerável (≤ 4 dias)
+                                    </div>
                                     {% else %}
-                                    <span class="text-muted">N/A</span>
+                                    <div class="fin-criterio-item text-warning">
+                                        <i class="fas fa-clock"></i> Pagamento atrasado
+                                    </div>
                                     {% endif %}
-                                </span>
+                                {% elif 'ANTECIPADO' in (item.match_criterio or '') %}
+                                <div class="fin-criterio-item text-info">
+                                    <i class="fas fa-clock"></i> Pagamento antecipado
+                                </div>
+                                {% endif %}
                             </div>
 
-                            {% set diff_valor = (item.valor or 0) - (item.titulo_valor or 0) %}
-                            <div class="fin-comparacao-item">
+                            {# Critério completo para debug/hover #}
+                            <div class="fin-criterio-raw text-muted small" style="font-size: 0.7rem; word-break: break-all;" title="{{ item.match_criterio }}">
+                                {{ item.match_criterio[:50] }}{% if (item.match_criterio|length) > 50 %}...{% endif %}
+                            </div>
+                            {% endif %}
+
+                            {% set diff_valor = ((item.valor or 0)|abs) - (item.titulo_valor or 0) %}
+                            <div class="fin-comparacao-item border-top pt-2 mt-2">
                                 <span class="text-muted">Δ Valor:</span>
                                 <span class="fw-bold {% if diff_valor > 0.01 %}fin-diff--positivo{% elif diff_valor < -0.01 %}fin-diff--negativo{% else %}fin-diff--zero{% endif %}">
                                     {% if diff_valor > 0.01 %}+R$ {{ "{:,.2f}".format(diff_valor) }}
@@ -400,9 +527,9 @@
                             <div class="fin-comparacao-item">
                                 <span class="text-muted">Δ Dias:</span>
                                 <span class="fw-bold {% if diff_dias > 0 %}fin-diff--positivo{% elif diff_dias < 0 %}fin-diff--negativo{% else %}fin-diff--zero{% endif %}">
-                                    {% if diff_dias > 0 %}+{{ diff_dias }}d
-                                    {% elif diff_dias < 0 %}{{ diff_dias }}d
-                                    {% else %}✓{% endif %}
+                                    {% if diff_dias > 0 %}+{{ diff_dias }}d (atraso)
+                                    {% elif diff_dias < 0 %}{{ diff_dias }}d (antecipado)
+                                    {% else %}✓ no prazo{% endif %}
                                 </span>
                             </div>
                             {% endif %}

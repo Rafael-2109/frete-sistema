@@ -210,8 +210,19 @@ def listar_contas_receber():
 @login_required
 def contas_receber_exportar():
     """
-    Página de Exportação de Contas a Receber
-    Exibe interface para exportação de relatório (Excel/JSON)
+    Redireciona para o Hub de Exportação de Relatórios.
+    A tela antiga de exportação enriquecida está em /contas-receber/exportar-enriquecido
+    """
+    return redirect(url_for('financeiro.exportar_hub'))
+
+
+@financeiro_bp.route('/contas-receber/exportar-enriquecido')
+@login_required
+def contas_receber_exportar_enriquecido():
+    """
+    Página de Exportação de Contas a Receber ENRIQUECIDO
+    Exibe interface para exportação de relatório com dados de entregas e agendamentos.
+    (Antiga tela de exportação - mantida para acesso via Hub)
     """
     data_ontem = (date.today() - timedelta(days=1)).strftime('%Y-%m-%d')
 

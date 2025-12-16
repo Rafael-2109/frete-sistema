@@ -1129,6 +1129,53 @@ input[type="date"].fin-input::-webkit-calendar-picker-indicator {
 .fin-diff--negative { color: var(--fin-accent-success); }
 .fin-diff--zero { color: var(--fin-text-muted); }
 
+/* Critérios detalhados de matching */
+.fin-criterios-detalhados {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.fin-criterio-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.2rem 0.4rem;
+    border-radius: var(--fin-radius-sm);
+    font-size: 0.75rem;
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.fin-criterio-item i {
+    font-size: 0.7rem;
+}
+
+.fin-criterio-item.text-success {
+    background: var(--fin-bg-success);
+}
+
+.fin-criterio-item.text-warning {
+    background: var(--fin-bg-warning);
+}
+
+.fin-criterio-item.text-danger {
+    background: var(--fin-bg-danger);
+}
+
+.fin-criterio-item.text-info {
+    background: var(--fin-bg-info);
+}
+
+.fin-criterio-raw {
+    cursor: help;
+    opacity: 0.6;
+    transition: opacity var(--fin-transition-fast);
+}
+
+.fin-criterio-raw:hover {
+    opacity: 1;
+}
+
 /* Título candidato */
 .fin-titulo-card {
     background: var(--fin-bg-tertiary);

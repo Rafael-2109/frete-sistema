@@ -42,3 +42,4 @@ from app.financeiro.routes import extrato
 from app.financeiro.routes import correcao_datas
 from app.financeiro.routes import pagamentos_baixas
 from app.financeiro.routes import contas_pagar
+from app.financeiro.routes import exportacao

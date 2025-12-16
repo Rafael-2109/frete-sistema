@@ -1,0 +1,804 @@
+{% extends "base.html" %}
+
+{% block title %}Exportar Relatórios - Financeiro{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/financeiro/extrato.css') }}">
+<style>
+    /* ================================================================== */
+    /* EXPORTAR HUB - Usando variáveis --bs-* e --fin-* do sistema        */
+    /* ================================================================== */
+
+    .export-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    .export-header {
+        margin-bottom: 30px;
+    }
+
+    .export-header__title {
+        font-size: 1.75rem;
+        font-weight: 600;
+        color: var(--bs-body-color);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .export-header__subtitle {
+        color: var(--bs-secondary-color);
+        margin-top: 8px;
+    }
+
+    .export-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+
+    .export-card {
+        background: var(--bs-secondary-bg);
+        border-radius: var(--fin-radius-lg, 12px);
+        padding: 24px;
+        border: 1px solid var(--bs-border-color);
+        transition: all var(--fin-transition-normal, 250ms ease);
+        cursor: pointer;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .export-card:hover {
+        transform: translateY(-4px);
+        box-shadow: var(--fin-shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.5));
+    }
+
+    .export-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 4px;
+        height: 100%;
+    }
+
+    .export-card--recebimentos::before { background: linear-gradient(180deg, var(--bs-success), var(--fin-accent-success, #059669)); }
+    .export-card--pagamentos::before { background: linear-gradient(180deg, var(--bs-danger), var(--fin-accent-danger, #dc2626)); }
+    .export-card--contas-receber::before { background: linear-gradient(180deg, var(--bs-info), var(--fin-accent-info, #0284c7)); }
+    .export-card--contas-pagar::before { background: linear-gradient(180deg, var(--bs-warning), var(--fin-accent-warning, #d97706)); }
+    .export-card--enriquecido::before { background: linear-gradient(180deg, var(--bs-primary), #7c3aed); }
+
+    .export-card__icon {
+        width: 56px;
+        height: 56px;
+        border-radius: var(--fin-radius-lg, 12px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        margin-bottom: 16px;
+    }
+
+    .export-card--recebimentos .export-card__icon { background: var(--fin-bg-success, rgba(16, 185, 129, 0.15)); color: var(--bs-success); }
+    .export-card--pagamentos .export-card__icon { background: var(--fin-bg-danger, rgba(239, 68, 68, 0.15)); color: var(--bs-danger); }
+    .export-card--contas-receber .export-card__icon { background: var(--fin-bg-info, rgba(14, 165, 233, 0.15)); color: var(--bs-info); }
+    .export-card--contas-pagar .export-card__icon { background: var(--fin-bg-warning, rgba(245, 158, 11, 0.15)); color: var(--bs-warning); }
+    .export-card--enriquecido .export-card__icon { background: rgba(var(--bs-primary-rgb), 0.15); color: var(--bs-primary); }
+
+    .export-card__title {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: var(--bs-body-color);
+        margin-bottom: 8px;
+    }
+
+    .export-card__desc {
+        font-size: 0.875rem;
+        color: var(--bs-secondary-color);
+        line-height: 1.5;
+        margin-bottom: 16px;
+    }
+
+    .export-card__badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+
+    .export-card__badge--excel {
+        background: var(--fin-bg-success, rgba(16, 185, 129, 0.15));
+        color: var(--bs-success);
+    }
+
+    /* ================================================================== */
+    /* Modal Styles - Usando variáveis do sistema                         */
+    /* ================================================================== */
+
+    .export-modal .modal-content {
+        background: var(--bs-secondary-bg);
+        border-radius: var(--fin-radius-xl, 16px);
+        border: 1px solid var(--bs-border-color);
+        box-shadow: var(--fin-shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.5));
+    }
+
+    .export-modal .modal-header {
+        background: var(--bs-tertiary-bg);
+        border-bottom: 1px solid var(--bs-border-color);
+        border-radius: var(--fin-radius-xl, 16px) var(--fin-radius-xl, 16px) 0 0;
+        padding: 20px 24px;
+    }
+
+    .export-modal .modal-title {
+        font-weight: 600;
+        color: var(--bs-body-color);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .export-modal .modal-body {
+        padding: 24px;
+        background: var(--bs-secondary-bg);
+        color: var(--bs-body-color);
+    }
+
+    .export-modal .modal-footer {
+        background: var(--bs-secondary-bg);
+        border-top: 1px solid var(--bs-border-color);
+        border-radius: 0 0 var(--fin-radius-xl, 16px) var(--fin-radius-xl, 16px);
+        padding: 16px 24px;
+    }
+
+    .filter-section {
+        margin-bottom: 24px;
+    }
+
+    .filter-section__header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+
+    .filter-section__title {
+        font-weight: 500;
+        color: var(--bs-body-color);
+        margin: 0;
+    }
+
+    .filter-toggle {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        color: var(--bs-body-color);
+    }
+
+    .filter-toggle input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--bs-primary);
+    }
+
+    .filter-content {
+        background: var(--bs-tertiary-bg);
+        border-radius: var(--fin-radius-md, 8px);
+        padding: 16px;
+        border: 1px solid var(--bs-border-color);
+        display: none;
+    }
+
+    .filter-content.active {
+        display: block;
+    }
+
+    .filter-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+
+    .filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .filter-group label {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--bs-secondary-color);
+    }
+
+    .filter-group input,
+    .filter-group select {
+        padding: 10px 12px;
+        border: 1px solid var(--bs-border-color);
+        border-radius: var(--fin-radius-md, 8px);
+        font-size: 0.9rem;
+        background: var(--bs-body-bg);
+        color: var(--bs-body-color);
+        transition: border-color var(--fin-transition-fast, 150ms ease), box-shadow var(--fin-transition-fast, 150ms ease);
+    }
+
+    .filter-group input:focus,
+    .filter-group select:focus {
+        outline: none;
+        border-color: var(--bs-primary);
+        box-shadow: 0 0 0 3px rgba(var(--bs-primary-rgb), 0.15);
+    }
+
+    .btn-export {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 24px;
+        border-radius: var(--fin-radius-md, 8px);
+        font-weight: 500;
+        transition: all var(--fin-transition-fast, 150ms ease);
+    }
+
+    .btn-export--primary {
+        background: linear-gradient(135deg, var(--bs-primary), var(--fin-accent-primary, #009d80));
+        color: white;
+        border: none;
+    }
+
+    .btn-export--primary:hover {
+        filter: brightness(1.1);
+        transform: translateY(-1px);
+        color: white;
+    }
+
+    .btn-export--secondary {
+        background: var(--bs-tertiary-bg);
+        color: var(--bs-body-color);
+        border: 1px solid var(--bs-border-color);
+    }
+
+    .btn-export--secondary:hover {
+        background: var(--bs-secondary-bg);
+        color: var(--bs-body-color);
+    }
+
+    .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--bs-secondary-color);
+        text-decoration: none;
+        font-size: 0.875rem;
+        margin-top: 8px;
+        transition: color var(--fin-transition-fast, 150ms ease);
+    }
+
+    .back-link:hover {
+        color: var(--bs-body-color);
+    }
+
+    /* ================================================================== */
+    /* Reduced Motion Support                                              */
+    /* ================================================================== */
+    @media (prefers-reduced-motion: reduce) {
+        .export-card,
+        .btn-export,
+        .filter-group input,
+        .filter-group select {
+            transition: none;
+        }
+
+        .export-card:hover {
+            transform: none;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="export-container">
+    <!-- Header -->
+    <header class="export-header">
+        <h1 class="export-header__title">
+            <i class="fas fa-file-export"></i>
+            Exportar Relatórios
+        </h1>
+        <p class="export-header__subtitle">
+            Exporte dados financeiros em Excel com filtros personalizados de data e status.
+        </p>
+        <a href="{{ url_for('financeiro.contas_receber_hub') }}" class="back-link">
+            <i class="fas fa-arrow-left"></i>
+            Voltar ao Hub
+        </a>
+    </header>
+
+    <!-- Cards Grid -->
+    <div class="export-grid">
+        <!-- Card 1: Extrato de Recebimentos -->
+        <div class="export-card export-card--recebimentos" onclick="abrirModal('recebimentos')">
+            <div class="export-card__icon">
+                <i class="fas fa-arrow-down"></i>
+            </div>
+            <h3 class="export-card__title">Extrato de Recebimentos</h3>
+            <p class="export-card__desc">
+                Linhas de extrato bancário de entradas (créditos). Dados importados do Odoo para conciliação.
+            </p>
+            <span class="export-card__badge export-card__badge--excel">
+                <i class="fas fa-file-excel"></i>
+                Excel
+            </span>
+        </div>
+
+        <!-- Card 2: Extrato de Pagamentos -->
+        <div class="export-card export-card--pagamentos" onclick="abrirModal('pagamentos')">
+            <div class="export-card__icon">
+                <i class="fas fa-arrow-up"></i>
+            </div>
+            <h3 class="export-card__title">Extrato de Pagamentos</h3>
+            <p class="export-card__desc">
+                Linhas de extrato bancário de saídas (débitos). Dados importados do Odoo para conciliação.
+            </p>
+            <span class="export-card__badge export-card__badge--excel">
+                <i class="fas fa-file-excel"></i>
+                Excel
+            </span>
+        </div>
+
+        <!-- Card 3: Contas a Receber -->
+        <div class="export-card export-card--contas-receber" onclick="abrirModal('contas-receber')">
+            <div class="export-card__icon">
+                <i class="fas fa-file-invoice-dollar"></i>
+            </div>
+            <h3 class="export-card__title">Contas a Receber</h3>
+            <p class="export-card__desc">
+                Títulos a receber sincronizados do Odoo. Exportação simples sem enriquecimento de dados.
+            </p>
+            <span class="export-card__badge export-card__badge--excel">
+                <i class="fas fa-file-excel"></i>
+                Excel
+            </span>
+        </div>
+
+        <!-- Card 4: Contas a Pagar -->
+        <div class="export-card export-card--contas-pagar" onclick="abrirModal('contas-pagar')">
+            <div class="export-card__icon">
+                <i class="fas fa-file-invoice"></i>
+            </div>
+            <h3 class="export-card__title">Contas a Pagar</h3>
+            <p class="export-card__desc">
+                Títulos a pagar sincronizados do Odoo. Visualize fornecedores, vencimentos e valores.
+            </p>
+            <span class="export-card__badge export-card__badge--excel">
+                <i class="fas fa-file-excel"></i>
+                Excel
+            </span>
+        </div>
+
+        <!-- Card 5: Recebimento Enriquecido -->
+        <div class="export-card export-card--enriquecido" onclick="window.location.href='{{ url_for('financeiro.contas_receber_exportar_enriquecido') }}'">
+            <div class="export-card__icon">
+                <i class="fas fa-chart-line"></i>
+            </div>
+            <h3 class="export-card__title">Recebimento Enriquecido</h3>
+            <p class="export-card__desc">
+                Contas a receber com dados de entregas, agendamentos e status de finalização (11 regras de negócio).
+            </p>
+            <span class="export-card__badge export-card__badge--excel">
+                <i class="fas fa-file-excel"></i>
+                Excel / JSON
+            </span>
+        </div>
+    </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- MODAL: Extrato de Recebimentos                                      -->
+<!-- ================================================================== -->
+<div class="modal fade export-modal" id="modalRecebimentos" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-arrow-down text-success"></i>
+                    Exportar Extrato de Recebimentos
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Filtro de Data -->
+                <div class="filter-section">
+                    <div class="filter-section__header">
+                        <label class="filter-toggle">
+                            <input type="checkbox" id="filtroDataRecebimentos" onchange="toggleFilter('dataRecebimentos')">
+                            <span class="filter-section__title">Filtrar por Data</span>
+                        </label>
+                    </div>
+                    <div class="filter-content" id="filterDataRecebimentos">
+                        <div class="filter-row">
+                            <div class="filter-group">
+                                <label for="dataDeRecebimentos">De:</label>
+                                <input type="date" id="dataDeRecebimentos">
+                            </div>
+                            <div class="filter-group">
+                                <label for="dataAteRecebimentos">Até:</label>
+                                <input type="date" id="dataAteRecebimentos">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filtro de Status -->
+                <div class="filter-section">
+                    <div class="filter-section__header">
+                        <label class="filter-toggle">
+                            <input type="checkbox" id="filtroStatusRecebimentos" onchange="toggleFilter('statusRecebimentos')">
+                            <span class="filter-section__title">Filtrar por Status</span>
+                        </label>
+                    </div>
+                    <div class="filter-content" id="filterStatusRecebimentos">
+                        <div class="filter-group">
+                            <label for="statusRecebimentos">Status:</label>
+                            <select id="statusRecebimentos">
+                                <option value="">Todos</option>
+                                <option value="PENDENTE">Pendente</option>
+                                <option value="MATCH_ENCONTRADO">Match Encontrado</option>
+                                <option value="MULTIPLOS_MATCHES">Múltiplos Matches</option>
+                                <option value="SEM_MATCH">Sem Match</option>
+                                <option value="APROVADO">Aprovado</option>
+                                <option value="CONCILIANDO">Conciliando</option>
+                                <option value="CONCILIADO">Conciliado</option>
+                                <option value="ERRO">Erro</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-export btn-export--secondary" data-bs-dismiss="modal">
+                    Cancelar
+                </button>
+                <button type="button" class="btn-export btn-export--primary" onclick="exportar('recebimentos')">
+                    <i class="fas fa-download"></i>
+                    Exportar Excel
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- MODAL: Extrato de Pagamentos                                        -->
+<!-- ================================================================== -->
+<div class="modal fade export-modal" id="modalPagamentos" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-arrow-up text-danger"></i>
+                    Exportar Extrato de Pagamentos
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Filtro de Data -->
+                <div class="filter-section">
+                    <div class="filter-section__header">
+                        <label class="filter-toggle">
+                            <input type="checkbox" id="filtroDataPagamentos" onchange="toggleFilter('dataPagamentos')">
+                            <span class="filter-section__title">Filtrar por Data</span>
+                        </label>
+                    </div>
+                    <div class="filter-content" id="filterDataPagamentos">
+                        <div class="filter-row">
+                            <div class="filter-group">
+                                <label for="dataDePagamentos">De:</label>
+                                <input type="date" id="dataDePagamentos">
+                            </div>
+                            <div class="filter-group">
+                                <label for="dataAtePagamentos">Até:</label>
+                                <input type="date" id="dataAtePagamentos">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filtro de Status -->
+                <div class="filter-section">
+                    <div class="filter-section__header">
+                        <label class="filter-toggle">
+                            <input type="checkbox" id="filtroStatusPagamentos" onchange="toggleFilter('statusPagamentos')">
+                            <span class="filter-section__title">Filtrar por Status</span>
+                        </label>
+                    </div>
+                    <div class="filter-content" id="filterStatusPagamentos">
+                        <div class="filter-group">
+                            <label for="statusPagamentos">Status:</label>
+                            <select id="statusPagamentos">
+                                <option value="">Todos</option>
+                                <option value="PENDENTE">Pendente</option>
+                                <option value="MATCH_ENCONTRADO">Match Encontrado</option>
+                                <option value="MULTIPLOS_MATCHES">Múltiplos Matches</option>
+                                <option value="SEM_MATCH">Sem Match</option>
+                                <option value="APROVADO">Aprovado</option>
+                                <option value="CONCILIANDO">Conciliando</option>
+                                <option value="CONCILIADO">Conciliado</option>
+                                <option value="ERRO">Erro</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-export btn-export--secondary" data-bs-dismiss="modal">
+                    Cancelar
+                </button>
+                <button type="button" class="btn-export btn-export--primary" onclick="exportar('pagamentos')">
+                    <i class="fas fa-download"></i>
+                    Exportar Excel
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- MODAL: Contas a Receber                                             -->
+<!-- ================================================================== -->
+<div class="modal fade export-modal" id="modalContasReceber" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-file-invoice-dollar text-primary"></i>
+                    Exportar Contas a Receber
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Filtro de Data -->
+                <div class="filter-section">
+                    <div class="filter-section__header">
+                        <label class="filter-toggle">
+                            <input type="checkbox" id="filtroDataContasReceber" onchange="toggleFilter('dataContasReceber')">
+                            <span class="filter-section__title">Filtrar por Data de Vencimento</span>
+                        </label>
+                    </div>
+                    <div class="filter-content" id="filterDataContasReceber">
+                        <div class="filter-row">
+                            <div class="filter-group">
+                                <label for="dataDeContasReceber">De:</label>
+                                <input type="date" id="dataDeContasReceber">
+                            </div>
+                            <div class="filter-group">
+                                <label for="dataAteContasReceber">Até:</label>
+                                <input type="date" id="dataAteContasReceber">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filtro de Status -->
+                <div class="filter-section">
+                    <div class="filter-section__header">
+                        <label class="filter-toggle">
+                            <input type="checkbox" id="filtroStatusContasReceber" onchange="toggleFilter('statusContasReceber')">
+                            <span class="filter-section__title">Filtrar por Status</span>
+                        </label>
+                    </div>
+                    <div class="filter-content" id="filterStatusContasReceber">
+                        <div class="filter-group">
+                            <label for="statusContasReceber">Status:</label>
+                            <select id="statusContasReceber">
+                                <option value="">Todos</option>
+                                <option value="aberto">Em Aberto</option>
+                                <option value="pago">Pago</option>
+                                <option value="vencido">Vencido</option>
+                                <option value="cancelado">Cancelado</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-export btn-export--secondary" data-bs-dismiss="modal">
+                    Cancelar
+                </button>
+                <button type="button" class="btn-export btn-export--primary" onclick="exportar('contas-receber')">
+                    <i class="fas fa-download"></i>
+                    Exportar Excel
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- MODAL: Contas a Pagar                                               -->
+<!-- ================================================================== -->
+<div class="modal fade export-modal" id="modalContasPagar" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-file-invoice text-warning"></i>
+                    Exportar Contas a Pagar
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Filtro de Data -->
+                <div class="filter-section">
+                    <div class="filter-section__header">
+                        <label class="filter-toggle">
+                            <input type="checkbox" id="filtroDataContasPagar" onchange="toggleFilter('dataContasPagar')">
+                            <span class="filter-section__title">Filtrar por Data de Vencimento</span>
+                        </label>
+                    </div>
+                    <div class="filter-content" id="filterDataContasPagar">
+                        <div class="filter-row">
+                            <div class="filter-group">
+                                <label for="dataDeContasPagar">De:</label>
+                                <input type="date" id="dataDeContasPagar">
+                            </div>
+                            <div class="filter-group">
+                                <label for="dataAteContasPagar">Até:</label>
+                                <input type="date" id="dataAteContasPagar">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filtro de Status -->
+                <div class="filter-section">
+                    <div class="filter-section__header">
+                        <label class="filter-toggle">
+                            <input type="checkbox" id="filtroStatusContasPagar" onchange="toggleFilter('statusContasPagar')">
+                            <span class="filter-section__title">Filtrar por Status</span>
+                        </label>
+                    </div>
+                    <div class="filter-content" id="filterStatusContasPagar">
+                        <div class="filter-group">
+                            <label for="statusContasPagar">Status:</label>
+                            <select id="statusContasPagar">
+                                <option value="">Todos</option>
+                                <option value="PENDENTE">Pendente</option>
+                                <option value="PROGRAMADO">Programado</option>
+                                <option value="PAGO">Pago</option>
+                                <option value="CONTESTADO">Contestado</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-export btn-export--secondary" data-bs-dismiss="modal">
+                    Cancelar
+                </button>
+                <button type="button" class="btn-export btn-export--primary" onclick="exportar('contas-pagar')">
+                    <i class="fas fa-download"></i>
+                    Exportar Excel
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Modal -->
+<div class="modal fade" id="loadingModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content">
+            <div class="modal-body text-center p-4">
+                <div class="spinner-border text-primary mb-3" role="status">
+                    <span class="visually-hidden">Carregando...</span>
+                </div>
+                <p class="mb-0">Gerando relatório...</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Modais
+const modais = {
+    recebimentos: null,
+    pagamentos: null,
+    'contas-receber': null,
+    'contas-pagar': null
+};
+
+// Inicializar modais
+document.addEventListener('DOMContentLoaded', function() {
+    modais['recebimentos'] = new bootstrap.Modal(document.getElementById('modalRecebimentos'));
+    modais['pagamentos'] = new bootstrap.Modal(document.getElementById('modalPagamentos'));
+    modais['contas-receber'] = new bootstrap.Modal(document.getElementById('modalContasReceber'));
+    modais['contas-pagar'] = new bootstrap.Modal(document.getElementById('modalContasPagar'));
+});
+
+// Abrir modal
+function abrirModal(tipo) {
+    if (modais[tipo]) {
+        modais[tipo].show();
+    }
+}
+
+// Toggle filtro
+function toggleFilter(tipo) {
+    const checkbox = document.getElementById(`filtro${tipo.charAt(0).toUpperCase() + tipo.slice(1)}`);
+    const content = document.getElementById(`filter${tipo.charAt(0).toUpperCase() + tipo.slice(1)}`);
+
+    if (checkbox && content) {
+        if (checkbox.checked) {
+            content.classList.add('active');
+        } else {
+            content.classList.remove('active');
+        }
+    }
+}
+
+// Exportar
+function exportar(tipo) {
+    let params = new URLSearchParams();
+    params.append('tipo', tipo);
+
+    // Mapear tipo para sufixos corretos
+    const tipoMap = {
+        'recebimentos': 'Recebimentos',
+        'pagamentos': 'Pagamentos',
+        'contas-receber': 'ContasReceber',
+        'contas-pagar': 'ContasPagar'
+    };
+
+    const sufixo = tipoMap[tipo];
+
+    // Verificar filtro de data
+    const filtroData = document.getElementById(`filtroData${sufixo}`);
+    if (filtroData && filtroData.checked) {
+        const dataDe = document.getElementById(`dataDe${sufixo}`).value;
+        const dataAte = document.getElementById(`dataAte${sufixo}`).value;
+
+        if (dataDe) params.append('data_de', dataDe);
+        if (dataAte) params.append('data_ate', dataAte);
+    }
+
+    // Verificar filtro de status
+    const filtroStatus = document.getElementById(`filtroStatus${sufixo}`);
+    if (filtroStatus && filtroStatus.checked) {
+        const status = document.getElementById(`status${sufixo}`).value;
+        if (status) params.append('status', status);
+    }
+
+    // Fechar modal de filtro
+    if (modais[tipo]) {
+        modais[tipo].hide();
+    }
+
+    // Mostrar loading
+    const loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
+    loadingModal.show();
+
+    // Construir URL de exportação
+    const url = `{{ url_for('financeiro.exportar_relatorio') }}?${params.toString()}`;
+
+    // Criar link temporário para download
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${tipo}_${new Date().toISOString().split('T')[0]}.xlsx`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    // Esconder loading após 3 segundos
+    setTimeout(() => {
+        loadingModal.hide();
+    }, 3000);
+}
+</script>
+{% endblock %}

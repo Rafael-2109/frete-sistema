@@ -1014,7 +1014,8 @@ def extrato_aprovar_item():
 
     item = ExtratoItem.query.get_or_404(item_id)
 
-    if aprovar and not item.titulo_receber_id:
+    # Verificar se tem título vinculado (1:1 via FK OU M:N via tabela associativa)
+    if aprovar and not item.titulo_receber_id and not item.tem_multiplos_titulos:
         return jsonify({
             'success': False,
             'error': 'Item não possui título vinculado'
@@ -1303,7 +1304,8 @@ def extrato_conciliar_item():
             'error': 'Item não está aprovado'
         }), 400
 
-    if not item.titulo_receber_id:
+    # Verificar se tem título vinculado (1:1 via FK OU M:N via tabela associativa)
+    if not item.titulo_receber_id and not item.tem_multiplos_titulos:
         return jsonify({
             'success': False,
             'error': 'Item não possui título vinculado'
