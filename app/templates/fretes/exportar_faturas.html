@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block title %}Exportar Faturas{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-file-export"></i> Exportar Faturas de Frete
+            </h1>
+        </div>
+    </div>
+
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('fretes.index') }}">Fretes</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('fretes.listar_faturas') }}">Faturas</a></li>
+            <li class="breadcrumb-item active">Exportar</li>
+        </ol>
+    </nav>
+
+    <!-- Card de Filtros -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">
+                <i class="fas fa-filter"></i> Filtros de Exportação
+            </h5>
+        </div>
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('fretes.exportar_faturas_excel') }}" id="formExportar">
+                <div class="row">
+                    <div class="col-md-4">
+                        {{ form.transportadora_id.label(class="form-label") }}
+                        {{ form.transportadora_id(class="form-control") }}
+                    </div>
+                    <div class="col-md-4">
+                        {{ form.status_conferencia.label(class="form-label") }}
+                        {{ form.status_conferencia(class="form-control") }}
+                    </div>
+                    <div class="col-md-4">
+                        {{ form.numero_fatura.label(class="form-label") }}
+                        {{ form.numero_fatura(class="form-control", placeholder="Ex: FAT001") }}
+                    </div>
+                </div>
+
+                <div class="row mt-3">
+                    <div class="col-md-3">
+                        {{ form.data_emissao_de.label(class="form-label") }}
+                        {{ form.data_emissao_de(class="form-control") }}
+                    </div>
+                    <div class="col-md-3">
+                        {{ form.data_emissao_ate.label(class="form-label") }}
+                        {{ form.data_emissao_ate(class="form-control") }}
+                    </div>
+                    <div class="col-md-3">
+                        {{ form.data_vencimento_de.label(class="form-label") }}
+                        {{ form.data_vencimento_de(class="form-control") }}
+                    </div>
+                    <div class="col-md-3">
+                        {{ form.data_vencimento_ate.label(class="form-label") }}
+                        {{ form.data_vencimento_ate(class="form-control") }}
+                    </div>
+                </div>
+
+                <div class="row mt-4">
+                    <div class="col-md-12">
+                        <button type="submit" class="btn btn-success btn-lg" id="btnExportar">
+                            <i class="fas fa-file-excel"></i> Exportar para Excel
+                        </button>
+                        <a href="{{ url_for('fretes.listar_faturas') }}" class="btn btn-secondary btn-lg">
+                            <i class="fas fa-arrow-left"></i> Voltar às Faturas
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Card de Informações -->
+    <div class="card">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0">
+                <i class="fas fa-info-circle"></i> Informações da Exportação
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <h6><i class="fas fa-file-excel text-success"></i> Formato do Arquivo</h6>
+                    <p class="text-muted">
+                        O arquivo será exportado no formato <strong>Excel (.xlsx)</strong> com duas abas:
+                    </p>
+                    <ul class="list-group list-group-flush mb-3">
+                        <li class="list-group-item">
+                            <strong><i class="fas fa-table text-primary"></i> Aba "Faturas"</strong>
+                            <br><small class="text-muted">Resumo das faturas: número, transportadora, valores, status, etc.</small>
+                        </li>
+                        <li class="list-group-item">
+                            <strong><i class="fas fa-list text-warning"></i> Aba "Detalhes"</strong>
+                            <br><small class="text-muted">Dados completos: fretes e despesas de cada fatura, incluindo CTe, valores, cliente, etc.</small>
+                        </li>
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <h6><i class="fas fa-columns text-primary"></i> Campos Exportados</h6>
+                    <div class="row">
+                        <div class="col-6">
+                            <p class="mb-1"><strong>Da Fatura:</strong></p>
+                            <ul class="small text-muted">
+                                <li>Número, Transportadora</li>
+                                <li>Data Emissão, Vencimento</li>
+                                <li>Valor Total, Status</li>
+                                <li>Qtd Fretes/Despesas</li>
+                            </ul>
+                        </div>
+                        <div class="col-6">
+                            <p class="mb-1"><strong>Do Frete/Despesa:</strong></p>
+                            <ul class="small text-muted">
+                                <li>CTe, Chave, Valor, Status</li>
+                                <li>Cliente, CNPJ, NFs</li>
+                                <li>Valores (cotado, pago, etc.)</li>
+                                <li>Tipo/Motivo despesa</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="alert alert-warning mt-3 mb-0">
+                <i class="fas fa-lightbulb"></i>
+                <strong>Dica:</strong> Use os filtros acima para exportar apenas as faturas desejadas.
+                Se nenhum filtro for selecionado, todas as faturas serão exportadas.
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('formExportar').addEventListener('submit', function(e) {
+    const btn = document.getElementById('btnExportar');
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Gerando Excel...';
+    btn.disabled = true;
+
+    // Re-habilita o botão após 10 segundos (caso de erro)
+    setTimeout(function() {
+        btn.innerHTML = '<i class="fas fa-file-excel"></i> Exportar para Excel';
+        btn.disabled = false;
+    }, 10000);
+});
+</script>
+{% endblock %}

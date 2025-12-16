@@ -2108,6 +2108,271 @@ def excluir_fatura(fatura_id):
         return redirect(url_for("fretes.listar_faturas"))
 
 
+# =================== EXPORTAÇÃO DE FATURAS ===================
+
+
+@fretes_bp.route("/faturas/exportar")
+@login_required
+@require_financeiro()
+def exportar_faturas():
+    """Tela de exportação de faturas com filtros"""
+    form = FiltroFaturasForm(request.args)
+
+    # Popular choices de transportadoras
+    transportadoras = Transportadora.query.order_by(Transportadora.razao_social).all()
+    form.transportadora_id.choices = [("", "Todas as transportadoras")] + [
+        (t.id, t.razao_social) for t in transportadoras
+    ]
+
+    return render_template("fretes/exportar_faturas.html", form=form)
+
+
+@fretes_bp.route("/faturas/exportar/excel")
+@login_required
+@require_financeiro()
+def exportar_faturas_excel():
+    """
+    Exporta faturas para Excel com 2 abas:
+    - Aba "Faturas": Dados resumidos das faturas
+    - Aba "Detalhes": Dados denormalizados (fretes + despesas)
+    """
+    from io import BytesIO
+    import pandas as pd
+
+    # Capturar filtros
+    transportadora_id = request.args.get("transportadora_id", "")
+    status_conferencia = request.args.get("status_conferencia", "")
+    data_emissao_de = request.args.get("data_emissao_de", "")
+    data_emissao_ate = request.args.get("data_emissao_ate", "")
+    data_vencimento_de = request.args.get("data_vencimento_de", "")
+    data_vencimento_ate = request.args.get("data_vencimento_ate", "")
+
+    # Montar query base
+    query = FaturaFrete.query
+
+    # Aplicar filtros
+    if transportadora_id:
+        try:
+            query = query.filter(FaturaFrete.transportadora_id == int(transportadora_id))
+        except (ValueError, TypeError):
+            pass
+
+    if status_conferencia:
+        query = query.filter(FaturaFrete.status_conferencia == status_conferencia)
+
+    if data_emissao_de:
+        try:
+            data_de = datetime.strptime(data_emissao_de, "%Y-%m-%d").date()
+            query = query.filter(FaturaFrete.data_emissao >= data_de)
+        except ValueError:
+            pass
+
+    if data_emissao_ate:
+        try:
+            data_ate = datetime.strptime(data_emissao_ate, "%Y-%m-%d").date()
+            query = query.filter(FaturaFrete.data_emissao <= data_ate)
+        except ValueError:
+            pass
+
+    if data_vencimento_de:
+        try:
+            data_de = datetime.strptime(data_vencimento_de, "%Y-%m-%d").date()
+            query = query.filter(FaturaFrete.vencimento >= data_de)
+        except ValueError:
+            pass
+
+    if data_vencimento_ate:
+        try:
+            data_ate = datetime.strptime(data_vencimento_ate, "%Y-%m-%d").date()
+            query = query.filter(FaturaFrete.vencimento <= data_ate)
+        except ValueError:
+            pass
+
+    # Executar query
+    faturas = query.order_by(desc(FaturaFrete.data_emissao)).all()
+
+    if not faturas:
+        flash("Nenhuma fatura encontrada com os filtros selecionados.", "warning")
+        return redirect(url_for("fretes.exportar_faturas"))
+
+    # ========== ABA 1: FATURAS ==========
+    dados_faturas = []
+    for fatura in faturas:
+        dados_faturas.append({
+            "ID": fatura.id,
+            "Número Fatura": fatura.numero_fatura,
+            "Transportadora": fatura.transportadora.razao_social if fatura.transportadora else "",
+            "CNPJ Transportadora": fatura.transportadora.cnpj if fatura.transportadora else "",
+            "Data Emissão": fatura.data_emissao.strftime("%d/%m/%Y") if fatura.data_emissao else "",
+            "Vencimento": fatura.vencimento.strftime("%d/%m/%Y") if fatura.vencimento else "",
+            "Valor Total Fatura": float(fatura.valor_total_fatura or 0),
+            "Status": fatura.status_conferencia,
+            "Qtd Fretes": fatura.total_fretes(),
+            "Valor Total Fretes": float(fatura.valor_total_fretes() or 0),
+            "Qtd Despesas": fatura.total_despesas_extras(),
+            "Valor Total Despesas": float(fatura.valor_total_despesas_extras() or 0),
+            "Conferido Por": fatura.conferido_por or "",
+            "Conferido Em": fatura.conferido_em.strftime("%d/%m/%Y %H:%M") if fatura.conferido_em else "",
+            "Criado Por": fatura.criado_por or "",
+            "Criado Em": fatura.criado_em.strftime("%d/%m/%Y %H:%M") if fatura.criado_em else "",
+        })
+
+    df_faturas = pd.DataFrame(dados_faturas)
+
+    # ========== ABA 2: DETALHES (Denormalizado) ==========
+    dados_detalhes = []
+
+    for fatura in faturas:
+        # Dados base da fatura
+        dados_fatura_base = {
+            "Fatura ID": fatura.id,
+            "Número Fatura": fatura.numero_fatura,
+            "Transportadora": fatura.transportadora.razao_social if fatura.transportadora else "",
+            "Data Emissão Fatura": fatura.data_emissao.strftime("%d/%m/%Y") if fatura.data_emissao else "",
+            "Vencimento Fatura": fatura.vencimento.strftime("%d/%m/%Y") if fatura.vencimento else "",
+            "Valor Total Fatura": float(fatura.valor_total_fatura or 0),
+            "Status Fatura": fatura.status_conferencia,
+        }
+
+        # Adicionar fretes
+        for frete in fatura.fretes:
+            # Buscar dados do CTe vinculado (se houver)
+            cte_chave = ""
+            cte_valor = ""
+            cte_status = ""
+
+            if frete.cte:
+                cte_chave = frete.cte.chave_acesso or ""
+                cte_valor = float(frete.cte.valor_total or 0) if frete.cte.valor_total else ""
+                cte_status = frete.cte.odoo_status_descricao or ""
+
+            dados_linha = {
+                **dados_fatura_base,
+                "Tipo": "FRETE",
+                "Frete ID": frete.id,
+                "Número CTe": frete.numero_cte or "",
+                "Chave CTe": cte_chave,
+                "Valor CTe (Sistema)": cte_valor,
+                "Status CTe": cte_status,
+                "Cliente": frete.nome_cliente or "",
+                "CNPJ Cliente": frete.cnpj_cliente or "",
+                "NFs": frete.numeros_nfs or "",
+                "Qtd NFs": frete.quantidade_nfs or 0,
+                "UF Destino": frete.uf_destino or "",
+                "Cidade Destino": frete.cidade_destino or "",
+                "Peso Total": float(frete.peso_total or 0),
+                "Valor Total NFs": float(frete.valor_total_nfs or 0),
+                "Valor Cotado": float(frete.valor_cotado or 0),
+                "Valor CTe (Frete)": float(frete.valor_cte or 0),
+                "Valor Considerado": float(frete.valor_considerado or 0),
+                "Valor Pago": float(frete.valor_pago or 0),
+                "Status Frete": frete.status or "",
+                "Data Emissão CTe": frete.data_emissao_cte.strftime("%d/%m/%Y") if frete.data_emissao_cte else "",
+                "Vencimento Frete": frete.vencimento.strftime("%d/%m/%Y") if frete.vencimento else "",
+                # Campos de despesa (vazios para fretes)
+                "Tipo Despesa": "",
+                "Setor Responsável": "",
+                "Motivo Despesa": "",
+                "Tipo Documento": "",
+                "Número Documento": "",
+                "Valor Despesa": "",
+                "Vencimento Despesa": "",
+            }
+            dados_detalhes.append(dados_linha)
+
+        # Adicionar despesas extras
+        for despesa in fatura.todas_despesas_extras():
+            # Chave do CTe da despesa (se houver)
+            despesa_cte_chave = despesa.chave_cte or ""
+
+            dados_linha = {
+                **dados_fatura_base,
+                "Tipo": "DESPESA",
+                "Frete ID": despesa.frete_id or "",
+                "Número CTe": despesa.numero_documento if despesa.tipo_documento == "CTE" else "",
+                "Chave CTe": despesa_cte_chave,
+                "Valor CTe (Sistema)": "",
+                "Status CTe": despesa.status or "",
+                "Cliente": despesa.frete.nome_cliente if despesa.frete else "",
+                "CNPJ Cliente": despesa.frete.cnpj_cliente if despesa.frete else "",
+                "NFs": despesa.frete.numeros_nfs if despesa.frete else "",
+                "Qtd NFs": despesa.frete.quantidade_nfs if despesa.frete else "",
+                "UF Destino": despesa.frete.uf_destino if despesa.frete else "",
+                "Cidade Destino": despesa.frete.cidade_destino if despesa.frete else "",
+                "Peso Total": "",
+                "Valor Total NFs": "",
+                "Valor Cotado": "",
+                "Valor CTe (Frete)": "",
+                "Valor Considerado": "",
+                "Valor Pago": "",
+                "Status Frete": "",
+                "Data Emissão CTe": "",
+                "Vencimento Frete": "",
+                # Campos de despesa
+                "Tipo Despesa": despesa.tipo_despesa or "",
+                "Setor Responsável": despesa.setor_responsavel or "",
+                "Motivo Despesa": despesa.motivo_despesa or "",
+                "Tipo Documento": despesa.tipo_documento or "",
+                "Número Documento": despesa.numero_documento or "",
+                "Valor Despesa": float(despesa.valor_despesa or 0),
+                "Vencimento Despesa": despesa.vencimento_despesa.strftime("%d/%m/%Y") if despesa.vencimento_despesa else "",
+            }
+            dados_detalhes.append(dados_linha)
+
+    df_detalhes = pd.DataFrame(dados_detalhes)
+
+    # ========== GERAR EXCEL ==========
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        # Aba 1: Faturas
+        df_faturas.to_excel(writer, index=False, sheet_name="Faturas")
+
+        # Formatar colunas da aba Faturas
+        worksheet_faturas = writer.sheets["Faturas"]
+        for column in worksheet_faturas.columns:
+            max_length = 0
+            column_letter = column[0].column_letter
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            worksheet_faturas.column_dimensions[column_letter].width = adjusted_width
+
+        # Aba 2: Detalhes (se houver dados)
+        if not df_detalhes.empty:
+            df_detalhes.to_excel(writer, index=False, sheet_name="Detalhes")
+
+            # Formatar colunas da aba Detalhes
+            worksheet_detalhes = writer.sheets["Detalhes"]
+            for column in worksheet_detalhes.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = min(max_length + 2, 50)
+                worksheet_detalhes.column_dimensions[column_letter].width = adjusted_width
+
+    output.seek(0)
+
+    # Nome do arquivo
+    data_atual = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"faturas_frete_{data_atual}.xlsx"
+
+    return send_file(
+        output,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name=filename,
+    )
+
+
 # =================== DESPESAS EXTRAS ===================
 
 
