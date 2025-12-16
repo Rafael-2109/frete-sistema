@@ -227,11 +227,32 @@ class ExtratoConciliacaoService:
 
             else:
                 # Payment existe mas não tem linha PENDENTES disponível
-                # Pode significar que já foi conciliado com outro extrato
+                # Verificar se a linha do EXTRATO já está conciliada no Odoo
                 logger.warning(
                     f"  Payment existe mas sem linha PENDENTES disponível. "
-                    f"Pode já estar conciliado com outro extrato."
+                    f"Verificando se extrato já está conciliado no Odoo..."
                 )
+
+                # Verificar se linha de crédito do extrato já está reconciliada
+                linha_extrato = self._verificar_linha_extrato_reconciliada(item.credit_line_id)
+                if linha_extrato and linha_extrato.get('reconciled'):
+                    # JÁ ESTÁ CONCILIADO NO ODOO - Sincronizar para o sistema
+                    logger.info(
+                        f"  ✓ Extrato JÁ CONCILIADO no Odoo! Sincronizando informação..."
+                    )
+                    return self._sincronizar_conciliacao_existente(item, titulo_odoo, linha_extrato)
+
+                # Verificar se o título já está completamente quitado
+                saldo_titulo = titulo_odoo.get('amount_residual', 0)
+                if saldo_titulo <= 0 or l10n_br_paga:
+                    # Título já quitado por outro meio - sincronizar localmente
+                    logger.info(
+                        f"  ✓ Título já quitado (saldo={saldo_titulo}, paga={l10n_br_paga}). "
+                        f"Marcando item como conciliado localmente..."
+                    )
+                    return self._marcar_conciliado_local(item, titulo_odoo, matched_credit_ids)
+
+                # Realmente não há como conciliar
                 raise ValueError(
                     f"Título NF {titulo.titulo_nf} P{titulo.parcela} já tem payment mas "
                     f"não há linha disponível na conta PENDENTES para conciliar. "
@@ -247,6 +268,16 @@ class ExtratoConciliacaoService:
             # Verificar se há saldo para baixar
             saldo_titulo = titulo_odoo.get('amount_residual', 0)
             if saldo_titulo <= 0:
+                # Verificar se a linha do EXTRATO já está conciliada no Odoo
+                logger.info(f"  Título já quitado, verificando se extrato já conciliado no Odoo...")
+                linha_extrato = self._verificar_linha_extrato_reconciliada(item.credit_line_id)
+                if linha_extrato and linha_extrato.get('reconciled'):
+                    # JÁ ESTÁ CONCILIADO NO ODOO - Sincronizar para o sistema
+                    logger.info(
+                        f"  ✓ Extrato JÁ CONCILIADO no Odoo! Sincronizando informação..."
+                    )
+                    return self._sincronizar_conciliacao_existente(item, titulo_odoo, linha_extrato)
+
                 raise ValueError(
                     f"Título NF {titulo.titulo_nf} P{titulo.parcela} já está quitado "
                     f"(saldo: R$ {saldo_titulo:.2f}). Reconciliado: {titulo_odoo.get('reconciled', False)}"
@@ -876,3 +907,230 @@ class ExtratoConciliacaoService:
         )
 
         return linhas[0] if linhas else None
+
+    def _verificar_linha_extrato_reconciliada(self, credit_line_id: int) -> Optional[Dict]:
+        """
+        Verifica se a linha de crédito do extrato já está reconciliada no Odoo.
+
+        Esta verificação é importante para casos onde a conciliação foi feita
+        diretamente no Odoo e precisamos sincronizar essa informação.
+
+        Args:
+            credit_line_id: ID da linha de crédito do extrato (account.move.line)
+
+        Returns:
+            Dict com dados da linha (incluindo 'reconciled', 'full_reconcile_id', etc)
+            ou None se não encontrar
+        """
+        if not credit_line_id:
+            return None
+
+        try:
+            linhas = self.connection.search_read(
+                'account.move.line',
+                [['id', '=', credit_line_id]],
+                fields=[
+                    'id', 'name', 'credit', 'debit', 'balance',
+                    'reconciled', 'full_reconcile_id', 'matching_number',
+                    'matched_credit_ids', 'matched_debit_ids',
+                    'amount_residual', 'partner_id', 'move_id'
+                ],
+                limit=1
+            )
+            return linhas[0] if linhas else None
+        except Exception as e:
+            logger.error(f"Erro ao verificar linha extrato {credit_line_id}: {e}")
+            return None
+
+    def _sincronizar_conciliacao_existente(
+        self, item: ExtratoItem, titulo_odoo: Dict, linha_extrato: Dict
+    ) -> Dict:
+        """
+        Sincroniza uma conciliação que já existe no Odoo para o sistema local.
+
+        Quando a conciliação foi feita diretamente no Odoo, este método
+        captura as informações e atualiza o ExtratoItem local.
+
+        Args:
+            item: ExtratoItem do sistema local
+            titulo_odoo: Dict com dados do título no Odoo
+            linha_extrato: Dict com dados da linha de extrato reconciliada
+
+        Returns:
+            Dict com resultado da sincronização
+        """
+        logger.info(f"  Sincronizando conciliação existente do Odoo...")
+
+        titulo_odoo_id = titulo_odoo['id']
+
+        # Capturar snapshots
+        snapshot_antes = {'titulo': titulo_odoo, 'linha_extrato': linha_extrato}
+        item.set_snapshot_antes(snapshot_antes)
+        item.set_snapshot_depois(snapshot_antes)  # Mesmo valor pois não alteramos nada
+
+        # Extrair IDs de reconciliação da linha do extrato
+        full_reconcile = linha_extrato.get('full_reconcile_id')
+        if full_reconcile:
+            if isinstance(full_reconcile, (list, tuple)) and len(full_reconcile) > 0:
+                item.full_reconcile_id = full_reconcile[0]
+            elif isinstance(full_reconcile, int):
+                item.full_reconcile_id = full_reconcile
+
+        # Buscar partial_reconcile
+        matched_ids = linha_extrato.get('matched_debit_ids', []) or linha_extrato.get('matched_credit_ids', [])
+        if matched_ids:
+            item.partial_reconcile_id = matched_ids[-1] if isinstance(matched_ids, list) else matched_ids
+
+        # Preencher saldos (já estava quitado, então saldo = 0)
+        item.titulo_saldo_antes = titulo_odoo.get('amount_residual', 0)
+        item.titulo_saldo_depois = titulo_odoo.get('amount_residual', 0)
+
+        # Atualizar status
+        item.status = 'CONCILIADO'
+        item.processado_em = datetime.utcnow()
+        item.mensagem = "Sincronizado do Odoo - conciliação já existente"
+
+        logger.info(
+            f"  ✅ Sincronizado: full_reconcile_id={item.full_reconcile_id}, "
+            f"partial_reconcile_id={item.partial_reconcile_id}"
+        )
+
+        return {
+            'item_id': item.id,
+            'titulo_id': titulo_odoo_id,
+            'saldo_antes': item.titulo_saldo_antes,
+            'saldo_depois': item.titulo_saldo_depois,
+            'partial_reconcile_id': item.partial_reconcile_id,
+            'sincronizado_do_odoo': True,
+            'mensagem': 'Conciliação já existia no Odoo - sincronizado para o sistema'
+        }
+
+    def _marcar_conciliado_local(
+        self, item: ExtratoItem, titulo_odoo: Dict, matched_credit_ids: list
+    ) -> Dict:
+        """
+        Reconcilia o extrato com o payment existente quando o título já está quitado.
+
+        Este cenário acontece quando:
+        - O pagamento foi registrado no Odoo por outro meio (ex: baixa manual)
+        - A linha do extrato não foi usada na conciliação original
+        - Precisamos fechar o ciclo: extrato ↔ payment
+
+        Fluxo:
+        1. Buscar linha PENDENTES não reconciliada do payment existente
+        2. Se encontrar: reconciliar com a linha do extrato (fecha o ciclo)
+        3. Se não encontrar: apenas marcar localmente (fallback)
+
+        Args:
+            item: ExtratoItem do sistema local
+            titulo_odoo: Dict com dados do título no Odoo
+            matched_credit_ids: IDs dos partial_reconcile vinculados ao título
+
+        Returns:
+            Dict com resultado da operação
+        """
+        titulo_odoo_id = titulo_odoo['id']
+        extrato_reconciliado = False
+        mensagem_resultado = ""
+
+        # Capturar snapshot ANTES
+        snapshot_antes = {
+            'titulo': titulo_odoo,
+            'matched_credit_ids': matched_credit_ids,
+            'extrato_credit_line_id': item.credit_line_id
+        }
+        item.set_snapshot_antes(snapshot_antes)
+
+        # =========================================================================
+        # TENTAR RECONCILIAR EXTRATO COM PAYMENT EXISTENTE
+        # =========================================================================
+        if matched_credit_ids and item.credit_line_id:
+            logger.info(
+                f"  Título já quitado - tentando reconciliar extrato com payment existente..."
+            )
+
+            # Buscar linha PENDENTES não reconciliada do payment
+            payment_pendente_line = self._buscar_linha_payment_pendentes(matched_credit_ids)
+
+            if payment_pendente_line:
+                payment_pendente_line_id = payment_pendente_line['id']
+                logger.info(
+                    f"  Encontrada linha PENDENTES não reconciliada: {payment_pendente_line_id}"
+                )
+                logger.info(
+                    f"  Reconciliando: payment_line={payment_pendente_line_id} <-> "
+                    f"extrato_line={item.credit_line_id}"
+                )
+
+                try:
+                    # Executar reconciliação no Odoo
+                    self._executar_reconcile(payment_pendente_line_id, item.credit_line_id)
+
+                    # Buscar partial_reconcile criado
+                    item.partial_reconcile_id = self._buscar_partial_reconcile_linha(
+                        payment_pendente_line_id
+                    )
+
+                    extrato_reconciliado = True
+                    mensagem_resultado = (
+                        f"Extrato reconciliado com payment existente "
+                        f"(partial_reconcile={item.partial_reconcile_id})"
+                    )
+                    logger.info(f"  ✅ {mensagem_resultado}")
+
+                except Exception as e:
+                    logger.warning(
+                        f"  ⚠️ Falha ao reconciliar extrato com payment: {e}. "
+                        f"Marcando apenas localmente."
+                    )
+                    mensagem_resultado = f"Título quitado - falha ao reconciliar extrato: {e}"
+            else:
+                logger.info(
+                    f"  Não há linha PENDENTES disponível para reconciliar com extrato. "
+                    f"O payment original pode ter sido feito por outro método."
+                )
+                mensagem_resultado = (
+                    "Título já quitado no Odoo - extrato não reconciliado "
+                    "(payment original não usou conta PENDENTES)"
+                )
+
+                # Buscar partial_reconcile do payment para referência
+                primeiro_partial_id = matched_credit_ids[0]
+                item.partial_reconcile_id = self._buscar_partial_reconcile_linha(
+                    primeiro_partial_id
+                )
+        else:
+            mensagem_resultado = "Título já quitado no Odoo - marcado localmente"
+
+        # Capturar snapshot DEPOIS
+        snapshot_depois = {
+            'titulo': titulo_odoo,
+            'extrato_reconciliado': extrato_reconciliado,
+            'partial_reconcile_id': item.partial_reconcile_id
+        }
+        item.set_snapshot_depois(snapshot_depois)
+
+        # O título já está quitado, então saldo = 0
+        item.titulo_saldo_antes = 0
+        item.titulo_saldo_depois = 0
+
+        # Atualizar status
+        item.status = 'CONCILIADO'
+        item.processado_em = datetime.utcnow()
+        item.mensagem = mensagem_resultado
+
+        logger.info(
+            f"  ✅ Concluído: partial_reconcile_id={item.partial_reconcile_id}, "
+            f"extrato_reconciliado={extrato_reconciliado}"
+        )
+
+        return {
+            'item_id': item.id,
+            'titulo_id': titulo_odoo_id,
+            'saldo_antes': 0,
+            'saldo_depois': 0,
+            'partial_reconcile_id': item.partial_reconcile_id,
+            'sincronizado_do_odoo': True,
+            'extrato_reconciliado': extrato_reconciliado,
+            'mensagem': mensagem_resultado
+        }

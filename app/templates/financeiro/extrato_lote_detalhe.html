@@ -271,7 +271,7 @@
                             </button>
                             {% endif %}
                             {% if item.aprovado %}
-                            <button class="btn btn-sm btn-warning" onclick="conciliarItem({{ item.id }})">
+                            <button class="btn btn-sm btn-warning" onclick="conciliarItem({{ item.id }}, this)">
                                 <i class="fas fa-link"></i> Conciliar
                             </button>
                             <button class="btn btn-sm btn-outline-secondary" onclick="desaprovarItem({{ item.id }})">
@@ -657,7 +657,13 @@ function desvincularTitulo(itemId) {
     });
 }
 
-function conciliarItem(itemId) {
+function conciliarItem(itemId, btn) {
+    if (!confirm('Conciliar este título no Odoo?')) return;
+
+    const textoOriginal = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
     fetch('/financeiro/extrato/api/conciliar-item', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -666,11 +672,27 @@ function conciliarItem(itemId) {
     .then(r => r.json())
     .then(data => {
         if (data.success) {
-            toastr.success('Item conciliado no Odoo');
+            // Mostrar mensagem apropriada
+            if (data.extrato_reconciliado) {
+                // Título já quitado, extrato reconciliado com payment existente
+                toastr.success('Título quitado - extrato reconciliado com payment existente');
+            } else if (data.sincronizado_do_odoo) {
+                // Título já quitado, mas extrato não pôde ser reconciliado
+                toastr.warning('Título quitado - extrato NÃO reconciliado (verificar no Odoo)');
+            } else {
+                toastr.success('Item conciliado no Odoo');
+            }
             location.reload();
         } else {
             toastr.error(data.error || 'Erro na conciliação');
+            btn.disabled = false;
+            btn.innerHTML = textoOriginal;
         }
+    })
+    .catch(err => {
+        toastr.error('Erro de conexão');
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
     });
 }
 

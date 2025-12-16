@@ -1087,10 +1087,12 @@ def extrato_conciliar_item():
 
         service = ExtratoConciliacaoService()
         resultado = service.conciliar_item(item)
+        db.session.commit()
 
         return jsonify({
             'success': True,
-            'resultado': resultado
+            'resultado': resultado,
+            'sincronizado_do_odoo': resultado.get('sincronizado_do_odoo', False)
         })
 
     except Exception as e:

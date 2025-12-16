@@ -494,8 +494,17 @@ class ExtratoMatchingService:
         item.titulo_cnpj = titulo.cnpj
         item.titulo_vencimento = titulo.vencimento
 
-        # Calcular score
+        # Calcular score base pelo valor
         score, criterio, _ = self._calcular_score_valor(item.valor, titulo.valor_titulo or 0)
+
+        # Aplicar desconto de vencimento (igual à busca de candidatos)
+        desconto_venc, criterio_venc = self._calcular_desconto_vencimento(
+            item.data_transacao, titulo.vencimento
+        )
+        score = max(0, score - desconto_venc)
+        if criterio_venc:
+            criterio = f'{criterio}+{criterio_venc}'
+
         item.match_score = score
         item.match_criterio = f'MANUAL+{criterio}'
 

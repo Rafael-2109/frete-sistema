@@ -516,13 +516,32 @@ class PagamentoMatchingService:
         item.titulo_cnpj = titulo.cnpj
         item.titulo_vencimento = titulo.vencimento
 
-        # Calcular score
+        # Calcular score base pelo valor
         valor = abs(item.valor) if item.valor else 0
-        desconto_valor, _ = self._calcular_desconto_valor(valor, titulo.valor_residual or 0)
+        desconto_valor, criterio_valor = self._calcular_desconto_valor(valor, titulo.valor_residual or 0)
         score = 100 - desconto_valor
+        criterios = ['MANUAL']
+        if criterio_valor:
+            criterios.append(criterio_valor)
+
+        # Aplicar desconto de vencimento (igual à busca de candidatos)
+        if item.data_transacao and titulo.vencimento:
+            if titulo.vencimento < item.data_transacao:
+                # Vencimento anterior = -5%
+                score -= 5
+                criterios.append('VENC_ANTERIOR')
+            elif titulo.vencimento > item.data_transacao:
+                # Vencimento posterior = -10%
+                score -= 10
+                criterios.append('VENC_POSTERIOR')
+            else:
+                criterios.append('VENC_EXATO')
+
+        # Score mínimo
+        score = max(0, score)
 
         item.match_score = score
-        item.match_criterio = 'MANUAL'
+        item.match_criterio = '+'.join(criterios)
 
         item.status_match = 'MATCH_ENCONTRADO'
         item.mensagem = 'Título vinculado manualmente'

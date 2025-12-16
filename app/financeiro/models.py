@@ -1469,6 +1469,243 @@ class ExtratoItem(db.Model):
         """Salva snapshot dos dados DEPOIS da conciliação"""
         self.snapshot_depois = json.dumps(dados, default=str)
 
+    # =========================================================================
+    # RELACIONAMENTO M:N COM TÍTULOS (múltiplos títulos por linha de extrato)
+    # =========================================================================
+    titulos_vinculados = db.relationship(
+        'ExtratoItemTitulo',
+        back_populates='extrato_item',
+        lazy='dynamic',
+        cascade='all, delete-orphan'
+    )
+
+    @property
+    def valor_alocado_total(self) -> float:
+        """Soma dos valores alocados em todos os títulos vinculados."""
+        return sum(t.valor_alocado or 0 for t in self.titulos_vinculados)
+
+    @property
+    def valor_pendente_alocacao(self) -> float:
+        """Valor do extrato ainda não alocado a títulos."""
+        return (self.valor or 0) - self.valor_alocado_total
+
+    @property
+    def tem_multiplos_titulos(self) -> bool:
+        """Retorna True se há mais de um título vinculado."""
+        return self.titulos_vinculados.count() > 1
+
+
+class ExtratoItemTitulo(db.Model):
+    """
+    Associação M:N entre ExtratoItem e Títulos (Receber ou Pagar).
+
+    Permite vincular múltiplos títulos a uma única linha de extrato,
+    com controle de valor alocado para cada título.
+
+    Cenários de uso:
+    1. Pagamento agrupado: Cliente paga 3 NFs de uma vez
+    2. Alocação parcial: Extrato R$ 10.000, título R$ 12.000 (paga 83,3%)
+    3. Rastreabilidade: Saber exatamente quanto de cada título foi pago
+
+    Exemplo:
+    ┌─────────────────────────────────────────────────────────────┐
+    │  EXTRATO: PIX R$ 15.000,00 de CLIENTE XPTO                  │
+    └─────────────────────────────────────────────────────────────┘
+                              │
+        ┌─────────────────────┼─────────────────────┐
+        │                     │                     │
+        ▼                     ▼                     ▼
+    NF 1001 P1            NF 1002 P1           NF 1003 P1
+    R$ 5.000,00           R$ 7.000,00          R$ 3.000,00
+    (alocado: 5.000)      (alocado: 7.000)     (alocado: 3.000)
+    ─────────────────────────────────────────────────────────────
+                      TOTAL ALOCADO = R$ 15.000,00
+    """
+    __tablename__ = 'extrato_item_titulo'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # =========================================================================
+    # RELACIONAMENTOS
+    # =========================================================================
+
+    # FK para ExtratoItem (obrigatório)
+    extrato_item_id = db.Column(
+        db.Integer,
+        db.ForeignKey('extrato_item.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True
+    )
+    extrato_item = db.relationship(
+        'ExtratoItem',
+        back_populates='titulos_vinculados'
+    )
+
+    # FK para Título A RECEBER (clientes) - mutuamente exclusivo com titulo_pagar_id
+    titulo_receber_id = db.Column(
+        db.Integer,
+        db.ForeignKey('contas_a_receber.id'),
+        nullable=True,
+        index=True
+    )
+    titulo_receber = db.relationship('ContasAReceber', lazy='joined')
+
+    # FK para Título A PAGAR (fornecedores) - mutuamente exclusivo com titulo_receber_id
+    titulo_pagar_id = db.Column(
+        db.Integer,
+        db.ForeignKey('contas_a_pagar.id'),
+        nullable=True,
+        index=True
+    )
+    titulo_pagar = db.relationship('ContasAPagar', lazy='joined')
+
+    # =========================================================================
+    # DADOS DA ALOCAÇÃO
+    # =========================================================================
+
+    # Valor alocado deste título ao pagamento (pode ser parcial)
+    valor_alocado = db.Column(db.Numeric(15, 2), nullable=False)
+
+    # Valor total do título no momento da vinculação (para referência)
+    valor_titulo_original = db.Column(db.Numeric(15, 2), nullable=True)
+
+    # Percentual do título que está sendo pago (valor_alocado / valor_titulo)
+    percentual_alocado = db.Column(db.Numeric(5, 2), nullable=True)
+
+    # =========================================================================
+    # CAMPOS DE CACHE (desnormalizados para performance)
+    # =========================================================================
+
+    titulo_nf = db.Column(db.String(50), nullable=True)
+    titulo_parcela = db.Column(db.Integer, nullable=True)
+    titulo_vencimento = db.Column(db.Date, nullable=True)
+    titulo_cliente = db.Column(db.String(255), nullable=True)
+    titulo_cnpj = db.Column(db.String(20), nullable=True)
+
+    # Score de matching
+    match_score = db.Column(db.Integer, nullable=True)
+    match_criterio = db.Column(db.String(100), nullable=True)
+
+    # =========================================================================
+    # CONTROLE DE PROCESSAMENTO
+    # =========================================================================
+
+    # Status individual: PENDENTE, APROVADO, CONCILIADO, ERRO
+    status = db.Column(db.String(30), default='PENDENTE', nullable=False, index=True)
+
+    # Aprovação individual
+    aprovado = db.Column(db.Boolean, default=False, nullable=False)
+    aprovado_em = db.Column(db.DateTime, nullable=True)
+    aprovado_por = db.Column(db.String(100), nullable=True)
+
+    # =========================================================================
+    # RESULTADO DA CONCILIAÇÃO
+    # =========================================================================
+
+    # IDs criados no Odoo (cada título tem sua própria reconciliação)
+    partial_reconcile_id = db.Column(db.Integer, nullable=True)
+    full_reconcile_id = db.Column(db.Integer, nullable=True)
+    payment_id = db.Column(db.Integer, nullable=True)  # account.payment criado
+
+    # Saldo do título antes/depois da conciliação
+    titulo_saldo_antes = db.Column(db.Numeric(15, 2), nullable=True)
+    titulo_saldo_depois = db.Column(db.Numeric(15, 2), nullable=True)
+
+    # Mensagem de erro ou observação
+    mensagem = db.Column(db.Text, nullable=True)
+
+    # =========================================================================
+    # AUDITORIA
+    # =========================================================================
+
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    processado_em = db.Column(db.DateTime, nullable=True)
+
+    __table_args__ = (
+        # Índice composto para busca
+        Index('idx_extrato_titulo_item', 'extrato_item_id'),
+        Index('idx_extrato_titulo_receber', 'titulo_receber_id'),
+        Index('idx_extrato_titulo_pagar', 'titulo_pagar_id'),
+        Index('idx_extrato_titulo_status', 'status'),
+        # Constraint: título receber OU pagar, não ambos
+        db.CheckConstraint(
+            '(titulo_receber_id IS NOT NULL AND titulo_pagar_id IS NULL) OR '
+            '(titulo_receber_id IS NULL AND titulo_pagar_id IS NOT NULL)',
+            name='chk_titulo_receber_ou_pagar'
+        ),
+    )
+
+    def __repr__(self):
+        tipo = 'Receber' if self.titulo_receber_id else 'Pagar'
+        titulo_id = self.titulo_receber_id or self.titulo_pagar_id
+        return (
+            f'<ExtratoItemTitulo {self.id} - '
+            f'Item:{self.extrato_item_id} -> {tipo}:{titulo_id} '
+            f'R$ {self.valor_alocado} ({self.status})>'
+        )
+
+    @property
+    def titulo(self):
+        """Retorna o título correto (receber ou pagar)."""
+        return self.titulo_receber or self.titulo_pagar
+
+    @property
+    def titulo_id_efetivo(self):
+        """Retorna o ID do título efetivo."""
+        return self.titulo_receber_id or self.titulo_pagar_id
+
+    @property
+    def tipo_titulo(self) -> str:
+        """Retorna 'receber' ou 'pagar'."""
+        return 'receber' if self.titulo_receber_id else 'pagar'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'extrato_item_id': self.extrato_item_id,
+            'titulo_receber_id': self.titulo_receber_id,
+            'titulo_pagar_id': self.titulo_pagar_id,
+            'titulo_id_efetivo': self.titulo_id_efetivo,
+            'tipo_titulo': self.tipo_titulo,
+            'valor_alocado': float(self.valor_alocado) if self.valor_alocado else None,
+            'valor_titulo_original': float(self.valor_titulo_original) if self.valor_titulo_original else None,
+            'percentual_alocado': float(self.percentual_alocado) if self.percentual_alocado else None,
+            'titulo_nf': self.titulo_nf,
+            'titulo_parcela': self.titulo_parcela,
+            'titulo_vencimento': self.titulo_vencimento.isoformat() if self.titulo_vencimento else None,
+            'titulo_cliente': self.titulo_cliente,
+            'titulo_cnpj': self.titulo_cnpj,
+            'match_score': self.match_score,
+            'match_criterio': self.match_criterio,
+            'status': self.status,
+            'aprovado': self.aprovado,
+            'partial_reconcile_id': self.partial_reconcile_id,
+            'full_reconcile_id': self.full_reconcile_id,
+            'payment_id': self.payment_id,
+            'titulo_saldo_antes': float(self.titulo_saldo_antes) if self.titulo_saldo_antes else None,
+            'titulo_saldo_depois': float(self.titulo_saldo_depois) if self.titulo_saldo_depois else None,
+            'mensagem': self.mensagem,
+            'criado_em': self.criado_em.isoformat() if self.criado_em else None,
+            'processado_em': self.processado_em.isoformat() if self.processado_em else None,
+        }
+
+    def preencher_cache(self):
+        """Preenche campos de cache a partir do título relacionado."""
+        titulo = self.titulo
+        if titulo:
+            self.titulo_nf = titulo.titulo_nf
+            self.titulo_parcela = titulo.parcela
+            self.titulo_vencimento = titulo.vencimento
+            self.titulo_cliente = getattr(titulo, 'raz_social_red', None) or titulo.raz_social
+            self.titulo_cnpj = titulo.cnpj
+            self.valor_titulo_original = titulo.valor_titulo
+
+            # Calcular percentual alocado
+            if self.valor_alocado and titulo.valor_titulo:
+                self.percentual_alocado = (
+                    float(self.valor_alocado) / float(titulo.valor_titulo) * 100
+                )
+
 
 # =============================================================================
 # FIM EXTRATO BANCÁRIO

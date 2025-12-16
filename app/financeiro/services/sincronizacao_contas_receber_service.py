@@ -242,15 +242,38 @@ class SincronizacaoContasReceberService:
                         odoo_write_date: datetime) -> ContasAReceber:
         """Cria um novo registro de ContasAReceber"""
 
-        # Calcular valor_titulo inicial
-        valor_original = float(row.get('saldo_total', 0) or 0)
-        desconto = float(row.get('desconto_concedido', 0) or 0)
-        valor_titulo = valor_original - desconto
+        # =======================================================================
+        # CORREÇÃO BUG DESCONTO DUPLO NO ODOO (2025-12-15)
+        # =======================================================================
+        # O Odoo aplica o desconto 2 vezes: VALOR * (1-desc) * (1-desc)
+        #
+        # O que vem do Odoo:
+        # - saldo_total = balance + desconto_concedido = valor com desconto 1x
+        # - desconto_concedido = calculado sobre valor já com desconto (incorreto)
+        # - desconto_percentual = percentual correto (ex: 5%)
+        #
+        # O que precisamos:
+        # - valor_titulo = saldo_total (valor que o cliente vai pagar, desconto 1x)
+        # - valor_original = saldo_total / (1 - desconto_pct) (valor da NF sem desconto)
+        # - desconto = valor_original - valor_titulo (recalculado corretamente)
+        # =======================================================================
 
-        # Converter desconto_percentual
+        # Converter desconto_percentual primeiro (precisamos para calcular valor_original)
         desconto_pct = row.get('desconto_concedido_percentual', 0)
         if desconto_pct:
             desconto_pct = float(desconto_pct) / 100
+
+        # valor_titulo = saldo_total (valor com desconto correto 1x - valor a pagar)
+        valor_titulo = float(row.get('saldo_total', 0) or 0)
+
+        # valor_original = valor_titulo / (1 - desconto_pct), se houver desconto
+        if desconto_pct and desconto_pct > 0 and desconto_pct < 1:
+            valor_original = valor_titulo / (1 - desconto_pct)
+        else:
+            valor_original = valor_titulo
+
+        # desconto = diferença entre original e título (recalculado corretamente)
+        desconto = valor_original - valor_titulo
 
         conta = ContasAReceber(
             empresa=empresa,
@@ -281,7 +304,32 @@ class SincronizacaoContasReceberService:
 
         alteracoes = []
 
+        # =======================================================================
+        # CORREÇÃO BUG DESCONTO DUPLO NO ODOO (2025-12-15)
+        # =======================================================================
+        # Primeiro calcular os valores financeiros corretamente
+        # (mesma lógica do _criar_registro)
+        # =======================================================================
+
+        desconto_pct = row.get('desconto_concedido_percentual', 0)
+        if desconto_pct:
+            desconto_pct = float(desconto_pct) / 100
+
+        # saldo_total do Odoo = valor com desconto correto 1x = nosso valor_titulo
+        saldo_total_odoo = float(row.get('saldo_total', 0) or 0)
+
+        # Calcular valor_original e desconto corretamente
+        if desconto_pct and desconto_pct > 0 and desconto_pct < 1:
+            valor_original_calc = saldo_total_odoo / (1 - desconto_pct)
+        else:
+            valor_original_calc = saldo_total_odoo
+
+        desconto_calc = valor_original_calc - saldo_total_odoo
+        valor_titulo_calc = saldo_total_odoo
+
         # Mapear campos do DataFrame para campos do modelo
+        # NOTA: Removemos saldo_total, desconto_concedido do mapeamento automático
+        # pois precisam de cálculo especial (bug desconto duplo)
         mapeamento = {
             'partner_cnpj': ('cnpj', lambda x: x),
             'partner_raz_social': ('raz_social', lambda x: x or row.get('partner_id_nome')),
@@ -289,9 +337,6 @@ class SincronizacaoContasReceberService:
             'partner_state': ('uf_cliente', lambda x: x),
             'date': ('emissao', lambda x: x),
             'date_maturity': ('vencimento', lambda x: x),
-            'saldo_total': ('valor_original', lambda x: float(x or 0)),
-            'desconto_concedido_percentual': ('desconto_percentual', lambda x: float(x or 0) / 100 if x else 0),
-            'desconto_concedido': ('desconto', lambda x: float(x or 0)),
             'payment_provider_id_nome': ('tipo_titulo', lambda x: x),
             'l10n_br_paga': ('parcela_paga', lambda x: bool(x)),
             'x_studio_status_de_pagamento': ('status_pagamento_odoo', lambda x: x),
@@ -318,8 +363,30 @@ class SincronizacaoContasReceberService:
                 setattr(conta, campo_modelo, valor_novo)
                 alteracoes.append(campo_modelo)
 
-        # Recalcular valor_titulo
-        conta.valor_titulo = (conta.valor_original or 0) - (conta.desconto or 0)
+        # Atualizar campos financeiros calculados (com snapshot se alterado)
+        campos_financeiros = [
+            ('valor_original', valor_original_calc),
+            ('desconto_percentual', desconto_pct),
+            ('desconto', desconto_calc),
+            ('valor_titulo', valor_titulo_calc),
+        ]
+
+        for campo, valor_novo in campos_financeiros:
+            valor_atual = getattr(conta, campo)
+            if self._valores_diferentes(valor_atual, valor_novo):
+                if campo in self.CAMPOS_ODOO_AUDITADOS:
+                    ContasAReceberSnapshot.registrar_alteracao(
+                        conta=conta,
+                        campo=campo,
+                        valor_anterior=valor_atual,
+                        valor_novo=valor_novo,
+                        usuario='Sistema Odoo',
+                        odoo_write_date=odoo_write_date
+                    )
+                    self.estatisticas['snapshots_criados'] += 1
+
+                setattr(conta, campo, valor_novo)
+                alteracoes.append(campo)
 
         # Atualizar metadados
         conta.odoo_write_date = odoo_write_date
