@@ -80,9 +80,36 @@
                             <p class="mb-1"><strong>Cliente:</strong> {{ frete.nome_cliente[:50] }}</p>
                         </div>
                         <div class="col-md-4">
-                            <p class="mb-1"><strong>DFe ID:</strong> {{ frete.odoo_dfe_id or 'N/A' }}</p>
-                            <p class="mb-1"><strong>Purchase Order:</strong> {{ frete.odoo_purchase_order_id or 'N/A' }}</p>
-                            <p class="mb-1"><strong>Invoice:</strong> {{ frete.odoo_invoice_id or 'N/A' }}</p>
+                            <p class="mb-1"><strong>DFe ID:</strong>
+                                {% if frete.odoo_dfe_id %}
+                                <a href="https://odoo.nacomgoya.com.br/web#id={{ frete.odoo_dfe_id }}&model=l10n_br_ciel_it_account.dfe&view_type=form"
+                                   target="_blank"
+                                   class="badge bg-info text-white text-decoration-none"
+                                   title="Abrir DFe no Odoo">
+                                    <i class="fas fa-external-link-alt me-1"></i>{{ frete.odoo_dfe_id }}
+                                </a>
+                                {% else %}N/A{% endif %}
+                            </p>
+                            <p class="mb-1"><strong>Purchase Order:</strong>
+                                {% if frete.odoo_purchase_order_id %}
+                                <a href="https://odoo.nacomgoya.com.br/web#id={{ frete.odoo_purchase_order_id }}&model=purchase.order&view_type=form"
+                                   target="_blank"
+                                   class="badge bg-primary text-white text-decoration-none"
+                                   title="Abrir PO no Odoo">
+                                    <i class="fas fa-external-link-alt me-1"></i>{{ frete.odoo_purchase_order_id }}
+                                </a>
+                                {% else %}N/A{% endif %}
+                            </p>
+                            <p class="mb-1"><strong>Invoice:</strong>
+                                {% if frete.odoo_invoice_id %}
+                                <a href="https://odoo.nacomgoya.com.br/web#id={{ frete.odoo_invoice_id }}&model=account.move&view_type=form"
+                                   target="_blank"
+                                   class="badge bg-success text-white text-decoration-none"
+                                   title="Abrir Invoice no Odoo">
+                                    <i class="fas fa-external-link-alt me-1"></i>{{ frete.odoo_invoice_id }}
+                                </a>
+                                {% else %}N/A{% endif %}
+                            </p>
                         </div>
                         <div class="col-md-4">
                             <p class="mb-1"><strong>Lançado em:</strong> {{ frete.lancado_odoo_em.strftime('%d/%m/%Y %H:%M:%S') if frete.lancado_odoo_em else 'N/A' }}</p>

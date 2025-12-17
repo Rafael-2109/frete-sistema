@@ -263,7 +263,7 @@ Problema: Mostra entradas de estoque (producao JA realizada), NAO programacao fu
 
 Sempre ativar antes de executar:
 ```bash
-source $([ -d venv ] && echo venv || echo .venv)/bin/activate
+source .venv/bin/activate
 ```
 
 ---
@@ -275,7 +275,7 @@ source $([ -d venv ] && echo venv || echo .venv)/bin/activate
 **Queries cobertas:** Q1, Q2, Q3, Q4, Q5, Q6, Q9, Q11, Q12
 
 ```bash
-source $([ -d venv ] && echo venv || echo .venv)/bin/activate && \
+source .venv/bin/activate && \
 python .claude/skills/gerindo-expedicao/scripts/analisando_disponibilidade_estoque.py [parametros]
 ```
 
@@ -304,7 +304,7 @@ python .claude/skills/gerindo-expedicao/scripts/analisando_disponibilidade_estoq
 **Queries cobertas:** Q8, Q10, Q14, Q16, Q19
 
 ```bash
-source $([ -d venv ] && echo venv || echo .venv)/bin/activate && \
+source .venv/bin/activate && \
 python .claude/skills/gerindo-expedicao/scripts/consultando_situacao_pedidos.py [parametros]
 ```
 
@@ -336,7 +336,7 @@ python .claude/skills/gerindo-expedicao/scripts/consultando_situacao_pedidos.py 
 **Queries cobertas:** Q13, Q17, Q18, Q20 + SITUACAO COMPLETA
 
 ```bash
-source $([ -d venv ] && echo venv || echo .venv)/bin/activate && \
+source .venv/bin/activate && \
 python .claude/skills/gerindo-expedicao/scripts/consultando_produtos_estoque.py [parametros]
 ```
 
@@ -370,7 +370,7 @@ python .claude/skills/gerindo-expedicao/scripts/consultando_produtos_estoque.py 
 **Queries cobertas:** Q7 + CALCULO REVERSO
 
 ```bash
-source $([ -d venv ] && echo venv || echo .venv)/bin/activate && \
+source .venv/bin/activate && \
 python .claude/skills/gerindo-expedicao/scripts/calculando_leadtime_entrega.py [parametros]
 ```
 
@@ -400,7 +400,7 @@ python .claude/skills/gerindo-expedicao/scripts/calculando_leadtime_entrega.py [
 **IMPORTANTE:** Sempre executar primeiro SEM `--executar` para simular!
 
 ```bash
-source $([ -d venv ] && echo venv || echo .venv)/bin/activate && \
+source .venv/bin/activate && \
 python .claude/skills/gerindo-expedicao/scripts/criando_separacao_pedidos.py [parametros]
 ```
 
@@ -445,7 +445,7 @@ python .claude/skills/gerindo-expedicao/scripts/criando_separacao_pedidos.py [pa
 **Queries cobertas:** Q15 + LISTAGEM COMPLETA
 
 ```bash
-source $([ -d venv ] && echo venv || echo .venv)/bin/activate && \
+source .venv/bin/activate && \
 python .claude/skills/gerindo-expedicao/scripts/consultando_programacao_producao.py [parametros]
 ```
 

@@ -470,6 +470,17 @@ class LancamentoOdooService:
             if not frete:
                 raise ValueError(f"Frete ID {frete_id} não encontrado")
 
+            # 🔧 CORREÇÃO 17/12/2025: Extrair dados do frete ANTES das operações longas
+            # Isso previne o erro "Instance <Frete> is not bound to a Session"
+            # que ocorre quando a ETAPA 6 demora muito (60+ segundos) e a sessão expira
+            frete_fatura_id = frete.fatura_frete_id
+            frete_numero_fatura = frete.fatura_frete.numero_fatura if frete.fatura_frete else None
+            frete_cte_id_atual = frete.frete_cte_id  # Para verificar vínculo na ETAPA 16
+            current_app.logger.debug(
+                f"📦 Dados extraídos do frete #{frete_id}: "
+                f"fatura_id={frete_fatura_id}, numero_fatura={frete_numero_fatura}"
+            )
+
             # Buscar CTe
             cte = ConhecimentoTransporte.query.filter_by(chave_acesso=cte_chave).first()
             cte_id = cte.id if cte else None
@@ -630,8 +641,9 @@ class LancamentoOdooService:
                 dados_atualizacao = {'l10n_br_data_entrada': hoje}
 
                 # ✅ ADICIONAR payment_reference com número da fatura (se houver)
-                if frete.fatura_frete_id and frete.fatura_frete:
-                    referencia_fatura = f"FATURA-{frete.fatura_frete.numero_fatura}"
+                # 🔧 CORREÇÃO 17/12/2025: Usar variáveis locais extraídas no início
+                if frete_fatura_id and frete_numero_fatura:
+                    referencia_fatura = f"FATURA-{frete_numero_fatura}"
 
                     # Buscar valor atual ANTES de atualizar
                     try:
@@ -649,7 +661,7 @@ class LancamentoOdooService:
                     if payment_ref_atual != referencia_fatura:
                         dados_atualizacao['payment_reference'] = referencia_fatura
                         current_app.logger.info(
-                            f"🔗 Adicionando fatura {frete.fatura_frete.numero_fatura} ao DFe {dfe_id} "
+                            f"🔗 Adicionando fatura {frete_numero_fatura} ao DFe {dfe_id} "
                             f"(payment_reference: '{payment_ref_atual}' -> '{referencia_fatura}')"
                         )
                     else:
@@ -884,9 +896,27 @@ class LancamentoOdooService:
                     'picking_type_id': self.PICKING_TYPE_CD_RECEBIMENTO_ID  # ✅ CD: Recebimento (CD)
                 }
 
+                # 🔧 CORREÇÃO 17/12/2025: Buscar valor CORRETO do DFE (fonte da verdade)
+                # O valor deve vir do DFE, não do PO que pode ter sido alterado incorretamente
+                valor_correto_dfe = None
+                try:
+                    dfe_valor = self.odoo.read(
+                        'l10n_br_ciel_it_account.dfe',
+                        [dfe_id],
+                        ['nfe_infnfe_total_icmstot_vnf']
+                    )
+                    if dfe_valor and dfe_valor[0].get('nfe_infnfe_total_icmstot_vnf'):
+                        valor_correto_dfe = dfe_valor[0]['nfe_infnfe_total_icmstot_vnf']
+                        current_app.logger.info(
+                            f"💰 Valor correto do DFE {dfe_id}: R$ {valor_correto_dfe:.2f}"
+                        )
+                except Exception as e:
+                    current_app.logger.warning(f"⚠️ Erro ao buscar valor do DFE: {e}")
+
                 # ✅ CORRIGIR OPERAÇÃO FISCAL: De-Para FB → CD (cabeçalho e linhas)
                 # O Odoo pode criar o PO com operação da empresa FB, precisamos corrigir para CD
                 operacao_correta_id = None
+                line_ids_po = []  # Guardar IDs das linhas para verificação posterior
                 try:
                     po_operacao = self.odoo.read(
                         'purchase.order',
@@ -896,6 +926,7 @@ class LancamentoOdooService:
                     if po_operacao and po_operacao[0].get('l10n_br_operacao_id'):
                         operacao_atual_id = po_operacao[0]['l10n_br_operacao_id'][0]
                         operacao_atual_nome = po_operacao[0]['l10n_br_operacao_id'][1]
+                        line_ids_po = po_operacao[0].get('order_line', [])
 
                         if operacao_atual_id in self.OPERACAO_FB_PARA_CD:
                             operacao_correta_id = self.OPERACAO_FB_PARA_CD[operacao_atual_id]
@@ -905,97 +936,49 @@ class LancamentoOdooService:
                                 f"→ {operacao_correta_id} (empresa CD)"
                             )
 
-                            # ✅ CORRIGIR TAMBÉM AS LINHAS DO PO (COM PROTEÇÃO DE VALORES)
-                            line_ids = po_operacao[0].get('order_line', [])
-                            if line_ids:
-                                # 1. Ler dados atuais das linhas ANTES de alterar
+                            # Corrigir operação fiscal das linhas
+                            if line_ids_po:
                                 linhas_data = self.odoo.read(
                                     'purchase.order.line',
-                                    line_ids,
-                                    ['id', 'l10n_br_operacao_id', 'price_unit', 'product_qty', 'price_subtotal']
+                                    line_ids_po,
+                                    ['id', 'l10n_br_operacao_id']
                                 )
 
-                                # 2. Filtrar apenas linhas que PRECISAM de correção
                                 linhas_para_corrigir = []
-                                valores_backup = {}
-
                                 for linha in linhas_data:
                                     op_linha = linha.get('l10n_br_operacao_id')
                                     op_linha_id = op_linha[0] if op_linha else None
-
                                     if op_linha_id != operacao_correta_id:
                                         linhas_para_corrigir.append(linha['id'])
-                                        # Backup dos valores para restaurar se necessário
-                                        valores_backup[linha['id']] = {
-                                            'price_unit': linha.get('price_unit', 0),
-                                            'product_qty': linha.get('product_qty', 1)
-                                        }
-                                        current_app.logger.info(
-                                            f"  📝 Linha {linha['id']}: op {op_linha_id} → {operacao_correta_id} "
-                                            f"(valor: R$ {linha.get('price_subtotal', 0):.2f})"
-                                        )
 
                                 if linhas_para_corrigir:
-                                    # 3. Alterar operação fiscal
                                     self.odoo.write(
                                         'purchase.order.line',
                                         linhas_para_corrigir,
                                         {'l10n_br_operacao_id': operacao_correta_id}
                                     )
-
-                                    # 4. Verificar se valores foram ALTERADOS e RESTAURAR
-                                    # 🔧 CORREÇÃO 15/12/2025: Verificar QUALQUER alteração de valor
-                                    # Antes só verificava se foi zerado (== 0), mas a operação fiscal
-                                    # pode RECALCULAR o valor (ex: incluir/excluir impostos)
-                                    linhas_apos = self.odoo.read(
-                                        'purchase.order.line',
-                                        linhas_para_corrigir,
-                                        ['id', 'price_unit', 'price_subtotal']
-                                    )
-
-                                    for linha in linhas_apos:
-                                        backup = valores_backup.get(linha['id'], {})
-                                        valor_original = backup.get('price_unit', 0)
-                                        valor_atual = linha.get('price_unit', 0)
-
-                                        # Tolerância de 0.01 para comparação de floats
-                                        diferenca = abs(valor_atual - valor_original)
-                                        valor_foi_alterado = diferenca > 0.01
-
-                                        if valor_foi_alterado and valor_original > 0:
-                                            current_app.logger.warning(
-                                                f"  ⚠️ Linha {linha['id']} teve valor ALTERADO! "
-                                                f"R$ {valor_original:.2f} → R$ {valor_atual:.2f} (diff: R$ {diferenca:.2f}). "
-                                                f"Restaurando valor original..."
-                                            )
-                                            self.odoo.write(
-                                                'purchase.order.line',
-                                                [linha['id']],
-                                                backup
-                                            )
-                                        elif valor_foi_alterado:
-                                            current_app.logger.warning(
-                                                f"  ⚠️ Linha {linha['id']} alterada mas original era R$ 0. "
-                                                f"Mantendo valor atual: R$ {valor_atual:.2f}"
-                                            )
-
                                     current_app.logger.info(
                                         f"🔄 Operação fiscal corrigida em {len(linhas_para_corrigir)} linha(s) do PO"
                                     )
                                 else:
                                     current_app.logger.info(
-                                        f"✅ Todas as {len(line_ids)} linha(s) já estão com operação fiscal correta"
+                                        f"✅ Todas as {len(line_ids_po)} linha(s) já estão com operação fiscal correta"
                                     )
                         else:
                             current_app.logger.info(
                                 f"✅ Operação fiscal já está correta: {operacao_atual_id} ({operacao_atual_nome})"
                             )
+                    else:
+                        # Mesmo sem operação fiscal, pegar line_ids para verificação posterior
+                        if po_operacao:
+                            line_ids_po = po_operacao[0].get('order_line', [])
                 except Exception as e:
                     current_app.logger.warning(f"⚠️ Erro ao verificar/corrigir operação fiscal: {e}")
 
                 # ✅ ADICIONAR partner_ref com número da fatura (se houver)
-                if frete.fatura_frete_id and frete.fatura_frete:
-                    referencia_fatura = f"FATURA-{frete.fatura_frete.numero_fatura}"
+                # 🔧 CORREÇÃO 17/12/2025: Usar variáveis locais extraídas no início
+                if frete_fatura_id and frete_numero_fatura:
+                    referencia_fatura = f"FATURA-{frete_numero_fatura}"
 
                     # Buscar valor atual ANTES de atualizar
                     try:
@@ -1013,7 +996,7 @@ class LancamentoOdooService:
                     if partner_ref_atual != referencia_fatura:
                         dados_po['partner_ref'] = referencia_fatura
                         current_app.logger.info(
-                            f"🔗 Adicionando fatura {frete.fatura_frete.numero_fatura} ao PO {purchase_order_id} "
+                            f"🔗 Adicionando fatura {frete_numero_fatura} ao PO {purchase_order_id} "
                             f"(partner_ref: '{partner_ref_atual}' -> '{referencia_fatura}')"
                         )
                     else:
@@ -1046,6 +1029,49 @@ class LancamentoOdooService:
                     return resultado
 
                 resultado['etapas_concluidas'] = 7
+
+                # 🔧 CORREÇÃO 17/12/2025: Verificar e corrigir valor da linha APÓS o write do header
+                # O onchange do Odoo pode recalcular incorretamente os valores das linhas
+                # Usamos o valor do DFE como fonte da verdade
+                if valor_correto_dfe and line_ids_po:
+                    try:
+                        # Ler valor atual da linha do PO
+                        linha_atual = self.odoo.read(
+                            'purchase.order.line',
+                            line_ids_po[:1],  # Pegar apenas a primeira linha (CTe tem 1 linha)
+                            ['price_unit', 'price_subtotal']
+                        )
+
+                        if linha_atual:
+                            price_unit_atual = linha_atual[0].get('price_unit', 0)
+
+                            # Comparar com tolerância de R$ 0.01
+                            diferenca = abs(price_unit_atual - valor_correto_dfe)
+                            if diferenca > 0.01:
+                                current_app.logger.warning(
+                                    f"⚠️ VALOR INCORRETO DETECTADO! "
+                                    f"PO linha: R$ {price_unit_atual:.2f} | "
+                                    f"DFE correto: R$ {valor_correto_dfe:.2f} | "
+                                    f"Diferença: R$ {diferenca:.2f}"
+                                )
+
+                                # Corrigir o valor da linha com o valor do DFE
+                                self.odoo.write(
+                                    'purchase.order.line',
+                                    line_ids_po[:1],
+                                    {'price_unit': valor_correto_dfe}
+                                )
+                                current_app.logger.info(
+                                    f"✅ VALOR CORRIGIDO: R$ {price_unit_atual:.2f} → R$ {valor_correto_dfe:.2f}"
+                                )
+                            else:
+                                current_app.logger.info(
+                                    f"✅ Valor da linha PO está correto: R$ {price_unit_atual:.2f}"
+                                )
+                    except Exception as e:
+                        current_app.logger.warning(
+                            f"⚠️ Erro ao verificar/corrigir valor da linha PO: {e}"
+                        )
             else:
                 current_app.logger.info(f"⏭️ ETAPA 7 PULADA - Retomando de etapa {continuar_de_etapa}")
 
@@ -1266,8 +1292,9 @@ class LancamentoOdooService:
                 }
 
                 # ✅ ADICIONAR payment_reference com número da fatura (se houver)
-                if frete.fatura_frete_id and frete.fatura_frete:
-                    referencia_fatura = f"FATURA-{frete.fatura_frete.numero_fatura}"
+                # 🔧 CORREÇÃO 17/12/2025: Usar variáveis locais extraídas no início
+                if frete_fatura_id and frete_numero_fatura:
+                    referencia_fatura = f"FATURA-{frete_numero_fatura}"
 
                     # Buscar valor atual ANTES de atualizar
                     try:
@@ -1285,7 +1312,7 @@ class LancamentoOdooService:
                     if payment_ref_atual != referencia_fatura:
                         dados_invoice['payment_reference'] = referencia_fatura
                         current_app.logger.info(
-                            f"🔗 Adicionando fatura {frete.fatura_frete.numero_fatura} à Invoice {invoice_id} "
+                            f"🔗 Adicionando fatura {frete_numero_fatura} à Invoice {invoice_id} "
                             f"(payment_reference: '{payment_ref_atual}' -> '{referencia_fatura}')"
                         )
                     else:
@@ -1413,6 +1440,18 @@ class LancamentoOdooService:
             # ETAPA 16: Atualizar frete E criar vínculo bidirecional com CTe
             # ========================================
             try:
+                # 🔧 CORREÇÃO 17/12/2025: Re-buscar frete e CTe com sessão NOVA
+                # A sessão original pode ter expirado durante as operações longas no Odoo
+                current_app.logger.info(f"🔄 Re-buscando frete #{frete_id} para atualização final...")
+                frete = Frete.query.get(frete_id)
+                if not frete:
+                    raise ValueError(f"Frete ID {frete_id} não encontrado na ETAPA 16")
+
+                # Re-buscar CTe também se existia
+                if cte_id:
+                    cte = ConhecimentoTransporte.query.get(cte_id)
+                    current_app.logger.debug(f"🔄 CTe #{cte_id} re-buscado: {'encontrado' if cte else 'não encontrado'}")
+
                 # Atualizar campos do Frete
                 frete.odoo_dfe_id = dfe_id
                 frete.odoo_purchase_order_id = purchase_order_id
@@ -1423,8 +1462,8 @@ class LancamentoOdooService:
 
                 # ✅ CRIAR VÍNCULO BIDIRECIONAL Frete ↔ CTe
                 if cte:
-                    # Frete → CTe
-                    if not frete.frete_cte_id:
+                    # Frete → CTe (usar variável extraída no início para verificação)
+                    if not frete_cte_id_atual:
                         frete.frete_cte_id = cte.id
                         current_app.logger.info(f"🔗 Vinculando Frete → CTe: frete_cte_id = {cte.id}")
 

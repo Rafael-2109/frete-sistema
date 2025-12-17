@@ -30,7 +30,7 @@ Skill para **descoberta de campos e estrutura** de modelos do Odoo.
 ### descobrindo.py
 
 ```bash
-source $([ -d venv ] && echo venv || echo .venv)/bin/activate && \
+source .venv/bin/activate && \
 python .claude/skills/descobrindo-odoo-estrutura/scripts/descobrindo.py [opcoes]
 ```
 

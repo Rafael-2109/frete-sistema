@@ -16,9 +16,8 @@ Skill para **criacao de arquivos** que o usuario pode baixar.
 ### exportar.py
 
 ```bash
-echo '{"dados": [...]}' | \
-source $([ -d venv ] && echo venv || echo .venv)/bin/activate && \
-python .claude/skills/exportando-arquivos/scripts/exportar.py [opcoes]
+source .venv/bin/activate && \
+echo '{"dados": [...]}' | python .claude/skills/exportando-arquivos/scripts/exportar.py [opcoes]
 ```
 
 ## Formatos de Saida
@@ -67,9 +66,8 @@ Dados sao recebidos via **stdin** no formato JSON:
 
 ### Gerar Excel simples
 ```bash
-echo '{"dados": [{"col1": "val1"}]}' | \
-source $([ -d venv ] && echo venv || echo .venv)/bin/activate && \
-python .claude/skills/exportando-arquivos/scripts/exportar.py \
+source .venv/bin/activate && \
+echo '{"dados": [{"col1": "val1"}]}' | python .claude/skills/exportando-arquivos/scripts/exportar.py \
   --formato excel \
   --nome relatorio
 ```

@@ -9,7 +9,7 @@
 2. **MOSTRAR EVIDENCIAS**: Citar arquivo:linha ANTES de qualquer modificacao
 3. **VERIFICAR TUDO**: Ler arquivos completos, verificar imports, testar mentalmente
 4. **QUESTIONAR**: Se algo nao estiver 100% claro, PARAR e PERGUNTAR
-5. **AMBIENTE VIRTUAL**: Sempre utilize o ambiente virtual quando for necessario `source $([ -d venv ] && echo venv || echo .venv)/bin/activate`
+5. **AMBIENTE VIRTUAL**: Sempre utilize o ambiente virtual quando for necessário `source .venv/bin/activate`
 
 ### NUNCA FAZER:
 1. **NUNCA assumir** comportamento pelo nome da funcao
@@ -80,7 +80,7 @@ Os paths sao **virtuais** (armazenados no banco, nao arquivos fisicos):
 
 ```bash
 # Visualizar todas as memorias
-source $([ -d venv ] && echo venv || echo .venv)/bin/activate && python .claude/skills/memoria-usuario/scripts/memoria.py view --user-id 1
+source .venv/bin/activate && python .claude/skills/memoria-usuario/scripts/memoria.py view --user-id 1
 
 # Visualizar path especifico
 python .claude/skills/memoria-usuario/scripts/memoria.py view --user-id 1 --path /memories/preferences.xml

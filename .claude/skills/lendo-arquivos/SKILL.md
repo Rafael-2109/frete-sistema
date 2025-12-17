@@ -16,7 +16,7 @@ Skill para **leitura de arquivos** enviados pelo usuario via upload.
 ### ler.py
 
 ```bash
-source $([ -d venv ] && echo venv || echo .venv)/bin/activate && \
+source .venv/bin/activate && \
 python .claude/skills/lendo-arquivos/scripts/ler.py [opcoes]
 ```
 
@@ -53,7 +53,7 @@ FORMATOS SUPORTADOS
 
 ### Ler arquivo Excel
 ```bash
-source $([ -d venv ] && echo venv || echo .venv)/bin/activate && \
+source .venv/bin/activate && \
 python .claude/skills/lendo-arquivos/scripts/ler.py \
   --url "/agente/api/files/default/abc123_planilha.xlsx"
 ```
