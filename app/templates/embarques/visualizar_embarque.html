@@ -3,6 +3,19 @@
 
 <style>
   /* ======================================================================== */
+  /* THEAD THEME-AWARE                                                        */
+  /* ======================================================================== */
+  .table-thead-theme {
+    background-color: var(--bs-tertiary-bg) !important;
+  }
+  .table-thead-theme th {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+    border-bottom: 2px solid var(--bs-border-color) !important;
+    font-weight: 600;
+  }
+
+  /* ======================================================================== */
   /* CONFIGURAÇÃO DO TAMANHO DAS COLUNAS DOS ITENS DO EMBARQUE               */
   /* Ajuste os valores abaixo para alterar a largura das colunas             */
   /* ======================================================================== */
@@ -26,8 +39,8 @@
   
   .itens-embarque-table th:nth-child(4),  /* Protocolo */
   .itens-embarque-table td:nth-child(4) {
-    width: 10%;
-    min-width: 100px;
+    width: 12%;
+    min-width: 130px;
   }
   
   .itens-embarque-table th:nth-child(5),  /* Agendamento (Data + Confirmação) */
@@ -56,8 +69,9 @@
 
   .itens-embarque-table th:nth-child(9),  /* Status/Ações */
   .itens-embarque-table td:nth-child(9) {
-    width: 16%;
-    min-width: 150px;
+    width: 18%;
+    min-width: 180px;
+    white-space: nowrap;
   }
   
   /* Configurações gerais da tabela */
@@ -118,22 +132,22 @@
   }
 
   /* ======================================================================== */
-  /* ESTILOS ESPECÍFICOS PARA ITENS CANCELADOS                               */
+  /* ESTILOS ESPECÍFICOS PARA ITENS CANCELADOS - Theme-aware                 */
   /* ======================================================================== */
-  
+
   /* Linha cancelada - fundo vermelho claro e borda vermelha */
   .table-danger {
-    background-color: #f8d7da !important;
-    border: 2px solid #dc3545 !important;
+    background-color: rgba(var(--bs-danger-rgb), 0.15) !important;
+    border: 2px solid var(--bs-danger) !important;
   }
-  
+
   /* Inputs desabilitados em itens cancelados */
-  .table-danger input, 
-  .table-danger select, 
+  .table-danger input,
+  .table-danger select,
   .table-danger textarea {
-    background-color: #f5c6cb !important;
-    border-color: #dc3545 !important;
-    color: #721c24 !important;
+    background-color: rgba(var(--bs-danger-rgb), 0.2) !important;
+    border-color: var(--bs-danger) !important;
+    color: var(--bs-danger) !important;
     pointer-events: none;
   }
   
@@ -176,11 +190,11 @@
   }
 
   .status-acoes-container .print-icon-inline.printed {
-    color: #28a745;
+    color: var(--bs-success);
   }
 
   .status-acoes-container .print-icon-inline.not-printed {
-    color: #dee2e6;
+    color: var(--bs-border-color);
     opacity: 0.5;
   }
   
@@ -227,7 +241,7 @@
     .agendamento-badge::after {
       content: '✓';
       font-size: 14px !important;
-      color: #28a745 !important;
+      color: var(--bs-success) !important;
       font-weight: bold;
     }
 
@@ -448,7 +462,7 @@
       <!-- ============================================================ -->
       <div class="table-responsive">
         <table class="table table-striped table-bordered itens-embarque-table">
-            <thead class="table-dark">
+            <thead class="table-thead-theme">
               <tr>
                 <th>Cliente</th>
                 <th>Pedido</th>

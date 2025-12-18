@@ -16,7 +16,7 @@
     <!-- Estatísticas de Estoque -->
     <div class="row mb-4">
         <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
-            <div class="card bg-info text-white">
+            <div class="card stat-card">
                 <div class="card-body">
                     <div class="d-flex justify-content-between">
                         <div>
@@ -32,7 +32,7 @@
         </div>
 
         <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
-            <div class="card bg-success text-white">
+            <div class="card stat-card stat-card-success">
                 <div class="card-body">
                     <div class="d-flex justify-content-between">
                         <div>
@@ -48,7 +48,7 @@
         </div>
 
         <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
-            <div class="card bg-warning text-dark">
+            <div class="card stat-card stat-card-danger">
                 <div class="card-body">
                     <div class="d-flex justify-content-between">
                         <div>
@@ -64,7 +64,7 @@
         </div>
 
         <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
-            <div class="card bg-primary text-white">
+            <div class="card stat-card">
                 <div class="card-body">
                     <div class="d-flex justify-content-between">
                         <div>
@@ -80,7 +80,7 @@
         </div>
 
         <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
-            <div class="card bg-secondary text-white">
+            <div class="card stat-card">
                 <div class="card-body">
                     <div class="d-flex justify-content-between">
                         <div>
@@ -96,7 +96,7 @@
         </div>
 
         <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
-            <div class="card bg-dark text-white">
+            <div class="card stat-card">
                 <div class="card-body">
                     <div class="d-flex justify-content-between">
                         <div>
@@ -117,44 +117,44 @@
         <div class="col-12">
             <h4><i class="fas fa-bolt"></i> Ações Rápidas</h4>
         </div>
-        
+
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('estoque.listar_movimentacoes') }}" class="btn btn-info btn-lg btn-block">
+            <a href="{{ url_for('estoque.listar_movimentacoes') }}" class="btn btn-action btn-lg btn-block">
                 <i class="fas fa-list"></i><br>
                 Movimentações<br>de Estoque
             </a>
         </div>
-        
+
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('estoque.importar_movimentacoes') }}" class="btn btn-primary btn-lg btn-block">
+            <a href="{{ url_for('estoque.importar_movimentacoes') }}" class="btn btn-action btn-lg btn-block">
                 <i class="fas fa-file-excel"></i><br>
                 Importar<br>Movimentações
             </a>
         </div>
-        
+
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('estoque.listar_unificacao_codigos') }}" class="btn btn-success btn-lg btn-block">
+            <a href="{{ url_for('estoque.listar_unificacao_codigos') }}" class="btn btn-action btn-lg btn-block">
                 <i class="fas fa-link"></i><br>
                 Unificação<br>de Códigos
             </a>
         </div>
-        
+
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('estoque.saldo_estoque') }}" class="btn btn-success btn-lg btn-block text-white">
+            <a href="{{ url_for('estoque.saldo_estoque') }}" class="btn btn-action btn-lg btn-block">
                 <i class="fas fa-chart-line"></i><br>
                 Saldo de<br>Estoque
             </a>
         </div>
-        
+
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('estoque.baixar_modelo_movimentacoes') }}" class="btn btn-secondary btn-lg btn-block">
+            <a href="{{ url_for('estoque.baixar_modelo_movimentacoes') }}" class="btn btn-action btn-lg btn-block">
                 <i class="fas fa-download"></i><br>
                 Baixar<br>Modelo
             </a>
         </div>
-        
+
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('carteira.index') }}" class="btn btn-outline-dark btn-lg btn-block">
+            <a href="{{ url_for('carteira.index') }}" class="btn btn-action btn-lg btn-block">
                 <i class="fas fa-arrow-left"></i><br>
                 Voltar<br>Carteira
             </a>

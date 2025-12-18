@@ -165,31 +165,23 @@
                                     </td>
                                     <td>
                                         {% if frete.numero_cte %}
-                                        <span class="badge bg-success"
-                                            style="color: white; background-color: #28a745;">{{ frete.numero_cte
-                                            }}</span>
+                                        <span class="badge bg-success">{{ frete.numero_cte }}</span>
                                         {% else %}
-                                        <span class="badge bg-warning"
-                                            style="color: #212529; background-color: #ffc107;">Pendente</span>
+                                        <span class="badge bg-warning">Pendente</span>
                                         {% endif %}
                                     </td>
                                     <td>{{ (frete.valor_cotado)|moeda_carteira }}</td>
                                     <td>
                                         {% if frete.status == 'PENDENTE' %}
-                                        <span class="badge bg-warning"
-                                            style="color: #212529; background-color: #ffc107;">{{ frete.status }}</span>
+                                        <span class="badge bg-warning">{{ frete.status }}</span>
                                         {% elif frete.status == 'EM_TRATATIVA' %}
-                                        <span class="badge bg-info" style="color: white; background-color: #17a2b8;">EM
-                                            TRATATIVA</span>
+                                        <span class="badge bg-info">EM TRATATIVA</span>
                                         {% elif frete.status == 'APROVADO' %}
-                                        <span class="badge bg-success"
-                                            style="color: white; background-color: #28a745;">{{ frete.status }}</span>
+                                        <span class="badge bg-success">{{ frete.status }}</span>
                                         {% elif frete.status == 'LANCADO' %}
-                                        <span class="badge bg-dark" style="color: white; background-color: #343a40;">{{
-                                            frete.status }}</span>
+                                        <span class="badge bg-dark">{{ frete.status }}</span>
                                         {% else %}
-                                        <span class="badge bg-secondary"
-                                            style="color: white; background-color: #6c757d;">{{ frete.status }}</span>
+                                        <span class="badge bg-secondary">{{ frete.status }}</span>
                                         {% endif %}
                                     </td>
                                     <td>

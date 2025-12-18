@@ -68,14 +68,11 @@
                             <td><strong>Status:</strong></td>
                             <td>
                                 {% if fatura.status_conferencia == 'CONFERIDO' %}
-                                <span class="badge bg-success"
-                                    style="color: white; background-color: #28a745;">CONFERIDO</span>
+                                <span class="badge bg-success">CONFERIDO</span>
                                 {% elif fatura.status_conferencia == 'EM_CONFERENCIA' %}
-                                <span class="badge bg-warning" style="color: #212529; background-color: #ffc107;">EM
-                                    CONFERÊNCIA</span>
+                                <span class="badge bg-warning">EM CONFERÊNCIA</span>
                                 {% else %}
-                                <span class="badge bg-secondary"
-                                    style="color: white; background-color: #6c757d;">PENDENTE</span>
+                                <span class="badge bg-secondary">PENDENTE</span>
                                 {% endif %}
                             </td>
                         </tr>
@@ -187,11 +184,10 @@
                             </td>
                             <td>
                                 {% if frete.numeros_nfs %}
-                                <span class="badge bg-info" style="color: white; background-color: #17a2b8;"
-                                    title="NFs deste frete">
+                                <span class="badge bg-info" title="NFs deste frete">
                                     {{ frete.quantidade_nfs or 0 }} NF(s)
                                 </span>
-                                <br><small class="text-muted" style="word-break: break-all;">
+                                <br><small class="text-muted">
                                     {{ frete.numeros_nfs[:50] }}{% if frete.numeros_nfs|length > 50 %}...{% endif %}
                                 </small>
                                 {% else %}
@@ -204,14 +200,11 @@
                             <td><strong>{{ (frete.valor_pago or 0)|moeda_carteira }}</strong></td>
                             <td>
                                 {% if frete.status == 'APROVADO' %}
-                                <span class="badge bg-success" style="color: white; background-color: #28a745;">{{
-                                    frete.status }}</span>
+                                <span class="badge bg-success">{{ frete.status }}</span>
                                 {% elif frete.status == 'PENDENTE' %}
-                                <span class="badge bg-warning" style="color: #212529; background-color: #ffc107;">{{
-                                    frete.status }}</span>
+                                <span class="badge bg-warning">{{ frete.status }}</span>
                                 {% else %}
-                                <span class="badge bg-secondary" style="color: white; background-color: #6c757d;">{{
-                                    frete.status }}</span>
+                                <span class="badge bg-secondary">{{ frete.status }}</span>
                                 {% endif %}
                             </td>
                             <td>
@@ -257,9 +250,7 @@
                         <tr>
                             <td><strong>#{{ despesa.id }}</strong></td>
                             <td>
-                                <span class="badge bg-info" style="color: white; background-color: #17a2b8;">
-                                    {{ despesa.tipo_despesa }}
-                                </span>
+                                <span class="badge bg-info">{{ despesa.tipo_despesa }}</span>
                             </td>
                             <td>
                                 <a href="{{ url_for('fretes.visualizar_frete', frete_id=despesa.frete.id) }}">
@@ -272,11 +263,10 @@
                             </td>
                             <td>
                                 {% if despesa.frete.numeros_nfs %}
-                                <span class="badge bg-secondary" style="color: white; background-color: #6c757d;"
-                                    title="NFs do frete relacionado">
+                                <span class="badge bg-secondary" title="NFs do frete relacionado">
                                     {{ despesa.frete.quantidade_nfs or 0 }} NF(s)
                                 </span>
-                                <br><small class="text-muted" style="word-break: break-all;">
+                                <br><small class="text-muted">
                                     {{ despesa.frete.numeros_nfs[:30] }}{% if despesa.frete.numeros_nfs|length > 30
                                     %}...{% endif %}
                                 </small>

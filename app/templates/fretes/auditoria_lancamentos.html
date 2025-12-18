@@ -91,7 +91,7 @@
     <!-- Estatísticas rápidas -->
     <div class="row mb-4">
         <div class="col-md-3">
-            <div class="card bg-light">
+            <div class="card stat-card">
                 <div class="card-body text-center">
                     <h5 class="text-muted mb-1">Total</h5>
                     <h3 class="mb-0">{{ total }}</h3>
@@ -99,7 +99,7 @@
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card bg-success text-white">
+            <div class="card stat-card stat-card-success">
                 <div class="card-body text-center">
                     <h5 class="mb-1">Sucesso</h5>
                     <h3 class="mb-0">{{ lancamentos | selectattr('status', 'equalto', 'SUCESSO') | list | length }}</h3>
@@ -107,7 +107,7 @@
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card bg-danger text-white">
+            <div class="card stat-card stat-card-danger">
                 <div class="card-body text-center">
                     <h5 class="mb-1">Com Erro</h5>
                     <h3 class="mb-0">{{ lancamentos | selectattr('status', 'equalto', 'ERRO') | list | length }}</h3>
@@ -115,7 +115,7 @@
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card bg-warning">
+            <div class="card stat-card">
                 <div class="card-body text-center">
                     <h5 class="mb-1">Incompleto</h5>
                     <h3 class="mb-0">{{ lancamentos | selectattr('status', 'equalto', 'INCOMPLETO') | list | length }}</h3>

@@ -3,11 +3,14 @@
     "allow": [
       "Bash(python3:*)",
       "Bash(source:*)",
-      "Bash(python /home/rafaelnascimento/projetos/frete_sistema/.claude/skills/consultando-odoo/scripts/consultando_desconhecidas.py:*)",
       "Bash(python /home/rafaelnascimento/projetos/frete_sistema/.claude/skills/descobrindo-odoo-estrutura/scripts/descobrindo.py:*)",
-      "Bash(python /home/rafaelnascimento/projetos/frete_sistema/.claude/skills/consultando-odoo-compras/scripts/consulta.py:*)",
-      "Bash(python /home/rafaelnascimento/projetos/frete_sistema/.claude/skills/consultando-odoo-produtos/scripts/consulta.py:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(tree:*)",
+      "Bash(grep:*)",
+      "Bash(wc:*)",
+      "Bash(find:*)",
+      "Bash(cut:*)",
+      "Bash(xargs -I {} sh -c 'echo \"\"\"\"$(grep -co ''''style=\"\"\"\"[^\"\"\"\"]*\"\"\"\"'''' {}) {}\"\"\"\"')"
     ],
     "deny": []
   },

@@ -1,9 +1,13 @@
 /**
- * 🎨 ANIMAÇÕES FLUIDAS PARA SEPARAÇÕES
- * Estilos para melhorar a experiência do usuário
+ * ANIMACOES FLUIDAS PARA SEPARACOES
+ * Estilos para melhorar a experiencia do usuario
+ *
+ * MOVIDO DE: app/templates/carteira/css/separacao-animations.css
+ * PARA: app/static/css/modules/carteira/separacao-animations.css
+ * DATA: 2025-12-17
  */
 
-/* ✨ Animação de criação de separação */
+/* Animacao de criacao de separacao */
 .separacao-criada-animation {
     animation: sucessoPulse 0.5s ease-in-out;
     background: linear-gradient(45deg, rgba(40, 167, 69, 0.1) 0%, transparent 100%) !important;
@@ -24,7 +28,7 @@
     }
 }
 
-/* 🔄 Animação de transformação */
+/* Animacao de transformacao */
 .transformacao-sucesso-animation {
     animation: transformarCard 0.8s ease-in-out;
 }
@@ -43,7 +47,7 @@
     }
 }
 
-/* 💫 Animação de pulse para contadores */
+/* Animacao de pulse para contadores */
 .pulse-animation {
     animation: pulseNumber 0.5s ease-in-out;
 }
@@ -64,7 +68,7 @@
     }
 }
 
-/* 🗑️ Animação de exclusão */
+/* Animacao de exclusao */
 .excluindo-animation {
     animation: slideOutLeft 0.5s ease-out forwards;
 }
@@ -80,7 +84,7 @@
     }
 }
 
-/* 📦 Card de pré-separação/separação */
+/* Card de pre-separacao/separacao */
 .card-lote,
 .card-separacao {
     transition: all 0.3s ease;
@@ -92,7 +96,7 @@
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
 }
 
-/* 🔘 Botões com loading */
+/* Botoes com loading */
 .btn-loading {
     position: relative;
     pointer-events: none;
@@ -119,7 +123,7 @@
     }
 }
 
-/* 🎯 Badge de status com transição */
+/* Badge de status com transicao */
 .badge-status {
     transition: all 0.3s ease;
 }
@@ -137,7 +141,7 @@
     }
 }
 
-/* 📊 Workspace vazio */
+/* Workspace vazio */
 .workspace-vazio {
     animation: fadeIn 0.5s ease-in;
 }
@@ -153,32 +157,32 @@
     }
 }
 
-/* 🌟 Efeito de sucesso no card */
+/* Efeito de sucesso no card */
 .success-glow {
     box-shadow: 0 0 20px rgba(40, 167, 69, 0.3) !important;
     border: 1px solid rgba(40, 167, 69, 0.5) !important;
 }
 
-/* ⚠️ Efeito de aviso no card */
+/* Efeito de aviso no card */
 .warning-glow {
     box-shadow: 0 0 20px rgba(255, 193, 7, 0.3) !important;
     border: 1px solid rgba(255, 193, 7, 0.5) !important;
 }
 
-/* ❌ Efeito de erro no card */
+/* Efeito de erro no card */
 .error-glow {
     box-shadow: 0 0 20px rgba(220, 53, 69, 0.3) !important;
     border: 1px solid rgba(220, 53, 69, 0.5) !important;
 }
 
-/* 🔄 Transições suaves para todos os cards */
+/* Transicoes suaves para todos os cards */
 [data-pedido],
 [data-lote-id],
 [data-separacao-id] {
     transition: all 0.3s ease;
 }
 
-/* 📱 Responsividade */
+/* Responsividade */
 @media (max-width: 768px) {
     @keyframes slideOutLeft {
         0% {
@@ -192,7 +196,7 @@
     }
 }
 
-/* 🎨 Melhorias visuais gerais */
+/* Melhorias visuais gerais */
 .btn {
     transition: all 0.2s ease;
 }
@@ -206,7 +210,7 @@
     opacity: 0.6;
 }
 
-/* ✨ Efeito de hover nos cards */
+/* Efeito de hover nos cards */
 .card {
     transition: all 0.2s ease;
 }
@@ -215,7 +219,7 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-/* 🔔 Notificação inline */
+/* Notificacao inline */
 .notification-inline {
     animation: slideInRight 0.3s ease-out;
     position: fixed;

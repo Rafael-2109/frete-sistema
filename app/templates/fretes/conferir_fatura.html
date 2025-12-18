@@ -43,9 +43,9 @@
                 <div class="col-md-3">
                     <strong>Status:</strong><br>
                     {% if fatura.status_conferencia == 'CONFERIDO' %}
-                    <span class="badge bg-success" style="color: white; background-color: #28a745;">CONFERIDO</span>
+                    <span class="badge bg-success">CONFERIDO</span>
                     {% else %}
-                    <span class="badge bg-warning" style="color: black; background-color: #ffc107;">PENDENTE</span>
+                    <span class="badge badge-pendente">PENDENTE</span>
                     {% endif %}
                 </div>
             </div>
@@ -87,18 +87,18 @@
                 <div class="col-md-6">
                     <h6>Diferença Fatura vs CTe:</h6>
                     {% if analise_valores.fatura_dentro_tolerancia %}
-                    <span class="badge bg-success badge-lg" style="color: white; background-color: #28a745;">
+                    <span class="badge bg-success badge-lg">
                         {{ (analise_valores.diferenca_fatura_cte)|moeda_carteira }} (Dentro da tolerância ≤ R$ 1,00)
                     </span>
                     {% else %}
-                    <span class="badge bg-danger badge-lg" style="color: white; background-color: #dc3545;">
+                    <span class="badge bg-danger badge-lg">
                         {{ (analise_valores.diferenca_fatura_cte)|moeda_carteira }} (Acima da tolerância > R$ 1,00)
                     </span>
                     {% endif %}
                 </div>
                 <div class="col-md-6">
-                    <strong style="color: black;">Diferença Considerado vs Pago:</strong><br>
-                    <span class="h5" style="color: black;">{{
+                    <strong>Diferença Considerado vs Pago:</strong><br>
+                    <span class="h5">{{
                         (analise_valores.diferenca_considerado_pago)|moeda_carteira }}</span>
                 </div>
             </div>
@@ -130,11 +130,9 @@
                         <tr>
                             <td>
                                 {% if doc.tipo == 'CTe' %}
-                                <span class="badge bg-primary"
-                                    style="color: white; background-color: #007bff;">CTe</span>
+                                <span class="badge bg-primary">CTe</span>
                                 {% else %}
-                                <span class="badge bg-secondary"
-                                    style="color: white; background-color: #6c757d;">Despesa</span>
+                                <span class="badge bg-secondary">Despesa</span>
                                 {% endif %}
                             </td>
                             <td>
@@ -151,14 +149,11 @@
                             </td>
                             <td class="text-center">
                                 {% if doc.status == 'LANÇADO' %}
-                                <span class="badge bg-success"
-                                    style="color: white; background-color: #28a745;">LANÇADO</span>
+                                <span class="badge bg-success">LANÇADO</span>
                                 {% elif doc.status == 'APROVADO' %}
-                                <span class="badge bg-success"
-                                    style="color: white; background-color: #28a745;">APROVADO</span>
+                                <span class="badge bg-success">APROVADO</span>
                                 {% else %}
-                                <span class="badge bg-danger"
-                                    style="color: white; background-color: #dc3545;">PENDENTE</span>
+                                <span class="badge bg-danger">PENDENTE</span>
                                 {% endif %}
                             </td>
                             <td>
@@ -196,21 +191,17 @@
                 <div class="col-md-6">
                     <h6>1. Status dos Documentos:</h6>
                     {% if todos_aprovados %}
-                    <span class="badge bg-success" style="color: white; background-color: #28a745;">✅ Todos os
-                        documentos estão APROVADOS/LANÇADOS</span>
+                    <span class="badge bg-success">✅ Todos os documentos estão APROVADOS/LANÇADOS</span>
                     {% else %}
-                    <span class="badge bg-danger" style="color: white; background-color: #dc3545;">❌ Há documentos
-                        PENDENTES</span>
+                    <span class="badge bg-danger">❌ Há documentos PENDENTES</span>
                     {% endif %}
                 </div>
                 <div class="col-md-6">
                     <h6>2. Tolerância de Valores:</h6>
                     {% if analise_valores.fatura_dentro_tolerancia %}
-                    <span class="badge bg-success" style="color: white; background-color: #28a745;">✅ Diferença dentro
-                        da tolerância (≤ R$ 1,00)</span>
+                    <span class="badge bg-success">✅ Diferença dentro da tolerância (≤ R$ 1,00)</span>
                     {% else %}
-                    <span class="badge bg-danger" style="color: white; background-color: #dc3545;">❌ Diferença acima da
-                        tolerância (> R$ 1,00)</span>
+                    <span class="badge bg-danger">❌ Diferença acima da tolerância (> R$ 1,00)</span>
                     {% endif %}
                 </div>
             </div>

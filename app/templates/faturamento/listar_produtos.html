@@ -134,7 +134,7 @@
     {% if produtos %}
     <div class="row mb-4">
         <div class="col-md-2">
-            <div class="card bg-primary text-white">
+            <div class="card stat-card">
                 <div class="card-body text-center">
                     <h4>{{ total_registros_filtrados }}</h4>
                     <small>Registros Encontrados</small>
@@ -142,7 +142,7 @@
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card bg-success text-white">
+            <div class="card stat-card stat-card-success">
                 <div class="card-body text-center">
                     <h4>{{ total_valor_faturado | valor_br }}</h4>
                     <small>Valor Total Faturado</small>
@@ -150,7 +150,7 @@
             </div>
         </div>
         <div class="col-md-2">
-            <div class="card bg-warning text-dark">
+            <div class="card stat-card">
                 <div class="card-body text-center">
                     <h4>{{ total_quantidade | numero_br }}</h4>
                     <small>Quantidade Total</small>
@@ -158,7 +158,7 @@
             </div>
         </div>
         <div class="col-md-2">
-            <div class="card bg-success text-white">
+            <div class="card stat-card stat-card-success">
                 <div class="card-body text-center">
                     <h4>{{ "%.2f"|format(total_peso) }} kg</h4>
                     <small>Peso Total</small>
@@ -166,7 +166,7 @@
             </div>
         </div>
         <div class="col-md-2">
-            <div class="card bg-info text-white">
+            <div class="card stat-card">
                 <div class="card-body text-center">
                     <h4>{{ produtos_unicos }}</h4>
                     <small>Produtos Únicos</small>

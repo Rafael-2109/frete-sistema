@@ -23,7 +23,7 @@
     <!-- Resumo -->
     <div class="row mb-3">
         <div class="col-md-3">
-            <div class="card bg-primary text-white">
+            <div class="card stat-card">
                 <div class="card-body">
                     <h6>Total Geral</h6>
                     <h3>R$ {{ total_geral|valor_br }}</h3>
@@ -31,7 +31,7 @@
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card bg-success text-white">
+            <div class="card stat-card stat-card-success">
                 <div class="card-body">
                     <h6>Total Pago</h6>
                     <h3>R$ {{ total_pago|valor_br }}</h3>
@@ -39,7 +39,7 @@
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card bg-warning text-white">
+            <div class="card stat-card">
                 <div class="card-body">
                     <h6>Saldo Aberto</h6>
                     <h3>R$ {{ total_aberto|valor_br }}</h3>
@@ -47,7 +47,7 @@
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card bg-info text-white">
+            <div class="card stat-card">
                 <div class="card-body">
                     <h6>Total Despesas</h6>
                     <h3>{{ despesas|length }}</h3>

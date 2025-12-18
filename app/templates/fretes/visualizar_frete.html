@@ -261,11 +261,9 @@
                             </p>
                             <p><strong>Tipo de Carga:</strong>
                                 {% if frete.tipo_carga == 'DIRETA' %}
-                                <span class="badge bg-info" style="color: white; background-color: #17a2b8;">{{
-                                    frete.tipo_carga }}</span>
+                                <span class="badge bg-info">{{ frete.tipo_carga }}</span>
                                 {% else %}
-                                <span class="badge bg-warning" style="color: #212529; background-color: #ffc107;">{{
-                                    frete.tipo_carga }}</span>
+                                <span class="badge bg-warning">{{ frete.tipo_carga }}</span>
                                 {% endif %}
                             </p>
                             <p><strong>Modalidade:</strong> {{ frete.modalidade }}</p>
@@ -318,8 +316,7 @@
                         {% set nfs_list = frete.numeros_nfs.split(',') %}
                         {% for nf in nfs_list %}
                         {% if nf.strip() %}
-                        <span class="badge bg-primary mr-1 mb-1" style="color: white; background-color: #007bff;">{{
-                            nf.strip() }}</span>
+                        <span class="badge bg-primary mr-1 mb-1">{{ nf.strip() }}</span>
                         {% endif %}
                         {% endfor %}
                         {% else %}
@@ -439,9 +436,9 @@
                                    target="_blank">
                                     <i class="fas fa-external-link-alt me-1"></i>
                                     CTe {{ cte.numero_cte }}{% if cte.serie_cte %}/{{ cte.serie_cte }}{% endif %}
-                                    <span class="badge bg-info ms-1" style="color: white;">{{ (cte.valor_total or 0)|moeda_carteira }}</span>
+                                    <span class="badge bg-info ms-1">{{ (cte.valor_total or 0)|moeda_carteira }}</span>
                                     {% if cte.odoo_status_descricao %}
-                                    <span class="badge bg-{% if cte.odoo_status_codigo == '06' %}success{% elif cte.odoo_status_codigo == '01' %}secondary{% else %}warning{% endif %} ms-1" style="color: white;">
+                                    <span class="badge bg-{% if cte.odoo_status_codigo == '06' %}success{% elif cte.odoo_status_codigo == '01' %}secondary{% else %}warning{% endif %} ms-1">
                                         {{ cte.odoo_status_descricao }}
                                     </span>
                                     {% endif %}
@@ -529,11 +526,9 @@
                         {% if diferenca_cte != 0 %}
                         <div class="mt-1">
                             {% if diferenca_cte > 0 %}
-                            <span class="badge bg-danger" style="color: white; background-color: #dc3545;">+{{
-                                (diferenca_cte)|moeda_carteira }}</span>
+                            <span class="badge bg-danger">+{{ (diferenca_cte)|moeda_carteira }}</span>
                             {% else %}
-                            <span class="badge bg-success" style="color: white; background-color: #28a745;">{{
-                                (diferenca_cte)|moeda_carteira }}</span>
+                            <span class="badge bg-success">{{ (diferenca_cte)|moeda_carteira }}</span>
                             {% endif %}
                             <small class="text-muted d-block">
                                 {% if diferenca_cte > 0 %}Acima{% else %}Abaixo{% endif %} do cotado
@@ -543,8 +538,7 @@
                         {% set classificacao_cte = frete.classificacao_valor_cte_cotado() %}
                         {% if classificacao_cte %}
                         <div class="mt-1">
-                            <small class="badge bg-info" style="color: white; background-color: #17a2b8;">{{
-                                classificacao_cte }}</small>
+                            <small class="badge bg-info">{{ classificacao_cte }}</small>
                         </div>
                         {% endif %}
                         {% endif %}
@@ -569,11 +563,9 @@
                         {% if diferenca_pago != 0 %}
                         <div class="mt-1">
                             {% if diferenca_pago > 0 %}
-                            <span class="badge bg-warning" style="color: #212529; background-color: #ffc107;">+{{
-                                (diferenca_pago)|moeda_carteira }}</span>
+                            <span class="badge bg-warning">+{{ (diferenca_pago)|moeda_carteira }}</span>
                             {% else %}
-                            <span class="badge bg-info" style="color: white; background-color: #17a2b8;">{{
-                                (diferenca_pago)|moeda_carteira }}</span>
+                            <span class="badge bg-info">{{ (diferenca_pago)|moeda_carteira }}</span>
                             {% endif %}
                             <small class="text-muted d-block">
                                 Diferença para conta corrente
@@ -584,14 +576,11 @@
                         {% if classificacao_pago %}
                         <div class="mt-1">
                             {% if 'abaixo' in classificacao_pago %}
-                            <small class="badge bg-success" style="color: white; background-color: #28a745;">{{
-                                classificacao_pago }}</small>
+                            <small class="badge bg-success">{{ classificacao_pago }}</small>
                             {% elif 'deve' in classificacao_pago %}
-                            <small class="badge bg-warning" style="color: #212529; background-color: #ffc107;">{{
-                                classificacao_pago }}</small>
+                            <small class="badge bg-warning">{{ classificacao_pago }}</small>
                             {% else %}
-                            <small class="badge bg-secondary" style="color: white; background-color: #6c757d;">{{
-                                classificacao_pago }}</small>
+                            <small class="badge bg-secondary">{{ classificacao_pago }}</small>
                             {% endif %}
                         </div>
                         {% endif %}
@@ -1059,30 +1048,22 @@
                                 <tr>
                                     <td>
                                         {% if mov.tipo_movimentacao == 'CREDITO' %}
-                                        <span class="badge bg-success"
-                                            style="color: white; background-color: #28a745;">{{ mov.tipo_movimentacao
-                                            }}</span>
+                                        <span class="badge bg-success">{{ mov.tipo_movimentacao }}</span>
                                         {% elif mov.tipo_movimentacao == 'DEBITO' %}
-                                        <span class="badge bg-danger"
-                                            style="color: white; background-color: #dc3545;">{{ mov.tipo_movimentacao
-                                            }}</span>
+                                        <span class="badge bg-danger">{{ mov.tipo_movimentacao }}</span>
                                         {% else %}
-                                        <span class="badge bg-info" style="color: white; background-color: #17a2b8;">{{
-                                            mov.tipo_movimentacao }}</span>
+                                        <span class="badge bg-info">{{ mov.tipo_movimentacao }}</span>
                                         {% endif %}
                                     </td>
                                     <td>{{ mov.descricao }}</td>
                                     <td>{{ (mov.valor_diferenca)|moeda_carteira }}</td>
                                     <td>
                                         {% if mov.status == 'ATIVO' %}
-                                        <span class="badge bg-warning"
-                                            style="color: #212529; background-color: #ffc107;">{{ mov.status }}</span>
+                                        <span class="badge bg-warning">{{ mov.status }}</span>
                                         {% elif mov.status == 'COMPENSADO' %}
-                                        <span class="badge bg-success"
-                                            style="color: white; background-color: #28a745;">{{ mov.status }}</span>
+                                        <span class="badge bg-success">{{ mov.status }}</span>
                                         {% else %}
-                                        <span class="badge bg-secondary"
-                                            style="color: white; background-color: #6c757d;">{{ mov.status }}</span>
+                                        <span class="badge bg-secondary">{{ mov.status }}</span>
                                         {% endif %}
                                     </td>
                                     <td>{{ mov.criado_em | formatar_data_hora_brasil }}</td>

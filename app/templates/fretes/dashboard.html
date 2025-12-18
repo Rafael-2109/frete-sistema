@@ -3,108 +3,7 @@
 {% block title %}Sistema de Fretes - Dashboard{% endblock %}
 
 {% block extra_css %}
-<style>
-/* ==========================================================================
-   FRETES DASHBOARD - Theme-aware Status Badges
-   ========================================================================== */
-
-/* Badge base com variáveis de cor */
-.badge-status {
-    font-size: 0.75rem;
-    font-weight: 600;
-    padding: 0.35em 0.65em;
-    border-radius: 0.375rem;
-}
-
-/* Status: PENDENTE - Amarelo */
-.badge-status-pendente {
-    background-color: var(--bs-warning) !important;
-    color: #ffffff !important;
-}
-
-/* Status: EM_TRATATIVA - Info/Cyan */
-.badge-status-tratativa {
-    background-color: var(--bs-info) !important;
-    color: #fff !important;
-}
-
-/* Status: APROVADO - Verde */
-.badge-status-aprovado {
-    background-color: var(--bs-success) !important;
-    color: #fff !important;
-}
-
-/* Status: REJEITADO - Vermelho */
-.badge-status-rejeitado {
-    background-color: var(--bs-danger) !important;
-    color: #fff !important;
-}
-
-/* Status: PAGO - Primário */
-.badge-status-pago {
-    background-color: var(--bs-primary) !important;
-    color: #0a1628 !important;
-}
-
-/* Status: LANCADO - Escuro com suporte a tema */
-.badge-status-lancado {
-    background-color: var(--bs-tertiary-bg) !important;
-    color: var(--bs-body-color) !important;
-    border: 1px solid var(--bs-border-color);
-}
-
-/* Status: CANCELADO - Secundário */
-.badge-status-cancelado {
-    background-color: var(--bs-secondary) !important;
-    color: #fff !important;
-}
-
-/* ==========================================================================
-   BOTÕES - Theme-aware fixes
-   ========================================================================== */
-
-/* btn-dark no dark mode precisa de borda para visibilidade */
-[data-bs-theme="dark"] .btn-dark,
-[data-theme="dark"] .btn-dark {
-    background-color: var(--bs-tertiary-bg) !important;
-    border-color: var(--bs-border-color) !important;
-    color: var(--bs-body-color) !important;
-}
-
-[data-bs-theme="dark"] .btn-dark:hover,
-[data-theme="dark"] .btn-dark:hover {
-    background-color: var(--bs-secondary-bg) !important;
-    border-color: var(--bs-primary) !important;
-    color: var(--bs-primary) !important;
-}
-
-/* ==========================================================================
-   THEAD - Theme-aware
-   ========================================================================== */
-.table-thead-theme {
-    background-color: var(--bs-tertiary-bg) !important;
-}
-
-.table-thead-theme th {
-    background-color: var(--bs-tertiary-bg) !important;
-    color: var(--bs-body-color) !important;
-    border-bottom: 2px solid var(--bs-border-color) !important;
-    font-weight: 600;
-}
-
-/* ==========================================================================
-   CARD HEADER - Theme-aware
-   ========================================================================== */
-.card-header-theme {
-    background-color: var(--bs-tertiary-bg) !important;
-    color: var(--bs-body-color) !important;
-    border-bottom: 1px solid var(--bs-border-color) !important;
-}
-
-.card-header-theme .card-title {
-    color: var(--bs-body-color) !important;
-}
-</style>
+<!-- CSS centralizado em _variables.css e bootstrap-overrides.css -->
 {% endblock %}
 
 {% block content %}
@@ -120,7 +19,7 @@
     <!-- Estatísticas gerais -->
     <div class="row mb-4">
         <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
-            <div class="card bg-primary text-white">
+            <div class="card stat-card">
                 <div class="card-body">
                     <div class="d-flex justify-content-between">
                         <div>
@@ -137,7 +36,7 @@
 
         <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
             <a href="{{ url_for('cte.listar_ctes') }}" class="text-decoration-none">
-                <div class="card bg-info text-white">
+                <div class="card stat-card">
                     <div class="card-body">
                         <div class="d-flex justify-content-between">
                             <div>
@@ -154,7 +53,7 @@
         </div>
 
         <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
-            <div class="card bg-warning text-dark">
+            <div class="card stat-card">
                 <div class="card-body">
                     <div class="d-flex justify-content-between">
                         <div>
@@ -170,7 +69,7 @@
         </div>
 
         <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
-            <div class="card bg-info text-white">
+            <div class="card stat-card">
                 <div class="card-body">
                     <div class="d-flex justify-content-between">
                         <div>
@@ -186,7 +85,7 @@
         </div>
 
         <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
-            <div class="card bg-secondary text-white">
+            <div class="card stat-card">
                 <div class="card-body">
                     <div class="d-flex justify-content-between">
                         <div>
@@ -202,7 +101,7 @@
         </div>
 
         <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
-            <div class="card {% if fretes_sem_nfs > 0 %}bg-danger{% else %}bg-success{% endif %} text-white">
+            <div class="card stat-card {% if fretes_sem_nfs > 0 %}stat-card-danger{% else %}stat-card-success{% endif %}">
                 <div class="card-body">
                     <div class="d-flex justify-content-between">
                         <div>
@@ -224,61 +123,61 @@
             <h4>Ações Rápidas</h4>
         </div>
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('fretes.lancar_cte') }}" class="btn btn-success btn-lg btn-block">
+            <a href="{{ url_for('fretes.lancar_cte') }}" class="btn btn-action btn-lg btn-block">
                 <i class="fas fa-plus"></i><br>
                 Lançar CTe
             </a>
         </div>
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('fretes.listar_fretes') }}" class="btn btn-primary btn-lg btn-block">
+            <a href="{{ url_for('fretes.listar_fretes') }}" class="btn btn-action btn-lg btn-block">
                 <i class="fas fa-list"></i><br>
                 Listar Fretes
             </a>
         </div>
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('fretes.listar_aprovacoes') }}" class="btn btn-warning btn-lg btn-block text-dark">
+            <a href="{{ url_for('fretes.listar_aprovacoes') }}" class="btn btn-action btn-lg btn-block">
                 <i class="fas fa-check"></i><br>
                 Aprovações
             </a>
         </div>
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('fretes.listar_faturas') }}" class="btn btn-info btn-lg btn-block">
+            <a href="{{ url_for('fretes.listar_faturas') }}" class="btn btn-action btn-lg btn-block">
                 <i class="fas fa-file-pdf"></i><br>
                 Faturas
             </a>
         </div>
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('fretes.nova_despesa_extra_por_nf') }}" class="btn btn-warning btn-lg btn-block text-dark">
+            <a href="{{ url_for('fretes.nova_despesa_extra_por_nf') }}" class="btn btn-action btn-lg btn-block">
                 <i class="fas fa-plus-circle"></i><br>
                 Nova Despesa
             </a>
         </div>
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('fretes.gerenciar_despesas_extras') }}" class="btn btn-secondary btn-lg btn-block">
+            <a href="{{ url_for('fretes.gerenciar_despesas_extras') }}" class="btn btn-action btn-lg btn-block">
                 <i class="fas fa-cogs"></i><br>
                 Gerenciar Despesas
             </a>
         </div>
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('fretes.listar_contas_correntes') }}" class="btn btn-dark btn-lg btn-block">
+            <a href="{{ url_for('fretes.listar_contas_correntes') }}" class="btn btn-action btn-lg btn-block">
                 <i class="fas fa-balance-scale"></i><br>
                 Contas Correntes
             </a>
         </div>
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('fretes.lancamento_freteiros') }}" class="btn btn-primary btn-lg btn-block">
+            <a href="{{ url_for('fretes.lancamento_freteiros') }}" class="btn btn-action btn-lg btn-block">
                 <i class="fas fa-truck"></i><br>
                 Lançamento Freteiros
             </a>
         </div>
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('fretes.analises') }}" class="btn btn-info btn-lg btn-block">
+            <a href="{{ url_for('fretes.analises') }}" class="btn btn-action btn-lg btn-block">
                 <i class="fas fa-chart-bar"></i><br>
                 Análises
             </a>
         </div>
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('fretes.auditoria_lancamentos') }}" class="btn btn-outline-secondary btn-lg btn-block">
+            <a href="{{ url_for('fretes.auditoria_lancamentos') }}" class="btn btn-action btn-lg btn-block">
                 <i class="fas fa-clipboard-check"></i><br>
                 Auditoria Odoo
             </a>
@@ -286,8 +185,8 @@
 
         {% if fretes_sem_nfs > 0 %}
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('fretes.corrigir_nfs_fretes') }}" 
-               class="btn btn-danger btn-lg btn-block"
+            <a href="{{ url_for('fretes.corrigir_nfs_fretes') }}"
+               class="btn btn-action btn-action-danger btn-lg btn-block"
                onclick="return confirm('Deseja corrigir {{ fretes_sem_nfs }} frete(s) que não possuem NFs preenchidas?')">
                 <i class="fas fa-tools"></i><br>
                 Corrigir NFs

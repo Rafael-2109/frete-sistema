@@ -1,10 +1,14 @@
 /* ==========================================================================
    WORKSPACE DE MONTAGEM DE CARGA - Com Suporte a Dark/Light Mode
-   Usa CSS Variables do bootstrap-overrides.css e agrupados.css
+   Usa CSS Variables do bootstrap-overrides.css via _variables.css
+
+   MOVIDO DE: app/templates/carteira/css/workspace-montagem.css
+   PARA: app/static/css/modules/carteira/workspace-montagem.css
+   DATA: 2025-12-17
    ========================================================================== */
 
 /* ==========================================================================
-   CSS VARIABLES - Cores específicas do workspace
+   CSS VARIABLES - Cores especificas do workspace
    ========================================================================== */
 :root {
     --ws-header-bg: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
@@ -353,14 +357,14 @@
    STAT-CARD - Melhoria de legibilidade no Dark Mode
    ========================================================================== */
 
-/* Texto muted mais visível no dark mode */
+/* Texto muted mais visivel no dark mode */
 [data-bs-theme="dark"] .cardex-resumo-visual .stat-card .text-muted,
 [data-theme="dark"] .cardex-resumo-visual .stat-card .text-muted {
     color: var(--bs-secondary-color) !important;
     opacity: 0.9;
 }
 
-/* Cores semânticas mais vibrantes no dark mode para melhor contraste */
+/* Cores semanticas mais vibrantes no dark mode para melhor contraste */
 [data-bs-theme="dark"] .cardex-resumo-visual .stat-card .text-success,
 [data-theme="dark"] .cardex-resumo-visual .stat-card .text-success {
     color: #4ade80 !important; /* Verde mais brilhante */
@@ -381,7 +385,7 @@
     color: #f87171 !important; /* Vermelho mais brilhante */
 }
 
-/* Fundos bg-opacity-10 mais visíveis no dark mode */
+/* Fundos bg-opacity-10 mais visiveis no dark mode */
 [data-bs-theme="dark"] .cardex-resumo-visual .stat-card.bg-success,
 [data-theme="dark"] .cardex-resumo-visual .stat-card.bg-success {
     background-color: rgba(74, 222, 128, 0.15) !important;

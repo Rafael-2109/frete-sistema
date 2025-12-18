@@ -16,7 +16,7 @@
     <!-- Estatísticas de Produção -->
     <div class="row mb-4">
         <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
-            <div class="card bg-success text-white">
+            <div class="card stat-card stat-card-success">
                 <div class="card-body">
                     <div class="d-flex justify-content-between">
                         <div>
@@ -32,7 +32,7 @@
         </div>
 
         <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
-            <div class="card bg-primary text-white">
+            <div class="card stat-card">
                 <div class="card-body">
                     <div class="d-flex justify-content-between">
                         <div>
@@ -48,7 +48,7 @@
         </div>
 
         <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
-            <div class="card bg-warning text-dark">
+            <div class="card stat-card">
                 <div class="card-body">
                     <div class="d-flex justify-content-between">
                         <div>
@@ -64,7 +64,7 @@
         </div>
 
         <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
-            <div class="card bg-info text-white">
+            <div class="card stat-card">
                 <div class="card-body">
                     <div class="d-flex justify-content-between">
                         <div>
@@ -80,7 +80,7 @@
         </div>
 
         <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
-            <div class="card bg-secondary text-white">
+            <div class="card stat-card">
                 <div class="card-body">
                     <div class="d-flex justify-content-between">
                         <div>
@@ -96,7 +96,7 @@
         </div>
 
         <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
-            <div class="card bg-dark text-white">
+            <div class="card stat-card">
                 <div class="card-body">
                     <div class="d-flex justify-content-between">
                         <div>
@@ -119,42 +119,42 @@
         </div>
 
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('producao.listar_programacao') }}" class="btn btn-success btn-lg btn-block">
+            <a href="{{ url_for('producao.listar_programacao') }}" class="btn btn-action btn-lg btn-block">
                 <i class="fas fa-list"></i><br>
                 Programação<br>de Produção
             </a>
         </div>
 
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('producao.listar_palletizacao') }}" class="btn btn-warning btn-lg btn-block text-dark">
+            <a href="{{ url_for('producao.listar_palletizacao') }}" class="btn btn-action btn-lg btn-block">
                 <i class="fas fa-weight-hanging"></i><br>
                 Cadastro<br>Palletização
             </a>
         </div>
 
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('producao.importar_programacao') }}" class="btn btn-primary btn-lg btn-block">
+            <a href="{{ url_for('producao.importar_programacao') }}" class="btn btn-action btn-lg btn-block">
                 <i class="fas fa-file-excel"></i><br>
                 Importar<br>Programação
             </a>
         </div>
 
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('producao.importar_palletizacao') }}" class="btn btn-info btn-lg btn-block">
+            <a href="{{ url_for('producao.importar_palletizacao') }}" class="btn btn-action btn-lg btn-block">
                 <i class="fas fa-file-excel"></i><br>
                 Importar<br>Palletização
             </a>
         </div>
 
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="#" onclick="exportarRelatoriosProducao()" class="btn btn-secondary btn-lg btn-block">
+            <a href="#" onclick="exportarRelatoriosProducao()" class="btn btn-action btn-lg btn-block">
                 <i class="fas fa-chart-bar"></i><br>
                 Relatórios<br>Produção
             </a>
         </div>
 
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('carteira.index') }}" class="btn btn-outline-dark btn-lg btn-block">
+            <a href="{{ url_for('carteira.index') }}" class="btn btn-action btn-lg btn-block">
                 <i class="fas fa-arrow-left"></i><br>
                 Voltar<br>Carteira
             </a>

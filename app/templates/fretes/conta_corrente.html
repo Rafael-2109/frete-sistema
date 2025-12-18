@@ -15,7 +15,7 @@
     <!-- Resumo dos saldos -->
     <div class="row mb-4">
         <div class="col-md-4">
-            <div class="card bg-danger text-white">
+            <div class="card stat-card stat-card-danger">
                 <div class="card-body">
                     <div class="d-flex justify-content-between">
                         <div>
@@ -33,7 +33,7 @@
         </div>
 
         <div class="col-md-4">
-            <div class="card bg-success text-white">
+            <div class="card stat-card stat-card-success">
                 <div class="card-body">
                     <div class="d-flex justify-content-between">
                         <div>
@@ -51,7 +51,7 @@
         </div>
 
         <div class="col-md-4">
-            <div class="card bg-{% if saldo_atual > 0 %}success{% elif saldo_atual < 0 %}danger{% else %}secondary{% endif %} text-white">
+            <div class="card stat-card {% if saldo_atual > 0 %}stat-card-success{% elif saldo_atual < 0 %}stat-card-danger{% endif %}">
                 <div class="card-body">
                     <div class="d-flex justify-content-between">
                         <div>

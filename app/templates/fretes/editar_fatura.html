@@ -90,38 +90,31 @@
                     <h6><i class="fas fa-info-circle"></i> Status Atual da Fatura</h6>
                     <div class="row">
                         <div class="col-md-3">
-                            <strong style="color: black;">Status Conferência:</strong><br>
+                            <strong>Status Conferência:</strong><br>
                             {% if fatura.status_conferencia == 'CONFERIDO' %}
-                            <span class="badge bg-success"
-                                style="color: white; background-color: #28a745;">CONFERIDO</span>
+                            <span class="badge bg-success">CONFERIDO</span>
                             {% elif fatura.status_conferencia == 'EM_CONFERENCIA' %}
-                            <span class="badge bg-warning" style="color: #212529; background-color: #ffc107;">EM
-                                CONFERÊNCIA</span>
+                            <span class="badge bg-warning">EM CONFERÊNCIA</span>
                             {% else %}
-                            <span class="badge bg-secondary"
-                                style="color: white; background-color: #6c757d;">PENDENTE</span>
+                            <span class="badge bg-secondary">PENDENTE</span>
                             {% endif %}
                         </div>
                         <div class="col-md-3">
-                            <strong style="color: black;">Fretes Vinculados:</strong><br>
-                            <span class="badge bg-primary" style="color: white; background-color: #007bff;">{{
-                                fatura.total_fretes() }} frete(s)</span>
+                            <strong>Fretes Vinculados:</strong><br>
+                            <span class="badge bg-primary">{{ fatura.total_fretes() }} frete(s)</span>
                             {% if fatura.total_despesas_extras() > 0 %}
-                            <br><span class="badge bg-warning" style="color: #212529; background-color: #ffc107;">{{
-                                fatura.total_despesas_extras() }} despesa(s)</span>
+                            <br><span class="badge bg-warning">{{ fatura.total_despesas_extras() }} despesa(s)</span>
                             {% endif %}
                         </div>
                         <div class="col-md-3">
-                            <strong style="color: black;">Valores:</strong><br>
-                            <small style="color: black;">Fretes: {{ (fatura.valor_total_fretes()|moeda_carteira)
-                                }}</small>
+                            <strong>Valores:</strong><br>
+                            <small>Fretes: {{ (fatura.valor_total_fretes()|moeda_carteira) }}</small>
                             {% if fatura.total_despesas_extras() > 0 %}
-                            <br><small style="color: black;">Despesas: {{
-                                (fatura.valor_total_despesas_extras()|moeda_carteira) }}</small>
+                            <br><small>Despesas: {{ (fatura.valor_total_despesas_extras()|moeda_carteira) }}</small>
                             {% endif %}
                         </div>
                         <div class="col-md-3">
-                            <strong style="color: black;">Anexo:</strong><br>
+                            <strong>Anexo:</strong><br>
                             {% if fatura.arquivo_pdf %}
                             <a href="{{ url_for('fretes.download_pdf_fatura', fatura_id=fatura.id) }}" target="_blank"
                                 class="btn btn-sm btn-outline-primary" title="Visualizar Anexo">
@@ -172,14 +165,11 @@
                             <td>{{ (frete.valor_cte or 0)|moeda_carteira }}</td>
                             <td>
                                 {% if frete.status == 'CONFERIDO' %}
-                                <span class="badge bg-success" style="color: white; background-color: #28a745;">{{
-                                    frete.status }}</span>
+                                <span class="badge bg-success">{{ frete.status }}</span>
                                 {% elif frete.status == 'LANCADO' %}
-                                <span class="badge bg-primary" style="color: white; background-color: #007bff;">{{
-                                    frete.status }}</span>
+                                <span class="badge bg-primary">{{ frete.status }}</span>
                                 {% else %}
-                                <span class="badge bg-secondary" style="color: white; background-color: #6c757d;">{{
-                                    frete.status }}</span>
+                                <span class="badge bg-secondary">{{ frete.status }}</span>
                                 {% endif %}
                             </td>
                         </tr>
@@ -216,9 +206,7 @@
                         <tr>
                             <td><strong>#{{ despesa.id }}</strong></td>
                             <td>
-                                <span class="badge bg-info" style="color: white; background-color: #17a2b8;">
-                                    {{ despesa.tipo_despesa }}
-                                </span>
+                                <span class="badge bg-info">{{ despesa.tipo_despesa }}</span>
                             </td>
                             <td>
                                 <a href="{{ url_for('fretes.visualizar_frete', frete_id=despesa.frete.id) }}">

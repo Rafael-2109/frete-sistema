@@ -1,0 +1,474 @@
+/* ==========================================================================
+   CSS VARIABLES - Fonte Unica de Verdade para Cores e Tokens
+   Sistema: Frete Sistema - Nacom Goya
+
+   IMPORTANTE: Este arquivo centraliza TODAS as variaveis CSS do sistema.
+   Qualquer alteracao de cor deve ser feita AQUI, nao em outros arquivos.
+
+   Carregamento: Importado por bootstrap-overrides.css (primeiro arquivo CSS)
+   ========================================================================== */
+
+/* ==========================================================================
+   LIGHT MODE (Default)
+   Seletores: :root, [data-bs-theme="light"], [data-theme="light"]
+   ========================================================================== */
+
+:root,
+[data-bs-theme="light"],
+[data-theme="light"] {
+    /* ===== CORES PRIMARIAS ===== */
+
+    /* Primary - Financial Teal (NOT Bootstrap blue #0d6efd) */
+    --bs-primary: #009d80;
+    --bs-primary-rgb: 0, 157, 128;
+
+    /* Secondary - Slate Gray */
+    --bs-secondary: #64748b;
+    --bs-secondary-rgb: 100, 116, 139;
+
+    /* Success - Emerald (NOT Bootstrap green #198754) */
+    --bs-success: #0d7d5f;
+    --bs-success-rgb: 13, 125, 95;
+
+    /* Warning - Amber (escuro para contraste com texto branco) */
+    --bs-warning: #b45309;
+    --bs-warning-rgb: 180, 83, 9;
+
+    /* Danger - Red */
+    --bs-danger: #dc2626;
+    --bs-danger-rgb: 220, 38, 38;
+
+    /* Info - Sky Blue */
+    --bs-info: #0284c7;
+    --bs-info-rgb: 2, 132, 199;
+
+    /* ===== BACKGROUNDS ===== */
+
+    --bs-body-bg: #ffffff;
+    --bs-secondary-bg: #f6f8fa;
+    --bs-tertiary-bg: #eaeef2;
+    --bs-card-bg: #ffffff;
+
+    /* ===== TEXTO ===== */
+
+    --bs-body-color: #1f2328;
+    --bs-secondary-color: #6b8aad;
+
+    /* ===== BORDAS ===== */
+
+    --bs-border-color: rgba(31, 35, 40, 0.15);
+    --bs-border-radius: 0.5rem;
+    --bs-border-radius-sm: 0.25rem;
+    --bs-border-radius-lg: 0.75rem;
+
+    /* ===== TIPOGRAFIA ===== */
+
+    --bs-font-sans-serif: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+    --bs-font-monospace: 'JetBrains Mono', 'Fira Code', monospace;
+
+    /* ===== LINKS ===== */
+
+    --bs-link-color: #009d80;
+    --bs-link-hover-color: #007a63;
+
+    /* ===== COLOR SCHEME ===== */
+    color-scheme: light;
+}
+
+/* ==========================================================================
+   DARK MODE
+   Seletores: [data-bs-theme="dark"], [data-theme="dark"]
+   ========================================================================== */
+
+[data-bs-theme="dark"],
+[data-theme="dark"] {
+    /* ===== BACKGROUNDS - Corporate Deep ===== */
+
+    --bs-body-bg: #0a1628;
+    --bs-secondary-bg: #111d2e;
+    --bs-tertiary-bg: #1a2942;
+    --bs-card-bg: #111d2e;
+    --bs-card-border-color: #2d4a6a;
+
+    /* ===== TEXTO ===== */
+
+    --bs-body-color: #f0f6fc;
+    --bs-secondary-color: #8dafd5;
+
+    /* ===== BORDAS ===== */
+
+    --bs-border-color: #2d4a6a;
+
+    /* ===== CORES PRIMARIAS (mais claras para dark mode) ===== */
+
+    /* Primary - Financial Teal (brighter) */
+    --bs-primary: #00d4aa;
+    --bs-primary-rgb: 0, 212, 170;
+
+    /* Success - Emerald (brighter) */
+    --bs-success: #10b981;
+    --bs-success-rgb: 16, 185, 129;
+
+    /* Warning - Amber (mais claro) */
+    --bs-warning: #f59e0b;
+    --bs-warning-rgb: 245, 158, 11;
+
+    /* Danger - Red (mais claro) */
+    --bs-danger: #ef4444;
+    --bs-danger-rgb: 239, 68, 68;
+
+    /* Info - Sky Blue (mais claro) */
+    --bs-info: #0ea5e9;
+    --bs-info-rgb: 14, 165, 233;
+
+    /* ===== LINKS ===== */
+
+    --bs-link-color: #00d4aa;
+    --bs-link-hover-color: #00f5c4;
+
+    /* ===== COLOR SCHEME ===== */
+    color-scheme: dark;
+}
+
+/* ==========================================================================
+   CLASSES UTILITARIAS PARA SUBSTITUIR INLINE STYLES
+   Use estas classes em vez de style="background-color: #xxx"
+   ========================================================================== */
+
+/* ===== STATUS BACKGROUNDS ===== */
+
+.bg-status-success {
+    background-color: var(--bs-success) !important;
+    color: #ffffff !important;
+}
+
+.bg-status-warning {
+    background-color: var(--bs-warning) !important;
+    color: #ffffff !important;
+}
+
+.bg-status-danger {
+    background-color: var(--bs-danger) !important;
+    color: #ffffff !important;
+}
+
+.bg-status-info {
+    background-color: var(--bs-info) !important;
+    color: #ffffff !important;
+}
+
+.bg-status-primary {
+    background-color: var(--bs-primary) !important;
+    color: #ffffff !important;
+}
+
+.bg-status-secondary {
+    background-color: var(--bs-secondary) !important;
+    color: #ffffff !important;
+}
+
+.bg-status-neutral {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+    border: 1px solid var(--bs-border-color);
+}
+
+/* ===== BORDAS COLORIDAS ===== */
+
+.border-primary-custom {
+    border-color: var(--bs-primary) !important;
+}
+
+.border-success-custom {
+    border-color: var(--bs-success) !important;
+}
+
+.border-warning-custom {
+    border-color: var(--bs-warning) !important;
+}
+
+.border-danger-custom {
+    border-color: var(--bs-danger) !important;
+}
+
+.border-info-custom {
+    border-color: var(--bs-info) !important;
+}
+
+/* ===== TEXTOS COLORIDOS ===== */
+
+.text-status-success {
+    color: var(--bs-success) !important;
+}
+
+.text-status-warning {
+    color: var(--bs-warning) !important;
+}
+
+.text-status-danger {
+    color: var(--bs-danger) !important;
+}
+
+.text-status-info {
+    color: var(--bs-info) !important;
+}
+
+.text-status-primary {
+    color: var(--bs-primary) !important;
+}
+
+/* ===== BADGES DE STATUS (semanticos) ===== */
+
+.badge-ativo,
+.badge-status-ativo {
+    background-color: var(--bs-success) !important;
+    color: #ffffff !important;
+}
+
+.badge-inativo,
+.badge-status-inativo {
+    background-color: var(--bs-secondary) !important;
+    color: #ffffff !important;
+}
+
+.badge-pendente,
+.badge-status-pendente {
+    background-color: var(--bs-warning) !important;
+    color: #ffffff !important;
+}
+
+.badge-erro,
+.badge-status-erro {
+    background-color: var(--bs-danger) !important;
+    color: #ffffff !important;
+}
+
+.badge-processando,
+.badge-status-processando {
+    background-color: var(--bs-info) !important;
+    color: #ffffff !important;
+}
+
+/* ===== BADGE WARNING COM TEXTO ESCURO (sempre legível) ===== */
+.badge-warning-contrast {
+    background-color: var(--bs-warning) !important;
+    color: #212529 !important;
+}
+
+.badge-aguardando,
+.badge-status-aguardando {
+    background-color: var(--bs-warning) !important;
+    color: #212529 !important;
+}
+
+.badge-devolucao {
+    background-color: var(--bs-warning) !important;
+    color: #212529 !important;
+}
+
+/* ===== CARD WARNING COM TEXTO AUTO-CONTRASTE ===== */
+/* Em light mode: warning escuro = texto branco */
+/* Em dark mode: warning claro = texto escuro */
+.card.bg-warning {
+    color: #ffffff !important;
+}
+
+.card.bg-warning .card-title,
+.card.bg-warning .card-text,
+.card.bg-warning h4,
+.card.bg-warning h5,
+.card.bg-warning span {
+    color: #ffffff !important;
+}
+
+[data-bs-theme="dark"] .card.bg-warning,
+[data-theme="dark"] .card.bg-warning {
+    color: #212529 !important;
+}
+
+[data-bs-theme="dark"] .card.bg-warning .card-title,
+[data-bs-theme="dark"] .card.bg-warning .card-text,
+[data-bs-theme="dark"] .card.bg-warning h4,
+[data-bs-theme="dark"] .card.bg-warning h5,
+[data-bs-theme="dark"] .card.bg-warning span,
+[data-theme="dark"] .card.bg-warning .card-title,
+[data-theme="dark"] .card.bg-warning .card-text,
+[data-theme="dark"] .card.bg-warning h4,
+[data-theme="dark"] .card.bg-warning h5,
+[data-theme="dark"] .card.bg-warning span {
+    color: #212529 !important;
+}
+
+/* ===== BOTAO WARNING COM TEXTO AUTO-CONTRASTE ===== */
+.btn-warning {
+    color: #ffffff !important;
+}
+
+[data-bs-theme="dark"] .btn-warning,
+[data-theme="dark"] .btn-warning {
+    color: #212529 !important;
+}
+
+/* ===== CARD HEADERS THEME-AWARE ===== */
+.card-header-theme {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+    border-bottom: 1px solid var(--bs-border-color) !important;
+}
+
+/* ===== THEAD THEME-AWARE ===== */
+.table-thead-theme {
+    background-color: var(--bs-tertiary-bg) !important;
+}
+
+.table-thead-theme th {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+    border-bottom: 2px solid var(--bs-border-color) !important;
+    font-weight: 600;
+}
+
+/* ==========================================================================
+   STAT CARDS UNIFICADOS
+   Estilo padronizado para cards de estatísticas em dashboards
+   ========================================================================== */
+
+/* Card de estatística base - neutro com borda lateral */
+.stat-card {
+    background-color: var(--bs-card-bg) !important;
+    border: 1px solid var(--bs-border-color) !important;
+    border-left: 4px solid var(--bs-primary) !important;
+    transition: all 0.2s ease;
+}
+
+.stat-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+}
+
+.stat-card .card-body {
+    color: var(--bs-body-color) !important;
+}
+
+.stat-card h4,
+.stat-card .stat-number {
+    color: var(--bs-body-color) !important;
+    font-weight: 700;
+}
+
+.stat-card .stat-label,
+.stat-card .small {
+    color: var(--bs-secondary-color) !important;
+}
+
+.stat-card .stat-icon,
+.stat-card i.fa-2x {
+    color: var(--bs-primary) !important;
+    opacity: 0.7;
+}
+
+/* Variante: Indicador de alerta (danger) */
+.stat-card.stat-card-danger {
+    border-left-color: var(--bs-danger) !important;
+}
+
+.stat-card.stat-card-danger .stat-icon,
+.stat-card.stat-card-danger i.fa-2x {
+    color: var(--bs-danger) !important;
+}
+
+/* Variante: Indicador de sucesso */
+.stat-card.stat-card-success {
+    border-left-color: var(--bs-success) !important;
+}
+
+.stat-card.stat-card-success .stat-icon,
+.stat-card.stat-card-success i.fa-2x {
+    color: var(--bs-success) !important;
+}
+
+/* Variante: Link clicável */
+a .stat-card,
+.stat-card-link {
+    cursor: pointer;
+}
+
+a .stat-card:hover,
+.stat-card-link:hover {
+    border-left-color: var(--bs-info) !important;
+}
+
+a .stat-card .stat-icon,
+a .stat-card i.fa-2x,
+.stat-card-link .stat-icon,
+.stat-card-link i.fa-2x {
+    color: var(--bs-info) !important;
+}
+
+/* ==========================================================================
+   ACTION BUTTONS UNIFICADOS
+   Botões de ação rápida padronizados para dashboards
+   ========================================================================== */
+
+/* Botão de ação base - outline primary */
+.btn-action {
+    background-color: transparent !important;
+    border: 2px solid var(--bs-primary) !important;
+    color: var(--bs-primary) !important;
+    transition: all 0.2s ease;
+    font-weight: 500;
+}
+
+.btn-action:hover,
+.btn-action:focus {
+    background-color: var(--bs-primary) !important;
+    border-color: var(--bs-primary) !important;
+    color: #ffffff !important;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 157, 128, 0.3);
+}
+
+.btn-action:active {
+    transform: translateY(0);
+}
+
+.btn-action i {
+    opacity: 0.8;
+}
+
+.btn-action:hover i {
+    opacity: 1;
+}
+
+/* Variante: Ação de perigo/destrutiva */
+.btn-action.btn-action-danger {
+    border-color: var(--bs-danger) !important;
+    color: var(--bs-danger) !important;
+}
+
+.btn-action.btn-action-danger:hover,
+.btn-action.btn-action-danger:focus {
+    background-color: var(--bs-danger) !important;
+    border-color: var(--bs-danger) !important;
+    color: #ffffff !important;
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+}
+
+/* ==========================================================================
+   MAPEAMENTO DE CORES BOOTSTRAP ANTIGAS
+   Permite usar cores antigas do Bootstrap que serao convertidas automaticamente
+   ========================================================================== */
+
+/*
+   REFERENCIA DE MAPEAMENTO:
+
+   Bootstrap Antigo    -> Nosso Sistema
+   #0d6efd (blue)      -> var(--bs-primary) #009d80 (teal)
+   #198754 (green)     -> var(--bs-success) #0d7d5f (emerald)
+   #28a745 (green-old) -> var(--bs-success)
+   #ffc107 (yellow)    -> var(--bs-warning) #b45309 (amber)
+   #dc3545 (red)       -> var(--bs-danger) #dc2626 (red)
+   #17a2b8 (cyan)      -> var(--bs-info) #0284c7 (sky)
+   #6c757d (gray)      -> var(--bs-secondary) #64748b (slate)
+   #007bff (blue-old)  -> var(--bs-primary)
+*/

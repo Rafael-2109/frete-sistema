@@ -181,7 +181,7 @@
   {% if registros %}
   <div class="row mb-4">
     <div class="col-md-3">
-      <div class="card bg-primary text-white">
+      <div class="card stat-card">
         <div class="card-body text-center">
           <h5 class="card-title">{{ registros|length }}</h5>
           <p class="card-text">Total de Registros</p>
@@ -189,7 +189,7 @@
       </div>
     </div>
     <div class="col-md-3">
-      <div class="card bg-success text-white">
+      <div class="card stat-card stat-card-success">
         <div class="card-body text-center">
           <h5 class="card-title">{{ registros|selectattr('status', 'equalto', 'SAIU')|list|length }}</h5>
           <p class="card-text">Veículos que Saíram</p>
@@ -197,15 +197,15 @@
       </div>
     </div>
     <div class="col-md-3">
-      <div class="card bg-warning">
+      <div class="card stat-card">
         <div class="card-body text-center">
-          <h5 class="card-title text-dark">{{ registros|selectattr('status', 'equalto', 'DENTRO')|list|length }}</h5>
-          <p class="card-text text-dark">Veículos Dentro</p>
+          <h5 class="card-title">{{ registros|selectattr('status', 'equalto', 'DENTRO')|list|length }}</h5>
+          <p class="card-text">Veículos Dentro</p>
         </div>
       </div>
     </div>
     <div class="col-md-3">
-      <div class="card bg-info text-white">
+      <div class="card stat-card">
         <div class="card-body text-center">
           <h5 class="card-title">{{ registros|selectattr('status', 'equalto', 'AGUARDANDO')|list|length }}</h5>
           <p class="card-text">Aguardando Entrada</p>
@@ -264,10 +264,10 @@
               </td>
               <td>{{ registro.empresa }}</td>
               <td>
-                <span class="badge 
+                <span class="badge
                   {% if registro.tipo_carga == 'Coleta' %}bg-primary
                   {% elif registro.tipo_carga == 'Entrega' %}bg-success
-                  {% elif registro.tipo_carga == 'Devolução' %}bg-warning text-dark
+                  {% elif registro.tipo_carga == 'Devolução' %}badge-devolucao
                   {% else %}bg-info{% endif %}
                 ">
                   {{ registro.tipo_carga }}
@@ -290,10 +290,10 @@
               <td>{{ registro.data_saida | formatar_data_segura if registro.data_saida else '-' }}</td>
               <td>{{ registro.hora_saida | formatar_hora_brasil if registro.hora_saida else '-' }}</td>
               <td>
-                <span class="badge 
+                <span class="badge
                   {% if registro.status == 'SAIU' %}bg-secondary
                   {% elif registro.status == 'DENTRO' %}bg-success
-                  {% elif registro.status == 'AGUARDANDO' %}bg-warning text-dark
+                  {% elif registro.status == 'AGUARDANDO' %}badge-aguardando
                   {% else %}bg-secondary{% endif %}
                 ">
                   {{ registro.status }}

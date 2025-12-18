@@ -176,7 +176,7 @@
                 <div class="card-body">
                     <p><strong>Cliente:</strong> {{ frete.nome_cliente[:35] }}{% if frete.nome_cliente|length > 35
                         %}...{% endif %}</p>
-                    <p><strong>CNPJ:</strong> <span style="color: black;">{{ frete.cnpj_cliente }}</span></p>
+                    <p><strong>CNPJ:</strong> {{ frete.cnpj_cliente }}</p>
                     <p><strong>Embarque:</strong>
                         <a href="{{ url_for('embarques.visualizar_embarque', id=frete.embarque.id) }}">#{{
                             frete.embarque.numero }}</a>
@@ -190,21 +190,13 @@
                     <p><strong>CTe:</strong> <span class="text-muted">Não lançado</span></p>
                     {% endif %}
                     <p><strong>Status:</strong>
-                        <span class="badge 
-                            {% if frete.status == 'APROVADO' %}badge-success{% endif %}
-                            {% if frete.status == 'EM_TRATATIVA' %}badge-warning{% endif %}
-                            {% if frete.status == 'REJEITADO' %}badge-danger{% endif %}
-                            {% if frete.status == 'PAGO' %}badge-primary{% endif %}
-                            {% if frete.status == 'CANCELADO' %}badge-secondary{% endif %}
-                            {% if frete.status == 'LANCADO' %}badge-info{% endif %}
-                            {% if frete.status == 'PENDENTE' %}badge-secondary{% endif %}"
-                            style="{% if frete.status == 'APROVADO' %}color: white; background-color: #28a745;{% endif %}
-                                   {% if frete.status == 'EM_TRATATIVA' %}color: #212529; background-color: #ffc107;{% endif %}
-                                   {% if frete.status == 'REJEITADO' %}color: white; background-color: #dc3545;{% endif %}
-                                   {% if frete.status == 'PAGO' %}color: white; background-color: #007bff;{% endif %}
-                                   {% if frete.status == 'CANCELADO' %}color: white; background-color: #6c757d;{% endif %}
-                                   {% if frete.status == 'LANCADO' %}color: white; background-color: #17a2b8;{% endif %}
-                                   {% if frete.status == 'PENDENTE' %}color: white; background-color: #6c757d;{% endif %}">
+                        <span class="badge
+                            {% if frete.status == 'APROVADO' %}bg-success
+                            {% elif frete.status == 'EM_TRATATIVA' %}bg-warning
+                            {% elif frete.status == 'REJEITADO' %}bg-danger
+                            {% elif frete.status == 'PAGO' %}bg-primary
+                            {% elif frete.status == 'LANCADO' %}bg-info
+                            {% else %}bg-secondary{% endif %}">
                             {{ frete.status }}
                         </span>
                     </p>
@@ -223,7 +215,7 @@
                     {% set nfs_list = frete.numeros_nfs.split(',') %}
                     {% for nf in nfs_list %}
                     {% if nf.strip() %}
-                    <span class="badge bg-primary mr-1 mb-1" style="color: white; background-color: #007bff;">{{
+                    <span class="badge bg-primary mr-1 mb-1">{{
                         nf.strip() }}</span>
                     {% endif %}
                     {% endfor %}

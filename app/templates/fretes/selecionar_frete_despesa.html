@@ -73,9 +73,8 @@
                                             #{{ frete.embarque.numero }}
                                         </a>
                                         <br>
-                                        <small class="text-muted d-block" style="color: black !important;">
-                                            <span class="badge {% if frete.tipo_carga == 'DIRETA' %}badge-info{% else %}badge-warning{% endif %}" 
-                                                  style="color: white; background-color: {% if frete.tipo_carga == 'DIRETA' %}#17a2b8{% else %}#ffc107{% endif %};">
+                                        <small class="d-block">
+                                            <span class="badge {% if frete.tipo_carga == 'DIRETA' %}bg-info{% else %}bg-warning{% endif %}">
                                                 {{ frete.tipo_carga }}
                                             </span>
                                         </small>
@@ -89,20 +88,13 @@
                                         <small class="text-muted">{{ frete.quantidade_nfs }} NF(s)</small>
                                     </td>
                                     <td>
-                                        <span class="badge 
-                                            {% if frete.status == 'APROVADO' %}badge-success
-                                            {% elif frete.status == 'EM_TRATATIVA' %}badge-warning
-                                            {% elif frete.status == 'REJEITADO' %}badge-danger
-                                            {% elif frete.status == 'PAGO' %}badge-primary
-                                            {% elif frete.status == 'CANCELADO' %}badge-secondary
-                                            {% else %}badge-info{% endif %}"
-                                            style="color: white; background-color: 
-                                            {% if frete.status == 'APROVADO' %}#28a745
-                                            {% elif frete.status == 'EM_TRATATIVA' %}#ffc107
-                                            {% elif frete.status == 'REJEITADO' %}#dc3545
-                                            {% elif frete.status == 'PAGO' %}#007bff
-                                            {% elif frete.status == 'CANCELADO' %}#6c757d
-                                            {% else %}#17a2b8{% endif %};">
+                                        <span class="badge
+                                            {% if frete.status == 'APROVADO' %}bg-success
+                                            {% elif frete.status == 'EM_TRATATIVA' %}bg-warning
+                                            {% elif frete.status == 'REJEITADO' %}bg-danger
+                                            {% elif frete.status == 'PAGO' %}bg-primary
+                                            {% elif frete.status == 'CANCELADO' %}bg-secondary
+                                            {% else %}bg-info{% endif %}">
                                             {{ frete.status }}
                                         </span>
                                     </td>
@@ -154,14 +146,13 @@
                 <div class="card-body">
                     {% for frete in fretes %}
                     <div class="mb-3">
-                        <strong style="color: black;">Frete #{{ frete.id }}:</strong>
+                        <strong>Frete #{{ frete.id }}:</strong>
                         <div class="mt-1">
                             {% if frete.numeros_nfs %}
                                 {% set nfs_list = frete.numeros_nfs.split(',') %}
                                 {% for nf in nfs_list %}
                                     {% if nf.strip() %}
-                                        <span class="badge {% if nf.strip() == numero_nf %}badge-warning{% else %}badge-secondary{% endif %} mr-1"
-                                              style="color: white; background-color: {% if nf.strip() == numero_nf %}#ffc107{% else %}#6c757d{% endif %};">
+                                        <span class="badge {% if nf.strip() == numero_nf %}bg-warning{% else %}bg-secondary{% endif %} mr-1">
                                             {{ nf.strip() }}
                                             {% if nf.strip() == numero_nf %}
                                                 <i class="fas fa-search"></i>

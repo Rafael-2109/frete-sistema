@@ -59,14 +59,20 @@
     color: #fff !important;
 }
 
-/* Odoo status badges */
+/* Odoo status badges - Theme-aware */
 .badge-odoo-ok {
     background-color: var(--bs-success) !important;
-    color: #fff !important;
+    color: #ffffff !important;
 }
 
 .badge-odoo-pendente {
     background-color: var(--bs-warning) !important;
+    color: #ffffff !important;
+}
+
+/* Em dark mode, warning é mais claro então texto escuro */
+[data-bs-theme="dark"] .badge-odoo-pendente,
+[data-theme="dark"] .badge-odoo-pendente {
     color: #212529 !important;
 }
 

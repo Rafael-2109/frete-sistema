@@ -121,7 +121,7 @@
     <!-- Estatísticas -->
     <div class="row mb-4">
         <div class="col-md-6">
-            <div class="card bg-warning text-dark">
+            <div class="card stat-card stat-card-danger">
                 <div class="card-body">
                     <div class="d-flex justify-content-between">
                         <div>
@@ -136,7 +136,7 @@
             </div>
         </div>
         <div class="col-md-6">
-            <div class="card bg-success text-white">
+            <div class="card stat-card stat-card-success">
                 <div class="card-body">
                     <div class="d-flex justify-content-between">
                         <div>
@@ -219,8 +219,7 @@
                                     <td>{{ despesa.frete.transportadora.razao_social[:20] }}{% if
                                         despesa.frete.transportadora.razao_social|length > 20 %}...{% endif %}</td>
                                     <td>
-                                        <span class="badge bg-info" style="color: white; background-color: #17a2b8;">{{
-                                            despesa.tipo_despesa }}</span>
+                                        <span class="badge bg-info">{{ despesa.tipo_despesa }}</span>
                                     </td>
                                     <td><strong>{{ (despesa.valor_despesa)|moeda_carteira }}</strong></td>
                                     <td>{{ despesa.vencimento_despesa | formatar_data_segura if
@@ -339,17 +338,14 @@
                                     <td>{{ despesa.frete.transportadora.razao_social[:20] }}{% if
                                         despesa.frete.transportadora.razao_social|length > 20 %}...{% endif %}</td>
                                     <td>
-                                        <span class="badge bg-success"
-                                            style="color: white; background-color: #28a745;">{{ despesa.tipo_despesa
-                                            }}</span>
+                                        <span class="badge bg-success">{{ despesa.tipo_despesa }}</span>
                                     </td>
                                     <td><strong>{{ (despesa.valor_despesa)|moeda_carteira }}</strong></td>
                                     <td>
                                         {% if despesa.observacoes and 'Fatura:' in despesa.observacoes %}
                                         {% set fatura_info =
                                         despesa.observacoes.split('Fatura:')[1].split('|')[0].strip() %}
-                                        <span class="badge bg-primary"
-                                            style="color: white; background-color: #007bff;">{{ fatura_info }}</span>
+                                        <span class="badge bg-primary">{{ fatura_info }}</span>
                                         {% else %}
                                         <span class="text-muted">N/A</span>
                                         {% endif %}

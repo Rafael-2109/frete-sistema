@@ -127,20 +127,15 @@
                             <td>{{ fatura.vencimento | formatar_data_segura if fatura.vencimento else '-' }}</td>
                             <td>
                                 {% if fatura.status_conferencia == 'PENDENTE' %}
-                                <span class="badge bg-warning" style="color: #212529; background-color: #ffc107;">{{
-                                    fatura.status_conferencia }}</span>
+                                <span class="badge bg-warning">{{ fatura.status_conferencia }}</span>
                                 {% elif fatura.status_conferencia == 'CONFERIDO' %}
-                                <span class="badge bg-success" style="color: white; background-color: #28a745;">{{
-                                    fatura.status_conferencia }}</span>
+                                <span class="badge bg-success">{{ fatura.status_conferencia }}</span>
                                 {% else %}
-                                <span class="badge bg-info" style="color: white; background-color: #17a2b8;">{{
-                                    fatura.status_conferencia }}</span>
+                                <span class="badge bg-info">{{ fatura.status_conferencia }}</span>
                                 {% endif %}
                             </td>
                             <td>
-                                <span class="badge bg-primary" style="color: white; background-color: #007bff;">
-                                    {{ fatura.total_fretes() }} frete(s)
-                                </span>
+                                <span class="badge bg-primary">{{ fatura.total_fretes() }} frete(s)</span>
                                 {% if fatura.total_fretes() > 0 %}
                                 <br><small class="text-muted">
                                     {{ (fatura.valor_total_fretes()|moeda_carteira) }}
@@ -148,9 +143,7 @@
                                 {% endif %}
                                 <!-- ✅ DESPESAS EXTRAS USANDO MÉTODOS DO MODEL -->
                                 {% if fatura.total_despesas_extras() > 0 %}
-                                <br><span class="badge bg-warning" style="color: #212529; background-color: #ffc107;">
-                                    {{ fatura.total_despesas_extras() }} despesa(s)
-                                </span>
+                                <br><span class="badge bg-warning">{{ fatura.total_despesas_extras() }} despesa(s)</span>
                                 <br><small class="text-muted">
                                     {{ (fatura.valor_total_despesas_extras()|moeda_carteira) }}
                                 </small>
@@ -210,8 +203,7 @@
 
                                     {% elif fatura.status_conferencia == 'CONFERIDO' %}
                                     <!-- Fatura Conferida - Botões disponíveis -->
-                                    <span class="badge bg-success mb-1"
-                                        style="color: white; background-color: #28a745;">
+                                    <span class="badge bg-success mb-1">
                                         <i class="fas fa-lock"></i> CONFERIDA
                                     </span>
                                     <a href="{{ url_for('fretes.conferir_fatura', fatura_id=fatura.id) }}"

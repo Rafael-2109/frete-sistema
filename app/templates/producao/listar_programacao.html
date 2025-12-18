@@ -97,7 +97,7 @@
     {% if programacao %}
     <div class="row mb-4">
         <div class="col-md-3">
-            <div class="card bg-primary text-white">
+            <div class="card stat-card">
                 <div class="card-body text-center">
                     <h4>{{ programacao|length }}</h4>
                     <small>Registros Encontrados</small>
@@ -105,7 +105,7 @@
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card bg-success text-white">
+            <div class="card stat-card stat-card-success">
                 <div class="card-body text-center">
                     <h4>{{ total_quantidade | numero_br }}</h4>
                     <small>Quantidade Total</small>
@@ -113,7 +113,7 @@
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card bg-info text-white">
+            <div class="card stat-card">
                 <div class="card-body text-center">
                     <h4>{{ produtos_unicos }}</h4>
                     <small>Produtos Únicos</small>
@@ -121,7 +121,7 @@
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card bg-warning text-dark">
+            <div class="card stat-card">
                 <div class="card-body text-center">
                     <h4>{{ linhas_unicas }}</h4>
                     <small>Linhas Únicas</small>

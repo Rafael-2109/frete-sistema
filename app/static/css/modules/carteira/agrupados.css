@@ -1,10 +1,14 @@
 /* ==========================================================================
    CARTEIRA AGRUPADA - Estilos com Suporte a Dark/Light Mode
-   Usa CSS Variables do bootstrap-overrides.css
+   Usa CSS Variables do bootstrap-overrides.css via _variables.css
+
+   MOVIDO DE: app/templates/carteira/css/agrupados.css
+   PARA: app/static/css/modules/carteira/agrupados.css
+   DATA: 2025-12-17
    ========================================================================== */
 
 /* ==========================================================================
-   CSS VARIABLES - Cores específicas da carteira
+   CSS VARIABLES - Cores especificas da carteira
    ========================================================================== */
 :root {
     /* Badge filter colors */
@@ -106,7 +110,7 @@
     border-radius: 0.375rem;
 }
 
-/* IMPORTANTE: Reset da cor branca padrão do Bootstrap .badge */
+/* IMPORTANTE: Reset da cor branca padrao do Bootstrap .badge */
 /* Usando alta especificidade para garantir override */
 .badge.bg-filtro.badge-filtro {
     color: var(--bs-body-color) !important;
@@ -130,7 +134,7 @@
 }
 
 /* ==========================================================================
-   BADGES DE AGENDAMENTO - Classes específicas
+   BADGES DE AGENDAMENTO - Classes especificas
    Alta especificidade para sobrescrever Bootstrap
    ========================================================================== */
 .badge.bg-filtro.badge-filtro.badge-agendamento-sem {
@@ -175,7 +179,7 @@
 }
 
 /* ==========================================================================
-   BADGES DE ATENDIMENTO - Classes específicas
+   BADGES DE ATENDIMENTO - Classes especificas
    Alta especificidade para sobrescrever Bootstrap
    ========================================================================== */
 .badge.bg-filtro.badge-filtro.badge-atendimento-programar {
@@ -210,7 +214,7 @@
 }
 
 /* ==========================================================================
-   BADGES DE CLIENTES - Classes específicas
+   BADGES DE CLIENTES - Classes especificas
    Alta especificidade para sobrescrever Bootstrap
    ========================================================================== */
 .badge.bg-filtro.badge-filtro.badge-cliente-atacadao {
@@ -245,7 +249,7 @@
 }
 
 /* ==========================================================================
-   BADGES DE ROTAS - Classes específicas
+   BADGES DE ROTAS - Classes especificas
    Alta especificidade para sobrescrever Bootstrap
    ========================================================================== */
 .badge.bg-filtro.badge-filtro.badge-rota {
@@ -270,7 +274,7 @@
 }
 
 /* ==========================================================================
-   BADGES DE INCOTERMS - Classes específicas
+   BADGES DE INCOTERMS - Classes especificas
    ========================================================================== */
 .badge-incoterm {
     font-weight: 600;
@@ -774,7 +778,7 @@
     background-color: var(--bs-body-bg) !important;
 }
 
-/* Thead da tabela de separações */
+/* Thead da tabela de separacoes */
 .separacoes-compactas-table thead,
 .table-separacoes-compactas thead {
     background-color: var(--bs-tertiary-bg) !important;
@@ -803,7 +807,7 @@
     background-color: var(--cart-hover-bg);
 }
 
-/* Observação com ellipsis */
+/* Observacao com ellipsis */
 .obs-ellipsis {
     cursor: help;
     display: inline-block;
@@ -850,9 +854,9 @@
 /* ==========================================================================
    UTILITARIOS DE TEXTO COM TEMA
    ========================================================================== */
-/* .text-dark já tratado no bootstrap-overrides.css */
+/* .text-dark ja tratado no bootstrap-overrides.css */
 
-/* Classes de cores semânticas que respeitam o tema */
+/* Classes de cores semanticas que respeitam o tema */
 .text-primary-theme {
     color: var(--bs-primary) !important;
 }
@@ -910,7 +914,7 @@
 
 /* ==========================================================================
    TABLE-SUCCESS - Hover corrigido para Dark Mode
-   Linha de pedido com separação completa
+   Linha de pedido com separacao completa
    ========================================================================== */
 /* Light mode: verde claro */
 .table-success,
@@ -922,7 +926,7 @@ tr.table-success > td,
     --bs-table-hover-bg: rgba(25, 135, 84, 0.2);
 }
 
-/* Dark mode: verde mais visível - background base */
+/* Dark mode: verde mais visivel - background base */
 [data-bs-theme="dark"] .table-success,
 [data-bs-theme="dark"] tr.table-success,
 [data-bs-theme="dark"] tr.table-success > td,
@@ -940,7 +944,7 @@ tr.table-success > td,
     color: var(--bs-body-color) !important;
 }
 
-/* Dark mode: hover mais intenso - verde médio */
+/* Dark mode: hover mais intenso - verde medio */
 [data-bs-theme="dark"] .table-hover > tbody > tr.table-success:hover,
 [data-bs-theme="dark"] .table-hover > tbody > tr.table-success:hover > td,
 [data-bs-theme="dark"] .table-hover > tbody > .pedido-row.table-success:hover,
@@ -970,7 +974,7 @@ tr.table-success > td,
 }
 
 /* ==========================================================================
-   INDICADOR DE PROGRESSO - Análise de Ruptura
+   INDICADOR DE PROGRESSO - Analise de Ruptura
    ========================================================================== */
 .ruptura-progresso-indicator {
     position: fixed;
@@ -1061,9 +1065,9 @@ tr.table-success > td,
 }
 
 /* ==========================================================================
-   MODAL RUPTURA - Botões no Header
+   MODAL RUPTURA - Botoes no Header
    ========================================================================== */
-/* Botões outline dentro de headers coloridos precisam de maior contraste */
+/* Botoes outline dentro de headers coloridos precisam de maior contraste */
 #modalRuptura .modal-header .btn-group .btn-outline-danger,
 #modalRuptura .modal-header .btn-group .btn-outline-success,
 #modalRuptura .modal-header .btn-group .btn-outline-primary {
@@ -1118,7 +1122,7 @@ tr.table-success > td,
 
 /* ==========================================================================
    TABLE-SECONDARY - Dark Mode Fix
-   Linhas separadoras "Itens com Ruptura" / "Itens Disponíveis"
+   Linhas separadoras "Itens com Ruptura" / "Itens Disponiveis"
    ========================================================================== */
 [data-bs-theme="dark"] .table-secondary,
 [data-bs-theme="dark"] tr.table-secondary,
@@ -1133,7 +1137,7 @@ tr.table-success > td,
     border-color: var(--bs-border-color) !important;
 }
 
-/* Modal Ruptura específico - linhas de separação */
+/* Modal Ruptura especifico - linhas de separacao */
 [data-bs-theme="dark"] #modalRuptura .table-secondary td,
 [data-theme="dark"] #modalRuptura .table-secondary td {
     background-color: var(--bs-secondary-bg) !important;
@@ -1181,7 +1185,7 @@ tr.table-success > td,
     color: var(--bs-body-color) !important;
 }
 
-/* Card headers com cores específicas - manter cores mas garantir legibilidade */
+/* Card headers com cores especificas - manter cores mas garantir legibilidade */
 [data-bs-theme="dark"] .modal .card-header.bg-info,
 [data-bs-theme="dark"] .modal .card-header.bg-success,
 [data-bs-theme="dark"] .modal .card-header.bg-warning,
@@ -1291,7 +1295,7 @@ tr.table-success > td,
 }
 
 /* ==========================================================================
-   MODAIS DE COMPARAÇÃO SENDAS - Específicos
+   MODAIS DE COMPARACAO SENDAS - Especificos
    ========================================================================== */
 /* Lista de CNPJs */
 [data-bs-theme="dark"] #lista-cnpjs-lote .card,
