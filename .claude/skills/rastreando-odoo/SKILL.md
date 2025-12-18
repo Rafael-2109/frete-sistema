@@ -70,12 +70,16 @@ python .claude/skills/rastreando-odoo/scripts/normalizar.py "VCD123" --detectar
 | Padrao | Tipo | Exemplo |
 |--------|------|---------|
 | 44 digitos | `chave_nfe` | 35251218467441000163... |
-| PO + numeros | `po` | PO00123 |
+| PO/C + numeros | `po` | PO00123, C2513147 |
 | VCD/VFB/VSC + numeros | `so` | VCD789 |
 | NF/NFe + numeros | `nf_numero` | NF 12345 |
 | numero/serie | `nf_serie` | 12345/1 |
 | 8-14 digitos | `cnpj` | 18467441000123 |
 | Texto livre | `parceiro` | Atacadao |
+
+**Formatos de PO aceitos:**
+- `PO00123` - Formato padrao Odoo
+- `C2513147` - Formato alternativo (prefixo C + numero)
 
 ### [rastrear.py](scripts/rastrear.py)
 
@@ -158,6 +162,67 @@ Para detalhes dos relacionamentos entre tabelas Odoo, consultar [relacionamentos
 | VCD | Centro de Distribuicao |
 | VFB | Filial FB |
 | VSC | Filial SC |
+
+## Glossario de Modelos
+
+| Modelo Odoo | Nome Amigavel | Descricao |
+|-------------|---------------|-----------|
+| `l10n_br_ciel_it_account.dfe` | DFE | Documento Fiscal Eletronico (NF-e, CT-e) |
+| `purchase.order` | PO | Pedido de Compra |
+| `purchase.requisition` | Requisicao | Requisicao de Compra |
+| `sale.order` | SO | Pedido de Venda |
+| `account.move` | Fatura/Invoice | Fatura (compra ou venda) |
+| `account.move.line` | Linha Fatura | Linha de fatura ou titulo |
+| `stock.picking` | Picking | Transferencia de estoque |
+| `res.partner` | Parceiro | Cliente ou Fornecedor |
+
+## Campos de Impostos (DFE)
+
+| Campo | Descricao |
+|-------|-----------|
+| `nfe_infnfe_total_icmstot_vnf` | Valor Total NF |
+| `nfe_infnfe_total_icmstot_vicms` | Valor ICMS |
+| `nfe_infnfe_total_icmstot_vbcicms` | Base Calculo ICMS |
+| `nfe_infnfe_total_icmstot_vpis` | Valor PIS |
+| `nfe_infnfe_total_icmstot_vcofins` | Valor COFINS |
+| `nfe_infnfe_total_icmstot_vprod` | Valor Produtos/Servicos |
+
+## Troubleshooting
+
+### Busca nao encontra o PO
+
+**Problema**: Buscar "C2513147" retorna "parceiro" em vez de "po"
+
+**Solucao**: Verificar se o pattern aceita o formato. Formatos aceitos:
+- `PO00123` - Padrao Odoo
+- `C2513147` - Formato alternativo
+
+### Busca inversa: Fatura para DFE
+
+**Problema**: Tenho a Invoice e preciso do DFE vinculado
+
+**Solucao**: Usar busca por `invoice_ids`:
+```python
+# Buscar DFE vinculado a Invoice 426987
+dfes = odoo.search_read('l10n_br_ciel_it_account.dfe',
+    [('invoice_ids', 'in', [426987])],
+    fields=['id', 'protnfe_infnfe_chnfe', 'nfe_infnfe_ide_nnf'])
+```
+
+### Modelo DFE nao encontrado
+
+**Problema**: Tentei buscar em `l10n_br_fiscal.document` sem sucesso
+
+**Solucao**: O modelo correto eh `l10n_br_ciel_it_account.dfe`
+
+### Campos de impostos nao aparecem
+
+**Problema**: Campos como `vicms`, `vpis` nao retornam valores
+
+**Solucao**: Usar nomes completos dos campos:
+- `nfe_infnfe_total_icmstot_vicms` (ICMS)
+- `nfe_infnfe_total_icmstot_vpis` (PIS)
+- `nfe_infnfe_total_icmstot_vcofins` (COFINS)
 
 ## Skills Relacionadas
 

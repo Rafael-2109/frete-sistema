@@ -38,6 +38,12 @@ CAMPOS = {
         'nfe_infnfe_ide_finnfe', 'nfe_infnfe_ide_dhemi', 'nfe_infnfe_emit_cnpj',
         'nfe_infnfe_emit_xnome', 'nfe_infnfe_dest_cnpj', 'nfe_infnfe_total_icmstot_vnf',
         'l10n_br_status', 'is_cte', 'purchase_id', 'invoice_ids',
+        # Campos de impostos (CTe/NF-e)
+        'nfe_infnfe_total_icmstot_vicms',   # Valor ICMS
+        'nfe_infnfe_total_icmstot_vbcicms', # Base ICMS
+        'nfe_infnfe_total_icmstot_vpis',    # Valor PIS
+        'nfe_infnfe_total_icmstot_vcofins', # Valor COFINS
+        'nfe_infnfe_total_icmstot_vprod',   # Valor Produtos/Servicos
     ],
     'purchase_requisition': [
         'id', 'name', 'state', 'ordering_date', 'purchase_ids',

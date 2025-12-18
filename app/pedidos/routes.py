@@ -1678,17 +1678,24 @@ def cotacao_manual():
             flash("Nenhum pedido selecionado!", "warning")
             return redirect(url_for("pedidos.lista_pedidos"))
 
-        # Não converter para int se forem lotes (strings)
-        if lista_ids_str and lista_ids_str[0].startswith('LOTE'):
+        # Detecta se são separacao_lote_ids (strings alfanuméricas) ou IDs numéricos
+        # separacao_lote_id pode ter formatos: LOTE-xxx, LOTE_xxx, CLAUDE-xxx, etc.
+        primeiro_id = lista_ids_str[0] if lista_ids_str else ''
+        eh_separacao_lote_id = primeiro_id and not primeiro_id.isdigit()
+
+        if eh_separacao_lote_id:
+            # São separacao_lote_ids (strings) - usar diretamente
             lista_ids = lista_ids_str
         else:
+            # São IDs numéricos - converter para int
             lista_ids = [int(x) for x in lista_ids_str if x.isdigit()]
 
         # Armazena no session para usar nas rotas subsequentes
         session["cotacao_manual_pedidos"] = lista_ids
 
-        # Se lista_ids contém strings de lote (LOTE_xxx), usar diretamente
-        if lista_ids and isinstance(lista_ids[0], str) and lista_ids[0].startswith('LOTE'):
+        # Busca pedidos pelo tipo de ID recebido
+        if eh_separacao_lote_id:
+            # Busca por separacao_lote_id (formato: LOTE-xxx, CLAUDE-xxx, etc.)
             pedidos = Pedido.query.filter(Pedido.separacao_lote_id.in_(lista_ids)).all()
         else:
             # Se são IDs numéricos, converter para string e buscar por num_pedido
@@ -1748,13 +1755,17 @@ def processar_cotacao_manual():
             return redirect(url_for("pedidos.cotacao_manual"))
 
         # Carrega pedidos e transportadora
-        # Converter IDs para lotes se necessário
         from app.separacao.models import Separacao
-        # Se lista_ids contém strings de lote, usar diretamente
-        if lista_ids and isinstance(lista_ids[0], str) and lista_ids[0].startswith('LOTE'):
+
+        # Detecta se são separacao_lote_ids (strings alfanuméricas) ou IDs numéricos
+        primeiro_id = lista_ids[0] if lista_ids else ''
+        eh_separacao_lote_id = primeiro_id and isinstance(primeiro_id, str) and not primeiro_id.isdigit()
+
+        if eh_separacao_lote_id:
+            # São separacao_lote_ids (formato: LOTE-xxx, CLAUDE-xxx, etc.)
             pedidos = Pedido.query.filter(Pedido.separacao_lote_id.in_(lista_ids)).all()
         else:
-            # Se são IDs numéricos, precisa converter para num_pedido ou buscar lotes
+            # Se são IDs numéricos, buscar por num_pedido
             pedidos = Pedido.query.filter(Pedido.num_pedido.in_([str(id) for id in lista_ids])).all()
         transportadora = Transportadora.query.get(transportadora_id)
 
@@ -1911,22 +1922,28 @@ def embarque_fob():
             flash("Nenhum pedido selecionado!", "warning")
             return redirect(url_for("pedidos.lista_pedidos"))
 
-        # Não converter para int se forem lotes (strings)
-        if lista_ids_str and lista_ids_str[0].startswith('LOTE'):
+        # Detecta se são separacao_lote_ids (strings alfanuméricas) ou IDs numéricos
+        primeiro_id = lista_ids_str[0] if lista_ids_str else ''
+        eh_separacao_lote_id = primeiro_id and not primeiro_id.isdigit()
+
+        if eh_separacao_lote_id:
+            # São separacao_lote_ids (strings) - usar diretamente
             lista_ids = lista_ids_str
         else:
+            # São IDs numéricos - converter para int
             lista_ids = [int(x) for x in lista_ids_str if x.isdigit()]
 
         # Carrega os pedidos do banco
         from app.separacao.models import Separacao
-        
-        # Se lista_ids contém strings de lote (LOTE_xxx), usar diretamente
-        if lista_ids and isinstance(lista_ids[0], str) and lista_ids[0].startswith('LOTE'):
+
+        # Busca pedidos pelo tipo de ID recebido
+        if eh_separacao_lote_id:
+            # Busca por separacao_lote_id (formato: LOTE-xxx, CLAUDE-xxx, etc.)
             pedidos = Pedido.query.filter(Pedido.separacao_lote_id.in_(lista_ids)).all()
         else:
             # Se são IDs numéricos, converter para string e buscar por num_pedido
             pedidos = Pedido.query.filter(Pedido.num_pedido.in_([str(id) for id in lista_ids])).all()
-        
+
         if not pedidos:
             flash("Nenhum pedido encontrado!", "warning")
             return redirect(url_for("pedidos.lista_pedidos"))

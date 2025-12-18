@@ -32,7 +32,7 @@ PATTERNS = {
     'chave_nfe': r'^[0-9]{44}$',  # Chave NF-e 44 dígitos
     'cnpj': r'^[0-9]{8,14}$',  # CNPJ (8-14 dígitos)
     'cnpj_formatado': r'^\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}$',  # CNPJ formatado
-    'po': r'^PO\d+$',  # Pedido de compra (PO00123)
+    'po': r'^(?:PO|C)\d+$',  # Pedido de compra (PO00123, C2513147)
     # Pedidos de venda: VCD (CD), VFB (FB), VSC (SC) - prefixos de filial
     'so_filial': r'^V?(CD|FB|SC)\d+$',  # VCD123, VFB456, VSC789 ou CD123, FB456
     'so_generico': r'^SO?\d+$',  # SO00456 ou S00456 (genérico)

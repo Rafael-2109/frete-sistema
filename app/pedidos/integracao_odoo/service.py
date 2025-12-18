@@ -32,7 +32,7 @@ class ResultadoCriacaoPedido:
     order_id: Optional[int] = None
     order_name: Optional[str] = None
     mensagem: str = ""
-    erros: List[str] = None
+    erros: List[str] = None # type: ignore
 
     def __post_init__(self):
         if self.erros is None:
@@ -157,16 +157,18 @@ class OdooIntegrationService:
                      itens: List[Dict[str, Any]],
                      numero_pedido_cliente: str = None,
                      observacoes: str = None,
-                     calcular_impostos: bool = True) -> ResultadoCriacaoPedido:
+                     calcular_impostos: bool = True,
+                     payment_provider_id: int = None) -> ResultadoCriacaoPedido:
         """
         Cria um pedido de venda no Odoo
 
         Args:
             cnpj_cliente: CNPJ do cliente
             itens: Lista de dicts com cod_produto, quantidade, preco (nosso_codigo)
-            numero_pedido_cliente: Número do pedido de compra do cliente (Proposta/Pedido)
+            numero_pedido_cliente: Número do pedido de compra do cliente (campo "Numero:" do PDF)
             observacoes: Observações do pedido
             calcular_impostos: Se deve calcular impostos após criar
+            payment_provider_id: ID da forma de pagamento (30 = Transferência Bancária CD)
 
         Returns:
             ResultadoCriacaoPedido
@@ -230,8 +232,13 @@ class OdooIntegrationService:
                 'order_line': order_lines,
             }
 
+            # Número do pedido de compra do cliente (campo "Numero:" do PDF)
             if numero_pedido_cliente:
                 order_data['l10n_br_pedido_compra'] = numero_pedido_cliente
+
+            # Forma de pagamento (30 = Transferência Bancária CD)
+            if payment_provider_id:
+                order_data['payment_provider_id'] = payment_provider_id
 
             if observacoes:
                 order_data['note'] = observacoes
@@ -288,17 +295,19 @@ class OdooIntegrationService:
             )
 
     def criar_pedido_e_registrar(self,
-                                  cnpj_cliente: str,
-                                  itens: List[Dict[str, Any]],
-                                  rede: str,
-                                  tipo_documento: str,
-                                  numero_documento: str,
-                                  arquivo_pdf_s3: str,
-                                  usuario: str,
-                                  divergente: bool = False,
-                                  divergencias: List[Dict] = None,
-                                  justificativa: str = None,
-                                  aprovador: str = None) -> Tuple[ResultadoCriacaoPedido, RegistroPedidoOdoo]:
+        cnpj_cliente: str,
+        itens: List[Dict[str, Any]],
+        rede: str,
+        tipo_documento: str,
+        numero_documento: str,
+        arquivo_pdf_s3: str,
+        usuario: str,
+        divergente: bool = False,
+        divergencias: List[Dict] = None,
+        justificativa: str = None,
+        aprovador: str = None,
+        numero_pedido_cliente: str = None,
+        payment_provider_id: int = None) -> Tuple[ResultadoCriacaoPedido, RegistroPedidoOdoo]: # type: ignore # noqa: E125
         """
         Cria pedido no Odoo e registra no banco local para auditoria
 
@@ -307,13 +316,15 @@ class OdooIntegrationService:
             itens: Lista de itens
             rede: Nome da rede (ATACADAO, TENDA, ASSAI)
             tipo_documento: PROPOSTA ou PEDIDO
-            numero_documento: Número do documento
+            numero_documento: Número do documento (proposta)
             arquivo_pdf_s3: URL do arquivo no S3
             usuario: Usuário que está inserindo
             divergente: Se teve divergência de preço
             divergencias: Lista de divergências
             justificativa: Justificativa se divergente
             aprovador: Quem aprovou se divergente
+            numero_pedido_cliente: Número do pedido do cliente (campo "Numero:" do PDF)
+            payment_provider_id: ID da forma de pagamento (30 = Transferência Bancária CD)
 
         Returns:
             Tupla (ResultadoCriacaoPedido, RegistroPedidoOdoo)
@@ -343,10 +354,13 @@ class OdooIntegrationService:
 
         try:
             # Tenta criar pedido no Odoo
+            # Usa numero_pedido_cliente se fornecido, senão usa numero_documento como fallback
+            pedido_compra = numero_pedido_cliente or numero_documento
             resultado = self.criar_pedido(
                 cnpj_cliente=cnpj_cliente,
                 itens=itens,
-                numero_pedido_cliente=numero_documento,
+                numero_pedido_cliente=pedido_compra,
+                payment_provider_id=payment_provider_id,
             )
 
             if resultado.sucesso:

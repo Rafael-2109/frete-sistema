@@ -24,7 +24,9 @@ from app.utils.file_storage import get_file_storage
 from app.portal.atacadao.models import ProdutoDeParaAtacadao
 from app.pedidos.validacao import ValidadorPrecos, validar_precos_documento
 from app.pedidos.integracao_odoo import get_odoo_service, RegistroPedidoOdoo
+from app.pedidos.integracao_odoo.models import PedidoImportacaoTemp
 from app import db
+from sqlalchemy.orm.attributes import flag_modified
 
 bp = Blueprint('leitura_pedidos', __name__, url_prefix='/pedidos/leitura')
 
@@ -191,8 +193,32 @@ def upload():
                             'valor_unitario': produto.get('valor_unitario')
                         })
 
-            # Gera chave de sessão para armazenar dados
-            session_key = f"pedido_data_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            # Determina se pode inserir no Odoo
+            pode_inserir = len(itens_sem_depara) == 0
+
+            # Cria registro temporário no banco (substitui session)
+            usuario = current_user.username if hasattr(current_user, 'username') else str(current_user.id)
+
+            registro_temp = PedidoImportacaoTemp.criar_do_upload(
+                dados={
+                    'data': data_serializable,
+                    'summary': summary,
+                    'identificacao': identificacao,
+                    'validacao_precos': validacao_precos,
+                    'itens_sem_depara': itens_sem_depara,
+                    'tem_divergencia': tem_divergencia,
+                    'pode_inserir': pode_inserir,
+                    's3_path': s3_path,
+                    'filename': filename
+                },
+                usuario=usuario
+            )
+
+            db.session.add(registro_temp)
+            db.session.commit()
+
+            # Também mantém na session para compatibilidade temporária
+            session_key = registro_temp.chave_importacao
             session[session_key] = {
                 'data': data_serializable,
                 'summary': summary,
@@ -202,11 +228,8 @@ def upload():
                 's3_path': s3_path,
                 'filename': filename,
                 'timestamp': datetime.now().isoformat(),
-                'usuario': current_user.username if hasattr(current_user, 'username') else str(current_user.id)
+                'usuario': usuario
             }
-
-            # Determina se pode inserir no Odoo
-            pode_inserir = len(itens_sem_depara) == 0
 
             response_data = {
                 'success': True,
@@ -220,7 +243,10 @@ def upload():
                 'pode_inserir': pode_inserir,
                 's3_path': s3_path,
                 'warnings': result.get('warnings', []),
-                'errors': result.get('errors', [])
+                'errors': result.get('errors', []),
+                # Dados agregados de divergências para seção do topo
+                'divergencias_agregadas': registro_temp.obter_itens_divergentes_agregados(),
+                'dados_filiais': registro_temp.dados_filiais
             }
 
             return jsonify(response_data)
@@ -352,7 +378,7 @@ def inserir_odoo():
     Insere pedido(s) no Odoo
 
     Body JSON:
-    - session_key: Chave da sessão com os dados processados
+    - session_key: Chave da importação (usado como chave_importacao na tabela)
     - cnpj_filial: CNPJ específico para inserir (opcional, se não informado insere todos)
     - justificativa: Justificativa global (usado se não houver justificativa por filial)
     - justificativas_por_filial: Dict {cnpj: justificativa} para justificativas individuais
@@ -364,26 +390,37 @@ def inserir_odoo():
         justificativa_global = data.get('justificativa', '')
         justificativas_por_filial = data.get('justificativas_por_filial', {})
 
-        if not session_key or session_key not in session:
-            return jsonify({'success': False, 'error': 'Sessão inválida ou expirada'}), 400
+        if not session_key:
+            return jsonify({'success': False, 'error': 'Chave de importação não fornecida'}), 400
 
-        pedido_data = session[session_key]
-        summary = pedido_data.get('summary', {})
-        identificacao = pedido_data.get('identificacao', {})
-        validacao_precos = pedido_data.get('validacao_precos', {})
-        itens_sem_depara = pedido_data.get('itens_sem_depara', [])
+        # 🔧 CORREÇÃO: Busca do BANCO em vez de session para não depender de sessão HTTP
+        registro_temp = PedidoImportacaoTemp.buscar_por_chave(session_key)
 
-        rede = identificacao.get('rede', 'DESCONHECIDA')
-        tipo_doc = identificacao.get('tipo', 'DESCONHECIDO')
-        numero_doc = identificacao.get('numero_documento', '')
-        s3_path = pedido_data.get('s3_path', '')
-        usuario = pedido_data.get('usuario', str(current_user.id))
+        if not registro_temp:
+            # Fallback para session (compatibilidade temporária)
+            if session_key in session:
+                return _inserir_odoo_via_session(session_key, cnpj_filial, justificativa_global, justificativas_por_filial)
+            return jsonify({'success': False, 'error': 'Importação não encontrada ou expirada'}), 400
+
+        # 🔧 EXTRAI TODOS OS DADOS ANTES das operações longas para evitar perda de sessão
+        # Similar ao que foi feito em lancamento_odoo_service.py:473-482
+        rede = registro_temp.rede
+        tipo_doc = registro_temp.tipo_documento
+        numero_doc = registro_temp.numero_documento
+        s3_path = registro_temp.arquivo_pdf_s3
+        usuario = registro_temp.usuario
+        dados_filiais = registro_temp.dados_filiais or []
+        itens_sem_depara = registro_temp.itens_sem_depara or []
+
+        # Marca como em lançamento
+        registro_temp.marcar_lancando()
+        db.session.commit()
 
         # Obtém service do Odoo
         service = get_odoo_service()
 
         resultados = []
-        filiais_para_inserir = summary.get('por_filial', [])
+        filiais_para_inserir = dados_filiais.copy()
 
         # Filtra por CNPJ específico se informado
         if cnpj_filial:
@@ -408,23 +445,18 @@ def inserir_odoo():
 
         for filial in filiais_para_inserir:
             cnpj = filial.get('cnpj')
-            produtos = filial.get('produtos', [])
-            uf = filial.get('estado', '')
+            itens = filial.get('itens', [])
+            uf = filial.get('uf', '')
             nome_cliente = filial.get('nome_cliente', '')
+            tem_divergencia_filial = filial.get('tem_divergencia', False)
+            numero_pedido_cliente = filial.get('numero_pedido_cliente')  # Número: do PDF
 
-            # Verifica divergência desta filial específica
-            tem_divergencia_filial = False
-            divergencias_filial = None
-            if validacao_precos and validacao_precos.get('por_filial'):
-                for val_filial in validacao_precos['por_filial']:
-                    if val_filial.get('cnpj') == cnpj:
-                        tem_divergencia_filial = val_filial.get('tem_divergencia', False)
-                        if tem_divergencia_filial:
-                            divergencias_filial = val_filial.get('validacoes', [])
-                        break
-
-            # Obtém justificativa (individual ou global)
-            justificativa = justificativas_por_filial.get(cnpj, justificativa_global)
+            # Obtém justificativa (individual, do registro, ou global)
+            justificativa = (
+                justificativas_por_filial.get(cnpj) or
+                filial.get('justificativa') or
+                justificativa_global
+            )
 
             # Verifica se precisa de justificativa para esta filial
             if tem_divergencia_filial and not justificativa:
@@ -440,14 +472,28 @@ def inserir_odoo():
                 })
                 continue
 
-            # Prepara itens para o Odoo (usando nosso_codigo)
+            # Prepara divergências para registro
+            divergencias_filial = None
+            if tem_divergencia_filial:
+                divergencias_filial = [
+                    {
+                        'codigo': item.get('nosso_codigo'),
+                        'preco_doc': item.get('preco_documento'),
+                        'preco_tabela': item.get('preco_tabela'),
+                        'preco_final': item.get('preco_final'),
+                        'diferenca': item.get('diferenca_percentual')
+                    }
+                    for item in itens if item.get('divergente')
+                ]
+
+            # Prepara itens para o Odoo (usando nosso_codigo e preco_final editável)
             itens_odoo = []
-            for produto in produtos:
-                if produto.get('nosso_codigo'):
+            for item in itens:
+                if item.get('nosso_codigo'):
                     itens_odoo.append({
-                        'nosso_codigo': produto.get('nosso_codigo'),
-                        'quantidade': produto.get('quantidade', 0),
-                        'preco': produto.get('valor_unitario', 0),
+                        'nosso_codigo': item.get('nosso_codigo'),
+                        'quantidade': item.get('quantidade', 0),
+                        'preco': item.get('preco_final', item.get('preco_documento', 0)),  # Usa preço editado
                         'uf': uf,
                         'nome_cliente': nome_cliente
                     })
@@ -466,6 +512,7 @@ def inserir_odoo():
                 continue
 
             # Cria pedido no Odoo e registra
+            # 🔧 NOVO: Passa numero_pedido_cliente e payment_provider_id
             resultado, registro = service.criar_pedido_e_registrar(
                 cnpj_cliente=cnpj,
                 itens=itens_odoo,
@@ -477,7 +524,9 @@ def inserir_odoo():
                 divergente=tem_divergencia_filial,
                 divergencias=divergencias_filial,
                 justificativa=justificativa if tem_divergencia_filial else None,
-                aprovador=usuario if tem_divergencia_filial else None
+                aprovador=usuario if tem_divergencia_filial else None,
+                numero_pedido_cliente=numero_pedido_cliente,  # 🔧 NOVO: Número: do PDF
+                payment_provider_id=30  # 🔧 NOVO: Transferência Bancária CD
             )
 
             resultados.append({
@@ -491,9 +540,18 @@ def inserir_odoo():
                 'registro_id': registro.id if registro else None
             })
 
-        # Verifica sucesso geral
+        # Atualiza registro temporário com resultados
         todos_sucesso = all(r.get('sucesso') for r in resultados) if resultados else False
         algum_sucesso = any(r.get('sucesso') for r in resultados) if resultados else False
+
+        if todos_sucesso:
+            registro_temp.marcar_lancado(resultados)
+        elif algum_sucesso:
+            registro_temp.marcar_lancado(resultados)  # Parcialmente lançado
+        else:
+            registro_temp.marcar_erro(resultados)
+
+        db.session.commit()
 
         return jsonify({
             'success': algum_sucesso,
@@ -509,6 +567,316 @@ def inserir_odoo():
             'error': str(e),
             'traceback': traceback.format_exc()
         }), 500
+
+
+def _inserir_odoo_via_session(session_key, cnpj_filial, justificativa_global, justificativas_por_filial):
+    """
+    Fallback: Insere usando dados da session (compatibilidade temporária)
+    TODO: Remover após migração completa
+    """
+    pedido_data = session[session_key]
+    summary = pedido_data.get('summary', {})
+    identificacao = pedido_data.get('identificacao', {})
+    validacao_precos = pedido_data.get('validacao_precos', {})
+    itens_sem_depara = pedido_data.get('itens_sem_depara', [])
+
+    rede = identificacao.get('rede', 'DESCONHECIDA')
+    tipo_doc = identificacao.get('tipo', 'DESCONHECIDO')
+    numero_doc = identificacao.get('numero_documento', '')
+    s3_path = pedido_data.get('s3_path', '')
+    usuario = pedido_data.get('usuario', str(current_user.id))
+
+    service = get_odoo_service()
+    resultados = []
+    filiais_para_inserir = summary.get('por_filial', [])
+
+    if cnpj_filial:
+        filiais_para_inserir = [f for f in filiais_para_inserir if f.get('cnpj') == cnpj_filial]
+        itens_sem_depara_filial = [i for i in itens_sem_depara if i.get('cnpj_filial') == cnpj_filial]
+        if itens_sem_depara_filial:
+            return jsonify({
+                'success': False,
+                'error': 'Esta filial possui itens sem De-Para.',
+                'itens_sem_depara': itens_sem_depara_filial
+            }), 400
+    elif itens_sem_depara:
+        return jsonify({
+            'success': False,
+            'error': 'Existem itens sem De-Para.',
+            'itens_sem_depara': itens_sem_depara
+        }), 400
+
+    for filial in filiais_para_inserir:
+        cnpj = filial.get('cnpj')
+        produtos = filial.get('produtos', [])
+        uf = filial.get('estado', '')
+        nome_cliente = filial.get('nome_cliente', '')
+
+        tem_divergencia_filial = False
+        divergencias_filial = None
+        if validacao_precos and validacao_precos.get('por_filial'):
+            for val_filial in validacao_precos['por_filial']:
+                if val_filial.get('cnpj') == cnpj:
+                    tem_divergencia_filial = val_filial.get('tem_divergencia', False)
+                    if tem_divergencia_filial:
+                        divergencias_filial = val_filial.get('validacoes', [])
+                    break
+
+        justificativa = justificativas_por_filial.get(cnpj, justificativa_global)
+
+        if tem_divergencia_filial and not justificativa:
+            resultados.append({
+                'cnpj': cnpj,
+                'nome_cliente': nome_cliente,
+                'sucesso': False,
+                'order_id': None,
+                'order_name': None,
+                'mensagem': 'Justificativa obrigatória',
+                'erros': ['Informe uma justificativa'],
+                'registro_id': None
+            })
+            continue
+
+        itens_odoo = []
+        for produto in produtos:
+            if produto.get('nosso_codigo'):
+                itens_odoo.append({
+                    'nosso_codigo': produto.get('nosso_codigo'),
+                    'quantidade': produto.get('quantidade', 0),
+                    'preco': produto.get('valor_unitario', 0),
+                    'uf': uf,
+                    'nome_cliente': nome_cliente
+                })
+
+        if not itens_odoo:
+            resultados.append({
+                'cnpj': cnpj,
+                'nome_cliente': nome_cliente,
+                'sucesso': False,
+                'order_id': None,
+                'order_name': None,
+                'mensagem': 'Nenhum item válido',
+                'erros': [],
+                'registro_id': None
+            })
+            continue
+
+        resultado, registro = service.criar_pedido_e_registrar(
+            cnpj_cliente=cnpj,
+            itens=itens_odoo,
+            rede=rede,
+            tipo_documento=tipo_doc,
+            numero_documento=numero_doc,
+            arquivo_pdf_s3=s3_path,
+            usuario=usuario,
+            divergente=tem_divergencia_filial,
+            divergencias=divergencias_filial,
+            justificativa=justificativa if tem_divergencia_filial else None,
+            aprovador=usuario if tem_divergencia_filial else None,
+            payment_provider_id=30
+        )
+
+        resultados.append({
+            'cnpj': cnpj,
+            'nome_cliente': nome_cliente,
+            'sucesso': resultado.sucesso,
+            'order_id': resultado.order_id,
+            'order_name': resultado.order_name,
+            'mensagem': resultado.mensagem,
+            'erros': resultado.erros,
+            'registro_id': registro.id if registro else None
+        })
+
+    todos_sucesso = all(r.get('sucesso') for r in resultados) if resultados else False
+    algum_sucesso = any(r.get('sucesso') for r in resultados) if resultados else False
+
+    return jsonify({
+        'success': algum_sucesso,
+        'todos_sucesso': todos_sucesso,
+        'resultados': resultados,
+        'message': 'Pedido(s) inserido(s) no Odoo' if todos_sucesso else 'Alguns pedidos falharam'
+    })
+
+
+# ============================================================================
+# NOVOS ENDPOINTS - Edição de preço e justificativa
+# ============================================================================
+
+@bp.route('/editar-preco', methods=['POST'])
+@login_required
+def editar_preco():
+    """
+    Edita o preço de um item específico na importação
+
+    Body JSON:
+    - session_key: Chave da importação
+    - cnpj: CNPJ da filial
+    - codigo_rede: Código do produto na rede
+    - novo_preco: Novo preço a ser usado
+    """
+    try:
+        data = request.get_json()
+        session_key = data.get('session_key')
+        cnpj = data.get('cnpj')
+        codigo_rede = data.get('codigo_rede')
+        novo_preco = data.get('novo_preco')
+
+        if not all([session_key, cnpj, codigo_rede, novo_preco is not None]):
+            return jsonify({'success': False, 'error': 'Parâmetros obrigatórios faltando'}), 400
+
+        # Busca registro no banco
+        registro_temp = PedidoImportacaoTemp.buscar_por_chave(session_key)
+        if not registro_temp:
+            return jsonify({'success': False, 'error': 'Importação não encontrada'}), 404
+
+        # Atualiza preço
+        atualizado = registro_temp.atualizar_preco_item(cnpj, codigo_rede, float(novo_preco))
+
+        if not atualizado:
+            return jsonify({'success': False, 'error': 'Item não encontrado'}), 404
+
+        # Marca o JSON como modificado para o SQLAlchemy detectar
+        flag_modified(registro_temp, 'dados_filiais')
+        db.session.commit()
+
+        # Retorna dados atualizados
+        filial = registro_temp.obter_filial(cnpj)
+
+        return jsonify({
+            'success': True,
+            'message': f'Preço atualizado para R$ {novo_preco:.2f}',
+            'valor_total_filial': filial.get('valor_total') if filial else 0
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/aplicar-justificativa-global', methods=['POST'])
+@login_required
+def aplicar_justificativa_global():
+    """
+    Aplica justificativa global a todas as filiais com divergência
+
+    Body JSON:
+    - session_key: Chave da importação
+    - justificativa: Texto da justificativa
+    """
+    try:
+        data = request.get_json()
+        session_key = data.get('session_key')
+        justificativa = data.get('justificativa', '').strip()
+
+        if not session_key:
+            return jsonify({'success': False, 'error': 'Chave de importação não fornecida'}), 400
+
+        if not justificativa:
+            return jsonify({'success': False, 'error': 'Justificativa não pode ser vazia'}), 400
+
+        # Busca registro no banco
+        registro_temp = PedidoImportacaoTemp.buscar_por_chave(session_key)
+        if not registro_temp:
+            return jsonify({'success': False, 'error': 'Importação não encontrada'}), 404
+
+        # Aplica justificativa global
+        registro_temp.aplicar_justificativa_global(justificativa)
+
+        # Marca o JSON como modificado
+        flag_modified(registro_temp, 'dados_filiais')
+        db.session.commit()
+
+        # Conta filiais afetadas
+        filiais_afetadas = len(registro_temp.obter_filiais_divergentes())
+
+        return jsonify({
+            'success': True,
+            'message': f'Justificativa aplicada a {filiais_afetadas} filial(is) com divergência',
+            'filiais_afetadas': filiais_afetadas
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/atualizar-justificativa-filial', methods=['POST'])
+@login_required
+def atualizar_justificativa_filial():
+    """
+    Atualiza justificativa de uma filial específica
+
+    Body JSON:
+    - session_key: Chave da importação
+    - cnpj: CNPJ da filial
+    - justificativa: Texto da justificativa
+    """
+    try:
+        data = request.get_json()
+        session_key = data.get('session_key')
+        cnpj = data.get('cnpj')
+        justificativa = data.get('justificativa', '').strip()
+
+        if not all([session_key, cnpj]):
+            return jsonify({'success': False, 'error': 'Parâmetros obrigatórios faltando'}), 400
+
+        # Busca registro no banco
+        registro_temp = PedidoImportacaoTemp.buscar_por_chave(session_key)
+        if not registro_temp:
+            return jsonify({'success': False, 'error': 'Importação não encontrada'}), 404
+
+        # Atualiza justificativa
+        atualizado = registro_temp.atualizar_justificativa_filial(cnpj, justificativa)
+
+        if not atualizado:
+            return jsonify({'success': False, 'error': 'Filial não encontrada'}), 404
+
+        # Marca o JSON como modificado
+        flag_modified(registro_temp, 'dados_filiais')
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': 'Justificativa atualizada'
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/obter-dados-importacao/<session_key>')
+@login_required
+def obter_dados_importacao(session_key):
+    """
+    Obtém dados atualizados da importação
+
+    Útil para refresh da interface após edições
+    """
+    try:
+        registro_temp = PedidoImportacaoTemp.buscar_por_chave(session_key)
+        if not registro_temp:
+            return jsonify({'success': False, 'error': 'Importação não encontrada'}), 404
+
+        return jsonify({
+            'success': True,
+            'session_key': session_key,
+            'status': registro_temp.status,
+            'rede': registro_temp.rede,
+            'tipo_documento': registro_temp.tipo_documento,
+            'numero_documento': registro_temp.numero_documento,
+            'tem_divergencia': registro_temp.tem_divergencia,
+            'pode_inserir': registro_temp.pode_inserir,
+            'dados_filiais': registro_temp.dados_filiais,
+            'divergencias_agregadas': registro_temp.obter_itens_divergentes_agregados(),
+            'justificativa_global': registro_temp.justificativa_global,
+            'summary': registro_temp.summary,
+            'itens_sem_depara': registro_temp.itens_sem_depara,
+            'resultados_lancamento': registro_temp.resultados_lancamento
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @bp.route('/reprocessar', methods=['POST'])

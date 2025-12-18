@@ -103,3 +103,29 @@ account.move → invoice_origin → sale.order/purchase.order
 account.move.line → full_reconcile_id → account.full.reconcile
 account.full.reconcile → reconciled_line_ids → outras linhas conciliadas
 ```
+
+### A partir de Fatura (busca inversa para DFE)
+```
+# Buscar DFE vinculado a uma Invoice pelo campo invoice_ids
+account.move (invoice_id) → DFE.invoice_ids (contains invoice_id) → l10n_br_ciel_it_account.dfe
+```
+
+**Exemplo Python:**
+```python
+# Dado invoice_id = 426987, encontrar o DFE
+dfes = odoo.search_read('l10n_br_ciel_it_account.dfe',
+    [('invoice_ids', 'in', [426987])],
+    fields=['id', 'protnfe_infnfe_chnfe', 'nfe_infnfe_ide_nnf',
+            'nfe_infnfe_total_icmstot_vnf'])
+```
+
+## Campos de Impostos (DFE)
+
+| Campo | Descricao | Uso |
+|-------|-----------|-----|
+| `nfe_infnfe_total_icmstot_vnf` | Valor Total NF | Valor total do documento |
+| `nfe_infnfe_total_icmstot_vicms` | Valor ICMS | Imposto estadual |
+| `nfe_infnfe_total_icmstot_vbcicms` | Base ICMS | Base de calculo ICMS |
+| `nfe_infnfe_total_icmstot_vpis` | Valor PIS | Imposto federal PIS |
+| `nfe_infnfe_total_icmstot_vcofins` | Valor COFINS | Imposto federal COFINS |
+| `nfe_infnfe_total_icmstot_vprod` | Valor Produtos | Valor dos produtos/servicos |

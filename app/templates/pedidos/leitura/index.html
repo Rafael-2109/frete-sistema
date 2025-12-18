@@ -96,7 +96,58 @@
             <div id="alertaDivergencia" class="alert alert-danger mt-4" style="display: none;">
                 <h5><i class="fas fa-exclamation-circle"></i> Divergencia de Precos</h5>
                 <p class="mb-0">Foram encontradas divergencias entre os precos do documento e a tabela cadastrada.</p>
-                <p class="mb-0"><small>Informe a justificativa no campo de cada filial divergente antes de inserir no Odoo.</small></p>
+                <p class="mb-0"><small>Edite os precos ou informe a justificativa para aprovar.</small></p>
+            </div>
+
+            <!-- Secao de Agregacao de Divergencias (NOVO) -->
+            <div id="secaoDivergenciasAgregadas" class="card mt-4 border-danger" style="display: none;">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-exclamation-triangle"></i> Resumo de Divergencias de Preco
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <!-- Justificativa Global -->
+                    <div class="alert alert-warning mb-3">
+                        <div class="row align-items-end">
+                            <div class="col-md-9">
+                                <label class="form-label fw-bold">
+                                    <i class="fas fa-edit"></i> Justificativa Global
+                                </label>
+                                <textarea id="justificativaGlobal" class="form-control" rows="2"
+                                    placeholder="Informe a justificativa que sera aplicada a todos os pedidos com divergencia..."></textarea>
+                            </div>
+                            <div class="col-md-3">
+                                <button id="btnAplicarJustificativaGlobal" class="btn btn-warning w-100">
+                                    <i class="fas fa-check-double"></i> Aplicar a Todos
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tabela de Divergencias Agregadas -->
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover" id="tabelaDivergenciasAgregadas">
+                            <thead class="table-danger">
+                                <tr>
+                                    <th>Cliente / CNPJ</th>
+                                    <th>UF</th>
+                                    <th>Cod. Rede</th>
+                                    <th>Nosso Cod.</th>
+                                    <th>Descricao</th>
+                                    <th class="text-end">Qtde</th>
+                                    <th class="text-end">Preco Doc</th>
+                                    <th class="text-end">Preco Tabela</th>
+                                    <th class="text-end" style="width: 120px;">Preco Final</th>
+                                    <th class="text-end">Dif %</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyDivergenciasAgregadas">
+                                <!-- Preenchido dinamicamente -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
 
             <!-- Area de Resultados -->
@@ -333,7 +384,7 @@ $(document).ready(function() {
         submitBtn.html('<i class="fas fa-spinner fa-spin"></i> Processando...').prop('disabled', true);
 
         // Limpa resultados anteriores
-        $('#resultArea, #errorArea, #warningArea, #identificacaoCard, #alertaDepara, #alertaDivergencia').hide();
+        $('#resultArea, #errorArea, #warningArea, #identificacaoCard, #alertaDepara, #alertaDivergencia, #secaoDivergenciasAgregadas').hide();
 
         $.ajax({
             url: '{{ url_for("leitura_pedidos.upload") }}',
@@ -393,6 +444,11 @@ $(document).ready(function() {
         // Mostra alerta de divergencia se necessario
         if (response.tem_divergencia) {
             $('#alertaDivergencia').show();
+            // Mostra e popula seção de divergências agregadas
+            if (response.divergencias_agregadas && response.divergencias_agregadas.length > 0) {
+                popularTabelaDivergenciasAgregadas(response.divergencias_agregadas);
+                $('#secaoDivergenciasAgregadas').show();
+            }
         }
 
         // Mostra resumo geral
@@ -1089,6 +1145,194 @@ $(document).ready(function() {
             window.location.href = `{{ url_for("leitura_pedidos.export", format="csv", session_key="") }}${currentSessionKey}`;
         }
     });
+
+    // ============================================================================
+    // NOVAS FUNCOES - Divergencias Agregadas e Edicao de Preco
+    // ============================================================================
+
+    // Popula tabela de divergencias agregadas
+    function popularTabelaDivergenciasAgregadas(divergenciasAgregadas) {
+        const tbody = $('#tbodyDivergenciasAgregadas');
+        tbody.empty();
+
+        if (!divergenciasAgregadas || divergenciasAgregadas.length === 0) {
+            tbody.append('<tr><td colspan="10" class="text-center">Nenhuma divergencia encontrada</td></tr>');
+            return;
+        }
+
+        divergenciasAgregadas.forEach(function(filial) {
+            const cnpjSafe = filial.cnpj.replace(/[^0-9]/g, '');
+
+            filial.itens_divergentes.forEach(function(item, itemIndex) {
+                const rowId = `div_${cnpjSafe}_${item.codigo_rede}`;
+                const diferencaClass = item.diferenca_percentual > 0 ? 'text-danger' : 'text-success';
+                const diferencaPrefix = item.diferenca_percentual > 0 ? '+' : '';
+
+                let html = `
+                    <tr id="${rowId}" data-cnpj="${filial.cnpj}" data-codigo="${item.codigo_rede}">
+                        ${itemIndex === 0 ? `
+                        <td rowspan="${filial.itens_divergentes.length}">
+                            <strong>${filial.nome_cliente}</strong><br>
+                            <small class="text-muted">${filial.cnpj}</small>
+                        </td>
+                        <td rowspan="${filial.itens_divergentes.length}">
+                            <span class="badge bg-secondary">${filial.uf}</span>
+                        </td>
+                        ` : ''}
+                        <td><code>${item.codigo_rede}</code></td>
+                        <td><code>${item.nosso_codigo || '-'}</code></td>
+                        <td><small>${item.descricao || item.nossa_descricao || '-'}</small></td>
+                        <td class="text-end">${item.quantidade}</td>
+                        <td class="text-end">R$ ${formatMoney(item.preco_documento)}</td>
+                        <td class="text-end">R$ ${formatMoney(item.preco_tabela || 0)}</td>
+                        <td class="text-end">
+                            <input type="number" step="0.01" min="0"
+                                class="form-control form-control-sm preco-editavel text-end"
+                                style="width: 100px;"
+                                data-cnpj="${filial.cnpj}"
+                                data-codigo="${item.codigo_rede}"
+                                data-preco-original="${item.preco_documento}"
+                                value="${item.preco_final || item.preco_documento}"
+                                onchange="atualizarPreco(this)">
+                        </td>
+                        <td class="text-end ${diferencaClass}">
+                            <strong>${diferencaPrefix}${(item.diferenca_percentual || 0).toFixed(1)}%</strong>
+                        </td>
+                    </tr>
+                `;
+                tbody.append(html);
+            });
+        });
+    }
+
+    // Atualiza preco via AJAX
+    window.atualizarPreco = function(input) {
+        const cnpj = $(input).data('cnpj');
+        const codigoRede = $(input).data('codigo');
+        const novoPreco = parseFloat($(input).val()) || 0;
+        const precoOriginal = parseFloat($(input).data('preco-original')) || 0;
+
+        if (novoPreco <= 0) {
+            alert('Preco deve ser maior que zero');
+            $(input).val(precoOriginal);
+            return;
+        }
+
+        // Desabilita input enquanto salva
+        $(input).prop('disabled', true);
+
+        $.ajax({
+            url: '{{ url_for("leitura_pedidos.editar_preco") }}',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                session_key: currentSessionKey,
+                cnpj: cnpj,
+                codigo_rede: codigoRede,
+                novo_preco: novoPreco
+            }),
+            success: function(response) {
+                if (response.success) {
+                    // Atualiza estilo do input para indicar alteracao
+                    if (Math.abs(novoPreco - precoOriginal) > 0.01) {
+                        $(input).addClass('bg-warning-subtle');
+                    } else {
+                        $(input).removeClass('bg-warning-subtle');
+                    }
+
+                    // Sincroniza com input na tabela da filial (se existir)
+                    sincronizarPrecoFilial(cnpj, codigoRede, novoPreco);
+
+                    // Feedback visual
+                    $(input).addClass('border-success').delay(1000).queue(function(){
+                        $(this).removeClass('border-success').dequeue();
+                    });
+                } else {
+                    alert('Erro ao atualizar preco: ' + response.error);
+                    $(input).val(precoOriginal);
+                }
+            },
+            error: function(xhr) {
+                alert('Erro ao atualizar preco');
+                $(input).val(precoOriginal);
+            },
+            complete: function() {
+                $(input).prop('disabled', false);
+            }
+        });
+    };
+
+    // Sincroniza preco entre tabela agregada e tabela da filial
+    function sincronizarPrecoFilial(cnpj, codigoRede, novoPreco) {
+        // Busca input na tabela da filial
+        const cnpjSafe = cnpj.replace(/[^0-9]/g, '');
+        const inputFilial = $(`.preco-editavel-filial[data-cnpj="${cnpj}"][data-codigo="${codigoRede}"]`);
+        if (inputFilial.length > 0 && parseFloat(inputFilial.val()) !== novoPreco) {
+            inputFilial.val(novoPreco.toFixed(2));
+            inputFilial.addClass('bg-warning-subtle');
+        }
+    }
+
+    // Aplicar justificativa global
+    $('#btnAplicarJustificativaGlobal').on('click', function() {
+        const justificativa = $('#justificativaGlobal').val().trim();
+
+        if (!justificativa) {
+            alert('Por favor, informe uma justificativa');
+            return;
+        }
+
+        if (!currentSessionKey) {
+            alert('Sessao expirada. Recarregue a pagina e processe o arquivo novamente.');
+            return;
+        }
+
+        const btn = $(this);
+        const originalText = btn.html();
+        btn.html('<i class="fas fa-spinner fa-spin"></i> Aplicando...').prop('disabled', true);
+
+        $.ajax({
+            url: '{{ url_for("leitura_pedidos.aplicar_justificativa_global") }}',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                session_key: currentSessionKey,
+                justificativa: justificativa
+            }),
+            success: function(response) {
+                if (response.success) {
+                    alert(response.message);
+
+                    // Preenche campo de justificativa em todas as filiais divergentes
+                    $('.justificativa-filial').each(function() {
+                        const card = $(this).closest('.card');
+                        if (card.hasClass('border-danger') || card.find('.badge-danger').length > 0) {
+                            $(this).val(justificativa);
+                        }
+                    });
+
+                    // Feedback visual
+                    $('#justificativaGlobal').addClass('border-success');
+                    setTimeout(function() {
+                        $('#justificativaGlobal').removeClass('border-success');
+                    }, 2000);
+                } else {
+                    alert('Erro: ' + response.error);
+                }
+            },
+            error: function(xhr) {
+                const response = xhr.responseJSON || {};
+                alert('Erro ao aplicar justificativa: ' + (response.error || 'Erro desconhecido'));
+            },
+            complete: function() {
+                btn.html(originalText).prop('disabled', false);
+            }
+        });
+    });
+
+    // ============================================================================
+    // FIM NOVAS FUNCOES
+    // ============================================================================
 });
 </script>
 
