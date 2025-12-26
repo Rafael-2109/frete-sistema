@@ -686,7 +686,7 @@
                 <!-- Dados básicos -->
                 <td>
                     <span class="num-pedido-standby" data-num-pedido="${item.num_pedido}"
-                          style="cursor: pointer; text-decoration: underline; color: #0d6efd;"
+                          style="cursor: pointer; text-decoration: underline;"
                           title="Clique para enviar para standby">
                         ${item.num_pedido}
                     </span>
@@ -865,7 +865,7 @@
                 <!-- Dados básicos -->
                 <td>
                     <span class="num-pedido-standby" data-num-pedido="${item.num_pedido}"
-                          style="cursor: pointer; text-decoration: underline; color: #0d6efd;"
+                          style="cursor: pointer; text-decoration: underline;"
                           title="Clique para enviar para standby">
                         ${item.num_pedido}
                     </span>
@@ -3112,17 +3112,17 @@
                  style="position: fixed; top: 80px; right: 20px; z-index: 1050; min-width: 320px;"
                  id="toast-totais-separacao">
                 <div class="d-flex">
-                    <div class="toast-body" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 8px;">
+                    <div class="toast-body bg-tertiary-custom" style="border-radius: 8px;">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <strong style="font-size: 13px;">📦 TOTAIS DA SEPARAÇÃO</strong>
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+                            <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
                         </div>
-                        <hr style="margin: 8px 0; border-color: rgba(255,255,255,0.3);">
+                        <hr style="margin: 8px 0; border-color: var(--bs-border-color);">
                         <div style="font-size: 11px; line-height: 1.6;">
                             <div class="mb-1"><strong>Lote:</strong> ${loteIdCurto}</div>
                             <div class="mb-1"><strong>Cliente:</strong> ${primeira.raz_social_red || 'N/A'}</div>
                             <div class="mb-1"><strong>Expedição:</strong> ${primeira.expedicao ? formatarData(primeira.expedicao) : 'N/A'}</div>
-                            <hr style="margin: 8px 0; border-color: rgba(255,255,255,0.3);">
+                            <hr style="margin: 8px 0; border-color: var(--bs-border-color);">
                             <div class="mb-1">📦 <strong>Itens:</strong> ${qtdItens}</div>
                             <div class="mb-1">💰 <strong>Valor:</strong> R$ ${Math.round(totalValor).toLocaleString('pt-BR')}</div>
                             <div class="mb-1">⚖️ <strong>Peso:</strong> ${Math.round(totalPeso).toLocaleString('pt-BR')} kg</div>

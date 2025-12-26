@@ -141,7 +141,7 @@ function criarCardPedidoMobile(pedido) {
 
             <!-- Container de Documentos (oculto inicialmente) -->
             <div class="pedido-card-mobile-docs" id="docs_${pedidoId}" style="display: none;">
-                <div class="text-center p-3" style="color: #8e8ea0;">
+                <div class="text-center p-3 text-secondary-color">
                     <i class="fas fa-spinner fa-spin"></i>
                     <span class="ms-2">Carregando documentos...</span>
                 </div>
@@ -207,7 +207,7 @@ function carregarDocumentosPedidoMobile(numPedido, cnpj, pedidoId) {
 function renderizarDocumentosMobile(data, docsDiv) {
     if (data.documentos.length === 0) {
         docsDiv.innerHTML = `
-            <div class="alert alert-info m-2" style="background-color: #2d2d35; border-color: #444654; color: #c5c5d2;">
+            <div class="alert m-2 bg-tertiary-custom border-custom text-secondary-color">
                 <i class="fas fa-info-circle"></i> Nenhum documento encontrado
             </div>
         `;
@@ -323,7 +323,7 @@ function renderizarDocumentosMobile(data, docsDiv) {
 
                 <!-- Container de Produtos -->
                 <div class="documento-produtos" id="prods_${docId}" style="display: none;">
-                    <div class="text-center p-2" style="color: #8e8ea0; font-size: 0.85rem;">
+                    <div class="text-center p-2 text-secondary-color" style="font-size: 0.85rem;">
                         <i class="fas fa-spinner fa-spin"></i> Carregando produtos...
                     </div>
                 </div>
@@ -399,7 +399,7 @@ function carregarProdutosMobile(docId, tipo, identificador, numPedido) {
 function renderizarProdutosMobile(data, prodsDiv) {
     if (!data.produtos || data.produtos.length === 0) {
         prodsDiv.innerHTML = `
-            <div class="alert alert-info m-2" style="background-color: #2d2d35; border-color: #444654; color: #c5c5d2; font-size: 0.85rem;">
+            <div class="alert m-2 bg-tertiary-custom border-custom text-secondary-color" style="font-size: 0.85rem;">
                 <i class="fas fa-info-circle"></i> Nenhum produto encontrado
             </div>
         `;

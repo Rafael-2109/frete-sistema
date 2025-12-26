@@ -57,13 +57,14 @@
         }
         
         .side-panel-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: var(--bs-secondary-bg);
+            color: var(--bs-body-color);
             padding: 15px;
             border-radius: 8px 8px 0 0;
             position: sticky;
             top: 0;
             z-index: 1001;
+            border-bottom: 1px solid var(--bs-border-color);
         }
         
         .side-panel-content {
@@ -72,23 +73,23 @@
         
         /* Lista de Pedidos */
         .pedido-item {
-            border-left: 4px solid #667eea;
-            background: #f8f9fa;
+            border-left: 4px solid var(--bs-border-color);
+            background: var(--bs-tertiary-bg);
             padding: 10px;
             margin-bottom: 10px;
             border-radius: 4px;
             cursor: pointer;
             transition: all 0.3s ease;
         }
-        
+
         .pedido-item:hover {
-            background: #e9ecef;
+            background: var(--bs-secondary-bg);
             transform: translateX(5px);
         }
-        
+
         .pedido-item.selected {
-            background: #667eea;
-            color: white;
+            background: var(--bs-secondary-bg);
+            border-left-color: var(--bs-body-color);
         }
         
         .pedido-item.agendado {
@@ -108,13 +109,14 @@
             min-width: 300px;
             font-family: 'Segoe UI', Tahoma, sans-serif;
         }
-        
+
         .info-window-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: var(--bs-secondary-bg);
+            color: var(--bs-body-color);
             padding: 10px;
             margin: -10px -10px 10px -10px;
             border-radius: 4px 4px 0 0;
+            border-bottom: 1px solid var(--bs-border-color);
         }
         
         .info-window-content {
@@ -154,7 +156,7 @@
         .stat-value {
             font-size: 24px;
             font-weight: bold;
-            color: #667eea;
+            color: var(--bs-body-color);
         }
         
         .stat-label {
@@ -208,8 +210,8 @@
         .loading-spinner {
             width: 50px;
             height: 50px;
-            border: 5px solid #f3f3f3;
-            border-top: 5px solid #667eea;
+            border: 5px solid var(--bs-border-color);
+            border-top: 5px solid var(--bs-body-color);
             border-radius: 50%;
             animation: spin 1s linear infinite;
         }
@@ -248,10 +250,10 @@
             width: 60px;
             height: 60px;
             border-radius: 50%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            background: var(--bs-secondary-bg);
+            color: var(--bs-body-color);
+            border: 1px solid var(--bs-border-color);
+            box-shadow: var(--bs-box-shadow);
             font-size: 24px;
             cursor: pointer;
             transition: all 0.3s ease;
@@ -277,9 +279,9 @@
             width: 50px;
             height: 50px;
             border-radius: 50%;
-            background: white;
-            color: #667eea;
-            border: 2px solid #667eea;
+            background: var(--bs-body-bg);
+            color: var(--bs-body-color);
+            border: 1px solid var(--bs-border-color);
             margin-bottom: 10px;
             display: flex;
             align-items: center;
@@ -287,10 +289,10 @@
             cursor: pointer;
             transition: all 0.3s ease;
         }
-        
+
         .fab-option:hover {
-            background: #667eea;
-            color: white;
+            background: var(--bs-secondary-bg);
+            color: var(--bs-body-color);
             transform: scale(1.1);
         }
     </style>
@@ -430,7 +432,7 @@
                         <span>Atrasado</span>
                     </div>
                     <div class="legend-item">
-                        <div class="legend-color" style="background: #007bff;"></div>
+                        <div class="legend-color" style="background: #6c757d;"></div>
                         <span>Normal</span>
                     </div>
                 </div>
@@ -502,7 +504,7 @@
                 map: map,
                 suppressMarkers: false,
                 polylineOptions: {
-                    strokeColor: '#667eea',
+                    strokeColor: '#6c757d',
                     strokeWeight: 4,
                     strokeOpacity: 0.8
                 }

@@ -119,77 +119,75 @@
 
     <!-- Ações rápidas -->
     <div class="row mb-4">
-        <div class="col-12">
+        <div class="col-12 mb-3">
             <h4>Ações Rápidas</h4>
         </div>
-        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('fretes.lancar_cte') }}" class="btn btn-action btn-lg btn-block">
-                <i class="fas fa-plus"></i><br>
-                Lançar CTe
+        <div class="col-6 col-sm-4 col-md-3 col-lg-2 col-xl mb-3">
+            <a href="{{ url_for('fretes.lancar_cte') }}" class="action-card h-100">
+                <i class="fas fa-plus"></i>
+                <span>Lançar CTe</span>
             </a>
         </div>
-        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('fretes.listar_fretes') }}" class="btn btn-action btn-lg btn-block">
-                <i class="fas fa-list"></i><br>
-                Listar Fretes
+        <div class="col-6 col-sm-4 col-md-3 col-lg-2 col-xl mb-3">
+            <a href="{{ url_for('fretes.listar_fretes') }}" class="action-card h-100">
+                <i class="fas fa-list"></i>
+                <span>Listar Fretes</span>
             </a>
         </div>
-        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('fretes.listar_aprovacoes') }}" class="btn btn-action btn-lg btn-block">
-                <i class="fas fa-check"></i><br>
-                Aprovações
+        <div class="col-6 col-sm-4 col-md-3 col-lg-2 col-xl mb-3">
+            <a href="{{ url_for('fretes.listar_aprovacoes') }}" class="action-card h-100">
+                <i class="fas fa-check"></i>
+                <span>Aprovações</span>
             </a>
         </div>
-        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('fretes.listar_faturas') }}" class="btn btn-action btn-lg btn-block">
-                <i class="fas fa-file-pdf"></i><br>
-                Faturas
+        <div class="col-6 col-sm-4 col-md-3 col-lg-2 col-xl mb-3">
+            <a href="{{ url_for('fretes.listar_faturas') }}" class="action-card h-100">
+                <i class="fas fa-file-pdf"></i>
+                <span>Faturas</span>
             </a>
         </div>
-        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('fretes.nova_despesa_extra_por_nf') }}" class="btn btn-action btn-lg btn-block">
-                <i class="fas fa-plus-circle"></i><br>
-                Nova Despesa
+        <div class="col-6 col-sm-4 col-md-3 col-lg-2 col-xl mb-3">
+            <a href="{{ url_for('fretes.nova_despesa_extra_por_nf') }}" class="action-card h-100">
+                <i class="fas fa-plus-circle"></i>
+                <span>Nova Despesa</span>
             </a>
         </div>
-        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('fretes.gerenciar_despesas_extras') }}" class="btn btn-action btn-lg btn-block">
-                <i class="fas fa-cogs"></i><br>
-                Gerenciar Despesas
+        <div class="col-6 col-sm-4 col-md-3 col-lg-2 col-xl mb-3">
+            <a href="{{ url_for('fretes.gerenciar_despesas_extras') }}" class="action-card h-100">
+                <i class="fas fa-cogs"></i>
+                <span>Gerenciar Despesas</span>
             </a>
         </div>
-        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('fretes.listar_contas_correntes') }}" class="btn btn-action btn-lg btn-block">
-                <i class="fas fa-balance-scale"></i><br>
-                Contas Correntes
+        <div class="col-6 col-sm-4 col-md-3 col-lg-2 col-xl mb-3">
+            <a href="{{ url_for('fretes.listar_contas_correntes') }}" class="action-card h-100">
+                <i class="fas fa-balance-scale"></i>
+                <span>Contas Correntes</span>
             </a>
         </div>
-        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('fretes.lancamento_freteiros') }}" class="btn btn-action btn-lg btn-block">
-                <i class="fas fa-truck"></i><br>
-                Lançamento Freteiros
+        <div class="col-6 col-sm-4 col-md-3 col-lg-2 col-xl mb-3">
+            <a href="{{ url_for('fretes.lancamento_freteiros') }}" class="action-card h-100">
+                <i class="fas fa-truck"></i>
+                <span>Lançamento Freteiros</span>
             </a>
         </div>
-        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('fretes.analises') }}" class="btn btn-action btn-lg btn-block">
-                <i class="fas fa-chart-bar"></i><br>
-                Análises
+        <div class="col-6 col-sm-4 col-md-3 col-lg-2 col-xl mb-3">
+            <a href="{{ url_for('fretes.analises') }}" class="action-card h-100">
+                <i class="fas fa-chart-bar"></i>
+                <span>Análises</span>
             </a>
         </div>
-        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('fretes.auditoria_lancamentos') }}" class="btn btn-action btn-lg btn-block">
-                <i class="fas fa-clipboard-check"></i><br>
-                Auditoria Odoo
+        <div class="col-6 col-sm-4 col-md-3 col-lg-2 col-xl mb-3">
+            <a href="{{ url_for('fretes.auditoria_lancamentos') }}" class="action-card h-100">
+                <i class="fas fa-clipboard-check"></i>
+                <span>Auditoria Odoo</span>
             </a>
         </div>
-
         {% if fretes_sem_nfs > 0 %}
-        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('fretes.corrigir_nfs_fretes') }}"
-               class="btn btn-action btn-action-danger btn-lg btn-block"
+        <div class="col-6 col-sm-4 col-md-3 col-lg-2 col-xl mb-3">
+            <a href="{{ url_for('fretes.corrigir_nfs_fretes') }}" class="action-card h-100"
                onclick="return confirm('Deseja corrigir {{ fretes_sem_nfs }} frete(s) que não possuem NFs preenchidas?')">
-                <i class="fas fa-tools"></i><br>
-                Corrigir NFs
+                <i class="fas fa-tools"></i>
+                <span>Corrigir NFs</span>
             </a>
         </div>
         {% endif %}
@@ -257,8 +255,8 @@
                                         </td>
                                         <td>{{ frete.criado_em | formatar_data_hora_brasil }}</td>
                                         <td>
-                                            <a href="{{ url_for('fretes.visualizar_frete', frete_id=frete.id) }}" 
-                                               class="btn btn-sm btn-outline-primary">
+                                            <a href="{{ url_for('fretes.visualizar_frete', frete_id=frete.id) }}"
+                                               class="btn btn-sm btn-outline-secondary">
                                                 <i class="fas fa-eye"></i>
                                             </a>
                                         </td>

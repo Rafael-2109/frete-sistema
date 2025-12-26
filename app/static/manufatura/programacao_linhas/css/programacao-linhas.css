@@ -46,7 +46,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: linear-gradient(135deg, var(--bs-success, #198754) 0%, #20c997 100%);
+    background: var(--bs-success);
     color: white;
     padding: 6px 12px;
     border-radius: 4px;
@@ -165,7 +165,7 @@
     left: 0;
     top: 0;
     height: 100%;
-    background: linear-gradient(90deg, var(--bs-success, #28a745), #20c997);
+    background: var(--bs-success);
     transition: width 0.3s ease;
 }
 
@@ -296,12 +296,12 @@
 }
 
 #table-view .clickable-produto {
-    color: var(--bs-primary, #0d6efd);
+    color: var(--bs-body-color);
     transition: all 0.2s;
 }
 
 #table-view .clickable-produto:hover {
-    color: #0a58ca;
+    color: var(--bs-secondary-color);
     font-weight: 500;
     text-decoration: underline !important;
 }
@@ -376,7 +376,7 @@
 }
 
 .clickable-produto:hover {
-    color: #0a58ca !important;
+    color: var(--bs-secondary-color) !important;
     font-weight: 500;
 }
 
@@ -465,25 +465,25 @@
 
 [data-bs-theme="dark"] .dia-numero,
 [data-theme="dark"] .dia-numero {
-    color: #4ade80;
+    color: var(--bs-success);
 }
 
 [data-bs-theme="dark"] .dia-hoje .dia-numero,
 [data-theme="dark"] .dia-hoje .dia-numero {
-    color: #fbbf24;
+    color: var(--bs-warning);
 }
 
 [data-bs-theme="dark"] .recursos-calendario-mes,
 [data-theme="dark"] .recursos-calendario-mes {
-    color: #4ade80;
+    color: var(--bs-success);
 }
 
 [data-bs-theme="dark"] .dia-produto strong,
 [data-theme="dark"] .dia-produto strong {
-    color: #4ade80;
+    color: var(--bs-success);
 }
 
 [data-bs-theme="dark"] .autocomplete-item strong,
 [data-theme="dark"] .autocomplete-item strong {
-    color: #4ade80;
+    color: var(--bs-success);
 }

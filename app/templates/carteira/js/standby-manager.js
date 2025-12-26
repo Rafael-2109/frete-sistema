@@ -276,7 +276,7 @@ window.standbyManager = (function () {
             'success': 'bg-success',
             'error': 'bg-danger',
             'warning': 'bg-warning',
-            'info': 'bg-info'
+            'info': 'bg-secondary'
         };
 
         const toastDiv = document.createElement('div');

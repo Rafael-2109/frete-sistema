@@ -102,7 +102,7 @@ class WorkspaceTabela {
                     
                     <td>
                         <div class="produto-info">
-                            <strong class="text-primary">${produto.cod_produto}</strong>
+                            <strong>${produto.cod_produto}</strong>
                             <br><small class="text-muted">${produto.nome_produto || ''}</small>
                         </div>
                     </td>
@@ -129,17 +129,17 @@ class WorkspaceTabela {
                     </td>
                     
                     <td class="text-end" id="valor-${produto.cod_produto}">
-                        <strong class="text-success valor-calculada">${this.formatarMoeda(saldoDisponivel.qtdEditavel * precoUnitario)}</strong>
+                        <strong class="valor-calculada">${this.formatarMoeda(saldoDisponivel.qtdEditavel * precoUnitario)}</strong>
                         <br><small class="text-muted">Unit: ${this.formatarMoeda(precoUnitario)}</small>
                     </td>
-                    
+
                     <td class="text-end" id="peso-${produto.cod_produto}">
-                        <strong class="text-info peso-calculado">${this.formatarPeso(saldoDisponivel.qtdEditavel * pesoUnitario)}</strong>
+                        <strong class="peso-calculado">${this.formatarPeso(saldoDisponivel.qtdEditavel * pesoUnitario)}</strong>
                         <br><small class="text-muted">Unit: ${this.formatarPeso(pesoUnitario)}</small>
                     </td>
-                    
+
                     <td class="text-end" id="pallet-${produto.cod_produto}">
-                        <strong class="text-warning pallet-calculado">${this.formatarPallet(saldoDisponivel.qtdEditavel / palletizacao)}</strong>
+                        <strong class="pallet-calculado">${this.formatarPallet(saldoDisponivel.qtdEditavel / palletizacao)}</strong>
                         <br><small class="text-muted">PLT: ${this.formatarPallet(palletizacao)}</small>
                     </td>
                     
@@ -173,7 +173,7 @@ class WorkspaceTabela {
                     
                     <td>
                         <div class="btn-group-vertical btn-group-sm">
-                            <button class="btn btn-outline-info btn-xs mb-1" 
+                            <button class="btn btn-outline-secondary btn-xs mb-1"
                                     onclick="workspace.abrirCardex('${produto.cod_produto}')"
                                     title="Ver projeção de estoque D+0 a D+28">
                                 <i class="fas fa-chart-line me-1"></i>Cardex
@@ -220,7 +220,7 @@ class WorkspaceTabela {
     getEstoqueHojeBadgeClass(estoque) {
         if (estoque <= 0) return 'bg-danger text-white';
         if (estoque < 10) return 'bg-warning text-dark';
-        if (estoque < 50) return 'bg-info text-white';
+        if (estoque < 50) return 'bg-secondary text-white';
         return 'bg-success text-white';
     }
 
@@ -232,7 +232,7 @@ class WorkspaceTabela {
 
     getProducaoHojeBadgeClass(producao) {
         if (producao <= 0) return 'bg-light text-dark';
-        if (producao < 10) return 'bg-primary text-white';
+        if (producao < 10) return 'bg-secondary text-white';
         return 'bg-success text-white';
     }
 

@@ -20,56 +20,14 @@
 }
 
 /* =============================================================================
-   2. AURORA BACKGROUND
+   2. AURORA BACKGROUND (DESATIVADO - Design minimalista)
    ============================================================================= */
 
+/* Aurora desativado para design limpo e minimalista.
+   Para reativar, remova os comentários abaixo. */
+
 .aurora-bg {
-    position: fixed;
-    inset: 0;
-    overflow: hidden;
-    z-index: -1;
-    pointer-events: none;
-}
-
-.aurora-bg::before,
-.aurora-bg::after {
-    content: '';
-    position: absolute;
-    width: 150%;
-    height: 150%;
-    background: conic-gradient(
-        from 0deg at 50% 50%,
-        rgba(0, 212, 170, 0.12) 0deg,
-        rgba(99, 102, 241, 0.08) 60deg,
-        rgba(14, 165, 233, 0.12) 120deg,
-        rgba(168, 85, 247, 0.06) 180deg,
-        rgba(236, 72, 153, 0.06) 240deg,
-        rgba(0, 212, 170, 0.12) 360deg
-    );
-    animation: aurora-rotate 35s linear infinite;
-    filter: blur(100px);
-}
-
-.aurora-bg::before {
-    top: -25%;
-    left: -25%;
-}
-
-.aurora-bg::after {
-    bottom: -25%;
-    right: -25%;
-    animation-direction: reverse;
-    animation-duration: 30s;
-}
-
-[data-theme="light"] .aurora-bg::before,
-[data-theme="light"] .aurora-bg::after {
-    opacity: 0.5;
-}
-
-@keyframes aurora-rotate {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+    display: none; /* DESATIVADO */
 }
 
 /* =============================================================================
@@ -194,14 +152,14 @@
    ============================================================================= */
 
 .text-gradient {
-    background: linear-gradient(135deg, var(--fin-accent-primary) 0%, var(--fin-accent-info) 50%, #a855f7 100%);
+    background: linear-gradient(135deg, var(--fin-accent-primary) 0%, var(--fin-accent-info) 50%, hsl(271, 91%, 65%) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
 }
 
 .text-gradient-animated {
-    background: linear-gradient(90deg, #00d4aa, #6366f1, #ec4899, #00d4aa);
+    background: linear-gradient(90deg, hsl(45, 90%, 50%), hsl(0, 0%, 60%), hsl(0, 0%, 75%), hsl(45, 90%, 50%));
     background-size: 300% 100%;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -215,23 +173,23 @@
 }
 
 .text-glow {
-    text-shadow: 0 0 10px rgba(0, 212, 170, 0.5), 0 0 20px rgba(0, 212, 170, 0.3);
+    text-shadow: 0 0 10px hsla(45, 90%, 50%, 0.4), 0 0 20px hsla(45, 90%, 50%, 0.2);
 }
 
 [data-theme="light"] .text-glow {
-    text-shadow: 0 0 10px rgba(0, 157, 128, 0.3);
+    text-shadow: 0 0 10px hsla(45, 85%, 35%, 0.25);
 }
 
 /* Light theme: gradientes com cores mais saturadas para contraste */
 [data-theme="light"] .text-gradient {
-    background: linear-gradient(135deg, #009d80 0%, #0369a1 50%, #7c3aed 100%);
+    background: linear-gradient(135deg, hsl(45, 85%, 37%) 0%, hsl(201, 96%, 32%) 50%, hsl(263, 83%, 58%) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
 }
 
 [data-theme="light"] .text-gradient-animated {
-    background: linear-gradient(90deg, #009d80, #4f46e5, #db2777, #009d80);
+    background: linear-gradient(90deg, hsl(45, 85%, 35%), hsl(0, 0%, 45%), hsl(0, 0%, 30%), hsl(45, 85%, 35%));
     background-size: 300% 100%;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;

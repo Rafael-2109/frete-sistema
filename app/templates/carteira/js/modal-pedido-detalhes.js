@@ -104,12 +104,12 @@ class ModalPedidoDetalhes {
             <div class="modal-dialog modal-xl">
                 <div class="modal-content">
                     <!-- Header -->
-                    <div class="modal-header bg-primary text-white">
+                    <div class="modal-header">
                         <h5 class="modal-title">
                             <i class="fas fa-box me-2"></i>
                             Detalhes do Pedido ${numPedido}
                         </h5>
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
 
                     <!-- Body -->
@@ -159,7 +159,7 @@ class ModalPedidoDetalhes {
                                     </div>
                                     <div class="col-md-3">
                                         <strong>Expedição:</strong><br>
-                                        <span class="badge bg-info">
+                                        <span class="badge bg-secondary">
                                             ${this.formatarData(pedido.expedicao_separacao || pedido.expedicao)}
                                         </span>
                                     </div>
@@ -203,7 +203,7 @@ class ModalPedidoDetalhes {
                                     <div class="col-md-3">
                                         <div class="stat-box">
                                             <strong class="text-muted">Valor Total</strong><br>
-                                            <span class="h4 text-primary">
+                                            <span class="h4">
                                                 R$ ${this.formatarMoeda(pedido.valor_total || 0)}
                                             </span>
                                         </div>
@@ -211,7 +211,7 @@ class ModalPedidoDetalhes {
                                     <div class="col-md-3">
                                         <div class="stat-box">
                                             <strong class="text-muted">Peso Total</strong><br>
-                                            <span class="h4 text-info">
+                                            <span class="h4">
                                                 ${this.formatarNumero(pedido.peso_total || 0)} kg
                                             </span>
                                         </div>
@@ -219,7 +219,7 @@ class ModalPedidoDetalhes {
                                     <div class="col-md-3">
                                         <div class="stat-box">
                                             <strong class="text-muted">Pallets</strong><br>
-                                            <span class="h4 text-warning">
+                                            <span class="h4">
                                                 ${this.formatarNumero(pedido.pallet_total || 0, 2)}
                                             </span>
                                         </div>
@@ -227,7 +227,7 @@ class ModalPedidoDetalhes {
                                     <div class="col-md-3">
                                         <div class="stat-box">
                                             <strong class="text-muted">Total Itens</strong><br>
-                                            <span class="h4 text-success">
+                                            <span class="h4">
                                                 ${pedido.total_itens || 0}
                                             </span>
                                         </div>
@@ -242,7 +242,7 @@ class ModalPedidoDetalhes {
                                 <h6 class="mb-0">
                                     <i class="fas fa-list me-2"></i>Itens do Pedido
                                 </h6>
-                                <button class="btn btn-sm btn-outline-primary" onclick="pedidoDetalhes.analisarDisponibilidade('${numPedido}')">
+                                <button class="btn btn-sm btn-outline-secondary" onclick="pedidoDetalhes.analisarDisponibilidade('${numPedido}')">
                                     <i class="fas fa-chart-line me-1"></i>Analisar Disponibilidade
                                 </button>
                             </div>
@@ -340,7 +340,7 @@ class ModalPedidoDetalhes {
                 }
                     </td>
                     <td class="text-center">
-                        <button class="btn btn-sm btn-outline-primary" 
+                        <button class="btn btn-sm btn-outline-secondary"
                                 onclick="pedidoDetalhes.abrirCardex('${item.cod_produto}')"
                                 title="Ver Cardex">
                             <i class="fas fa-chart-line"></i>
@@ -361,7 +361,7 @@ class ModalPedidoDetalhes {
                 <div class="card-header bg-light d-flex justify-content-between align-items-center">
                     <div>
                         <strong>Lote: ${sep.separacao_lote_id}</strong>
-                        <span class="badge bg-${sep.tipo_envio === 'total' ? 'primary' : 'info'} ms-2">
+                        <span class="badge bg-secondary ms-2">
                             ${sep.tipo_envio}
                         </span>
                         <span class="badge bg-${this.getStatusColor(sep.status)} ms-1">
@@ -376,7 +376,7 @@ class ModalPedidoDetalhes {
                             </span>
                         ` : ''}
                         ${sep.agendamento ? `
-                            <span class="badge bg-info me-2">
+                            <span class="badge bg-secondary me-2">
                                 <i class="fas fa-clock me-1"></i>
                                 Agenda: ${this.formatarData(sep.agendamento)}
                             </span>

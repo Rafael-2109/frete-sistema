@@ -3,6 +3,19 @@
  * Implementa análise de estoques, sugestão de datas e priorização
  */
 
+// Utilitário: Obter cor do CSS Design System
+function getCSSColor(varName) {
+    return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+}
+
+// Cores semânticas para uso em SweetAlert e outros componentes JS
+const THEME_COLORS = {
+    get success() { return getCSSColor('--semantic-success') || '#28a745'; },
+    get danger() { return getCSSColor('--semantic-danger') || '#dc3545'; },
+    get warning() { return getCSSColor('--semantic-warning') || '#ffc107'; },
+    get secondary() { return getCSSColor('--bg-elevated') || '#6c757d'; }
+};
+
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Iniciando script de programação em lote v3...');
     
@@ -157,7 +170,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (disponibilidade === 100) {
                     // 100% disponível - sempre mostra "Disponível"
                     span.innerHTML = `100% | Disponível`;
-                    btn.classList.remove('btn-primary', 'btn-warning', 'btn-danger');
+                    btn.classList.remove('btn-secondary', 'btn-primary', 'btn-warning', 'btn-danger');
                     btn.classList.add('btn-success');
                 } else {
                     // Tem ruptura - mostrar data se disponível, senão mostrar texto apropriado
@@ -172,8 +185,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     span.innerHTML = `${disponibilidade}% | ${textoData}`;
 
-                    // Cor do botão conforme severidade
-                    btn.classList.remove('btn-primary', 'btn-success', 'btn-warning', 'btn-danger');
+                    // Cor do botão conforme severidade (incluir btn-secondary na remoção!)
+                    btn.classList.remove('btn-secondary', 'btn-primary', 'btn-success', 'btn-warning', 'btn-danger');
                     if (disponibilidade >= 80) {
                         btn.classList.add('btn-warning');  // Amarelo: quase pronto
                     } else {
@@ -197,7 +210,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const span = btn.querySelector('.ruptura-info');
                 if (span) {
                     span.innerHTML = `100% | Disponível`;
-                    btn.classList.remove('btn-primary', 'btn-warning', 'btn-danger');
+                    btn.classList.remove('btn-secondary', 'btn-primary', 'btn-warning', 'btn-danger');
                     btn.classList.add('btn-success');
                 }
             }
@@ -211,7 +224,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (span) {
                 // Mostrar erro ao invés de valor padrão
                 span.innerHTML = 'Erro ao analisar';
-                btn.classList.remove('btn-primary', 'btn-success', 'btn-warning');
+                btn.classList.remove('btn-secondary', 'btn-primary', 'btn-success', 'btn-warning');
                 btn.classList.add('btn-danger');
             }
         }
@@ -362,29 +375,31 @@ document.addEventListener('DOMContentLoaded', function() {
                         // Adicionar indicador visual se há ruptura
                         if (datas.tem_ruptura) {
                             cnpjsComRuptura++;
-                            inputExp.style.backgroundColor = '#fff3cd';
+                            inputExp.classList.remove('input-state-danger');
+                            inputExp.classList.add('input-state-warning');
                             inputExp.title = `Disponibilidade de estoque: ${datas.disponibilidade_estoque}`;
-                            
+
                             // Se a data de expedição foi ajustada devido ao estoque
                             if (datas.expedicao < datas.disponibilidade_estoque) {
                                 cnpjsAjustados++;
-                                inputExp.style.backgroundColor = '#ffe6e6';
+                                inputExp.classList.remove('input-state-warning');
+                                inputExp.classList.add('input-state-danger');
                             }
                         } else {
-                            inputExp.style.backgroundColor = '';
+                            inputExp.classList.remove('input-state-warning', 'input-state-danger');
                             inputExp.title = '';
                         }
                     }
                     
                     if (inputAge) {
                         inputAge.value = datas.agendamento;
-                        
+
                         // Adicionar indicador visual se há ruptura
                         if (datas.tem_ruptura) {
-                            inputAge.style.backgroundColor = '#fff3cd';
+                            inputAge.classList.add('input-state-warning');
                             inputAge.title = `Disponibilidade de estoque: ${datas.disponibilidade_estoque}`;
                         } else {
-                            inputAge.style.backgroundColor = '';
+                            inputAge.classList.remove('input-state-warning');
                             inputAge.title = '';
                         }
                     }
@@ -1439,10 +1454,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
                     `,
                     confirmButtonText: 'Atualizar Página',
-                    confirmButtonColor: '#28a745',
+                    confirmButtonColor: THEME_COLORS.success,
                     showCancelButton: true,
                     cancelButtonText: 'Continuar na Página',
-                    cancelButtonColor: '#6c757d'
+                    cancelButtonColor: THEME_COLORS.secondary
                 }).then((result) => {
                     // Só atualiza se o usuário escolher
                     if (result.isConfirmed) {
@@ -1478,7 +1493,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
                     `,
                     confirmButtonText: 'Entendi',
-                    confirmButtonColor: '#dc3545'
+                    confirmButtonColor: THEME_COLORS.danger
                 });
                 
             } else if (data.status === 'not_found') {
@@ -1590,222 +1605,5 @@ document.addEventListener('DOMContentLoaded', function() {
                 maximumFractionDigits: 2
             });
         }
-    }
-    
-    // ====== IMPORTAÇÃO DE AGENDAMENTOS ASSAI ======
-    // ⚠️ REMOVIDO: Funcionalidade não é mais utilizada
-
-    /*
-    // Handler para abrir modal de importação
-    function handleImportarAgendamentos() {
-        console.log('Abrindo modal de importação de agendamentos...');
-        
-        // Resetar formulário
-        const fileInput = document.getElementById('fileImportarAgendamentos');
-        const btnConfirmar = document.getElementById('btnConfirmarImportacao');
-        const progressoArea = document.getElementById('progressoImportacao');
-        const resultadoArea = document.getElementById('resultadoImportacao');
-        
-        if (fileInput) fileInput.value = '';
-        if (progressoArea) progressoArea.classList.add('d-none');
-        if (resultadoArea) resultadoArea.classList.add('d-none');
-        if (btnConfirmar) {
-            btnConfirmar.disabled = false;
-            btnConfirmar.innerHTML = '<i class="fas fa-upload"></i> Importar';
-        }
-        
-        // Abrir modal
-        const modal = new bootstrap.Modal(document.getElementById('modalImportarAgendamentos'));
-        modal.show();
-        
-        // Configurar evento de confirmação
-        if (btnConfirmar) {
-            btnConfirmar.onclick = processarImportacao;
-        }
-    }
-    
-    // Processar importação do arquivo
-    async function processarImportacao() {
-        const fileInput = document.getElementById('fileImportarAgendamentos');
-        const btnConfirmar = document.getElementById('btnConfirmarImportacao');
-        const progressoArea = document.getElementById('progressoImportacao');
-        const resultadoArea = document.getElementById('resultadoImportacao');
-        
-        // Validar arquivo
-        if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
-            Swal.fire({
-                icon: 'warning',
-                title: 'Arquivo não selecionado',
-                text: 'Por favor, selecione um arquivo Excel para importar.',
-                confirmButtonText: 'OK'
-            });
-            return;
-        }
-        
-        const file = fileInput.files[0];
-        
-        // Validar extensão
-        const fileName = file.name.toLowerCase();
-        if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
-            Swal.fire({
-                icon: 'error',
-                title: 'Formato inválido',
-                text: 'Por favor, selecione um arquivo Excel (.xlsx ou .xls).',
-                confirmButtonText: 'OK'
-            });
-            return;
-        }
-        
-        // Mostrar progresso
-        if (progressoArea) progressoArea.classList.remove('d-none');
-        if (resultadoArea) resultadoArea.classList.add('d-none');
-        if (btnConfirmar) {
-            btnConfirmar.disabled = true;
-            btnConfirmar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
-        }
-        
-        // Criar FormData
-        const formData = new FormData();
-        formData.append('file', file);
-        
-        try {
-            // Enviar arquivo para o servidor
-            const response = await fetch('/carteira/programacao-lote/api/importar-agendamentos-assai', {
-                method: 'POST',
-                body: formData
-            });
-            
-            const result = await response.json();
-            
-            if (response.ok && result.success) {
-                // Exibir resultados
-                exibirResultadosImportacao(result);
-                
-                // Recarregar a página após 3 segundos se houver alterações
-                if (result.resumo.criados > 0 || result.resumo.atualizados > 0) {
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 3000);
-                }
-            } else {
-                // Erro na importação
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Erro na Importação',
-                    text: result.error || 'Erro desconhecido ao processar arquivo.',
-                    confirmButtonText: 'OK'
-                });
-            }
-            
-        } catch (error) {
-            console.error('Erro ao importar:', error);
-            Swal.fire({
-                icon: 'error',
-                title: 'Erro de Comunicação',
-                text: 'Erro ao enviar arquivo para o servidor. Tente novamente.',
-                confirmButtonText: 'OK'
-            });
-            
-        } finally {
-            // Resetar botão
-            if (progressoArea) progressoArea.classList.add('d-none');
-            if (btnConfirmar) {
-                btnConfirmar.disabled = false;
-                btnConfirmar.innerHTML = '<i class="fas fa-upload"></i> Importar';
-            }
-        }
-    }
-    
-    // Exibir resultados da importação
-    function exibirResultadosImportacao(result) {
-        const resultadoArea = document.getElementById('resultadoImportacao');
-        
-        if (!resultadoArea) return;
-        
-        resultadoArea.classList.remove('d-none');
-        
-        // Atualizar resumo
-        const resumo = result.resumo;
-        document.getElementById('totalProcessados').textContent = resumo.total_processados || 0;
-        document.getElementById('totalCriados').textContent = resumo.criados || 0;
-        document.getElementById('totalAtualizados').textContent = resumo.atualizados || 0;
-        document.getElementById('totalNaoEncontrados').textContent = resumo.nao_encontrados || 0;
-        document.getElementById('totalErros').textContent = resumo.erros || 0;
-        
-        // Exibir CNPJs não encontrados
-        const naoEncontrados = result.detalhes.nao_encontrados;
-        if (naoEncontrados && naoEncontrados.length > 0) {
-            const areaNaoEncontrados = document.getElementById('areaNaoEncontrados');
-            const tabelaNaoEncontrados = document.getElementById('tabelaNaoEncontrados');
-            
-            if (areaNaoEncontrados && tabelaNaoEncontrados) {
-                areaNaoEncontrados.classList.remove('d-none');
-                
-                // Limpar tabela
-                tabelaNaoEncontrados.innerHTML = '';
-                
-                // Adicionar linhas
-                naoEncontrados.forEach(item => {
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td class="text-nowrap">${item.cnpj}</td>
-                        <td>${item.protocolo}</td>
-                        <td>${item.unidade || '-'}</td>
-                        <td>
-                            <span class="badge ${item.status === 'Aprovada' ? 'bg-success' : 'bg-warning text-dark'}">
-                                ${item.status}
-                            </span>
-                        </td>
-                        <td>${item.data || '-'}</td>
-                    `;
-                    tabelaNaoEncontrados.appendChild(tr);
-                });
-            }
-        }
-        
-        // Exibir erros
-        const erros = result.detalhes.erros;
-        if (erros && erros.length > 0) {
-            const areaErros = document.getElementById('areaErros');
-            const listaErros = document.getElementById('listaErros');
-            
-            if (areaErros && listaErros) {
-                areaErros.classList.remove('d-none');
-                
-                // Limpar lista
-                listaErros.innerHTML = '';
-                
-                // Adicionar erros
-                erros.forEach(erro => {
-                    const li = document.createElement('li');
-                    li.textContent = erro;
-                    listaErros.appendChild(li);
-                });
-            }
-        }
-        
-        // Mostrar mensagem de sucesso se houver alterações
-        if (resumo.criados > 0 || resumo.atualizados > 0) {
-            Swal.fire({
-                icon: 'success',
-                title: 'Importação Concluída!',
-                html: `
-                    <div class="text-start">
-                        <p><strong>Resumo:</strong></p>
-                        <ul>
-                            <li>${resumo.criados} registros criados</li>
-                            <li>${resumo.atualizados} registros atualizados</li>
-                            ${resumo.nao_encontrados > 0 ? `<li class="text-warning">${resumo.nao_encontrados} CNPJs não encontrados</li>` : ''}
-                            ${resumo.erros > 0 ? `<li class="text-danger">${resumo.erros} erros encontrados</li>` : ''}
-                        </ul>
-                        <p class="text-info mt-3">A página será recarregada em 3 segundos...</p>
-                    </div>
-                `,
-                timer: 3000,
-                timerProgressBar: true,
-                showConfirmButton: false
-            });
-        }
-    }
-    */
+    }    
 });

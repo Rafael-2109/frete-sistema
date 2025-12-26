@@ -608,8 +608,8 @@ class SeparacaoManager {
                 text: mensagem,
                 icon: 'warning',
                 showCancelButton: true,
-                confirmButtonColor: '#d33',
-                cancelButtonColor: '#6c757d',
+                confirmButtonColor: window.Notifications?.colors?.neutral || '#6c757d',
+                cancelButtonColor: window.Notifications?.colors?.neutral || '#6c757d',
                 confirmButtonText: 'Sim, continuar',
                 cancelButtonText: 'Cancelar'
             });
@@ -658,8 +658,8 @@ class SeparacaoManager {
                 showCancelButton: true,
                 confirmButtonText: 'Sim, agendar',
                 cancelButtonText: 'Não',
-                confirmButtonColor: '#28a745',
-                cancelButtonColor: '#6c757d'
+                confirmButtonColor: window.Notifications?.colors?.neutral || '#6c757d',
+                cancelButtonColor: window.Notifications?.colors?.neutral || '#6c757d'
             });
             return result.isConfirmed;
         } else {
@@ -876,8 +876,8 @@ class SeparacaoManager {
                 text: texto,
                 icon: icone,
                 showCancelButton: true,
-                confirmButtonColor: '#3085d6',
-                cancelButtonColor: '#d33',
+                confirmButtonColor: window.Notifications?.colors?.neutral || '#6c757d',
+                cancelButtonColor: window.Notifications?.colors?.danger || '#dc3545',
                 confirmButtonText: 'Sim, continuar',
                 cancelButtonText: 'Cancelar'
             });

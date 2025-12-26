@@ -73,7 +73,7 @@ class ModalEndereco {
                             <!-- Dados do Cliente -->
                             <div class="col-md-6">
                                 <div class="card h-100">
-                                    <div class="card-header bg-primary text-white">
+                                    <div class="card-header">
                                         <h6 class="mb-0">
                                             <i class="fas fa-user"></i> Cliente
                                         </h6>
@@ -97,7 +97,7 @@ class ModalEndereco {
                                             </li>
                                             <li class="mb-2">
                                                 <strong>Incoterm:</strong><br>
-                                                <span id="modal_incoterm" class="badge bg-info"></span>
+                                                <span id="modal_incoterm" class="badge bg-secondary"></span>
                                             </li>
                                         </ul>
                                     </div>
@@ -107,7 +107,7 @@ class ModalEndereco {
                             <!-- Endereço de Entrega -->
                             <div class="col-md-6">
                                 <div class="card h-100">
-                                    <div class="card-header bg-success text-white">
+                                    <div class="card-header">
                                         <h6 class="mb-0">
                                             <i class="fas fa-shipping-fast"></i> Endereço de Entrega
                                         </h6>
@@ -151,7 +151,7 @@ class ModalEndereco {
                         <div class="row mt-3">
                             <div class="col-12">
                                 <div class="card">
-                                    <div class="card-header bg-info text-white">
+                                    <div class="card-header">
                                         <h6 class="mb-0">
                                             <i class="fas fa-info-circle"></i> Informações do Pedido
                                         </h6>
@@ -160,7 +160,7 @@ class ModalEndereco {
                                         <div class="row">
                                             <div class="col-md-4">
                                                 <strong>Pedido:</strong><br>
-                                                <span id="modal_num_pedido" class="badge bg-primary"></span>
+                                                <span id="modal_num_pedido" class="badge bg-secondary"></span>
                                             </div>
                                             <div class="col-md-4">
                                                 <strong>Vendedor:</strong><br>

@@ -40,7 +40,7 @@ class PortalSendas {
                 title: 'Comparando com Planilha Sendas',
                 html: `
                     <div class="text-center">
-                        <div class="spinner-border text-primary mb-3" role="status">
+                        <div class="spinner-border mb-3" role="status">
                             <span class="visually-hidden">Comparando...</span>
                         </div>
                         <p>Comparando todos os itens da separação ${loteId}...</p>
@@ -323,7 +323,7 @@ class PortalSendas {
             showCancelButton: true,
             confirmButtonText: 'Confirmar Agendamento',
             cancelButtonText: 'Cancelar',
-            confirmButtonColor: '#28a745',
+            confirmButtonColor: window.Notifications?.colors?.success || '#28a745',
             didOpen: () => {
                 // ========== VALIDAÇÃO DE QUANTIDADE PRINCIPAL ==========
                 // Adicionar validação em tempo real para quantidades principais
@@ -584,7 +584,7 @@ class PortalSendas {
                         </div>
                     `,
                     confirmButtonText: 'OK',
-                    confirmButtonColor: '#28a745'
+                    confirmButtonColor: window.Notifications?.colors?.success || '#28a745'
                 });
 
                 // Atualizar interface se necessário

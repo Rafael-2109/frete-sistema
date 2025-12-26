@@ -196,15 +196,15 @@ class LoteManager {
                             <div class="row text-center">
                                 <div class="col-4">
                                     <small class="text-muted d-block">Valor</small>
-                                    <strong class="text-success total-valor-card">${this.formatarMoeda(loteData.totais?.valor || loteData.valor_total || loteData.valor_saldo || 0)}</strong>
+                                    <strong class="total-valor-card">${this.formatarMoeda(loteData.totais?.valor || loteData.valor_total || loteData.valor_saldo || 0)}</strong>
                                 </div>
                                 <div class="col-4">
                                     <small class="text-muted d-block">Peso</small>
-                                    <strong class="text-primary total-peso-card">${this.formatarPeso(loteData.totais?.peso || loteData.peso_total || loteData.peso || 0)}</strong>
+                                    <strong class="total-peso-card">${this.formatarPeso(loteData.totais?.peso || loteData.peso_total || loteData.peso || 0)}</strong>
                                 </div>
                                 <div class="col-4">
                                     <small class="text-muted d-block">Pallets</small>
-                                    <strong class="text-info total-pallet-card">${this.formatarPallet(loteData.totais?.pallet || loteData.pallet_total || loteData.pallet || 0)}</strong>
+                                    <strong class="total-pallet-card">${this.formatarPallet(loteData.totais?.pallet || loteData.pallet_total || loteData.pallet || 0)}</strong>
                                 </div>
                             </div>
                         </div>
@@ -241,21 +241,21 @@ class LoteManager {
                     <!-- Primeira linha: Botões principais -->
                     <div class="btn-group mb-2" role="group">
                         ${permissoes.podeEditarDatas ? `
-                            <button class="btn btn-outline-primary btn-sm" 
+                            <button class="btn btn-outline-secondary btn-sm"
                                     onclick="workspace.editarDatas('${loteData.lote_id}', '${status}')">
                                 <i class="fas fa-calendar-alt"></i> Datas
                             </button>
                         ` : ''}
 
                         ${permissoes.podeAdicionarProdutos ? `
-                            <button class="btn btn-outline-success btn-sm" 
+                            <button class="btn btn-outline-secondary btn-sm"
                                     onclick="workspace.adicionarProdutosSelecionados('${loteData.lote_id}')">
                                 <i class="fas fa-plus"></i> Adicionar
                             </button>
                         ` : ''}
 
                         ${permissoes.podeConfirmar ? `
-                            <button class="btn btn-warning btn-sm" 
+                            <button class="btn btn-primary btn-sm"
                                     onclick="workspace.alterarStatusSeparacao('${loteData.lote_id}', 'ABERTO')"
                                     title="Transformar em separação confirmada (ABERTO)">
                                 <i class="fas fa-check"></i> Confirmar
@@ -271,7 +271,7 @@ class LoteManager {
                         ` : ''}
 
                         ${permissoes.podeExcluir ? `
-                            <button class="btn btn-outline-danger btn-sm" 
+                            <button class="btn btn-outline-secondary btn-sm"
                                     onclick="workspace.excluirLote('${loteData.lote_id}')"
                                     title="Excluir separação">
                                 <i class="fas fa-trash"></i>
@@ -282,14 +282,14 @@ class LoteManager {
                     <!-- Segunda linha: Botões do Portal -->
                     ${(loteData.agendamento || loteData.data_agendamento) ? `
                         <div class="btn-group mb-2" role="group">
-                            <button class="btn btn-outline-success btn-sm"
+                            <button class="btn btn-outline-secondary btn-sm"
                                     onclick="carteiraAgrupada.agendarNoPortal('${loteData.lote_id || loteData.separacao_lote_id}', '${loteData.agendamento || loteData.data_agendamento}')"
                                     title="Agendar no portal do cliente">
                                 <i class="fas fa-calendar-plus"></i> Agendar
                             </button>
-                        
+
                             ${loteData.protocolo ? `
-                                <button class="btn btn-outline-info btn-sm"
+                                <button class="btn btn-outline-secondary btn-sm"
                                         	onclick="window.PortalAgendamento.verificarProtocoloNoPortal('${loteData.lote_id || loteData.separacao_lote_id}', '${loteData.protocolo}')"
                                         title="Verificar protocolo: ${loteData.protocolo}">
                                     <i class="fas fa-check-circle"></i> Ver. Protocolo
@@ -392,17 +392,17 @@ class LoteManager {
                             <strong>${qtdFormatada}</strong>un
                         </span>
                         ${valor > 0 ? `
-                            <span class="small text-success me-2">
+                            <span class="small me-2">
                                 R$ <strong>${valorFormatado}</strong>
                             </span>
                         ` : ''}
                         ${peso > 0 ? `
-                            <span class="small text-primary me-2">
+                            <span class="small me-2">
                                 <strong>${pesoFormatado}</strong>kg
                             </span>
                         ` : ''}
                         ${pallet > 0 ? `
-                            <span class="small text-info me-2">
+                            <span class="small me-2">
                                 <strong>${palletFormatado}</strong>plt
                             </span>
                         ` : ''}

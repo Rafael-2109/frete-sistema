@@ -5,9 +5,9 @@
 /* 🎯 PAGINAÇÃO HÍBRIDA - FUNCIONA EM QUALQUER NAVEGADOR */
 #hybrid-pagination {
   position: relative !important;
-  background: var(--bs-body-bg, #ffffff) !important;
-  border-bottom: 2px solid var(--bs-success, #28a745) !important;
-  box-shadow: 0 3px 15px rgba(0,0,0,0.2) !important;
+  background: var(--bg-dark) !important;
+  border-bottom: 2px solid var(--border) !important;
+  box-shadow: var(--shadow) !important;
   padding: 8px 0 !important;
   margin: 0 !important;
   transition: all 0.3s ease !important;
@@ -21,8 +21,8 @@
   left: 0 !important;
   right: 0 !important;
   width: 100% !important;
-  border: 3px solid var(--bs-danger, #dc3545) !important;
-  background: var(--bs-secondary-bg, #f8f9fa) !important;
+  border: 2px solid var(--amber-55) !important;
+  background: var(--bg-light) !important;
   transform: translateY(0) !important;
   z-index: 50 !important; /* Abaixo dos dropdowns (1000) */
 }
@@ -40,9 +40,9 @@
 }
 
 #hybrid-pagination .page-link {
-  color: var(--bs-success, #28a745) !important;
-  background-color: var(--bs-body-bg, #ffffff) !important;
-  border: 2px solid var(--bs-success, #28a745) !important;
+  color: var(--text) !important;
+  background-color: var(--bg-button) !important;
+  border: 1px solid var(--border) !important;
   padding: 8px 16px !important;
   margin: 0 2px !important;
   font-weight: 600 !important;
@@ -52,16 +52,16 @@
 }
 
 #hybrid-pagination .page-item.active .page-link {
-  background-color: var(--bs-success, #28a745) !important;
-  color: #ffffff !important;
-  border-color: var(--bs-success, #28a745) !important;
+  background-color: var(--amber-55) !important;
+  color: hsl(0 0% 10%) !important;
+  border-color: var(--amber-55) !important;
 }
 
 #hybrid-pagination .page-link:hover {
-  background-color: var(--bs-success, #218838) !important;
-  color: #ffffff !important;
-  border-color: var(--bs-success, #218838) !important;
-  transform: scale(1.05) !important;
+  background-color: var(--bg-light) !important;
+  color: var(--text) !important;
+  border-color: var(--amber-55) !important;
+  transform: scale(1.02) !important;
 }
 
 /* ✅ ESPAÇAMENTOS NORMAIS - SEM MARGEM FIXA */
@@ -167,24 +167,26 @@ nav.navbar.nc-filter-navbar .nav-link.fw-bold,
   color: var(--bs-primary) !important;
 }
 
-/* Estilo melhorado para a navbar de filtros */
+/* Estilo melhorado para a navbar de filtros - MIGRADO para variaveis */
 nav.navbar.navbar-light {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  background: var(--bs-secondary-bg) !important;
+  border: 1px solid var(--bs-border-color) !important;
   border-radius: 10px !important;
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2) !important;
+  box-shadow: var(--bs-box-shadow) !important;
 }
 
-/* 🔥 FORÇAR GRADIENTE ROXO NO TEMA LIGHT */
-[data-theme="light"] nav.navbar.navbar-light {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2) !important;
+/* Tema LIGHT */
+[data-theme="light"] nav.navbar.navbar-light,
+[data-bs-theme="light"] nav.navbar.navbar-light {
+  background: var(--bs-secondary-bg) !important;
+  box-shadow: var(--bs-box-shadow) !important;
 }
 
-/* 🌙 ADAPTAÇÃO PARA TEMA DARK (suporta data-theme E data-bs-theme) */
+/* Tema DARK */
 [data-theme="dark"] nav.navbar.navbar-light,
 [data-bs-theme="dark"] nav.navbar.navbar-light {
-  background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%) !important;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5) !important;
+  background: var(--bs-secondary-bg) !important;
+  box-shadow: var(--bs-box-shadow) !important;
 }
 
 [data-theme="dark"] .bg-light,
@@ -214,9 +216,9 @@ nav.navbar.navbar-light {
 [data-bs-theme="dark"] .sticky-col,
 [data-bs-theme="dark"] .sticky-col-2,
 [data-bs-theme="dark"] .sticky-col-3 {
-  background: var(--bs-body-bg, #0a1628) !important;
-  box-shadow: 2px 0 5px rgba(0,0,0,0.3);
-  border-right: 1px solid var(--bs-border-color, #3a3f47) !important;
+  background: var(--bg-light) !important;
+  box-shadow: 2px 0 5px hsla(0 0% 0% / 0.3);
+  border-right: 1px solid var(--border) !important;
 }
 
 [data-theme="dark"] .btn-outline-secondary,
@@ -233,9 +235,9 @@ nav.navbar.navbar-light {
 [data-bs-theme="dark"] .btn-outline-info,
 [data-bs-theme="dark"] .btn-outline-primary,
 [data-bs-theme="dark"] .btn-outline-dark {
-  background-color: var(--bs-tertiary-bg, #2d3139);
-  border-color: var(--bs-border-color, #3a3f47);
-  color: var(--bs-body-color, #e4e6eb);
+  background-color: var(--bg-button);
+  border-color: var(--border);
+  color: var(--text);
 }
 
 [data-theme="dark"] .btn-outline-secondary:hover,
@@ -252,8 +254,8 @@ nav.navbar.navbar-light {
 [data-bs-theme="dark"] .btn-outline-info:hover,
 [data-bs-theme="dark"] .btn-outline-primary:hover,
 [data-bs-theme="dark"] .btn-outline-dark:hover {
-  background-color: rgba(var(--bs-primary-rgb, 0, 212, 170), 0.1);
-  border-color: var(--bs-primary, #00d4aa);
+  background-color: var(--bg-light);
+  border-color: var(--amber-55);
 }
 
 /* Brand da navbar - SEMPRE BRANCO por causa do fundo roxo (EXCETO navbars do design system) */
@@ -271,40 +273,47 @@ nav.navbar:not(.nc-filter-navbar):not(.nc-navbar) .nav-link {
   padding: 8px 15px !important;
 }
 
-/* 🔥 CORREÇÃO: Forçar cores escuras para textos no tema LIGHT */
-[data-theme="light"] .table {
-  color: #212529 !important;
+/* Cores para tema LIGHT - MIGRADO para variaveis */
+[data-theme="light"] .table,
+[data-bs-theme="light"] .table {
+  color: var(--bs-body-color) !important;
 }
 
-[data-theme="light"] .text-muted {
-  color: #6c757d !important;
+[data-theme="light"] .text-muted,
+[data-bs-theme="light"] .text-muted {
+  color: var(--bs-secondary-color) !important;
 }
 
-[data-theme="light"] .dropdown-item {
-  color: #212529 !important;
+[data-theme="light"] .dropdown-item,
+[data-bs-theme="light"] .dropdown-item {
+  color: var(--bs-body-color) !important;
 }
 
-[data-theme="light"] .form-control,
-[data-theme="light"] .form-select {
-  color: #212529 !important;
-  background-color: #ffffff !important;
+/* form-control usa design-tokens (--bg-light) */
+
+[data-theme="light"] h1,
+[data-theme="light"] h2,
+[data-theme="light"] h3,
+[data-theme="light"] h4,
+[data-theme="light"] h5,
+[data-theme="light"] h6,
+[data-bs-theme="light"] h1,
+[data-bs-theme="light"] h2,
+[data-bs-theme="light"] h3,
+[data-bs-theme="light"] h4,
+[data-bs-theme="light"] h5,
+[data-bs-theme="light"] h6 {
+  color: var(--bs-body-color) !important;
 }
 
-[data-theme="light"] h1, 
-[data-theme="light"] h2, 
-[data-theme="light"] h3, 
-[data-theme="light"] h4, 
-[data-theme="light"] h5, 
-[data-theme="light"] h6 {
-  color: #212529 !important;
+[data-theme="light"] label,
+[data-bs-theme="light"] label {
+  color: var(--bs-secondary-color) !important;
 }
 
-[data-theme="light"] label {
-  color: #495057 !important;
-}
-
-[data-theme="light"] .card-body {
-  color: #212529 !important;
+[data-theme="light"] .card-body,
+[data-bs-theme="light"] .card-body {
+  color: var(--bs-body-color) !important;
 }
 
 /* Hover nos links (EXCETO navbars do design system) */
@@ -350,14 +359,14 @@ nav.navbar:not(.nc-filter-navbar):not(.nc-navbar) .nav-link.fw-bold {
 }
 
 .dropdown-item:hover {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white !important;
+  background: var(--bs-tertiary-bg);
+  color: var(--bs-body-color) !important;
   transform: translateX(5px);
 }
 
 .dropdown-item.active {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white !important;
+  background: var(--bs-tertiary-bg);
+  color: var(--bs-body-color) !important;
 }
 
 /* Badges nos dropdowns */
@@ -388,7 +397,7 @@ nav.navbar .badge.rounded-pill {
 
 /* Divider personalizado */
 .dropdown-divider {
-  border-color: rgba(102, 126, 234, 0.2);
+  border-color: var(--bs-border-color);
   margin: 8px 10px;
 }
 
@@ -430,31 +439,31 @@ nav.navbar .navbar-brand .badge.bg-primary {
   border-radius: 15px;
 }
 
-/* Responsividade melhorada */
+/* Responsividade melhorada - MIGRADO para variaveis */
 @media (max-width: 992px) {
   nav.navbar .navbar-collapse {
-    background: rgba(255, 255, 255, 0.95);
+    background: var(--bs-secondary-bg);
     border-radius: 10px;
     padding: 15px;
     margin-top: 15px;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--bs-box-shadow);
   }
-  
+
   nav.navbar .navbar-collapse .nav-link {
-    color: #667eea !important;
-    border-bottom: 1px solid rgba(102, 126, 234, 0.1);
+    color: var(--bs-body-color) !important;
+    border-bottom: 1px solid var(--bs-border-color);
     margin: 5px 0;
   }
-  
+
   nav.navbar .navbar-collapse .nav-link:hover {
-    background: rgba(102, 126, 234, 0.1);
+    background: var(--bs-tertiary-bg);
   }
-  
+
   .dropdown-menu {
     position: static !important;
     transform: none !important;
     box-shadow: none;
-    background: rgba(102, 126, 234, 0.05);
+    background: var(--bs-tertiary-bg);
     margin: 10px 0;
   }
 }
@@ -496,9 +505,9 @@ nav.navbar .navbar-brand .badge.bg-primary {
 /* Melhorias nas colunas sticky da tabela */
 .sticky-col, .sticky-col-2, .sticky-col-3 {
   position: sticky;
-  background: var(--bs-body-bg, #ffffff) !important;
-  box-shadow: 2px 0 5px rgba(0,0,0,0.1);
-  border-right: 2px solid var(--bs-border-color, #e9ecef) !important;
+  background: var(--bg-light) !important;
+  box-shadow: 2px 0 5px hsla(0 0% 0% / 0.1);
+  border-right: 1px solid var(--border) !important;
 }
 
 .sticky-col {
@@ -521,7 +530,7 @@ nav.navbar .navbar-brand .badge.bg-primary {
 
 /* Efeitos hover na tabela */
 .table-hover tbody tr:hover {
-  background-color: rgba(0,123,255,0.05) !important;
+  background-color: hsla(0 0% 50% / 0.08) !important;
   transform: scale(1.001);
   transition: all 0.2s ease;
 }
@@ -566,36 +575,33 @@ nav.navbar .navbar-brand .badge.bg-primary {
 
 /* ✅ PAGINAÇÃO SIMPLES - SEM BURACO */
 .sticky-pagination-simple {
-  background: var(--bs-body-bg, #ffffff) !important;
-  border-bottom: 2px solid var(--bs-success, #28a745) !important;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+  background: var(--bg-dark) !important;
+  border-bottom: 2px solid var(--border) !important;
+  box-shadow: var(--shadow) !important;
   margin: 0 !important;
   padding: 0 !important;
 }
 
 /* 🎯 INDICADOR VISUAL QUANDO GRUDADA */
 .sticky-pagination-simple.stuck {
-  border-color: var(--bs-danger, #dc3545) !important;
-  background: var(--bs-secondary-bg, #f8f9fa) !important;
-  box-shadow: 0 5px 20px rgba(220, 53, 69, 0.3) !important;
+  border-color: var(--amber-55) !important;
+  background: var(--bg-light) !important;
+  box-shadow: var(--shadow) !important;
 }
 
 /* Dark mode stuck state */
 [data-bs-theme="dark"] .sticky-pagination-simple.stuck,
 [data-theme="dark"] .sticky-pagination-simple.stuck {
-  background: var(--bs-tertiary-bg, #2d3139) !important;
+  background: var(--bg-light) !important;
 }
 
-/* 📋 CABEÇALHO DA TABELA STICKY */
+/* 📋 CABEÇALHO DA TABELA STICKY - herda visual do bootstrap-overrides */
 .table thead th {
   position: -webkit-sticky !important; /* Safari */
   position: sticky !important;
   top: 40px !important; /* Abaixo da paginação (~40px de altura) */
   z-index: 40 !important; /* Abaixo da paginação (50) mas acima do conteúdo */
-  background: var(--bs-tertiary-bg, #212529) !important;
-  color: var(--bs-body-color, #ffffff) !important;
-  border-bottom: 2px solid var(--bs-success, #28a745) !important;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1) !important;
+  /* Visual herdado do bootstrap-overrides: bg-dark, uppercase, font-size 0.75rem */
 }
 
 /* 📋 CORREÇÃO PARA COLUNAS STICKY DA TABELA */
@@ -603,14 +609,14 @@ nav.navbar .navbar-brand .badge.bg-primary {
 .table thead th.sticky-col-2,
 .table thead th.sticky-col-3 {
   z-index: 45 !important; /* Ligeiramente maior que headers normais (40) */
-  background: var(--bs-tertiary-bg, #212529) !important;
+  background: var(--bg-light) !important;
 }
 
 /* 📋 AJUSTE PARA CÉLULAS DO BODY COM STICKY COLUMNS */
 .table tbody td.sticky-col,
 .table tbody td.sticky-col-2,
 .table tbody td.sticky-col-3 {
-  background: var(--bs-body-bg, #ffffff) !important;
+  background: var(--bg-light) !important;
   /* z-index já definido nas classes acima (1015, 1014, 1013) */
 }
 
@@ -772,6 +778,48 @@ nav.navbar .navbar-brand .badge.bg-primary {
 @keyframes obs-spin {
   to { transform: rotate(360deg); }
 }
+
+/* 🎯 HIERARQUIA: 3 TONS (90% body → 95% filtros → 100% tabela) */
+
+/* Filtros - tom intermediário (--bg = 95% light / 8% dark) */
+#form-filtros {
+  background: var(--bg);
+  padding: 0.75rem;
+  border-radius: var(--radius-md);
+}
+
+/* Navbar de filtros - transparente */
+.nc-filter-navbar {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0.25rem 0 !important;
+}
+
+/* Inputs - mais claros (destaque) */
+.form-control,
+.form-select {
+  background-color: var(--bg-light) !important;
+  border: 1px solid var(--border) !important;
+}
+
+/* Card da tabela - mais claro (destaque central) */
+.container-fluid .card.shadow {
+  background: var(--bg-light) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: 0 2px 8px hsla(0 0% 0% / 0.1) !important;
+}
+
+[data-bs-theme="dark"] .container-fluid .card.shadow,
+[data-theme="dark"] .container-fluid .card.shadow {
+  background: var(--bg-light) !important;
+  box-shadow: 0 4px 12px hsla(0 0% 0% / 0.3) !important;
+}
+
+/* Tabela dentro do card - herda fundo claro */
+.container-fluid .card.shadow .table {
+  background: transparent;
+}
 </style>
 {% endblock %}
 
@@ -780,9 +828,8 @@ nav.navbar .navbar-brand .badge.bg-primary {
 <!-- 🔧 CONTAINER COM CORREÇÕES PARA STICKY -->
 <div class="pagination-container premium-page">
 
-<!-- 1) Se quiser um fundo claro só para os filtros, use algo como: -->
-<div class="bg-light py-2">
-  <div class="container-fluid">
+<!-- Filtros discretos (acessórios) -->
+<div class="container-fluid py-2">
     <!-- ✅ FILTROS COM PERSISTÊNCIA - Mantém valores anteriores -->
     <form method="get" class="row g-1 align-items-end" id="form-filtros">
     <!-- Campos hidden para manter status e agrupamento -->
@@ -862,38 +909,38 @@ nav.navbar .navbar-brand .badge.bg-primary {
 
         <!-- 🚚 BOTÃO DE RASTREAMENTO GPS -->
         <a href="{{ url_for('rastreamento.dashboard_rastreamento') }}"
-           class="btn btn-info"
+           class="btn btn-secondary"
            target="_blank"
            title="Ver todas as cargas rastreadas em tempo real no mapa">
           <i class="fas fa-map-marked-alt"></i> Rastreamento GPS
         </a>
 
         {% if current_user.perfil != 'vendedor' %}
-        <a href="{{ url_for('monitoramento.upload_canhotos_lote') }}" 
-           class="btn btn-primary" 
+        <a href="{{ url_for('monitoramento.upload_canhotos_lote') }}"
+           class="btn btn-secondary"
            title="Upload de múltiplos canhotos de uma vez">
           <i class="fas fa-upload"></i> Upload Canhotos
         </a>
         {% endif %}
         <a href="{{ url_for('monitoramento.exportar_entregas') }}"
-           class="btn btn-success"
+           class="btn btn-secondary"
            title="Exportar dados do monitoramento para Excel">
           <i class="fas fa-file-excel"></i> Exportar Excel
         </a>
         <button type="button"
-                class="btn btn-warning"
+                class="btn btn-secondary"
                 onclick="abrirModalImportarPlanilhaSendas()"
                 title="Importar planilha modelo do portal Sendas">
           <i class="fas fa-file-import"></i> Importar Saldo Disp. Sendas
         </button>
         <a href="/portal/sendas/exportacao"
-           class="btn btn-info"
+           class="btn btn-secondary"
            target="_blank"
            title="Exportar planilhas para upload no portal Sendas">
           <i class="fas fa-file-export"></i> Exportar Planilhas Sendas
         </a>
         <a href="/portal/sendas/verificacao"
-           class="btn btn-success"
+           class="btn btn-secondary"
            target="_blank"
            title="Verificar agendamentos do portal Sendas">
           <i class="fas fa-check-circle"></i> Verificar Agendamentos Sendas
@@ -1081,8 +1128,7 @@ nav.navbar .navbar-brand .badge.bg-primary {
         </div>
       </div>
     </nav>
-  </div>
-</div>
+</div><!-- /container-fluid filtros -->
 
 <!-- ✅ PAGINAÇÃO STICKY ULTRA-SIMPLES -->
 {% if not agrupar and paginacao and paginacao.pages > 1 %}
@@ -1154,11 +1200,10 @@ nav.navbar .navbar-brand .badge.bg-primary {
 </div>
 {% endif %}
 
-<!-- TABELA -->
-<div class="container-fluid mt-1 pagination-offset">
-
-  <!-- Exemplo: barra de rolagem horizontal -->
-  <div class="table-responsive">
+<!-- 🎯 TABELA - ELEMENTO CENTRAL -->
+<div class="container-fluid mt-2">
+  <div class="card shadow border">
+    <div class="table-responsive">
   {% if agrupar %}
       <!-- Modo Acordeão (agrupar por status) -->
     <div class="accordion" id="accordionEntregas">
@@ -1764,10 +1809,9 @@ nav.navbar .navbar-brand .badge.bg-primary {
       </tbody>
     </table>
   {% endif %}
-</div>
-
-
-
+    </div><!-- /table-responsive -->
+  </div><!-- /card -->
+</div><!-- /container-fluid tabela -->
 
 
 

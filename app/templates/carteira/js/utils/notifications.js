@@ -19,15 +19,45 @@
         },
 
         /**
-         * Cores por tipo de notificação
+         * Obtém valor de variável CSS
+         * @param {string} varName - Nome da variável (ex: '--gray-50')
+         * @param {string} fallback - Valor fallback
+         */
+        getCSSVar: function(varName, fallback = '') {
+            return getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || fallback;
+        },
+
+        /**
+         * Cores do Design Token System
+         * Usa variáveis CSS quando disponíveis, fallback para hex
+         */
+        getColors: function() {
+            return {
+                success: this.getCSSVar('--semantic-success', '#198754'),
+                error: this.getCSSVar('--semantic-danger', '#dc3545'),
+                danger: this.getCSSVar('--semantic-danger', '#dc3545'),
+                warning: this.getCSSVar('--semantic-warning', '#ffc107'),
+                info: this.getCSSVar('--gray-50', '#6c757d'),
+                primary: this.getCSSVar('--gray-50', '#6c757d'),
+                secondary: this.getCSSVar('--gray-50', '#6c757d'),
+                neutral: this.getCSSVar('--gray-50', '#6c757d'),
+                accent: this.getCSSVar('--accent-primary', '#ffd426')
+            };
+        },
+
+        /**
+         * Cores por tipo de notificação (compatibilidade)
          */
         colors: {
-            success: '#28a745',
-            error: '#dc3545',
-            warning: '#ffc107',
-            info: '#17a2b8',
-            primary: '#007bff',
-            secondary: '#6c757d'
+            get success() { return Notifications.getCSSVar('--semantic-success', '#198754'); },
+            get error() { return Notifications.getCSSVar('--semantic-danger', '#dc3545'); },
+            get danger() { return Notifications.getCSSVar('--semantic-danger', '#dc3545'); },
+            get warning() { return Notifications.getCSSVar('--semantic-warning', '#ffc107'); },
+            get info() { return Notifications.getCSSVar('--gray-50', '#6c757d'); },
+            get primary() { return Notifications.getCSSVar('--gray-50', '#6c757d'); },
+            get secondary() { return Notifications.getCSSVar('--gray-50', '#6c757d'); },
+            get neutral() { return Notifications.getCSSVar('--gray-50', '#6c757d'); },
+            get accent() { return Notifications.getCSSVar('--accent-primary', '#ffd426'); }
         },
 
         /**
@@ -202,7 +232,7 @@
                 
                 loadingElement.innerHTML = `
                     <div style="background: white; padding: 20px; border-radius: 8px;">
-                        <div class="spinner-border text-primary" role="status">
+                        <div class="spinner-border" role="status">
                             <span class="sr-only">${mensagem}</span>
                         </div>
                         <p style="margin-top: 10px; margin-bottom: 0;">${mensagem}</p>

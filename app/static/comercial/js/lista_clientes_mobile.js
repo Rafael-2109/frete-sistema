@@ -232,7 +232,7 @@ function criarCardCliente(cliente) {
             <div class="cliente-card-mobile-footer">
                 <div>
                     <div class="cliente-card-mobile-valor">${cliente.valorFormatado}</div>
-                    <div style="font-size: 0.75rem; color: #8e8ea0; margin-top: 0.1rem;">
+                    <div class="text-secondary-color" style="font-size: 0.75rem; margin-top: 0.1rem;">
                         <span class="emoji" style="font-size: 0.85rem;">📦</span> ${cliente.pedidos} pedido${cliente.pedidos !== 1 ? 's' : ''}
                     </div>
                 </div>

@@ -10,7 +10,8 @@
       "Bash(wc:*)",
       "Bash(find:*)",
       "Bash(cut:*)",
-      "Bash(xargs -I {} sh -c 'echo \"\"\"\"$(grep -co ''''style=\"\"\"\"[^\"\"\"\"]*\"\"\"\"'''' {}) {}\"\"\"\"')"
+      "Bash(xargs -I {} sh -c 'echo \"\"\"\"$(grep -co ''''style=\"\"\"\"[^\"\"\"\"]*\"\"\"\"'''' {}) {}\"\"\"\"')",
+      "Bash(xargs:*)"
     ],
     "deny": []
   },

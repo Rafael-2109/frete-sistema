@@ -1,82 +1,83 @@
-/* ==========================================================================
+/* ═══════════════════════════════════════════════════════════════════════════
    CARTEIRA AGRUPADA - Estilos com Suporte a Dark/Light Mode
-   Usa CSS Variables do bootstrap-overrides.css via _variables.css
+   Usa Design Tokens de app/static/css/_design-tokens.css
 
    MOVIDO DE: app/templates/carteira/css/agrupados.css
    PARA: app/static/css/modules/carteira/agrupados.css
-   DATA: 2025-12-17
-   ========================================================================== */
+   ATUALIZADO: 2025-12-18 - Migracao para Design Tokens
+   ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ==========================================================================
-   CSS VARIABLES - Cores especificas da carteira
-   ========================================================================== */
+/* ═══════════════════════════════════════════════════════════════════════════
+   CSS VARIABLES - Cores especificas da carteira (usando Design Tokens)
+   ═══════════════════════════════════════════════════════════════════════════ */
 :root {
-    /* Badge filter colors */
-    --cart-badge-danger: #dc3545;
-    --cart-badge-success: #198754;
-    --cart-badge-warning: #fd7e14;
-    --cart-badge-info: #0dcaf0;
-    --cart-badge-purple: #6f42c1;
-    --cart-badge-pink: #e83e8c;
-    --cart-badge-orange: #ff6b00;
-    --cart-badge-blue: #0056b3;
-    --cart-badge-secondary: #6c757d;
-    --cart-badge-primary: #0d6efd;
-    --cart-badge-yellow: #ffc107;
+    /* Badge filter colors - SEMANTICAS APENAS */
+    --cart-badge-danger: var(--semantic-danger);
+    --cart-badge-success: var(--semantic-success);
+    --cart-badge-warning: var(--semantic-warning);
+    --cart-badge-secondary: var(--gray-50);
+    /* DEPRECATED - mantidos para compatibilidade */
+    --cart-badge-info: var(--gray-50);
+    --cart-badge-purple: var(--gray-50);
+    --cart-badge-pink: var(--gray-50);
+    --cart-badge-orange: var(--gray-50);
+    --cart-badge-blue: var(--gray-50);
+    --cart-badge-primary: var(--gray-50);
+    --cart-badge-yellow: var(--amber-55);
 
-    /* Page structure colors */
-    --cart-page-header-bg: linear-gradient(135deg, #f8f9fc 0%, #fff 100%);
-    --cart-card-shadow: rgba(0, 0, 0, 0.075);
-    --cart-card-shadow-lg: rgba(0, 0, 0, 0.15);
-    --cart-hover-bg: rgba(0, 123, 255, 0.05);
-    --cart-border-color: #e3e6f0;
-    --cart-dropdown-header-bg: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
-    --cart-dropdown-footer-bg: #f8f9fa;
+    /* Page structure colors - Light Mode */
+    --cart-page-header-bg: linear-gradient(135deg, var(--gray-90) 0%, var(--gray-95) 100%);
+    --cart-card-shadow: var(--shadow-sm);
+    --cart-card-shadow-lg: var(--shadow-md);
+    --cart-hover-bg: hsla(0, 0%, 50%, 0.08);
+    --cart-border-color: var(--border-default);
+    --cart-dropdown-header-bg: linear-gradient(135deg, var(--gray-25) 0%, var(--gray-15) 100%);
+    --cart-dropdown-footer-bg: var(--gray-90);
 }
 
 [data-bs-theme="dark"],
 [data-theme="dark"] {
-    /* Badge filter colors - ajustados para dark mode */
-    --cart-badge-danger: #f87171;
-    --cart-badge-success: #4ade80;
-    --cart-badge-warning: #fb923c;
-    --cart-badge-info: #22d3ee;
-    --cart-badge-purple: #a78bfa;
-    --cart-badge-pink: #f472b6;
-    --cart-badge-orange: #ff8f3c;
-    --cart-badge-blue: #60a5fa;
-    --cart-badge-secondary: #9ca3af;
-    --cart-badge-primary: #60a5fa;
-    --cart-badge-yellow: #fcd34d;
+    /* Badge filter colors - Dark Mode */
+    --cart-badge-danger: var(--semantic-danger-text);
+    --cart-badge-success: var(--semantic-success-text);
+    --cart-badge-warning: var(--semantic-warning-text);
+    --cart-badge-secondary: var(--gray-60);
+    --cart-badge-info: var(--gray-60);
+    --cart-badge-purple: var(--gray-60);
+    --cart-badge-pink: var(--gray-60);
+    --cart-badge-orange: var(--gray-60);
+    --cart-badge-blue: var(--gray-60);
+    --cart-badge-primary: var(--gray-60);
+    --cart-badge-yellow: var(--amber-60);
 
-    /* Page structure colors - dark mode */
-    --cart-page-header-bg: linear-gradient(135deg, var(--bs-secondary-bg) 0%, var(--bs-body-bg) 100%);
-    --cart-card-shadow: rgba(0, 0, 0, 0.2);
-    --cart-card-shadow-lg: rgba(0, 0, 0, 0.3);
-    --cart-hover-bg: rgba(96, 165, 250, 0.08);
-    --cart-border-color: var(--bs-border-color);
-    --cart-dropdown-header-bg: linear-gradient(135deg, var(--bs-primary) 0%, color-mix(in srgb, var(--bs-primary) 70%, black) 100%);
-    --cart-dropdown-footer-bg: var(--bs-secondary-bg);
+    /* Page structure colors - Dark Mode */
+    --cart-page-header-bg: linear-gradient(135deg, var(--gray-5) 0%, var(--gray-0) 100%);
+    --cart-card-shadow: var(--shadow-md);
+    --cart-card-shadow-lg: var(--shadow-lg);
+    --cart-hover-bg: hsla(0, 0%, 50%, 0.08);
+    --cart-border-color: var(--border-default);
+    --cart-dropdown-header-bg: linear-gradient(135deg, var(--gray-15) 0%, var(--gray-8) 100%);
+    --cart-dropdown-footer-bg: var(--gray-5);
 }
 
-/* ==========================================================================
+/* ═══════════════════════════════════════════════════════════════════════════
    PAGE HEADER
-   ========================================================================== */
+   ═══════════════════════════════════════════════════════════════════════════ */
 .page-header {
     background: var(--cart-page-header-bg);
-    border-radius: 0.5rem;
-    padding: 1.5rem;
-    margin-bottom: 1rem;
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
+    margin-bottom: var(--space-4);
     border: 1px solid var(--cart-border-color);
 }
 
-/* ==========================================================================
+/* ═══════════════════════════════════════════════════════════════════════════
    BADGES DE FILTROS - Container
-   ========================================================================== */
+   ═══════════════════════════════════════════════════════════════════════════ */
 .badges-filtros-container,
 .badges-agendamento-container,
 .badges-atendimento-container {
-    padding: 0.5rem 0;
+    padding: var(--space-2) 0;
 }
 
 .badges-agendamento-wrapper,
@@ -86,269 +87,162 @@
 .badges-subrotas-wrapper {
     display: inline-flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
+    gap: var(--space-2);
 }
 
 .badges-linha {
     display: inline-flex;
     flex-wrap: wrap;
-    gap: 0.25rem;
+    gap: var(--space-1);
 }
 
-/* ==========================================================================
-   BADGE FILTRO - Base
-   ========================================================================== */
+/* ═══════════════════════════════════════════════════════════════════════════
+   BADGE FILTRO - PADRONIZADO CINZA (usando Design Tokens)
+   ═══════════════════════════════════════════════════════════════════════════ */
 .badge-filtro {
     cursor: pointer !important;
     padding: 0.35rem 0.65rem;
     font-size: 0.8rem;
     font-weight: 500;
-    transition: all 0.2s ease;
-    border: 2px solid transparent !important;
+    transition: all var(--transition-fast);
+    border: 1px solid var(--gray-60) !important;
     user-select: none;
     background-color: transparent !important;
-    border-radius: 0.375rem;
+    border-radius: var(--radius-md);
+    color: var(--gray-40) !important;
 }
 
-/* IMPORTANTE: Reset da cor branca padrao do Bootstrap .badge */
-/* Usando alta especificidade para garantir override */
 .badge.bg-filtro.badge-filtro {
-    color: var(--bs-body-color) !important;
+    color: var(--gray-40) !important;
     background-color: transparent !important;
+    border-color: var(--gray-60) !important;
 }
 
 .badge-filtro:hover {
-    filter: brightness(0.9);
+    background-color: var(--gray-90) !important;
+    border-color: var(--gray-50) !important;
+    color: var(--gray-25) !important;
     transform: translateY(-1px);
-    opacity: 0.8;
 }
 
 .badge-filtro:active {
     transform: scale(0.98);
 }
 
-/* Dark mode adjustments */
+/* Dark mode */
+[data-bs-theme="dark"] .badge-filtro,
+[data-theme="dark"] .badge-filtro {
+    border-color: var(--gray-45) !important;
+    color: var(--gray-65) !important;
+}
+
+[data-bs-theme="dark"] .badge.bg-filtro.badge-filtro,
+[data-theme="dark"] .badge.bg-filtro.badge-filtro {
+    border-color: var(--gray-45) !important;
+    color: var(--gray-65) !important;
+}
+
 [data-bs-theme="dark"] .badge-filtro:hover,
 [data-theme="dark"] .badge-filtro:hover {
-    filter: brightness(1.2);
+    background-color: var(--gray-20) !important;
+    border-color: var(--gray-55) !important;
+    color: var(--gray-85) !important;
 }
 
-/* ==========================================================================
-   BADGES DE AGENDAMENTO - Classes especificas
-   Alta especificidade para sobrescrever Bootstrap
-   ========================================================================== */
-.badge.bg-filtro.badge-filtro.badge-agendamento-sem {
-    color: var(--cart-badge-danger) !important;
-    border-color: var(--cart-badge-danger) !important;
+/* ═══════════════════════════════════════════════════════════════════════════
+   ESTADO ATIVO - Todos os badges usam cinza escuro
+   ═══════════════════════════════════════════════════════════════════════════ */
+.badge-filtro.ativo,
+.badge-filtro.active {
+    background-color: var(--gray-30) !important;
+    border-color: var(--gray-30) !important;
+    color: white !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
 }
 
-.badge.bg-filtro.badge-filtro.badge-agendamento-com {
-    color: var(--cart-badge-success) !important;
-    border-color: var(--cart-badge-success) !important;
+[data-bs-theme="dark"] .badge-filtro.ativo,
+[data-bs-theme="dark"] .badge-filtro.active,
+[data-theme="dark"] .badge-filtro.ativo,
+[data-theme="dark"] .badge-filtro.active {
+    background-color: var(--gray-25) !important;
+    border-color: var(--gray-35) !important;
+    color: var(--gray-95) !important;
+    box-shadow: 0 2px 4px rgba(255, 255, 255, 0.08);
 }
 
-.badge.bg-filtro.badge-filtro.badge-agendamento-aguardando {
-    color: var(--cart-badge-warning) !important;
-    border-color: var(--cart-badge-warning) !important;
-}
-
-.badge.bg-filtro.badge-filtro.badge-agendamento-confirmado {
-    color: var(--cart-badge-info) !important;
-    border-color: var(--cart-badge-info) !important;
-}
-
-/* Estados ativos */
-.badge-agendamento-sem.ativo {
-    background-color: var(--cart-badge-danger);
-    color: white;
-}
-
-.badge-agendamento-com.ativo {
-    background-color: var(--cart-badge-success);
-    color: white;
-}
-
-.badge-agendamento-aguardando.ativo {
-    background-color: var(--cart-badge-warning);
-    color: #212529;
-}
-
-.badge-agendamento-confirmado.ativo {
-    background-color: var(--cart-badge-info);
-    color: #212529;
-}
-
-/* ==========================================================================
-   BADGES DE ATENDIMENTO - Classes especificas
-   Alta especificidade para sobrescrever Bootstrap
-   ========================================================================== */
-.badge.bg-filtro.badge-filtro.badge-atendimento-programar {
-    color: var(--cart-badge-purple) !important;
-    border-color: var(--cart-badge-purple) !important;
-}
-
-.badge.bg-filtro.badge-filtro.badge-atendimento-revisar {
-    color: var(--cart-badge-pink) !important;
-    border-color: var(--cart-badge-pink) !important;
-}
-
-.badge.bg-filtro.badge-filtro.badge-atendimento-importante {
-    color: var(--cart-badge-orange) !important;
-    border-color: var(--cart-badge-orange) !important;
-}
-
-/* Estados ativos */
-.badge-atendimento-programar.ativo {
-    background-color: var(--cart-badge-purple);
-    color: white;
-}
-
-.badge-atendimento-revisar.ativo {
-    background-color: var(--cart-badge-pink);
-    color: white;
-}
-
-.badge-atendimento-importante.ativo {
-    background-color: var(--cart-badge-orange);
-    color: white;
-}
-
-/* ==========================================================================
-   BADGES DE CLIENTES - Classes especificas
-   Alta especificidade para sobrescrever Bootstrap
-   ========================================================================== */
-.badge.bg-filtro.badge-filtro.badge-cliente-atacadao {
-    color: var(--cart-badge-blue) !important;
-    border-color: var(--cart-badge-blue) !important;
-}
-
-.badge.bg-filtro.badge-filtro.badge-cliente-sendas {
-    color: var(--cart-badge-danger) !important;
-    border-color: var(--cart-badge-danger) !important;
-}
-
-.badge.bg-filtro.badge-filtro.badge-cliente-outros {
-    color: var(--cart-badge-secondary) !important;
-    border-color: var(--cart-badge-secondary) !important;
-}
-
-/* Estados ativos */
-.badge-cliente-atacadao.ativo {
-    background-color: var(--cart-badge-blue);
-    color: white;
-}
-
-.badge-cliente-sendas.ativo {
-    background-color: var(--cart-badge-danger);
-    color: white;
-}
-
-.badge-cliente-outros.ativo {
-    background-color: var(--cart-badge-secondary);
-    color: white;
-}
-
-/* ==========================================================================
-   BADGES DE ROTAS - Classes especificas
-   Alta especificidade para sobrescrever Bootstrap
-   ========================================================================== */
-.badge.bg-filtro.badge-filtro.badge-rota {
-    color: var(--cart-badge-primary) !important;
-    border-color: var(--cart-badge-primary) !important;
-}
-
-.badge-rota.ativo,
-.badge-rota.active {
-    background-color: #0d47a1;
-    color: white;
-    border-color: #0d47a1;
-    box-shadow: 0 2px 4px rgba(25, 118, 210, 0.5);
-}
-
-[data-bs-theme="dark"] .badge-rota.ativo,
-[data-bs-theme="dark"] .badge-rota.active,
-[data-theme="dark"] .badge-rota.ativo,
-[data-theme="dark"] .badge-rota.active {
-    background-color: var(--cart-badge-primary);
-    border-color: var(--cart-badge-primary);
-}
-
-/* ==========================================================================
-   BADGES DE INCOTERMS - Classes especificas
-   ========================================================================== */
+/* ═══════════════════════════════════════════════════════════════════════════
+   BADGES INCOTERM - 1 degrau mais elevado, amarelo quando ativo
+   ═══════════════════════════════════════════════════════════════════════════ */
 .badge-incoterm {
     font-weight: 600;
+    font-size: 0.75rem;
+    padding: 0.35rem 0.5rem;
 }
 
-.badge.bg-filtro.badge-filtro.badge-incoterm-fob {
-    color: var(--cart-badge-yellow) !important;
-    border-color: var(--cart-badge-yellow) !important;
+/* FOB e RED nos FILTROS - 1 degrau mais elevado que os outros */
+.badge.bg-filtro.badge-filtro.badge-incoterm,
+.badge.bg-filtro.badge-filtro.badge-incoterm-fob,
+.badge.bg-filtro.badge-filtro.badge-incoterm-red,
+span.badge.bg-filtro.badge-filtro.badge-incoterm-fob,
+span.badge.bg-filtro.badge-filtro.badge-incoterm-red {
+    background-color: var(--bg-elevated) !important;
+    background: var(--bg-elevated) !important;
+    color: var(--gray-30) !important;
+    border: 1px solid var(--gray-50) !important;
 }
 
-.badge.bg-filtro.badge-filtro.badge-incoterm-red {
-    color: var(--cart-badge-danger) !important;
-    border-color: var(--cart-badge-danger) !important;
+/* Dark mode - filtros */
+[data-bs-theme="dark"] .badge.bg-filtro.badge-filtro.badge-incoterm-fob,
+[data-bs-theme="dark"] .badge.bg-filtro.badge-filtro.badge-incoterm-red,
+[data-theme="dark"] .badge.bg-filtro.badge-filtro.badge-incoterm-fob,
+[data-theme="dark"] .badge.bg-filtro.badge-filtro.badge-incoterm-red {
+    background-color: var(--bg-elevated) !important;
+    background: var(--bg-elevated) !important;
+    color: var(--gray-70) !important;
+    border-color: var(--gray-40) !important;
 }
 
-.badge-incoterm:hover {
-    transform: translateY(-1px);
-    filter: brightness(1.1);
+/* Estados ativos - AMARELO (accent) para ambos FOB e RED */
+.badge.bg-filtro.badge-filtro.badge-incoterm-fob.ativo,
+.badge.bg-filtro.badge-filtro.badge-incoterm-red.ativo,
+span.badge.bg-filtro.badge-filtro.badge-incoterm-fob.ativo,
+span.badge.bg-filtro.badge-filtro.badge-incoterm-red.ativo {
+    background-color: var(--accent-primary) !important;
+    background: var(--accent-primary) !important;
+    border-color: var(--accent-primary) !important;
+    color: var(--gray-10) !important;
+    box-shadow: 0 0 8px var(--amber-50);
 }
 
-.badge-incoterm.ativo,
-.badge-incoterm.active {
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+/* FOB e RED nos PEDIDOS (cards) - fundo preenchido */
+.pedido-row .badge-incoterm-fob,
+td .badge-incoterm-fob,
+.badge-incoterm-fob:not(.bg-filtro) {
+    background-color: var(--accent-primary) !important;
+    border: 1px solid var(--accent-primary) !important;
+    color: var(--gray-10) !important;
 }
 
-.badge-incoterm-fob.ativo {
-    background-color: var(--cart-badge-yellow);
-    color: #212529;
+.pedido-row .badge-incoterm-red,
+td .badge-incoterm-red,
+.badge-incoterm-red:not(.bg-filtro) {
+    background-color: var(--gray-40) !important;
+    border: 1px solid var(--gray-40) !important;
+    color: var(--gray-95) !important;
 }
 
-.badge-incoterm-red.ativo {
-    background-color: var(--cart-badge-danger);
-    color: white;
-}
-
-/* ==========================================================================
-   BADGES DE SUBROTAS
-   Alta especificidade para sobrescrever Bootstrap
-   ========================================================================== */
+/* ═══════════════════════════════════════════════════════════════════════════
+   BADGES DE SUBROTAS - Menor tamanho
+   ═══════════════════════════════════════════════════════════════════════════ */
 .badge.bg-filtro.badge-filtro.badge-subrota {
     font-size: 0.75rem;
     padding: 0.3rem 0.55rem;
-    color: var(--cart-badge-secondary) !important;
-    border-color: var(--cart-badge-secondary) !important;
-}
-
-.badge-subrota:hover {
-    background-color: #495057;
-    color: white;
-}
-
-.badge-subrota.ativo,
-.badge-subrota.active {
-    background-color: #343a40;
-    color: white;
-    box-shadow: 0 2px 4px rgba(52, 58, 64, 0.3);
-}
-
-[data-bs-theme="dark"] .badge-subrota:hover,
-[data-theme="dark"] .badge-subrota:hover {
-    background-color: var(--bs-secondary-bg);
-}
-
-[data-bs-theme="dark"] .badge-subrota.ativo,
-[data-bs-theme="dark"] .badge-subrota.active,
-[data-theme="dark"] .badge-subrota.ativo,
-[data-theme="dark"] .badge-subrota.active {
-    background-color: var(--bs-tertiary-bg);
 }
 
 .subrotas-sp-container {
-    border-top: 1px solid var(--bs-border-color, #dee2e6);
-    padding-top: 0.5rem;
-    margin-top: 0.5rem;
+    border-top: 1px solid var(--border-default);
+    padding-top: var(--space-2);
+    margin-top: var(--space-2);
 }
 
 /* Indicador de filtros ativos */
@@ -358,50 +252,145 @@
     font-weight: bold;
 }
 
-/* ==========================================================================
+/* ═══════════════════════════════════════════════════════════════════════════
+   BADGES DE AGENDAMENTO E ATENDIMENTO - CINZA (usando Design Tokens)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.badge-agendamento-sem,
+.badge-agendamento-com,
+.badge-agendamento-aguardando,
+.badge-agendamento-confirmado,
+.badge-atendimento-programar,
+.badge-atendimento-revisar,
+.badge-cliente-atacadao,
+.badge-cliente-sendas,
+.badge-cliente-outros {
+    background-color: transparent !important;
+    border-color: var(--gray-70) !important;
+    color: var(--gray-40) !important;
+}
+
+/* Estado ativo */
+.badge-agendamento-sem.ativo,
+.badge-agendamento-com.ativo,
+.badge-agendamento-aguardando.ativo,
+.badge-agendamento-confirmado.ativo,
+.badge-atendimento-programar.ativo,
+.badge-atendimento-revisar.ativo,
+.badge-cliente-atacadao.ativo,
+.badge-cliente-sendas.ativo,
+.badge-cliente-outros.ativo {
+    background-color: var(--gray-30) !important;
+    border-color: var(--gray-30) !important;
+    color: white !important;
+}
+
+/* Dark mode */
+[data-bs-theme="dark"] .badge-agendamento-sem,
+[data-bs-theme="dark"] .badge-agendamento-com,
+[data-bs-theme="dark"] .badge-agendamento-aguardando,
+[data-bs-theme="dark"] .badge-agendamento-confirmado,
+[data-bs-theme="dark"] .badge-atendimento-programar,
+[data-bs-theme="dark"] .badge-atendimento-revisar,
+[data-bs-theme="dark"] .badge-cliente-atacadao,
+[data-bs-theme="dark"] .badge-cliente-sendas,
+[data-bs-theme="dark"] .badge-cliente-outros,
+[data-theme="dark"] .badge-agendamento-sem,
+[data-theme="dark"] .badge-agendamento-com,
+[data-theme="dark"] .badge-agendamento-aguardando,
+[data-theme="dark"] .badge-agendamento-confirmado,
+[data-theme="dark"] .badge-atendimento-programar,
+[data-theme="dark"] .badge-atendimento-revisar,
+[data-theme="dark"] .badge-cliente-atacadao,
+[data-theme="dark"] .badge-cliente-sendas,
+[data-theme="dark"] .badge-cliente-outros {
+    background-color: transparent !important;
+    border-color: var(--gray-45) !important;
+    color: var(--gray-65) !important;
+}
+
+[data-bs-theme="dark"] .badge-agendamento-sem.ativo,
+[data-bs-theme="dark"] .badge-agendamento-com.ativo,
+[data-bs-theme="dark"] .badge-agendamento-aguardando.ativo,
+[data-bs-theme="dark"] .badge-agendamento-confirmado.ativo,
+[data-bs-theme="dark"] .badge-atendimento-programar.ativo,
+[data-bs-theme="dark"] .badge-atendimento-revisar.ativo,
+[data-bs-theme="dark"] .badge-cliente-atacadao.ativo,
+[data-bs-theme="dark"] .badge-cliente-sendas.ativo,
+[data-bs-theme="dark"] .badge-cliente-outros.ativo,
+[data-theme="dark"] .badge-agendamento-sem.ativo,
+[data-theme="dark"] .badge-agendamento-com.ativo,
+[data-theme="dark"] .badge-agendamento-aguardando.ativo,
+[data-theme="dark"] .badge-agendamento-confirmado.ativo,
+[data-theme="dark"] .badge-atendimento-programar.ativo,
+[data-theme="dark"] .badge-atendimento-revisar.ativo,
+[data-theme="dark"] .badge-cliente-atacadao.ativo,
+[data-theme="dark"] .badge-cliente-sendas.ativo,
+[data-theme="dark"] .badge-cliente-outros.ativo {
+    background-color: var(--gray-25) !important;
+    border-color: var(--gray-35) !important;
+    color: var(--gray-95) !important;
+}
+
+/* Badge Importante (atendimento) - AMARELO como warning */
+.badge-atendimento-importante {
+    background-color: transparent !important;
+    border-color: var(--semantic-warning) !important;
+    color: var(--semantic-warning) !important;
+}
+
+.badge-atendimento-importante.ativo {
+    background-color: var(--semantic-warning) !important;
+    border-color: var(--semantic-warning) !important;
+    color: var(--gray-10) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    BOTAO STANDBY
-   ========================================================================== */
+   ═══════════════════════════════════════════════════════════════════════════ */
 .btn-standby {
     background-color: var(--cart-badge-yellow);
-    color: #000;
+    color: var(--gray-10);
     border: 1px solid var(--cart-badge-yellow);
 }
 
 .btn-standby:hover {
-    background-color: #e0a800;
-    border-color: #e0a800;
-    color: #000;
+    background-color: var(--semantic-warning);
+    border-color: var(--semantic-warning);
+    color: var(--gray-10);
+    filter: brightness(0.9);
 }
 
 .btn-standby.confirmado {
-    background-color: var(--cart-badge-success);
+    background-color: var(--semantic-success);
     color: #fff;
-    border-color: var(--cart-badge-success);
+    border-color: var(--semantic-success);
 }
 
 .btn-standby.confirmado:hover {
-    background-color: #218838;
-    border-color: #1e7e34;
+    background-color: var(--semantic-success);
+    border-color: var(--semantic-success);
+    filter: brightness(0.85);
 }
 
-/* ==========================================================================
+/* ═══════════════════════════════════════════════════════════════════════════
    CARDS DE LOTE
-   ========================================================================== */
+   ═══════════════════════════════════════════════════════════════════════════ */
 .lote-card {
     border: 2px solid var(--cart-border-color);
-    border-radius: 0.5rem;
-    transition: all 0.3s ease;
-    background-color: var(--bs-body-bg);
+    border-radius: var(--radius-lg);
+    transition: all var(--transition-normal);
+    background-color: var(--bg-surface);
 }
 
 .lote-card:hover {
-    border-color: var(--bs-primary);
-    box-shadow: 0 0.5rem 1rem var(--cart-card-shadow-lg);
+    border-color: var(--accent-primary);
+    box-shadow: var(--cart-card-shadow-lg);
     transform: translateY(-2px);
 }
 
 .lote-card .card-header {
-    border-radius: 0.5rem 0.5rem 0 0 !important;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0 !important;
     border: none;
     background: var(--cart-dropdown-header-bg) !important;
     color: white;
@@ -409,7 +398,7 @@
 
 .lote-acoes .btn {
     border: 1px solid rgba(255, 255, 255, 0.3);
-    transition: all 0.2s ease;
+    transition: all var(--transition-fast);
 }
 
 .lote-acoes .btn:hover {
@@ -418,7 +407,7 @@
 }
 
 .status-info .badge {
-    padding: 0.5rem 1rem;
+    padding: var(--space-2) var(--space-4);
     font-size: 0.875rem;
 }
 
@@ -433,29 +422,29 @@
 
 .separacoes-resumo {
     background: var(--cart-page-header-bg);
-    border-radius: 0.375rem;
-    padding: 1rem;
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
 }
 
-/* ==========================================================================
+/* ═══════════════════════════════════════════════════════════════════════════
    SECTIONS
-   ========================================================================== */
+   ═══════════════════════════════════════════════════════════════════════════ */
 .filters-section .card {
     border: none;
-    box-shadow: 0 0.125rem 0.25rem var(--cart-card-shadow);
-    background-color: var(--bs-body-bg);
+    box-shadow: var(--cart-card-shadow);
+    background-color: var(--bg-surface);
 }
 
 .table-section .card {
-    box-shadow: 0 0.5rem 1rem var(--cart-card-shadow-lg);
-    background-color: var(--bs-body-bg);
+    box-shadow: var(--cart-card-shadow-lg);
+    background-color: var(--bg-surface);
 }
 
-/* ==========================================================================
+/* ═══════════════════════════════════════════════════════════════════════════
    LINHAS DE PEDIDOS
-   ========================================================================== */
+   ═══════════════════════════════════════════════════════════════════════════ */
 .pedido-row {
-    transition: all 0.2s ease;
+    transition: all var(--transition-fast);
     position: relative;
 }
 
@@ -464,17 +453,17 @@
 }
 
 .btn-expandir {
-    transition: all 0.2s ease;
+    transition: all var(--transition-fast);
 }
 
 .btn-expandir:hover .expand-icon {
     transform: scale(1.2);
-    color: var(--bs-primary) !important;
+    color: var(--accent-primary) !important;
 }
 
-/* ==========================================================================
+/* ═══════════════════════════════════════════════════════════════════════════
    BADGES GERAIS
-   ========================================================================== */
+   ═══════════════════════════════════════════════════════════════════════════ */
 .badge {
     font-size: 0.75rem;
     font-weight: 500;
@@ -484,42 +473,43 @@
     font-size: 0.875rem !important;
 }
 
-/* ==========================================================================
-   TABLE RESPONSIVE - Dropdown Fix
-   ========================================================================== */
+/* ═══════════════════════════════════════════════════════════════════════════
+   TABLE RESPONSIVE - Scrollbar + Dropdown Fix
+   ═══════════════════════════════════════════════════════════════════════════ */
 .table-responsive {
-    overflow: visible !important;
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    min-height: 0;
 }
 
 .table-responsive .dropdown-menu {
-    position: absolute !important;
+    position: fixed !important;
     z-index: 1070 !important;
     margin: 0 !important;
-    transform: none !important;
 }
 
 .dropdown-header {
     background: var(--cart-dropdown-header-bg);
     color: white;
     font-weight: 600;
-    border-radius: 0.5rem 0.5rem 0 0;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 
 .dropdown-footer {
     background: var(--cart-dropdown-footer-bg);
-    border-radius: 0 0 0.5rem 0.5rem;
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
 }
 
-/* ==========================================================================
+/* ═══════════════════════════════════════════════════════════════════════════
    DETALHES EXPANDIDOS
-   ========================================================================== */
+   ═══════════════════════════════════════════════════════════════════════════ */
 .detalhes-row.show {
     display: table-row !important;
 }
 
 .detalhes-content {
-    animation: fadeIn 0.3s ease;
-    background-color: var(--bs-tertiary-bg) !important;
+    animation: fadeIn var(--transition-normal);
+    background-color: var(--bg-elevated) !important;
 }
 
 @keyframes fadeIn {
@@ -533,37 +523,37 @@
     }
 }
 
-/* ==========================================================================
-   TAGS DO PEDIDO (ODOO)
-   ========================================================================== */
+/* ═══════════════════════════════════════════════════════════════════════════
+   TAGS DO PEDIDO (ODOO) - MINIMALISTA (95% cinza + semantico)
+   ═══════════════════════════════════════════════════════════════════════════ */
 .badge-tag {
     font-size: 0.7rem;
     padding: 0.25rem 0.5rem;
     margin-right: 0.25rem;
     margin-bottom: 0.25rem;
     display: inline-block;
-    border-radius: 0.25rem;
+    border-radius: var(--radius-sm);
     font-weight: 500;
     color: white !important;
 }
 
-/* Mapeamento de cores do Odoo para Bootstrap */
-.badge-tag[data-color="0"] { background-color: #6c757d !important; }
-.badge-tag[data-color="1"] { background-color: #dc3545 !important; }
-.badge-tag[data-color="2"] { background-color: #fd7e14 !important; }
-.badge-tag[data-color="3"] { background-color: #ffc107 !important; color: #212529 !important; }
-.badge-tag[data-color="4"] { background-color: #20c997 !important; }
-.badge-tag[data-color="5"] { background-color: #198754 !important; }
-.badge-tag[data-color="6"] { background-color: #0dcaf0 !important; color: #212529 !important; }
-.badge-tag[data-color="7"] { background-color: #0d6efd !important; }
-.badge-tag[data-color="8"] { background-color: #6f42c1 !important; }
-.badge-tag[data-color="9"] { background-color: #d63384 !important; }
-.badge-tag[data-color="10"] { background-color: #495057 !important; }
-.badge-tag[data-color="11"] { background-color: #343a40 !important; }
+/* Mapeamento de cores do Odoo */
+.badge-tag[data-color="0"] { background-color: var(--gray-50) !important; }
+.badge-tag[data-color="1"] { background-color: var(--semantic-danger) !important; }
+.badge-tag[data-color="2"] { background-color: var(--semantic-warning) !important; color: var(--gray-10) !important; }
+.badge-tag[data-color="3"] { background-color: var(--semantic-warning) !important; color: var(--gray-10) !important; }
+.badge-tag[data-color="4"] { background-color: var(--semantic-success) !important; }
+.badge-tag[data-color="5"] { background-color: var(--semantic-success) !important; }
+.badge-tag[data-color="6"] { background-color: var(--gray-50) !important; }
+.badge-tag[data-color="7"] { background-color: var(--gray-50) !important; }
+.badge-tag[data-color="8"] { background-color: var(--gray-50) !important; }
+.badge-tag[data-color="9"] { background-color: var(--gray-50) !important; }
+.badge-tag[data-color="10"] { background-color: var(--gray-30) !important; }
+.badge-tag[data-color="11"] { background-color: var(--gray-30) !important; }
 
-/* ==========================================================================
+/* ═══════════════════════════════════════════════════════════════════════════
    ANIMACOES
-   ========================================================================== */
+   ═══════════════════════════════════════════════════════════════════════════ */
 @keyframes pulse {
     0% { transform: scale(1); }
     50% { transform: scale(1.1); box-shadow: 0 0 15px rgba(40, 167, 69, 0.5); }
@@ -572,7 +562,7 @@
 
 .bg-filtro {
     cursor: pointer !important;
-    transition: all 0.2s ease;
+    transition: all var(--transition-fast);
     user-select: none;
 }
 
@@ -606,7 +596,7 @@
 .deleting {
     opacity: 0.5;
     pointer-events: none;
-    transition: opacity 0.3s ease;
+    transition: opacity var(--transition-normal);
 }
 
 .separacao-criada-animation {
@@ -619,9 +609,9 @@
     100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); }
 }
 
-/* ==========================================================================
+/* ═══════════════════════════════════════════════════════════════════════════
    RESPONSIVIDADE
-   ========================================================================== */
+   ═══════════════════════════════════════════════════════════════════════════ */
 @media (max-width: 768px) {
     .lote-card .card-header {
         flex-direction: column;
@@ -629,7 +619,7 @@
     }
 
     .lote-acoes {
-        margin-top: 0.5rem;
+        margin-top: var(--space-2);
     }
 
     .totais-lote .row {
@@ -638,11 +628,11 @@
 
     .btn-toolbar {
         flex-direction: column;
-        gap: 0.5rem;
+        gap: var(--space-2);
     }
 
     .filters-section .row {
-        row-gap: 0.5rem;
+        row-gap: var(--space-2);
     }
 
     .table-responsive {
@@ -661,9 +651,9 @@
     }
 }
 
-/* ==========================================================================
+/* ═══════════════════════════════════════════════════════════════════════════
    UTILITARIOS
-   ========================================================================== */
+   ═══════════════════════════════════════════════════════════════════════════ */
 .text-truncate-2 {
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -685,9 +675,9 @@
     to { transform: rotate(360deg); }
 }
 
-/* ==========================================================================
+/* ═══════════════════════════════════════════════════════════════════════════
    ACESSIBILIDADE - Preferencia de movimento reduzido
-   ========================================================================== */
+   ═══════════════════════════════════════════════════════════════════════════ */
 @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -705,90 +695,42 @@
     }
 }
 
-/* ==========================================================================
-   ESTADOS OUTLINE (LEGACY - para compatibilidade)
-   ========================================================================== */
-.bg-outline-primary {
-    background-color: transparent;
-    color: var(--cart-badge-primary);
-    border-color: var(--cart-badge-primary);
-}
-
-.bg-outline-secondary {
-    background-color: transparent;
-    color: var(--cart-badge-secondary);
-    border-color: var(--cart-badge-secondary);
-}
-
-.bg-outline-success {
-    background-color: transparent;
-    color: var(--cart-badge-success);
-    border-color: var(--cart-badge-success);
-}
-
-.bg-outline-danger {
-    background-color: transparent;
-    color: var(--cart-badge-danger);
-    border-color: var(--cart-badge-danger);
-}
-
+/* ═══════════════════════════════════════════════════════════════════════════
+   ESTADOS OUTLINE (LEGACY - convertido para cinza padronizado)
+   ═══════════════════════════════════════════════════════════════════════════ */
+.bg-outline-primary,
+.bg-outline-secondary,
+.bg-outline-success,
+.bg-outline-danger,
 .bg-outline-warning {
     background-color: transparent;
-    color: var(--cart-badge-yellow);
-    border-color: var(--cart-badge-yellow);
+    color: var(--gray-40);
+    border-color: var(--gray-60);
 }
 
-/* Estados ativos para outline badges */
-.badge-filtro.ativo.bg-outline-primary {
-    background-color: var(--cart-badge-primary);
-    color: white;
-}
-
-.badge-filtro.ativo.bg-outline-secondary {
-    background-color: var(--cart-badge-secondary);
-    color: white;
-}
-
-.badge-filtro.ativo.bg-outline-success {
-    background-color: var(--cart-badge-success);
-    color: white;
-}
-
-.badge-filtro.ativo.bg-outline-danger {
-    background-color: var(--cart-badge-danger);
-    color: white;
-}
-
-.badge-filtro.ativo.bg-outline-warning {
-    background-color: var(--cart-badge-yellow);
-    color: #000;
-}
-
-/* ==========================================================================
+/* ═══════════════════════════════════════════════════════════════════════════
    TABELA DE SEPARACOES COMPACTAS
-   ========================================================================== */
+   ═══════════════════════════════════════════════════════════════════════════ */
 .separacoes-compactas-container {
-    background-color: var(--bs-body-bg);
-    border-color: var(--bs-border-color);
+    background-color: var(--bg-surface);
+    border-color: var(--border-default);
 }
 
-/* Substitui bg-white com suporte a tema */
 .separacoes-compactas-container.bg-white,
 .separacoes-compactas-container .bg-white {
-    background-color: var(--bs-body-bg) !important;
+    background-color: var(--bg-surface) !important;
 }
 
-/* Thead da tabela de separacoes */
 .separacoes-compactas-table thead,
 .table-separacoes-compactas thead {
-    background-color: var(--bs-tertiary-bg) !important;
-    border-bottom: 2px solid var(--bs-border-color);
+    background-color: var(--bg-elevated) !important;
+    border-bottom: 2px solid var(--border-default);
 }
 
 .separacoes-compactas-table thead th,
 .table-separacoes-compactas thead th {
-    background-color: var(--bs-tertiary-bg) !important;
-    color: var(--bs-secondary-color) !important;
+    background-color: var(--bg-elevated) !important;
+    color: var(--text-secondary) !important;
     border: none !important;
     font-size: 0.8rem;
     font-weight: 600;
@@ -796,10 +738,9 @@
     letter-spacing: 0.3px;
 }
 
-/* Linhas da tabela */
 .separacoes-compactas-table tbody tr,
 .table-separacoes-compactas tbody tr {
-    border-bottom: 1px solid var(--bs-border-color);
+    border-bottom: 1px solid var(--border-default);
 }
 
 .separacoes-compactas-table tbody tr:hover,
@@ -807,7 +748,6 @@
     background-color: var(--cart-hover-bg);
 }
 
-/* Observacao com ellipsis */
 .obs-ellipsis {
     cursor: help;
     display: inline-block;
@@ -817,48 +757,44 @@
     white-space: nowrap;
 }
 
-/* ==========================================================================
+/* ═══════════════════════════════════════════════════════════════════════════
    DETALHES EXPANDIDOS - Dark Mode Fix
-   ========================================================================== */
+   ═══════════════════════════════════════════════════════════════════════════ */
 .detalhes-content.bg-light {
-    background-color: var(--bs-tertiary-bg) !important;
+    background-color: var(--bg-elevated) !important;
 }
 
-/* ==========================================================================
+/* ═══════════════════════════════════════════════════════════════════════════
    WORKSPACE - Dark Mode Overrides
-   ========================================================================== */
+   ═══════════════════════════════════════════════════════════════════════════ */
 .workspace-produtos.bg-light {
-    background-color: var(--bs-secondary-bg) !important;
+    background-color: var(--bg-surface) !important;
 }
 
-/* Table dark header com suporte a tema */
 .workspace-produtos-table .table-dark,
 .workspace-produtos-table thead.table-dark {
-    background-color: var(--bs-tertiary-bg) !important;
-    color: var(--bs-body-color) !important;
+    background-color: var(--bg-elevated) !important;
+    color: var(--text-primary) !important;
 }
 
 .workspace-produtos-table thead.table-dark th {
-    background-color: var(--bs-tertiary-bg) !important;
-    color: var(--bs-secondary-color) !important;
-    border-color: var(--bs-border-color) !important;
+    background-color: var(--bg-elevated) !important;
+    color: var(--text-secondary) !important;
+    border-color: var(--border-default) !important;
 }
 
-/* ==========================================================================
+/* ═══════════════════════════════════════════════════════════════════════════
    CARD HEADER PRIMARY - Com suporte a tema
-   ========================================================================== */
+   ═══════════════════════════════════════════════════════════════════════════ */
 .table-section .card-header.bg-primary {
     background: var(--cart-dropdown-header-bg) !important;
 }
 
-/* ==========================================================================
+/* ═══════════════════════════════════════════════════════════════════════════
    UTILITARIOS DE TEXTO COM TEMA
-   ========================================================================== */
-/* .text-dark ja tratado no bootstrap-overrides.css */
-
-/* Classes de cores semanticas que respeitam o tema */
+   ═══════════════════════════════════════════════════════════════════════════ */
 .text-primary-theme {
-    color: var(--bs-primary) !important;
+    color: var(--accent-primary) !important;
 }
 
 .text-success-theme {
@@ -866,67 +802,61 @@
 }
 
 .text-muted-theme {
-    color: var(--bs-secondary-color) !important;
+    color: var(--text-secondary) !important;
 }
 
-/* ==========================================================================
+/* ═══════════════════════════════════════════════════════════════════════════
    BG-LIGHT GLOBAL OVERRIDE PARA DARK MODE
-   ========================================================================== */
-/* Card headers com bg-light */
+   ═══════════════════════════════════════════════════════════════════════════ */
 .card-header.bg-light {
-    background-color: var(--bs-tertiary-bg) !important;
-    border-color: var(--bs-border-color) !important;
+    background-color: var(--bg-elevated) !important;
+    border-color: var(--border-default) !important;
 }
 
-/* Containers com bg-light */
 .pedidos-container.bg-light,
 .content-detalhes .bg-light {
-    background-color: var(--bs-tertiary-bg) !important;
+    background-color: var(--bg-elevated) !important;
 }
 
-/* Placeholder de lote */
 .lote-placeholder {
-    border-color: var(--bs-secondary-color) !important;
+    border-color: var(--text-secondary) !important;
 }
 
 .lote-placeholder:hover {
-    border-color: var(--bs-primary) !important;
-    background-color: rgba(var(--bs-primary-rgb), 0.05) !important;
+    border-color: var(--accent-primary) !important;
+    background-color: rgba(255, 212, 38, 0.05) !important;
 }
 
-/* ==========================================================================
+/* ═══════════════════════════════════════════════════════════════════════════
    TABLE THEAD THEME - Substitui table-light
-   ========================================================================== */
+   ═══════════════════════════════════════════════════════════════════════════ */
 .table-thead-theme {
-    background-color: var(--bs-tertiary-bg) !important;
-    color: var(--bs-body-color) !important;
+    background-color: var(--bg-elevated) !important;
+    color: var(--text-primary) !important;
 }
 
 .table-thead-theme th {
-    background-color: var(--bs-tertiary-bg) !important;
-    color: var(--bs-body-color) !important;
-    border-bottom: 2px solid var(--bs-border-color) !important;
+    background-color: var(--bg-elevated) !important;
+    color: var(--text-primary) !important;
+    border-bottom: 2px solid var(--border-default) !important;
     font-weight: 600;
     text-transform: uppercase;
     font-size: 0.75rem;
     letter-spacing: 0.3px;
 }
 
-/* ==========================================================================
+/* ═══════════════════════════════════════════════════════════════════════════
    TABLE-SUCCESS - Hover corrigido para Dark Mode
-   Linha de pedido com separacao completa
-   ========================================================================== */
-/* Light mode: verde claro */
+   ═══════════════════════════════════════════════════════════════════════════ */
 .table-success,
 tr.table-success,
 tr.table-success > td,
 .pedido-row.table-success,
 .pedido-row.table-success > td {
-    --bs-table-bg: rgba(25, 135, 84, 0.1);
-    --bs-table-hover-bg: rgba(25, 135, 84, 0.2);
+    --bs-table-bg: rgba(40, 167, 90, 0.1);
+    --bs-table-hover-bg: rgba(40, 167, 90, 0.2);
 }
 
-/* Dark mode: verde mais visivel - background base */
 [data-bs-theme="dark"] .table-success,
 [data-bs-theme="dark"] tr.table-success,
 [data-bs-theme="dark"] tr.table-success > td,
@@ -937,14 +867,13 @@ tr.table-success > td,
 [data-theme="dark"] tr.table-success > td,
 [data-theme="dark"] .pedido-row.table-success,
 [data-theme="dark"] .pedido-row.table-success > td {
-    --bs-table-bg: rgba(16, 185, 129, 0.15) !important;
-    --bs-table-hover-bg: rgba(16, 185, 129, 0.30) !important;
-    --bs-table-color: var(--bs-body-color) !important;
-    background-color: rgba(16, 185, 129, 0.15) !important;
-    color: var(--bs-body-color) !important;
+    --bs-table-bg: rgba(40, 167, 90, 0.15) !important;
+    --bs-table-hover-bg: rgba(40, 167, 90, 0.30) !important;
+    --bs-table-color: var(--text-primary) !important;
+    background-color: rgba(40, 167, 90, 0.15) !important;
+    color: var(--text-primary) !important;
 }
 
-/* Dark mode: hover mais intenso - verde medio */
 [data-bs-theme="dark"] .table-hover > tbody > tr.table-success:hover,
 [data-bs-theme="dark"] .table-hover > tbody > tr.table-success:hover > td,
 [data-bs-theme="dark"] .table-hover > tbody > .pedido-row.table-success:hover,
@@ -953,13 +882,13 @@ tr.table-success > td,
 [data-theme="dark"] .table-hover > tbody > tr.table-success:hover > td,
 [data-theme="dark"] .table-hover > tbody > .pedido-row.table-success:hover,
 [data-theme="dark"] .table-hover > tbody > .pedido-row.table-success:hover > td {
-    background-color: rgba(16, 185, 129, 0.30) !important;
-    --bs-table-accent-bg: rgba(16, 185, 129, 0.30) !important;
+    background-color: rgba(40, 167, 90, 0.30) !important;
+    --bs-table-accent-bg: rgba(40, 167, 90, 0.30) !important;
 }
 
-/* ==========================================================================
+/* ═══════════════════════════════════════════════════════════════════════════
    BADGE CONTADOR - Substitui bg-light text-dark
-   ========================================================================== */
+   ═══════════════════════════════════════════════════════════════════════════ */
 .badge-contador-theme {
     background-color: rgba(255, 255, 255, 0.2) !important;
     color: #fff !important;
@@ -973,21 +902,21 @@ tr.table-success > td,
     color: #fff !important;
 }
 
-/* ==========================================================================
+/* ═══════════════════════════════════════════════════════════════════════════
    INDICADOR DE PROGRESSO - Analise de Ruptura
-   ========================================================================== */
+   ═══════════════════════════════════════════════════════════════════════════ */
 .ruptura-progresso-indicator {
     position: fixed;
     bottom: 20px;
     right: 20px;
-    background-color: var(--bs-body-bg);
-    border: 1px solid var(--bs-border-color);
-    border-radius: 8px;
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
     padding: 10px 15px;
-    box-shadow: 0 2px 10px var(--cart-card-shadow);
+    box-shadow: var(--cart-card-shadow);
     z-index: 1000;
     font-size: 0.9rem;
-    color: var(--bs-body-color);
+    color: var(--text-primary);
 }
 
 [data-bs-theme="dark"] .ruptura-progresso-indicator,
@@ -995,23 +924,23 @@ tr.table-success > td,
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
 }
 
-/* ==========================================================================
+/* ═══════════════════════════════════════════════════════════════════════════
    SWEETALERT2 - Suporte a Dark Mode
-   ========================================================================== */
+   ═══════════════════════════════════════════════════════════════════════════ */
 [data-bs-theme="dark"] .swal2-popup,
 [data-theme="dark"] .swal2-popup {
-    background-color: var(--bs-secondary-bg) !important;
-    color: var(--bs-body-color) !important;
+    background-color: var(--bg-surface) !important;
+    color: var(--text-primary) !important;
 }
 
 [data-bs-theme="dark"] .swal2-title,
 [data-theme="dark"] .swal2-title {
-    color: var(--bs-body-color) !important;
+    color: var(--text-primary) !important;
 }
 
 [data-bs-theme="dark"] .swal2-html-container,
 [data-theme="dark"] .swal2-html-container {
-    color: var(--bs-secondary-color) !important;
+    color: var(--text-secondary) !important;
 }
 
 [data-bs-theme="dark"] .swal2-input,
@@ -1020,9 +949,9 @@ tr.table-success > td,
 [data-theme="dark"] .swal2-input,
 [data-theme="dark"] .swal2-textarea,
 [data-theme="dark"] .swal2-select {
-    background-color: var(--bs-tertiary-bg) !important;
-    color: var(--bs-body-color) !important;
-    border-color: var(--bs-border-color) !important;
+    background-color: var(--bg-elevated) !important;
+    color: var(--text-primary) !important;
+    border-color: var(--border-default) !important;
 }
 
 [data-bs-theme="dark"] .swal2-input:focus,
@@ -1031,43 +960,40 @@ tr.table-success > td,
 [data-theme="dark"] .swal2-input:focus,
 [data-theme="dark"] .swal2-textarea:focus,
 [data-theme="dark"] .swal2-select:focus {
-    border-color: var(--bs-primary) !important;
-    box-shadow: 0 0 0 3px rgba(var(--bs-primary-rgb), 0.25) !important;
+    border-color: var(--accent-primary) !important;
+    box-shadow: 0 0 0 3px rgba(255, 212, 38, 0.25) !important;
 }
 
 [data-bs-theme="dark"] .swal2-validation-message,
 [data-theme="dark"] .swal2-validation-message {
-    background-color: var(--bs-tertiary-bg) !important;
-    color: var(--bs-body-color) !important;
+    background-color: var(--bg-elevated) !important;
+    color: var(--text-primary) !important;
 }
 
 [data-bs-theme="dark"] .swal2-footer,
 [data-theme="dark"] .swal2-footer {
-    border-top-color: var(--bs-border-color) !important;
-    color: var(--bs-secondary-color) !important;
+    border-top-color: var(--border-default) !important;
+    color: var(--text-secondary) !important;
 }
 
-/* Close button */
 [data-bs-theme="dark"] .swal2-close,
 [data-theme="dark"] .swal2-close {
-    color: var(--bs-secondary-color) !important;
+    color: var(--text-secondary) !important;
 }
 
 [data-bs-theme="dark"] .swal2-close:hover,
 [data-theme="dark"] .swal2-close:hover {
-    color: var(--bs-body-color) !important;
+    color: var(--text-primary) !important;
 }
 
-/* Timer progress bar */
 [data-bs-theme="dark"] .swal2-timer-progress-bar,
 [data-theme="dark"] .swal2-timer-progress-bar {
     background-color: rgba(255, 255, 255, 0.3) !important;
 }
 
-/* ==========================================================================
+/* ═══════════════════════════════════════════════════════════════════════════
    MODAL RUPTURA - Botoes no Header
-   ========================================================================== */
-/* Botoes outline dentro de headers coloridos precisam de maior contraste */
+   ═══════════════════════════════════════════════════════════════════════════ */
 #modalRuptura .modal-header .btn-group .btn-outline-danger,
 #modalRuptura .modal-header .btn-group .btn-outline-success,
 #modalRuptura .modal-header .btn-group .btn-outline-primary {
@@ -1082,24 +1008,24 @@ tr.table-success > td,
 }
 
 #modalRuptura .modal-header .btn-group .btn-outline-danger.active {
-    background-color: var(--bs-danger) !important;
+    background-color: var(--semantic-danger) !important;
     color: #fff !important;
-    border-color: var(--bs-danger) !important;
+    border-color: var(--semantic-danger) !important;
 }
 
 #modalRuptura .modal-header .btn-group .btn-outline-success.active {
-    background-color: var(--bs-success) !important;
+    background-color: var(--semantic-success) !important;
     color: #fff !important;
-    border-color: var(--bs-success) !important;
+    border-color: var(--semantic-success) !important;
 }
 
 #modalRuptura .modal-header .btn-group .btn-outline-primary.active {
-    background-color: var(--bs-primary) !important;
-    color: #fff !important;
-    border-color: var(--bs-primary) !important;
+    background-color: var(--accent-primary) !important;
+    color: var(--gray-10) !important;
+    border-color: var(--accent-primary) !important;
 }
 
-/* Dark mode - manter legibilidade */
+/* Dark mode */
 [data-bs-theme="dark"] #modalRuptura .modal-header .btn-group .btn-outline-danger,
 [data-bs-theme="dark"] #modalRuptura .modal-header .btn-group .btn-outline-success,
 [data-bs-theme="dark"] #modalRuptura .modal-header .btn-group .btn-outline-primary,
@@ -1120,72 +1046,64 @@ tr.table-success > td,
     background-color: rgba(255, 255, 255, 0.2);
 }
 
-/* ==========================================================================
+/* ═══════════════════════════════════════════════════════════════════════════
    TABLE-SECONDARY - Dark Mode Fix
-   Linhas separadoras "Itens com Ruptura" / "Itens Disponiveis"
-   ========================================================================== */
+   ═══════════════════════════════════════════════════════════════════════════ */
 [data-bs-theme="dark"] .table-secondary,
 [data-bs-theme="dark"] tr.table-secondary,
 [data-bs-theme="dark"] tr.table-secondary > td,
 [data-theme="dark"] .table-secondary,
 [data-theme="dark"] tr.table-secondary,
 [data-theme="dark"] tr.table-secondary > td {
-    --bs-table-bg: var(--bs-tertiary-bg) !important;
-    --bs-table-color: var(--bs-body-color) !important;
-    background-color: var(--bs-tertiary-bg) !important;
-    color: var(--bs-body-color) !important;
-    border-color: var(--bs-border-color) !important;
+    --bs-table-bg: var(--bg-elevated) !important;
+    --bs-table-color: var(--text-primary) !important;
+    background-color: var(--bg-elevated) !important;
+    color: var(--text-primary) !important;
+    border-color: var(--border-default) !important;
 }
 
-/* Modal Ruptura especifico - linhas de separacao */
 [data-bs-theme="dark"] #modalRuptura .table-secondary td,
 [data-theme="dark"] #modalRuptura .table-secondary td {
-    background-color: var(--bs-secondary-bg) !important;
-    color: var(--bs-body-color) !important;
+    background-color: var(--bg-surface) !important;
+    color: var(--text-primary) !important;
 }
 
-/* ==========================================================================
+/* ═══════════════════════════════════════════════════════════════════════════
    MODALS - Dark Mode Global Fix
-   ========================================================================== */
-/* Modal content background */
+   ═══════════════════════════════════════════════════════════════════════════ */
 [data-bs-theme="dark"] .modal-content,
 [data-theme="dark"] .modal-content {
-    background-color: var(--bs-body-bg) !important;
-    color: var(--bs-body-color) !important;
-    border-color: var(--bs-border-color) !important;
+    background-color: var(--bg-overlay) !important;
+    color: var(--text-primary) !important;
+    border-color: var(--border-default) !important;
 }
 
-/* Modal header sem bg-* */
 [data-bs-theme="dark"] .modal-header,
 [data-theme="dark"] .modal-header {
-    border-color: var(--bs-border-color) !important;
+    border-color: var(--border-default) !important;
 }
 
-/* Modal body */
 [data-bs-theme="dark"] .modal-body,
 [data-theme="dark"] .modal-body {
-    color: var(--bs-body-color) !important;
+    color: var(--text-primary) !important;
 }
 
-/* Modal footer */
 [data-bs-theme="dark"] .modal-footer,
 [data-theme="dark"] .modal-footer {
-    border-color: var(--bs-border-color) !important;
+    border-color: var(--border-default) !important;
 }
 
-/* Cards dentro de modais */
 [data-bs-theme="dark"] .modal .card,
 [data-theme="dark"] .modal .card {
-    background-color: var(--bs-secondary-bg) !important;
-    border-color: var(--bs-border-color) !important;
+    background-color: var(--bg-surface) !important;
+    border-color: var(--border-default) !important;
 }
 
 [data-bs-theme="dark"] .modal .card-body,
 [data-theme="dark"] .modal .card-body {
-    color: var(--bs-body-color) !important;
+    color: var(--text-primary) !important;
 }
 
-/* Card headers com cores especificas - manter cores mas garantir legibilidade */
 [data-bs-theme="dark"] .modal .card-header.bg-info,
 [data-bs-theme="dark"] .modal .card-header.bg-success,
 [data-bs-theme="dark"] .modal .card-header.bg-warning,
@@ -1203,48 +1121,45 @@ tr.table-success > td,
     border-color: transparent !important;
 }
 
-/* bg-warning precisa de texto escuro */
 [data-bs-theme="dark"] .modal .card-header.bg-warning,
 [data-theme="dark"] .modal .card-header.bg-warning {
-    color: #212529 !important;
+    color: var(--gray-10) !important;
 }
 
-/* Inputs dentro de modais */
 [data-bs-theme="dark"] .modal .form-control,
 [data-bs-theme="dark"] .modal .form-select,
 [data-theme="dark"] .modal .form-control,
 [data-theme="dark"] .modal .form-select {
-    background-color: var(--bs-tertiary-bg) !important;
-    color: var(--bs-body-color) !important;
-    border-color: var(--bs-border-color) !important;
+    background-color: var(--bg-elevated) !important;
+    color: var(--text-primary) !important;
+    border-color: var(--border-default) !important;
 }
 
 [data-bs-theme="dark"] .modal .form-control:focus,
 [data-bs-theme="dark"] .modal .form-select:focus,
 [data-theme="dark"] .modal .form-control:focus,
 [data-theme="dark"] .modal .form-select:focus {
-    border-color: var(--bs-primary) !important;
-    box-shadow: 0 0 0 0.25rem rgba(var(--bs-primary-rgb), 0.25) !important;
+    border-color: var(--accent-primary) !important;
+    box-shadow: 0 0 0 0.25rem rgba(255, 212, 38, 0.25) !important;
 }
 
-/* Tabelas dentro de modais */
 [data-bs-theme="dark"] .modal .table,
 [data-theme="dark"] .modal .table {
     --bs-table-bg: transparent;
-    --bs-table-color: var(--bs-body-color);
-    color: var(--bs-body-color) !important;
+    --bs-table-color: var(--text-primary);
+    color: var(--text-primary) !important;
 }
 
 [data-bs-theme="dark"] .modal .table thead,
 [data-theme="dark"] .modal .table thead {
-    background-color: var(--bs-tertiary-bg) !important;
+    background-color: var(--bg-elevated) !important;
 }
 
 [data-bs-theme="dark"] .modal .table th,
 [data-bs-theme="dark"] .modal .table td,
 [data-theme="dark"] .modal .table th,
 [data-theme="dark"] .modal .table td {
-    border-color: var(--bs-border-color) !important;
+    border-color: var(--border-default) !important;
 }
 
 [data-bs-theme="dark"] .modal .table-hover tbody tr:hover,
@@ -1252,77 +1167,73 @@ tr.table-success > td,
     background-color: var(--cart-hover-bg) !important;
 }
 
-/* Alerts dentro de modais */
 [data-bs-theme="dark"] .modal .alert-info,
 [data-theme="dark"] .modal .alert-info {
-    background-color: rgba(var(--bs-info-rgb), 0.15) !important;
-    border-color: rgba(var(--bs-info-rgb), 0.3) !important;
-    color: var(--bs-info) !important;
+    background-color: rgba(128, 128, 128, 0.15) !important;
+    border-color: rgba(128, 128, 128, 0.3) !important;
+    color: var(--semantic-info-text) !important;
 }
 
 [data-bs-theme="dark"] .modal .alert-success,
 [data-theme="dark"] .modal .alert-success {
-    background-color: rgba(var(--bs-success-rgb), 0.15) !important;
-    border-color: rgba(var(--bs-success-rgb), 0.3) !important;
-    color: var(--bs-success) !important;
+    background-color: rgba(40, 167, 90, 0.15) !important;
+    border-color: rgba(40, 167, 90, 0.3) !important;
+    color: var(--semantic-success-text) !important;
 }
 
 [data-bs-theme="dark"] .modal .alert-warning,
 [data-theme="dark"] .modal .alert-warning {
-    background-color: rgba(var(--bs-warning-rgb), 0.15) !important;
-    border-color: rgba(var(--bs-warning-rgb), 0.3) !important;
-    color: var(--bs-warning) !important;
+    background-color: rgba(255, 212, 38, 0.15) !important;
+    border-color: rgba(255, 212, 38, 0.3) !important;
+    color: var(--semantic-warning-text) !important;
 }
 
 [data-bs-theme="dark"] .modal .alert-danger,
 [data-theme="dark"] .modal .alert-danger {
-    background-color: rgba(var(--bs-danger-rgb), 0.15) !important;
-    border-color: rgba(var(--bs-danger-rgb), 0.3) !important;
-    color: var(--bs-danger) !important;
+    background-color: rgba(204, 51, 51, 0.15) !important;
+    border-color: rgba(204, 51, 51, 0.3) !important;
+    color: var(--semantic-danger-text) !important;
 }
 
 [data-bs-theme="dark"] .modal .alert-light,
 [data-theme="dark"] .modal .alert-light {
-    background-color: var(--bs-tertiary-bg) !important;
-    border-color: var(--bs-border-color) !important;
-    color: var(--bs-body-color) !important;
+    background-color: var(--bg-elevated) !important;
+    border-color: var(--border-default) !important;
+    color: var(--text-primary) !important;
 }
 
-/* Text muted dentro de modais */
 [data-bs-theme="dark"] .modal .text-muted,
 [data-theme="dark"] .modal .text-muted {
-    color: var(--bs-secondary-color) !important;
+    color: var(--text-secondary) !important;
 }
 
-/* ==========================================================================
+/* ═══════════════════════════════════════════════════════════════════════════
    MODAIS DE COMPARACAO SENDAS - Especificos
-   ========================================================================== */
-/* Lista de CNPJs */
+   ═══════════════════════════════════════════════════════════════════════════ */
 [data-bs-theme="dark"] #lista-cnpjs-lote .card,
 [data-theme="dark"] #lista-cnpjs-lote .card {
-    background-color: var(--bs-tertiary-bg) !important;
+    background-color: var(--bg-elevated) !important;
 }
 
-/* Accordion dentro de modais */
 [data-bs-theme="dark"] .modal .accordion-item,
 [data-theme="dark"] .modal .accordion-item {
-    background-color: var(--bs-secondary-bg) !important;
-    border-color: var(--bs-border-color) !important;
+    background-color: var(--bg-surface) !important;
+    border-color: var(--border-default) !important;
 }
 
 [data-bs-theme="dark"] .modal .accordion-button,
 [data-theme="dark"] .modal .accordion-button {
-    background-color: var(--bs-tertiary-bg) !important;
-    color: var(--bs-body-color) !important;
+    background-color: var(--bg-elevated) !important;
+    color: var(--text-primary) !important;
 }
 
 [data-bs-theme="dark"] .modal .accordion-button:not(.collapsed),
 [data-theme="dark"] .modal .accordion-button:not(.collapsed) {
-    background-color: var(--bs-secondary-bg) !important;
-    color: var(--bs-primary) !important;
+    background-color: var(--bg-surface) !important;
+    color: var(--accent-primary) !important;
 }
 
 [data-bs-theme="dark"] .modal .accordion-body,
 [data-theme="dark"] .modal .accordion-body {
-    background-color: var(--bs-body-bg) !important;
+    background-color: var(--bg-elevated) !important;
 }

@@ -3,59 +3,15 @@
    Suporte a Dark/Light Mode
    ============================================== */
 
-/* === IMPORT FONT E VARIAVEIS === */
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
-
-/* === VARIAVEIS CSS (DARK MODE - Default) === */
-:root {
-    --cr-bg-primary: #0a1628;
-    --cr-bg-secondary: #111d2e;
-    --cr-bg-tertiary: #1a2942;
-    --cr-bg-hover: #243656;
-
-    --cr-border: #2d4a6a;
-    --cr-border-light: #3d5f82;
-
-    --cr-text-primary: #f0f6fc;
-    --cr-text-secondary: #8b949e;
-    --cr-text-muted: #6e7681;
-
-    --cr-accent-primary: #00d4aa;
-    --cr-accent-success: #10b981;
-    --cr-accent-warning: #f59e0b;
-    --cr-accent-danger: #ef4444;
-    --cr-accent-info: #0ea5e9;
-
-    --cr-font-display: 'IBM Plex Sans', -apple-system, sans-serif;
-    --cr-font-mono: 'JetBrains Mono', 'Fira Code', monospace;
-}
-
-/* === LIGHT MODE === */
-[data-theme="light"] {
-    --cr-bg-primary: #ffffff;
-    --cr-bg-secondary: #f6f8fa;
-    --cr-bg-tertiary: #eaeef2;
-    --cr-bg-hover: rgba(0, 0, 0, 0.04);
-
-    --cr-border: rgba(31, 35, 40, 0.15);
-    --cr-border-light: rgba(31, 35, 40, 0.10);
-
-    --cr-text-primary: #1f2328;
-    --cr-text-secondary: #656d76;
-    --cr-text-muted: #8b949e;
-
-    --cr-accent-primary: #009d80;
-    --cr-accent-success: #0d7d5f;
-    --cr-accent-warning: #b45309;
-    --cr-accent-danger: #dc2626;
-    --cr-accent-info: #0284c7;
-}
+/* === VARIAVEIS CSS === */
+/* NOTA: Este arquivo usa variaveis de _variables.css (--bs-*)
+   Nao redefinir aqui - centralizacao em _variables.css */
 
 /* === CONTAINER PRINCIPAL === */
 body {
-    background: var(--cr-bg-primary) !important;
-    color: var(--cr-text-primary) !important;
-    font-family: var(--cr-font-display);
+    background: var(--bs-body-bg) !important;
+    color: var(--bs-body-color) !important;
+    font-family: var(--bs-font-sans-serif);
 }
 
 /* === PROTEGER NAVBAR NO LIGHT MODE === */
@@ -115,8 +71,8 @@ body {
 
 /* Container principal - EXCLUIR o container dentro do navbar */
 .container-fluid:not(.navbar .container-fluid) {
-    background: var(--cr-bg-primary);
-    color: var(--cr-text-primary);
+    background: var(--bs-body-bg);
+    color: var(--bs-body-color);
 }
 
 /* Garantir que o container do navbar seja transparente */
@@ -127,9 +83,9 @@ body {
 
 /* === SOBRESCREVER BOOTSTRAP GLOBALMENTE === */
 .table {
-    --bs-table-color: var(--cr-text-primary);
-    --bs-table-bg: var(--cr-bg-secondary);
-    --bs-table-border-color: var(--cr-border);
+    --bs-table-color: var(--bs-body-color);
+    --bs-table-bg: var(--bs-secondary-bg);
+    --bs-table-border-color: var(--bs-border-color);
 }
 
 /* Garantir cores em todos os elementos da tabela */
@@ -145,17 +101,17 @@ body {
 .table-contas td strong,
 .table-contas td small,
 .table-contas td i {
-    color: var(--cr-text-primary) !important;
+    color: var(--bs-body-color) !important;
 }
 
 /* Classe cliente-col */
 .table-contas .cliente-col {
-    color: var(--cr-text-primary) !important;
+    color: var(--bs-body-color) !important;
 }
 
 /* Classe tipo-titulo */
 .table-contas .tipo-titulo {
-    color: var(--cr-text-muted) !important;
+    color: var(--bs-muted-color) !important;
 }
 
 /* Exceções para badges que devem manter suas cores */
@@ -166,38 +122,38 @@ body {
 
 /* Exceções para elementos com cores específicas */
 .table-contas .text-danger {
-    color: var(--cr-accent-danger) !important;
+    color: var(--bs-danger) !important;
 }
 .table-contas .text-warning {
-    color: var(--cr-accent-warning) !important;
+    color: var(--bs-warning) !important;
 }
 .table-contas .text-success {
-    color: var(--cr-accent-success) !important;
+    color: var(--bs-success) !important;
 }
 .table-contas .text-info {
-    color: var(--cr-accent-info) !important;
+    color: var(--bs-info) !important;
 }
 .table-contas .text-muted {
-    color: var(--cr-text-muted) !important;
+    color: var(--bs-muted-color) !important;
 }
 .table-contas .text-secondary {
-    color: var(--cr-text-secondary) !important;
+    color: var(--bs-secondary-color) !important;
 }
 
 /* === ACCORDION CUSTOMIZADO === */
 .accordion-item {
-    background: var(--cr-bg-secondary);
-    border-color: var(--cr-border);
+    background: var(--bs-secondary-bg);
+    border-color: var(--bs-border-color);
 }
 
 .accordion-button {
-    background: var(--cr-bg-secondary);
-    color: var(--cr-text-primary);
+    background: var(--bs-secondary-bg);
+    color: var(--bs-body-color);
 }
 
 .accordion-button:not(.collapsed) {
-    background: var(--cr-bg-tertiary);
-    color: var(--cr-accent-primary);
+    background: var(--bs-tertiary-bg);
+    color: var(--bs-primary);
 }
 
 .accordion-button::after {
@@ -213,8 +169,8 @@ body {
 }
 
 .accordion-body {
-    background: var(--cr-bg-secondary);
-    border-top-color: var(--cr-border);
+    background: var(--bs-secondary-bg);
+    border-top-color: var(--bs-border-color);
 }
 
 /* === BARRA DE ACOES E LEMBRETES === */
@@ -224,8 +180,8 @@ body {
 
 /* === FILTROS === */
 .filtros-container {
-    background: var(--cr-bg-secondary);
-    border: 1px solid var(--cr-border);
+    background: var(--bs-secondary-bg);
+    border: 1px solid var(--bs-border-color);
     border-radius: 8px;
     padding: 1rem;
     margin-bottom: 1.5rem;
@@ -233,24 +189,24 @@ body {
 
 /* Form controls */
 .form-control, .form-select {
-    background: var(--cr-bg-tertiary);
-    border-color: var(--cr-border);
-    color: var(--cr-text-primary);
+    background: var(--bs-tertiary-bg);
+    border-color: var(--bs-border-color);
+    color: var(--bs-body-color);
 }
 
 .form-control:focus, .form-select:focus {
-    background: var(--cr-bg-tertiary);
-    border-color: var(--cr-accent-primary);
-    color: var(--cr-text-primary);
+    background: var(--bs-tertiary-bg);
+    border-color: var(--bs-primary);
+    color: var(--bs-body-color);
     box-shadow: 0 0 0 3px rgba(0, 212, 170, 0.15);
 }
 
 .form-control::placeholder {
-    color: var(--cr-text-muted);
+    color: var(--bs-muted-color);
 }
 
 .form-label {
-    color: var(--cr-text-secondary);
+    color: var(--bs-secondary-color);
 }
 
 /* Date inputs */
@@ -265,52 +221,52 @@ input[type="date"] {
 /* === TABELA === */
 .table-contas {
     font-size: 0.8rem;
-    background: var(--cr-bg-secondary) !important;
-    --bs-table-bg: var(--cr-bg-secondary);
-    --bs-table-striped-bg: var(--cr-bg-tertiary);
-    --bs-table-hover-bg: var(--cr-bg-hover);
-    --bs-table-border-color: var(--cr-border);
-    color: var(--cr-text-primary) !important;
+    background: var(--bs-secondary-bg) !important;
+    --bs-table-bg: var(--bs-secondary-bg);
+    --bs-table-striped-bg: var(--bs-tertiary-bg);
+    --bs-table-hover-bg: var(--bs-btn-hover-bg);
+    --bs-table-border-color: var(--bs-border-color);
+    color: var(--bs-body-color) !important;
 }
 
 .table-contas th {
-    background: var(--cr-bg-tertiary) !important;
-    color: var(--cr-text-secondary) !important;
+    background: var(--bs-tertiary-bg) !important;
+    color: var(--bs-secondary-color) !important;
     font-weight: 600;
     white-space: nowrap;
     position: sticky;
     top: 0;
     z-index: 10;
-    border-color: var(--cr-border) !important;
+    border-color: var(--bs-border-color) !important;
 }
 
 .table-contas th a {
-    color: var(--cr-text-secondary) !important;
+    color: var(--bs-secondary-color) !important;
     text-decoration: none;
 }
 
 .table-contas th a:hover {
-    color: var(--cr-accent-primary) !important;
+    color: var(--bs-primary) !important;
 }
 
 .table-contas td {
-    color: var(--cr-text-primary) !important;
-    border-color: var(--cr-border) !important;
+    color: var(--bs-body-color) !important;
+    border-color: var(--bs-border-color) !important;
     vertical-align: middle;
     background: transparent;
 }
 
 /* Sobrescrever table-striped do Bootstrap */
 .table-contas.table-striped > tbody > tr:nth-of-type(odd) > * {
-    background-color: var(--cr-bg-tertiary) !important;
-    --bs-table-accent-bg: var(--cr-bg-tertiary);
-    color: var(--cr-text-primary) !important;
+    background-color: var(--bs-tertiary-bg) !important;
+    --bs-table-accent-bg: var(--bs-tertiary-bg);
+    color: var(--bs-body-color) !important;
 }
 
 .table-contas.table-striped > tbody > tr:nth-of-type(even) > * {
-    background-color: var(--cr-bg-secondary) !important;
-    --bs-table-accent-bg: var(--cr-bg-secondary);
-    color: var(--cr-text-primary) !important;
+    background-color: var(--bs-secondary-bg) !important;
+    --bs-table-accent-bg: var(--bs-secondary-bg);
+    color: var(--bs-body-color) !important;
 }
 
 .table-contas tbody tr {
@@ -318,9 +274,9 @@ input[type="date"] {
 }
 
 .table-contas.table-hover > tbody > tr:hover > * {
-    background-color: var(--cr-bg-hover) !important;
-    --bs-table-accent-bg: var(--cr-bg-hover);
-    color: var(--cr-text-primary) !important;
+    background-color: var(--bs-btn-hover-bg) !important;
+    --bs-table-accent-bg: var(--bs-btn-hover-bg);
+    color: var(--bs-body-color) !important;
 }
 
 /* === BADGES DE EMPRESA === */
@@ -329,8 +285,8 @@ input[type="date"] {
     padding: 0.2rem 0.4rem;
 }
 
-.badge-fb { background-color: var(--cr-accent-success); }
-.badge-sc { background-color: var(--cr-accent-info); }
+.badge-fb { background-color: var(--bs-success); }
+.badge-sc { background-color: var(--bs-info); }
 .badge-cd { background-color: #6f42c1; }
 
 .badge-status {
@@ -341,7 +297,7 @@ input[type="date"] {
 .valor-cell {
     font-size: 0.75rem;
     white-space: nowrap;
-    font-family: var(--cr-font-mono);
+    font-family: var(--bs-font-monospace);
 }
 
 .valor-display, .abat-display, .saldo-display {
@@ -352,7 +308,7 @@ input[type="date"] {
     font-size: 0.75rem;
     min-width: 70px;
     text-align: right;
-    font-family: var(--cr-font-mono);
+    font-family: var(--bs-font-monospace);
 }
 
 .valor-display {
@@ -361,14 +317,14 @@ input[type="date"] {
 }
 
 .valor-positivo {
-    color: var(--cr-accent-success);
+    color: var(--bs-success);
     background-color: rgba(16, 185, 129, 0.15);
 }
 .valor-positivo:hover {
     background-color: rgba(16, 185, 129, 0.25);
 }
 .valor-negativo {
-    color: var(--cr-accent-danger);
+    color: var(--bs-danger);
     background-color: rgba(239, 68, 68, 0.15);
 }
 
@@ -378,35 +334,35 @@ input[type="date"] {
     transition: all 0.2s ease;
 }
 .abat-valor {
-    color: var(--cr-accent-warning);
+    color: var(--bs-warning);
     background-color: rgba(245, 158, 11, 0.15);
 }
 .abat-valor:hover {
     background-color: rgba(245, 158, 11, 0.25);
 }
 .abat-zero {
-    color: var(--cr-text-muted);
+    color: var(--bs-muted-color);
     background-color: transparent;
 }
 .abat-zero:hover {
-    color: var(--cr-text-secondary);
-    background-color: var(--cr-bg-hover);
+    color: var(--bs-secondary-color);
+    background-color: var(--bs-btn-hover-bg);
 }
 
 /* === SALDO === */
 .saldo-positivo {
-    color: var(--cr-accent-success);
+    color: var(--bs-success);
     background-color: rgba(16, 185, 129, 0.15);
     font-weight: 600;
 }
 .saldo-negativo {
-    color: var(--cr-accent-danger);
+    color: var(--bs-danger);
     background-color: rgba(239, 68, 68, 0.15);
     font-weight: 600;
 }
 .saldo-zero {
-    color: var(--cr-text-muted);
-    background-color: var(--cr-bg-hover);
+    color: var(--bs-muted-color);
+    background-color: var(--bs-btn-hover-bg);
 }
 
 /* === CONFIRMACAO === */
@@ -422,13 +378,13 @@ input[type="date"] {
 }
 .confirmacao-ok {
     color: #fff;
-    background-color: var(--cr-accent-success);
+    background-color: var(--bs-success);
 }
 .confirmacao-ok:hover {
     filter: brightness(1.1);
 }
 .confirmacao-aberto {
-    color: var(--cr-accent-warning);
+    color: var(--bs-warning);
     background-color: rgba(245, 158, 11, 0.15);
     border: 1px solid rgba(245, 158, 11, 0.3);
 }
@@ -449,20 +405,20 @@ input[type="date"] {
 }
 .acao-ativa {
     color: #fff;
-    background-color: var(--cr-accent-danger);
+    background-color: var(--bs-danger);
     font-weight: 500;
 }
 .acao-ativa:hover {
     filter: brightness(1.1);
 }
 .acao-vazia {
-    color: var(--cr-text-muted);
-    background-color: var(--cr-bg-tertiary);
-    border: 1px dashed var(--cr-border);
+    color: var(--bs-muted-color);
+    background-color: var(--bs-tertiary-bg);
+    border: 1px dashed var(--bs-border-color);
 }
 .acao-vazia:hover {
-    background-color: var(--cr-bg-hover);
-    border-color: var(--cr-border-light);
+    background-color: var(--bs-btn-hover-bg);
+    border-color: var(--bs-border-color-subtle);
 }
 
 /* === COLUNAS === */
@@ -502,7 +458,7 @@ input[type="date"] {
 
 /* === INFO TOTAIS === */
 .info-totais {
-    background: linear-gradient(135deg, var(--cr-accent-success) 0%, var(--cr-accent-primary) 100%);
+    background: linear-gradient(135deg, var(--bs-success) 0%, var(--bs-primary) 100%);
     color: white;
     border-radius: 8px;
     padding: 1rem;
@@ -511,12 +467,12 @@ input[type="date"] {
 
 /* === CANHOTO === */
 .canhoto-icon {
-    color: var(--cr-accent-success);
+    color: var(--bs-success);
     cursor: pointer;
 }
 
 .no-canhoto-icon {
-    color: var(--cr-accent-danger);
+    color: var(--bs-danger);
 }
 
 /* === TOOLTIP === */
@@ -540,16 +496,16 @@ input[type="date"] {
 }
 .alerta-on {
     color: #fff;
-    background-color: var(--cr-accent-danger);
+    background-color: var(--bs-danger);
     animation: pulse-alert 1.5s infinite;
 }
 .alerta-off {
-    color: var(--cr-text-muted);
+    color: var(--bs-muted-color);
     background-color: transparent;
 }
 .alerta-off:hover {
-    color: var(--cr-text-secondary);
-    background-color: var(--cr-bg-hover);
+    color: var(--bs-secondary-color);
+    background-color: var(--bs-btn-hover-bg);
 }
 @keyframes pulse-alert {
     0%, 100% { opacity: 1; }
@@ -560,10 +516,10 @@ input[type="date"] {
 .obs-clicavel {
     cursor: pointer;
     text-decoration: underline dotted;
-    color: var(--cr-text-muted) !important;
+    color: var(--bs-muted-color) !important;
 }
 .obs-clicavel:hover {
-    color: var(--cr-accent-info) !important;
+    color: var(--bs-info) !important;
 }
 .obs-clicavel i {
     color: inherit !important;
@@ -573,9 +529,9 @@ input[type="date"] {
 }
 
 /* === PREVISAO ENTREGA === */
-.previsao-agendado { color: var(--cr-accent-warning); font-weight: 600; }
-.previsao-confirmado { color: var(--cr-accent-info); font-weight: 600; }
-.previsao-prevista { color: var(--cr-text-muted); }
+.previsao-agendado { color: var(--bs-warning); font-weight: 600; }
+.previsao-confirmado { color: var(--bs-info); font-weight: 600; }
+.previsao-prevista { color: var(--bs-muted-color); }
 
 /* === NF INFO ADICIONAL === */
 .nf-info-extra {
@@ -589,16 +545,16 @@ input[type="date"] {
 
 /* === LINK TITULO NF === */
 .titulo-nf-link {
-    color: var(--cr-text-primary) !important;
+    color: var(--bs-body-color) !important;
     text-decoration: none;
     cursor: pointer;
     transition: all 0.2s ease;
 }
 .titulo-nf-link strong {
-    color: var(--cr-text-primary) !important;
+    color: var(--bs-body-color) !important;
 }
 .titulo-nf-link:hover {
-    color: var(--cr-accent-primary);
+    color: var(--bs-primary);
     text-decoration: underline;
 }
 .titulo-nf-link strong {
@@ -616,7 +572,7 @@ input[type="date"] {
 .lembrete-item {
     background: rgba(245, 158, 11, 0.15);
     border: 1px solid rgba(245, 158, 11, 0.3);
-    color: var(--cr-accent-warning);
+    color: var(--bs-warning);
     border-radius: 4px;
     padding: 0.2rem 0.4rem;
     cursor: pointer;
@@ -627,12 +583,12 @@ input[type="date"] {
 .lembrete-item.passado {
     background: rgba(239, 68, 68, 0.15);
     border-color: rgba(239, 68, 68, 0.3);
-    color: var(--cr-accent-danger);
+    color: var(--bs-danger);
 }
 .lembrete-item.hoje {
     background: rgba(16, 185, 129, 0.15);
     border-color: rgba(16, 185, 129, 0.3);
-    color: var(--cr-accent-success);
+    color: var(--bs-success);
 }
 
 /* === COLUNAS COMPACTAS === */
@@ -648,41 +604,41 @@ input[type="date"] {
 
 /* === MODAL STYLING === */
 .modal-content {
-    background: var(--cr-bg-secondary);
-    border: 1px solid var(--cr-border);
-    color: var(--cr-text-primary);
+    background: var(--bs-secondary-bg);
+    border: 1px solid var(--bs-border-color);
+    color: var(--bs-body-color);
 }
 
 /* Modal header - NÃO sobrescrever se tiver classe Bootstrap de cor */
 .modal-header:not(.bg-primary):not(.bg-success):not(.bg-danger):not(.bg-warning):not(.bg-info):not(.bg-secondary):not(.bg-dark):not(.bg-light) {
-    background: var(--cr-bg-tertiary);
-    border-bottom-color: var(--cr-border);
+    background: var(--bs-tertiary-bg);
+    border-bottom-color: var(--bs-border-color);
 }
 
 /* Para modal headers com classes Bootstrap de cor - Usar cores do DESIGN SYSTEM */
 /* NÃO usar cores genéricas Bootstrap - usar paleta financeira única */
 .modal-header.bg-primary {
-    background: linear-gradient(135deg, var(--cr-accent-primary), var(--cr-accent-info)) !important;
+    background: linear-gradient(135deg, var(--bs-primary), var(--bs-info)) !important;
     border-bottom-color: rgba(0, 0, 0, 0.2);
 }
 
 .modal-header.bg-success {
-    background: linear-gradient(135deg, var(--cr-accent-success), #059669) !important;
+    background: linear-gradient(135deg, var(--bs-success), #059669) !important;
     border-bottom-color: rgba(0, 0, 0, 0.2);
 }
 
 .modal-header.bg-danger {
-    background: linear-gradient(135deg, var(--cr-accent-danger), #b91c1c) !important;
+    background: linear-gradient(135deg, var(--bs-danger), #b91c1c) !important;
     border-bottom-color: rgba(0, 0, 0, 0.2);
 }
 
 .modal-header.bg-warning {
-    background: linear-gradient(135deg, var(--cr-accent-warning), #d97706) !important;
+    background: linear-gradient(135deg, var(--bs-warning), #d97706) !important;
     border-bottom-color: rgba(0, 0, 0, 0.2);
 }
 
 .modal-header.bg-info {
-    background: linear-gradient(135deg, var(--cr-accent-info), #0284c7) !important;
+    background: linear-gradient(135deg, var(--bs-info), #0284c7) !important;
     border-bottom-color: rgba(0, 0, 0, 0.2);
 }
 
@@ -704,12 +660,12 @@ input[type="date"] {
 }
 
 .modal-title {
-    color: var(--cr-text-primary);
+    color: var(--bs-body-color);
 }
 
 .modal-body {
-    background: var(--cr-bg-secondary);
-    color: var(--cr-text-primary);
+    background: var(--bs-secondary-bg);
+    color: var(--bs-body-color);
 }
 
 /* Elementos de texto dentro do modal */
@@ -729,8 +685,8 @@ input[type="date"] {
 }
 
 .modal-footer {
-    background: var(--cr-bg-tertiary);
-    border-top-color: var(--cr-border);
+    background: var(--bs-tertiary-bg);
+    border-top-color: var(--bs-border-color);
 }
 
 /* Botão close padrão (dark mode) */
@@ -746,22 +702,22 @@ input[type="date"] {
 
 /* Modal cards */
 .modal .card {
-    background: var(--cr-bg-tertiary);
-    border-color: var(--cr-border);
+    background: var(--bs-tertiary-bg);
+    border-color: var(--bs-border-color);
 }
 
 /* Card header - NÃO sobrescrever se tiver classe Bootstrap de cor */
 .modal .card-header:not(.bg-light):not(.bg-primary):not(.bg-secondary):not(.bg-success):not(.bg-danger):not(.bg-warning):not(.bg-info) {
-    background: var(--cr-bg-hover);
-    border-bottom-color: var(--cr-border);
-    color: var(--cr-text-primary);
+    background: var(--bs-btn-hover-bg);
+    border-bottom-color: var(--bs-border-color);
+    color: var(--bs-body-color);
 }
 
 /* Card header com bg-light - manter light e ajustar para o tema */
 .modal .card-header.bg-light {
-    background-color: var(--cr-bg-tertiary) !important;
-    border-bottom-color: var(--cr-border);
-    color: var(--cr-text-primary);
+    background-color: var(--bs-tertiary-bg) !important;
+    border-bottom-color: var(--bs-border-color);
+    color: var(--bs-body-color);
 }
 
 /* Light mode: card-header bg-light deve ser realmente light */
@@ -771,12 +727,12 @@ input[type="date"] {
 }
 
 .modal .table-secondary {
-    background: var(--cr-bg-tertiary) !important;
+    background: var(--bs-tertiary-bg) !important;
 }
 
 .modal .table-secondary th {
-    background: var(--cr-bg-tertiary) !important;
-    color: var(--cr-text-secondary);
+    background: var(--bs-tertiary-bg) !important;
+    color: var(--bs-secondary-color);
 }
 
 /* Light mode: table-secondary deve manter aparência light */
@@ -790,8 +746,8 @@ input[type="date"] {
 }
 
 .modal .table td {
-    border-color: var(--cr-border);
-    color: var(--cr-text-primary);
+    border-color: var(--bs-border-color);
+    color: var(--bs-body-color);
 }
 
 /* Modal table no light mode */
@@ -820,13 +776,13 @@ input[type="date"] {
 }
 .btn-pendencia.btn-outline-secondary {
     opacity: 0.6;
-    color: var(--cr-text-muted);
-    border-color: var(--cr-border);
+    color: var(--bs-muted-color);
+    border-color: var(--bs-border-color);
 }
 .btn-pendencia.btn-outline-secondary:hover {
     opacity: 1;
-    background-color: var(--cr-accent-danger);
-    border-color: var(--cr-accent-danger);
+    background-color: var(--bs-danger);
+    border-color: var(--bs-danger);
     color: white;
 }
 @keyframes pulse-pendencia {
@@ -837,119 +793,119 @@ input[type="date"] {
 /* === TIPO TITULO === */
 .tipo-titulo {
     font-size: 0.75rem;
-    color: var(--cr-text-muted);
+    color: var(--bs-muted-color);
     cursor: default;
 }
 
 /* === PAGINACAO === */
 .pagination .page-link {
-    background: var(--cr-bg-tertiary);
-    border-color: var(--cr-border);
-    color: var(--cr-text-secondary);
+    background: var(--bs-tertiary-bg);
+    border-color: var(--bs-border-color);
+    color: var(--bs-secondary-color);
 }
 
 .pagination .page-link:hover {
-    background: var(--cr-bg-hover);
-    color: var(--cr-text-primary);
+    background: var(--bs-btn-hover-bg);
+    color: var(--bs-body-color);
 }
 
 .pagination .page-item.active .page-link {
-    background: var(--cr-accent-primary);
-    border-color: var(--cr-accent-primary);
+    background: var(--bs-primary);
+    border-color: var(--bs-primary);
     color: white;
 }
 
 .pagination .page-item.disabled .page-link {
-    background: var(--cr-bg-tertiary);
-    color: var(--cr-text-muted);
+    background: var(--bs-tertiary-bg);
+    color: var(--bs-muted-color);
 }
 
 /* === CARDS === */
 .card {
-    background: var(--cr-bg-secondary);
-    border-color: var(--cr-border);
+    background: var(--bs-secondary-bg);
+    border-color: var(--bs-border-color);
 }
 
 .card-header {
-    background: var(--cr-bg-tertiary);
-    border-bottom-color: var(--cr-border);
-    color: var(--cr-text-primary);
+    background: var(--bs-tertiary-bg);
+    border-bottom-color: var(--bs-border-color);
+    color: var(--bs-body-color);
 }
 
 .card-body {
-    color: var(--cr-text-primary);
+    color: var(--bs-body-color);
 }
 
 /* === BOTOES CUSTOMIZADOS === */
 .btn-outline-secondary {
-    color: var(--cr-text-secondary);
-    border-color: var(--cr-border);
+    color: var(--bs-secondary-color);
+    border-color: var(--bs-border-color);
 }
 
 .btn-outline-secondary:hover {
-    background: var(--cr-bg-hover);
-    color: var(--cr-text-primary);
-    border-color: var(--cr-border-light);
+    background: var(--bs-btn-hover-bg);
+    color: var(--bs-body-color);
+    border-color: var(--bs-border-color-subtle);
 }
 
 .btn-outline-success {
-    color: var(--cr-accent-success);
-    border-color: var(--cr-accent-success);
+    color: var(--bs-success);
+    border-color: var(--bs-success);
 }
 
 .btn-primary {
-    background: var(--cr-accent-primary);
-    border-color: var(--cr-accent-primary);
+    background: var(--bs-primary);
+    border-color: var(--bs-primary);
 }
 
 /* === NAVTABS === */
 .nav-tabs {
-    border-bottom-color: var(--cr-border);
+    border-bottom-color: var(--bs-border-color);
 }
 
 .nav-tabs .nav-link {
-    color: var(--cr-text-secondary);
+    color: var(--bs-secondary-color);
     border-color: transparent;
 }
 
 .nav-tabs .nav-link:hover {
-    border-color: var(--cr-border);
-    color: var(--cr-text-primary);
+    border-color: var(--bs-border-color);
+    color: var(--bs-body-color);
 }
 
 .nav-tabs .nav-link.active {
-    background: var(--cr-bg-secondary);
-    border-color: var(--cr-border) var(--cr-border) var(--cr-bg-secondary);
-    color: var(--cr-text-primary);
+    background: var(--bs-secondary-bg);
+    border-color: var(--bs-border-color) var(--bs-border-color) var(--bs-secondary-bg);
+    color: var(--bs-body-color);
 }
 
 /* === TEXT UTILITIES === */
 .text-muted {
-    color: var(--cr-text-muted) !important;
+    color: var(--bs-muted-color) !important;
 }
 
 .text-danger {
-    color: var(--cr-accent-danger) !important;
+    color: var(--bs-danger) !important;
 }
 
 .text-success {
-    color: var(--cr-accent-success) !important;
+    color: var(--bs-success) !important;
 }
 
 .text-warning {
-    color: var(--cr-accent-warning) !important;
+    color: var(--bs-warning) !important;
 }
 
 .text-info {
-    color: var(--cr-accent-info) !important;
+    color: var(--bs-info) !important;
 }
 
 .text-primary {
-    color: var(--cr-accent-primary) !important;
+    color: var(--bs-primary) !important;
 }
 
 .text-secondary {
-    color: var(--cr-text-secondary) !important;
+    color: var(--bs-secondary-color) !important;
 }
 
 /* === BADGE CLICAVEL === */
@@ -970,15 +926,15 @@ input[type="date"] {
     width: 40px;
     height: 40px;
     border-radius: 8px;
-    border: 1px solid var(--cr-border);
-    background: var(--cr-bg-secondary);
+    border: 1px solid var(--bs-border-color);
+    background: var(--bs-secondary-bg);
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
 .theme-toggle:hover {
-    background: var(--cr-bg-hover);
-    border-color: var(--cr-accent-primary);
+    background: var(--bs-btn-hover-bg);
+    border-color: var(--bs-primary);
 }
 
 .theme-toggle__icon {
@@ -987,12 +943,12 @@ input[type="date"] {
 
 .theme-toggle__icon--light {
     display: none;
-    color: var(--cr-accent-warning);
+    color: var(--bs-warning);
 }
 
 .theme-toggle__icon--dark {
     display: block;
-    color: var(--cr-text-secondary);
+    color: var(--bs-secondary-color);
 }
 
 [data-theme="light"] .theme-toggle__icon--light {
@@ -1020,12 +976,12 @@ input[type="date"] {
 
 .btn-ext--ghost {
     background: transparent;
-    border: 1px solid var(--cr-border);
-    color: var(--cr-text-secondary);
+    border: 1px solid var(--bs-border-color);
+    color: var(--bs-secondary-color);
 }
 
 .btn-ext--ghost:hover {
-    background: var(--cr-bg-hover);
-    border-color: var(--cr-accent-primary);
-    color: var(--cr-text-primary);
+    background: var(--bs-btn-hover-bg);
+    border-color: var(--bs-primary);
+    color: var(--bs-body-color);
 }

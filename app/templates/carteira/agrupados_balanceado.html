@@ -8,8 +8,8 @@
     <header class="page-header reveal">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
-                <h1 class="h3 mb-0 text-gray-800">
-                    <i class="fas fa-layer-group text-primary me-2"></i>
+                <h1 class="h3 mb-0">
+                    <i class="fas fa-layer-group me-2"></i>
                     Carteira Agrupada por Pedidos
                 </h1>
                 {% if total_pedidos %}
@@ -25,16 +25,16 @@
 
             <div class="btn-toolbar" role="toolbar">
                 <div class="btn-group me-2" role="group">
-                    <a href="{{ url_for('sync_integrada.dashboard') }}" class="btn btn-success btn-sm">
+                    <a href="{{ url_for('sync_integrada.dashboard') }}" class="btn btn-secondary btn-sm">
                         <i class="fas fa-sync me-1"></i> Sincronizar
                     </a>
-                    <button type="button" class="btn btn-warning btn-sm" onclick="abrirModalImportarPlanilhaSendas()">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="abrirModalImportarPlanilhaSendas()">
                         <i class="fas fa-file-import me-1"></i> Importar Saldo Disp. Sendas
                     </button>
-                    <a href="/portal/sendas/exportacao" class="btn btn-info btn-sm" target="_blank">
+                    <a href="/portal/sendas/exportacao" class="btn btn-secondary btn-sm" target="_blank">
                         <i class="fas fa-file-export me-1"></i> Exportar Planilhas Sendas
                     </a>
-                    <a href="/portal/sendas/verificacao" class="btn btn-success btn-sm" target="_blank">
+                    <a href="/portal/sendas/verificacao" class="btn btn-secondary btn-sm" target="_blank">
                         <i class="fas fa-check-circle me-1"></i> Verificar Agendamentos Sendas
                     </a>
                 </div>
@@ -109,26 +109,26 @@
                 <div class="row align-items-center mt-2">
                     <div class="col-md-12 text-end">
                         <!-- Botão de Verificar TODOS os Protocolos Pendentes -->
-                        <button type="button" class="btn btn-warning btn-sm me-2" id="btn-verificar-todos-pendentes"
+                        <button type="button" class="btn btn-secondary btn-sm me-2" id="btn-verificar-todos-pendentes"
                             onclick="carteiraAgrupada.verificarTodosProtocolosPendentes()"
                             title="Verificar TODOS os protocolos pendentes de confirmação">
                             <i class="fas fa-check-double"></i> Verificar Todos Pendentes
-                            <span class="badge bg-dark ms-1" id="contador-pendentes-total">0</span>
+                            <span class="badge bg-secondary ms-1" id="contador-pendentes-total">0</span>
                         </button>
 
                         <!-- Botão de Verificar Agendas -->
-                        <button type="button" class="btn btn-outline-info btn-sm me-2" id="btn-verificar-agendas"
+                        <button type="button" class="btn btn-secondary btn-sm me-2" id="btn-verificar-agendas"
                             onclick="carteiraAgrupada.verificarAgendasEmLote()"
                             title="Verificar status de até 50 agendamentos no portal">
                             <i class="fas fa-sync-alt"></i> Verificar Agendas
-                            <span class="badge bg-danger ms-1" id="contador-protocolos">0</span>
+                            <span class="badge bg-secondary ms-1" id="contador-protocolos">0</span>
                         </button>
 
                         <div class="btn-group btn-group-sm" role="group">
-                            <button type="button" class="btn btn-outline-primary" id="expandir-todos">
+                            <button type="button" class="btn btn-secondary" id="expandir-todos">
                                 <i class="fas fa-expand-arrows-alt me-1"></i> Expandir Todos
                             </button>
-                            <button type="button" class="btn btn-outline-secondary" id="colapsar-todos">
+                            <button type="button" class="btn btn-secondary" id="colapsar-todos">
                                 <i class="fas fa-compress-arrows-alt me-1"></i> Colapsar Todos
                             </button>
                         </div>
@@ -330,11 +330,11 @@
     <section class="table-section">
         {% if pedidos %}
         <div class="card shadow">
-            <div class="card-header bg-primary text-white">
+            <div class="card-header">
                 <h6 class="mb-0">
                     <i class="fas fa-table me-2"></i>
                     Pedidos Agrupados
-                    <span class="badge badge-contador-theme ms-2">{{ total_pedidos }}</span>
+                    <span class="badge bg-secondary ms-2">{{ total_pedidos }}</span>
                 </h6>
             </div>
 
@@ -389,13 +389,12 @@
                                 <!-- Vendedor -->
                                 <td>
                                     <div class="vendedor-info">
-                                        <strong class="text-primary">{{ pedido.vendedor or '-' }}</strong>
+                                        <strong>{{ pedido.vendedor or '-' }}</strong>
                                         {% if pedido.equipe_vendas %}
                                         <br><small class="text-muted">{{ pedido.equipe_vendas }}</small>
                                         {% endif %}
                                         {% if pedido.status_pedido %}
-                                        <br><span class="badge bg-secondary text-white">{{ pedido.status_pedido
-                                            }}</span>
+                                        <br><span class="badge bg-secondary">{{ pedido.status_pedido }}</span>
                                         {% endif %}
                                     </div>
                                 </td>
@@ -403,12 +402,12 @@
                                 <!-- Pedido -->
                                 <td>
                                     <div class="pedido-info">
-                                        <strong class="text-dark">{{ pedido.num_pedido }}</strong>
+                                        <strong>{{ pedido.num_pedido }}</strong>
                                         {% if pedido.data_pedido %}
                                         <br><small class="text-muted">{{ pedido.data_pedido|safe_date }}</small>
                                         {% endif %}
                                         {% if pedido.pedido_cliente %}
-                                        <br><small class="text-info">PC: {{ pedido.pedido_cliente }}</small>
+                                        <br><small class="text-muted">PC: {{ pedido.pedido_cliente }}</small>
                                         {% endif %}
                                     </div>
                                 </td>
@@ -416,7 +415,7 @@
                                 <!-- Cliente -->
                                 <td>
                                     <div class="cliente-info">
-                                        <strong class="text-dark">{{ pedido.raz_social_red or '-' }}</strong>
+                                        <strong>{{ pedido.raz_social_red or '-' }}</strong>
                                         {% if pedido.cnpj_cpf %}
                                         <br><small class="text-muted">{{ pedido.cnpj_cpf }}</small>
                                         {% endif %}
@@ -442,8 +441,8 @@
                                     <div class="destino-info">
                                         {% if pedido.nome_cidade and pedido.cod_uf %}
                                         <div class="d-flex align-items-center gap-1">
-                                            <strong class="text-primary">{{ pedido.nome_cidade }}/{{ pedido.cod_uf }}</strong>
-                                            <button class="btn btn-outline-primary btn-sm py-0 px-1"
+                                            <strong>{{ pedido.nome_cidade }}/{{ pedido.cod_uf }}</strong>
+                                            <button class="btn btn-secondary btn-sm py-0 px-1"
                                                 onclick="modalEndereco.abrirModalEndereco('{{ pedido.num_pedido }}')"
                                                 title="Ver endereço de entrega e dados do cliente"
                                                 style="font-size: 0.75rem;">
@@ -452,11 +451,11 @@
                                         </div>
                                         {% endif %}
                                         {% if pedido.incoterm == 'FOB' %}
-                                        <span class="badge bg-warning text-dark">FOB{% if pedido.sub_rota %} | {{ pedido.sub_rota }}{% endif %}</span>
+                                        <span class="badge badge-incoterm badge-incoterm-fob">FOB{% if pedido.sub_rota %} | {{ pedido.sub_rota }}{% endif %}</span>
                                         {% elif pedido.incoterm == 'RED' %}
-                                        <span class="badge bg-danger text-white">RED{% if pedido.sub_rota %} | {{ pedido.sub_rota }}{% endif %}</span>
+                                        <span class="badge badge-incoterm badge-incoterm-red">RED{% if pedido.sub_rota %} | {{ pedido.sub_rota }}{% endif %}</span>
                                         {% elif pedido.rota %}
-                                        <span class="badge bg-info text-white">{{ pedido.rota }}{% if pedido.sub_rota %} | {{ pedido.sub_rota }}{% endif %}</span>
+                                        <span class="badge bg-secondary">{{ pedido.rota }}{% if pedido.sub_rota %} | {{ pedido.sub_rota }}{% endif %}</span>
                                         {% endif %}
 
                                         <!-- Tags do Pedido (Odoo) -->
@@ -464,21 +463,7 @@
                                         <div class="mt-1">
                                             {% set tags = pedido.tags_pedido|from_json %}
                                             {% for tag in tags %}
-                                            <span class="badge badge-tag" data-color="{{ tag.color }}" style="
-                                                {% if tag.color == 0 %}background-color: #6c757d; color: white;
-                                                {% elif tag.color == 1 %}background-color: #dc3545; color: white;
-                                                {% elif tag.color == 2 %}background-color: #fd7e14; color: white;
-                                                {% elif tag.color == 3 %}background-color: #ffc107; color: #212529;
-                                                {% elif tag.color == 4 %}background-color: #20c997; color: white;
-                                                {% elif tag.color == 5 %}background-color: #198754; color: white;
-                                                {% elif tag.color == 6 %}background-color: #0dcaf0; color: #212529;
-                                                {% elif tag.color == 7 %}background-color: #0d6efd; color: white;
-                                                {% elif tag.color == 8 %}background-color: #6f42c1; color: white;
-                                                {% elif tag.color == 9 %}background-color: #d63384; color: white;
-                                                {% elif tag.color == 10 %}background-color: #495057; color: white;
-                                                {% elif tag.color == 11 %}background-color: #343a40; color: white;
-                                                {% else %}background-color: #6c757d; color: white;
-                                                {% endif %}">
+                                            <span class="badge badge-tag" data-color="{{ tag.color }}">
                                                 <i class="fas fa-tag me-1"></i>{{ tag.name }}
                                             </span>
                                             {% endfor %}
@@ -492,9 +477,8 @@
                                     <div class="entrega-obs-info">
                                         {% if pedido.data_entrega_pedido %}
                                         <div class="mb-1">
-                                            <i class="fas fa-truck text-primary me-1"></i>
-                                            <strong class="text-primary">{{ pedido.data_entrega_pedido|safe_date
-                                                }}</strong>
+                                            <i class="fas fa-truck me-1"></i>
+                                            <strong>{{ pedido.data_entrega_pedido|safe_date }}</strong>
                                         </div>
                                         {% endif %}
 
@@ -511,7 +495,7 @@
                                         {% if pedido.forma_agendamento and pedido.forma_agendamento != 'SEM AGENDAMENTO'
                                         %}
                                         <div class="agendamento-container mt-1">
-                                            <small class="text-info" style="display: block;">
+                                            <small class="text-muted" style="display: block;">
                                                 <i class="fas fa-phone-alt me-1"></i>
                                                 Agendar por: <strong>{{ pedido.forma_agendamento }}</strong>
                                             </small>
@@ -536,7 +520,7 @@
                                 <!-- Saldo -->
                                 <td>
                                     <div class="separacoes-container">
-                                        <button class="btn btn-outline-primary btn-sm btn-separacoes" type="button"
+                                        <button class="btn btn-secondary btn-sm btn-separacoes" type="button"
                                             data-pedido="{{ pedido.num_pedido }}"
                                             onclick="abrirModalSeparacoes('{{ pedido.num_pedido }}')"
                                             title="Ver separações do pedido">
@@ -547,11 +531,11 @@
 
                                         <!-- Status visual das separações -->
                                         {% if pedido.totalmente_separado %}
-                                        <br><span class="badge bg-success text-white mt-1">Completo</span>
+                                        <br><span class="badge bg-success mt-1">Completo</span>
                                         {% elif pedido.qtd_separacoes > 0 %}
-                                        <br><span class="badge bg-warning text-dark mt-1">Parcial</span>
+                                        <br><span class="badge bg-warning mt-1">Parcial</span>
                                         {% else %}
-                                        <br><span class="badge bg-secondary text-white mt-1">Pendente {% if pedido.valor_saldo_restante %}R$ {{ pedido.valor_saldo_restante|moeda_carteira }}{% endif %}</span>
+                                        <br><span class="badge bg-secondary mt-1">Pendente {% if pedido.valor_saldo_restante %}R$ {{ pedido.valor_saldo_restante|moeda_carteira }}{% endif %}</span>
                                         {% endif %}
                                     </div>
                                 </td>
@@ -559,7 +543,7 @@
                                 <!-- Ações -->
                                 <td>
                                     <div class="btn-group-vertical btn-group-sm" role="group">
-                                        <button type="button" class="btn btn-primary btn-sm"
+                                        <button type="button" class="btn btn-secondary btn-sm"
                                             data-pedido="{{ pedido.num_pedido }}"
                                             onclick="criarSeparacao('{{ pedido.num_pedido }}')"
                                             title="Criar nova separação">
@@ -616,7 +600,7 @@
             <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
             <h4 class="text-muted">Nenhum pedido encontrado</h4>
             <p class="text-muted">Não há pedidos na carteira para exibir no momento.</p>
-            <a href="{{ url_for('carteira.index') }}" class="btn btn-primary">
+            <a href="{{ url_for('carteira.index') }}" class="btn btn-secondary">
                 <i class="fas fa-arrow-left me-1"></i> Voltar ao Dashboard
             </a>
         </div>
@@ -626,9 +610,9 @@
 {% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/modules/carteira/agrupados.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/modules/carteira/workspace-montagem.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/modules/carteira/separacao-animations.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/modules/carteira/agrupados.css') }}?v=9">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/modules/carteira/workspace-montagem.css') }}?v=6">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/modules/carteira/separacao-animations.css') }}?v=6">
 {% endblock %}
 
 {% block scripts %}
@@ -794,7 +778,7 @@
 <div class="modal fade" id="modalStandby" tabindex="-1" aria-labelledby="modalStandbyLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header bg-warning">
+            <div class="modal-header">
                 <h5 class="modal-title" id="modalStandbyLabel">
                     <i class="fas fa-pause-circle me-2"></i>
                     Enviar Pedido para Standby
@@ -803,11 +787,11 @@
             </div>
             <div class="modal-body">
                 <div id="modal-standby-loading" class="text-center p-4" style="display: none;">
-                    <i class="fas fa-spinner fa-spin fa-2x text-primary"></i>
+                    <i class="fas fa-spinner fa-spin fa-2x"></i>
                     <p class="mt-2">Carregando informações...</p>
                 </div>
                 <div id="modal-standby-content">
-                    <h6 class="mb-3">Pedido: <span id="standby-pedido-numero" class="text-primary"></span></h6>
+                    <h6 class="mb-3">Pedido: <span id="standby-pedido-numero" class="fw-bold"></span></h6>
 
                     <!-- Resumo do pedido -->
                     <div class="card mb-3">
@@ -883,17 +867,17 @@
 <div class="modal fade" id="modalSeparacoes" tabindex="-1" aria-labelledby="modalSeparacoesLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
+            <div class="modal-header">
                 <h5 class="modal-title" id="modalSeparacoesLabel">
                     <i class="fas fa-boxes me-2"></i>
                     Separações do Pedido <span id="modal-pedido-numero"></span>
                 </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                <button type="button" class="btn-close" data-bs-dismiss="modal"
                     aria-label="Fechar"></button>
             </div>
             <div class="modal-body">
                 <div id="modal-separacoes-loading" class="text-center p-4">
-                    <i class="fas fa-spinner fa-spin fa-2x text-primary"></i>
+                    <i class="fas fa-spinner fa-spin fa-2x"></i>
                     <p class="mt-2">Carregando separações...</p>
                 </div>
                 <div id="modal-separacoes-content" style="display: none;">
@@ -901,7 +885,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-primary"
+                <button type="button" class="btn btn-secondary"
                     onclick="criarSeparacao(document.getElementById('modal-pedido-numero').textContent)">
                     <i class="fas fa-plus me-1"></i> Nova Separação
                 </button>
@@ -939,7 +923,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary" onclick="importarPlanilhaSendas()">
+                <button type="button" class="btn btn-secondary" onclick="importarPlanilhaSendas()">
                     <i class="fas fa-upload"></i> Importar
                 </button>
             </div>

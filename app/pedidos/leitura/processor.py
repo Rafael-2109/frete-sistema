@@ -18,6 +18,7 @@ from decimal import Decimal
 
 from .atacadao import AtacadaoExtractor
 from .atacadao_pedido import AtacadaoPedidoExtractor
+from .assai import AssaiExtractor
 from .identificador import identificar_documento, IdentificacaoDocumento
 
 
@@ -33,11 +34,15 @@ class PedidoProcessor:
         # Aliases para compatibilidade
         'atacadao': AtacadaoExtractor,  # Default para proposta
         'atacadão': AtacadaoExtractor,
+        # Assaí/Sendas
+        'assai_pedido': AssaiExtractor,
+        'assai_proposta': AssaiExtractor,  # Usa mesmo extractor
+        'assai': AssaiExtractor,  # Default
+        'sendas': AssaiExtractor,  # Alias
+        'sendas_pedido': AssaiExtractor,
         # Futuros extratores
         # 'tenda_proposta': TendaPropostaExtractor,
         # 'tenda_pedido': TendaPedidoExtractor,
-        # 'assai_proposta': AssaiPropostaExtractor,
-        # 'assai_pedido': AssaiPedidoExtractor,
     }
 
     def __init__(self):
@@ -219,8 +224,19 @@ class PedidoProcessor:
                     # Conta itens sem De-Para nesta filial
                     sem_depara_filial = filial_df['nosso_codigo'].isna().sum() if 'nosso_codigo' in filial_df.columns else 0
 
+                    # Busca número do pedido (Atacadão: por filial, Assaí: mesmo para todas)
+                    numero_pedido = (
+                        primeiro_item.get('numero_pedido') or      # Assaí e Atacadão Pedido
+                        primeiro_item.get('pedido_edi') or         # Atacadão Pedido
+                        primeiro_item.get('proposta') or           # Atacadão Proposta
+                        primeiro_item.get('numero_comprador') or   # Fallback
+                        ''
+                    )
+
                     filial_info = {
                         'cnpj': cnpj,
+                        'numero_loja': primeiro_item.get('numero_loja', ''),  # Número da filial (ex: "007")
+                        'numero_pedido_cliente': numero_pedido,  # Número do pedido/proposta
                         'nome_cliente': primeiro_item.get('nome_cliente', ''),
                         'local': primeiro_item.get('local_entrega', ''),
                         'municipio': primeiro_item.get('municipio', '') or primeiro_item.get('cidade', ''),

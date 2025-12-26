@@ -290,12 +290,21 @@ class PedidoImportacaoTemp(db.Model):
         summary = dados.get('summary', {})
         validacao_precos = dados.get('validacao_precos', {})
 
-        # Extrai numero_pedido_cliente (Numero:) dos dados brutos
-        numero_pedido_cliente = None
+        # Extrai numero_pedido_cliente dos dados brutos
+        # - Atacadão: cada filial pode ter seu próprio número (N pedidos por PDF)
+        # - Assaí: 1 número de pedido para todo o PDF (N filiais)
         dados_brutos = dados.get('data', [])
+
+        # Para o registro geral, pega do primeiro item
+        numero_pedido_cliente = None
         if dados_brutos and len(dados_brutos) > 0:
-            # Pega do primeiro item (todos da mesma filial têm o mesmo)
-            numero_pedido_cliente = dados_brutos[0].get('numero_comprador') or dados_brutos[0].get('numero_pedido')
+            primeiro_item = dados_brutos[0]
+            numero_pedido_cliente = (
+                primeiro_item.get('numero_pedido') or
+                primeiro_item.get('pedido_edi') or
+                primeiro_item.get('proposta') or
+                primeiro_item.get('numero_comprador')
+            )
 
         # Prepara dados_filiais com estrutura para edição
         dados_filiais = []
@@ -314,11 +323,22 @@ class PedidoImportacaoTemp(db.Model):
                             break
 
                 # Busca numero_pedido_cliente específico desta filial
-                numero_pedido_filial = numero_pedido_cliente
+                # - Atacadão: cada filial tem SEU próprio número (N pedidos por PDF)
+                # - Assaí: todas as filiais compartilham o mesmo número (1 pedido por PDF)
+                numero_pedido_filial = None
                 for item in dados_brutos:
-                    if item.get('cnpj_filial') == cnpj:
-                        numero_pedido_filial = item.get('numero_comprador') or item.get('numero_pedido') or numero_pedido_cliente
-                        break
+                    # Tenta diferentes campos de CNPJ que podem existir nos dados
+                    cnpj_item = item.get('cnpj_filial') or item.get('cnpj') or item.get('cnpj_cpf')
+                    if cnpj_item == cnpj:
+                        # Tenta todos os campos possíveis de número de pedido
+                        numero_pedido_filial = (
+                            item.get('numero_pedido') or      # Assaí e Atacadão Pedido
+                            item.get('pedido_edi') or         # Atacadão Pedido
+                            item.get('proposta') or           # Atacadão Proposta
+                            item.get('numero_comprador')      # Fallback
+                        )
+                        if numero_pedido_filial:
+                            break
 
                 # Prepara itens com preço editável
                 itens = []

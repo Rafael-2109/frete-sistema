@@ -226,15 +226,18 @@ class FilialDeParaSendas(db.Model):
     CNPJ <-> Filial <-> CNPJ_Numero
     """
     __tablename__ = 'portal_sendas_filial_depara'
-    
+
     id = db.Column(db.Integer, primary_key=True)
-    
+
     # CNPJ completo (com ou sem formatação)
     cnpj = db.Column(db.String(20), nullable=False, unique=True, index=True)
-    
-    # Código da filial no Sendas
+
+    # Código da filial no Sendas (ex: "010 SAO BERNARDO PIRAPORI")
     filial = db.Column(db.String(100), nullable=False, unique=True, index=True)
-    
+
+    # Número da filial extraído (ex: "010") - para busca rápida por número
+    numero = db.Column(db.String(10), nullable=True, index=True)
+
     # Informações adicionais
     nome_filial = db.Column(db.String(255))
     cidade = db.Column(db.String(100))
@@ -302,10 +305,10 @@ class FilialDeParaSendas(db.Model):
     def filial_to_cnpj(cls, filial):
         """
         Converte código de filial para CNPJ
-        
+
         Args:
             filial: Código da filial no Sendas
-            
+
         Returns:
             CNPJ formatado ou None se não encontrar
         """
@@ -313,8 +316,74 @@ class FilialDeParaSendas(db.Model):
             filial=str(filial),
             ativo=True
         ).first()
-        
+
         return filial_depara.cnpj if filial_depara else None
+
+    @classmethod
+    def buscar_por_numero(cls, numero_loja: str):
+        """
+        Busca filial pelo número (ex: "007", "010", "350")
+        Usado na importação de pedidos do Assaí onde o PDF mostra apenas o número
+
+        Args:
+            numero_loja: Número da loja (3 dígitos)
+
+        Returns:
+            Objeto FilialDeParaSendas ou None se não encontrar
+        """
+        import re
+
+        # Normaliza para 3 dígitos com zero à esquerda
+        numero_normalizado = str(numero_loja).zfill(3)
+
+        # Primeiro tenta buscar pelo campo 'numero' (se estiver populado)
+        filial = cls.query.filter(
+            cls.numero == numero_normalizado,
+            cls.ativo == True
+        ).first()
+
+        if filial:
+            return filial
+
+        # Fallback: busca extraindo número do campo 'filial'
+        filiais = cls.query.filter_by(ativo=True).all()
+
+        for f in filiais:
+            # Extrai números do início do campo filial
+            # Ex: "010 SAO BERNARDO PIRAPORI" -> "010"
+            match = re.match(r'^(\d+)', f.filial or '')
+            if match:
+                numero_depara = match.group(1).zfill(3)
+                if numero_depara == numero_normalizado:
+                    return f
+
+        return None
+
+    @classmethod
+    def obter_info_por_numero(cls, numero_loja: str):
+        """
+        Obtém informações completas da filial pelo número
+
+        Args:
+            numero_loja: Número da loja (3 dígitos)
+
+        Returns:
+            Dicionário com informações da filial ou dict vazio
+        """
+        filial = cls.buscar_por_numero(numero_loja)
+
+        if filial:
+            return {
+                'cnpj': filial.cnpj,
+                'cnpj_limpo': cls.limpar_cnpj(filial.cnpj),
+                'filial': filial.filial,
+                'numero': filial.numero or numero_loja,
+                'nome_filial': filial.nome_filial,
+                'cidade': filial.cidade,
+                'uf': filial.uf
+            }
+
+        return {}
     
     @classmethod
     def obter_info_filial(cls, identificador):

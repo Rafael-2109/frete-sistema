@@ -22,7 +22,7 @@ from decimal import Decimal
 from .processor import PedidoProcessor
 from app.utils.file_storage import get_file_storage
 from app.portal.atacadao.models import ProdutoDeParaAtacadao
-from app.pedidos.validacao import ValidadorPrecos, validar_precos_documento
+from app.pedidos.validacao import ValidadorPrecos
 from app.pedidos.integracao_odoo import get_odoo_service, RegistroPedidoOdoo
 from app.pedidos.integracao_odoo.models import PedidoImportacaoTemp
 from app import db
@@ -718,7 +718,7 @@ def editar_preco():
         data = request.get_json()
         session_key = data.get('session_key')
         cnpj = data.get('cnpj')
-        codigo_rede = data.get('codigo_rede')
+        codigo_rede = str(data.get('codigo_rede')) if data.get('codigo_rede') else None  # Garante string
         novo_preco = data.get('novo_preco')
 
         if not all([session_key, cnpj, codigo_rede, novo_preco is not None]):
@@ -733,7 +733,20 @@ def editar_preco():
         atualizado = registro_temp.atualizar_preco_item(cnpj, codigo_rede, float(novo_preco))
 
         if not atualizado:
-            return jsonify({'success': False, 'error': 'Item não encontrado'}), 404
+            # Debug: Lista CNPJs e códigos disponíveis
+            cnpjs_disponiveis = [f.get('cnpj') for f in (registro_temp.dados_filiais or [])]
+            codigos_disponiveis = []
+            for f in (registro_temp.dados_filiais or []):
+                if f.get('cnpj') == cnpj:
+                    codigos_disponiveis = [i.get('codigo_rede') for i in f.get('itens', [])]
+                    break
+
+            return jsonify({
+                'success': False,
+                'error': f'Item não encontrado. CNPJ buscado: {cnpj}, código buscado: {codigo_rede}. '
+                         f'CNPJs disponíveis: {cnpjs_disponiveis[:3]}... '
+                         f'Códigos na filial: {codigos_disponiveis[:5]}...'
+            }), 404
 
         # Marca o JSON como modificado para o SQLAlchemy detectar
         flag_modified(registro_temp, 'dados_filiais')
@@ -1002,8 +1015,8 @@ def export(format, session_key):
         return send_file(
             output_path,
             mimetype=mimetype,
-            as_attachment=True,
-            download_name=os.path.basename(output_path)
+            as_attachment=True, # type: ignore
+            download_name=os.path.basename(output_path) # type: ignore
         )
 
     except Exception as e:
@@ -1287,7 +1300,7 @@ def tabela_precos_importar():
                     criados += 1
 
             except Exception as e:
-                erros.append(f"Erro na linha {idx + 2}: {str(e)}")
+                erros.append(f"Erro na linha {idx + 2}: {str(e)}") # type: ignore
 
         db.session.commit()
         flash(f'Importação concluída: {criados} criados, {atualizados} atualizados', 'success')
@@ -1565,7 +1578,7 @@ def regioes_importar():
                     criados += 1
 
             except Exception as e:
-                erros.append(f"Erro na linha {idx + 2}: {str(e)}")
+                erros.append(f"Erro na linha {idx + 2}: {str(e)}") # type: ignore
 
         db.session.commit()
         flash(f'Importação concluída: {criados} criados, {atualizados} atualizados', 'success')

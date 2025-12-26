@@ -7,11 +7,27 @@ from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 import pandas as pd
 import os
+import re
 from datetime import datetime
 from app import db
 from app.portal.sendas.models import ProdutoDeParaSendas, FilialDeParaSendas
 from app.producao.models import CadastroPalletizacao
 import logging
+
+
+def extrair_numero_filial(codigo_filial: str) -> str:
+    """
+    Extrai o número de 3 dígitos do código da filial.
+    Ex: "010 SAO BERNARDO PIRAPORI" -> "010"
+    Ex: "007 Santos" -> "007"
+    """
+    if not codigo_filial:
+        return None
+
+    match = re.match(r'^(\d+)', codigo_filial.strip())
+    if match:
+        return match.group(1).zfill(3)  # Padroniza para 3 dígitos
+    return None
 
 logger = logging.getLogger(__name__)
 
@@ -236,6 +252,7 @@ def listar_filiais():
     if search:
         query = query.filter(
             db.or_(
+                FilialDeParaSendas.numero.contains(search),
                 FilialDeParaSendas.cnpj.contains(search),
                 FilialDeParaSendas.filial.contains(search),
                 FilialDeParaSendas.nome_filial.contains(search),
@@ -243,8 +260,8 @@ def listar_filiais():
             )
         )
     
-    query = query.order_by(FilialDeParaSendas.filial)
-    
+    query = query.order_by(FilialDeParaSendas.numero, FilialDeParaSendas.filial)
+
     filiais = query.paginate(page=page, per_page=50, error_out=False)
     
     return render_template('portal/sendas/filiais/listar.html',
@@ -258,22 +275,27 @@ def nova_filial():
     if request.method == 'POST':
         try:
             cnpj = request.form.get('cnpj', '').strip()
-            
+
             # Formatar CNPJ se necessário
-            if '.' not in cnpj and '/' not in cnpj and '-' not in cnpj: 
+            if '.' not in cnpj and '/' not in cnpj and '-' not in cnpj:
                 # Se vier sem formatação, formatar
                 cnpj = FilialDeParaSendas.formatar_cnpj(cnpj)
-            
+
+            # Extrair número automaticamente do código da filial
+            codigo_filial = request.form.get('filial', '').strip()
+            numero = extrair_numero_filial(codigo_filial)
+
             filial = FilialDeParaSendas(
                 cnpj=cnpj,
-                filial=request.form.get('filial', '').strip(),
+                filial=codigo_filial,
+                numero=numero,  # Número extraído automaticamente
                 nome_filial=request.form.get('nome_filial', '').strip(),
                 cidade=request.form.get('cidade', '').strip(),
                 uf=request.form.get('uf', '').strip().upper(),
                 ativo=request.form.get('ativo') == 'on',
                 criado_por=current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
             )
-            
+
             db.session.add(filial)
             db.session.commit()
             
@@ -294,23 +316,28 @@ def nova_filial():
 def editar_filial(id):
     """Editar mapeamento de filial existente"""
     filial = FilialDeParaSendas.query.get_or_404(id)
-    
+
     if request.method == 'POST':
         try:
             cnpj = request.form.get('cnpj', '').strip()
-            
+
             # Formatar CNPJ se necessário
-            if '.' not in cnpj and '/' not in cnpj and '-' not in cnpj: 
+            if '.' not in cnpj and '/' not in cnpj and '-' not in cnpj:
                 cnpj = FilialDeParaSendas.formatar_cnpj(cnpj)
-            
+
+            # Extrair número automaticamente do código da filial
+            codigo_filial = request.form.get('filial', '').strip()
+            numero = extrair_numero_filial(codigo_filial)
+
             filial.cnpj = cnpj
-            filial.filial = request.form.get('filial', '').strip()
+            filial.filial = codigo_filial
+            filial.numero = numero  # Atualiza número automaticamente
             filial.nome_filial = request.form.get('nome_filial', '').strip()
             filial.cidade = request.form.get('cidade', '').strip()
             filial.uf = request.form.get('uf', '').strip().upper()
             filial.ativo = request.form.get('ativo') == 'on'
             filial.atualizado_em = datetime.utcnow()
-            
+
             db.session.commit()
             
             flash('Mapeamento de filial atualizado com sucesso!', 'success')

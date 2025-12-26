@@ -403,7 +403,7 @@ function renderizarPorProduto(linhas) {
                         <div class="d-flex justify-content-between w-100 me-3">
                             <div>
                                 <strong class="clickable-produto" data-cod="${produto.cod_produto}"
-                                        style="cursor:pointer; color: #0d6efd; text-decoration: underline;"
+                                        style="cursor:pointer; text-decoration: underline;"
                                         title="Clique para ver separações e estoque">
                                     ${produto.cod_produto}
                                 </strong> - ${produto.nome_produto}
@@ -454,7 +454,7 @@ function renderizarItemProgramacao(prog, mostrarLinha = false, mostrarData = fal
         <div class="p-2 mb-1 border rounded programacao-item ${extraClass}" data-prog-id="${progId}">
             <div class="d-flex justify-content-between align-items-center gap-2">
                 <div class="flex-grow-1">
-                    <strong class="clickable-produto" data-cod="${prog.cod_produto}" style="cursor:pointer; color: #0d6efd;">
+                    <strong class="clickable-produto" data-cod="${prog.cod_produto}" style="cursor:pointer;">
                         ${prog.cod_produto}
                     </strong> - ${prog.nome_produto || ''}${extraBadge}`;
 

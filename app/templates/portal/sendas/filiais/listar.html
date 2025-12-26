@@ -50,6 +50,7 @@
                 <table class="table table-hover">
                     <thead>
                         <tr>
+                            <th width="60">Nº</th>
                             <th>CNPJ</th>
                             <th>Código Filial</th>
                             <th>Nome Filial</th>
@@ -62,6 +63,13 @@
                     <tbody>
                         {% for item in filiais.items %}
                         <tr>
+                            <td>
+                                {% if item.numero %}
+                                    <span class="badge bg-primary">{{ item.numero }}</span>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
                             <td>{{ item.cnpj }}</td>
                             <td><strong>{{ item.filial }}</strong></td>
                             <td>{{ item.nome_filial or '-' }}</td>
@@ -96,7 +104,7 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="7" class="text-center text-muted">
+                            <td colspan="8" class="text-center text-muted">
                                 <i class="fas fa-store fa-3x mb-3"></i>
                                 <p>Nenhum mapeamento de filial encontrado.</p>
                             </td>

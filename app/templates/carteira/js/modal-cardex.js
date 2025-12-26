@@ -97,12 +97,12 @@ class ModalCardex {
             <div class="modal-dialog modal-xl">
                 <div class="modal-content">
                     <!-- Header -->
-                    <div class="modal-header bg-primary text-white">
+                    <div class="modal-header">
                         <h5 class="modal-title">
                             <i class="fas fa-chart-line me-2"></i>
                             Cardex - ${codProduto}
                         </h5>
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
 
                     <!-- Body -->
@@ -111,7 +111,7 @@ class ModalCardex {
                         <div class="produto-cardex-header mb-4">
                             <div class="row">
                                 <div class="col-md-8">
-                                    <h6 class="text-primary">${nomeProduto}</h6>
+                                    <h6>${nomeProduto}</h6>
                                     <p class="text-muted mb-0">Análise de estoque para os próximos 28 dias</p>
                                 </div>
                                 <div class="col-md-4 text-end">
@@ -141,10 +141,10 @@ class ModalCardex {
                                     </div>
                                 </div>
                                 <div class="col-3">
-                                    <div class="stat-card bg-info bg-opacity-10 p-3 rounded">
-                                        <h5 class="text-info mb-1">${this.formatarQuantidade(data.total_producao)}</h5>
+                                    <div class="stat-card bg-secondary bg-opacity-10 p-3 rounded">
+                                        <h5 class="mb-1">${this.formatarQuantidade(data.total_producao)}</h5>
                                         <small class="text-muted">Produção Total</small>
-                                        <br><small class="text-info">28 dias</small>
+                                        <br><small class="text-muted">28 dias</small>
                                     </div>
                                 </div>
                                 <div class="col-3">
@@ -196,7 +196,7 @@ class ModalCardex {
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                             <i class="fas fa-times me-1"></i> Fechar
                         </button>
-                        <button type="button" class="btn btn-primary" onclick="modalCardex.exportarCardex('${codProduto}')">
+                        <button type="button" class="btn btn-secondary" onclick="modalCardex.exportarCardex('${codProduto}')">
                             <i class="fas fa-download me-1"></i> Exportar Excel
                         </button>
                     </div>
@@ -287,7 +287,7 @@ class ModalCardex {
         } else if (dia.producao > 0) {
             return {
                 rowClass: '',
-                badgeClass: 'bg-info',
+                badgeClass: 'bg-secondary',
                 texto: 'Produção'
             };
         } else {
@@ -434,7 +434,7 @@ class ModalCardex {
         icon.classList.add('fa-chevron-up');
         pedidosContainer.innerHTML = `
             <div class="text-center p-3">
-                <div class="spinner-border spinner-border-sm text-primary" role="status">
+                <div class="spinner-border spinner-border-sm" role="status">
                     <span class="visually-hidden">Carregando...</span>
                 </div>
                 <span class="ms-2">Carregando pedidos...</span>
@@ -473,7 +473,7 @@ class ModalCardex {
             // Renderizar pedidos
             pedidosContainer.innerHTML = `
                 <div class="p-3">
-                    <h6 class="mb-3 text-primary">
+                    <h6 class="mb-3">
                         <i class="fas fa-box-open me-2"></i>
                         ${pedidosDoDia.total_pedidos} pedido(s) - Total: ${this.formatarQuantidade(pedidosDoDia.total_quantidade)} UN
                     </h6>
@@ -536,10 +536,10 @@ class ModalCardex {
     getStatusColor(status) {
         const statusColors = {
             'PREVISAO': 'secondary',
-            'ABERTO': 'info',
+            'ABERTO': 'secondary',
             'COTADO': 'warning',
             'EMBARCADO': 'success',
-            'FATURADO': 'primary',
+            'FATURADO': 'success',
             'NF no CD': 'danger',
             'CANCELADO': 'dark'
         };

@@ -53,7 +53,10 @@ class IdentificadorDocumento:
         'ASSAI': [
             r'ASSAI\s*ATACADISTA',
             r'SENDAS\s*DISTRIBUIDORA',
-            r'A\s*S\s*S\s*A\s*I',  # Texto espaçado
+            r'S\s*E\s*N\s*D\s*A\s*S',  # Texto espaçado
+            r'Pedidos/Lotes\s+De\s+Compra',  # Header específico do PDF Assaí
+            r'Consinco',  # Sistema usado pelo Assaí
+            r'NACOM\s+GOYA',  # Fornecedor específico
         ]
     }
 
@@ -78,8 +81,14 @@ class IdentificadorDocumento:
                 r'Local\s+de\s+Entrega:',  # Campo que só existe em PEDIDO
                 r'M\s*E\s*R\s*C\s*A\s*D\s*O\s*R\s*I\s*A',  # Header da tabela de produtos
                 r'ORDEM\s+DE\s+COMPRA',
+                r'Pedidos/Lotes\s+De\s+Compra',  # Header específico do Assaí (ALTA CONFIANÇA)
+                r'Lote:\s*\d+',  # Campo Lote específico do Assaí (ALTA CONFIANÇA)
+                r'Pedido:\s*\d+',  # Campo Pedido: XXXXX (Assaí) - ALTA CONFIANÇA
+                r'Prev\.\s*Entrega:',  # Campo Previsão de Entrega (Assaí)
+                r'Cond\.\s*Pagto:',  # Condição de Pagamento (Assaí)
+                r'Data\s+Pedido:',  # Campo Data Pedido (Assaí)
             ],
-            'peso': [1.0, 1.0, 0.9, 0.8, 0.9, 0.7, 0.6, 0.8]
+            'peso': [1.0, 1.0, 0.9, 0.8, 0.9, 0.7, 0.6, 0.8, 1.0, 1.0, 1.0, 0.8, 0.8, 0.8]
         }
     }
 
@@ -89,6 +98,8 @@ class IdentificadorDocumento:
         'ATACADAO_PEDIDO': r'Numero:\s*(\d+)',  # Campo "Numero: 988186" no canto superior direito
         'TENDA': r'Pedido:?\s*(\d+)',
         'ASSAI': r'Pedido:?\s*(\d+)',
+        'ASSAI_PEDIDO': r'Pedido:?\s*(\d+)',  # Campo "Pedido:21046597" no cabeçalho
+        'ASSAI_LOTE': r'Lote:\s*(\d+)',  # Campo "Lote: 104093" (backup)
     }
 
     def __init__(self):

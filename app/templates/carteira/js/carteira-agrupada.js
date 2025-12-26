@@ -256,61 +256,34 @@ class CarteiraAgrupada {
             return;
         }
 
-        // Toggle do badge com classe 'ativo' e estilos
+        // Toggle do badge - apenas classe 'ativo', CSS controla estilos
         badge.classList.toggle('ativo');
 
-        // Aplicar ou remover estilos visuais
+        // Atualizar estado dos filtros ativos
         if (badge.classList.contains('ativo')) {
-            // Estado ativo (preenchido)
+            // Ativando filtro
             if (tipo === 'rota') {
-                badge.style.backgroundColor = '#0d6efd';
-                badge.style.color = 'white';
-                badge.style.borderColor = '#0d6efd';
                 this.filtrosAtivos.rotas.add(valor);
                 // Se ativou SP, mostrar subrotas
                 if (valor === 'SP') {
                     this.mostrarSubrotasSP();
                 }
             } else if (tipo === 'incoterm') {
-                if (valor === 'FOB') {
-                    badge.style.backgroundColor = '#ffc107';
-                    badge.style.color = '#000';
-                    badge.style.borderColor = '#ffc107';
-                } else if (valor === 'RED') {
-                    badge.style.backgroundColor = '#dc3545';
-                    badge.style.color = 'white';
-                    badge.style.borderColor = '#dc3545';
-                }
                 this.filtrosAtivos.incoterms.add(valor);
             } else if (tipo === 'subrota') {
-                badge.style.backgroundColor = '#6c757d';
-                badge.style.color = 'white';
-                badge.style.borderColor = '#6c757d';
                 this.filtrosAtivos.subrotas.add(valor);
             }
         } else {
-            // Estado inativo (outline)
-            badge.style.backgroundColor = 'transparent';
+            // Desativando filtro
             if (tipo === 'rota') {
-                badge.style.color = '#0d6efd';
-                badge.style.borderColor = '#0d6efd';
                 this.filtrosAtivos.rotas.delete(valor);
                 // Se desativou SP, esconder subrotas
                 if (valor === 'SP') {
                     this.esconderSubrotasSP();
                 }
             } else if (tipo === 'incoterm') {
-                if (valor === 'FOB') {
-                    badge.style.color = '#ffc107';
-                    badge.style.borderColor = '#ffc107';
-                } else if (valor === 'RED') {
-                    badge.style.color = '#dc3545';
-                    badge.style.borderColor = '#dc3545';
-                }
                 this.filtrosAtivos.incoterms.delete(valor);
             } else if (tipo === 'subrota') {
-                badge.style.color = '#6c757d';
-                badge.style.borderColor = '#6c757d';
                 this.filtrosAtivos.subrotas.delete(valor);
             }
         }
@@ -378,28 +351,9 @@ class CarteiraAgrupada {
     }
 
     toggleAgendamento(badge, valor) {
-        // Remover ativo de todos os badges de agendamento
-        document.querySelectorAll('.badge-agendamento').forEach(b => {
+        // Remover ativo de todos os badges de agendamento (CSS controla estilos)
+        document.querySelectorAll('[data-tipo="agendamento"]').forEach(b => {
             b.classList.remove('ativo');
-            // Restaurar estilo outline (não clicado) baseado no valor do badge
-            const valorBadge = b.dataset.valor;
-            if (valorBadge === 'sem') {
-                b.style.backgroundColor = 'transparent';
-                b.style.color = '#dc3545';
-                b.style.borderColor = '#dc3545';
-            } else if (valorBadge === 'com') {
-                b.style.backgroundColor = 'transparent';
-                b.style.color = '#198754';
-                b.style.borderColor = '#198754';
-            } else if (valorBadge === 'sep-aguardando') {
-                b.style.backgroundColor = 'transparent';
-                b.style.color = '#fd7e14';
-                b.style.borderColor = '#fd7e14';
-            } else if (valorBadge === 'sep-confirmado') {
-                b.style.backgroundColor = 'transparent';
-                b.style.color = '#0dcaf0';
-                b.style.borderColor = '#0dcaf0';
-            }
         });
 
         // Se clicou no mesmo que já estava ativo, desativar
@@ -407,25 +361,8 @@ class CarteiraAgrupada {
             this.filtrosAtivos.agendamento = null;
             document.getElementById('limpar-agendamento').style.display = 'none';
         } else {
-            // Ativar o novo com estilo preenchido
+            // Ativar o novo (CSS controla estilos via classe 'ativo')
             badge.classList.add('ativo');
-            if (valor === 'sem') {
-                badge.style.backgroundColor = '#dc3545';
-                badge.style.color = 'white';
-                badge.style.borderColor = '#dc3545';
-            } else if (valor === 'com') {
-                badge.style.backgroundColor = '#198754';
-                badge.style.color = 'white';
-                badge.style.borderColor = '#198754';
-            } else if (valor === 'sep-aguardando') {
-                badge.style.backgroundColor = '#fd7e14';
-                badge.style.color = 'white';
-                badge.style.borderColor = '#fd7e14';
-            } else if (valor === 'sep-confirmado') {
-                badge.style.backgroundColor = '#0dcaf0';
-                badge.style.color = 'white';
-                badge.style.borderColor = '#0dcaf0';
-            }
             this.filtrosAtivos.agendamento = valor;
             document.getElementById('limpar-agendamento').style.display = 'inline-block';
         }
@@ -434,22 +371,9 @@ class CarteiraAgrupada {
     }
 
     limparFiltrosRotas() {
-        // Limpar badges de rotas e incoterms
+        // Limpar badges de rotas e incoterms (CSS controla estilos)
         document.querySelectorAll('.badge-rota, .badge-incoterm').forEach(badge => {
             badge.classList.remove('ativo');
-            badge.style.backgroundColor = 'transparent';
-
-            // Restaurar cores outline
-            if (badge.classList.contains('badge-rota')) {
-                badge.style.color = '#0d6efd';
-                badge.style.borderColor = '#0d6efd';
-            } else if (badge.dataset.valor === 'FOB') {
-                badge.style.color = '#ffc107';
-                badge.style.borderColor = '#ffc107';
-            } else if (badge.dataset.valor === 'RED') {
-                badge.style.color = '#dc3545';
-                badge.style.borderColor = '#dc3545';
-            }
         });
 
         this.filtrosAtivos.rotas.clear();
@@ -461,12 +385,9 @@ class CarteiraAgrupada {
     }
 
     limparFiltrosSubrotas() {
-        // Limpar badges de subrotas
+        // Limpar badges de subrotas (CSS controla estilos)
         document.querySelectorAll('.badge-subrota').forEach(badge => {
             badge.classList.remove('ativo');
-            badge.style.backgroundColor = 'transparent';
-            badge.style.color = '#6c757d';
-            badge.style.borderColor = '#6c757d';
         });
 
         this.filtrosAtivos.subrotas.clear();
@@ -476,25 +397,9 @@ class CarteiraAgrupada {
     }
 
     limparFiltrosAgendamento() {
-        document.querySelectorAll('.badge-agendamento').forEach(badge => {
+        // Limpar badges de agendamento (CSS controla estilos)
+        document.querySelectorAll('[data-tipo="agendamento"]').forEach(badge => {
             badge.classList.remove('ativo');
-            badge.style.backgroundColor = 'transparent';
-
-            // Restaurar cores outline baseado no valor do badge
-            const valorBadge = badge.dataset.valor;
-            if (valorBadge === 'sem') {
-                badge.style.color = '#dc3545';
-                badge.style.borderColor = '#dc3545';
-            } else if (valorBadge === 'com') {
-                badge.style.color = '#198754';
-                badge.style.borderColor = '#198754';
-            } else if (valorBadge === 'sep-aguardando') {
-                badge.style.color = '#fd7e14';
-                badge.style.borderColor = '#fd7e14';
-            } else if (valorBadge === 'sep-confirmado') {
-                badge.style.color = '#0dcaf0';
-                badge.style.borderColor = '#0dcaf0';
-            }
         });
         this.filtrosAtivos.agendamento = null;
         this.aplicarFiltros();
@@ -502,24 +407,9 @@ class CarteiraAgrupada {
     }
 
     toggleCliente(badge, valor) {
-        // Remover ativo de todos os badges de cliente
-        document.querySelectorAll('.badge-cliente').forEach(b => {
+        // Remover ativo de todos os badges de cliente (CSS controla estilos)
+        document.querySelectorAll('[data-tipo="cliente"]').forEach(b => {
             b.classList.remove('ativo');
-            // Restaurar estilo outline (não clicado) baseado no valor do badge
-            const valorBadge = b.dataset.valor;
-            if (valorBadge === 'atacadao') {
-                b.style.backgroundColor = 'transparent';
-                b.style.color = '#0056b3';
-                b.style.borderColor = '#0056b3';
-            } else if (valorBadge === 'sendas') {
-                b.style.backgroundColor = 'transparent';
-                b.style.color = '#dc3545';
-                b.style.borderColor = '#dc3545';
-            } else if (valorBadge === 'outros') {
-                b.style.backgroundColor = 'transparent';
-                b.style.color = '#6c757d';
-                b.style.borderColor = '#6c757d';
-            }
         });
 
         // Se clicou no mesmo que já estava ativo, desativar
@@ -527,21 +417,8 @@ class CarteiraAgrupada {
             this.filtrosAtivos.cliente = null;
             document.getElementById('limpar-cliente').style.display = 'none';
         } else {
-            // Ativar o novo com estilo preenchido
+            // Ativar o novo (CSS controla estilos via classe 'ativo')
             badge.classList.add('ativo');
-            if (valor === 'atacadao') {
-                badge.style.backgroundColor = '#0056b3';
-                badge.style.color = 'white';
-                badge.style.borderColor = '#0056b3';
-            } else if (valor === 'sendas') {
-                badge.style.backgroundColor = '#dc3545';
-                badge.style.color = 'white';
-                badge.style.borderColor = '#dc3545';
-            } else if (valor === 'outros') {
-                badge.style.backgroundColor = '#6c757d';
-                badge.style.color = 'white';
-                badge.style.borderColor = '#6c757d';
-            }
             this.filtrosAtivos.cliente = valor;
             document.getElementById('limpar-cliente').style.display = 'inline-block';
         }
@@ -550,20 +427,9 @@ class CarteiraAgrupada {
     }
 
     toggleAtendimento(badge, valor) {
-        // Remover ativo de todos os badges de atendimento
-        document.querySelectorAll('.badge-atendimento').forEach(b => {
+        // Remover ativo de todos os badges de atendimento (CSS controla estilos)
+        document.querySelectorAll('[data-tipo="atendimento"]').forEach(b => {
             b.classList.remove('ativo');
-            // Restaurar estilo outline (não clicado) baseado no valor do badge
-            const valorBadge = b.dataset.valor;
-            if (valorBadge === 'programar') {
-                b.style.backgroundColor = 'transparent';
-                b.style.color = '#6f42c1';
-                b.style.borderColor = '#6f42c1';
-            } else if (valorBadge === 'revisar-data') {
-                b.style.backgroundColor = 'transparent';
-                b.style.color = '#e83e8c';
-                b.style.borderColor = '#e83e8c';
-            }
         });
 
         // Se clicou no mesmo que já estava ativo, desativar
@@ -571,17 +437,8 @@ class CarteiraAgrupada {
             this.filtrosAtivos.atendimento = null;
             document.getElementById('limpar-atendimento').style.display = 'none';
         } else {
-            // Ativar o novo com estilo preenchido
+            // Ativar o novo (CSS controla estilos via classe 'ativo')
             badge.classList.add('ativo');
-            if (valor === 'programar') {
-                badge.style.backgroundColor = '#6f42c1';
-                badge.style.color = 'white';
-                badge.style.borderColor = '#6f42c1';
-            } else if (valor === 'revisar-data') {
-                badge.style.backgroundColor = '#e83e8c';
-                badge.style.color = 'white';
-                badge.style.borderColor = '#e83e8c';
-            }
             this.filtrosAtivos.atendimento = valor;
             document.getElementById('limpar-atendimento').style.display = 'inline-block';
         }
@@ -590,20 +447,9 @@ class CarteiraAgrupada {
     }
 
     limparFiltrosCliente() {
-        document.querySelectorAll('.badge-cliente').forEach(badge => {
+        // Limpar badges de cliente (CSS controla estilos)
+        document.querySelectorAll('[data-tipo="cliente"]').forEach(badge => {
             badge.classList.remove('ativo');
-            badge.style.backgroundColor = 'transparent';
-            const valorBadge = badge.dataset.valor;
-            if (valorBadge === 'atacadao') {
-                badge.style.color = '#0056b3';
-                badge.style.borderColor = '#0056b3';
-            } else if (valorBadge === 'sendas') {
-                badge.style.color = '#dc3545';
-                badge.style.borderColor = '#dc3545';
-            } else if (valorBadge === 'outros') {
-                badge.style.color = '#6c757d';
-                badge.style.borderColor = '#6c757d';
-            }
         });
         this.filtrosAtivos.cliente = null;
         this.aplicarFiltros();
@@ -611,17 +457,9 @@ class CarteiraAgrupada {
     }
 
     limparFiltrosAtendimento() {
-        document.querySelectorAll('.badge-atendimento').forEach(badge => {
+        // Limpar badges de atendimento (CSS controla estilos)
+        document.querySelectorAll('[data-tipo="atendimento"]').forEach(badge => {
             badge.classList.remove('ativo');
-            badge.style.backgroundColor = 'transparent';
-            const valorBadge = badge.dataset.valor;
-            if (valorBadge === 'programar') {
-                badge.style.color = '#6f42c1';
-                badge.style.borderColor = '#6f42c1';
-            } else if (valorBadge === 'revisar-data') {
-                badge.style.color = '#e83e8c';
-                badge.style.borderColor = '#e83e8c';
-            }
         });
         this.filtrosAtivos.atendimento = null;
         this.aplicarFiltros();
@@ -1359,12 +1197,12 @@ class CarteiraAgrupada {
      * 🆕 RENDERIZAR LINHA INDIVIDUAL DA SEPARAÇÃO COMPACTA
      */
     renderizarLinhaSeparacaoCompacta(item) {
-        const tipoClass = item.isSeparacao ? 'text-primary' : 'text-warning';
+        const tipoClass = item.isSeparacao ? '' : 'text-muted';
         const statusBadge = item.status ?
             (item.status === 'PREVISAO' ? '<span class="badge bg-secondary">PREVISAO</span>' :
                 item.status === 'COTADO' ? '<span class="badge bg-warning text-dark">COTADO</span>' :
                     item.status === 'FATURADO' ? '<span class="badge bg-success">FATURADO</span>' :
-                        item.status === 'EMBARCADO' ? '<span class="badge bg-info">EMBARCADO</span>' :
+                        item.status === 'EMBARCADO' ? '<span class="badge bg-success">EMBARCADO</span>' :
                             item.status === 'NF no CD' ? '<span class="badge bg-danger">NF no CD</span>' :
                                 item.status === 'ABERTO' ? '<span class="badge bg-secondary">ABERTO</span>' : '') : '';
 
@@ -1394,31 +1232,31 @@ class CarteiraAgrupada {
                 <td data-field="obs_separacao"><small>${obsSeparacao}</small></td>
                 <td class="text-center">
                     <div class="btn-group btn-group-sm">
-                        <button class="btn btn-outline-primary btn-sm" 
+                        <button class="btn btn-outline-secondary btn-sm"
                                 onclick="carteiraAgrupada.abrirModalDatas('${item.loteId}', ${item.isSeparacao}, '${item.expedicao || ''}', '${item.agendamento || ''}', '${item.protocolo || ''}', ${item.agendamento_confirmado || false})"
                                 title="Editar datas">
                             <i class="fas fa-calendar-alt"></i> Datas
                         </button>
                         ${item.status === 'PREVISAO' ? `
-                            <button class="btn btn-outline-success btn-sm"
+                            <button class="btn btn-outline-secondary btn-sm"
                                     onclick="carteiraAgrupada.alterarStatusSeparacao('${item.loteId}', 'ABERTO')"
                                     title="Confirmar separação">
                                 <i class="fas fa-check"></i> Confirmar
                             </button>
                         ` : ''}
-                        <button class="btn btn-outline-info btn-sm" 
+                        <button class="btn btn-outline-secondary btn-sm"
                                 onclick="carteiraAgrupada.agendarNoPortal('${item.loteId}', '${item.agendamento || ''}')"
                                 title="Agendar no portal">
                             <i class="fas fa-calendar-plus"></i> Agendar
                         </button>
                         ${item.protocolo ? `
-                            <button class="btn btn-outline-warning btn-sm" 
+                            <button class="btn btn-outline-secondary btn-sm"
                                     onclick="carteiraAgrupada.verificarAgendamento('${item.loteId}', '${item.protocolo}')"
                                     title="Verificar agendamento no portal">
                                 <i class="fas fa-search"></i> Ver.Agenda
                             </button>
                         ` : ''}
-                        <button class="btn btn-outline-danger btn-sm" 
+                        <button class="btn btn-outline-secondary btn-sm"
                                 onclick="carteiraAgrupada.excluirSeparacao('${item.loteId}')"
                                 title="Excluir separação">
                             <i class="fas fa-trash"></i> Excluir
@@ -1745,7 +1583,7 @@ class CarteiraAgrupada {
                 showCancelButton: true,
                 confirmButtonText: 'Verificar',
                 cancelButtonText: 'Cancelar',
-                confirmButtonColor: '#0dcaf0'
+                confirmButtonColor: window.Notifications?.colors?.neutral || '#6c757d'
             });
 
             if (!result.isConfirmed) return;
@@ -1936,7 +1774,7 @@ class CarteiraAgrupada {
         const contador = document.getElementById('contador-protocolos');
         if (contador) {
             contador.textContent = totalProtocolosUnicos;
-            contador.className = totalProtocolosUnicos > 0 ? 'badge bg-danger ms-1' : 'badge bg-secondary ms-1';
+            contador.className = totalProtocolosUnicos > 0 ? 'badge bg-secondary ms-1' : 'badge bg-secondary ms-1';
         }
     }
 
@@ -1991,7 +1829,7 @@ class CarteiraAgrupada {
                 showCancelButton: true,
                 confirmButtonText: 'Verificar Todos',
                 cancelButtonText: 'Cancelar',
-                confirmButtonColor: '#ffc107'
+                confirmButtonColor: window.Notifications?.colors?.neutral || '#6c757d'
             });
 
             if (!result.isConfirmed) return;
@@ -2462,37 +2300,28 @@ class CarteiraAgrupada {
         console.log(`📊 Contadores importantes: ${importantesSemSeparacao} / ${totalImportantes}`);
     }
 
-    // Toggle do filtro importante (exclusivo mútuo)
+    // Toggle do filtro importante (exclusivo mútuo) - CSS controla estilos
     toggleImportanteFiltro(badge) {
         // Se já está ativo, desativar
         if (this.filtrosAtivos.importante) {
             this.filtrosAtivos.importante = false;
             badge.classList.remove('ativo');
-            badge.style.backgroundColor = 'transparent';
-            badge.style.color = '#ff6b00';
-            badge.style.borderColor = '#ff6b00';
             document.getElementById('limpar-importante').style.display = 'none';
         } else {
             // Ativar
             this.filtrosAtivos.importante = true;
             badge.classList.add('ativo');
-            badge.style.backgroundColor = '#ff6b00';
-            badge.style.color = 'white';
-            badge.style.borderColor = '#ff6b00';
             document.getElementById('limpar-importante').style.display = 'inline-block';
         }
 
         this.aplicarFiltros();
     }
 
-    // Limpa o filtro de importante
+    // Limpa o filtro de importante - CSS controla estilos
     limparFiltroImportante() {
-        const badge = document.querySelector('.badge-importante');
+        const badge = document.querySelector('[data-tipo="importante"]');
         if (badge) {
             badge.classList.remove('ativo');
-            badge.style.backgroundColor = 'transparent';
-            badge.style.color = '#ff6b00';
-            badge.style.borderColor = '#ff6b00';
         }
         this.filtrosAtivos.importante = false;
         document.getElementById('limpar-importante').style.display = 'none';

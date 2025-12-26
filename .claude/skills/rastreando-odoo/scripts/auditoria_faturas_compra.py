@@ -65,7 +65,7 @@ def chunked(lst: List, size: int):
 # EXTRAÇÃO OTIMIZADA (BATCH QUERIES)
 # ==============================================================================
 
-def extrair_auditoria_otimizado(odoo, mes: int = None, ano: int = None, limit: int = 10000, todos: bool = False) -> Dict:
+def extrair_auditoria(odoo, mes: int = None, ano: int = None, limit: int = 10000, todos: bool = False) -> Dict:
     """
     Extrai auditoria completa de faturas de compra - VERSÃO OTIMIZADA.
 
@@ -476,8 +476,6 @@ def extrair_auditoria_otimizado(odoo, mes: int = None, ano: int = None, limit: i
     }
 
 
-# Manter compatibilidade com nome antigo
-extrair_auditoria = extrair_auditoria_otimizado
 
 
 # ==============================================================================
@@ -676,7 +674,7 @@ Exemplos:
         print("ERRO: Falha na autenticação com Odoo", file=sys.stderr)
         sys.exit(1)
 
-    auditoria = extrair_auditoria_otimizado(odoo, args.mes, args.ano, args.limit, args.todos)
+    auditoria = extrair_auditoria(odoo, args.mes, args.ano, args.limit, args.todos)
 
     if args.json:
         print(json.dumps(auditoria, indent=2, ensure_ascii=False, default=str))

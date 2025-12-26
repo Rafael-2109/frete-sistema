@@ -52,11 +52,11 @@ class ModalCardexExpandido {
             }
             
             .dia-card[data-tem-ruptura="true"] {
-                border-left: 3px solid #dc3545;
+                border-left: 3px solid var(--semantic-danger, #dc3545);
             }
-            
+
             .dia-card[data-tem-ruptura="false"] {
-                border-left: 3px solid #28a745;
+                border-left: 3px solid var(--semantic-success, #28a745);
             }
             
             .dia-card .fa-chevron-down,
@@ -169,12 +169,12 @@ class ModalCardexExpandido {
             <div class="modal-dialog modal-xl">
                 <div class="modal-content">
                     <!-- Header -->
-                    <div class="modal-header bg-primary text-white">
+                    <div class="modal-header">
                         <h5 class="modal-title">
                             <i class="fas fa-table me-2"></i>
                             Cardex Detalhado - ${codProduto}
                         </h5>
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
 
                     <!-- Body -->
@@ -183,19 +183,19 @@ class ModalCardexExpandido {
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <div class="d-flex align-items-center">
-                                    <h6 class="text-primary mb-0">Estoque Atual: 
+                                    <h6 class="mb-0">Estoque Atual:
                                         <span class="badge bg-success fs-6">${this.formatarQuantidade(estoqueAtual)}</span>
                                     </h6>
                                 </div>
                             </div>
                             <div class="col-md-6 text-end">
-                                <button class="btn btn-sm btn-outline-danger" 
+                                <button class="btn btn-sm btn-outline-secondary"
                                         onclick="cardexExpandido.toggleFiltroRuptura(this)"
                                         data-mostrando-todos="true">
                                     <i class="fas fa-exclamation-triangle me-1"></i>
                                     Apenas Rupturas
                                 </button>
-                                <button class="btn btn-sm btn-primary ms-2" 
+                                <button class="btn btn-sm btn-secondary ms-2"
                                         onclick="cardexExpandido.exportarDetalhado('${codProduto}')">
                                     <i class="fas fa-download me-1"></i>
                                     Exportar Excel
@@ -412,7 +412,7 @@ class ModalCardexExpandido {
                                 }
                             </td>
                             <td class="text-center">
-                                <button class="btn btn-sm btn-outline-primary" 
+                                <button class="btn btn-sm btn-outline-secondary"
                                         onclick="cardexExpandido.abrirPedidoDetalhes('${pedido.num_pedido}')"
                                         title="Ver detalhes do pedido">
                                     <i class="fas fa-eye"></i>

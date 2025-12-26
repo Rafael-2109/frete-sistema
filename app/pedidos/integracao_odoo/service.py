@@ -158,7 +158,8 @@ class OdooIntegrationService:
                      numero_pedido_cliente: str = None,
                      observacoes: str = None,
                      calcular_impostos: bool = True,
-                     payment_provider_id: int = None) -> ResultadoCriacaoPedido:
+                     payment_provider_id: int = None,
+                     picking_policy: str = None) -> ResultadoCriacaoPedido:
         """
         Cria um pedido de venda no Odoo
 
@@ -169,6 +170,7 @@ class OdooIntegrationService:
             observacoes: Observações do pedido
             calcular_impostos: Se deve calcular impostos após criar
             payment_provider_id: ID da forma de pagamento (30 = Transferência Bancária CD)
+            picking_policy: Política de envio ('direct' = O mais rápido possível, 'one' = Quando todos prontos)
 
         Returns:
             ResultadoCriacaoPedido
@@ -207,13 +209,18 @@ class OdooIntegrationService:
                     continue
 
                 # Linha do pedido no formato Odoo (0, 0, {...})
-                line = (0, 0, {
+                line_data = {
                     'product_id': product_id,
                     'product_uom_qty': quantidade,
                     'price_unit': preco,
                     'l10n_br_compra_indcom': self.DESTINACAO_USO,
-                })
-                order_lines.append(line)
+                }
+
+                # Adiciona pedido de compra do cliente na linha também
+                if numero_pedido_cliente:
+                    line_data['l10n_br_pedido_compra'] = numero_pedido_cliente
+
+                order_lines.append((0, 0, line_data))
 
             if not order_lines:
                 return ResultadoCriacaoPedido(
@@ -242,6 +249,10 @@ class OdooIntegrationService:
 
             if observacoes:
                 order_data['note'] = observacoes
+
+            # Política de envio (direct = O mais rápido possível)
+            if picking_policy:
+                order_data['picking_policy'] = picking_policy
 
             order_id = self._execute('sale.order', 'create', order_data)
 
@@ -356,11 +367,16 @@ class OdooIntegrationService:
             # Tenta criar pedido no Odoo
             # Usa numero_pedido_cliente se fornecido, senão usa numero_documento como fallback
             pedido_compra = numero_pedido_cliente or numero_documento
+
+            # Atacadão: política de envio "O mais rápido possível"
+            picking_policy = 'direct' if rede.upper() == 'ATACADAO' else None
+
             resultado = self.criar_pedido(
                 cnpj_cliente=cnpj_cliente,
                 itens=itens,
                 numero_pedido_cliente=pedido_compra,
                 payment_provider_id=payment_provider_id,
+                picking_policy=picking_policy,
             )
 
             if resultado.sucesso:

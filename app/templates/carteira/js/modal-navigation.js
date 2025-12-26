@@ -49,12 +49,12 @@ class ModalNavigationManager {
             }
             
             .breadcrumb-item:hover:not(.active) {
-                background-color: rgba(13, 110, 253, 0.1);
-                color: #0d6efd;
+                background-color: rgba(108, 117, 125, 0.15);
+                color: var(--bs-body-color);
             }
-            
+
             .breadcrumb-item.active {
-                background-color: rgba(13, 110, 253, 0.1);
+                background-color: rgba(108, 117, 125, 0.15);
                 border-radius: 4px;
             }
         `;
@@ -75,8 +75,8 @@ class ModalNavigationManager {
             top: 0;
             left: 0;
             right: 0;
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-            border-bottom: 2px solid #0d6efd;
+            background: var(--bs-secondary-bg);
+            border-bottom: 2px solid var(--bs-border-color);
             padding: 10px 20px;
             z-index: 1055;
             display: none;
@@ -228,7 +228,7 @@ class ModalNavigationManager {
             return `
                 <span class="breadcrumb-item ${isLast ? 'active fw-bold' : ''}" 
                       data-index="${index}"
-                      style="cursor: ${isLast ? 'default' : 'pointer'}; ${isLast ? 'color: #0d6efd;' : ''}">
+                      style="cursor: ${isLast ? 'default' : 'pointer'}; ${isLast ? 'font-weight: 600;' : ''}">
                     <i class="${icon} me-1"></i>
                     ${item.title}
                 </span>

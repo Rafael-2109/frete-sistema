@@ -350,13 +350,13 @@ class RupturaWorkerAddon {
                 min-width: 350px;
             ">
                 <div style="display: flex; align-items: center; margin-bottom: 10px;">
-                    <i class="fas fa-cog fa-spin" style="color: #667eea; margin-right: 10px;"></i>
+                    <i class="fas fa-cog fa-spin text-secondary-color" style="margin-right: 10px;"></i>
                     <strong>Processando com Workers</strong>
                 </div>
                 <div class="progress" style="height: 25px; margin-bottom: 5px;">
                     <div class="progress-bar progress-bar-striped progress-bar-animated" 
                          role="progressbar" 
-                         style="width: 0%; background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);">
+                         style="width: 0%; background: var(--bs-secondary-bg);">
                         0%
                     </div>
                 </div>

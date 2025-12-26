@@ -215,14 +215,14 @@ class WorkspaceMontagem {
         return `
             <div class="workspace-montagem" data-pedido="${numPedido}">
                 <!-- Header do Workspace -->
-                <div class="workspace-header bg-primary text-white p-3 rounded-top">
+                <div class="workspace-header p-3 rounded-top border-bottom">
                     <div class="row align-items-center">
                         <div class="col-md-8">
                             <h5 class="mb-0">
                                 <i class="fas fa-boxes me-2"></i>
                                 Workspace de Montagem - Pedido ${numPedido}
                             </h5>
-                            <small>Selecione os produtos e clique em "Adicionar" no lote desejado</small>
+                            <small class="text-muted">Selecione os produtos e clique em "Adicionar" no lote desejado</small>
                         </div>
                         <div class="col-md-4 text-end">
                             <div class="workspace-resumo">
@@ -256,7 +256,7 @@ class WorkspaceMontagem {
                             ${this.separacoesConfirmadas && this.separacoesConfirmadas.length > 0 ?
                 `<span class="badge bg-secondary ms-2">${this.separacoesConfirmadas.length}</span>` : ''}
                         </h6>
-                        <button class="btn btn-success btn-sm" onclick="workspace.criarNovoLote('${numPedido}')">
+                        <button class="btn btn-secondary btn-sm" onclick="workspace.criarNovoLote('${numPedido}')">
                             <i class="fas fa-plus me-1"></i> Novo Lote
                         </button>
                     </div>
@@ -287,10 +287,10 @@ class WorkspaceMontagem {
         const statusMap = {
             'PREVISAO': 'secondary',
             'ABERTO': 'warning',
-            'FATURADO': 'info',
-            'COTADO': 'primary',
+            'FATURADO': 'success',
+            'COTADO': 'warning',
             'EMBARCADO': 'success',
-            'NF no CD': 'secondary'
+            'NF no CD': 'danger'
         };
         return statusMap[status] || 'secondary';
     }
@@ -586,11 +586,13 @@ class WorkspaceMontagem {
         // Criar toast notification
         const toast = document.createElement('div');
         toast.className = `toast-feedback toast-${tipo}`;
+        const colors = window.Notifications?.getColors?.() || { success: '#28a745', error: '#dc3545', warning: '#ffc107' };
+        const bgColor = tipo === 'success' ? colors.success : tipo === 'error' ? colors.error : colors.warning;
         toast.style.cssText = `
             position: fixed;
             top: 20px;
             right: 20px;
-            background: ${tipo === 'success' ? '#28a745' : tipo === 'error' ? '#dc3545' : '#ffc107'};
+            background: ${bgColor};
             color: white;
             padding: 12px 24px;
             border-radius: 4px;
@@ -877,7 +879,7 @@ class WorkspaceMontagem {
                     <i class="fas fa-exclamation-triangle me-2"></i>
                     <strong>Erro ao carregar workspace</strong>
                     <p class="mb-2">${mensagem}</p>
-                    <button class="btn btn-sm btn-outline-danger" onclick="location.reload()">
+                    <button class="btn btn-sm btn-outline-secondary" onclick="location.reload()">
                         <i class="fas fa-redo me-1"></i> Recarregar página
                     </button>
                 </div>
@@ -997,7 +999,7 @@ class WorkspaceMontagem {
                     icon: 'success',
                     title: 'Reversão Concluída!',
                     text: 'A separação foi revertida para pré-separação com sucesso.',
-                    confirmButtonColor: '#28a745',
+                    confirmButtonColor: window.Notifications?.colors?.success || '#28a745',
                     confirmButtonText: 'OK'
                 }).then(() => {
                     // Atualizar a página sem reload completo
@@ -1037,7 +1039,7 @@ class WorkspaceMontagem {
                     icon: 'error',
                     title: 'Erro ao Reverter',
                     text: data.error || 'Não foi possível reverter a separação',
-                    confirmButtonColor: '#dc3545'
+                    confirmButtonColor: window.Notifications?.colors?.danger || '#dc3545'
                 });
             }
 
@@ -1049,7 +1051,7 @@ class WorkspaceMontagem {
                 icon: 'error',
                 title: 'Erro ao Reverter',
                 text: error.message || 'Ocorreu um erro ao reverter a separação',
-                confirmButtonColor: '#dc3545'
+                confirmButtonColor: window.Notifications?.colors?.danger || '#dc3545'
             });
         }
     }
@@ -1150,7 +1152,7 @@ class WorkspaceMontagem {
                             <h5 class="modal-title">
                                 <i class="fas fa-calendar-alt me-2"></i>
                                 Editar Datas - Separação
-                                <span class="badge bg-primary ms-2">${loteId}</span>
+                                <span class="badge bg-secondary ms-2">${loteId}</span>
                             </h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
@@ -1228,7 +1230,7 @@ class WorkspaceMontagem {
                 icon: 'warning',
                 title: 'Campo Obrigatório',
                 text: 'Data de expedição é obrigatória!',
-                confirmButtonColor: '#0066cc'
+                confirmButtonColor: window.Notifications?.colors?.neutral || '#6c757d'
             });
             return;
         }
@@ -1340,7 +1342,7 @@ class WorkspaceMontagem {
                     icon: 'error',
                     title: 'Erro ao Atualizar',
                     text: data.error || 'Erro ao atualizar as datas',
-                    confirmButtonColor: '#dc3545'
+                    confirmButtonColor: window.Notifications?.colors?.danger || '#dc3545'
                 });
             }
 
@@ -1350,7 +1352,7 @@ class WorkspaceMontagem {
                 icon: 'error',
                 title: 'Erro Interno',
                 text: 'Ocorreu um erro ao atualizar as datas. Tente novamente.',
-                confirmButtonColor: '#dc3545'
+                confirmButtonColor: window.Notifications?.colors?.danger || '#dc3545'
             });
         }
     }
@@ -1570,7 +1572,7 @@ class WorkspaceMontagem {
                         const prodHojeCell = row.cells[8];
                         if (prodHojeCell) {
                             const producao = Math.floor(produto.producao_hoje || 0);
-                            const badgeClass = producao > 0 ? 'bg-info' : 'bg-secondary';
+                            const badgeClass = producao > 0 ? 'bg-secondary' : 'bg-secondary';
                             prodHojeCell.innerHTML = `
                                 <span class="badge ${badgeClass}" title="Quantidade programada para produzir hoje">
                                     ${producao.toLocaleString('pt-BR')}
@@ -1610,7 +1612,7 @@ class WorkspaceMontagem {
                                     const dataFormatada = `${dia}/${mes}`;
 
                                     statusDisponibilidade = {
-                                        class: 'bg-info text-white',
+                                        class: 'bg-secondary text-white',
                                         texto: `${Math.floor(qtdDisponivel).toLocaleString('pt-BR')}`,
                                         detalhes: `D+${diasFuturo} | ${dataFormatada}`
                                     };

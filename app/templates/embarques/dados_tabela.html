@@ -2,6 +2,7 @@
 {% block content %}
 
 <style>
+  /* MIGRADO: Usando variaveis de _variables.css */
   @media print {
     body {
       font-size: 11px;
@@ -37,27 +38,29 @@
   }
 
   .badge-success {
-    background-color: #28a745;
+    background-color: var(--bs-success);
+    color: #fff;
   }
 
   .badge-danger {
-    background-color: #dc3545;
+    background-color: var(--bs-danger);
+    color: #fff;
   }
 
   .badge-warning {
-    background-color: #ffc107;
-    color: #212529;
+    background-color: var(--bs-warning);
+    color: hsl(0, 0%, 10%);
   }
 
   .valor-destaque {
     font-weight: bold;
-    color: #0066cc;
+    color: var(--bs-body-color);
   }
 </style>
 
 <div class="container my-4">
   <div class="card">
-    <div class="card-header bg-info text-white">
+    <div class="card-header">
       <h2 class="card-title mb-0">
         <i class="fas fa-table"></i> Dados da Tabela - Embarque #{{ embarque.numero }}
       </h2>
@@ -254,7 +257,7 @@
             <!-- Valores Mínimos -->
             {% if embarque.tabela_gris_minimo or embarque.tabela_adv_minimo %}
             <hr>
-            <h6 class="text-primary">📌 Valores Mínimos</h6>
+            <h6>📌 Valores Mínimos</h6>
             <div class="row">
               <div class="col-md-4"><strong>GRIS Mínimo:</strong></div>
               <div class="col-md-8">
@@ -334,7 +337,7 @@
           <!-- Dados da Tabela do Item (para cargas FRACIONADAS) -->
           {% if embarque.tipo_carga == 'FRACIONADA' and (item.tabela_nome_tabela or item.modalidade) %}
           <hr>
-          <h6 class="text-info"><i class="fas fa-table"></i> Dados da Tabela deste Item</h6>
+          <h6><i class="fas fa-table"></i> Dados da Tabela deste Item</h6>
           <div class="dados-tabela">
             <div class="row">
               <div class="col-md-4"><strong>Modalidade:</strong></div>
@@ -488,7 +491,7 @@
             <!-- Valores Mínimos para itens -->
             {% if item.tabela_gris_minimo or item.tabela_adv_minimo %}
             <hr>
-            <h6 class="text-primary">📌 Valores Mínimos</h6>
+            <h6>📌 Valores Mínimos</h6>
             <div class="row">
               <div class="col-md-4"><strong>GRIS Mínimo:</strong></div>
               <div class="col-md-8">

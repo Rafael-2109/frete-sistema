@@ -18,7 +18,7 @@
                         class="d-inline">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
                         <button type="submit" class="btn btn-primary"
-                            onclick="return confirm('Confirma a sincronização de todas as entregas? Esta operação pode demorar alguns minutos.')"
+                            onclick="return confirm('Confirma a sincronização de todas as entregas? Esta operação pode demorar alguns minutos.')">
                             <i class="fas fa-sync"></i> Sincronizar Todas
                         </button>
                     </form>
@@ -30,19 +30,19 @@
     <!-- Cards de Estatísticas -->
     <div class="row mb-4">
         <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-primary shadow h-100 py-2">
+            <div class="card border-start border-primary border-3 shadow h-100 py-2">
                 <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                    <div class="row g-0 align-items-center">
+                        <div class="col me-2">
+                            <div class="small fw-bold text-primary text-uppercase mb-1">
                                 Total de Entregas
                             </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                            <div class="h5 mb-0 fw-bold">
                                 {{ diagnosticos.total_entregas }}
                             </div>
                         </div>
                         <div class="col-auto">
-                            <i class="fas fa-truck fa-2x text-gray-300"></i>
+                            <i class="fas fa-truck fa-2x text-muted"></i>
                         </div>
                     </div>
                 </div>
@@ -50,22 +50,22 @@
         </div>
 
         <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-warning shadow h-100 py-2">
+            <div class="card border-start border-warning border-3 shadow h-100 py-2">
                 <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                    <div class="row g-0 align-items-center">
+                        <div class="col me-2">
+                            <div class="small fw-bold text-warning text-uppercase mb-1">
                                 Entregas Órfãs
                             </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                            <div class="h5 mb-0 fw-bold">
                                 {{ diagnosticos.entregas_sem_embarque }}
                             </div>
                         </div>
                         <div class="col-auto">
-                            <i class="fas fa-exclamation-triangle fa-2x text-gray-300"></i>
+                            <i class="fas fa-exclamation-triangle fa-2x text-muted"></i>
                         </div>
                     </div>
-                    <div class="text-xs text-muted mt-1">
+                    <div class="small text-muted mt-1">
                         Sem embarque correspondente
                     </div>
                 </div>
@@ -73,22 +73,22 @@
         </div>
 
         <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-danger shadow h-100 py-2">
+            <div class="card border-start border-danger border-3 shadow h-100 py-2">
                 <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                    <div class="row g-0 align-items-center">
+                        <div class="col me-2">
+                            <div class="small fw-bold text-danger text-uppercase mb-1">
                                 NFs no CD
                             </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                            <div class="h5 mb-0 fw-bold">
                                 {{ diagnosticos.nfs_cd_ativo }}
                             </div>
                         </div>
                         <div class="col-auto">
-                            <i class="fas fa-undo fa-2x text-gray-300"></i>
+                            <i class="fas fa-undo fa-2x text-muted"></i>
                         </div>
                     </div>
-                    <div class="text-xs text-muted mt-1">
+                    <div class="small text-muted mt-1">
                         Precisam reprocessamento
                     </div>
                 </div>
@@ -96,22 +96,22 @@
         </div>
 
         <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-info shadow h-100 py-2">
+            <div class="card border-start border-info border-3 shadow h-100 py-2">
                 <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                    <div class="row g-0 align-items-center">
+                        <div class="col me-2">
+                            <div class="small fw-bold text-info text-uppercase mb-1">
                                 Sem Data Embarque
                             </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                            <div class="h5 mb-0 fw-bold">
                                 {{ diagnosticos.entregas_sem_data_embarque }}
                             </div>
                         </div>
                         <div class="col-auto">
-                            <i class="fas fa-calendar-times fa-2x text-gray-300"></i>
+                            <i class="fas fa-calendar-times fa-2x text-muted"></i>
                         </div>
                     </div>
-                    <div class="text-xs text-muted mt-1">
+                    <div class="small text-muted mt-1">
                         Item 2-b processo
                     </div>
                 </div>
@@ -124,7 +124,7 @@
         <div class="col-lg-6 mb-4">
             <div class="card shadow">
                 <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">
+                    <h6 class="m-0 fw-bold text-primary">
                         <i class="fas fa-info-circle"></i> Análise Detalhada
                     </h6>
                 </div>
@@ -215,7 +215,7 @@
         <div class="col-lg-6 mb-4">
             <div class="card shadow">
                 <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-success">
+                    <h6 class="m-0 fw-bold text-success">
                         <i class="fas fa-check-circle"></i> Itens do Processo Completo
                     </h6>
                 </div>
@@ -267,7 +267,7 @@
         <div class="col-12">
             <div class="card shadow">
                 <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-info">
+                    <h6 class="m-0 fw-bold text-info">
                         <i class="fas fa-tools"></i> Ações de Manutenção Disponíveis
                     </h6>
                 </div>
@@ -328,30 +328,4 @@
     </div>
 </div>
 
-<style>
-    .border-left-primary {
-        border-left: 0.25rem solid #4e73df !important;
-    }
-
-    .border-left-warning {
-        border-left: 0.25rem solid #f6c23e !important;
-    }
-
-    .border-left-danger {
-        border-left: 0.25rem solid #e74a3b !important;
-    }
-
-    .border-left-info {
-        border-left: 0.25rem solid #36b9cc !important;
-    }
-
-    .card {
-        transition: all 0.3s;
-    }
-
-    .card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1) !important;
-    }
-</style>
 {% endblock %}

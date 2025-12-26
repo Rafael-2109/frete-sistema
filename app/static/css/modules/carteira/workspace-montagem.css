@@ -1,62 +1,34 @@
 /* ==========================================================================
-   WORKSPACE DE MONTAGEM DE CARGA - Com Suporte a Dark/Light Mode
-   Usa CSS Variables do bootstrap-overrides.css via _variables.css
+   WORKSPACE DE MONTAGEM DE CARGA
+   Usa variáveis do _design-tokens.css
 
-   MOVIDO DE: app/templates/carteira/css/workspace-montagem.css
-   PARA: app/static/css/modules/carteira/workspace-montagem.css
-   DATA: 2025-12-17
+   HIERARQUIA (dark mode):
+   - body: --bg-dark (0%)
+   - workspace: --gradient (5%→10%)
+   - elementos: --bg-light (10%)
+   - botões: --bg-button (15%)
    ========================================================================== */
-
-/* ==========================================================================
-   CSS VARIABLES - Cores especificas do workspace
-   ========================================================================== */
-:root {
-    --ws-header-bg: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
-    --ws-lotes-bg: #f8f9fa;
-    --ws-produto-bg: #f8f9fa;
-    --ws-produto-hover: #e9ecef;
-    --ws-produto-selected: #e3f2fd;
-    --ws-produto-border: #1976d2;
-    --ws-totais-bg: linear-gradient(135deg, #f8f9fc 0%, #fff 100%);
-    --ws-border-color: #dee2e6;
-    --ws-scrollbar-track: #f1f1f1;
-    --ws-scrollbar-thumb: #007bff;
-    --ws-scrollbar-thumb-hover: #0056b3;
-    --ws-cardex-header-bg: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
-}
-
-[data-bs-theme="dark"],
-[data-theme="dark"] {
-    --ws-header-bg: linear-gradient(135deg, var(--bs-primary) 0%, color-mix(in srgb, var(--bs-primary) 70%, black) 100%);
-    --ws-lotes-bg: var(--bs-secondary-bg);
-    --ws-produto-bg: var(--bs-tertiary-bg);
-    --ws-produto-hover: var(--bs-secondary-bg);
-    --ws-produto-selected: rgba(96, 165, 250, 0.15);
-    --ws-produto-border: var(--bs-primary);
-    --ws-totais-bg: linear-gradient(135deg, var(--bs-secondary-bg) 0%, var(--bs-body-bg) 100%);
-    --ws-border-color: var(--bs-border-color);
-    --ws-scrollbar-track: var(--bs-tertiary-bg);
-    --ws-scrollbar-thumb: var(--bs-primary);
-    --ws-scrollbar-thumb-hover: color-mix(in srgb, var(--bs-primary) 80%, white);
-    --ws-cardex-header-bg: linear-gradient(135deg, var(--bs-primary) 0%, color-mix(in srgb, var(--bs-primary) 70%, black) 100%);
-}
 
 /* ==========================================================================
    WORKSPACE BASE
    ========================================================================== */
 .workspace-montagem {
-    border-radius: 0.5rem;
-    box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.1);
+    background: var(--gradient);
+    border: var(--border-card);
+    border-top: solid 1px var(--highlight);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
     margin: 1rem 0;
     position: relative;
     z-index: 1;
-    background-color: var(--bs-body-bg);
 }
 
 .workspace-header {
-    border-radius: 0.5rem 0.5rem 0 0 !important;
-    background: var(--ws-header-bg) !important;
-    color: white;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0 !important;
+    background: transparent !important;
+    color: var(--text) !important;
+    border-bottom: 1px solid var(--border);
+    padding: 1rem;
 }
 
 .workspace-resumo {
@@ -67,27 +39,28 @@
    SELECAO DE PRODUTOS
    ========================================================================== */
 .produto-origem {
-    transition: all 0.2s ease;
+    transition: all 0.15s ease;
     position: relative;
 }
 
 .produto-origem:hover {
-    background-color: var(--ws-produto-hover) !important;
+    background-color: var(--bg-light) !important;
 }
 
 .produto-origem.selected {
-    background-color: var(--ws-produto-selected) !important;
-    box-shadow: inset 0 0 0 2px var(--ws-produto-border);
+    background-color: var(--bg-button) !important;
+    box-shadow: inset 0 0 0 2px var(--amber-55);
 }
 
 /* ==========================================================================
    AREA DE LOTES
    ========================================================================== */
 .workspace-lotes {
-    background-color: var(--ws-lotes-bg);
-    border: 1px solid var(--ws-border-color);
-    border-radius: 0 0 0.5rem 0.5rem;
+    background: transparent;
+    border-top: 1px solid var(--border);
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
     min-height: 300px;
+    padding: 1rem;
 }
 
 .lotes-container {
@@ -98,8 +71,8 @@
    TABELA DE PRODUTOS
    ========================================================================== */
 .workspace-produtos {
-    border-left: 1px solid var(--ws-border-color);
-    border-right: 1px solid var(--ws-border-color);
+    border-left: none;
+    border-right: none;
 }
 
 .workspace-produtos-table {
@@ -129,14 +102,9 @@
 }
 
 .workspace-produtos-table .input-group-text.text-warning {
-    background-color: rgba(255, 193, 7, 0.15);
-    border-color: var(--cart-badge-yellow, #ffc107);
-    color: var(--cart-badge-yellow, #856404);
-}
-
-[data-bs-theme="dark"] .workspace-produtos-table .input-group-text.text-warning,
-[data-theme="dark"] .workspace-produtos-table .input-group-text.text-warning {
-    background-color: rgba(252, 211, 77, 0.15);
+    background-color: var(--semantic-warning-subtle);
+    border-color: var(--semantic-warning);
+    color: var(--semantic-warning-text);
 }
 
 .produto-info strong {
@@ -151,42 +119,45 @@
    CARDS DE LOTE
    ========================================================================== */
 .lote-card {
-    border: 2px solid var(--ws-border-color);
-    transition: all 0.3s ease;
+    background: var(--gradient);
+    border: var(--border-card);
+    border-top: solid 1px var(--highlight);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow);
+    transition: all 0.15s ease;
     min-height: 250px;
     position: relative;
-    background-color: var(--bs-body-bg);
 }
 
 .lote-card .card-footer {
     position: relative;
     z-index: 1;
-    background-color: var(--bs-body-bg);
-    border-top: 1px solid var(--ws-border-color);
+    background: transparent;
+    border-top: 1px solid var(--border);
 }
 
 .lote-card:hover {
-    border-color: var(--bs-primary);
-    box-shadow: 0 0.25rem 0.5rem rgba(var(--bs-primary-rgb), 0.15);
+    background: var(--gradient-hover);
 }
 
 .lote-card .card-header {
-    background: var(--ws-header-bg) !important;
-    border: none;
-    color: white;
+    background: transparent !important;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
 }
 
 .lote-placeholder {
-    border: 2px dashed var(--bs-secondary-color);
+    border: 2px dashed var(--border);
     background: transparent;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.15s ease;
     position: relative;
+    border-radius: var(--radius-md);
 }
 
 .lote-placeholder:hover {
-    border-color: var(--bs-primary);
-    background-color: rgba(var(--bs-primary-rgb), 0.05);
+    border-color: var(--amber-55);
+    background: hsla(45 95% 55% / 0.05);
 }
 
 /* ==========================================================================
@@ -194,13 +165,13 @@
    ========================================================================== */
 .produto-lote {
     padding: 0.25rem 0.5rem;
-    background: var(--ws-produto-bg);
-    border-radius: 0.25rem;
-    border-left: 3px solid var(--bs-primary);
+    background: var(--bg-light);
+    border-radius: var(--radius-sm);
+    border-left: 3px solid var(--amber-55);
 }
 
 .produto-lote:hover {
-    background: var(--ws-produto-hover);
+    background: var(--bg-button);
 }
 
 .produto-lote small {
@@ -211,18 +182,19 @@
    TOTAIS DO LOTE
    ========================================================================== */
 .totais-lote {
-    background: var(--ws-totais-bg);
-    border-radius: 0.25rem;
+    background: var(--bg-light);
+    border-radius: var(--radius-sm);
     padding: 0.5rem;
 }
 
 .totais-lote strong {
     font-size: 0.95rem;
+    color: var(--text);
 }
 
 .totais-lote small {
     font-size: 0.75rem;
-    color: var(--bs-secondary-color);
+    color: var(--text-muted);
 }
 
 /* ==========================================================================
@@ -234,19 +206,22 @@
 }
 
 /* ==========================================================================
-   ESTADOS ESPECIAIS
+   ESTADOS ESPECIAIS - Cores semânticas para status
    ========================================================================== */
 .lote-card.sem-produtos {
     opacity: 0.8;
 }
 
 .lote-card.com-estoque .card-header {
-    background: linear-gradient(135deg, var(--cart-badge-success) 0%, color-mix(in srgb, var(--cart-badge-success) 80%, black) 100%) !important;
+    background: var(--semantic-success-subtle) !important;
+    border-bottom: 2px solid var(--semantic-success) !important;
+    color: var(--semantic-success) !important;
 }
 
 .lote-card.sem-estoque .card-header {
-    background: linear-gradient(135deg, var(--cart-badge-yellow) 0%, color-mix(in srgb, var(--cart-badge-yellow) 80%, black) 100%) !important;
-    color: #212529 !important;
+    background: hsla(45 100% 50% / 0.15) !important;
+    border-bottom: 2px solid var(--amber-50) !important;
+    color: var(--amber-50) !important;
 }
 
 /* ==========================================================================
@@ -289,30 +264,8 @@
 }
 
 /* ==========================================================================
-   SCROLLBAR CUSTOMIZADA
+   SCROLLBAR CUSTOMIZADA - Herda do design-tokens
    ========================================================================== */
-.workspace-montagem {
-    scrollbar-width: thin;
-    scrollbar-color: var(--ws-scrollbar-thumb) var(--ws-scrollbar-track);
-}
-
-.workspace-montagem::-webkit-scrollbar {
-    width: 6px;
-}
-
-.workspace-montagem::-webkit-scrollbar-track {
-    background: var(--ws-scrollbar-track);
-    border-radius: 3px;
-}
-
-.workspace-montagem::-webkit-scrollbar-thumb {
-    background: var(--ws-scrollbar-thumb);
-    border-radius: 3px;
-}
-
-.workspace-montagem::-webkit-scrollbar-thumb:hover {
-    background: var(--ws-scrollbar-thumb-hover);
-}
 
 /* ==========================================================================
    MODAL DE CARDEX
@@ -322,20 +275,22 @@
 }
 
 #modal-cardex .modal-header {
-    background: var(--ws-cardex-header-bg) !important;
-    color: white;
+    background: transparent !important;
+    color: var(--text);
+    border-bottom: 1px solid var(--border);
 }
 
 #modal-cardex .modal-content {
-    background-color: var(--bs-body-bg);
-    border-color: var(--ws-border-color);
+    background: var(--gradient);
+    border: var(--border-card);
+    border-top: solid 1px var(--highlight);
 }
 
 .produto-cardex-header {
-    background: var(--ws-totais-bg);
-    border-radius: 0.5rem;
+    background: var(--bg-light);
+    border-radius: var(--radius-md);
     padding: 1rem;
-    border: 1px solid var(--ws-border-color);
+    border: 1px solid var(--border);
 }
 
 .cardex-resumo {
@@ -343,79 +298,36 @@
 }
 
 .cardex-resumo-visual .stat-card {
-    border: 1px solid var(--ws-border-color);
-    transition: all 0.3s ease;
-    background-color: var(--bs-body-bg);
+    background: var(--gradient);
+    border: var(--border-card);
+    border-top: solid 1px var(--highlight);
+    transition: all 0.15s ease;
 }
 
 .cardex-resumo-visual .stat-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.1);
+    background: var(--gradient-hover);
 }
 
 /* ==========================================================================
-   STAT-CARD - Melhoria de legibilidade no Dark Mode
+   STAT-CARD - Cores semânticas
    ========================================================================== */
 
-/* Texto muted mais visivel no dark mode */
-[data-bs-theme="dark"] .cardex-resumo-visual .stat-card .text-muted,
-[data-theme="dark"] .cardex-resumo-visual .stat-card .text-muted {
-    color: var(--bs-secondary-color) !important;
-    opacity: 0.9;
+.cardex-resumo-visual .stat-card .text-success {
+    color: var(--semantic-success) !important;
 }
 
-/* Cores semanticas mais vibrantes no dark mode para melhor contraste */
-[data-bs-theme="dark"] .cardex-resumo-visual .stat-card .text-success,
-[data-theme="dark"] .cardex-resumo-visual .stat-card .text-success {
-    color: #4ade80 !important; /* Verde mais brilhante */
+.cardex-resumo-visual .stat-card .text-danger {
+    color: var(--semantic-danger) !important;
 }
 
-[data-bs-theme="dark"] .cardex-resumo-visual .stat-card .text-warning,
-[data-theme="dark"] .cardex-resumo-visual .stat-card .text-warning {
-    color: #fbbf24 !important; /* Amarelo mais brilhante */
-}
-
-[data-bs-theme="dark"] .cardex-resumo-visual .stat-card .text-info,
-[data-theme="dark"] .cardex-resumo-visual .stat-card .text-info {
-    color: #38bdf8 !important; /* Cyan mais brilhante */
-}
-
-[data-bs-theme="dark"] .cardex-resumo-visual .stat-card .text-danger,
-[data-theme="dark"] .cardex-resumo-visual .stat-card .text-danger {
-    color: #f87171 !important; /* Vermelho mais brilhante */
-}
-
-/* Fundos bg-opacity-10 mais visiveis no dark mode */
-[data-bs-theme="dark"] .cardex-resumo-visual .stat-card.bg-success,
-[data-theme="dark"] .cardex-resumo-visual .stat-card.bg-success {
-    background-color: rgba(74, 222, 128, 0.15) !important;
-}
-
-[data-bs-theme="dark"] .cardex-resumo-visual .stat-card.bg-warning,
-[data-theme="dark"] .cardex-resumo-visual .stat-card.bg-warning {
-    background-color: rgba(251, 191, 36, 0.15) !important;
-}
-
-[data-bs-theme="dark"] .cardex-resumo-visual .stat-card.bg-info,
-[data-theme="dark"] .cardex-resumo-visual .stat-card.bg-info {
-    background-color: rgba(56, 189, 248, 0.15) !important;
-}
-
-[data-bs-theme="dark"] .cardex-resumo-visual .stat-card.bg-danger,
-[data-theme="dark"] .cardex-resumo-visual .stat-card.bg-danger {
-    background-color: rgba(248, 113, 113, 0.15) !important;
-}
-
-/* Headers h5 dentro dos stat-cards */
-[data-bs-theme="dark"] .cardex-resumo-visual .stat-card h5,
-[data-theme="dark"] .cardex-resumo-visual .stat-card h5 {
+.cardex-resumo-visual .stat-card h5 {
     font-weight: 700;
-    text-shadow: 0 0 10px currentColor;
+    color: var(--text);
 }
 
 .cardex-tabela {
-    border: 1px solid var(--ws-border-color);
-    border-radius: 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
     overflow: hidden;
 }
 
@@ -424,61 +336,63 @@
 }
 
 .cardex-tabela thead th {
-    border-bottom: 2px solid var(--bs-secondary-color);
+    border-bottom: 2px solid var(--border);
     font-weight: 600;
     font-size: 0.85rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    background-color: var(--bs-tertiary-bg);
+    background: var(--bg-dark);
+    color: var(--text);
 }
 
 .cardex-tabela tbody td {
     font-size: 0.9rem;
     vertical-align: middle;
+    color: var(--text);
 }
 
 .cardex-tabela .table-striped > tbody > tr:nth-of-type(odd) > td {
-    background-color: rgba(var(--bs-secondary-rgb), 0.05);
+    background-color: hsla(0 0% 50% / 0.03);
 }
 
 /* Status das linhas */
 .cardex-tabela .table-danger {
-    background-color: rgba(var(--bs-danger-rgb), 0.1) !important;
+    background-color: var(--semantic-danger-subtle) !important;
 }
 
 .cardex-tabela .table-warning {
-    background-color: rgba(var(--bs-warning-rgb), 0.1) !important;
+    background-color: hsla(45 100% 50% / 0.15) !important;
 }
 
 /* Alertas do cardex */
 .cardex-alertas {
-    background: var(--ws-lotes-bg);
-    border-radius: 0.5rem;
+    background: transparent;
+    border-radius: var(--radius-md);
     padding: 1rem;
-    border: 1px solid var(--ws-border-color);
+    border: 1px solid var(--border);
 }
 
 .cardex-alertas .list-group-item {
     border: none;
     border-left: 4px solid transparent;
     margin-bottom: 0.5rem;
-    border-radius: 0.375rem;
-    background-color: var(--bs-body-bg);
+    border-radius: var(--radius-sm);
+    background-color: var(--bg-light);
 }
 
 .cardex-alertas .list-group-item-danger {
-    border-left-color: var(--bs-danger);
-    background-color: rgba(var(--bs-danger-rgb), 0.1);
+    border-left-color: var(--semantic-danger);
+    background-color: var(--semantic-danger-subtle);
 }
 
 .cardex-alertas .list-group-item-warning {
-    border-left-color: var(--bs-warning);
-    background-color: rgba(var(--bs-warning-rgb), 0.1);
+    border-left-color: var(--amber-50);
+    background-color: hsla(45 100% 50% / 0.15);
 }
 
 .cardex-alertas .list-group-item-info {
-    border-left-color: var(--bs-info);
-    background-color: rgba(var(--bs-info-rgb), 0.1);
+    border-left-color: var(--border);
+    background-color: var(--bg-light);
 }
 
 /* Badges especiais do cardex */
@@ -487,25 +401,7 @@
     padding: 0.25rem 0.5rem;
 }
 
-/* Scrollbar da tabela */
-.cardex-tabela .table-responsive::-webkit-scrollbar {
-    height: 8px;
-    width: 8px;
-}
-
-.cardex-tabela .table-responsive::-webkit-scrollbar-track {
-    background: var(--ws-scrollbar-track);
-    border-radius: 4px;
-}
-
-.cardex-tabela .table-responsive::-webkit-scrollbar-thumb {
-    background: var(--ws-scrollbar-thumb);
-    border-radius: 4px;
-}
-
-.cardex-tabela .table-responsive::-webkit-scrollbar-thumb:hover {
-    background: var(--ws-scrollbar-thumb-hover);
-}
+/* Scrollbar da tabela - herda do design-tokens */
 
 /* ==========================================================================
    ANIMACOES DO MODAL

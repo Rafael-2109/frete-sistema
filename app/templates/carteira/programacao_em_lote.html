@@ -4,44 +4,21 @@
 
 {% block extra_css %}
 <style>
-    /* Estilos para as cores das linhas conforme status */
+    /* Estilos para as cores das linhas conforme status - usando variáveis CSS */
     .table-danger {
-        background-color: rgba(220, 53, 69, 0.1) !important;
+        background-color: var(--semantic-danger-subtle) !important;
     }
-    
+
     .table-warning {
-        background-color: rgba(255, 193, 7, 0.1) !important;
+        background-color: var(--semantic-warning-subtle) !important;
     }
-    
+
     .table-info {
-        background-color: rgba(13, 202, 240, 0.1) !important;
+        background-color: var(--semantic-info-subtle) !important;
     }
-    
+
     .table-success {
-        background-color: rgba(25, 135, 84, 0.1) !important;
-    }
-    
-    /* Ajuste hover para linhas coloridas */
-    .table-hover tbody tr.table-danger:hover {
-        background-color: rgba(220, 53, 69, 0.2) !important;
-    }
-    
-    .table-hover tbody tr.table-warning:hover {
-        background-color: rgba(255, 193, 7, 0.2) !important;
-    }
-    
-    .table-hover tbody tr.table-info:hover {
-        background-color: rgba(13, 202, 240, 0.2) !important;
-    }
-    
-    .table-hover tbody tr.table-success:hover {
-        background-color: rgba(25, 135, 84, 0.2) !important;
-    }
-    
-    /* Estilos para badges de status */
-    .badge {
-        font-weight: 500;
-        letter-spacing: 0.3px;
+        background-color: var(--semantic-success-subtle) !important;
     }
 </style>
 {% endblock %}
@@ -51,10 +28,10 @@
     <!-- Header -->
     <div class="d-flex justify-content-between align-items-center mb-4 reveal">
         <div>
-            <h1 class="h3 mb-0 text-gray-800">
-                <i class="fas fa-network-wired text-warning"></i>
-                Programação em Lote - {{ rede }} SP 
-                <span style="font-size: 0.8em; font-weight: bold;">- {{ vendedor or 'Sem vendedor' }} - {{ equipe_vendas or 'Sem equipe' }}</span>
+            <h1 class="h3 mb-0">
+                <i class="fas fa-network-wired"></i>
+                Programação em Lote - {{ rede }} SP
+                <span class="fs-6 fw-normal text-muted">- {{ vendedor or 'Sem vendedor' }} - {{ equipe_vendas or 'Sem equipe' }}</span>
             </h1>
             <p class="text-muted mb-0">
                 Gestão unificada de pedidos para {{ rede }} em São Paulo
@@ -64,7 +41,7 @@
             {% if rede == 'sendas' %}
             <!-- Dropdown Agendamentos Sendas -->
             <div class="btn-group me-2" role="group">
-                <button type="button" class="btn btn-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                <button type="button" class="btn btn-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
                     <i class="fas fa-calendar-alt"></i> Agendamentos Sendas
                 </button>
                 <ul class="dropdown-menu">
@@ -92,16 +69,16 @@
                 </ul>
             </div>
             {% endif %}
-            <button class="btn btn-info me-2" id="btnAnalisarEstoques">
+            <button class="btn btn-secondary me-2" id="btnAnalisarEstoques">
                 <i class="fas fa-chart-line"></i> Analisar Estoques
             </button>
-            <button class="btn btn-warning me-2" id="btnSugerirDatas">
+            <button class="btn btn-secondary me-2" id="btnSugerirDatas">
                 <i class="fas fa-magic"></i> Sugerir Datas
             </button>
-            <button class="btn btn-primary me-2" id="btnSelecionarTodos">
+            <button class="btn btn-secondary me-2" id="btnSelecionarTodos">
                 <i class="fas fa-check-square"></i> Selecionar Todos
             </button>
-            <button class="btn btn-success me-2" id="btnProcessarLote" disabled>
+            <button class="btn btn-primary me-2" id="btnProcessarLote" disabled>
                 <i class="fas fa-calendar-alt"></i> Agendar Selecionados
             </button>
             <a href="{{ url_for('carteira.index') }}" class="btn btn-secondary">
@@ -110,22 +87,22 @@
         </div>
     </div>
 
-    <!-- Cards de Resumo -->
+    <!-- Cards de Resumo - Usando stat-card padrão -->
     <div class="row mb-4">
         <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-primary shadow h-100 py-2">
+            <div class="card stat-card shadow h-100 py-2">
                 <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                    <div class="row g-0 align-items-center">
+                        <div class="col me-2">
+                            <div class="small fw-bold text-uppercase mb-1">
                                 Total de CNPJs
                             </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                            <div class="h5 mb-0 fw-bold">
                                 {{ total_cnpjs }}
                             </div>
                         </div>
                         <div class="col-auto">
-                            <i class="fas fa-building fa-2x text-gray-300"></i>
+                            <i class="fas fa-building fa-2x text-muted"></i>
                         </div>
                     </div>
                 </div>
@@ -133,19 +110,19 @@
         </div>
 
         <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-success shadow h-100 py-2">
+            <div class="card stat-card shadow h-100 py-2">
                 <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                    <div class="row g-0 align-items-center">
+                        <div class="col me-2">
+                            <div class="small fw-bold text-uppercase mb-1">
                                 Valor Total
                             </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                            <div class="h5 mb-0 fw-bold">
                                 R$ <span id="valorTotalGeral">0,00</span>
                             </div>
                         </div>
                         <div class="col-auto">
-                            <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
+                            <i class="fas fa-dollar-sign fa-2x text-muted"></i>
                         </div>
                     </div>
                 </div>
@@ -153,19 +130,19 @@
         </div>
 
         <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-info shadow h-100 py-2">
+            <div class="card stat-card shadow h-100 py-2">
                 <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                    <div class="row g-0 align-items-center">
+                        <div class="col me-2">
+                            <div class="small fw-bold text-uppercase mb-1">
                                 Peso Total
                             </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                            <div class="h5 mb-0 fw-bold">
                                 <span id="pesoTotalGeral">0</span> kg
                             </div>
                         </div>
                         <div class="col-auto">
-                            <i class="fas fa-weight fa-2x text-gray-300"></i>
+                            <i class="fas fa-weight fa-2x text-muted"></i>
                         </div>
                     </div>
                 </div>
@@ -173,19 +150,19 @@
         </div>
 
         <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-warning shadow h-100 py-2">
+            <div class="card stat-card shadow h-100 py-2">
                 <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                    <div class="row g-0 align-items-center">
+                        <div class="col me-2">
+                            <div class="small fw-bold text-uppercase mb-1">
                                 Pallets Total
                             </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                            <div class="h5 mb-0 fw-bold">
                                 <span id="palletsTotalGeral">0</span>
                             </div>
                         </div>
                         <div class="col-auto">
-                            <i class="fas fa-pallet fa-2x text-gray-300"></i>
+                            <i class="fas fa-pallet fa-2x text-muted"></i>
                         </div>
                     </div>
                 </div>
@@ -196,7 +173,7 @@
     <!-- Dropdown de Análise de Estoques (inicialmente oculto) -->
     <div class="card shadow mb-4 d-none" id="cardAnaliseEstoques">
         <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">
+            <h6 class="m-0 fw-bold">
                 <i class="fas fa-chart-line"></i> Análise de Estoques - Itens da Rede
             </h6>
         </div>
@@ -223,15 +200,15 @@
     <!-- Tabela de CNPJs -->
     <div class="card shadow mb-4">
         <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">
+            <h6 class="m-0 fw-bold">
                 <i class="fas fa-list"></i> Clientes {{ rede }} SP
             </h6>
         </div>
         <div class="card-body">
             <div class="table-responsive">
                 <table class="table table-bordered table-hover" id="tabelaProgramacao">
-                    <thead>
-                        <tr class="bg-light">
+                    <thead class="table-thead-theme">
+                        <tr>
                             <th width="40">
                                 <input type="checkbox" id="checkTodos" title="Selecionar apenas Pendentes e Reagendar" />
                             </th>
@@ -253,12 +230,12 @@
                                 <input type="checkbox" class="check-cnpj" value="{{ cnpj_data.cnpj }}" data-status="{{ cnpj_data.status }}" />
                             </td>
                             <td>
-                                <div style="font-size: 0.95em; font-weight: 500;">{{ cnpj_data.raz_social }}</div>
-                                <div style="font-size: 0.75em; color: #6c757d;">{{ cnpj_data.cnpj_formatado }}</div>
+                                <div class="fw-medium">{{ cnpj_data.raz_social }}</div>
+                                <small class="text-muted">{{ cnpj_data.cnpj_formatado }}</small>
                             </td>
                             <td>
                                 <div>{{ cnpj_data.cidade }}</div>
-                                <div style="font-size: 0.75em; color: #6c757d;">Sub-Rota: {{ cnpj_data.sub_rota or '-' }}</div>
+                                <small class="text-muted">Sub-Rota: {{ cnpj_data.sub_rota or '-' }}</small>
                             </td>
                             <td class="text-end" style="font-size: 0.9em;">R$ {{ "{:,.2f}".format(cnpj_data.total_valor) }}</td>
                             <td class="text-end" style="font-size: 0.9em;">{{ "{:,.2f}".format(cnpj_data.total_peso) }}</td>
@@ -284,7 +261,7 @@
                                         {{ cnpj_data.status }}
                                     </span>
                                 {% else %}
-                                    <span style="color: #6c757d; font-size: 0.85em;">Pendente</span>
+                                    <span class="badge bg-secondary">Pendente</span>
                                 {% endif %}
                             </td>
                             <td class="text-center">
@@ -293,14 +270,14 @@
                                         title="Priorizar">
                                     <i class="fas fa-arrow-up"></i>
                                 </button>
-                                <button class="btn btn-sm btn-primary btn-analisar-ruptura" 
+                                <button class="btn btn-sm btn-secondary btn-analisar-ruptura"
                                         data-cnpj="{{ cnpj_data.cnpj }}"
                                         data-pedidos="{% if cnpj_data.pedidos %}{% for p in cnpj_data.pedidos %}{{ p.num_pedido }}{% if not loop.last %},{% endif %}{% endfor %}{% endif %}"
                                         title="Analisar ruptura"
                                         style="min-width: 120px; font-size: 0.75em;">
                                     <span class="ruptura-info">Analisando...</span>
                                 </button>
-                                <button class="btn btn-sm btn-info btn-expandir" 
+                                <button class="btn btn-sm btn-secondary btn-expandir"
                                         data-cnpj="{{ cnpj_data.cnpj }}"
                                         title="Ver detalhes">
                                     <i class="fas fa-chevron-down"></i>
@@ -378,7 +355,7 @@
                                                         Agenda: {{ sep.agendamento.strftime('%d/%m') if sep.agendamento else '-' }}
                                                     </span>
                                                     {% if sep.protocolo %}
-                                                    <span class="badge bg-primary">
+                                                    <span class="badge bg-secondary">
                                                         <i class="fas fa-check-circle"></i> Prot: {{ sep.protocolo }}
                                                     </span>
                                                     {% endif %}
@@ -413,7 +390,7 @@
                                                     </span>
                                                     {% endif %}
                                                     {% if nf.protocolo %}
-                                                    <span class="badge bg-primary">
+                                                    <span class="badge bg-secondary">
                                                         <i class="fas fa-check-circle"></i> Prot: {{ nf.protocolo }}
                                                     </span>
                                                     {% endif %}
@@ -1003,7 +980,7 @@
             html += `
             <div class="alert alert-info mt-3">
                 <strong>Alternativas:</strong> ${resultado.alternativas_filial.sugestao}
-                <button class="btn btn-sm btn-info ms-2" onclick="mostrarAlternativasFilial()">
+                <button class="btn btn-sm btn-secondary ms-2" onclick="mostrarAlternativasFilial()">
                     Ver todos produtos da filial
                 </button>
             </div>

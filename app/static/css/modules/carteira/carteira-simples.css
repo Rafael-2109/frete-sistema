@@ -1,43 +1,41 @@
 /**
- * Carteira Simplificada - Estilos Compactos
- * 🌙 TEMA ESCURO + FONTE POPPINS
- * Foco em densidade visual e performance
+ * Carteira Simplificada - Estilos
+ * REFATORADO: 2025-12-18
+ * Filosofia: 95% CINZA + 5% CORES SEMANTICAS
+ * Usa variaveis Bootstrap - dark/light mode automatico
  */
 
-/* ==============================================
-   VARIÁVEIS CSS
-   ============================================== */
+/* ==========================================================================
+   VARIAVEIS LOCAIS (apenas tamanhos, nao cores)
+   ========================================================================== */
 :root {
-    --font-size-base: 10px;
-    --padding-cell: 2px 4px;
-    --input-height: 22px;
-    --btn-height: 20px;
-
-    /* 🌙 Cores Tema Escuro */
-    --bg-primary: #1a1a1a;
-    --bg-secondary: #2d2d2d;
-    --bg-tertiary: #3a3a3a;
-    --border-color: #404040;
-    --text-primary: #e0e0e0;
-    --text-secondary: #a0a0a0;
+    --cs-font-size-base: 10px;
+    --cs-font-size-header: 9px;
+    --cs-font-size-btn: 9px;
+    --cs-padding-cell: 0px 2px;
+    --cs-input-height: 18px;
+    --cs-btn-height: 20px;
 }
 
-/* ==============================================
+/* ==========================================================================
    CONTAINER PRINCIPAL
-   ============================================== */
+   ========================================================================== */
 .carteira-simples-container {
-    font-size: var(--font-size-base);
+    font-size: var(--cs-font-size-base);
     font-family: 'Poppins', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     line-height: 1.2;
-    height: calc(100vh - 60px); /* 🚀 Altura total menos navbar */
+    height: calc(100vh - 60px);
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    background-color: var(--bg-primary);
-    color: var(--text-primary);
+    background-color: var(--bs-body-bg);
+    color: var(--bs-body-color);
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* Section da tabela ocupa espaço disponível */
+/* ==========================================================================
+   LAYOUT - ALTURA TOTAL
+   ========================================================================== */
 .carteira-simples-container .table-section {
     flex: 1;
     display: flex;
@@ -46,7 +44,6 @@
     min-height: 0;
 }
 
-/* Card principal ocupa todo espaço disponível */
 .carteira-simples-container .table-section .card {
     flex: 1;
     display: flex;
@@ -54,6 +51,8 @@
     overflow: hidden;
     margin-bottom: 0 !important;
     height: 100%;
+    background-color: var(--bs-card-bg);
+    border-color: var(--bs-border-color);
 }
 
 .carteira-simples-container .table-section .card-body {
@@ -63,109 +62,189 @@
     overflow: hidden;
     padding: 0 !important;
     min-height: 0;
+    background-color: var(--bs-card-bg);
+    color: var(--bs-body-color);
 }
 
-/* Table responsive ocupa todo espaço */
+.carteira-simples-container .table-section .card-header {
+    background-color: var(--bs-tertiary-bg);
+    color: var(--bs-body-color);
+    border-bottom-color: var(--bs-border-color);
+}
+
 .carteira-simples-container .table-responsive {
     flex: 1;
-    overflow-y: scroll !important; /* 🚀 Força scroll vertical sempre visível */
+    overflow-y: scroll !important;
     overflow-x: auto !important;
     height: 100%;
     min-height: 0;
+    scroll-behavior: smooth;
 }
 
-/* ==============================================
+/* ==========================================================================
    TABELA
-   ============================================== */
+   ========================================================================== */
 .table-carteira-simples {
-    font-size: var(--font-size-base);
+    font-size: var(--cs-font-size-base);
     margin-bottom: 0 !important;
+    line-height: 1.0;
+    background-color: var(--bs-secondary-bg);
+    color: var(--bs-body-color);
 }
 
+.table-carteira-simples th,
+.table-carteira-simples td {
+    padding: var(--cs-padding-cell) !important;
+    vertical-align: middle !important;
+    white-space: nowrap !important;
+    font-size: var(--cs-font-size-base) !important;
+    line-height: 1.0 !important;
+}
+
+/* Cabecalho */
 .table-carteira-simples thead th {
     position: sticky;
     top: 0;
-    background-color: var(--bg-primary);
+    background-color: var(--bs-tertiary-bg);
+    color: var(--bs-body-color);
     z-index: 10;
     font-weight: 600;
     padding: 4px 4px !important;
-    border-bottom: 2px solid var(--border-color);
-    white-space: nowrap;
-    font-size: 9px;
+    border-bottom: 2px solid var(--bs-border-color);
+    font-size: var(--cs-font-size-header);
     text-transform: uppercase;
-    color: var(--text-primary);
 }
 
+/* Celulas */
 .table-carteira-simples tbody td {
-    padding: var(--padding-cell) !important;
-    vertical-align: middle;
-    border-bottom: 1px solid var(--border-color);
-    font-size: var(--font-size-base);
-    background-color: var(--bg-secondary);
-    color: var(--text-primary);
+    background-color: var(--bs-secondary-bg);
+    color: var(--bs-body-color);
+    border-color: var(--bs-border-color);
 }
 
+/* Hover */
 .table-carteira-simples tbody tr:hover td {
-    background-color: var(--bg-tertiary);
+    background-color: var(--bs-tertiary-bg);
 }
 
-/* ==============================================
-   INPUTS E CAMPOS EDITÁVEIS
-   ============================================== */
+/* Celulas de estoque - permitem estilos inline do JS */
+.table-carteira-simples tbody td.est-data-edit,
+.table-carteira-simples tbody td.menor-est-7d {
+    background-color: transparent;
+    color: inherit;
+}
+
+/* ==========================================================================
+   ESTADOS DE LINHA - SEMANTICOS
+   ========================================================================== */
+
+/* Separacao ATRASADA - danger */
+.table-carteira-simples tr.separacao-atrasada {
+    border-left: 4px solid var(--bs-danger) !important;
+}
+
+.table-carteira-simples tr.separacao-atrasada td {
+    background-color: rgba(var(--bs-danger-rgb), 0.15) !important;
+    color: var(--bs-danger) !important;
+}
+
+/* Separacao ABERTO - warning */
+.table-carteira-simples tr.table-warning td {
+    background-color: rgba(var(--bs-warning-rgb), 0.15) !important;
+    color: var(--bs-warning) !important;
+}
+
+/* Separacao COTADO - info (mapeado para secondary) */
+.table-carteira-simples tr.table-info td {
+    background-color: var(--bs-secondary-bg) !important;
+    color: var(--bs-secondary-color) !important;
+}
+
+/* Hover em linhas especiais */
+.table-carteira-simples tbody tr.table-warning:hover td,
+.table-carteira-simples tbody tr.table-info:hover td,
+.table-carteira-simples tbody tr.separacao-atrasada:hover td {
+    filter: brightness(0.95);
+}
+
+/* ==========================================================================
+   SEPARADORES VISUAIS
+   ========================================================================== */
+.table-carteira-simples tr.border-pedido-top {
+    border-top: 2px solid var(--bs-border-color) !important;
+}
+
+.table-carteira-simples tr.border-lote-top {
+    border-top: 1px solid var(--bs-border-color) !important;
+}
+
+/* ==========================================================================
+   INPUTS
+   ========================================================================== */
 .table-carteira-simples input[type="number"],
 .table-carteira-simples input[type="date"],
 .table-carteira-simples input[type="text"] {
-    font-size: var(--font-size-base);
-    padding: 1px 3px;
-    height: var(--input-height);
-    border: 1px solid #ced4da;
+    font-size: var(--cs-font-size-base);
+    padding: 0px 2px;
+    height: var(--cs-input-height);
+    border: 1px solid var(--bs-border-color);
     border-radius: 2px;
     width: 100%;
     box-sizing: border-box;
+    background-color: var(--bs-body-bg);
+    color: var(--bs-body-color);
+    line-height: 1;
 }
 
-.table-carteira-simples input[type="number"]:focus,
-.table-carteira-simples input[type="date"]:focus,
-.table-carteira-simples input[type="text"]:focus {
-    border-color: #86b7fe;
-    outline: 0;
-    box-shadow: 0 0 0 0.15rem rgba(13, 110, 253, 0.25);
+.table-carteira-simples input:focus {
+    background-color: var(--bs-secondary-bg);
+    border-color: var(--bs-border-color);
+    outline: none;
+    box-shadow: 0 0 0 0.15rem rgba(128, 128, 128, 0.2);
 }
 
 .table-carteira-simples input[type="number"] {
     text-align: right;
 }
 
-/* Inputs inválidos */
+/* Inputs invalidos - semantico */
 .table-carteira-simples input:invalid {
-    border-color: #dc3545;
+    border-color: var(--bs-danger);
 }
 
-/* ==============================================
-   BOTÕES
-   ============================================== */
+/* Inputs especificos */
+.table-carteira-simples input.qtd-editavel,
+.table-carteira-simples input.qtd-separacao-editavel,
+.table-carteira-simples input.qtd-separacao-editavel-2,
+.table-carteira-simples input.protocolo {
+    height: 17px;
+    font-size: var(--cs-font-size-base);
+    padding: 0px 2px;
+}
+
+/* ==========================================================================
+   BOTOES DA TABELA
+   ========================================================================== */
 .table-carteira-simples .btn-sm-custom {
-    font-size: 9px;
-    padding: 1px 4px;
-    line-height: 1.2;
+    font-size: var(--cs-font-size-btn);
+    padding: 0px 3px;
+    line-height: 1.1;
     border-radius: 2px;
-    height: var(--btn-height);
+    height: var(--cs-btn-height);
     min-width: 24px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    border: 1px solid transparent;
+    border: 1px solid var(--bs-border-color);
     transition: all 0.15s ease-in-out;
+    background-color: var(--bs-secondary-bg);
+    color: var(--bs-body-color);
 }
 
-.table-carteira-simples .btn-sm-custom:hover {
+.table-carteira-simples .btn-sm-custom:hover:not(:disabled) {
+    background-color: var(--bs-tertiary-bg);
     transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.table-carteira-simples .btn-sm-custom:active {
-    transform: translateY(0);
 }
 
 .table-carteira-simples .btn-sm-custom:disabled {
@@ -173,80 +252,44 @@
     cursor: not-allowed;
 }
 
-/* Botões específicos */
+/* Botoes semanticos */
 .btn-ok {
-    background-color: #28a745;
-    color: white;
-    border-color: #28a745;
-}
-
-.btn-ok:hover:not(:disabled) {
-    background-color: #218838;
-}
-
-.btn-add-qtd {
-    background-color: #007bff;
-    color: white;
-    border-color: #007bff;
-}
-
-.btn-add-qtd:hover:not(:disabled) {
-    background-color: #0056b3;
-}
-
-.btn-add-all {
-    background-color: #17a2b8;
-    color: white;
-    border-color: #17a2b8;
-}
-
-.btn-add-all:hover:not(:disabled) {
-    background-color: #138496;
-}
-
-.btn-d1 {
-    background-color: #ffc107;
-    color: #212529;
-    border-color: #ffc107;
-}
-
-.btn-d1:hover:not(:disabled) {
-    background-color: #e0a800;
+    background-color: var(--bs-success) !important;
+    color: #fff !important;
+    border-color: var(--bs-success) !important;
 }
 
 .btn-confirmar {
-    background-color: #28a745;
-    color: white;
-    border-color: #28a745;
+    background-color: var(--bs-success) !important;
+    color: #fff !important;
+    border-color: var(--bs-success) !important;
     font-weight: bold;
 }
 
-.btn-confirmar:hover:not(:disabled) {
-    background-color: #218838;
-}
-
 .btn-confirmar:disabled {
-    background-color: #6c757d;
-    border-color: #6c757d;
+    background-color: var(--bs-secondary-bg) !important;
+    border-color: var(--bs-border-color) !important;
+    color: var(--bs-secondary-color) !important;
 }
 
-/* ==============================================
-   TOOLTIPS E TEXTOS TRUNCADOS
-   ============================================== */
-.truncate-tooltip {
-    cursor: help;
-    text-decoration: underline dotted #6c757d;
-    text-decoration-thickness: 1px;
-    text-underline-offset: 2px;
+/* Botoes neutros (cinza) */
+.btn-add-qtd,
+.btn-add-all,
+.btn-d1 {
+    background-color: var(--bs-secondary-bg) !important;
+    color: var(--bs-body-color) !important;
+    border-color: var(--bs-border-color) !important;
 }
 
-.truncate-tooltip:hover {
-    text-decoration-color: #0d6efd;
+.btn-add-qtd:hover:not(:disabled),
+.btn-add-all:hover:not(:disabled),
+.btn-d1:hover:not(:disabled) {
+    background-color: var(--bs-tertiary-bg) !important;
 }
 
-/* ==============================================
+/* ==========================================================================
    ESTOQUE PROJETADO
-   ============================================== */
+   ========================================================================== */
 .estoque-projecao-container {
     display: flex;
     align-items: center;
@@ -256,225 +299,395 @@
 }
 
 .estoque-dia {
-    font-size: 8px;
+    font-size: 10px;
     padding: 1px 2px;
-    background-color: #f8f9fa;
-    border: 1px solid #dee2e6;
-    border-radius: 2px;
-    min-width: 35px;
+    background-color: var(--bs-secondary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 3px;
+    min-width: 40px;
     max-width: 45px;
     text-align: center;
     display: inline-block;
     line-height: 1.1;
+    color: var(--bs-body-color);
+    font-weight: 500;
 }
 
+/* Estoque negativo - semantico danger */
 .estoque-dia.negativo {
-    background-color: #f8d7da;
-    color: #842029;
+    background-color: var(--bs-danger);
+    color: #fff;
+    border-color: var(--bs-danger);
     font-weight: 600;
-    border-color: #f5c2c7;
 }
 
+/* Estoque baixo - semantico warning */
 .estoque-dia.baixo {
-    background-color: #fff3cd;
-    color: #856404;
-    border-color: #ffecb5;
+    background-color: rgba(var(--bs-warning-rgb), 0.15);
+    color: var(--bs-warning);
+    border-color: rgba(var(--bs-warning-rgb), 0.3);
 }
 
-/* Botões de navegação de estoque */
+/* Cabecalho de estoque */
+.estoque-header-dia {
+    font-size: 8px;
+    min-width: 40px;
+    text-align: center;
+    font-weight: 600;
+    border-radius: 3px;
+    padding: 1px 2px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--bs-secondary-bg);
+    border: 1px solid var(--bs-border-color);
+    color: var(--bs-secondary-color);
+}
+
+/* Botoes de paginacao estoque */
 .btn-paginacao-estoque {
-    font-size: 9px;
+    font-size: 10px;
     padding: 0 3px;
     cursor: pointer;
-    background-color: #e9ecef;
-    border: 1px solid #dee2e6;
-    border-radius: 2px;
-    height: var(--btn-height);
+    background-color: var(--bs-secondary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 3px;
+    height: var(--cs-btn-height);
     min-width: 20px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     transition: background-color 0.15s ease;
+    color: var(--bs-body-color);
 }
 
 .btn-paginacao-estoque:hover {
-    background-color: #dee2e6;
+    background-color: var(--bs-tertiary-bg);
 }
 
-.btn-paginacao-estoque:active {
-    background-color: #cbd3da;
+/* ==========================================================================
+   TOOLTIPS E TEXTOS TRUNCADOS
+   ========================================================================== */
+.truncate-tooltip {
+    cursor: help;
+    text-decoration: none;
 }
 
-/* ==============================================
-   CORES E ESTADOS
-   ============================================== */
-.text-danger {
-    color: #dc3545 !important;
+/* ==========================================================================
+   ICONES INDICADORES
+   ========================================================================== */
+.icone-info {
+    cursor: pointer;
+    font-size: 10px;
+    opacity: 0.8;
+    transition: opacity 0.2s ease;
+    flex-shrink: 0;
 }
 
-.text-warning {
-    color: #ffc107 !important;
+.icone-info:hover {
+    opacity: 1;
 }
 
-.text-success {
-    color: #28a745 !important;
+/* Icone de observacao - warning */
+.icone-obs {
+    color: var(--bs-warning);
 }
 
-.fw-bold {
-    font-weight: 600 !important;
+/* Icone de tags - neutro */
+.icone-tags {
+    color: var(--bs-secondary-color);
 }
 
-/* ==============================================
+/* ==========================================================================
+   FORMS E INPUTS GERAIS
+   ========================================================================== */
+.form-control,
+.form-select {
+    background-color: var(--bs-body-bg);
+    color: var(--bs-body-color);
+    border-color: var(--bs-border-color);
+}
+
+.form-control:focus,
+.form-select:focus {
+    background-color: var(--bs-secondary-bg);
+    color: var(--bs-body-color);
+    border-color: var(--bs-border-color);
+    box-shadow: 0 0 0 0.25rem rgba(128, 128, 128, 0.15);
+}
+
+.form-control::placeholder {
+    color: var(--bs-secondary-color);
+}
+
+.input-group-text {
+    background-color: var(--bs-tertiary-bg);
+    color: var(--bs-body-color);
+    border-color: var(--bs-border-color);
+}
+
+/* ==========================================================================
+   BOTOES GERAIS
+   ========================================================================== */
+
+/* Btn Primary - neutro (cinza) */
+.carteira-simples-container .btn-primary {
+    background-color: var(--bs-secondary-bg);
+    border-color: var(--bs-border-color);
+    color: var(--bs-body-color);
+}
+
+.carteira-simples-container .btn-primary:hover {
+    background-color: var(--bs-tertiary-bg);
+    border-color: var(--bs-border-color);
+}
+
+/* Btn Secondary - neutro */
+.carteira-simples-container .btn-secondary {
+    background-color: var(--bs-secondary-bg);
+    border-color: var(--bs-border-color);
+    color: var(--bs-body-color);
+}
+
+.carteira-simples-container .btn-secondary:hover {
+    background-color: var(--bs-tertiary-bg);
+}
+
+/* Btn Success - semantico */
+.carteira-simples-container .btn-success {
+    background-color: var(--bs-success);
+    border-color: var(--bs-success);
+    color: #fff;
+}
+
+/* Btn Danger - semantico */
+.carteira-simples-container .btn-danger {
+    background-color: var(--bs-danger);
+    border-color: var(--bs-danger);
+    color: #fff;
+}
+
+/* Btn Warning - semantico */
+.carteira-simples-container .btn-warning {
+    background-color: var(--bs-warning);
+    border-color: var(--bs-warning);
+    color: #000;
+}
+
+/* ==========================================================================
+   MODALS
+   ========================================================================== */
+.modal-content {
+    background-color: var(--bs-body-bg);
+    border-color: var(--bs-border-color);
+    color: var(--bs-body-color);
+}
+
+.modal-header {
+    background-color: var(--bs-tertiary-bg);
+    border-bottom-color: var(--bs-border-color);
+    color: var(--bs-body-color);
+}
+
+.modal-body {
+    background-color: var(--bs-body-bg);
+    color: var(--bs-body-color);
+}
+
+.modal-footer {
+    background-color: var(--bs-tertiary-bg);
+    border-top-color: var(--bs-border-color);
+}
+
+.modal-title {
+    color: var(--bs-body-color);
+}
+
+/* ==========================================================================
+   CARDS GERAIS
+   ========================================================================== */
+.carteira-simples-container .card {
+    background-color: var(--bs-card-bg);
+    border-color: var(--bs-border-color);
+}
+
+.carteira-simples-container .card-header {
+    background-color: var(--bs-tertiary-bg);
+    color: var(--bs-body-color);
+    border-bottom-color: var(--bs-border-color);
+}
+
+.carteira-simples-container .card-body {
+    background-color: var(--bs-card-bg);
+    color: var(--bs-body-color);
+}
+
+/* ==========================================================================
+   ALERTS - SEMANTICOS
+   ========================================================================== */
+.alert-success {
+    background-color: rgba(var(--bs-success-rgb), 0.15);
+    color: var(--bs-success);
+    border-color: rgba(var(--bs-success-rgb), 0.3);
+}
+
+.alert-danger {
+    background-color: rgba(var(--bs-danger-rgb), 0.15);
+    color: var(--bs-danger);
+    border-color: rgba(var(--bs-danger-rgb), 0.3);
+}
+
+.alert-warning {
+    background-color: rgba(var(--bs-warning-rgb), 0.15);
+    color: var(--bs-warning);
+    border-color: rgba(var(--bs-warning-rgb), 0.3);
+}
+
+/* ==========================================================================
+   PAINEL RESUMO SEPARACAO
+   ========================================================================== */
+.painel-resumo-separacao {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    width: 280px;
+    max-height: 600px;
+    overflow-y: auto;
+    background-color: var(--bs-body-bg);
+    border: 2px solid var(--bs-border-color);
+    border-radius: 8px;
+    box-shadow: var(--bs-box-shadow);
+    z-index: 1040;
+    display: none;
+    font-size: 11px;
+    padding: 12px;
+    color: var(--bs-body-color);
+}
+
+.painel-resumo-separacao .card {
+    background-color: var(--bs-secondary-bg);
+    border-color: var(--bs-border-color);
+}
+
+.painel-resumo-separacao hr {
+    border-color: var(--bs-border-color);
+}
+
+/* Linha de totais */
+.linha-total-pedido {
+    background-color: var(--bs-secondary-bg);
+    color: var(--bs-body-color);
+    border-color: var(--bs-border-color);
+}
+
+.linha-total-pedido .badge {
+    background-color: var(--bs-tertiary-bg);
+    color: var(--bs-body-color);
+}
+
+/* ==========================================================================
+   SCROLLBAR
+   ========================================================================== */
+.table-responsive::-webkit-scrollbar,
+.carteira-simples-container ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.table-responsive::-webkit-scrollbar-track,
+.carteira-simples-container ::-webkit-scrollbar-track {
+    background: var(--bs-body-bg);
+}
+
+.table-responsive::-webkit-scrollbar-thumb,
+.carteira-simples-container ::-webkit-scrollbar-thumb {
+    background: var(--bs-border-color);
+    border-radius: 3px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb:hover,
+.carteira-simples-container ::-webkit-scrollbar-thumb:hover {
+    background: var(--bs-secondary-color);
+}
+
+/* ==========================================================================
    RESPONSIVIDADE
-   ============================================== */
+   ========================================================================== */
 @media (max-width: 1366px) {
     .carteira-simples-container {
-        font-size: 9px;
-    }
-
-    .table-carteira-simples {
-        font-size: 9px;
-    }
-
-    .table-carteira-simples input {
-        font-size: 9px;
-    }
-
-    .btn-sm-custom {
-        font-size: 8px;
-        padding: 1px 3px;
+        --cs-font-size-base: 9px;
+        --cs-font-size-header: 8px;
+        --cs-font-size-btn: 8px;
     }
 
     .estoque-dia {
-        font-size: 7px;
-        min-width: 30px;
+        font-size: 8px;
+        min-width: 32px;
         max-width: 38px;
+    }
+
+    .estoque-header-dia {
+        font-size: 7px;
     }
 }
 
-/* ==============================================
-   SCROLLBAR CUSTOMIZADA
-   ============================================== */
-.table-responsive::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-}
-
-.table-responsive::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 4px;
-}
-
-.table-responsive::-webkit-scrollbar-thumb {
-    background: #888;
-    border-radius: 4px;
-}
-
-.table-responsive::-webkit-scrollbar-thumb:hover {
-    background: #555;
-}
-
-/* 🚀 OTIMIZAÇÃO: Scroll suave */
-.table-responsive {
-    scroll-behavior: smooth;
-}
-
-/* 🎨 MELHORIA: Estoque projetado com scroll horizontal próprio */
-.estoque-projecao {
-    overflow-x: auto;
-    max-width: 1200px;
-}
-
-.estoque-projecao::-webkit-scrollbar {
-    height: 4px;
-}
-
-.estoque-projecao::-webkit-scrollbar-thumb {
-    background: #6c757d;
-    border-radius: 2px;
-}
-
-/* ==============================================
-   LOADING E STATES
-   ============================================== */
+/* ==========================================================================
+   LOADING
+   ========================================================================== */
 .skeleton-loading {
-    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background: linear-gradient(
+        90deg,
+        var(--bs-secondary-bg) 25%,
+        var(--bs-tertiary-bg) 50%,
+        var(--bs-secondary-bg) 75%
+    );
     background-size: 200% 100%;
     animation: skeleton-loading 1.5s ease-in-out infinite;
 }
 
 @keyframes skeleton-loading {
-    0% {
-        background-position: 200% 0;
-    }
-    100% {
-        background-position: -200% 0;
-    }
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
 }
 
-/* ==============================================
+/* ==========================================================================
    FILTROS
-   ============================================== */
+   ========================================================================== */
 .filters-section .form-control-sm,
 .filters-section .form-select-sm {
-    font-size: var(--font-size-base);
+    font-size: var(--cs-font-size-base);
     height: 28px;
+    background-color: var(--bs-body-bg);
+    color: var(--bs-body-color);
+    border-color: var(--bs-border-color);
 }
 
 .filters-section .input-group-text {
-    font-size: var(--font-size-base);
+    font-size: var(--cs-font-size-base);
     padding: 4px 8px;
+    background-color: var(--bs-tertiary-bg);
+    color: var(--bs-body-color);
+    border-color: var(--bs-border-color);
 }
 
-/* ==============================================
-   PAGINAÇÃO
-   ============================================== */
+/* ==========================================================================
+   PAGINACAO
+   ========================================================================== */
 .pagination-sm .page-link {
-    font-size: var(--font-size-base);
+    font-size: var(--cs-font-size-base);
     padding: 4px 8px;
+    background-color: var(--bs-body-bg);
+    color: var(--bs-body-color);
+    border-color: var(--bs-border-color);
 }
 
-/* ==============================================
-   UTILITÁRIOS
-   ============================================== */
-.text-end {
-    text-align: right !important;
+.pagination-sm .page-link:hover {
+    background-color: var(--bs-secondary-bg);
 }
 
-.text-center {
-    text-align: center !important;
-}
-
-.sticky-top {
-    position: sticky;
-    top: 0;
-    z-index: 10;
-}
-
-.d-flex {
-    display: flex !important;
-}
-
-.gap-1 {
-    gap: 0.25rem !important;
-}
-
-.gap-2 {
-    gap: 0.5rem !important;
-}
-
-.align-items-center {
-    align-items: center !important;
-}
-
-.justify-content-center {
-    justify-content: center !important;
-}
-
-.flex-wrap {
-    flex-wrap: wrap !important;
-}
-
-.flex-nowrap {
-    flex-wrap: nowrap !important;
+.pagination-sm .page-item.active .page-link {
+    background-color: var(--bs-secondary-bg);
+    border-color: var(--bs-border-color);
+    color: var(--bs-body-color);
 }

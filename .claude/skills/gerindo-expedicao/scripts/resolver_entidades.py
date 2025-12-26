@@ -150,7 +150,7 @@ def get_abreviacao_produto(termo: str) -> dict:
         dict com info da abreviacao ou None se nao for abreviacao conhecida
     """
     termo_upper = termo.strip().upper()
-    return ABREVIACOES_PRODUTO.get(termo_upper)
+    return ABREVIACOES_PRODUTO.get(termo_upper) # type: ignore
 
 
 def detectar_abreviacoes(tokens: list) -> tuple:
@@ -261,7 +261,7 @@ def resolver_grupo(grupo: str, uf: str = None, loja: str = None, fonte: str = 'c
     """
     from app.carteira.models import CarteiraPrincipal
     from app.separacao.models import Separacao
-    from sqlalchemy import or_, func
+    from sqlalchemy import or_
     from collections import defaultdict
 
     grupo_lower = grupo.lower().strip()
@@ -645,9 +645,9 @@ def resolver_cliente(termo: str, fonte: str = 'carteira') -> dict:
             pedidos_dict[num]['cnpj'] = cnpj
             pedidos_dict[num]['cidade'] = item.nome_cidade
             pedidos_dict[num]['uf'] = item.cod_uf
-            clientes_dict[cnpj]['num_pedidos'] += 1
+            clientes_dict[cnpj]['num_pedidos'] += 1 # type: ignore
 
-        pedidos_dict[num]['total_itens'] += 1
+        pedidos_dict[num]['total_itens'] += 1 # type: ignore
 
         # Calcular valor
         if fonte == 'separacao':
@@ -655,15 +655,15 @@ def resolver_cliente(termo: str, fonte: str = 'carteira') -> dict:
         else:
             valor_item = float(item.qtd_saldo_produto_pedido or 0) * float(item.preco_produto_pedido or 0)
 
-        pedidos_dict[num]['valor_total'] += valor_item
-        clientes_dict[cnpj]['valor_total'] += valor_item
+        pedidos_dict[num]['valor_total'] += valor_item # type: ignore
+        clientes_dict[cnpj]['valor_total'] += valor_item # type: ignore
 
     # Converter para listas
     clientes_lista = list(clientes_dict.values())
-    clientes_lista.sort(key=lambda c: -c['valor_total'])
+    clientes_lista.sort(key=lambda c: -c['valor_total']) # type: ignore
 
     pedidos_lista = list(pedidos_dict.values())
-    pedidos_lista.sort(key=lambda p: -p['valor_total'])
+    pedidos_lista.sort(key=lambda p: -p['valor_total']) # type: ignore
 
     resultado['sucesso'] = True
     resultado['clientes_encontrados'] = clientes_lista
@@ -1398,7 +1398,6 @@ def formatar_sugestao_produto(info: dict) -> str:
 # TESTE DO MODULO
 # ============================================================
 if __name__ == '__main__':
-    import json
     from app import create_app
 
     app = create_app()

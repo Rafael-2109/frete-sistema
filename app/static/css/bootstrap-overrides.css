@@ -1,213 +1,176 @@
-/* ==========================================================================
-   BOOTSTRAP OVERRIDES - Financial Teal Identity Layer
-   Load this AFTER bootstrap.min.css
-   Syncs with fin-* design system in css/financeiro/extrato.css
-   ========================================================================== */
+/* ═══════════════════════════════════════════════════════════════════════════
+   BOOTSTRAP OVERRIDES - Nacom Goya
+   Carrega APÓS bootstrap.min.css
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 /* === FONTS === */
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
-/* === CSS VARIABLES === */
-/* Todas as variaveis de cor estao centralizadas em _variables.css */
-@import url('./_variables.css');
+/* === DESIGN TOKENS === */
+@import url('./_design-tokens.css');
 
-/* ==========================================================================
-   TYPOGRAPHY ENHANCEMENT
-   ========================================================================== */
+/* ═══════════════════════════════════════════════════════════════════════════
+   BODY - usa --bg-dark (0% dark / 90% light)
+   ═══════════════════════════════════════════════════════════════════════════ */
 
-h1, h2, h3, .h1, .h2, .h3 {
-    font-weight: 700;
+body {
+    background: var(--bg-dark);
+    color: var(--text-muted);
+    font-family: var(--font-sans);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TYPOGRAPHY
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+h1, h2, h3, h4, h5, h6,
+.h1, .h2, .h3, .h4, .h5, .h6 {
+    color: var(--text);
+    font-weight: 600;
     letter-spacing: -0.02em;
 }
 
-h4, h5, h6, .h4, .h5, .h6 {
+/* ═══════════════════════════════════════════════════════════════════════════
+   TABLES - Hierarquia clara
+   thead: --bg-light (destaque)
+   tbody: --bg-light (destaque)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.table {
+    color: var(--text);
+    background-color: var(--bg-light);
+    --bs-table-bg: var(--bg-light);
+    --bs-table-border-color: var(--border);
+}
+
+.table > thead {
+    background: var(--bg-light);
+}
+
+.table > thead th {
+    background: var(--bg-light) !important;
+    color: var(--text) !important;
     font-weight: 600;
-    letter-spacing: -0.01em;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    border-bottom: 2px solid var(--border) !important;
 }
 
-.display-1, .display-2, .display-3, .display-4, .display-5, .display-6 {
-    font-weight: 700;
-    letter-spacing: -0.03em;
+.table > tbody > tr {
+    transition: background-color 0.15s ease;
 }
 
-/* Monospace for values */
-.font-mono {
-    font-family: var(--bs-font-monospace);
+/* Hover genérico só para linhas sem classe de status */
+.table > tbody > tr:not(.table-success):not(.table-warning):not(.table-primary):not(.table-light):hover {
+    background-color: hsla(0 0% 50% / 0.05) !important;
 }
 
-/* ==========================================================================
-   BUTTON ENHANCEMENT
-   ========================================================================== */
-
-.btn {
-    font-weight: 500;
-    letter-spacing: 0.01em;
-    transition: all 0.25s ease, box-shadow 0.3s ease;
-    position: relative;
-    overflow: hidden;
+/* Striped */
+.table-striped > tbody > tr:nth-of-type(odd) > * {
+    background-color: hsla(0 0% 50% / 0.03);
 }
 
-/* Shine effect on buttons */
-.btn::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(
-        90deg,
-        transparent,
-        rgba(255, 255, 255, 0.15),
-        transparent
-    );
-    transition: left 0.5s ease;
+/* table-bordered - bordas usando variável do tema */
+.table-bordered,
+.table-bordered > thead > tr > th,
+.table-bordered > thead > tr > td,
+.table-bordered > tbody > tr > th,
+.table-bordered > tbody > tr > td {
+    border-color: var(--border) !important;
 }
 
-.btn:hover::before {
-    left: 100%;
+/* table-light no dark mode */
+[data-bs-theme="dark"] .table-light,
+[data-bs-theme="dark"] .table-light th,
+[data-theme="dark"] .table-light,
+[data-theme="dark"] .table-light th {
+    background-color: var(--bg-light) !important;
+    color: var(--text) !important;
+    --bs-table-bg: var(--bg-light);
 }
 
-.btn-primary {
-    --bs-btn-bg: var(--bs-primary);
-    --bs-btn-border-color: var(--bs-primary);
-    --bs-btn-hover-bg: var(--bs-primary);
-    --bs-btn-hover-border-color: var(--bs-primary);
+/* ═══════════════════════════════════════════════════════════════════════════
+   TABLE STATUS COLORS - Estado normal sutil, hover destaca
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Reset Bootstrap table vars */
+.table-success, .table-primary, .table-warning, .table-light,
+.table-success > td, .table-primary > td, .table-warning > td, .table-light > td,
+tr.table-success > td, tr.table-primary > td, tr.table-warning > td, tr.table-light > td {
+    color: var(--text) !important;
+    --bs-table-bg: transparent;
+    --bs-table-accent-bg: transparent;
 }
 
-.btn-primary:hover {
-    filter: brightness(1.1);
-    box-shadow:
-        0 0 0 3px rgba(var(--bs-primary-rgb), 0.25),
-        0 4px 15px rgba(var(--bs-primary-rgb), 0.3);
-    transform: translateY(-1px);
+/* Success (FATURADO) - verde */
+.table-success, .table-success > td, tr.table-success > td {
+    background-color: hsla(145 50% 35% / 0.15) !important;
+}
+.table-success:hover, tr.table-success:hover > td {
+    background-color: hsla(145 50% 35% / 0.28) !important;
 }
 
-.btn-success:hover {
-    box-shadow:
-        0 0 0 3px rgba(var(--bs-success-rgb), 0.25),
-        0 4px 15px rgba(var(--bs-success-rgb), 0.3);
-    transform: translateY(-1px);
+/* Primary (EMBARCADO) - amber */
+.table-primary, .table-primary > td, tr.table-primary > td {
+    background-color: hsla(45 80% 50% / 0.06) !important;
+}
+.table-primary:hover, tr.table-primary:hover > td {
+    background-color: hsla(45 80% 50% / 0.12) !important;
 }
 
-.btn-warning:hover {
-    box-shadow:
-        0 0 0 3px rgba(var(--bs-warning-rgb), 0.25),
-        0 4px 15px rgba(var(--bs-warning-rgb), 0.3);
-    transform: translateY(-1px);
+/* Warning (COTADO) - amarelo */
+.table-warning, .table-warning > td, tr.table-warning > td {
+    background-color: hsla(50 100% 50% / 0.08) !important;
+}
+.table-warning:hover, tr.table-warning:hover > td {
+    background-color: hsla(50 100% 50% / 0.15) !important;
 }
 
-.btn-danger:hover {
-    box-shadow:
-        0 0 0 3px rgba(var(--bs-danger-rgb), 0.25),
-        0 4px 15px rgba(var(--bs-danger-rgb), 0.3);
-    transform: translateY(-1px);
+/* Light (ABERTO) - sem destaque */
+.table-light, .table-light > td, tr.table-light > td {
+    background-color: transparent !important;
+}
+.table-light:hover, tr.table-light:hover > td {
+    background-color: hsla(0 0% 50% / 0.05) !important;
 }
 
-/* Outline buttons */
-.btn-outline-primary {
-    --bs-btn-color: var(--bs-primary);
-    --bs-btn-border-color: var(--bs-primary);
-    --bs-btn-hover-bg: var(--bs-primary);
-    --bs-btn-hover-border-color: var(--bs-primary);
+/* ═══════════════════════════════════════════════════════════════════════════
+   MODAL - mesmo tom dos cards (--bg)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.modal-content {
+    background: var(--bg);
+    border: var(--border-card);
+    box-shadow: var(--shadow);
 }
 
-.btn-outline-success {
-    --bs-btn-color: var(--bs-success);
-    --bs-btn-border-color: var(--bs-success);
+.modal-header {
+    background: transparent;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
 }
 
-.btn-outline-warning {
-    --bs-btn-color: var(--bs-warning);
-    --bs-btn-border-color: var(--bs-warning);
+.modal-body {
+    background: transparent;
+    color: var(--text);
 }
 
-.btn-outline-danger {
-    --bs-btn-color: var(--bs-danger);
-    --bs-btn-border-color: var(--bs-danger);
+.modal-footer {
+    background: transparent;
+    border-top: 1px solid var(--border);
 }
 
-/* ==========================================================================
-   CARD ENHANCEMENT
-   ========================================================================== */
-
-.card {
-    border: 1px solid var(--bs-border-color);
-    transition: all 0.3s ease, box-shadow 0.4s ease;
-    position: relative;
-    overflow: hidden;
-    background: var(--bs-card-bg, var(--bs-body-bg));
+/* Close button */
+[data-bs-theme="dark"] .btn-close,
+[data-theme="dark"] .btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%);
 }
 
-/* Progressive glow line */
-.card::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 0;
-    height: 3px;
-    background: linear-gradient(90deg, var(--bs-primary), var(--bs-info));
-    transition: width 0.4s ease;
-}
+/* ═══════════════════════════════════════════════════════════════════════════
+   DATE INPUTS
+   ═══════════════════════════════════════════════════════════════════════════ */
 
-.card:hover::after {
-    width: 100%;
-}
-
-.card:hover {
-    transform: translateY(-4px);
-    box-shadow:
-        0 20px 40px rgba(0, 0, 0, 0.15),
-        0 0 0 1px var(--bs-primary);
-}
-
-[data-bs-theme="dark"] .card:hover,
-:root:not([data-theme="light"]) .card:hover {
-    box-shadow:
-        0 20px 40px rgba(0, 0, 0, 0.4),
-        0 0 0 1px var(--bs-primary),
-        0 0 30px rgba(var(--bs-primary-rgb), 0.1);
-}
-
-/* Disable hover effects on static cards */
-.card.card-static:hover {
-    transform: none;
-    box-shadow: none;
-}
-
-.card.card-static::after {
-    display: none;
-}
-
-/* ==========================================================================
-   FORM ENHANCEMENT
-   ========================================================================== */
-
-.form-control,
-.form-select {
-    background: var(--bs-tertiary-bg);
-    border-color: var(--bs-border-color);
-    color: var(--bs-body-color);
-    transition: all 0.2s ease;
-}
-
-.form-control:focus,
-.form-select:focus {
-    background: var(--bs-tertiary-bg);
-    border-color: var(--bs-primary);
-    color: var(--bs-body-color);
-    box-shadow:
-        0 0 0 3px rgba(var(--bs-primary-rgb), 0.15),
-        0 4px 12px rgba(var(--bs-primary-rgb), 0.1);
-}
-
-.form-control::placeholder {
-    color: var(--bs-secondary-color);
-    opacity: 0.6;
-}
-
-/* Date inputs - special handling for dark mode */
 input[type="date"].form-control,
 input[type="datetime-local"].form-control,
 input[type="time"].form-control {
@@ -216,755 +179,467 @@ input[type="time"].form-control {
 
 [data-bs-theme="dark"] input[type="date"].form-control,
 [data-bs-theme="dark"] input[type="datetime-local"].form-control,
-[data-bs-theme="dark"] input[type="time"].form-control,
-:root:not([data-theme="light"]) input[type="date"].form-control,
-:root:not([data-theme="light"]) input[type="datetime-local"].form-control,
-:root:not([data-theme="light"]) input[type="time"].form-control {
+[data-bs-theme="dark"] input[type="time"].form-control {
     color-scheme: dark;
 }
 
-[data-theme="light"] input[type="date"].form-control,
-[data-theme="light"] input[type="datetime-local"].form-control,
-[data-theme="light"] input[type="time"].form-control {
-    color-scheme: light;
-}
-
-/* Calendar icon color in dark mode */
-[data-bs-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator,
-:root:not([data-theme="light"]) input[type="date"]::-webkit-calendar-picker-indicator {
+[data-bs-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator {
     filter: invert(1);
 }
 
-/* ==========================================================================
-   TABLE ENHANCEMENT
-   ========================================================================== */
+/* ═══════════════════════════════════════════════════════════════════════════
+   INLINE STYLE OVERRIDES
+   Para estilos hardcoded que não respeitam variáveis CSS
+   ═══════════════════════════════════════════════════════════════════════════ */
 
-.table {
-    --bs-table-bg: transparent;
-    --bs-table-hover-bg: rgba(var(--bs-primary-rgb), 0.05);
-    --bs-table-border-color: var(--bs-border-color);
-}
-
-.table > thead {
-    background: var(--bs-tertiary-bg);
-}
-
-.table > thead th {
-    font-weight: 600;
-    text-transform: uppercase;
-    font-size: 0.75rem;
-    letter-spacing: 0.5px;
-    color: var(--bs-secondary-color);
-    border-bottom-width: 2px;
-}
-
-.table > tbody > tr {
-    transition: all 0.2s ease;
-    position: relative;
-}
-
-.table > tbody > tr:hover {
-    box-shadow: inset 3px 0 0 var(--bs-primary);
-}
-
-/* ==========================================================================
-   BADGE ENHANCEMENT
-   ========================================================================== */
-
-.badge {
-    font-weight: 600;
-    letter-spacing: 0.3px;
-}
-
-.bg-primary {
-    background-color: var(--bs-primary) !important;
-}
-
-.bg-success {
-    background-color: var(--bs-success) !important;
-}
-
-.bg-warning {
-    background-color: var(--bs-warning) !important;
-    color: #ffffff !important;
-}
-
-.bg-danger {
-    background-color: var(--bs-danger) !important;
-}
-
-.bg-info {
-    background-color: var(--bs-info) !important;
-}
-
-/* ==========================================================================
-   INLINE STYLE OVERRIDE - FORCE THEME COLORS
-   Sobrescreve estilos inline hardcoded (style="background-color: #xxx")
-   que não respeitam o sistema de variáveis CSS
-   ========================================================================== */
-
-/*
- * PROBLEMA: Templates usam style="color: #212529; background-color: #ffc107;"
- * que são cores do Bootstrap padrão, não do nosso sistema de variáveis.
- *
- * SOLUÇÃO: Usar seletores de alta especificidade com [style*=] para
- * sobrescrever estilos inline.
- */
-
-/* --- SUCCESS (#28a745, #198754) → var(--bs-success) --- */
+/* Success colors */
 .badge[style*="background-color: #28a745"],
 .badge[style*="background-color:#28a745"],
 .badge[style*="background-color: #198754"],
-.badge[style*="background-color:#198754"],
-span[style*="background-color: #28a745"],
-span[style*="background-color:#28a745"] {
-    background-color: var(--bs-success) !important;
-    color: #ffffff !important;
+.badge[style*="background-color:#198754"] {
+    background-color: var(--semantic-success) !important;
+    color: hsl(0 0% 100%) !important;
 }
 
-/* --- WARNING (#ffc107) → var(--bs-warning) --- */
-/* CRÍTICO: No tema light, --bs-warning é #b45309 (escuro), requer texto branco */
+/* Warning colors */
 .badge[style*="background-color: #ffc107"],
-.badge[style*="background-color:#ffc107"],
-span[style*="background-color: #ffc107"],
-span[style*="background-color:#ffc107"] {
-    background-color: var(--bs-warning) !important;
-    color: #ffffff !important;
+.badge[style*="background-color:#ffc107"] {
+    background-color: var(--amber-50) !important;
+    color: hsl(0 0% 10%) !important;
 }
 
-/* --- DANGER (#dc3545) → var(--bs-danger) --- */
+/* Danger colors */
 .badge[style*="background-color: #dc3545"],
-.badge[style*="background-color:#dc3545"],
-span[style*="background-color: #dc3545"],
-span[style*="background-color:#dc3545"] {
-    background-color: var(--bs-danger) !important;
-    color: #ffffff !important;
+.badge[style*="background-color:#dc3545"] {
+    background-color: var(--semantic-danger) !important;
+    color: hsl(0 0% 100%) !important;
 }
 
-/* --- INFO (#17a2b8) → var(--bs-info) --- */
+/* Info colors */
 .badge[style*="background-color: #17a2b8"],
-.badge[style*="background-color:#17a2b8"],
-span[style*="background-color: #17a2b8"],
-span[style*="background-color:#17a2b8"] {
-    background-color: var(--bs-info) !important;
-    color: #ffffff !important;
+.badge[style*="background-color:#17a2b8"] {
+    background-color: hsl(0 0% 45%) !important;
+    color: hsl(0 0% 100%) !important;
 }
 
-/* --- PRIMARY (#007bff) → var(--bs-primary) --- */
-.badge[style*="background-color: #007bff"],
-.badge[style*="background-color:#007bff"],
-span[style*="background-color: #007bff"],
-span[style*="background-color:#007bff"] {
-    background-color: var(--bs-primary) !important;
-    color: #ffffff !important;
-}
-
-/* --- SECONDARY (#6c757d) → var(--bs-secondary) --- */
+/* Secondary colors */
 .badge[style*="background-color: #6c757d"],
-.badge[style*="background-color:#6c757d"],
-span[style*="background-color: #6c757d"],
-span[style*="background-color:#6c757d"] {
-    background-color: var(--bs-secondary) !important;
-    color: #ffffff !important;
+.badge[style*="background-color:#6c757d"] {
+    background-color: hsl(0 0% 40%) !important;
+    color: hsl(0 0% 100%) !important;
 }
 
-/* --- DARK (#343a40) → usar secondary-bg --- */
-.badge[style*="background-color: #343a40"],
-.badge[style*="background-color:#343a40"],
-span[style*="background-color: #343a40"],
-span[style*="background-color:#343a40"] {
-    background-color: var(--bs-tertiary-bg) !important;
-    color: var(--bs-body-color) !important;
-    border: 1px solid var(--bs-border-color);
-}
-
-/* --- LIGHT backgrounds (#f8f9fa, #fff, #f1f3f5) --- */
-/* No dark mode, estes precisam de ajuste */
+/* Light backgrounds */
 .badge[style*="background-color: #f8f9fa"],
-.badge[style*="background-color:#f8f9fa"],
-span[style*="background-color: #f8f9fa"],
-span[style*="background-color:#f8f9fa"],
-.badge[style*="background-color: #fff"],
-.badge[style*="background-color:#fff"] {
-    background-color: var(--bs-tertiary-bg) !important;
-    color: var(--bs-body-color) !important;
+.badge[style*="background-color:#f8f9fa"] {
+    background-color: var(--bg-light) !important;
+    color: var(--text) !important;
 }
 
-/* ==========================================================================
-   STATUS BADGE CLASSES - USE THESE INSTEAD OF INLINE STYLES
-   Classes centralizadas para badges de status em todo o sistema
-   ========================================================================== */
-
-/* Base para todos os badges de status */
-.badge-status {
-    font-size: 0.75rem;
-    font-weight: 600;
-    padding: 0.35em 0.65em;
-    border-radius: 0.375rem;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-}
-
-/* PENDENTE - Warning (amber) */
-.badge-status-pendente,
-.badge-pendente {
-    background-color: var(--bs-warning) !important;
-    color: #ffffff !important;
-}
-
-/* EM TRATATIVA - Info (sky blue) */
-.badge-status-tratativa,
-.badge-tratativa,
-.badge-em-tratativa {
-    background-color: var(--bs-info) !important;
-    color: #ffffff !important;
-}
-
-/* APROVADO - Success (emerald) */
-.badge-status-aprovado,
-.badge-aprovado {
-    background-color: var(--bs-success) !important;
-    color: #ffffff !important;
-}
-
-/* REJEITADO / REPROVADO - Danger (red) */
-.badge-status-rejeitado,
-.badge-status-reprovado,
-.badge-rejeitado,
-.badge-reprovado {
-    background-color: var(--bs-danger) !important;
-    color: #ffffff !important;
-}
-
-/* PAGO / LANÇADO - Primary (teal) */
-.badge-status-pago,
-.badge-status-lancado,
-.badge-pago,
-.badge-lancado {
-    background-color: var(--bs-primary) !important;
-    color: #ffffff !important;
-}
-
-/* CANCELADO / INATIVO - Secondary */
-.badge-status-cancelado,
-.badge-status-inativo,
-.badge-cancelado,
-.badge-inativo {
-    background-color: var(--bs-secondary) !important;
-    color: #ffffff !important;
-}
-
-/* CONFERIDO - Success */
-.badge-status-conferido,
-.badge-conferido {
-    background-color: var(--bs-success) !important;
-    color: #ffffff !important;
-}
-
-/* RASCUNHO - Light with border */
-.badge-status-rascunho,
-.badge-rascunho {
-    background-color: var(--bs-tertiary-bg) !important;
-    color: var(--bs-body-color) !important;
-    border: 1px solid var(--bs-border-color);
-}
-
-/* CONCLUIDO - Success subtle */
-.badge-status-concluido,
-.badge-concluido {
-    background-color: rgba(var(--bs-success-rgb), 0.15) !important;
-    color: var(--bs-success) !important;
-    border: 1px solid var(--bs-success);
-}
-
-/* ==========================================================================
-   FORCE CORRECT TEXT COLOR ON BG-* CLASSES
-   Garante texto legível em badges com classes bg-*
-   ========================================================================== */
-
-/* Warning sempre precisa de texto branco (fundo é escuro no light mode) */
-.badge.bg-warning,
-span.badge.bg-warning {
-    color: #ffffff !important;
-}
-
-/* Todos os outros bg-* também precisam de texto branco para consistência */
-.badge.bg-success,
-.badge.bg-danger,
-.badge.bg-info,
-.badge.bg-primary,
-.badge.bg-secondary,
-.badge.bg-dark {
-    color: #ffffff !important;
-}
-
-/* bg-light precisa de texto escuro no light mode e claro no dark mode */
-.badge.bg-light {
-    background-color: var(--bs-tertiary-bg) !important;
-    color: var(--bs-body-color) !important;
-    border: 1px solid var(--bs-border-color);
-}
-
-/* ==========================================================================
-   TD/CELL INLINE STYLE OVERRIDE
-   Sobrescreve estilos inline em células de tabela
-   ========================================================================== */
-
+/* TD cells */
 td[style*="background-color: #198754"],
 td[style*="background-color:#198754"] {
-    background-color: var(--bs-success) !important;
-    color: #ffffff !important;
+    background-color: var(--semantic-success) !important;
+    color: hsl(0 0% 100%) !important;
 }
 
-td[style*="background-color: #f8f9fa"],
-td[style*="background-color:#f8f9fa"] {
-    background-color: var(--bs-tertiary-bg) !important;
-    color: var(--bs-body-color) !important;
+/* ═══════════════════════════════════════════════════════════════════════════
+   STATUS BADGES - Classes para usar em vez de inline styles
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.badge-status-pendente, .badge-pendente {
+    background-color: var(--amber-50) !important;
+    color: hsl(0 0% 10%) !important;
 }
 
-/* ==========================================================================
-   MODAL ENHANCEMENT
-   ========================================================================== */
-
-.modal-content {
-    border: 1px solid var(--bs-border-color);
-    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
-    background: var(--bs-body-bg);
+.badge-status-aprovado, .badge-aprovado,
+.badge-status-conferido, .badge-conferido {
+    background-color: var(--semantic-success) !important;
+    color: hsl(0 0% 100%) !important;
 }
 
-[data-bs-theme="dark"] .modal-content,
-:root:not([data-theme="light"]) .modal-content {
-    background: var(--bs-secondary-bg);
+.badge-status-rejeitado, .badge-rejeitado,
+.badge-status-reprovado, .badge-reprovado {
+    background-color: var(--semantic-danger) !important;
+    color: hsl(0 0% 100%) !important;
 }
 
-.modal-header {
-    background: var(--bs-tertiary-bg);
-    border-bottom-color: var(--bs-border-color);
+.badge-status-pago, .badge-pago,
+.badge-status-lancado, .badge-lancado {
+    background-color: var(--amber-55) !important;
+    color: hsl(0 0% 10%) !important;
 }
 
-.modal-footer {
-    background: var(--bs-tertiary-bg);
-    border-top-color: var(--bs-border-color);
+.badge-status-cancelado, .badge-cancelado {
+    background-color: hsl(0 0% 40%) !important;
+    color: hsl(0 0% 100%) !important;
 }
 
-/* Close button in dark mode */
-[data-bs-theme="dark"] .btn-close,
-:root:not([data-theme="light"]) .btn-close {
-    filter: invert(1) grayscale(100%) brightness(200%);
+.badge-status-rascunho, .badge-rascunho {
+    background-color: var(--bg-light) !important;
+    color: var(--text) !important;
+    border: 1px solid var(--border) !important;
 }
 
-/* Light mode explicit - reset close button */
-[data-theme="light"] .btn-close {
-    filter: none;
+/* ═══════════════════════════════════════════════════════════════════════════
+   DARK MODE FIXES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* text-dark no dark mode */
+[data-bs-theme="dark"] .text-dark,
+[data-theme="dark"] .text-dark {
+    color: var(--text) !important;
 }
 
-/* ==========================================================================
-   BREADCRUMB ENHANCEMENT
-   ========================================================================== */
+/* EXCEÇÃO: text-dark em badges warning DEVE permanecer escuro */
+[data-bs-theme="dark"] .badge.bg-warning.text-dark,
+[data-bs-theme="dark"] .bg-warning.text-dark,
+[data-theme="dark"] .badge.bg-warning.text-dark,
+[data-theme="dark"] .bg-warning.text-dark {
+    color: hsl(0 0% 10%) !important;
+}
+
+/* bg-light no dark mode */
+[data-bs-theme="dark"] .bg-light,
+[data-theme="dark"] .bg-light {
+    background-color: var(--bg-light) !important;
+    color: var(--text) !important;
+}
+
+/* bg-white no dark mode */
+[data-bs-theme="dark"] .bg-white,
+[data-theme="dark"] .bg-white {
+    background-color: var(--bg-light) !important;
+    color: var(--text) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CARD HEADERS - Converter cores para cinza
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.card-header.bg-primary,
+.card-header.bg-info,
+.card-header.bg-warning,
+.card-header.bg-secondary {
+    background: var(--bg-light) !important;
+    color: var(--text) !important;
+    border-bottom: 1px solid var(--border) !important;
+}
+
+/* Success e Danger mantêm cor */
+.card-header.bg-success {
+    background: var(--semantic-success) !important;
+    color: hsl(0 0% 100%) !important;
+}
+
+.card-header.bg-danger {
+    background: var(--semantic-danger) !important;
+    color: hsl(0 0% 100%) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ICONS - Cor padrão cinza
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.card i,
+.card .fa,
+.card .fas,
+.card .far {
+    color: var(--text-muted) !important;
+}
+
+/* Exceção: dentro de botões */
+.card .btn i,
+.btn i {
+    color: inherit !important;
+}
+
+/* Exceção: classes semânticas (incluindo dentro de cards) */
+i.text-success,
+.card i.text-success,
+.card .fa.text-success,
+.card .fas.text-success,
+.card .far.text-success { color: var(--semantic-success) !important; }
+
+i.text-danger,
+.card i.text-danger,
+.card .fa.text-danger,
+.card .fas.text-danger,
+.card .far.text-danger { color: var(--semantic-danger) !important; }
+
+i.text-warning,
+.card i.text-warning,
+.card .fa.text-warning,
+.card .fas.text-warning,
+.card .far.text-warning { color: var(--amber-50) !important; }
+
+i.text-muted,
+.card i.text-muted,
+.card .fa.text-muted,
+.card .fas.text-muted,
+.card .far.text-muted { color: var(--text-muted) !important; }
+
+/* Dentro de badges */
+.badge i { color: inherit !important; }
+
+/* Card headers */
+.card-header i { color: inherit !important; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BREADCRUMB
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 .breadcrumb {
-    --bs-breadcrumb-divider-color: var(--bs-secondary-color);
-    --bs-breadcrumb-item-active-color: var(--bs-secondary-color);
+    --bs-breadcrumb-divider-color: var(--text-muted);
+    --bs-breadcrumb-item-active-color: var(--text-muted);
 }
 
 .breadcrumb-item a {
-    color: var(--bs-primary);
-    text-decoration: none;
+    color: var(--amber-55);
 }
 
 .breadcrumb-item a:hover {
-    color: var(--bs-link-hover-color);
-    text-decoration: underline;
+    color: var(--amber-60);
 }
 
-/* ==========================================================================
-   PAGINATION ENHANCEMENT
-   ========================================================================== */
-
-.page-link {
-    background: var(--bs-tertiary-bg);
-    border-color: var(--bs-border-color);
-    color: var(--bs-body-color);
-    transition: all 0.2s ease;
-}
-
-.page-link:hover {
-    background: var(--bs-secondary-bg);
-    border-color: var(--bs-primary);
-    color: var(--bs-primary);
-}
-
-.page-item.active .page-link {
-    background: var(--bs-primary);
-    border-color: var(--bs-primary);
-}
-
-.page-item.disabled .page-link {
-    background: var(--bs-secondary-bg);
-    color: var(--bs-secondary-color);
-}
-
-/* ==========================================================================
-   ALERT ENHANCEMENT
-   ========================================================================== */
-
-.alert-info {
-    --bs-alert-bg: rgba(var(--bs-info-rgb), 0.15);
-    --bs-alert-border-color: var(--bs-info);
-    --bs-alert-color: var(--bs-body-color);
-}
-
-.alert-success {
-    --bs-alert-bg: rgba(var(--bs-success-rgb), 0.15);
-    --bs-alert-border-color: var(--bs-success);
-    --bs-alert-color: var(--bs-body-color);
-}
-
-.alert-warning {
-    --bs-alert-bg: rgba(var(--bs-warning-rgb), 0.15);
-    --bs-alert-border-color: var(--bs-warning);
-    --bs-alert-color: var(--bs-body-color);
-}
-
-.alert-danger {
-    --bs-alert-bg: rgba(var(--bs-danger-rgb), 0.15);
-    --bs-alert-border-color: var(--bs-danger);
-    --bs-alert-color: var(--bs-body-color);
-}
-
-/* ==========================================================================
-   TEXT COLORS
-   ========================================================================== */
-
-.text-primary {
-    color: var(--bs-primary) !important;
-}
-
-.text-success {
-    color: var(--bs-success) !important;
-}
-
-.text-warning {
-    color: var(--bs-warning) !important;
-}
-
-.text-danger {
-    color: var(--bs-danger) !important;
-}
-
-.text-info {
-    color: var(--bs-info) !important;
-}
-
-.text-muted {
-    color: var(--bs-secondary-color) !important;
-}
-
-/* ==========================================================================
-   REDUCED MOTION SUPPORT
-   ========================================================================== */
-
-@media (prefers-reduced-motion: reduce) {
-    .btn::before,
-    .card::after {
-        display: none;
-    }
-
-    .btn, .card, .form-control, .form-select {
-        transition: none !important;
-        transform: none !important;
-    }
-}
-
-/* ==========================================================================
-   THEME TOGGLE SYNC
-   ========================================================================== */
-
-/* Support both data-bs-theme and data-theme for compatibility */
-[data-theme="light"] {
-    color-scheme: light;
-}
-
-[data-theme="dark"],
-:root:not([data-theme]) {
-    color-scheme: dark;
-}
-
-/* Map data-theme to data-bs-theme styles when using extrato.css */
-[data-theme="light"] .card {
-    background: var(--bs-body-bg);
-    border-color: var(--bs-border-color);
-}
-
-/* ==========================================================================
-   BOOTSTRAP COLOR UTILITY FIXES FOR DARK MODE
-   Inverte classes de cor que ficam ilegíveis no dark mode
-   ========================================================================== */
-
-/* text-dark: No dark mode, usar cor de texto principal (clara) */
-[data-bs-theme="dark"] .text-dark,
-[data-theme="dark"] .text-dark {
-    color: var(--bs-body-color) !important;
-}
-
-/* bg-light com text-dark: Ajustar background também */
-[data-bs-theme="dark"] .bg-light,
-[data-theme="dark"] .bg-light {
-    background-color: var(--bs-tertiary-bg) !important;
-    color: var(--bs-body-color) !important;
-}
-
-/* bg-light + text-dark em badges e elementos pequenos */
-[data-bs-theme="dark"] .badge.bg-light,
-[data-theme="dark"] .badge.bg-light {
-    background-color: var(--bs-tertiary-bg) !important;
-    color: var(--bs-body-color) !important;
-    border: 1px solid var(--bs-border-color);
-}
-
-/* bg-white: No dark mode, usar fundo do tema */
-[data-bs-theme="dark"] .bg-white,
-[data-theme="dark"] .bg-white {
-    background-color: var(--bs-secondary-bg) !important;
-    color: var(--bs-body-color) !important;
-}
-
-/* card-header com bg-white no dark mode */
-[data-bs-theme="dark"] .card-header.bg-white,
-[data-theme="dark"] .card-header.bg-white {
-    background-color: var(--bs-tertiary-bg) !important;
-    border-bottom-color: var(--bs-border-color) !important;
-}
-
-/* table-light: No dark mode, usar cor escura adaptada */
-[data-bs-theme="dark"] .table-light,
-[data-theme="dark"] .table-light,
-[data-bs-theme="dark"] thead.table-light,
-[data-theme="dark"] thead.table-light {
-    --bs-table-bg: var(--bs-tertiary-bg) !important;
-    --bs-table-color: var(--bs-body-color) !important;
-    --bs-table-border-color: var(--bs-border-color) !important;
-    background-color: var(--bs-tertiary-bg) !important;
-    color: var(--bs-body-color) !important;
-}
-
-[data-bs-theme="dark"] .table-light th,
-[data-theme="dark"] .table-light th,
-[data-bs-theme="dark"] thead.table-light th,
-[data-theme="dark"] thead.table-light th {
-    background-color: var(--bs-tertiary-bg) !important;
-    color: var(--bs-body-color) !important;
-    border-color: var(--bs-border-color) !important;
-}
-
-/* table-success: Manter legível no dark mode */
-[data-bs-theme="dark"] .table-success,
-[data-theme="dark"] .table-success {
-    --bs-table-bg: rgba(16, 185, 129, 0.15);
-    --bs-table-color: var(--bs-body-color);
-    --bs-table-border-color: var(--bs-border-color);
-}
-
-/* ==========================================================================
-   FLASH MESSAGES / ALERTS ENHANCEMENT
-   ========================================================================== */
-
-.alert {
-    border: none;
-    border-radius: var(--bs-border-radius);
-    padding: 1rem 1.25rem;
-    border-left: 4px solid;
-    animation: alertSlideIn 0.3s ease-out;
-    position: relative;
-}
-
-@keyframes alertSlideIn {
-    from {
-        opacity: 0;
-        transform: translateX(-20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateX(0);
-    }
-}
-
-.alert .btn-close {
-    position: absolute;
-    right: 1rem;
-    top: 50%;
-    transform: translateY(-50%);
-    padding: 0.5rem;
-}
-
-/* ==========================================================================
-   SCROLLBAR CUSTOMIZATION
-   ========================================================================== */
-
-::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-}
-
-::-webkit-scrollbar-track {
-    background: var(--bs-tertiary-bg);
-    border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb {
-    background: var(--bs-border-color);
-    border-radius: 4px;
-    transition: background 0.2s ease;
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: var(--bs-secondary-color);
-}
-
-/* Firefox */
-* {
-    scrollbar-width: thin;
-    scrollbar-color: var(--bs-border-color) var(--bs-tertiary-bg);
-}
-
-/* ==========================================================================
-   UTILITY ANIMATIONS
-   ========================================================================== */
-
-/* Fade in up */
-.animate-fade-in {
-    animation: fadeInUp 0.5s ease-out;
-}
-
-@keyframes fadeInUp {
-    from {
-        opacity: 0;
-        transform: translateY(20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* Staggered children animation */
-.stagger-children > * {
-    animation: fadeInUp 0.4s ease-out backwards;
-}
-
-.stagger-children > *:nth-child(1) { animation-delay: 0.05s; }
-.stagger-children > *:nth-child(2) { animation-delay: 0.1s; }
-.stagger-children > *:nth-child(3) { animation-delay: 0.15s; }
-.stagger-children > *:nth-child(4) { animation-delay: 0.2s; }
-.stagger-children > *:nth-child(5) { animation-delay: 0.25s; }
-.stagger-children > *:nth-child(6) { animation-delay: 0.3s; }
-
-/* Pulse animation */
-.animate-pulse {
-    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-}
-
-/* ==========================================================================
-   DROPDOWN ENHANCEMENT (Global)
-   ========================================================================== */
+/* ═══════════════════════════════════════════════════════════════════════════
+   DROPDOWN ENHANCEMENT
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 .dropdown-menu {
-    background-color: var(--bs-secondary-bg);
-    border: 1px solid var(--bs-border-color);
-    border-radius: var(--bs-border-radius);
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
     padding: 0.5rem;
     animation: dropdownFadeIn 0.15s ease-out;
 }
 
 @keyframes dropdownFadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(-8px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 .dropdown-item {
-    color: var(--bs-body-color);
     padding: 0.5rem 1rem;
-    border-radius: var(--bs-border-radius-sm);
-    transition: all 0.15s ease;
+    border-radius: var(--radius-sm);
     font-size: 0.875rem;
 }
 
-.dropdown-item:hover,
-.dropdown-item:focus {
-    background-color: rgba(var(--bs-primary-rgb), 0.1);
-    color: var(--bs-primary);
+.dropdown-item:hover {
+    background: var(--bg-light);
+    color: var(--text);
 }
 
-.dropdown-item.active,
-.dropdown-item:active {
-    background-color: var(--bs-primary);
-    color: #0a1628;
+.dropdown-item.active {
+    background-color: var(--amber-55);
+    color: hsl(0 0% 10%);
 }
 
-.dropdown-item i {
-    width: 1.25rem;
-    text-align: center;
-    margin-right: 0.5rem;
-    opacity: 0.7;
+/* ═══════════════════════════════════════════════════════════════════════════
+   ALERT ENHANCEMENT
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.alert {
+    border-radius: var(--radius-md);
+    padding: 1rem 1.25rem;
+    animation: alertSlideIn 0.3s ease-out;
 }
 
-.dropdown-item:hover i {
-    opacity: 1;
+@keyframes alertSlideIn {
+    from { opacity: 0; transform: translateX(-20px); }
+    to { opacity: 1; transform: translateX(0); }
 }
 
-.dropdown-header {
-    color: var(--bs-secondary-color);
-    font-size: 0.7rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: 0.5rem 1rem 0.25rem;
+/* ═══════════════════════════════════════════════════════════════════════════
+   REDUCED MOTION
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+    .dropdown-menu,
+    .alert {
+        animation: none !important;
+    }
 }
 
-.dropdown-divider {
-    border-color: var(--bs-border-color);
-    margin: 0.5rem 0;
-    opacity: 0.5;
-}
-
-/* ==========================================================================
-   PRINT STYLES
-   ========================================================================== */
+/* ═══════════════════════════════════════════════════════════════════════════
+   PRINT
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 @media print {
     body {
         background: white !important;
         color: black !important;
     }
-
     .card {
         border: 1px solid #ddd !important;
         box-shadow: none !important;
     }
-
-    .card::after {
-        display: none;
-    }
-
-    .btn {
-        border: 1px solid #ddd !important;
-    }
-
-    .navbar,
-    .btn-close,
-    .dropdown-menu {
+    .navbar, .btn-close, .dropdown-menu {
         display: none !important;
     }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TABLE HOVER - Desativa o hover do Bootstrap para linhas com status
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.table-hover > tbody > tr:hover > * {
+    --bs-table-bg-state: transparent;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   OUTLINE BUTTONS - Cores corretas para botões outline
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Primary - Amber */
+.btn-outline-primary {
+    color: var(--amber-55);
+    border-color: var(--amber-55);
+    transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+}
+.btn-outline-primary:hover {
+    background-color: var(--amber-55);
+    border-color: hsl(50 100% 50%);
+    color: hsl(0 0% 10%);
+    box-shadow: 0 0 6px 1px hsla(50 100% 55% / 0.6);
+}
+
+/* Secondary - Cinza */
+.btn-outline-secondary {
+    color: var(--text-muted);
+    border-color: var(--border);
+    transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+}
+.btn-outline-secondary:hover {
+    background-color: var(--bg-light);
+    border-color: hsl(50 100% 50%);
+    color: var(--text);
+    box-shadow: 0 0 6px 1px hsla(50 100% 55% / 0.5);
+}
+
+/* Success - Verde */
+.btn-outline-success {
+    color: var(--semantic-success);
+    border-color: var(--semantic-success);
+    transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+}
+.btn-outline-success:hover {
+    background-color: var(--semantic-success);
+    border-color: hsl(50 100% 50%);
+    color: hsl(0 0% 100%);
+    box-shadow: 0 0 6px 1px hsla(50 100% 55% / 0.6);
+}
+
+/* Danger - Vermelho */
+.btn-outline-danger {
+    color: var(--semantic-danger);
+    border-color: var(--semantic-danger);
+    transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+}
+.btn-outline-danger:hover {
+    background-color: var(--semantic-danger);
+    border-color: hsl(50 100% 50%);
+    color: hsl(0 0% 100%);
+    box-shadow: 0 0 6px 1px hsla(50 100% 55% / 0.6);
+}
+
+/* Warning - Amarelo/Amber */
+.btn-outline-warning {
+    color: var(--amber-50);
+    border-color: var(--amber-50);
+    transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+}
+.btn-outline-warning:hover {
+    background-color: var(--amber-50);
+    border-color: hsl(50 100% 50%);
+    color: hsl(0 0% 10%);
+    box-shadow: 0 0 6px 1px hsla(50 100% 55% / 0.6);
+}
+
+/* Info - Cinza neutro */
+.btn-outline-info {
+    color: var(--text-muted);
+    border-color: var(--text-muted);
+    transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+}
+.btn-outline-info:hover {
+    background-color: hsl(0 0% 45%);
+    border-color: hsl(50 100% 50%);
+    color: hsl(0 0% 100%);
+    box-shadow: 0 0 6px 1px hsla(50 100% 55% / 0.5);
+}
+
+/* Light - Borda clara */
+.btn-outline-light {
+    color: var(--text-muted);
+    border-color: var(--border);
+    transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+}
+.btn-outline-light:hover {
+    background-color: var(--bg-light);
+    border-color: hsl(50 100% 50%);
+    box-shadow: 0 0 6px 1px hsla(50 100% 55% / 0.5);
+    color: var(--text);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BADGE WARNING - Texto sempre escuro
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.badge.bg-warning,
+.bg-warning.badge {
+    background-color: var(--amber-50) !important;
+    color: hsl(0 0% 10%) !important;
+}
+
+/* Força texto escuro em badges warning mesmo no dark mode */
+[data-bs-theme="dark"] .badge.bg-warning,
+[data-bs-theme="dark"] .bg-warning.badge,
+[data-theme="dark"] .badge.bg-warning,
+[data-theme="dark"] .bg-warning.badge {
+    color: hsl(0 0% 10%) !important;
+}
+
+/* Badge contador - herda cor do botão pai */
+.badge-contador-theme {
+    background-color: hsla(0 0% 100% / 0.2) !important;
+    color: inherit !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BADGES DENTRO DE TABELAS - Cores independentes da linha
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Badge warning dentro de qualquer contexto de tabela */
+.table .badge.bg-warning,
+.table td .badge.bg-warning,
+.table-success .badge.bg-warning,
+.table-warning .badge.bg-warning,
+.table-primary .badge.bg-warning,
+.table-light .badge.bg-warning,
+tr .badge.bg-warning,
+td .badge.bg-warning {
+    background-color: hsl(45 100% 50%) !important;
+    color: hsl(0 0% 10%) !important;
+}
+
+/* Badge success dentro de tabela */
+.table .badge.bg-success,
+.table td .badge.bg-success,
+td .badge.bg-success {
+    background-color: var(--semantic-success) !important;
+    color: hsl(0 0% 100%) !important;
+}
+
+/* Badge danger dentro de tabela */
+.table .badge.bg-danger,
+.table td .badge.bg-danger,
+td .badge.bg-danger {
+    background-color: var(--semantic-danger) !important;
+    color: hsl(0 0% 100%) !important;
+}
+
+/* Badge secondary dentro de tabela */
+.table .badge.bg-secondary,
+.table td .badge.bg-secondary,
+td .badge.bg-secondary {
+    background-color: hsl(0 0% 40%) !important;
+    color: hsl(0 0% 100%) !important;
 }

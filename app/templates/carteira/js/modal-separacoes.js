@@ -93,8 +93,8 @@ class ModalSeparacoes {
 
         let html = `
             <!-- Totalizadores Gerais -->
-            <div class="card mb-3 border-primary">
-                <div class="card-header bg-primary text-white">
+            <div class="card mb-3">
+                <div class="card-header">
                     <h6 class="mb-0">
                         <i class="fas fa-calculator me-2"></i>
                         Totais de Todas as Separações (${this.separacoes.length} separações)
@@ -103,15 +103,15 @@ class ModalSeparacoes {
                 <div class="card-body">
                     <div class="row text-center">
                         <div class="col-md-4">
-                            <h5 class="text-success">${this.formatarMoeda(totaisGerais.valor)}</h5>
+                            <h5>${this.formatarMoeda(totaisGerais.valor)}</h5>
                             <small class="text-muted">Valor Total</small>
                         </div>
                         <div class="col-md-4">
-                            <h5 class="text-info">${this.formatarPeso(totaisGerais.peso)}</h5>
+                            <h5>${this.formatarPeso(totaisGerais.peso)}</h5>
                             <small class="text-muted">Peso Total</small>
                         </div>
                         <div class="col-md-4">
-                            <h5 class="text-warning">${this.formatarPallet(totaisGerais.pallet)}</h5>
+                            <h5>${this.formatarPallet(totaisGerais.pallet)}</h5>
                             <small class="text-muted">Pallets Total</small>
                         </div>
                     </div>
@@ -283,19 +283,19 @@ class ModalSeparacoes {
                                 <i class="fas fa-globe me-1"></i> Portal do Cliente
                             </h6>
                             <div class="d-flex gap-2 flex-wrap">
-                                <button class="btn btn-success btn-sm" 
+                                <button class="btn btn-secondary btn-sm"
                                         data-lote="${separacao.separacao_lote_id}"
                                         data-agendamento="${separacao.agendamento || ''}"
                                         onclick="window.PortalAgendamento.agendarNoPortal(this.dataset.lote, this.dataset.agendamento)">
                                     <i class="fas fa-calendar-plus me-1"></i> Agendar no Portal
                                 </button>
-                                <button class="btn btn-info btn-sm"
+                                <button class="btn btn-secondary btn-sm"
                                         data-lote="${separacao.separacao_lote_id}"
                                         onclick="window.PortalAgendamento.verificarPortal(this.dataset.lote)">
                                     <i class="fas fa-search me-1"></i> Status
                                 </button>
                                 ${separacao.protocolo ? `
-                                    <button class="btn btn-warning btn-sm"
+                                    <button class="btn btn-secondary btn-sm"
                                             data-lote="${separacao.separacao_lote_id}"
                                             data-protocolo="${separacao.protocolo}"
                                             onclick="window.PortalAgendamento.verificarProtocoloNoPortal(this.dataset.lote, this.dataset.protocolo)">
@@ -587,7 +587,7 @@ class ModalSeparacoes {
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-primary" onclick="window.modalSeparacoes.extrairConfirmacoes()">
+                        <button type="button" class="btn btn-secondary" onclick="window.modalSeparacoes.extrairConfirmacoes()">
                             <i class="fas fa-sync me-1"></i> Extrair Confirmações
                         </button>
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
@@ -636,8 +636,8 @@ class ModalSeparacoes {
             <div class="row">
                 <!-- Lado Esquerdo: Separação -->
                 <div class="col-md-6">
-                    <div class="card border-primary">
-                        <div class="card-header bg-primary text-white">
+                    <div class="card">
+                        <div class="card-header">
                             <h6 class="mb-0">
                                 <i class="fas fa-boxes"></i> Separação (Sistema)
                             </h6>
@@ -667,8 +667,8 @@ class ModalSeparacoes {
 
                 <!-- Lado Direito: Portal -->
                 <div class="col-md-6">
-                    <div class="card border-success">
-                        <div class="card-header bg-success text-white">
+                    <div class="card">
+                        <div class="card-header">
                             <h6 class="mb-0">
                                 <i class="fas fa-globe"></i> Portal (${data.portal || 'Atacadão'})
                             </h6>
@@ -813,10 +813,10 @@ class ModalSeparacoes {
                             font-weight: 600;
                         }
                         .linha-divergencia {
-                            background-color: #ffebee !important;
+                            background-color: var(--semantic-danger-subtle, #ffebee) !important;
                         }
                         .texto-divergencia {
-                            color: #c62828;
+                            color: var(--semantic-danger, #c62828);
                             font-weight: 600;
                         }
                         .badge-diferenca {
@@ -845,7 +845,7 @@ class ModalSeparacoes {
                         <div class="row">
                             <div class="col-12">
                                 <div class="card">
-                                    <div class="card-header bg-primary text-white py-2">
+                                    <div class="card-header py-2">
                                         <h6 class="mb-0">
                                             <i class="fas fa-exchange-alt"></i> Comparação de Produtos
                                         </h6>
@@ -961,7 +961,9 @@ class ModalSeparacoes {
                     width: '1100px',
                     showCancelButton: false,
                     confirmButtonText: data.agendamento_confirmado ? 'OK' : 'Atualizar Status',
-                    confirmButtonColor: data.agendamento_confirmado ? '#28a745' : '#ffc107'
+                    confirmButtonColor: data.agendamento_confirmado
+                        ? (window.Notifications?.colors?.success || '#28a745')
+                        : (window.Notifications?.colors?.warning || '#ffc107')
                 }).then((result) => {
                     if (result.isConfirmed && !data.agendamento_confirmado) {
                         // Atualizar status da separação

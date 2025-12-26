@@ -207,7 +207,7 @@ class RupturaEstoqueManager {
         } else {
             indicator.innerHTML = `
                 <div class="d-flex align-items-center">
-                    <i class="fas fa-spinner fa-spin text-primary me-2"></i>
+                    <i class="fas fa-spinner fa-spin me-2"></i>
                     <span>Analisando estoque (${this.filaAnalises.length} restantes)</span>
                 </div>
             `;
@@ -273,7 +273,7 @@ class RupturaEstoqueManager {
             const btnContainer = document.createElement('div');
             btnContainer.className = 'mt-2';
             btnContainer.innerHTML = `
-                <button class="btn btn-sm btn-outline-info btn-analisar-ruptura" 
+                <button class="btn btn-sm btn-outline-secondary btn-analisar-ruptura"
                         data-pedido="${numPedido}"
                         title="Verificar disponibilidade de estoque"
                         style="font-size: 0.75rem;">
@@ -353,7 +353,7 @@ class RupturaEstoqueManager {
                 const cores = {
                     'CRITICA': 'btn-danger',
                     'ALTA': 'btn-warning',
-                    'MEDIA': 'btn-info',
+                    'MEDIA': 'btn-secondary',
                     'BAIXA': 'btn-secondary'
                 };
 
@@ -430,7 +430,7 @@ class RupturaEstoqueManager {
             const cores = {
                 'CRITICA': 'btn-danger',
                 'ALTA': 'btn-warning',
-                'MEDIA': 'btn-info',
+                'MEDIA': 'btn-secondary',
                 'BAIXA': 'btn-secondary'
             };
 
@@ -489,7 +489,7 @@ class RupturaEstoqueManager {
         const cores = {
             'CRITICA': 'danger',
             'ALTA': 'warning',
-            'MEDIA': 'info',
+            'MEDIA': 'secondary',
             'BAIXA': 'secondary'
         };
 
@@ -508,17 +508,17 @@ class RupturaEstoqueManager {
                     </span>
                 </div>
                 <div class="btn-group btn-group-sm" role="group">
-                    <button type="button" class="btn btn-outline-danger active" 
+                    <button type="button" class="btn btn-danger active"
                             onclick="rupturaManager.mostrarItensRuptura()">
                         <i class="fas fa-exclamation-triangle me-1"></i>
                         Ruptura (${resumo.qtd_itens_ruptura})
                     </button>
-                    <button type="button" class="btn btn-outline-success" 
+                    <button type="button" class="btn btn-success"
                             onclick="rupturaManager.mostrarItensDisponiveis()">
                         <i class="fas fa-check-circle me-1"></i>
                         Disponíveis (${resumo.qtd_itens_disponiveis})
                     </button>
-                    <button type="button" class="btn btn-outline-primary" 
+                    <button type="button" class="btn btn-secondary"
                             onclick="rupturaManager.mostrarTodosItens()">
                         <i class="fas fa-list me-1"></i>
                         Todos (${resumo.total_itens})
@@ -615,7 +615,7 @@ class RupturaEstoqueManager {
                 </td>
                 <td class="text-center">
                     ${item.data_producao ?
-                `<span class="badge bg-primary">
+                `<span class="badge bg-secondary">
                             ${this.formatarData(item.data_producao)}
                             <br>
                             <small>${this.formatarNumero(item.qtd_producao)} un</small>
@@ -708,7 +708,7 @@ class RupturaEstoqueManager {
         // Atualizar título da seção
         const tituloSecao = tbody.closest('.modal-body').querySelector('h6');
         if (tituloSecao) {
-            tituloSecao.innerHTML = '<i class="fas fa-list text-primary me-2"></i>Todos os Itens do Pedido:';
+            tituloSecao.innerHTML = '<i class="fas fa-list me-2"></i>Todos os Itens do Pedido:';
         }
 
         // Atualizar botões de toggle
@@ -748,7 +748,7 @@ class RupturaEstoqueManager {
                         </td>
                         <td class="text-center">
                             ${item.data_producao ?
-                        `<span class="badge bg-primary">
+                        `<span class="badge bg-secondary">
                                     ${this.formatarData(item.data_producao)}
                                     <br>
                                     <small>${this.formatarNumero(item.qtd_producao)} un</small>
@@ -882,11 +882,11 @@ class RupturaEstoqueManager {
             <div class="modal fade" id="modalRuptura" tabindex="-1">
                 <div class="modal-dialog modal-xl">
                     <div class="modal-content">
-                        <div class="modal-header bg-info text-white">
+                        <div class="modal-header">
                             <h5 class="modal-title" id="modalRupturaTitulo">
                                 Análise de Ruptura
                             </h5>
-                            <button type="button" class="btn-close btn-close-white" 
+                            <button type="button" class="btn-close"
                                     data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
@@ -986,7 +986,7 @@ class RupturaEstoqueManager {
 
             // Adicionar animação
             row.style.transition = 'background-color 0.5s';
-            row.style.backgroundColor = '#d4edda';
+            row.style.backgroundColor = 'var(--semantic-success-subtle, #d4edda)';
 
             setTimeout(() => {
                 row.style.backgroundColor = '';

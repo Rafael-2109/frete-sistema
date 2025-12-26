@@ -1,130 +1,101 @@
 {% extends "base.html" %}
 
-{% block title %}📋 Carteira de Pedidos - Dashboard{% endblock %}
+{% block title %}Carteira de Pedidos - Dashboard{% endblock %}
 
 {% block content %}
-<div class="container-fluid premium-page">
+<div class="container-fluid">
     <!-- Header Principal -->
-    <div class="d-flex justify-content-between align-items-center mb-4 reveal">
+    <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h1 class="h3 mb-0 text-gray-800">
-                <i class="fas fa-clipboard-list text-primary"></i>
+            <h1 class="h3 mb-0">
+                <i class="fas fa-clipboard-list text-accent"></i>
                 Carteira de Pedidos
             </h1>
-            <p class="text-muted mb-0">Sistema central de gestão da carteira - Núcleo do ecossistema</p>
+            <p class="text-muted mb-0">Sistema central de gestão da carteira</p>
         </div>
-        <div>
-            <button type="button" class="btn btn-info me-2" data-bs-toggle="modal" data-bs-target="#modalRelatorios">
+        <div class="d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modalRelatorios">
                 <i class="fas fa-file-excel"></i> Relatórios
             </button>
-            <a href="{{ url_for('carteira.alertas_visualizacao.dashboard') }}" class="btn btn-danger me-2 position-relative">
+            <a href="{{ url_for('carteira.alertas_visualizacao.dashboard') }}" class="btn btn-outline-secondary btn-sm position-relative">
                 <i class="fas fa-bell"></i> Alertas
                 {% if alertas_pendentes_count and alertas_pendentes_count > 0 %}
-                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-warning text-dark">
+                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
                     {{ alertas_pendentes_count }}
-                    <span class="visually-hidden">alertas pendentes</span>
                 </span>
                 {% endif %}
             </a>
-            <button type="button" class="btn btn-warning me-2" data-bs-toggle="modal" data-bs-target="#modalPedidosNaoOdoo">
-                <i class="fas fa-file-import"></i> Pedidos Não-Odoo
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modalPedidosNaoOdoo">
+                <i class="fas fa-file-import"></i> Não-Odoo
             </button>
-            <a href="{{ url_for('leitura_pedidos.index') }}" class="btn btn-info me-2">
-                <i class="fas fa-file-pdf"></i> Importar Pedidos PDF
+            <a href="{{ url_for('leitura_pedidos.index') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-file-pdf"></i> Importar PDF
             </a>
-            {# Verifica se o portal está disponível usando has_request_context #}
-                <a href="{{ url_for('portal.central_portais') }}" class="btn btn-primary me-2">
-                    <i class="fas fa-globe"></i> Portais de Agendamento
-                </a>
-            <button type="button" class="btn btn-warning me-2" data-bs-toggle="modal" data-bs-target="#modalClientesRedeSP">
-                <i class="fas fa-network-wired"></i> Clientes Rede SP
+            <a href="{{ url_for('portal.central_portais') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-globe"></i> Portais
+            </a>
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modalClientesRedeSP">
+                <i class="fas fa-network-wired"></i> Rede SP
             </button>
-            <a href="{{ url_for('carteira.listar_pedidos_agrupados') }}" class="btn btn-success me-2">
+            <a href="{{ url_for('carteira.listar_pedidos_agrupados') }}" class="btn btn-primary btn-sm">
                 <i class="fas fa-boxes"></i> Carteira Agrupada
             </a>
-            <a href="{{ url_for('carteira.carteira_simples.index') }}" class="btn btn-primary">
-                <i class="fas fa-list"></i> Carteira Simplificada
+            <a href="{{ url_for('carteira.carteira_simples.index') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-list"></i> Simplificada
             </a>
         </div>
     </div>
 
     <!-- Cards de Estatísticas -->
     <div class="row mb-4">
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-primary shadow h-100 py-2">
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="card stat-card h-100">
                 <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                                Total de Pedidos
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {{ estatisticas.total_pedidos or 0 }}
-                            </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="small text-uppercase text-muted mb-1">Total de Pedidos</div>
+                            <h4 class="mb-0">{{ estatisticas.total_pedidos or 0 }}</h4>
                         </div>
-                        <div class="col-auto">
-                            <i class="fas fa-shopping-cart fa-2x text-gray-300"></i>
-                        </div>
+                        <i class="fas fa-shopping-cart fa-2x"></i>
                     </div>
                 </div>
             </div>
         </div>
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-success shadow h-100 py-2">
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="card stat-card h-100">
                 <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
-                                Produtos Únicos
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {{ estatisticas.total_produtos or 0 }}
-                            </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="small text-uppercase text-muted mb-1">Produtos Únicos</div>
+                            <h4 class="mb-0">{{ estatisticas.total_produtos or 0 }}</h4>
                         </div>
-                        <div class="col-auto">
-                            <i class="fas fa-boxes fa-2x text-gray-300"></i>
-                        </div>
+                        <i class="fas fa-boxes fa-2x"></i>
                     </div>
                 </div>
             </div>
         </div>
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-info shadow h-100 py-2">
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="card stat-card h-100">
                 <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
-                                Total de Itens
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {{ estatisticas.total_itens or 0 }}
-                            </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="small text-uppercase text-muted mb-1">Total de Itens</div>
+                            <h4 class="mb-0">{{ estatisticas.total_itens or 0 }}</h4>
                         </div>
-                        <div class="col-auto">
-                            <i class="fas fa-list fa-2x text-gray-300"></i>
-                        </div>
+                        <i class="fas fa-list fa-2x"></i>
                     </div>
                 </div>
             </div>
         </div>
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-warning shadow h-100 py-2">
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="card stat-card stat-card-accent h-100">
                 <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
-                                Valor Total
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                R$ {{ "{:,.2f}".format(estatisticas.valor_total or 0) }}
-                            </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="small text-uppercase text-muted mb-1">Valor Total</div>
+                            <h4 class="mb-0 text-accent">R$ {{ "{:,.2f}".format(estatisticas.valor_total or 0) }}</h4>
                         </div>
-                        <div class="col-auto">
-                            <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
-                        </div>
+                        <i class="fas fa-dollar-sign fa-2x"></i>
                     </div>
                 </div>
             </div>
@@ -134,18 +105,18 @@
     <!-- Seção de Pedidos Programados -->
     <div class="row mb-4">
         <div class="col-12">
-            <div class="card shadow">
-                <div class="card-header py-2 bg-info text-white">
+            <div class="card">
+                <div class="card-header card-header-theme py-2">
                     <div class="d-flex justify-content-between align-items-center">
-                        <h6 class="m-0 font-weight-bold">
-                            <i class="fas fa-calendar-check"></i> Pedidos Programados
+                        <h6 class="m-0 fw-bold">
+                            <i class="fas fa-calendar-check text-accent"></i> Pedidos Programados
                         </h6>
                         <div id="totais-programados" class="text-end">
                             <small>
-                                <span class="badge bg-light text-dark">
+                                <span class="badge badge-status">
                                     <span id="qtd-separacoes">0</span> Separações
                                 </span>
-                                <span class="badge bg-warning text-dark ms-2">
+                                <span class="badge badge-status badge-status-accent ms-2">
                                     R$ <span id="valor-total-separacoes">0,00</span>
                                 </span>
                             </small>
@@ -183,19 +154,19 @@
         <!-- Top Vendedores (apenas se houver dados) -->
         {% if top_vendedores %}
         <div class="col-lg-6">
-            <div class="card shadow">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">
-                        <i class="fas fa-user-tie"></i> Top Vendedores
+            <div class="card">
+                <div class="card-header card-header-theme py-3">
+                    <h6 class="m-0 fw-bold">
+                        <i class="fas fa-user-tie text-accent"></i> Top Vendedores
                     </h6>
                 </div>
                 <div class="card-body">
                     {% for vendedor in top_vendedores[:5] %}
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <span>{{ vendedor.vendedor or 'N/A' }}</span>
-                        <div class="text-right">
+                        <div class="text-end">
                             <small class="text-muted">{{ vendedor.quantidade }} itens</small><br>
-                            <strong>R$ {{ "{:,.0f}".format(vendedor.valor or 0) }}</strong>
+                            <strong class="text-accent">R$ {{ "{:,.0f}".format(vendedor.valor or 0) }}</strong>
                         </div>
                     </div>
                     {% endfor %}
@@ -206,30 +177,30 @@
         
         <!-- Saldo Standby -->
         <div class="col-lg-6">
-            <div class="card shadow">
-                <div class="card-header py-3 d-flex justify-content-between align-items-center">
-                    <h6 class="m-0 font-weight-bold text-warning">
-                        <i class="fas fa-pause-circle"></i> Saldo Standby
+            <div class="card">
+                <div class="card-header card-header-theme py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 fw-bold">
+                        <i class="fas fa-pause-circle text-accent"></i> Saldo Standby
                     </h6>
-                    <a href="{{ url_for('carteira.standby.visualizar_standby') }}" class="btn btn-warning btn-sm">
+                    <a href="{{ url_for('carteira.standby.visualizar_standby') }}" class="btn btn-primary btn-sm">
                         <i class="fas fa-eye"></i> Visualizar
                     </a>
                 </div>
                 <div class="card-body">
                     <div class="row">
                         <div class="col-md-6">
-                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                            <div class="small text-uppercase text-muted mb-1">
                                 Total de Pedidos
                             </div>
-                            <div class="h5 mb-2 font-weight-bold text-gray-800">
+                            <div class="h5 mb-2 fw-bold">
                                 {{ total_standby_pedidos }}
                             </div>
                         </div>
                         <div class="col-md-6">
-                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                            <div class="small text-uppercase text-muted mb-1">
                                 Valor Total
                             </div>
-                            <div class="h5 mb-2 font-weight-bold text-gray-800">
+                            <div class="h5 mb-2 fw-bold text-accent">
                                 R$ {{ "{:,.0f}".format(total_standby_valor) }}
                             </div>
                         </div>
@@ -239,16 +210,16 @@
                     <small class="text-muted">Por Status:</small>
                     {% for stat in standby_stats %}
                     <div class="d-flex justify-content-between align-items-center mb-1">
-                        <span class="badge 
-                            {% if stat.status_standby == 'ATIVO' %}bg-success
-                            {% elif stat.status_standby == 'BLOQ. COML.' %}bg-warning text-dark
-                            {% elif stat.status_standby == 'SALDO' %}bg-info
+                        <span class="badge badge-status
+                            {% if stat.status_standby == 'ATIVO' %}badge-status-aprovado
+                            {% elif stat.status_standby == 'BLOQ. COML.' %}badge-status-pendente
+                            {% elif stat.status_standby == 'SALDO' %}badge-status-lancado
                             {% endif %}">
                             {{ stat.status_standby }}
                         </span>
-                        <div class="text-right">
+                        <div class="text-end">
                             <small class="text-muted">{{ stat.qtd_pedidos }} pedidos</small>
-                            <strong class="ms-2">R$ {{ "{:,.0f}".format(stat.valor_total or 0) }}</strong>
+                            <strong class="ms-2 text-accent">R$ {{ "{:,.0f}".format(stat.valor_total or 0) }}</strong>
                         </div>
                     </div>
                     {% endfor %}
@@ -260,10 +231,10 @@
         
         <!-- Ações Rápidas sempre visíveis -->
         <div class="col-lg-12 mt-3">
-            <div class="card shadow">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">
-                        <i class="fas fa-cogs"></i> Ações Rápidas
+            <div class="card">
+                <div class="card-header card-header-theme py-3">
+                    <h6 class="m-0 fw-bold">
+                        <i class="fas fa-cogs text-accent"></i> Ações Rápidas
                     </h6>
                 </div>
                 <div class="card-body">
@@ -271,22 +242,22 @@
                         <a href="/estoque/" class="list-group-item list-group-item-action">
                             <div class="d-flex w-100 justify-content-between">
                                 <h6 class="mb-1">
-                                    <i class="fas fa-sync-alt text-primary"></i> 
+                                    <i class="fas fa-sync-alt text-accent"></i>
                                     Sincronização com Odoo
                                 </h6>
-                                <span class="badge bg-primary pill">Seguro</span>
+                                <span class="badge badge-status">Seguro</span>
                             </div>
                             <p class="mb-1">Sincronizar carteira e faturamento com sequência automática</p>
                             <small class="text-muted">Executa Faturamento → Carteira automaticamente</small>
                         </a>
-                        
+
                         <a href="/faturamento/" class="list-group-item list-group-item-action">
                             <div class="d-flex w-100 justify-content-between">
                                 <h6 class="mb-1">
-                                    <i class="fas fa-file-invoice text-success"></i> 
+                                    <i class="fas fa-file-invoice text-accent"></i>
                                     Gerenciar Faturamento
                                 </h6>
-                                <span class="badge bg-success pill">Ativo</span>
+                                <span class="badge badge-status badge-status-aprovado">Ativo</span>
                             </div>
                             <p class="mb-1">Acessar dashboard de faturamento e relatórios</p>
                             <small class="text-muted">Visualizar dados importados e processar NFs</small>
@@ -301,14 +272,14 @@
     {% if not sistema_inicializado %}
     <div class="row">
         <div class="col-lg-12">
-            <div class="card border-left-warning shadow">
+            <div class="card stat-card border-start border-warning border-3">
                 <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                    <div class="row g-0 align-items-center">
+                        <div class="col me-2">
+                            <div class="small fw-bold text-warning text-uppercase mb-1">
                                 Sistema de Carteira de Pedidos
                             </div>
-                            <div class="h5 mb-2 font-weight-bold text-gray-800">
+                            <div class="h5 mb-2 fw-bold">
                                 Aguardando primeira importação
                             </div>
                             <p class="text-muted mb-3">
@@ -318,7 +289,7 @@
                             <!-- Botão Baixar Modelo removido - funcionalidade desativada -->
                         </div>
                         <div class="col-auto">
-                            <i class="fas fa-clipboard-list fa-2x text-gray-300"></i>
+                            <i class="fas fa-clipboard-list fa-2x text-muted"></i>
                         </div>
                     </div>
                 </div>
@@ -330,62 +301,62 @@
     <!-- Seção do Workspace de Montagem -->
     <div class="row mb-4">
         <div class="col-12">
-            <div class="card shadow border-left-success">
-                <div class="card-header py-3 bg-gradient-success">
-                    <h6 class="m-0 font-weight-bold text-white">
-                        <i class="fas fa-boxes"></i> Workspace de Montagem de Carga - v2.0
+            <div class="card stat-card-accent">
+                <div class="card-header card-header-theme py-3">
+                    <h6 class="m-0 fw-bold">
+                        <i class="fas fa-boxes text-accent"></i> Workspace de Montagem de Carga - v2.0
                     </h6>
                 </div>
                 <div class="card-body">
                     <div class="row">
                         <div class="col-md-8">
                             <p class="text-muted mb-3">
-                                Sistema avançado de pré-separação com interface drag & drop, 
+                                Sistema avançado de pré-separação com interface drag & drop,
                                 permitindo montagem inteligente de cargas com controle total de estoque.
                             </p>
-                            
+
                             <div class="row mb-3">
                                 <div class="col-md-6">
-                                    <h6 class="font-weight-bold text-success">✨ Principais Funcionalidades</h6>
+                                    <h6 class="fw-bold text-accent">Principais Funcionalidades</h6>
                                     <ul class="list-unstyled text-sm">
-                                        <li><i class="fas fa-check-circle text-success me-2"></i> Drag & Drop intuitivo</li>
-                                        <li><i class="fas fa-check-circle text-success me-2"></i> Pré-separações persistentes</li>
-                                        <li><i class="fas fa-check-circle text-success me-2"></i> Validação de estoque em tempo real</li>
-                                        <li><i class="fas fa-check-circle text-success me-2"></i> Cardex D0-D28 integrado</li>
+                                        <li><i class="fas fa-check-circle text-accent me-2"></i> Drag & Drop intuitivo</li>
+                                        <li><i class="fas fa-check-circle text-accent me-2"></i> Pré-separações persistentes</li>
+                                        <li><i class="fas fa-check-circle text-accent me-2"></i> Validação de estoque em tempo real</li>
+                                        <li><i class="fas fa-check-circle text-accent me-2"></i> Cardex D0-D28 integrado</li>
                                     </ul>
                                 </div>
                                 <div class="col-md-6">
-                                    <h6 class="font-weight-bold text-info">🎯 Benefícios</h6>
+                                    <h6 class="fw-bold">Benefícios</h6>
                                     <ul class="list-unstyled text-sm">
-                                        <li><i class="fas fa-arrow-up text-info me-2"></i> Agilidade na separação</li>
-                                        <li><i class="fas fa-shield-alt text-info me-2"></i> Controle de rastreabilidade</li>
-                                        <li><i class="fas fa-chart-line text-info me-2"></i> Otimização de cargas</li>
-                                        <li><i class="fas fa-clock text-info me-2"></i> Redução de tempo operacional</li>
+                                        <li><i class="fas fa-arrow-up text-muted me-2"></i> Agilidade na separação</li>
+                                        <li><i class="fas fa-shield-alt text-muted me-2"></i> Controle de rastreabilidade</li>
+                                        <li><i class="fas fa-chart-line text-muted me-2"></i> Otimização de cargas</li>
+                                        <li><i class="fas fa-clock text-muted me-2"></i> Redução de tempo operacional</li>
                                     </ul>
                                 </div>
                             </div>
-                            
+
                             <div class="d-flex gap-2">
-                                <a href="{{ url_for('carteira.listar_pedidos_agrupados') }}" class="btn btn-success">
+                                <a href="{{ url_for('carteira.listar_pedidos_agrupados') }}" class="btn btn-primary">
                                     <i class="fas fa-boxes"></i> Acessar Workspace
                                 </a>
-                                <a href="/static/DOCUMENTACAO_MODULO_CARTEIRA.md" target="_blank" class="btn btn-outline-info">
+                                <a href="/static/DOCUMENTACAO_MODULO_CARTEIRA.md" target="_blank" class="btn btn-outline-secondary">
                                     <i class="fas fa-book"></i> Documentação
                                 </a>
                             </div>
                         </div>
                         <div class="col-md-4 text-center">
                             <div class="workspace-preview p-3">
-                                <i class="fas fa-desktop fa-4x text-success mb-3"></i>
-                                <h6 class="font-weight-bold text-success">Interface Moderna</h6>
+                                <i class="fas fa-desktop fa-4x text-accent mb-3"></i>
+                                <h6 class="fw-bold text-accent">Interface Moderna</h6>
                                 <p class="text-muted small">
-                                    Sistema modular com arquitetura JavaScript ES6+, 
+                                    Sistema modular com arquitetura JavaScript ES6+,
                                     APIs RESTful e interface responsiva.
                                 </p>
                                 <div class="badge-container">
-                                    <span class="badge bg-success pill">Drag & Drop</span>
-                                    <span class="badge bg-info pill">APIs REST</span>
-                                    <span class="badge bg-warning pill">Bootstrap 5</span>
+                                    <span class="badge badge-status">Drag & Drop</span>
+                                    <span class="badge badge-status">APIs REST</span>
+                                    <span class="badge badge-status">Bootstrap 5</span>
                                 </div>
                             </div>
                         </div>
@@ -396,101 +367,65 @@
     </div>
 </div>
 
-<style>
-.border-left-primary {
-    border-left: 0.25rem solid #4e73df !important;
-}
-.border-left-success {
-    border-left: 0.25rem solid #1cc88a !important;
-}
-.border-left-info {
-    border-left: 0.25rem solid #36b9cc !important;
-}
-.border-left-warning {
-    border-left: 0.25rem solid #f6c23e !important;
-}
-</style>
-
 <!-- Modal Pedidos Não-Odoo -->
 <div class="modal fade" id="modalPedidosNaoOdoo" tabindex="-1" aria-labelledby="modalPedidosNaoOdooLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header bg-warning text-white">
+            <div class="modal-header">
                 <h5 class="modal-title" id="modalPedidosNaoOdooLabel">
-                    <i class="fas fa-file-import"></i> Gestão de Pedidos Não-Odoo
+                    <i class="fas fa-file-import text-accent"></i> Gestão de Pedidos Não-Odoo
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <p class="text-muted mb-4">
-                    Sistema para importação e gestão de pedidos que não vêm do Odoo. 
+                    Sistema para importação e gestão de pedidos que não vêm do Odoo.
                     Permite cadastrar clientes, importar pedidos via Excel e gerenciar a carteira Não-Odoo.
                 </p>
-                
+
                 <div class="row">
                     <!-- Cadastro de Cliente -->
                     <div class="col-md-4 mb-3">
-                        <div class="card h-100 text-center border-primary">
-                            <div class="card-body">
-                                <i class="fas fa-user-plus fa-3x text-primary mb-3"></i>
-                                <h5 class="card-title">Cadastro de Cliente</h5>
-                                <p class="card-text text-muted">
-                                    Cadastre novos clientes Não-Odoo com informações completas para importação
-                                </p>
-                                <a href="{{ url_for('carteira.views_nao_odoo.cadastro_cliente') }}" class="btn btn-primary btn-block">
-                                    <i class="fas fa-user-plus"></i> Cadastrar Cliente
-                                </a>
-                            </div>
-                        </div>
+                        <a href="{{ url_for('carteira.views_nao_odoo.cadastro_cliente') }}" class="action-card h-100">
+                            <i class="fas fa-user-plus fa-2x"></i>
+                            <h6 class="mt-2 mb-1">Cadastro de Cliente</h6>
+                            <small class="text-muted text-center">Cadastre novos clientes Não-Odoo</small>
+                        </a>
                     </div>
-                    
+
                     <!-- Importação de Pedidos -->
                     <div class="col-md-4 mb-3">
-                        <div class="card h-100 text-center border-success">
-                            <div class="card-body">
-                                <i class="fas fa-file-excel fa-3x text-success mb-3"></i>
-                                <h5 class="card-title">Importação de Pedidos</h5>
-                                <p class="card-text text-muted">
-                                    Importe pedidos através de planilhas Excel com mapeamento flexível
-                                </p>
-                                <a href="{{ url_for('carteira.views_nao_odoo.importacao_carteira') }}" class="btn btn-success btn-block">
-                                    <i class="fas fa-file-excel"></i> Importar Pedidos
-                                </a>
-                            </div>
-                        </div>
+                        <a href="{{ url_for('carteira.views_nao_odoo.importacao_carteira') }}" class="action-card h-100">
+                            <i class="fas fa-file-excel fa-2x"></i>
+                            <h6 class="mt-2 mb-1">Importação de Pedidos</h6>
+                            <small class="text-muted text-center">Importe via planilhas Excel</small>
+                        </a>
                     </div>
-                    
+
                     <!-- Carteira Não-Odoo -->
                     <div class="col-md-4 mb-3">
-                        <div class="card h-100 text-center border-warning">
-                            <div class="card-body">
-                                <i class="fas fa-clipboard-list fa-3x text-warning mb-3"></i>
-                                <h5 class="card-title">Carteira Não-Odoo</h5>
-                                <p class="card-text text-muted">
-                                    Visualize e gerencie todos os pedidos Não-Odoo importados
-                                </p>
-                                <a href="{{ url_for('carteira.views_nao_odoo.carteira_nao_odoo') }}" class="btn btn-warning btn-block">
-                                    <i class="fas fa-clipboard-list"></i> Ver Carteira
-                                </a>
-                            </div>
-                        </div>
+                        <a href="{{ url_for('carteira.views_nao_odoo.carteira_nao_odoo') }}" class="action-card h-100">
+                            <i class="fas fa-clipboard-list fa-2x"></i>
+                            <h6 class="mt-2 mb-1">Carteira Não-Odoo</h6>
+                            <small class="text-muted text-center">Visualize e gerencie pedidos</small>
+                        </a>
                     </div>
                 </div>
-                
-                <div class="alert alert-info mt-3" role="alert">
-                    <i class="fas fa-info-circle"></i> 
-                    <strong>Nota:</strong> Os pedidos importados serão adicionados tanto na CarteiraCopia (para controle) 
+
+                <div class="alert alert-secondary mt-3" role="alert">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>Nota:</strong> Os pedidos importados serão adicionados tanto na CarteiraCopia (para controle)
                     quanto na CarteiraPrincipal (para operação normal).
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
                     <i class="fas fa-times"></i> Fechar
                 </button>
             </div>
         </div>
     </div>
-    </div>
+</div>
 
 <!-- Script de Relatórios -->
 <script src="{{ url_for('static', filename='carteira/js/modal-relatorios.js') }}"></script>
@@ -549,7 +484,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Destacar hoje
             if (data.toDateString() === hoje.toDateString()) {
-                thData.innerHTML = `<span class="badge bg-primary">${diaMes}</span>`;
+                thData.innerHTML = `<span class="badge badge-status badge-status-accent">${diaMes}</span>`;
             } else if (data < hoje) {
                 thData.innerHTML = `<small class="text-muted">${diaMes}</small>`;
             } else {
@@ -563,19 +498,19 @@ document.addEventListener('DOMContentLoaded', function() {
             
             const valor = dadosPorData[dataStr] || 0;
             if (valor > 0) {
-                const valorFormatado = new Intl.NumberFormat('pt-BR', { 
+                const valorFormatado = new Intl.NumberFormat('pt-BR', {
                     notation: 'compact',
                     minimumFractionDigits: 0,
-                    maximumFractionDigits: 1 
+                    maximumFractionDigits: 1
                 }).format(valor);
-                
-                // Colorir baseado no valor
-                let bgClass = 'bg-light';
-                if (valor > 100000) bgClass = 'bg-success text-white';
-                else if (valor > 50000) bgClass = 'bg-warning';
-                else if (valor > 20000) bgClass = 'bg-info text-white';
-                
-                tdValor.innerHTML = `<small class="badge ${bgClass}">R$ ${valorFormatado}</small>`;
+
+                // Colorir baseado no valor usando classes semânticas
+                let badgeClass = 'badge-status';
+                if (valor > 100000) badgeClass = 'badge-status badge-status-aprovado';
+                else if (valor > 50000) badgeClass = 'badge-status badge-status-accent';
+                else if (valor > 20000) badgeClass = 'badge-status badge-status-lancado';
+
+                tdValor.innerHTML = `<small class="badge ${badgeClass}">R$ ${valorFormatado}</small>`;
             } else {
                 tdValor.innerHTML = '<small class="text-muted">-</small>';
             }
@@ -595,34 +530,34 @@ document.addEventListener('DOMContentLoaded', function() {
 <div class="modal fade" id="modalClientesRedeSP" tabindex="-1" aria-labelledby="modalClientesRedeSPLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <div class="modal-header bg-warning text-dark">
+            <div class="modal-header">
                 <h5 class="modal-title" id="modalClientesRedeSPLabel">
-                    <i class="fas fa-network-wired"></i> Selecione a Rede SP
+                    <i class="fas fa-network-wired text-accent"></i> Selecione a Rede SP
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <div class="row">
                     <div class="col-md-6 mb-3">
-                        <a href="{{ url_for('carteira.programacao_em_lote.listar', rede='atacadao') }}" class="btn btn-lg btn-outline-primary w-100 py-3">
-                            <i class="fas fa-shopping-cart fa-2x mb-2"></i><br>
-                            <strong>Atacadão SP</strong>
+                        <a href="{{ url_for('carteira.programacao_em_lote.listar', rede='atacadao') }}" class="action-card h-100 py-4">
+                            <i class="fas fa-shopping-cart fa-2x"></i>
+                            <strong class="mt-2">Atacadão SP</strong>
                         </a>
                     </div>
                     <div class="col-md-6 mb-3">
-                        <a href="{{ url_for('carteira.programacao_em_lote.listar', rede='sendas') }}" class="btn btn-lg btn-outline-success w-100 py-3">
-                            <i class="fas fa-store fa-2x mb-2"></i><br>
-                            <strong>Sendas SP</strong>
+                        <a href="{{ url_for('carteira.programacao_em_lote.listar', rede='sendas') }}" class="action-card h-100 py-4">
+                            <i class="fas fa-store fa-2x"></i>
+                            <strong class="mt-2">Sendas SP</strong>
                         </a>
                     </div>
                 </div>
-                <div class="alert alert-info mt-3">
-                    <i class="fas fa-info-circle"></i> 
+                <div class="alert alert-secondary mt-3">
+                    <i class="fas fa-info-circle"></i>
                     <small>Selecione a rede para visualizar e programar pedidos em lote de clientes localizados em São Paulo.</small>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fechar</button>
             </div>
         </div>
     </div>

@@ -26,13 +26,13 @@
 
     .produto-codigo {
         font-weight: bold;
-        color: #0d6efd;
+        color: var(--bs-body-color);
         font-size: 0.9rem;
     }
 
     .produto-nome {
         font-size: 0.75rem;
-        color: #6c757d;
+        color: var(--bs-secondary-color);
         line-height: 1.2;
     }
 
@@ -151,7 +151,7 @@
                     {% if palletizacao %}
                         <div class="table-responsive">
                             <table class="table table-sm table-hover" id="tabelaPalletizacao">
-                                <thead class="thead-light">
+                                <thead class="table-thead-theme">
                                     <tr>
                                         <th>Produto</th>
                                         <th>Categoria</th>

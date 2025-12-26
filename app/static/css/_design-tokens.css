@@ -1,0 +1,698 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   DESIGN TOKENS - NACOM GOYA
+
+   HIERARQUIA DE LUMINOSIDADE (4 TONS DISTINTOS):
+   - body:    --bg-dark   (0% dark / 90% light)
+   - cards:   --bg        (5% dark / 95% light)
+   - tabela:  --bg-light  (10% dark / 100% light)
+   - buttons: --bg-button (15% dark / 100% light)
+
+   VARIÁVEIS POR TEMA:
+   DARK MODE:                    LIGHT MODE:
+   --bg-dark:  hsl(0 0% 0%)      --bg-dark:  hsl(0 0% 90%)
+   --bg:       hsl(0 0% 5%)      --bg:       hsl(0 0% 95%)
+   --bg-light: hsl(0 0% 10%)     --bg-light: hsl(0 0% 100%)
+   --text:     hsl(0 0% 95%)     --text:     hsl(0 0% 5%)
+   --text-muted: hsl(0 0% 70%)   --text-muted: hsl(0 0% 30%)
+   --border:   hsl(0 0% 30%)     --border:   hsl(0 0% 80%)
+
+   --gradient:       linear-gradient de --bg-light para --bg (topo→base)
+   --gradient-hover: linear-gradient sólido --bg-light
+   --highlight:      borda superior clara (20% dark / 100% light)
+   --border-card:    solid 1px (30% dark / 85% light)
+
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+    /* ═══════════════════════════════════════════════════════════════════════
+       ACCENT: Amarelo Ambar (UNICA cor de destaque)
+       ═══════════════════════════════════════════════════════════════════════ */
+    --amber-40: hsl(45 100% 40%);
+    --amber-50: hsl(45 100% 50%);
+    --amber-55: hsl(45 95% 55%);
+    --amber-60: hsl(45 90% 60%);
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       SEMANTICAS: Apenas SUCCESS e DANGER
+       ═══════════════════════════════════════════════════════════════════════ */
+    --semantic-success: hsl(145 65% 40%);
+    --semantic-success-subtle: hsl(145 30% 15%);
+    --semantic-danger: hsl(0 70% 50%);
+    --semantic-danger-subtle: hsl(0 30% 15%);
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       TIPOGRAFIA
+       ═══════════════════════════════════════════════════════════════════════ */
+    --font-sans: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       BORDER RADIUS
+       ═══════════════════════════════════════════════════════════════════════ */
+    --radius-sm: 0.25rem;
+    --radius-md: 0.5rem;
+    --radius-lg: 1rem;
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       SHADOW (sutil)
+       ═══════════════════════════════════════════════════════════════════════ */
+    --shadow: 0 2px 2px hsla(0 0% 0% / 0.07), 0 4px 4px hsla(0 0% 0% / 0.15);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DARK MODE (Padrão)
+   bg-dark 0%, bg 5%, bg-light 10%, text 95%, text-muted 70%
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root,
+[data-bs-theme="dark"],
+[data-theme="dark"] {
+    /* 4 tons de background (0% → 5% → 10% → 15%) */
+    --bg-dark: hsl(0 0% 0%);     /* body */
+    --bg: hsl(0 0% 5%);          /* gradients, cards */
+    --bg-light: hsl(0 0% 10%);   /* tabela, inputs */
+    --bg-button: hsl(0 0% 15%);  /* botões */
+
+    /* 2 tons de texto (95% → 70%) */
+    --text: hsl(0 0% 95%);
+    --text-muted: hsl(0 0% 70%);
+
+    /* Borda (30%) */
+    --border: hsl(0 0% 30%);
+
+    /* Gradients e Detalhes */
+    --gradient: linear-gradient(180deg, var(--bg-light), var(--bg));
+    --gradient-hover: linear-gradient(180deg, var(--bg-light), var(--bg-light));
+    --highlight: hsl(0 0% 20%);
+    --border-card: solid 1px var(--border);
+
+    /* Bootstrap mapping */
+    --bs-body-bg: var(--bg-dark);
+    --bs-body-color: var(--text);
+    --bs-secondary-bg: var(--bg-light);
+    --bs-tertiary-bg: var(--bg-light);
+    --bs-border-color: var(--border);
+    --bs-secondary-color: var(--text-muted);
+    --bs-primary: var(--amber-55);
+    --bs-primary-rgb: 255, 212, 38;
+    --bs-success: var(--semantic-success);
+    --bs-success-rgb: 34, 197, 94;
+    --bs-danger: var(--semantic-danger);
+    --bs-danger-rgb: 239, 68, 68;
+    --bs-warning: var(--amber-50);
+    --bs-warning-rgb: 255, 200, 0;
+    --bs-secondary: hsl(0 0% 40%);
+    --bs-info: hsl(0 0% 50%);
+    --bs-info-rgb: 128, 128, 128;
+    --bs-link-color: var(--amber-55);
+
+    color-scheme: dark;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LIGHT MODE
+   bg-dark 90%, bg 95%, bg-light 100%, text 5%, text-muted 30%
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+[data-bs-theme="light"],
+[data-theme="light"] {
+    /* 4 tons de background (90% → 95% → 100% → 100%) */
+    --bg-dark: hsl(0 0% 90%);     /* body */
+    --bg: hsl(0 0% 95%);          /* gradients */
+    --bg-light: hsl(0 0% 100%);   /* cards, inputs */
+    --bg-button: hsl(0 0% 100%);  /* botões (máximo no light) */
+
+    /* 2 tons de texto (5% → 30%) */
+    --text: hsl(0 0% 5%);
+    --text-muted: hsl(0 0% 30%);
+
+    /* Borda (80% - mais clara no light mode) */
+    --border: hsl(0 0% 80%);
+
+    /* Gradients e Detalhes */
+    --gradient: linear-gradient(180deg, var(--bg-light), var(--bg));
+    --gradient-hover: linear-gradient(180deg, var(--bg-light), var(--bg-light));
+    --highlight: hsl(0 0% 100%);
+    --border-card: solid 1px hsl(0 0% 85%);
+
+    /* Bootstrap mapping */
+    --bs-body-bg: var(--bg-dark);
+    --bs-body-color: var(--text);
+    --bs-secondary-bg: var(--bg-light);
+    --bs-tertiary-bg: var(--bg-light);
+    --bs-border-color: var(--border);
+    --bs-secondary-color: var(--text-muted);
+    --bs-primary: var(--amber-50);
+    --bs-primary-rgb: 255, 204, 0;
+    --bs-success: hsl(145 70% 32%);
+    --bs-success-rgb: 34, 139, 84;
+    --bs-danger: hsl(0 75% 45%);
+    --bs-danger-rgb: 200, 57, 57;
+    --bs-warning: var(--amber-50);
+    --bs-warning-rgb: 255, 193, 7;
+    --bs-secondary: hsl(0 0% 50%);
+    --bs-info: hsl(0 0% 50%);
+    --bs-info-rgb: 128, 128, 128;
+    --bs-link-color: var(--amber-40);
+
+    /* Semânticas light mode */
+    --semantic-success-subtle: hsl(145 40% 90%);
+    --semantic-danger-subtle: hsl(0 50% 92%);
+
+    color-scheme: light;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BODY - Background usa bg-dark (0% dark / 90% light)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+body {
+    background: var(--bg-dark);
+    color: var(--text-muted);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   COMPONENTES - BOTÕES
+   Hierarquia: bg-button (15% dark / 100% light) = 1 tom mais claro que cards
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.btn {
+    background: var(--bg-button);
+    color: var(--text);
+    font-weight: 700;
+    border-radius: var(--radius-md);
+    border: var(--border-card);
+    border-top: solid 1px var(--highlight);
+    transition: all 0.15s ease;
+}
+
+.btn:hover {
+    filter: brightness(1.1);
+}
+
+/* Primary - Accent Amarelo */
+.btn-primary {
+    background: var(--amber-55) !important;
+    color: hsl(0 0% 10%) !important;
+    border: none !important;
+    transition: box-shadow 0.2s;
+}
+
+.btn-primary:hover {
+    background: var(--amber-60) !important;
+    box-shadow: 0 0 6px 1px hsla(50 100% 55% / 0.7);
+}
+
+/* Secondary - Cinza neutro */
+.btn-secondary {
+    background: var(--bg-button) !important;
+    color: var(--text) !important;
+    border: 1px solid var(--border) !important;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.btn-secondary:hover {
+    background: var(--bg) !important;
+    border-color: hsl(50 100% 50%) !important;
+    box-shadow: 0 0 6px 1px hsla(50 100% 55% / 0.5);
+}
+
+/* Danger */
+.btn-danger {
+    background: var(--semantic-danger) !important;
+    color: hsl(0 0% 100%) !important;
+    border: none !important;
+}
+
+/* Success */
+.btn-success {
+    background: var(--semantic-success) !important;
+    color: hsl(0 0% 100%) !important;
+    border: none !important;
+}
+
+/* Link - transparente, sem background em todos os estados */
+.btn-link,
+.btn-link:hover,
+.btn-link:focus,
+.btn-link:active {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* Outline - todos usam borda */
+.btn-outline-primary,
+.btn-outline-secondary,
+.btn-outline-info {
+    background: transparent !important;
+    color: var(--text) !important;
+    border: 1px solid var(--border) !important;
+}
+
+.btn-outline-primary:hover,
+.btn-outline-secondary:hover,
+.btn-outline-info:hover {
+    background: var(--bg-light) !important;
+}
+
+.btn-outline-danger {
+    background: transparent !important;
+    color: var(--semantic-danger) !important;
+    border: 1px solid var(--semantic-danger) !important;
+}
+
+.btn-outline-danger:hover {
+    background: var(--semantic-danger) !important;
+    color: hsl(0 0% 100%) !important;
+}
+
+.btn-outline-success {
+    background: transparent !important;
+    color: var(--semantic-success) !important;
+    border: 1px solid var(--semantic-success) !important;
+}
+
+.btn-outline-success:hover {
+    background: var(--semantic-success) !important;
+    color: hsl(0 0% 100%) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   COMPONENTES - CARDS
+   Hierarquia: --bg (5% dark / 95% light) = tom intermediário
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.card {
+    background: var(--bg);
+    border: var(--border-card);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.card:hover {
+    border-color: hsl(50 100% 50%);
+    box-shadow: 0 0 6px 1px hsla(50 100% 55% / 0.6);
+}
+
+.card-body {
+    color: var(--text);
+}
+
+.card-header {
+    background: transparent;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+}
+
+.card-footer {
+    background: transparent;
+    border-top: 1px solid var(--border);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   COMPONENTES - INPUTS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.form-control,
+.form-select {
+    background: var(--bg-light);
+    border: var(--border-card);
+    color: var(--text);
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: hsl(50 100% 50%);
+    box-shadow: 0 0 6px 1px hsla(50 100% 55% / 0.6);
+    outline: none;
+}
+
+.form-control::placeholder {
+    color: var(--text-muted);
+}
+
+/* Estados de input */
+.input-state-warning {
+    border-color: var(--amber-50) !important;
+}
+
+.input-state-danger {
+    border-color: var(--semantic-danger) !important;
+}
+
+.input-state-success {
+    border-color: var(--semantic-success) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   COMPONENTES - BADGES (HSL direto)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.badge {
+    font-weight: 500;
+    font-size: 0.75rem;
+    padding: 0.35em 0.65em;
+    border-radius: var(--radius-sm);
+}
+
+/* SECONDARY - Cinza 40% */
+.badge-secondary, .badge.bg-secondary {
+    background: hsl(0 0% 40%) !important;
+    color: hsl(0 0% 100%) !important;
+}
+
+/* PRIMARY - Amarelo */
+.badge-primary, .badge.bg-primary {
+    background: hsl(45 100% 55%) !important;
+    color: hsl(0 0% 10%) !important;
+}
+
+/* SUCCESS - Verde */
+.badge-success, .badge.bg-success {
+    background: hsl(145 65% 40%) !important;
+    color: hsl(0 0% 100%) !important;
+}
+
+/* DANGER - Vermelho */
+.badge-danger, .badge.bg-danger {
+    background: hsl(0 70% 50%) !important;
+    color: hsl(0 0% 100%) !important;
+}
+
+/* WARNING - Amarelo escuro */
+.badge-warning, .badge.bg-warning {
+    background: hsl(45 100% 50%) !important;
+    color: hsl(0 0% 10%) !important;
+}
+
+/* INFO - Cinza 45% */
+.badge-info, .badge.bg-info {
+    background: hsl(0 0% 45%) !important;
+    color: hsl(0 0% 100%) !important;
+}
+
+/* LIGHT - Adaptativo */
+.badge.bg-light {
+    background: var(--bg-light) !important;
+    color: var(--text) !important;
+    border: 1px solid var(--border) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   COMPONENTES - TABLES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.table {
+    color: var(--text);
+    background-color: var(--bg-light);
+}
+
+.table > thead {
+    background: var(--bg-light);
+}
+
+.table > thead th {
+    background: var(--bg-light);
+    color: var(--text);
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    border-bottom: 2px solid var(--border);
+}
+
+/* thead com contraste */
+.table-thead-theme,
+.table-thead-theme th {
+    background-color: var(--bg-light) !important;
+    color: var(--text) !important;
+    border-bottom: 2px solid var(--border) !important;
+}
+
+.table > tbody > tr:hover {
+    background: hsla(0 0% 50% / 0.05);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   COMPONENTES - MODALS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.modal-content {
+    background: var(--gradient);
+    border: var(--border-card);
+    border-top: solid 1px var(--highlight);
+    box-shadow: var(--shadow);
+}
+
+.modal-header {
+    background: transparent;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+}
+
+.modal-footer {
+    background: transparent;
+    border-top: 1px solid var(--border);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   COMPONENTES - DROPDOWNS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.dropdown-menu {
+    background: var(--gradient);
+    border: var(--border-card);
+    border-top: solid 1px var(--highlight);
+    box-shadow: var(--shadow);
+}
+
+.dropdown-item {
+    color: var(--text);
+}
+
+.dropdown-item:hover {
+    background: var(--bg-light);
+    color: var(--text);
+}
+
+.dropdown-item.active {
+    background: var(--amber-55);
+    color: hsl(0 0% 10%);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   COMPONENTES - ALERTS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.alert {
+    border: var(--border-card);
+    border-top: solid 1px var(--highlight);
+    border-left-width: 3px;
+    background: var(--gradient);
+    color: var(--text);
+}
+
+.alert-success {
+    border-left-color: var(--semantic-success);
+}
+
+.alert-danger {
+    border-left-color: var(--semantic-danger);
+}
+
+.alert-warning {
+    border-left-color: var(--amber-50);
+}
+
+.alert-info {
+    border-left-color: var(--border);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   UTILITIES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Backgrounds */
+.bg-light { background-color: var(--bg-light) !important; }
+.bg-dark { background-color: var(--bg-dark) !important; }
+
+/* Texto */
+.text-muted { color: var(--text-muted) !important; }
+.text-primary { color: var(--amber-55) !important; }
+.text-success { color: var(--semantic-success) !important; }
+.text-danger { color: var(--semantic-danger) !important; }
+.text-warning { color: var(--amber-50) !important; }
+.text-info { color: var(--text-muted) !important; }
+.text-secondary { color: var(--text-muted) !important; }
+.text-dark { color: var(--text) !important; }
+.text-body { color: var(--text) !important; }
+
+/* Links */
+a { color: var(--bs-link-color); }
+a:hover { filter: brightness(1.1); }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: hsl(0 0% 25%); border-radius: 3px; }
+* { scrollbar-width: thin; scrollbar-color: hsl(0 0% 25%) transparent; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   REDUCED MOTION SUPPORT
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   COMPATIBILIDADE BOOTSTRAP 4 → 5
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* text-gray-* */
+.text-gray-800 { color: var(--text) !important; }
+.text-gray-300 { color: var(--text-muted) !important; }
+
+/* font-weight-bold → fw-bold */
+.font-weight-bold { font-weight: 600 !important; }
+
+/* text-xs */
+.text-xs { font-size: 0.75rem !important; }
+
+/* no-gutters → g-0 */
+.no-gutters { --bs-gutter-x: 0; --bs-gutter-y: 0; }
+.no-gutters > .col, .no-gutters > [class*="col-"] { padding-right: 0; padding-left: 0; }
+
+/* mr-* → me-* */
+.mr-1 { margin-right: 0.25rem !important; }
+.mr-2 { margin-right: 0.5rem !important; }
+.mr-3 { margin-right: 1rem !important; }
+
+/* ml-* → ms-* */
+.ml-1 { margin-left: 0.25rem !important; }
+.ml-2 { margin-left: 0.5rem !important; }
+.ml-3 { margin-left: 1rem !important; }
+
+/* border-left-* */
+.border-left-primary { border-left: 3px solid var(--amber-55) !important; }
+.border-left-success { border-left: 3px solid var(--semantic-success) !important; }
+.border-left-danger { border-left: 3px solid var(--semantic-danger) !important; }
+.border-left-warning { border-left: 3px solid var(--amber-50) !important; }
+.border-left-info, .border-left-secondary { border-left: 3px solid var(--border) !important; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   VARIÁVEIS LEGADAS - Para compatibilidade com arquivos não migrados
+   REMOVER quando todos os arquivos usarem as novas variáveis
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root,
+[data-bs-theme="dark"],
+[data-theme="dark"] {
+    /* Gray scale (dark mode) */
+    --gray-0: hsl(0 0% 0%);
+    --gray-5: hsl(0 0% 5%);
+    --gray-8: hsl(0 0% 8%);
+    --gray-10: hsl(0 0% 10%);
+    --gray-15: hsl(0 0% 15%);
+    --gray-20: hsl(0 0% 20%);
+    --gray-25: hsl(0 0% 25%);
+    --gray-30: hsl(0 0% 30%);
+    --gray-35: hsl(0 0% 35%);
+    --gray-40: hsl(0 0% 40%);
+    --gray-45: hsl(0 0% 45%);
+    --gray-50: hsl(0 0% 50%);
+    --gray-55: hsl(0 0% 55%);
+    --gray-60: hsl(0 0% 60%);
+    --gray-65: hsl(0 0% 65%);
+    --gray-70: hsl(0 0% 70%);
+    --gray-75: hsl(0 0% 75%);
+    --gray-80: hsl(0 0% 80%);
+    --gray-85: hsl(0 0% 85%);
+    --gray-88: hsl(0 0% 88%);
+    --gray-90: hsl(0 0% 90%);
+    --gray-95: hsl(0 0% 95%);
+    --gray-100: hsl(0 0% 100%);
+
+    /* Aliases legados */
+    --bg-surface: var(--bg);
+    --bg-elevated: var(--bg-light);
+    --bg-overlay: var(--bg-light);
+    --text-primary: var(--text);
+    --text-secondary: var(--text-muted);
+    --border-default: var(--border);
+    --accent-primary: var(--amber-55);
+
+    /* Semantic legado */
+    --semantic-warning: var(--amber-50);
+    --semantic-warning-subtle: hsla(45 100% 50% / 0.15);
+    --semantic-warning-text: var(--amber-50);
+    --semantic-success-text: var(--semantic-success);
+    --semantic-danger-text: var(--semantic-danger);
+    --semantic-info-text: var(--text-muted);
+
+    /* Shadows legado */
+    --shadow-sm: 0 1px 2px hsla(0 0% 0% / 0.05);
+    --shadow-md: var(--shadow);
+    --shadow-lg: 0 4px 8px hsla(0 0% 0% / 0.15), 0 8px 16px hsla(0 0% 0% / 0.2);
+
+    /* Transitions legado */
+    --transition-fast: 0.15s ease;
+    --transition-normal: 0.25s ease;
+
+    /* Spacing legado */
+    --space-1: 0.25rem;
+    --space-2: 0.5rem;
+    --space-3: 0.75rem;
+    --space-4: 1rem;
+    --space-5: 1.5rem;
+    --space-6: 2rem;
+}
+
+[data-bs-theme="light"],
+[data-theme="light"] {
+    /* Aliases legados para light mode */
+    --bg-surface: var(--bg);
+    --bg-elevated: var(--bg-light);
+    --bg-overlay: var(--bg-light);
+    --text-primary: var(--text);
+    --text-secondary: var(--text-muted);
+    --border-default: var(--border);
+
+    /* Semantic legado light */
+    --semantic-warning-subtle: hsla(45 100% 50% / 0.15);
+    --semantic-warning-text: hsl(45 100% 35%);
+    --semantic-success-text: hsl(145 70% 30%);
+    --semantic-danger-text: hsl(0 75% 40%);
+    --semantic-info-text: var(--text-muted);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PRINT STYLES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media print {
+    body {
+        background: white !important;
+        color: black !important;
+    }
+
+    .card {
+        border: 1px solid #ddd !important;
+        box-shadow: none !important;
+    }
+
+    .navbar,
+    .btn-close,
+    .dropdown-menu {
+        display: none !important;
+    }
+}

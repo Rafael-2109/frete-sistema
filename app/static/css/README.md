@@ -242,10 +242,57 @@ const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark'
 
 ---
 
+## Versionamento de CSS (Cache Busting)
+
+Para forcar o navegador a recarregar o CSS apos mudancas, use query parameter `?v=N`:
+
+```jinja2
+<!-- Em base.html e templates que carregam CSS -->
+<link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap-overrides.css') }}?v=6">
+```
+
+**Quando incrementar a versao:**
+- Qualquer mudanca em `_variables.css`
+- Mudancas de cor ou layout
+- Adicao de novas classes
+
+**Versao atual**: `?v=6` (2025-12-18)
+
+---
+
+## Sistema de Badges de Filtro
+
+Badges de filtro (agendamento, atendimento, cliente) seguem padrao minimalista:
+
+### Estado Normal (nao selecionado)
+```css
+.badge-agendamento-* {
+    background-color: transparent;
+    border: 1px solid hsl(0, 0%, 70%);
+    color: hsl(0, 0%, 40%);
+}
+```
+
+### Estado Ativo (selecionado)
+```css
+.badge-agendamento-*.ativo {
+    background-color: hsl(0, 0%, 30%);
+    border-color: hsl(0, 0%, 30%);
+    color: white;
+}
+```
+
+### Excecoes Semanticas
+- `.badge-atendimento-importante` → Usa `var(--bs-warning)` (amarelo)
+- Demais badges → Escala de cinza APENAS
+
+---
+
 ## Historico de Mudancas
 
 | Data | Versao | Descricao |
 |------|--------|-----------|
+| 2025-12-18 | 2.2.0 | Versionamento CSS (?v=6), badges de filtro cinza, correcoes light mode |
 | 2025-12-17 | 2.1.0 | Adicionados `.stat-card` e `.btn-action` para padronizar dashboards |
 | 2025-12-17 | 2.0.0 | Reorganizacao completa, centralizacao de variaveis, modularizacao |
 | 2025-XX-XX | 1.0.0 | Estrutura inicial |

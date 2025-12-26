@@ -73,8 +73,8 @@ class PortalAtacadao {
                     showCancelButton: true,
                     confirmButtonText: 'Continuar',
                     cancelButtonText: 'Cadastrar De-Para',
-                    confirmButtonColor: '#ffc107',
-                    cancelButtonColor: '#007bff'
+                    confirmButtonColor: window.Notifications?.colors?.warning || '#ffc107',
+                    cancelButtonColor: window.Notifications?.colors?.neutral || '#6c757d'
                 });
 
                 if (result.dismiss === Swal.DismissReason.cancel) {
@@ -344,8 +344,8 @@ class PortalAtacadao {
                 showConfirmButton: !separacao || !separacao.protocolo,
                 confirmButtonText: 'Agendar Agora',
                 cancelButtonText: verificacao.sem_depara > 0 ? 'Cadastrar De-Para' : 'Fechar',
-                confirmButtonColor: '#28a745',
-                cancelButtonColor: verificacao.sem_depara > 0 ? '#007bff' : '#6c757d'
+                confirmButtonColor: window.Notifications?.colors?.success || '#28a745',
+                cancelButtonColor: window.Notifications?.colors?.neutral || '#6c757d'
             });
 
             if (result.isConfirmed && (!separacao || !separacao.protocolo)) {
@@ -415,10 +415,10 @@ class PortalAtacadao {
                             font-weight: 600;
                         }
                         .linha-divergencia {
-                            background-color: #ffebee !important;
+                            background-color: var(--semantic-danger-subtle, #ffebee) !important;
                         }
                         .texto-divergencia {
-                            color: #c62828;
+                            color: var(--semantic-danger, #c62828);
                             font-weight: 600;
                         }
                         .badge-diferenca {
@@ -447,7 +447,7 @@ class PortalAtacadao {
                         <div class="row">
                             <div class="col-12">
                                 <div class="card">
-                                    <div class="card-header bg-primary text-white py-2">
+                                    <div class="card-header py-2">
                                         <h6 class="mb-0">
                                             <i class="fas fa-exchange-alt"></i> Comparação de Produtos
                                         </h6>
@@ -563,7 +563,9 @@ class PortalAtacadao {
                     width: '1100px',
                     showCancelButton: false,
                     confirmButtonText: data.agendamento_confirmado ? 'OK' : 'Atualizar Status',
-                    confirmButtonColor: data.agendamento_confirmado ? '#28a745' : '#ffc107'
+                    confirmButtonColor: data.agendamento_confirmado
+                        ? (window.Notifications?.colors?.success || '#28a745')
+                        : (window.Notifications?.colors?.warning || '#ffc107')
                 }).then((result) => {
                     if (result.isConfirmed && !data.agendamento_confirmado) {
                         // Atualizar status da separação
