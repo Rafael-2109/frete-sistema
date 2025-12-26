@@ -105,7 +105,7 @@ def editar_frete(frete_id):
 ```html
 {% if ctes_sugeridos and ctes_sugeridos|length > 1 %}
 <div class="card mb-4 border-info">
-    <div class="card-header bg-info text-white">
+    <div class="card-header bg-info">
         <h5 class="mb-0">
             <i class="fas fa-search"></i> CTes Sugeridos ({{ ctes_sugeridos|length }} encontrados)
         </h5>

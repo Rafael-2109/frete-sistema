@@ -1114,7 +1114,7 @@ def resolver_cidades_multiplas(cidades: list, fonte: str = 'separacao', apenas_p
 # RESOLVER PRODUTO
 # Busca por tokenizacao em CadastroPalletizacao
 # ============================================================
-def resolver_produto(termo: str, limit: int = 10):
+def resolver_produto(termo: str, limit: int = 50):
     """
     Resolve termo de produto usando tokenizacao e busca em CadastroPalletizacao.
 
@@ -1210,10 +1210,11 @@ def resolver_produto(termo: str, limit: int = 10):
 
     filtro_final = and_(*filtros)
 
-    # Buscar produtos ativos
+    # Buscar produtos ativos E vendidos (exclui etiquetas, intermediarios, etc)
     produtos = CadastroPalletizacao.query.filter(
         filtro_final,
-        CadastroPalletizacao.ativo == True
+        CadastroPalletizacao.ativo == True,
+        CadastroPalletizacao.produto_vendido == True
     ).limit(limit * 3).all()  # Buscar mais para depois ordenar
 
     if not produtos:
@@ -1324,6 +1325,90 @@ def resolver_produto_unico(termo: str):
     return None, info
 
 
+def resolver_produtos_na_carteira_cliente(termo: str, cnpjs: list) -> dict:
+    """
+    Busca todos os candidatos de produto na carteira do cliente.
+    NÃO para quando múltiplos - retorna todos para IA decidir.
+
+    Esta função implementa a filosofia 50% regra / 50% IA:
+    - Script faz: resolver candidatos, buscar na carteira, agrupar
+    - IA decide: como apresentar, se perguntar, como agrupar
+
+    Args:
+        termo: Termo de busca do produto (ex: "palmito")
+        cnpjs: Lista de CNPJs do cliente/grupo
+
+    Returns:
+        dict com:
+        - sucesso: bool
+        - candidatos_cadastro: lista de produtos do cadastro que batem
+        - itens_carteira: lista de produtos com saldo na carteira do cliente
+        - total_skus: quantidade de SKUs encontrados
+        - ia_decide: True (flag para indicar que IA deve processar)
+    """
+    from app.carteira.models import CarteiraPrincipal
+
+    # 1. Resolver candidatos no cadastro
+    candidatos = resolver_produto(termo, limit=50)
+    cod_produtos = [c['cod_produto'] for c in candidatos]
+
+    if not cod_produtos:
+        return {
+            'sucesso': False,
+            'erro': f'Nenhum produto encontrado para "{termo}"',
+            'candidatos_cadastro': [],
+            'itens_carteira': [],
+            'total_skus': 0,
+            'ia_decide': True
+        }
+
+    # 2. Buscar na CarteiraPrincipal do cliente
+    itens = CarteiraPrincipal.query.filter(
+        CarteiraPrincipal.cnpj_cpf.in_(cnpjs),
+        CarteiraPrincipal.cod_produto.in_(cod_produtos),
+        CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+    ).all()
+
+    # 3. Agrupar por produto
+    por_produto = {}
+    for item in itens:
+        cod = item.cod_produto
+        if cod not in por_produto:
+            por_produto[cod] = {
+                'cod_produto': cod,
+                'nome_produto': item.nome_produto,
+                'qtd_total': 0,
+                'valor_total': 0,
+                'pedidos': [],
+                'clientes': set()
+            }
+        por_produto[cod]['qtd_total'] += float(item.qtd_saldo_produto_pedido or 0)
+        por_produto[cod]['valor_total'] += float(item.qtd_saldo_produto_pedido or 0) * float(item.preco_produto_pedido or 0)
+        if item.num_pedido not in por_produto[cod]['pedidos']:
+            por_produto[cod]['pedidos'].append(item.num_pedido)
+        por_produto[cod]['clientes'].add(item.raz_social_red or item.cnpj_cpf)
+
+    # Converter sets para listas para serialização JSON
+    itens_carteira = []
+    for cod, dados in por_produto.items():
+        dados['clientes'] = list(dados['clientes'])
+        dados['num_pedidos'] = len(dados['pedidos'])
+        itens_carteira.append(dados)
+
+    # Ordenar por quantidade (maior primeiro)
+    itens_carteira.sort(key=lambda x: -x['qtd_total'])
+
+    return {
+        'sucesso': True,
+        'candidatos_cadastro': candidatos,
+        'itens_carteira': itens_carteira,
+        'total_skus': len(por_produto),
+        'total_quantidade': sum(p['qtd_total'] for p in itens_carteira),
+        'total_valor': sum(p['valor_total'] for p in itens_carteira),
+        'ia_decide': True
+    }
+
+
 # ============================================================
 # FUNCOES AUXILIARES
 # ============================================================
@@ -1384,7 +1469,7 @@ def formatar_sugestao_produto(info: dict) -> str:
         candidatos = info.get('candidatos', [])
         lista = '\n'.join([
             f"  - {c['cod_produto']}: {c['nome_produto']}"
-            for c in candidatos[:5]
+            for c in candidatos  # Sem limite - IA decide como apresentar
         ])
         return (
             f"Multiplos produtos encontrados para '{info['termo_original']}':\n{lista}\n"

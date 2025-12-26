@@ -133,6 +133,55 @@ ANTES de escolher qualquer script, faca este raciocinio mentalmente:
 
 ---
 
+### Leitura de References (Sob Demanda)
+
+<filosofia_50_50>
+**FILOSOFIA: 50% Regra / 50% IA**
+
+Esta skill implementa um equilibrio entre scripts e IA:
+
+**SCRIPTS fazem:**
+- Resolver entidades (cliente, grupo, produto)
+- Buscar dados no banco
+- Retornar TODOS os candidatos (sem truncar)
+
+**IA decide:**
+- Como agrupar/apresentar resultados
+- Se precisa perguntar algo ao usuario
+- Quando usar references para contexto
+</filosofia_50_50>
+
+<leitura_references>
+ANTES de executar scripts, o agente DEVE ler os references relevantes baseado na pergunta:
+
+| Gatilho na Pergunta | Reference a Ler | Motivo |
+|---------------------|-----------------|--------|
+| Produto mencionado | `references/products.md` | Entender abreviacoes (CI, AZ VF, BD) |
+| Cliente/Grupo | `references/business.md` | Prefixos CNPJ, constantes |
+| Termo desconhecido | `references/glossary.md` | "matar", "ruptura", "FOB" |
+| Variacao de escrita | `references/synonyms.md` | ketchup→catchup |
+| Comunicar PCP/Comercial | `references/communication.md` | Templates de mensagem |
+| Duvida de script | `references/examples.md` | Validar escolha |
+</leitura_references>
+
+<exemplo_fluxo_50_50>
+**Exemplo de Fluxo Completo**
+
+Pergunta: "quanto tem de palmito pro atacadao 183"
+
+1. IA le `references/glossary.md` → "pendente" = qtd_saldo > 0
+2. IA le `references/business.md` → atacadao = grupo com prefixos CNPJ
+3. IA executa: `python consultando_situacao_pedidos.py --grupo atacadao --produto palmito`
+4. Script encontra 18 candidatos de palmito
+5. Script busca TODOS na carteira do cliente (nao para por multiplos)
+6. Script retorna 2 SKUs com saldo: Tolete 15x300g (2.592 un), Rodela 15x300g (1.053 un)
+7. IA apresenta tabela consolidada ao usuario
+
+**IMPORTANTE:** Quando script retorna `ia_decide: true`, a IA DEVE processar os dados e decidir a melhor forma de apresentar.
+</exemplo_fluxo_50_50>
+
+---
+
 ### Termos Ambiguos - PERGUNTE antes de agir!
 
 <termos_ambiguos>

@@ -7,13 +7,13 @@
  * - Carregamento AJAX de projeção -D7 a +D7
  */
 
-(function() {
+(function () {
     'use strict';
 
     // ========================================
     // Inicialização
     // ========================================
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function () {
         console.log('[REQUISICOES] Módulo carregado');
 
         // Inicializar componentes
@@ -30,7 +30,7 @@
             document.querySelectorAll('[data-bs-toggle="tooltip"], [title]')
         );
 
-        tooltipTriggerList.forEach(function(tooltipTriggerEl) {
+        tooltipTriggerList.forEach(function (tooltipTriggerEl) {
             if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
                 new bootstrap.Tooltip(tooltipTriggerEl);
             }
@@ -48,7 +48,7 @@
         // Limpar filtros
         const btnLimpar = formFiltros.querySelector('a[href*="listar_requisicoes"]:not([href*="?"])');
         if (btnLimpar) {
-            btnLimpar.addEventListener('click', function(e) {
+            btnLimpar.addEventListener('click', function (e) {
                 e.preventDefault();
                 formFiltros.reset();
                 window.location.href = btnLimpar.getAttribute('href');
@@ -64,7 +64,7 @@
         console.log('[PROJECAO] Botões encontrados:', botoes.length);
 
         botoes.forEach(botao => {
-            botao.addEventListener('click', function(e) {
+            botao.addEventListener('click', function (e) {
                 e.stopPropagation(); // Evitar propagação
 
                 const linha = this.closest('tr.linha-produto');  // ✅ MUDOU: linha-produto
@@ -246,7 +246,7 @@
     function renderizarPedidosVinculados(pedidos) {
         let html = `
             <div class="card mb-3">
-                <div class="card-header bg-info text-white">
+                <div class="card-header bg-info">
                     <h6 class="mb-0"><i class="fas fa-link"></i> Pedidos de Compra Vinculados</h6>
                 </div>
                 <div class="card-body">

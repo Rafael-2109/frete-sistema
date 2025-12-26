@@ -70,7 +70,8 @@
           <tfoot class="table-secondary fw-bold">
             <tr>
               <td colspan="6">Totais:</td>
-              <td class="text-end">R$ {{ "%.0f"|format(pedidos_selecionados|sum(attribute='valor_saldo_total') or 0) }}</td>
+              <td class="text-end">R$ {{ "%.0f"|format(pedidos_selecionados|sum(attribute='valor_saldo_total') or 0) }}
+              </td>
               <td class="text-end">{{ "%.1f"|format(pedidos_selecionados|sum(attribute='pallet_total') or 0) }}</td>
               <td class="text-end">{{ "%.0f"|format(pedidos_selecionados|sum(attribute='peso_total') or 0) }} kg</td>
               <td></td>
@@ -87,9 +88,8 @@
     <!-- Seção Carga Direta -->
     <div class="accordion-item shadow-sm">
       <h2 class="accordion-header" id="headingDireta">
-        <button class="accordion-button" type="button" data-bs-toggle="collapse"
-                data-bs-target="#collapseDireta" aria-expanded="true"
-                aria-controls="collapseDireta">
+        <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseDireta"
+          aria-expanded="true" aria-controls="collapseDireta">
           <div class="d-flex align-items-center">
             <i class="fas fa-truck me-2"></i>
             <strong class="me-2">Carga Direta</strong>
@@ -97,8 +97,8 @@
           </div>
         </button>
       </h2>
-      <div id="collapseDireta" class="accordion-collapse collapse show"
-           aria-labelledby="headingDireta" data-bs-parent="#accordionFretes">
+      <div id="collapseDireta" class="accordion-collapse collapse show" aria-labelledby="headingDireta"
+        data-bs-parent="#accordionFretes">
         <div class="accordion-body p-0">
           <div class="table-responsive">
             <table class="table table-hover mb-0">
@@ -126,18 +126,14 @@
                   <td class="text-end">R$ {{ "%.2f"|format(opcao.valor_liquido / peso_total) }}</td>
                   <td>
                     <div class="btn-group">
-                      <button class="btn btn-success btn-sm fechar-frete"
-                              data-opcao-id="{{ loop.index0 }}"
-                              data-tipo="direta"
-                              data-indice="{{ opcao.indice_original }}"
-                              data-transportadora-id="{{ opcao.transportadora_id }}"
-                              data-modalidade="{{ opcao.modalidade }}"
-                              data-nome-tabela="{{ opcao.nome_tabela }}"
-                              data-opcao-completa='{{ opcao|tojson|safe }}'>
+                      <button class="btn btn-success btn-sm fechar-frete" data-opcao-id="{{ loop.index0 }}"
+                        data-tipo="direta" data-indice="{{ opcao.indice_original }}"
+                        data-transportadora-id="{{ opcao.transportadora_id }}" data-modalidade="{{ opcao.modalidade }}"
+                        data-nome-tabela="{{ opcao.nome_tabela }}" data-opcao-completa='{{ opcao|tojson|safe }}'>
                         <i class="fas fa-check"></i> Fechar
                       </button>
-                      <a href="{{ url_for('cotacao.otimizar', opcao_id=loop.index0, tipo='direta', indice=opcao.indice_original) }}" 
-                         class="btn btn-info btn-sm">
+                      <a href="{{ url_for('cotacao.otimizar', opcao_id=loop.index0, tipo='direta', indice=opcao.indice_original) }}"
+                        class="btn btn-info btn-sm">
                         <i class="fas fa-chart-line"></i> Otimizador
                       </a>
                     </div>
@@ -145,50 +141,55 @@
                 </tr>
                 <!-- Embarques compatíveis para esta cotação específica -->
                 {% if embarques_compativeis_direta %}
-                  {% for embarque_info in embarques_compativeis_direta %}
-                    {% if embarque_info.embarque.transportadora_id == opcao.transportadora_id and embarque_info.embarque.modalidade == opcao.modalidade %}
-                    <tr class="table-light border-start border-primary border-3">
-                      <td colspan="2" class="ps-4">
-                        <small class="text-muted">
-                          <i class="fas fa-arrow-right me-1"></i>
-                          Embarque #{{ embarque_info.embarque.numero }}
-                        </small>
-                      </td>
-                      <td><small>{{ embarque_info.embarque.data_prevista_embarque | formatar_data_segura if embarque_info.embarque.data_prevista_embarque else '-' }}</small></td>
-                      <td><small>{{ embarque_info.qtd_cnpjs }} CNPJs</small></td>
-                      <td class="text-end"><small>{{ "%.0f"|format(embarque_info.embarque.total_peso_pedidos()) }} kg</small></td>
-                      <td class="text-end">
-                        <small>
-                          {% if embarque_info.capacidade_restante >= 0 %}
-                            <span class="text-success">{{ "%.0f"|format(embarque_info.capacidade_restante) }} kg restante</span>
-                          {% else %}
-                            <span class="text-danger">{{ "%.0f"|format(embarque_info.capacidade_restante) }} kg</span>
-                          {% endif %}
-                        </small>
-                      </td>
-                      <td class="text-end">
-                        <small>
-                          {% if embarque_info.acrescimo_valor > 0 %}
-                            <span class="text-warning">+R$ {{ "%.2f"|format(embarque_info.acrescimo_valor) }}</span>
-                          {% else %}
-                            <span class="text-success">R$ 0,00</span>
-                          {% endif %}
-                        </small>
-                      </td>
-                      <td>
-                        {% if embarque_info.tem_capacidade %}
-                          <button class="btn btn-outline-primary btn-sm" onclick="incluirEmEmbarque({{ embarque_info.embarque.id }}, 'DIRETA')">
-                            <i class="fas fa-plus"></i> Incluir
-                          </button>
-                        {% else %}
-                          <span class="badge bg-warning text-dark">
-                            <i class="fas fa-exclamation-triangle"></i> Sem Capacidade
-                          </span>
-                        {% endif %}
-                      </td>
-                    </tr>
+                {% for embarque_info in embarques_compativeis_direta %}
+                {% if embarque_info.embarque.transportadora_id == opcao.transportadora_id and
+                embarque_info.embarque.modalidade == opcao.modalidade %}
+                <tr class="table-light border-start border-primary border-3">
+                  <td colspan="2" class="ps-4">
+                    <small class="text-muted">
+                      <i class="fas fa-arrow-right me-1"></i>
+                      Embarque #{{ embarque_info.embarque.numero }}
+                    </small>
+                  </td>
+                  <td><small>{{ embarque_info.embarque.data_prevista_embarque | formatar_data_segura if
+                      embarque_info.embarque.data_prevista_embarque else '-' }}</small></td>
+                  <td><small>{{ embarque_info.qtd_cnpjs }} CNPJs</small></td>
+                  <td class="text-end"><small>{{ "%.0f"|format(embarque_info.embarque.total_peso_pedidos()) }}
+                      kg</small></td>
+                  <td class="text-end">
+                    <small>
+                      {% if embarque_info.capacidade_restante >= 0 %}
+                      <span class="text-success">{{ "%.0f"|format(embarque_info.capacidade_restante) }} kg
+                        restante</span>
+                      {% else %}
+                      <span class="text-danger">{{ "%.0f"|format(embarque_info.capacidade_restante) }} kg</span>
+                      {% endif %}
+                    </small>
+                  </td>
+                  <td class="text-end">
+                    <small>
+                      {% if embarque_info.acrescimo_valor > 0 %}
+                      <span class="text-warning">+R$ {{ "%.2f"|format(embarque_info.acrescimo_valor) }}</span>
+                      {% else %}
+                      <span class="text-success">R$ 0,00</span>
+                      {% endif %}
+                    </small>
+                  </td>
+                  <td>
+                    {% if embarque_info.tem_capacidade %}
+                    <button class="btn btn-outline-primary btn-sm"
+                      onclick="incluirEmEmbarque({{ embarque_info.embarque.id }}, 'DIRETA')">
+                      <i class="fas fa-plus"></i> Incluir
+                    </button>
+                    {% else %}
+                    <span class="badge bg-warning text-dark">
+                      <i class="fas fa-exclamation-triangle"></i> Sem Capacidade
+                    </span>
                     {% endif %}
-                  {% endfor %}
+                  </td>
+                </tr>
+                {% endif %}
+                {% endfor %}
                 {% endif %}
                 {% endfor %}
               </tbody>
@@ -198,16 +199,14 @@
         </div>
       </div>
     </div>
-  {% endif %}
+    {% endif %}
 
     <!-- Seção Carga Fracionada -->
     <div class="accordion-item shadow-sm">
       <h2 class="accordion-header" id="headingFracionada">
-        <button class="accordion-button {% if not todos_mesmo_uf %}active{% else %}collapsed{% endif %}" 
-                type="button" data-bs-toggle="collapse"
-                data-bs-target="#collapseFracionada" 
-                aria-expanded="{% if not todos_mesmo_uf %}true{% else %}false{% endif %}"
-                aria-controls="collapseFracionada">
+        <button class="accordion-button {% if not todos_mesmo_uf %}active{% else %}collapsed{% endif %}" type="button"
+          data-bs-toggle="collapse" data-bs-target="#collapseFracionada"
+          aria-expanded="{% if not todos_mesmo_uf %}true{% else %}false{% endif %}" aria-controls="collapseFracionada">
           <div class="d-flex align-items-center">
             <i class="fas fa-boxes me-2"></i>
             <strong class="me-2">Carga Fracionada</strong>
@@ -215,10 +214,8 @@
           </div>
         </button>
       </h2>
-      <div id="collapseFracionada" 
-           class="accordion-collapse collapse {% if not todos_mesmo_uf %}show{% endif %}"
-           aria-labelledby="headingFracionada" 
-           data-bs-parent="#accordionFretes">
+      <div id="collapseFracionada" class="accordion-collapse collapse {% if not todos_mesmo_uf %}show{% endif %}"
+        aria-labelledby="headingFracionada" data-bs-parent="#accordionFretes">
         <div class="accordion-body">
           {# Botão para abrir modal de escolha por CNPJ #}
           <div class="mb-3">
@@ -235,9 +232,9 @@
               <div class="d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">{{ transportadora.razao_social }}</h5>
                 <button class="btn btn-success btn-sm fechar-frete-grupo"
-                        data-transportadora-id="{{ transportadora_id }}"
-                        data-cnpjs='{{ transportadora.cnpjs|map(attribute="cnpj")|list|tojson|safe }}'
-                        data-opcoes-cnpjs='{{ transportadora.cnpjs|tojson|safe }}'>
+                  data-transportadora-id="{{ transportadora_id }}"
+                  data-cnpjs='{{ transportadora.cnpjs|map(attribute="cnpj")|list|tojson|safe }}'
+                  data-opcoes-cnpjs='{{ transportadora.cnpjs|tojson|safe }}'>
                   <i class="fas fa-check me-1"></i>
                   Fechar Frete ({{ transportadora.cnpjs|length }} CNPJs)
                 </button>
@@ -279,10 +276,14 @@
                       <td colspan="3"><strong>Total</strong></td>
                       <td><strong>{{ "%.1f"|format(transportadora.cnpjs|sum(attribute="pallets_grupo")) }}</strong></td>
                       <td><strong>{{ "%.0f"|format(transportadora.cnpjs|sum(attribute="peso_grupo")) }} kg</strong></td>
-                      <td><strong>R$ {{ "%.0f"|format(transportadora.cnpjs|sum(attribute="valor_grupo")) }}</strong></td>
-                      <td><strong>R$ {{ "%.0f"|format(transportadora.cnpjs|sum(attribute="valor_total")) }}</strong></td>
-                      <td><strong>R$ {{ "%.0f"|format(transportadora.cnpjs|sum(attribute="valor_liquido")) }}</strong></td>
-                      <td><strong>R$ {{ "%.2f"|format(transportadora.cnpjs|sum(attribute="valor_liquido") / transportadora.cnpjs|sum(attribute="peso_grupo")) }}</strong></td>
+                      <td><strong>R$ {{ "%.0f"|format(transportadora.cnpjs|sum(attribute="valor_grupo")) }}</strong>
+                      </td>
+                      <td><strong>R$ {{ "%.0f"|format(transportadora.cnpjs|sum(attribute="valor_total")) }}</strong>
+                      </td>
+                      <td><strong>R$ {{ "%.0f"|format(transportadora.cnpjs|sum(attribute="valor_liquido")) }}</strong>
+                      </td>
+                      <td><strong>R$ {{ "%.2f"|format(transportadora.cnpjs|sum(attribute="valor_liquido") /
+                          transportadora.cnpjs|sum(attribute="peso_grupo")) }}</strong></td>
                     </tr>
                   </tfoot>
                 </table>
@@ -305,7 +306,7 @@
   <!-- Seção de Embarques Compatíveis para Carga Fracionada -->
   {% if embarques_compativeis_fracionada %}
   <div class="card mb-4 shadow-sm">
-    <div class="card-header bg-info text-white">
+    <div class="card-header bg-info">
       <h5 class="mb-0"><i class="fas fa-plus-circle"></i> Embarques Compatíveis para Inclusão</h5>
     </div>
     <div class="card-body">
@@ -331,14 +332,17 @@
                   #{{ embarque_info.embarque.numero }}
                 </a>
               </td>
-              <td>{{ embarque_info.embarque.transportadora.razao_social if embarque_info.embarque.transportadora else '-' }}</td>
-              <td>{{ embarque_info.embarque.data_prevista_embarque | formatar_data_segura if embarque_info.embarque.data_prevista_embarque else '-' }}</td>
+              <td>{{ embarque_info.embarque.transportadora.razao_social if embarque_info.embarque.transportadora else
+                '-' }}</td>
+              <td>{{ embarque_info.embarque.data_prevista_embarque | formatar_data_segura if
+                embarque_info.embarque.data_prevista_embarque else '-' }}</td>
               <td>R$ {{ "%.2f"|format(embarque_info.embarque.total_valor_pedidos()) }}</td>
               <td>{{ "%.2f"|format(embarque_info.embarque.total_pallet_pedidos()) }}</td>
               <td>{{ "%.0f"|format(embarque_info.embarque.total_peso_pedidos()) }} kg</td>
               <td>{{ embarque_info.qtd_cnpjs }} CNPJs</td>
               <td>
-                <button class="btn btn-primary btn-sm" onclick="incluirEmEmbarque({{ embarque_info.embarque.id }}, 'FRACIONADA')">
+                <button class="btn btn-primary btn-sm"
+                  onclick="incluirEmEmbarque({{ embarque_info.embarque.id }}, 'FRACIONADA')">
                   <i class="fas fa-plus"></i> Incluir ao Embarque
                 </button>
               </td>
@@ -401,8 +405,10 @@
               <h6 class="mb-0">
                 <strong>CNPJ:</strong> {{ cnpj }}
                 <span class="ms-3"><strong>Cliente:</strong> {{ pedidos[0].raz_social_red }}</span>
-                <span class="ms-3"><strong>Peso:</strong> {{ "%.0f"|format(pedidos|sum(attribute="peso_total")) }}kg</span>
-                <span class="ms-3"><strong>Valor:</strong> R$ {{ "%.0f"|format(pedidos|sum(attribute="valor_saldo_total")) }}</span>
+                <span class="ms-3"><strong>Peso:</strong> {{ "%.0f"|format(pedidos|sum(attribute="peso_total"))
+                  }}kg</span>
+                <span class="ms-3"><strong>Valor:</strong> R$ {{
+                  "%.0f"|format(pedidos|sum(attribute="valor_saldo_total")) }}</span>
               </h6>
               <span class="badge bg-secondary">{{ pedidos|length }} pedido(s)</span>
             </div>
@@ -422,36 +428,34 @@
                 </thead>
                 <tbody>
                   {% if opcoes_por_cnpj.get(cnpj) %}
-                    {% for opcao in opcoes_por_cnpj[cnpj] %}
-                      <tr>
-                        <td>{{ opcao.transportadora }}</td>
-                        <td>{{ opcao.nome_tabela|default('') }}</td>
-                        <td class="text-end">R$ {{ "%.0f"|format(opcao.valor_total) }}</td>
-                        <td class="text-end">R$ {{ "%.0f"|format(opcao.valor_liquido) }}</td>
-                        <td class="text-end">R$ {{ "%.2f"|format(opcao.frete_kg) }}</td>
-                        <td class="text-end">
-                          <div class="btn-group">
-                            <button class="btn btn-primary btn-sm escolher-transportadora"
-                                    data-transportadora-id="{{ opcao.transportadora_id }}"
-                                    data-transportadora-nome="{{ opcao.transportadora }}">
-                              <i class="fas fa-check me-1"></i>
-                              Escolher
-                            </button>
-                            <button class="btn btn-success btn-sm adicionar-cotacao"
-                                    style="display: none;"
-                                    data-cnpj="{{ cnpj }}"
-                                    data-transportadora-id="{{ opcao.transportadora_id }}">
-                              <i class="fas fa-plus me-1"></i>
-                              Adicionar à Cotação
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    {% endfor %}
+                  {% for opcao in opcoes_por_cnpj[cnpj] %}
+                  <tr>
+                    <td>{{ opcao.transportadora }}</td>
+                    <td>{{ opcao.nome_tabela|default('') }}</td>
+                    <td class="text-end">R$ {{ "%.0f"|format(opcao.valor_total) }}</td>
+                    <td class="text-end">R$ {{ "%.0f"|format(opcao.valor_liquido) }}</td>
+                    <td class="text-end">R$ {{ "%.2f"|format(opcao.frete_kg) }}</td>
+                    <td class="text-end">
+                      <div class="btn-group">
+                        <button class="btn btn-primary btn-sm escolher-transportadora"
+                          data-transportadora-id="{{ opcao.transportadora_id }}"
+                          data-transportadora-nome="{{ opcao.transportadora }}">
+                          <i class="fas fa-check me-1"></i>
+                          Escolher
+                        </button>
+                        <button class="btn btn-success btn-sm adicionar-cotacao" style="display: none;"
+                          data-cnpj="{{ cnpj }}" data-transportadora-id="{{ opcao.transportadora_id }}">
+                          <i class="fas fa-plus me-1"></i>
+                          Adicionar à Cotação
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  {% endfor %}
                   {% else %}
-                    <tr>
-                      <td colspan="6" class="text-center text-muted">Nenhuma opção de frete disponível para este CNPJ</td>
-                    </tr>
+                  <tr>
+                    <td colspan="6" class="text-center text-muted">Nenhuma opção de frete disponível para este CNPJ</td>
+                  </tr>
                   {% endif %}
                 </tbody>
               </table>
@@ -468,58 +472,59 @@
 {% block scripts %}
 {{ super() }}
 <script>
-$(document).ready(function() {
-  // Adiciona o CSRF token em todas as requisições AJAX
-  $.ajaxSetup({
-    beforeSend: function(xhr, settings) {
-      if (!/^(GET|HEAD|OPTIONS|TRACE)$/i.test(settings.type) && !this.crossDomain) {
-        xhr.setRequestHeader("X-CSRFToken", "{{ csrf_token() }}");
+  $(document).ready(function () {
+    // Adiciona o CSRF token em todas as requisições AJAX
+    $.ajaxSetup({
+      beforeSend: function (xhr, settings) {
+        if (!/^(GET|HEAD|OPTIONS|TRACE)$/i.test(settings.type) && !this.crossDomain) {
+          xhr.setRequestHeader("X-CSRFToken", "{{ csrf_token() }}");
+        }
       }
-    }
-  });
+    });
 
-  // Variáveis globais
-  let pedidosSelecionados = [];
-  let transportadoraSelecionada = null;
-  let tabelasPorCnpjSelecionadas = {};  // ✅ NOVO: Armazena dados da tabela de cada CNPJ selecionado
+    // Variáveis globais
+    let pedidosSelecionados = [];
+    let transportadoraSelecionada = null;
+    let tabelasPorCnpjSelecionadas = {};  // ✅ NOVO: Armazena dados da tabela de cada CNPJ selecionado
 
-  // ✅ NOVO: Carrega opcoes_por_cnpj em variável JavaScript
-  const opcoesPorCnpj = {{ opcoes_por_cnpj|tojson|safe }};
+    // ✅ NOVO: Carrega opcoes_por_cnpj em variável JavaScript
+    const opcoesPorCnpj = {{ opcoes_por_cnpj| tojson | safe
+  }};
 
   // Debug: Verifica se as opções chegaram no template
   console.log('[DEBUG] opcoes_por_cnpj no template:', opcoesPorCnpj);
-  console.log('[DEBUG] pedidos_por_cnpj no template:', {{ pedidos_por_cnpj|tojson|safe }});
+  console.log('[DEBUG] pedidos_por_cnpj no template:', {{ pedidos_por_cnpj| tojson | safe }});
 
   // ✅ BOTÃO REDESPACHAR - Nova funcionalidade (SP/Guarulhos)
-  $('#btnRedespachar').click(function() {
+  $('#btnRedespachar').click(function () {
     console.log('[DEBUG] Iniciando redespacho para SP/Guarulhos...');
-    
+
     // Mostra loading
     const $btn = $(this);
     const originalText = $btn.html();
     $btn.html('<i class="fas fa-spinner fa-spin"></i> Carregando...');
     $btn.prop('disabled', true);
-    
+
     // Redireciona para a rota de redespacho (Guarulhos)
     window.location.href = "{{ url_for('cotacao.redespachar') }}";
   });
 
   // ✅ NOVO BOTÃO: REDESPACHAR PARA SP/SÃO PAULO
-  $('#btnRedespacharSaoPaulo').click(function() {
+  $('#btnRedespacharSaoPaulo').click(function () {
     console.log('[DEBUG] Iniciando redespacho para SP/São Paulo...');
-    
+
     // Mostra loading
     const $btn = $(this);
     const originalText = $btn.html();
     $btn.html('<i class="fas fa-spinner fa-spin"></i> Carregando...');
     $btn.prop('disabled', true);
-    
+
     // Redireciona para a nova rota de redespacho (São Paulo)
     window.location.href = "{{ url_for('cotacao.redespachar_sao_paulo') }}";
   });
 
   // ✅ CORRIGIDO: Quando selecionar uma transportadora no modal
-  $('.escolher-transportadora').click(function() {
+  $('.escolher-transportadora').click(function () {
     const $btn = $(this);
     const transportadoraId = $btn.data('transportadora-id');
     const transportadoraNome = $btn.data('transportadora-nome');
@@ -541,15 +546,15 @@ $(document).ready(function() {
     // ✅ CORREÇÃO: Esconde todos os botões "Escolher" e mostra "Adicionar" para a transportadora selecionada
     $('.escolher-transportadora').hide();
     $('.adicionar-cotacao').hide();
-    
+
     // Mostra os botões "Adicionar à Cotação" apenas para a transportadora selecionada
     $(`.adicionar-cotacao[data-transportadora-id="${transportadoraId}"]`).show();
-    
+
     console.log('[DEBUG] Botões habilitados para transportadora ID:', transportadoraId);
   });
 
   // ✅ CORRIGIDO: Quando clicar em "Adicionar à Cotação"
-  $('.adicionar-cotacao').click(function() {
+  $('.adicionar-cotacao').click(function () {
     const $btn = $(this);
     const cnpj = $btn.data('cnpj');
     const transportadoraId = $btn.data('transportadora-id');
@@ -572,7 +577,7 @@ $(document).ready(function() {
     // ✅ NOVO: Busca os dados da tabela para este CNPJ
     if (opcoesPorCnpj && opcoesPorCnpj[cnpj]) {
       // Busca a opção da transportadora selecionada
-      const opcaoTransportadora = opcoesPorCnpj[cnpj].find(function(opcao) {
+      const opcaoTransportadora = opcoesPorCnpj[cnpj].find(function (opcao) {
         return opcao.transportadora_id == transportadoraId;
       });
 
@@ -642,7 +647,7 @@ $(document).ready(function() {
   });
 
   // Quando clicar em "Remover" um pedido
-  $(document).on('click', '.remover-pedido', function() {
+  $(document).on('click', '.remover-pedido', function () {
     const $row = $(this).closest('tr');
     const pedidoId = $row.data('pedido-id');
     const cnpj = $(this).data('cnpj');
@@ -669,7 +674,7 @@ $(document).ready(function() {
   });
 
   // Quando clicar em "Fechar Cotação" no modal
-  $('#btnFecharCotacao').click(function() {
+  $('#btnFecharCotacao').click(function () {
     if (!transportadoraSelecionada || pedidosSelecionados.length === 0) {
       alert('Selecione uma transportadora e pelo menos um pedido.');
       return;
@@ -683,7 +688,7 @@ $(document).ready(function() {
 
     if (cnpjsSemTabela.length > 0) {
       alert('Erro: Dados de tabela não encontrados para os CNPJs: ' + cnpjsSemTabela.join(', ') +
-            '\n\nRecarregue a página e tente novamente.');
+        '\n\nRecarregue a página e tente novamente.');
       console.error('[DEBUG] ❌ CNPJs sem tabela:', cnpjsSemTabela);
       return;
     }
@@ -695,7 +700,7 @@ $(document).ready(function() {
       tipo: 'FRACIONADA',
       transportadora_id: transportadoraSelecionada,
       tabelas_por_cnpj: tabelasPorCnpjSelecionadas,  // ✅ NOVO: Envia tabelas completas
-      pedidos: pedidosSelecionados.map(function(pedido) {
+      pedidos: pedidosSelecionados.map(function (pedido) {
         return {
           id: pedido.separacao_lote_id,
           cnpj: pedido.cnpj_cpf,
@@ -714,14 +719,14 @@ $(document).ready(function() {
       type: 'POST',
       contentType: 'application/json',
       data: JSON.stringify(payload),
-      success: function(response) {
+      success: function (response) {
         if (response.success) {
           window.location.href = response.redirect_url;
         } else {
           alert('Erro ao fechar frete: ' + response.message);
         }
       },
-      error: function(xhr) {
+      error: function (xhr) {
         console.error('[DEBUG] Erro AJAX:', xhr.responseText);
         alert('Erro ao processar requisição: ' + xhr.responseText);
       }
@@ -729,7 +734,7 @@ $(document).ready(function() {
   });
 
   // Quando clicar em "Fechar" na carga direta
-  $('.fechar-frete').click(function() {
+  $('.fechar-frete').click(function () {
     const $btn = $(this);
     const transportadoraId = $btn.data('transportadora-id');
     const tipo = $btn.data('tipo');
@@ -794,59 +799,60 @@ $(document).ready(function() {
       transportadora_id: transportadoraId,
       tabela_selecionada: tabelaSelecionada,  // ✅ NOVO: Envia tabela completa
       indice_original: indiceOriginal,  // Mantém para compatibilidade/debug
-      pedidos: {{ pedidos_selecionados|tojson|safe }}.map(function(pedido) {
-        return {
-          id: pedido.separacao_lote_id,
-          cnpj: pedido.cnpj_cpf,
-          valor: pedido.valor_saldo_total,
-          peso: pedido.peso_total
-        };
-      })
+      pedidos: {{ pedidos_selecionados| tojson | safe
+  }}.map(function (pedido) {
+    return {
+      id: pedido.separacao_lote_id,
+      cnpj: pedido.cnpj_cpf,
+      valor: pedido.valor_saldo_total,
+      peso: pedido.peso_total
+    };
+  })
     };
 
-    console.log('[DEBUG] ✅ Payload enviado COM TABELA COMPLETA:', payload);
+  console.log('[DEBUG] ✅ Payload enviado COM TABELA COMPLETA:', payload);
 
-    // Envia a requisição
-    // ✅ TIMEOUT: Define timeout de 30 segundos para aviso
-    const timeoutId = setTimeout(function() {
-      alert('O processamento está demorando mais que o esperado. Por favor, aguarde...');
-    }, 30000);
-    
-    $.ajax({
-      url: "{{ url_for('cotacao.fechar_frete') }}",
-      type: 'POST',
-      contentType: 'application/json',
-      data: JSON.stringify(payload),
-      timeout: 120000, // ✅ Timeout de 2 minutos
-      success: function(response) {
-        clearTimeout(timeoutId);
-        if (response.success) {
-          // ✅ Mostra mensagem antes de redirecionar
-          $btn.html('<i class="fas fa-check me-1"></i>Concluído!');
-          setTimeout(function() {
-            window.location.href = response.redirect_url;
-          }, 500);
-        } else {
-          alert('Erro ao fechar frete: ' + response.message);
-          // ✅ Reabilita botões em caso de erro
-          $todosBotoes.prop('disabled', false);
-          $btn.html(textoOriginal);
-          $btn.data('processando', false);
-        }
-      },
-      error: function(xhr) {
-        clearTimeout(timeoutId);
-        alert('Erro ao processar requisição: ' + (xhr.responseText || 'Timeout'));
+  // Envia a requisição
+  // ✅ TIMEOUT: Define timeout de 30 segundos para aviso
+  const timeoutId = setTimeout(function () {
+    alert('O processamento está demorando mais que o esperado. Por favor, aguarde...');
+  }, 30000);
+
+  $.ajax({
+    url: "{{ url_for('cotacao.fechar_frete') }}",
+    type: 'POST',
+    contentType: 'application/json',
+    data: JSON.stringify(payload),
+    timeout: 120000, // ✅ Timeout de 2 minutos
+    success: function (response) {
+      clearTimeout(timeoutId);
+      if (response.success) {
+        // ✅ Mostra mensagem antes de redirecionar
+        $btn.html('<i class="fas fa-check me-1"></i>Concluído!');
+        setTimeout(function () {
+          window.location.href = response.redirect_url;
+        }, 500);
+      } else {
+        alert('Erro ao fechar frete: ' + response.message);
         // ✅ Reabilita botões em caso de erro
         $todosBotoes.prop('disabled', false);
         $btn.html(textoOriginal);
         $btn.data('processando', false);
       }
-    });
+    },
+    error: function (xhr) {
+      clearTimeout(timeoutId);
+      alert('Erro ao processar requisição: ' + (xhr.responseText || 'Timeout'));
+      // ✅ Reabilita botões em caso de erro
+      $todosBotoes.prop('disabled', false);
+      $btn.html(textoOriginal);
+      $btn.data('processando', false);
+    }
+  });
   });
 
   // Quando clicar em "Fechar" na carga fracionada
-  $('.fechar-frete-grupo').click(function() {
+  $('.fechar-frete-grupo').click(function () {
     const $btn = $(this);
     const transportadora_id = $btn.data('transportadora-id');
     const cnpjs = $btn.data('cnpjs');
@@ -878,7 +884,7 @@ $(document).ready(function() {
 
     // ✅ NOVO: Prepara dados das tabelas por CNPJ para enviar
     const tabelasPorCnpj = {};
-    opcoesCnpjs.forEach(function(opcao) {
+    opcoesCnpjs.forEach(function (opcao) {
       tabelasPorCnpj[opcao.cnpj] = {
         nome_tabela: opcao.nome_tabela,
         modalidade: opcao.modalidade,
@@ -921,7 +927,7 @@ $(document).ready(function() {
     };
 
     // ✅ TIMEOUT: Define timeout de 30 segundos para aviso
-    const timeoutId = setTimeout(function() {
+    const timeoutId = setTimeout(function () {
       alert('O processamento está demorando mais que o esperado. Por favor, aguarde...');
     }, 30000);
 
@@ -932,12 +938,12 @@ $(document).ready(function() {
       contentType: 'application/json',
       data: JSON.stringify(payload),
       timeout: 120000, // ✅ Timeout de 2 minutos
-      success: function(response) {
+      success: function (response) {
         clearTimeout(timeoutId);
         if (response.success) {
           // ✅ Mostra mensagem antes de redirecionar
           $btn.html('<i class="fas fa-check me-1"></i>Concluído!');
-          setTimeout(function() {
+          setTimeout(function () {
             window.location.href = response.redirect_url;
           }, 500);
         } else {
@@ -948,7 +954,7 @@ $(document).ready(function() {
           $btn.data('processando', false);
         }
       },
-      error: function(xhr) {
+      error: function (xhr) {
         clearTimeout(timeoutId);
         alert('Erro ao processar requisição: ' + (xhr.responseText || 'Timeout'));
         // ✅ Reabilita botões em caso de erro
@@ -960,39 +966,39 @@ $(document).ready(function() {
   });
 });
 
-// Função para incluir pedidos em embarque existente
-function incluirEmEmbarque(embarqueId, tipoCarga) {
+  // Função para incluir pedidos em embarque existente
+  function incluirEmEmbarque(embarqueId, tipoCarga) {
     if (confirm(`Confirma a inclusão dos pedidos cotados no embarque #${embarqueId}?`)) {
-        // Criar form para enviar POST
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = '/cotacao/incluir_em_embarque';
-        
-        // Adicionar CSRF token
-        const csrfToken = document.createElement('input');
-        csrfToken.type = 'hidden';
-        csrfToken.name = 'csrf_token';
-        csrfToken.value = '{{ csrf_token() }}';
-        form.appendChild(csrfToken);
-        
-        // Adicionar embarque_id
-        const embarqueInput = document.createElement('input');
-        embarqueInput.type = 'hidden';
-        embarqueInput.name = 'embarque_id';
-        embarqueInput.value = embarqueId;
-        form.appendChild(embarqueInput);
-        
-        // Adicionar tipo_carga
-        const tipoInput = document.createElement('input');
-        tipoInput.type = 'hidden';
-        tipoInput.name = 'tipo_carga';
-        tipoInput.value = tipoCarga;
-        form.appendChild(tipoInput);
-        
-        // Adicionar ao body e submeter
-        document.body.appendChild(form);
-        form.submit();
+      // Criar form para enviar POST
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = '/cotacao/incluir_em_embarque';
+
+      // Adicionar CSRF token
+      const csrfToken = document.createElement('input');
+      csrfToken.type = 'hidden';
+      csrfToken.name = 'csrf_token';
+      csrfToken.value = '{{ csrf_token() }}';
+      form.appendChild(csrfToken);
+
+      // Adicionar embarque_id
+      const embarqueInput = document.createElement('input');
+      embarqueInput.type = 'hidden';
+      embarqueInput.name = 'embarque_id';
+      embarqueInput.value = embarqueId;
+      form.appendChild(embarqueInput);
+
+      // Adicionar tipo_carga
+      const tipoInput = document.createElement('input');
+      tipoInput.type = 'hidden';
+      tipoInput.name = 'tipo_carga';
+      tipoInput.value = tipoCarga;
+      form.appendChild(tipoInput);
+
+      // Adicionar ao body e submeter
+      document.body.appendChild(form);
+      form.submit();
     }
-}
+  }
 </script>
 {% endblock %}

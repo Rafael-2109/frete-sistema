@@ -30,6 +30,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 from resolver_entidades import (
     resolver_pedido,
     resolver_produto_unico,
+    resolver_produtos_na_carteira_cliente,  # NOVO: filosofia 50% regra / 50% IA
     resolver_cliente,  # NOVO: GAP-01
     formatar_sugestao_produto,
     get_prefixos_grupo,
@@ -224,6 +225,44 @@ def consultar_situacao_pedidos_grupo_produto(args):
     # 2. Resolver produto
     produto_info, info_busca = resolver_produto_unico(args.produto)
 
+    # NOVO: Se multiplos candidatos, usar filosofia 50% regra / 50% IA
+    # Buscar TODOS os candidatos na carteira do cliente e deixar IA decidir
+    if info_busca.get('multiplos') and not info_busca.get('encontrado'):
+        # Construir lista de CNPJs do grupo
+        cnpjs_grupo = []
+        for p in prefixos:
+            itens_grupo = CarteiraPrincipal.query.filter(
+                CarteiraPrincipal.cnpj_cpf.like(f'{p}%'),
+                CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+            ).with_entities(CarteiraPrincipal.cnpj_cpf).distinct().all()
+            cnpjs_grupo.extend([i.cnpj_cpf for i in itens_grupo])
+
+        # Usar nova funcao que retorna todos os candidatos
+        resultado_carteira = resolver_produtos_na_carteira_cliente(args.produto, cnpjs_grupo)
+
+        if resultado_carteira['sucesso'] and resultado_carteira['itens_carteira']:
+            resultado['sucesso'] = True
+            resultado['tipo_analise'] = 'MULTIPLOS_PRODUTOS_GRUPO'
+            resultado['grupo'] = args.grupo
+            resultado['produtos'] = resultado_carteira['itens_carteira']
+            resultado['total_skus'] = resultado_carteira['total_skus']
+            resultado['candidatos_cadastro'] = resultado_carteira['candidatos_cadastro']
+            resultado['resumo'] = {
+                'total_skus': resultado_carteira['total_skus'],
+                'total_quantidade': resultado_carteira['total_quantidade'],
+                'total_valor': resultado_carteira['total_valor'],
+                'mensagem': f"{resultado_carteira['total_skus']} SKU(s) de '{args.produto}' encontrado(s) pro {args.grupo.capitalize()}"
+            }
+            resultado['ia_decide'] = True
+            return resultado
+        elif not resultado_carteira['itens_carteira']:
+            # Candidatos existem no cadastro mas nao na carteira do cliente
+            resultado['sucesso'] = False
+            resultado['erro'] = f"Produto '{args.produto}' existe no catalogo mas nao tem pedidos do {args.grupo.capitalize()}"
+            resultado['candidatos_cadastro'] = resultado_carteira['candidatos_cadastro']
+            return resultado
+
+    # Comportamento original para produto unico ou nao encontrado
     if not produto_info:
         resultado['sucesso'] = False
         resultado['erro'] = f"Produto '{args.produto}' nao encontrado"
@@ -442,6 +481,35 @@ def consultar_situacao_pedidos_cliente_produto(args):
     # 2. Resolver produto
     produto_info, info_busca = resolver_produto_unico(args.produto)
 
+    # NOVO: Se multiplos candidatos, usar filosofia 50% regra / 50% IA
+    # Buscar TODOS os candidatos na carteira do cliente e deixar IA decidir
+    if info_busca.get('multiplos') and not info_busca.get('encontrado'):
+        # Usar nova funcao que retorna todos os candidatos
+        resultado_carteira = resolver_produtos_na_carteira_cliente(args.produto, cnpjs_encontrados)
+
+        if resultado_carteira['sucesso'] and resultado_carteira['itens_carteira']:
+            resultado['sucesso'] = True
+            resultado['tipo_analise'] = 'MULTIPLOS_PRODUTOS_CLIENTE'
+            resultado['cliente'] = args.cliente
+            resultado['produtos'] = resultado_carteira['itens_carteira']
+            resultado['total_skus'] = resultado_carteira['total_skus']
+            resultado['candidatos_cadastro'] = resultado_carteira['candidatos_cadastro']
+            resultado['resumo'] = {
+                'total_skus': resultado_carteira['total_skus'],
+                'total_quantidade': resultado_carteira['total_quantidade'],
+                'total_valor': resultado_carteira['total_valor'],
+                'mensagem': f"{resultado_carteira['total_skus']} SKU(s) de '{args.produto}' encontrado(s) pro cliente '{args.cliente}'"
+            }
+            resultado['ia_decide'] = True
+            return resultado
+        elif not resultado_carteira['itens_carteira']:
+            # Candidatos existem no cadastro mas nao na carteira do cliente
+            resultado['sucesso'] = False
+            resultado['erro'] = f"Produto '{args.produto}' existe no catalogo mas nao tem pedidos do cliente '{args.cliente}'"
+            resultado['candidatos_cadastro'] = resultado_carteira['candidatos_cadastro']
+            return resultado
+
+    # Comportamento original para produto unico ou nao encontrado
     if not produto_info:
         resultado['sucesso'] = False
         resultado['erro'] = f"Produto '{args.produto}' nao encontrado"

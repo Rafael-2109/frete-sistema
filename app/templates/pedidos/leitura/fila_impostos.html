@@ -113,6 +113,16 @@
                             </tbody>
                         </table>
                     </div>
+                    <!-- Paginacao Pendentes -->
+                    <div id="paginacaoPendentes" class="d-flex justify-content-between align-items-center mt-3" style="display: none !important;">
+                        <small class="text-muted">
+                            Mostrando <span id="pendentesShowingStart">0</span>-<span id="pendentesShowingEnd">0</span> de <span id="pendentesTotal">0</span>
+                        </small>
+                        <nav>
+                            <ul class="pagination pagination-sm mb-0" id="paginacaoPendentesBtns">
+                            </ul>
+                        </nav>
+                    </div>
                 </div>
             </div>
         </div>
@@ -168,6 +178,16 @@
                             </tbody>
                         </table>
                     </div>
+                    <!-- Paginacao Concluidos -->
+                    <div id="paginacaoConcluidos" class="d-flex justify-content-between align-items-center mt-3" style="display: none !important;">
+                        <small class="text-muted">
+                            Mostrando <span id="concluidosShowingStart">0</span>-<span id="concluidosShowingEnd">0</span> de <span id="concluidosTotal">0</span>
+                        </small>
+                        <nav>
+                            <ul class="pagination pagination-sm mb-0" id="paginacaoConcluidosBtns">
+                            </ul>
+                        </nav>
+                    </div>
                 </div>
             </div>
         </div>
@@ -196,6 +216,16 @@
                             </tbody>
                         </table>
                     </div>
+                    <!-- Paginacao Falhados -->
+                    <div id="paginacaoFalhados" class="d-flex justify-content-between align-items-center mt-3" style="display: none !important;">
+                        <small class="text-muted">
+                            Mostrando <span id="falhadosShowingStart">0</span>-<span id="falhadosShowingEnd">0</span> de <span id="falhadosTotal">0</span>
+                        </small>
+                        <nav>
+                            <ul class="pagination pagination-sm mb-0" id="paginacaoFalhadosBtns">
+                            </ul>
+                        </nav>
+                    </div>
                 </div>
             </div>
         </div>
@@ -211,7 +241,7 @@
                 A fila de impostos processa o calculo automatico de CFOP e impostos para pedidos criados no Odoo.
             </p>
             <ul class="mb-0 small">
-                <li><strong>Timeout:</strong> 3 minutos por pedido</li>
+                <li><strong>Timeout:</strong> 5 minutos por pedido</li>
                 <li><strong>Metodo:</strong> <code>onchange_l10n_br_calcular_imposto</code> via XML-RPC</li>
                 <li><strong>Retencao:</strong> Resultados mantidos por 24 horas</li>
                 <li><strong>Reprocessamento:</strong> Jobs falhados podem ser reprocessados manualmente</li>
@@ -224,6 +254,14 @@
 $(document).ready(function() {
     let autoRefreshInterval = null;
     const REFRESH_INTERVAL = 5000; // 5 segundos
+    const PER_PAGE = 20;
+
+    // Estado da paginacao
+    let paginacao = {
+        pendentes: { page: 1, total_pages: 1, total_items: 0 },
+        concluidos: { page: 1, total_pages: 1, total_items: 0 },
+        falhados: { page: 1, total_pages: 1, total_items: 0 }
+    };
 
     // Configura CSRF token para todas as requisicoes AJAX
     const csrfToken = '{{ csrf_token() }}';
@@ -236,11 +274,24 @@ $(document).ready(function() {
     });
 
     function carregarDados() {
+        const params = new URLSearchParams({
+            page_pendentes: paginacao.pendentes.page,
+            page_concluidos: paginacao.concluidos.page,
+            page_falhados: paginacao.falhados.page,
+            per_page: PER_PAGE
+        });
+
         $.ajax({
-            url: '{{ url_for("leitura_pedidos.api_fila_impostos") }}',
+            url: '{{ url_for("leitura_pedidos.api_fila_impostos") }}?' + params.toString(),
             type: 'GET',
             success: function(response) {
                 if (response.success) {
+                    // Atualizar estado da paginacao
+                    if (response.paginacao) {
+                        paginacao.pendentes = response.paginacao.pendentes;
+                        paginacao.concluidos = response.paginacao.concluidos;
+                        paginacao.falhados = response.paginacao.falhados;
+                    }
                     atualizarInterface(response);
                 } else {
                     console.error('Erro ao carregar dados:', response.error);
@@ -271,16 +322,111 @@ $(document).ready(function() {
 
         // Tabela Pendentes
         atualizarTabelaPendentes(data.jobs_pendentes);
+        atualizarPaginacao('pendentes', paginacao.pendentes);
 
         // Tabela Em Execucao
         atualizarTabelaExecucao(data.jobs_em_execucao);
 
         // Tabela Concluidos
         atualizarTabelaConcluidos(data.jobs_concluidos);
+        atualizarPaginacao('concluidos', paginacao.concluidos);
 
         // Tabela Falhados
         atualizarTabelaFalhados(data.jobs_falhados);
+        atualizarPaginacao('falhados', paginacao.falhados);
     }
+
+    function atualizarPaginacao(tipo, info) {
+        const container = $(`#paginacao${capitalize(tipo)}`);
+        const btnsContainer = $(`#paginacao${capitalize(tipo)}Btns`);
+
+        if (info.total_items <= PER_PAGE) {
+            container.hide();
+            return;
+        }
+
+        container.show();
+
+        // Atualizar contadores
+        const start = ((info.page - 1) * PER_PAGE) + 1;
+        const end = Math.min(info.page * PER_PAGE, info.total_items);
+        $(`#${tipo}ShowingStart`).text(start);
+        $(`#${tipo}ShowingEnd`).text(end);
+        $(`#${tipo}Total`).text(info.total_items);
+
+        // Gerar botoes de paginacao
+        btnsContainer.empty();
+
+        // Botao Anterior
+        btnsContainer.append(`
+            <li class="page-item ${info.page <= 1 ? 'disabled' : ''}">
+                <a class="page-link btn-page" href="#" data-tipo="${tipo}" data-page="${info.page - 1}">
+                    <i class="fas fa-chevron-left"></i>
+                </a>
+            </li>
+        `);
+
+        // Paginas
+        const maxPages = 5;
+        let startPage = Math.max(1, info.page - Math.floor(maxPages / 2));
+        let endPage = Math.min(info.total_pages, startPage + maxPages - 1);
+        startPage = Math.max(1, endPage - maxPages + 1);
+
+        if (startPage > 1) {
+            btnsContainer.append(`
+                <li class="page-item">
+                    <a class="page-link btn-page" href="#" data-tipo="${tipo}" data-page="1">1</a>
+                </li>
+            `);
+            if (startPage > 2) {
+                btnsContainer.append('<li class="page-item disabled"><span class="page-link">...</span></li>');
+            }
+        }
+
+        for (let i = startPage; i <= endPage; i++) {
+            btnsContainer.append(`
+                <li class="page-item ${i === info.page ? 'active' : ''}">
+                    <a class="page-link btn-page" href="#" data-tipo="${tipo}" data-page="${i}">${i}</a>
+                </li>
+            `);
+        }
+
+        if (endPage < info.total_pages) {
+            if (endPage < info.total_pages - 1) {
+                btnsContainer.append('<li class="page-item disabled"><span class="page-link">...</span></li>');
+            }
+            btnsContainer.append(`
+                <li class="page-item">
+                    <a class="page-link btn-page" href="#" data-tipo="${tipo}" data-page="${info.total_pages}">${info.total_pages}</a>
+                </li>
+            `);
+        }
+
+        // Botao Proximo
+        btnsContainer.append(`
+            <li class="page-item ${info.page >= info.total_pages ? 'disabled' : ''}">
+                <a class="page-link btn-page" href="#" data-tipo="${tipo}" data-page="${info.page + 1}">
+                    <i class="fas fa-chevron-right"></i>
+                </a>
+            </li>
+        `);
+    }
+
+    function capitalize(str) {
+        return str.charAt(0).toUpperCase() + str.slice(1);
+    }
+
+    // Evento de clique na paginacao
+    $(document).on('click', '.btn-page', function(e) {
+        e.preventDefault();
+        const tipo = $(this).data('tipo');
+        const page = parseInt($(this).data('page'));
+
+        if (page < 1 || page > paginacao[tipo].total_pages) return;
+
+        paginacao[tipo].page = page;
+        carregarDados();
+    });
 
     function atualizarTabelaPendentes(jobs) {
         const tbody = $('#tabelaPendentes');
@@ -301,7 +447,7 @@ $(document).ready(function() {
             tbody.append(`
                 <tr>
                     <td><strong>${job.args.order_name || '-'}</strong></td>
-                    <td><code>${job.args.order_id || '-'}</code></td>
+                    <td><a href="https://nacomgoya.odoo.com/web#id=${job.args.order_id}&model=sale.order&view_type=form" target="_blank"><code>${job.args.order_id || '-'}</code></a></td>
                     <td>${formatarData(job.criado_em)}</td>
                     <td><span class="badge bg-warning text-dark">${job.status}</span></td>
                 </tr>
@@ -328,7 +474,7 @@ $(document).ready(function() {
             tbody.append(`
                 <tr>
                     <td><strong>${job.args.order_name || '-'}</strong></td>
-                    <td><code>${job.args.order_id || '-'}</code></td>
+                    <td><a href="https://nacomgoya.odoo.com/web#id=${job.args.order_id}&model=sale.order&view_type=form" target="_blank"><code>${job.args.order_id || '-'}</code></a></td>
                     <td>${formatarData(job.iniciado_em)}</td>
                     <td>
                         <span class="badge bg-primary">
@@ -364,7 +510,7 @@ $(document).ready(function() {
             tbody.append(`
                 <tr class="${sucesso ? '' : 'table-warning'}">
                     <td><strong>${job.args.order_name || '-'}</strong></td>
-                    <td><code>${job.args.order_id || '-'}</code></td>
+                    <td><a href="https://nacomgoya.odoo.com/web#id=${job.args.order_id}&model=sale.order&view_type=form" target="_blank"><code>${job.args.order_id || '-'}</code></a></td>
                     <td>${formatarData(job.finalizado_em)}</td>
                     <td>
                         <span class="badge ${sucesso ? 'bg-success' : 'bg-warning text-dark'}">
@@ -400,7 +546,7 @@ $(document).ready(function() {
             tbody.append(`
                 <tr class="table-danger">
                     <td><strong>${job.args.order_name || '-'}</strong></td>
-                    <td><code>${job.args.order_id || '-'}</code></td>
+                    <td><a href="https://nacomgoya.odoo.com/web#id=${job.args.order_id}&model=sale.order&view_type=form" target="_blank"><code>${job.args.order_id || '-'}</code></a></td>
                     <td>${formatarData(job.finalizado_em)}</td>
                     <td>
                         <span class="badge bg-danger">Falhou</span>

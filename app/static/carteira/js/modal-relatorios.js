@@ -18,7 +18,7 @@ class RelatoriosManager {
             <div class="modal fade" id="modalRelatorios" tabindex="-1" aria-labelledby="modalRelatoriosLabel" aria-hidden="true">
                 <div class="modal-dialog modal-lg">
                     <div class="modal-content">
-                        <div class="modal-header bg-info text-white">
+                        <div class="modal-header bg-info">
                             <h5 class="modal-title" id="modalRelatoriosLabel">
                                 <i class="fas fa-file-excel"></i> Exportar Relatórios
                             </h5>
@@ -172,37 +172,37 @@ class RelatoriosManager {
     aplicarFiltro() {
         const dataInicio = document.getElementById('dataInicio').value;
         const dataFim = document.getElementById('dataFim').value;
-        
+
         if (!dataInicio || !dataFim) {
             this.mostrarStatus('Por favor, selecione as duas datas', 'warning');
             return;
         }
-        
+
         if (dataInicio > dataFim) {
             this.mostrarStatus('A data inicial deve ser anterior à data final', 'warning');
             return;
         }
-        
+
         this.filtroRelatorios.data_inicio = dataInicio;
         this.filtroRelatorios.data_fim = dataFim;
-        
+
         // Mostrar período selecionado
         const periodoElem = document.getElementById('periodoSelecionado');
         const dataInicioFormatada = new Date(dataInicio + 'T00:00:00').toLocaleDateString('pt-BR');
         const dataFimFormatada = new Date(dataFim + 'T00:00:00').toLocaleDateString('pt-BR');
         periodoElem.innerHTML = `<i class="fas fa-check-circle text-success"></i> Período selecionado: ${dataInicioFormatada} até ${dataFimFormatada}`;
-        
+
         this.mostrarStatus('Filtro aplicado com sucesso!', 'success');
     }
 
     limparFiltro() {
         this.filtroRelatorios.data_inicio = null;
         this.filtroRelatorios.data_fim = null;
-        
+
         document.getElementById('dataInicio').value = '';
         document.getElementById('dataFim').value = '';
         document.getElementById('periodoSelecionado').innerHTML = '';
-        
+
         this.mostrarStatus('Filtro removido', 'info');
     }
 
@@ -211,7 +211,7 @@ class RelatoriosManager {
         statusElem.className = `alert alert-${tipo}`;
         statusElem.innerHTML = mensagem;
         statusElem.classList.remove('d-none');
-        
+
         setTimeout(() => {
             statusElem.classList.add('d-none');
         }, 3000);
@@ -219,7 +219,7 @@ class RelatoriosManager {
 
     async exportarRelatorio(tipo) {
         this.mostrarStatus('Gerando relatório...', 'info');
-        
+
         // Definir a URL baseada no tipo
         const urlMap = {
             'pre_separacoes': '/carteira/api/relatorios/pre_separacoes',
@@ -228,16 +228,16 @@ class RelatoriosManager {
             'carteira_detalhada': '/carteira/api/relatorios/carteira_detalhada',
             'producao': '/producao/relatorios/exportar'
         };
-        
+
         const url = urlMap[tipo];
         if (!url) {
             this.mostrarStatus('Tipo de relatório inválido', 'danger');
             return;
         }
-        
+
         try {
             let response;
-            
+
             // Relatório de produção usa GET, os outros usam POST
             if (tipo === 'producao') {
                 console.log('Baixando relatório de produção:', url);
@@ -250,10 +250,10 @@ class RelatoriosManager {
                     data_inicio: this.filtroRelatorios.data_inicio || null,
                     data_fim: this.filtroRelatorios.data_fim || null
                 };
-                
+
                 console.log('Enviando requisição para:', url);
                 console.log('Dados:', bodyData);
-                
+
                 response = await fetch(url, {
                     method: 'POST',
                     headers: {
@@ -262,7 +262,7 @@ class RelatoriosManager {
                     body: JSON.stringify(bodyData)
                 });
             }
-            
+
             if (!response.ok) {
                 // Tentar obter mensagem de erro do servidor
                 let errorMessage = 'Erro ao gerar relatório';
@@ -275,9 +275,9 @@ class RelatoriosManager {
                 }
                 throw new Error(errorMessage);
             }
-            
+
             const blob = await response.blob();
-            
+
             // Criar link para download
             const downloadUrl = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -287,7 +287,7 @@ class RelatoriosManager {
             a.click();
             document.body.removeChild(a);
             window.URL.revokeObjectURL(downloadUrl);
-            
+
             this.mostrarStatus('Relatório exportado com sucesso!', 'success');
         } catch (error) {
             console.error('Erro:', error);

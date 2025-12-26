@@ -60,12 +60,12 @@
                             </td>
                             <td>
                                 <div class="btn-group btn-group-sm" role="group">
-                                    <a href="{{ url_for('auth.aprovar_usuario', user_id=usuario.id) }}" 
-                                       class="btn btn-success" title="Aprovar">
+                                    <a href="{{ url_for('auth.aprovar_usuario', user_id=usuario.id) }}"
+                                        class="btn btn-success" title="Aprovar">
                                         <i class="fas fa-check"></i>
                                     </a>
-                                    <a href="{{ url_for('auth.rejeitar_usuario', user_id=usuario.id) }}" 
-                                       class="btn btn-danger" title="Rejeitar">
+                                    <a href="{{ url_for('auth.rejeitar_usuario', user_id=usuario.id) }}"
+                                        class="btn btn-danger" title="Rejeitar">
                                         <i class="fas fa-times"></i>
                                     </a>
                                 </div>
@@ -89,14 +89,14 @@
 
     <!-- Link público para registro -->
     <div class="card mt-4">
-        <div class="card-header bg-info text-white">
+        <div class="card-header bg-info">
             <i class="fas fa-share"></i> Link Público de Registro
         </div>
         <div class="card-body">
             <p class="mb-2">Compartilhe este link para permitir que novos usuários solicitem acesso:</p>
             <div class="input-group">
-                <input type="text" class="form-control" readonly 
-                       value="{{ request.url_root }}auth/registro" id="linkRegistro">
+                <input type="text" class="form-control" readonly value="{{ request.url_root }}auth/registro"
+                    id="linkRegistro">
                 <button class="btn btn-outline-secondary" type="button" onclick="copiarLink()">
                     <i class="fas fa-copy"></i> Copiar
                 </button>
@@ -106,24 +106,24 @@
 </div>
 
 <script>
-function copiarLink() {
-    const input = document.getElementById('linkRegistro');
-    input.select();
-    input.setSelectionRange(0, 99999);
-    navigator.clipboard.writeText(input.value);
-    
-    // Feedback visual
-    const btn = event.target;
-    const originalText = btn.innerHTML;
-    btn.innerHTML = '<i class="fas fa-check"></i> Copiado!';
-    btn.classList.remove('btn-outline-secondary');
-    btn.classList.add('btn-success');
-    
-    setTimeout(() => {
-        btn.innerHTML = originalText;
-        btn.classList.remove('btn-success');
-        btn.classList.add('btn-outline-secondary');
-    }, 2000);
-}
+    function copiarLink() {
+        const input = document.getElementById('linkRegistro');
+        input.select();
+        input.setSelectionRange(0, 99999);
+        navigator.clipboard.writeText(input.value);
+
+        // Feedback visual
+        const btn = event.target;
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-check"></i> Copiado!';
+        btn.classList.remove('btn-outline-secondary');
+        btn.classList.add('btn-success');
+
+        setTimeout(() => {
+            btn.innerHTML = originalText;
+            btn.classList.remove('btn-success');
+            btn.classList.add('btn-outline-secondary');
+        }, 2000);
+    }
 </script>
-{% endblock %} 
+{% endblock %}

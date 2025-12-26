@@ -8,7 +8,9 @@ Fluxo:
 3. Worker processa: chama onchange_l10n_br_calcular_imposto
 4. CFOP e impostos preenchidos automaticamente
 
-Timeout: 180 segundos (3 minutos) por pedido
+Timeout: 300 segundos (5 minutos) por pedido
+- Se der timeout, verifica se impostos foram calculados no Odoo
+- Se l10n_br_total_tributos > 0, considera sucesso
 """
 
 import logging
@@ -19,15 +21,16 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-# Timeout para conexão XML-RPC com Odoo (3 minutos)
-TIMEOUT_CALCULO_IMPOSTOS = 180
+# Timeout para conexão XML-RPC com Odoo (5 minutos)
+# Aumentado de 180s para 300s devido a lentidão no cálculo de impostos
+TIMEOUT_CALCULO_IMPOSTOS = 300
 
 
 def calcular_impostos_odoo(order_id: int, order_name: str = None):
     """
     Job para calcular impostos de um pedido no Odoo
 
-    Usa conexão XML-RPC direta com timeout de 180 segundos.
+    Usa conexão XML-RPC direta com timeout de 300 segundos (5 minutos).
     Este job é processado pela fila 'impostos' do Redis Queue.
 
     Args:
@@ -56,7 +59,7 @@ def calcular_impostos_odoo(order_id: int, order_name: str = None):
         username = ODOO_CONFIG['username']
         api_key = ODOO_CONFIG['api_key']
 
-        # Configurar timeout para 180 segundos
+        # Configurar timeout para 300 segundos (5 minutos)
         socket.setdefaulttimeout(TIMEOUT_CALCULO_IMPOSTOS)
 
         # SSL context
@@ -128,6 +131,23 @@ def calcular_impostos_odoo(order_id: int, order_name: str = None):
                 'tempo_segundos': tempo_total
             }
 
+        # Timeout ou erro - verificar se impostos foram calculados mesmo assim
+        is_timeout = 'timed out' in error_str.lower() or 'timeout' in error_str.lower()
+        if is_timeout:
+            logger.warning(f"⏱️ [Job Impostos] Timeout ao calcular {pedido_ref}, verificando se impostos foram calculados...")
+
+            # Verificar se impostos foram calculados no Odoo
+            impostos_ok = _verificar_impostos_calculados(order_id, url, database, username, api_key, ssl_context)
+            if impostos_ok:
+                logger.info(f"✅ [Job Impostos] {pedido_ref} - Impostos calculados (verificado após timeout) em {tempo_total:.1f}s")
+                return {
+                    'success': True,
+                    'order_id': order_id,
+                    'order_name': order_name,
+                    'message': f'Impostos calculados com sucesso em {tempo_total:.1f}s (verificado após timeout)',
+                    'tempo_segundos': tempo_total
+                }
+
         # Erro real
         logger.error(f"❌ [Job Impostos] Erro ao calcular {pedido_ref}: {e}")
         return {
@@ -138,3 +158,61 @@ def calcular_impostos_odoo(order_id: int, order_name: str = None):
             'error': error_str,
             'tempo_segundos': tempo_total
         }
+
+
+def _verificar_impostos_calculados(order_id: int, url: str, database: str,
+                                    username: str, api_key: str, ssl_context) -> bool:
+    """
+    Verifica se os impostos foram calculados no Odoo.
+
+    Usado após timeout para confirmar se o cálculo foi concluído.
+    Se l10n_br_total_tributos > 0 e l10n_br_cfop_id está preenchido,
+    considera que os impostos foram calculados com sucesso.
+
+    Returns:
+        bool: True se impostos foram calculados, False caso contrário
+    """
+    try:
+        # Nova conexão com timeout curto (30s) apenas para verificação
+        socket.setdefaulttimeout(30)
+
+        common = xmlrpc.client.ServerProxy(
+            f'{url}/xmlrpc/2/common',
+            context=ssl_context,
+            allow_none=True
+        )
+        uid = common.authenticate(database, username, api_key, {})
+
+        if not uid:
+            return False
+
+        models = xmlrpc.client.ServerProxy(
+            f'{url}/xmlrpc/2/object',
+            context=ssl_context,
+            allow_none=True
+        )
+
+        # Buscar campos de impostos do pedido
+        order_data = models.execute_kw(
+            database, uid, api_key,
+            'sale.order', 'read',
+            [[order_id]],
+            {'fields': ['l10n_br_total_tributos', 'l10n_br_cfop_id']}
+        )
+
+        if not order_data or not isinstance(order_data, list) or len(order_data) == 0:
+            return False
+
+        order = order_data[0]
+        if not isinstance(order, dict):
+            return False
+
+        total_tributos = order.get('l10n_br_total_tributos', 0) or 0
+        cfop = order.get('l10n_br_cfop_id')
+
+        # Considera calculado se tem tributos > 0 E CFOP preenchido
+        return bool(total_tributos > 0 and cfop)
+
+    except Exception as e:
+        logger.warning(f"⚠️ [Job Impostos] Erro ao verificar impostos: {e}")
+        return False

@@ -468,8 +468,14 @@ class CarteiraService:
                 if data_fim:
                     domain.append(('order_id.create_date', '<=', data_fim))
             
-            # Campos básicos necessários
-            campos_basicos = ['id', 'order_id', 'product_id', 'product_uom', 'product_uom_qty', 'qty_saldo', 'qty_cancelado', 'price_unit']
+            # Campos básicos necessários (incluindo impostos da linha)
+            campos_basicos = [
+                'id', 'order_id', 'product_id', 'product_uom', 'product_uom_qty',
+                'qty_saldo', 'qty_cancelado', 'price_unit',
+                # Impostos da linha
+                'l10n_br_icms_valor', 'l10n_br_icmsst_valor',
+                'l10n_br_pis_valor', 'l10n_br_cofins_valor'
+            ]
             
             logger.info("📡 Executando query no Odoo com filtro inteligente...")
             dados_odoo_brutos = self.connection.search_read('sale.order.line', domain, campos_basicos)
@@ -586,7 +592,9 @@ class CarteiraService:
                 'id', 'name', 'l10n_br_cnpj', 'l10n_br_razao_social',
                 'l10n_br_municipio_id', 'state_id', 'zip',
                 'l10n_br_endereco_bairro', 'l10n_br_endereco_numero',
-                'street', 'phone', 'agendamento'
+                'street', 'phone', 'agendamento',
+                # Desconto contratual
+                'x_studio_desconto_contratual', 'x_studio_desconto'
             ]
             
             logger.info(f"🔍 Query 2/5: Buscando {len(all_partner_ids)} partners...")
@@ -874,7 +882,17 @@ class CarteiraService:
                     'qtd_saldo_produto_pedido': linha.get('qty_saldo', 0),
                     'qtd_cancelada_produto_pedido': linha.get('qty_cancelado', 0),
                     'preco_produto_pedido': linha.get('price_unit', 0),
-                    
+
+                    # 💰 IMPOSTOS DA LINHA (Odoo sale.order.line)
+                    'icms_valor': linha.get('l10n_br_icms_valor', 0) or 0,
+                    'icmsst_valor': linha.get('l10n_br_icmsst_valor', 0) or 0,
+                    'pis_valor': linha.get('l10n_br_pis_valor', 0) or 0,
+                    'cofins_valor': linha.get('l10n_br_cofins_valor', 0) or 0,
+
+                    # 🏷️ DESCONTO CONTRATUAL (Odoo res.partner)
+                    'desconto_contratual': cliente.get('x_studio_desconto_contratual', False) or False,
+                    'desconto_percentual': cliente.get('x_studio_desconto', 0) or 0,
+
                     # 💳 CONDIÇÕES COMERCIAIS
                     'cond_pgto_pedido': extrair_relacao(pedido.get('payment_term_id'), 1),
                     'forma_pgto_pedido': extrair_relacao(pedido.get('payment_provider_id'), 1),
@@ -999,7 +1017,10 @@ class CarteiraService:
             # NOTA: Campos de estoque, separação, totalizadores foram movidos para Separacao
             campos_numericos = [
                 'qtd_produto_pedido', 'qtd_saldo_produto_pedido',
-                'qtd_cancelada_produto_pedido', 'preco_produto_pedido'
+                'qtd_cancelada_produto_pedido', 'preco_produto_pedido',
+                # Campos de impostos
+                'icms_valor', 'icmsst_valor', 'pis_valor', 'cofins_valor',
+                'desconto_percentual'
             ]
 
             for campo in campos_numericos:
@@ -1008,10 +1029,12 @@ class CarteiraService:
                         item_sanitizado[campo] = float(item_sanitizado[campo])
                     except (ValueError, TypeError):
                         item_sanitizado[campo] = 0.0
-            
-            # Campo booleano - garantir tipo correto
+
+            # Campos booleanos - garantir tipo correto
             if 'ativo' in item_sanitizado:
                 item_sanitizado['ativo'] = bool(item_sanitizado.get('ativo', True))
+            if 'desconto_contratual' in item_sanitizado:
+                item_sanitizado['desconto_contratual'] = bool(item_sanitizado.get('desconto_contratual', False))
 
             # 🔧 FALLBACK CRÍTICO: Garantir que cod_uf e nome_cidade NUNCA sejam NULL
             if not item_sanitizado.get('cod_uf') or item_sanitizado.get('cod_uf') == '':

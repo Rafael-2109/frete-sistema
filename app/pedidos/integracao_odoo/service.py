@@ -268,7 +268,7 @@ class OdooIntegrationService:
             order_name = order_data[0]['name'] if order_data else f"ID:{order_id}"
 
             # 5. Calcula impostos em BACKGROUND via Redis Queue
-            # Usa fila 'impostos' com timeout de 180 segundos
+            # Usa fila 'impostos' com timeout de 300 segundos (5 minutos)
             job_id = None
             if calcular_impostos:
                 try:
@@ -280,7 +280,7 @@ class OdooIntegrationService:
                         order_id,
                         order_name,
                         queue_name='impostos',
-                        timeout='3m'  # 3 minutos
+                        timeout='5m'  # 5 minutos
                     )
                     job_id = job.id
                     logger.info(f"📤 Job {job_id} enfileirado para calcular impostos: {order_name}")

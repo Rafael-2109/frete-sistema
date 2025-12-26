@@ -1667,20 +1667,33 @@ def fila_impostos():
 @login_required
 def api_fila_impostos():
     """
-    API para obter status da fila de impostos
+    API para obter status da fila de impostos com paginação
+
+    Query params:
+    - page_pendentes: Página de pendentes (default: 1)
+    - page_concluidos: Página de concluídos (default: 1)
+    - page_falhados: Página de falhados (default: 1)
+    - per_page: Registros por página (default: 20, max: 100)
 
     Retorna:
     - Estatísticas da fila (pendentes, em execução, concluídos, falhados)
-    - Lista de jobs pendentes
+    - Lista de jobs pendentes (paginado)
     - Lista de jobs em execução
-    - Lista de jobs concluídos recentes
-    - Lista de jobs falhados recentes
+    - Lista de jobs concluídos recentes (paginado)
+    - Lista de jobs falhados recentes (paginado)
+    - Informações de paginação
     """
     try:
         from rq import Queue
         from rq.job import Job
         from rq.registry import StartedJobRegistry, FinishedJobRegistry, FailedJobRegistry
         from app.portal.workers import get_redis_connection
+
+        # Parâmetros de paginação
+        page_pendentes = max(1, request.args.get('page_pendentes', 1, type=int))
+        page_concluidos = max(1, request.args.get('page_concluidos', 1, type=int))
+        page_falhados = max(1, request.args.get('page_falhados', 1, type=int))
+        per_page = min(100, max(10, request.args.get('per_page', 20, type=int)))
 
         redis_conn = get_redis_connection()
         queue = Queue('impostos', connection=redis_conn)
@@ -1690,17 +1703,27 @@ def api_fila_impostos():
         finished_registry = FinishedJobRegistry(queue=queue)
         failed_registry = FailedJobRegistry(queue=queue)
 
-        # Estatísticas
+        # Estatísticas (totais reais)
+        total_pendentes = len(queue)
+        total_em_execucao = len(started_registry)
+        total_concluidos = len(finished_registry)
+        total_falhados = len(failed_registry)
+
         stats = {
-            'pendentes': len(queue),
-            'em_execucao': len(started_registry),
-            'concluidos': len(finished_registry),
-            'falhados': len(failed_registry)
+            'pendentes': total_pendentes,
+            'em_execucao': total_em_execucao,
+            'concluidos': total_concluidos,
+            'falhados': total_falhados
         }
 
-        # Jobs pendentes (na fila)
+        # Jobs pendentes (paginado)
         jobs_pendentes = []
-        for job_id in queue.job_ids[:20]:  # Limita a 20
+        all_pending_ids = queue.job_ids
+        start_idx = (page_pendentes - 1) * per_page
+        end_idx = start_idx + per_page
+        paginated_pending_ids = all_pending_ids[start_idx:end_idx]
+
+        for job_id in paginated_pending_ids:
             try:
                 job = Job.fetch(job_id, connection=redis_conn)
                 jobs_pendentes.append({
@@ -1712,9 +1735,9 @@ def api_fila_impostos():
             except Exception:
                 pass
 
-        # Jobs em execução
+        # Jobs em execução (sem paginação - geralmente poucos)
         jobs_em_execucao = []
-        for job_id in started_registry.get_job_ids()[:10]:
+        for job_id in started_registry.get_job_ids()[:20]:
             try:
                 job = Job.fetch(job_id, connection=redis_conn)
                 jobs_em_execucao.append({
@@ -1726,9 +1749,14 @@ def api_fila_impostos():
             except Exception:
                 pass
 
-        # Jobs concluídos recentes
+        # Jobs concluídos recentes (paginado)
         jobs_concluidos = []
-        for job_id in finished_registry.get_job_ids()[:20]:
+        all_finished_ids = finished_registry.get_job_ids()
+        start_idx_c = (page_concluidos - 1) * per_page
+        end_idx_c = start_idx_c + per_page
+        paginated_finished_ids = all_finished_ids[start_idx_c:end_idx_c]
+
+        for job_id in paginated_finished_ids:
             try:
                 job = Job.fetch(job_id, connection=redis_conn)
                 resultado = job.result if job.result else {}
@@ -1742,9 +1770,14 @@ def api_fila_impostos():
             except Exception:
                 pass
 
-        # Jobs falhados
+        # Jobs falhados (paginado)
         jobs_falhados = []
-        for job_id in failed_registry.get_job_ids()[:20]:
+        all_failed_ids = failed_registry.get_job_ids()
+        start_idx_f = (page_falhados - 1) * per_page
+        end_idx_f = start_idx_f + per_page
+        paginated_failed_ids = all_failed_ids[start_idx_f:end_idx_f]
+
+        for job_id in paginated_failed_ids:
             try:
                 job = Job.fetch(job_id, connection=redis_conn)
                 jobs_falhados.append({
@@ -1756,6 +1789,12 @@ def api_fila_impostos():
             except Exception:
                 pass
 
+        # Calcular total de páginas
+        import math
+        total_pages_pendentes = math.ceil(total_pendentes / per_page) if total_pendentes > 0 else 1
+        total_pages_concluidos = math.ceil(total_concluidos / per_page) if total_concluidos > 0 else 1
+        total_pages_falhados = math.ceil(total_falhados / per_page) if total_falhados > 0 else 1
+
         return jsonify({
             'success': True,
             'stats': stats,
@@ -1763,6 +1802,24 @@ def api_fila_impostos():
             'jobs_em_execucao': jobs_em_execucao,
             'jobs_concluidos': jobs_concluidos,
             'jobs_falhados': jobs_falhados,
+            'paginacao': {
+                'per_page': per_page,
+                'pendentes': {
+                    'page': page_pendentes,
+                    'total_pages': total_pages_pendentes,
+                    'total_items': total_pendentes
+                },
+                'concluidos': {
+                    'page': page_concluidos,
+                    'total_pages': total_pages_concluidos,
+                    'total_items': total_concluidos
+                },
+                'falhados': {
+                    'page': page_falhados,
+                    'total_pages': total_pages_falhados,
+                    'total_items': total_falhados
+                }
+            },
             'atualizado_em': datetime.now().isoformat()
         })
 
@@ -1868,7 +1925,7 @@ def api_reprocessar_imposto(job_id):
             order_id,
             order_name,
             queue_name='impostos',
-            timeout='3m'
+            timeout='5m'  # 5 minutos - aumentado devido lentidão no Odoo
         )
 
         return jsonify({

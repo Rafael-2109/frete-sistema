@@ -16,9 +16,9 @@ const THEME_COLORS = {
     get secondary() { return getCSSColor('--bg-elevated') || '#6c757d'; }
 };
 
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     console.log('Iniciando script de programação em lote v3...');
-    
+
     // Elementos
     const checkTodos = document.getElementById('checkTodos');
     const btnSelecionarTodos = document.getElementById('btnSelecionarTodos');
@@ -30,31 +30,31 @@ document.addEventListener('DOMContentLoaded', function() {
     // Estado
     let cnpjsSelecionados = new Set();
     let dadosRuptura = {};
-    
+
     // Garantir que window.dadosRuptura esteja disponível globalmente
     window.dadosRuptura = dadosRuptura;
-    
+
     // Inicializar
     inicializar();
-    
+
     function inicializar() {
         console.log('Inicializando event listeners...');
-        
+
         // Botões principais
         if (btnAnalisarEstoques) {
             btnAnalisarEstoques.addEventListener('click', handleAnalisarEstoques);
             console.log('Botão analisar estoques configurado');
         }
-        
+
         if (btnSugerirDatas) {
             btnSugerirDatas.addEventListener('click', handleSugerirDatas);
             console.log('Botão sugerir datas configurado');
         }
-        
+
         if (btnSelecionarTodos) {
             btnSelecionarTodos.addEventListener('click', handleSelecionarTodos);
         }
-        
+
         if (btnProcessarLote) {
             btnProcessarLote.addEventListener('click', handleProcessarLote);
         }
@@ -69,47 +69,47 @@ document.addEventListener('DOMContentLoaded', function() {
         if (checkTodos) {
             checkTodos.addEventListener('change', handleCheckTodos);
         }
-        
+
         document.querySelectorAll('.check-cnpj').forEach(checkbox => {
             checkbox.addEventListener('change', handleCheckCnpj);
         });
-        
+
         // Botões das linhas
         document.querySelectorAll('.btn-expandir').forEach(btn => {
             btn.addEventListener('click', handleExpandir);
         });
-        
+
         document.querySelectorAll('.btn-priorizar').forEach(btn => {
             btn.addEventListener('click', handlePriorizar);
         });
-        
+
         document.querySelectorAll('.btn-analisar-ruptura').forEach(btn => {
             btn.addEventListener('click', handleAnalisarRupturaIndividual);
         });
-        
+
         // Campos de data - auto D+1
         document.querySelectorAll('.data-expedicao').forEach(input => {
             input.addEventListener('change', handleDataExpedicaoChange);
         });
-        
+
         // Calcular totais
         calcularTotais();
-        
+
         // Analisar ruptura inicial para todos os CNPJs
         analisarRupturaInicial();
     }
-    
+
     // Analisar ruptura inicial
     async function analisarRupturaInicial() {
         console.log('Analisando ruptura inicial...');
         const botoes = document.querySelectorAll('.btn-analisar-ruptura');
-        
+
         for (const btn of botoes) {
             const cnpj = btn.dataset.cnpj;
             await analisarRupturaSimplificada(cnpj, btn);
         }
     }
-    
+
     // Análise simplificada de ruptura para o botão
     async function analisarRupturaSimplificada(cnpj, btn) {
         try {
@@ -123,7 +123,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Fazer chamada ao endpoint que consolida TODOS os produtos do CNPJ
             console.log(`Fazendo requisição para: /carteira/programacao-lote/api/analisar-ruptura-cnpj/${cnpjEncoded}`);
             const response = await fetch(`/carteira/programacao-lote/api/analisar-ruptura-cnpj/${cnpjEncoded}`);
-            
+
             console.log('Status da resposta:', response.status);
             console.log('Status OK?', response.ok);
 
@@ -214,12 +214,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     btn.classList.add('btn-success');
                 }
             }
-            
+
         } catch (error) {
             console.error('Erro ao analisar ruptura para CNPJ', cnpj, ':', error);
             console.error('Mensagem:', error.message);
             console.error('Stack:', error.stack);
-            
+
             const span = btn.querySelector('.ruptura-info');
             if (span) {
                 // Mostrar erro ao invés de valor padrão
@@ -229,12 +229,12 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     }
-    
+
     // Analisar Estoques
     async function handleAnalisarEstoques() {
         console.log('Analisar estoques clicado');
         const cardAnalise = document.getElementById('cardAnaliseEstoques');
-        
+
         if (cardAnalise.classList.contains('d-none')) {
             cardAnalise.classList.remove('d-none');
             await carregarAnaliseEstoques();
@@ -242,19 +242,19 @@ document.addEventListener('DOMContentLoaded', function() {
             cardAnalise.classList.add('d-none');
         }
     }
-    
+
     // Carregar análise de estoques
     async function carregarAnaliseEstoques() {
         try {
             const titulo = document.querySelector('h1').textContent;
             const rede = titulo.includes('Atacadão') ? 'atacadao' : 'sendas';
-            
+
             const tbody = document.querySelector('#tabelaAnaliseEstoques tbody');
             tbody.innerHTML = '<tr><td colspan="7" class="text-center">Carregando análise...</td></tr>';
-            
+
             const response = await fetch(`/carteira/programacao-lote/api/analisar-estoques/${rede}`);
             const result = await response.json();
-            
+
             if (result.success) {
                 renderizarTabelaEstoques(result.data);
             } else {
@@ -266,34 +266,34 @@ document.addEventListener('DOMContentLoaded', function() {
             tbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">Erro ao carregar</td></tr>';
         }
     }
-    
+
     // Renderizar tabela de estoques
     function renderizarTabelaEstoques(dados) {
         const tbody = document.querySelector('#tabelaAnaliseEstoques tbody');
         tbody.innerHTML = '';
-        
+
         dados.forEach(item => {
             const tr = document.createElement('tr');
             const insuficiente = item.estoque_atual < item.qtd_total;
-            
+
             if (insuficiente) {
                 tr.classList.add('table-warning');
             }
-            
+
             tr.innerHTML = `
                 <td>${item.cod_produto}</td>
                 <td>${item.nome_produto}</td>
-                <td class="text-end">${item.qtd_total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-                <td class="text-end">R$ ${item.valor_total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-                <td class="text-end ${insuficiente ? 'text-danger fw-bold' : ''}">${item.estoque_atual.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                <td class="text-end">${item.qtd_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                <td class="text-end">R$ ${item.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                <td class="text-end ${insuficiente ? 'text-danger fw-bold' : ''}">${item.estoque_atual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                 <td class="text-center">${item.data_disponivel}</td>
-                <td class="text-end">${item.projecao_15_dias.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                <td class="text-end">${item.projecao_15_dias.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
             `;
-            
+
             tbody.appendChild(tr);
         });
     }
-    
+
     // Sugerir Datas - CONFIRMAÇÃO: Expedição 2ª-5ª, Agendamento D+1
     async function handleSugerirDatas() {
         console.log('Sugerir datas clicado');
@@ -306,17 +306,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     cnpjs.push(row.dataset.cnpj);
                 });
             }
-            
+
             if (cnpjs.length === 0) {
                 Swal.fire('Atenção', 'Nenhum CNPJ disponível', 'warning');
                 return;
             }
-            
+
             const titulo = document.querySelector('h1').textContent;
             const rede = titulo.includes('Atacadão') ? 'atacadao' : 'sendas';
-            
-            console.log('Enviando para API:', {rede, cnpjs_count: cnpjs.length});
-            
+
+            console.log('Enviando para API:', { rede, cnpjs_count: cnpjs.length });
+
             Swal.fire({
                 title: 'Sugerindo datas...',
                 text: 'Calculando datas otimizadas (2ª-5ª expedição, agendamento D+1)',
@@ -325,7 +325,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     Swal.showLoading();
                 }
             });
-            
+
             // Criar objeto com ordem dos CNPJs baseada na posição atual na tela
             const ordem = {};
             const rows = document.querySelectorAll('tbody tr.cnpj-row');
@@ -335,43 +335,43 @@ document.addEventListener('DOMContentLoaded', function() {
                     ordem[cnpj] = index;
                 }
             });
-            
+
             const response = await fetch(`/carteira/programacao-lote/api/sugerir-datas/${rede}`, {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     cnpjs: cnpjs,
                     ordem: ordem
                 })
             });
-            
+
             console.log('Response status:', response.status);
-            
+
             if (!response.ok) {
                 const errorText = await response.text();
                 console.error('Erro na resposta:', errorText);
                 Swal.fire('Erro', `Erro ${response.status}: ${errorText.substring(0, 100)}`, 'error');
                 return;
             }
-            
+
             const result = await response.json();
             console.log('Resultado da API:', result);
-            
+
             if (result.success) {
                 // Aplicar sugestões
                 let datasAplicadas = 0;
                 let cnpjsComRuptura = 0;
                 let cnpjsAjustados = 0;
-                
+
                 for (const [cnpj, datas] of Object.entries(result.sugestoes)) {
                     const inputExp = document.querySelector(`.data-expedicao[data-cnpj="${cnpj}"]`);
                     const inputAge = document.querySelector(`.data-agendamento[data-cnpj="${cnpj}"]`);
                     const row = document.querySelector(`tr.cnpj-row[data-cnpj="${cnpj}"]`);
-                    
+
                     if (inputExp) {
                         inputExp.value = datas.expedicao;
                         datasAplicadas++;
-                        
+
                         // Adicionar indicador visual se há ruptura
                         if (datas.tem_ruptura) {
                             cnpjsComRuptura++;
@@ -390,7 +390,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             inputExp.title = '';
                         }
                     }
-                    
+
                     if (inputAge) {
                         inputAge.value = datas.agendamento;
 
@@ -403,11 +403,11 @@ document.addEventListener('DOMContentLoaded', function() {
                             inputAge.title = '';
                         }
                     }
-                    
+
                     // Badge de ruptura removido - não mais necessário
                     // O indicador de ruptura agora é mostrado apenas no campo de agendamento (amarelo)
                 }
-                
+
                 // Preparar mensagem detalhada
                 let mensagemDetalhes = '';
                 if (cnpjsComRuptura > 0) {
@@ -418,7 +418,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <br><small>Campos em amarelo indicam ruptura</small>
                     </div>`;
                 }
-                
+
                 Swal.fire({
                     icon: 'success',
                     title: 'Datas Sugeridas!',
@@ -440,19 +440,19 @@ document.addEventListener('DOMContentLoaded', function() {
             Swal.fire('Erro', `Erro ao processar: ${error.message}`, 'error');
         }
     }
-    
+
     // Priorizar CNPJ
     function handlePriorizar(e) {
         const cnpj = e.currentTarget.dataset.cnpj;
         const row = document.querySelector(`tr.cnpj-row[data-cnpj="${cnpj}"]`);
         const detailRow = document.querySelector(`tr[data-cnpj-detail="${cnpj}"]`);
         const tbody = row.parentElement;
-        
+
         tbody.insertBefore(row, tbody.firstChild);
         if (detailRow) {
             tbody.insertBefore(detailRow, row.nextSibling);
         }
-        
+
         Swal.fire({
             icon: 'success',
             title: 'Priorizado!',
@@ -460,11 +460,11 @@ document.addEventListener('DOMContentLoaded', function() {
             timer: 1500,
             showConfirmButton: false
         });
-        
+
         // Re-analisar ruptura com nova ordem
         analisarRupturaInicial();
     }
-    
+
     // Analisar ruptura individual - mostrar detalhes
     async function handleAnalisarRupturaIndividual(e) {
         e.preventDefault();
@@ -554,24 +554,24 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     }
-    
+
     // Funções auxiliares de formatação
     function formatarValor(valor) {
         if (valor === null || valor === undefined) return '0,00';
         return valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
-    
+
     function formatarNumero(numero) {
         if (numero === null || numero === undefined) return '0';
         // Sem casas decimais para quantidades
         return Math.round(numero).toLocaleString('pt-BR');
     }
-    
+
     function formatarNumeroDecimal(numero) {
         if (numero === null || numero === undefined) return '0,00';
         return numero.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
-    
+
     // Função para formatar data de YYYY-MM-DD para DD/MM/YYYY
     function formatarData(data) {
         if (!data) return '-';
@@ -581,42 +581,42 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         return data;
     }
-    
+
     // Variável global para guardar dados do modal atual
     let dadosModalAtual = null;
-    
+
     // Função para mostrar modal detalhado de ruptura
     function mostrarModalRupturaDetalhado(data, cnpj) {
         console.log('Mostrando modal de ruptura para CNPJ:', cnpj);
         console.log('Dados recebidos:', data);
-        
+
         // Guardar dados para uso nas abas
         dadosModalAtual = data;
         window.dadosModalAtual = data; // Disponibilizar globalmente
-        
+
         try {
             const resumo = data.resumo;
             const cores = {
                 'CRITICA': 'danger',
-                'ALTA': 'warning', 
+                'ALTA': 'warning',
                 'MEDIA': 'info',
                 'BAIXA': 'secondary'
             };
-            
+
             // Criar modal se não existir
             let modal = document.getElementById('modalRupturaLote');
             if (!modal) {
                 console.log('Modal não existe, criando...');
                 modal = criarModalRupturaLote();
             }
-            
+
             // Verificar se elementos existem antes de atualizar
             const tituloElement = document.getElementById('modalRupturaLoteTitulo');
             if (!tituloElement) {
                 console.error('Elemento modalRupturaLoteTitulo não encontrado');
                 return;
             }
-            
+
             // Atualizar título com botões de toggle como na carteira agrupada
             tituloElement.innerHTML = `
                 <div class="d-flex justify-content-between align-items-center">
@@ -645,14 +645,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                 </div>
             `;
-            
+
             // Atualizar resumo igual à carteira agrupada
             const resumoElement = document.getElementById('modalRupturaLoteResumo');
             if (!resumoElement) {
                 console.error('Elemento modalRupturaLoteResumo não encontrado');
                 return;
             }
-            
+
             resumoElement.innerHTML = `
                 <div class="row">
                     <div class="col-md-3">
@@ -681,11 +681,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                 </div>
             `;
-            
+
             // Atualizar tabela de itens com campos corretos da API
             const tbody = document.getElementById('modalRupturaLoteItens');
             tbody.innerHTML = '';
-            
+
             if (data.itens && data.itens.length > 0) {
                 data.itens.forEach(item => {
                     const tr = document.createElement('tr');
@@ -701,22 +701,22 @@ document.addEventListener('DOMContentLoaded', function() {
                             ${formatarNumero(item.estoque_min_d7)}
                         </td>
                         <td class="text-center">
-                            ${item.data_producao ? 
-                                `<span class="badge bg-primary">
+                            ${item.data_producao ?
+                            `<span class="badge bg-primary">
                                     ${formatarData(item.data_producao)}
                                     <br>
                                     <small>${formatarNumero(item.qtd_producao)} un</small>
-                                </span>` : 
-                                '<span class="badge bg-danger">Sem Produção</span>'
-                            }
+                                </span>` :
+                            '<span class="badge bg-danger">Sem Produção</span>'
+                        }
                         </td>
                         <td class="text-center">
-                            ${item.data_disponivel ? 
-                                `<span class="badge bg-success">
+                            ${item.data_disponivel ?
+                            `<span class="badge bg-success">
                                     ${formatarData(item.data_disponivel)}
-                                </span>` : 
-                                '<span class="badge bg-secondary">Indisponível</span>'
-                            }
+                                </span>` :
+                            '<span class="badge bg-secondary">Indisponível</span>'
+                        }
                         </td>
                     `;
                     tbody.appendChild(tr);
@@ -731,13 +731,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     </tr>
                 `;
             }
-            
+
             // Mostrar modal
             console.log('Tentando mostrar modal...');
             const modalInstance = new bootstrap.Modal(modal);
             modalInstance.show();
             console.log('Modal mostrado com sucesso');
-            
+
         } catch (error) {
             console.error('Erro ao mostrar modal de ruptura:', error);
             console.error('Stack trace:', error.stack);
@@ -748,27 +748,27 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     }
-    
+
     // Funções para alternar entre as abas do modal
-    window.mostrarItensRupturaModal = function() {
+    window.mostrarItensRupturaModal = function () {
         if (!dadosModalAtual) return;
-        
+
         // Atualizar botões
         document.querySelectorAll('#modalRupturaLote .btn-group button').forEach(btn => {
             btn.classList.remove('active');
         });
         document.getElementById('btnMostrarRuptura')?.classList.add('active');
-        
+
         // Atualizar título da seção
         const tituloSecao = document.querySelector('#modalRupturaLote h6');
         if (tituloSecao) {
             tituloSecao.innerHTML = '<i class="fas fa-exclamation-triangle text-danger me-2"></i>Itens com Ruptura de Estoque:';
         }
-        
+
         // Atualizar tabela
         const tbody = document.getElementById('modalRupturaLoteItens');
         const itens = dadosModalAtual.itens || [];
-        
+
         if (itens.length === 0) {
             tbody.innerHTML = `
                 <tr>
@@ -780,7 +780,7 @@ document.addEventListener('DOMContentLoaded', function() {
             `;
             return;
         }
-        
+
         tbody.innerHTML = '';
         itens.forEach(item => {
             const tr = document.createElement('tr');
@@ -795,47 +795,47 @@ document.addEventListener('DOMContentLoaded', function() {
                     ${formatarNumero(item.estoque_min_d7)}
                 </td>
                 <td class="text-center">
-                    ${item.data_producao ? 
-                        `<span class="badge bg-primary">
+                    ${item.data_producao ?
+                    `<span class="badge bg-primary">
                             ${formatarData(item.data_producao)}
                             <br>
                             <small>${formatarNumero(item.qtd_producao)} un</small>
-                        </span>` : 
-                        '<span class="badge bg-danger">Sem Produção</span>'
-                    }
+                        </span>` :
+                    '<span class="badge bg-danger">Sem Produção</span>'
+                }
                 </td>
                 <td class="text-center">
-                    ${item.data_disponivel ? 
-                        `<span class="badge bg-success">
+                    ${item.data_disponivel ?
+                    `<span class="badge bg-success">
                             ${formatarData(item.data_disponivel)}
-                        </span>` : 
-                        '<span class="badge bg-secondary">Indisponível</span>'
-                    }
+                        </span>` :
+                    '<span class="badge bg-secondary">Indisponível</span>'
+                }
                 </td>
             `;
             tbody.appendChild(tr);
         });
     };
-    
-    window.mostrarItensDisponiveisModal = function() {
+
+    window.mostrarItensDisponiveisModal = function () {
         if (!dadosModalAtual) return;
-        
+
         // Atualizar botões
         document.querySelectorAll('#modalRupturaLote .btn-group button').forEach(btn => {
             btn.classList.remove('active');
         });
         document.getElementById('btnMostrarDisponiveis')?.classList.add('active');
-        
+
         // Atualizar título da seção
         const tituloSecao = document.querySelector('#modalRupturaLote h6');
         if (tituloSecao) {
             tituloSecao.innerHTML = '<i class="fas fa-check-circle text-success me-2"></i>Itens com Disponibilidade:';
         }
-        
+
         // Atualizar tabela
         const tbody = document.getElementById('modalRupturaLoteItens');
         const itens = dadosModalAtual.itens_disponiveis || [];
-        
+
         if (itens.length === 0) {
             tbody.innerHTML = `
                 <tr>
@@ -847,7 +847,7 @@ document.addEventListener('DOMContentLoaded', function() {
             `;
             return;
         }
-        
+
         tbody.innerHTML = '';
         itens.forEach(item => {
             const tr = document.createElement('tr');
@@ -873,29 +873,29 @@ document.addEventListener('DOMContentLoaded', function() {
             tbody.appendChild(tr);
         });
     };
-    
-    window.mostrarTodosItensModal = function() {
+
+    window.mostrarTodosItensModal = function () {
         if (!dadosModalAtual) return;
-        
+
         // Atualizar botões
         document.querySelectorAll('#modalRupturaLote .btn-group button').forEach(btn => {
             btn.classList.remove('active');
         });
         document.getElementById('btnMostrarTodos')?.classList.add('active');
-        
+
         // Atualizar título da seção
         const tituloSecao = document.querySelector('#modalRupturaLote h6');
         if (tituloSecao) {
             tituloSecao.innerHTML = '<i class="fas fa-list text-primary me-2"></i>Todos os Itens do Pedido:';
         }
-        
+
         // Atualizar tabela
         const tbody = document.getElementById('modalRupturaLoteItens');
         const itensRuptura = dadosModalAtual.itens || [];
         const itensDisponiveis = dadosModalAtual.itens_disponiveis || [];
-        
+
         tbody.innerHTML = '';
-        
+
         // Adicionar itens com ruptura primeiro
         if (itensRuptura.length > 0) {
             const trHeader = document.createElement('tr');
@@ -907,7 +907,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 </td>
             `;
             tbody.appendChild(trHeader);
-            
+
             itensRuptura.forEach(item => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
@@ -921,28 +921,28 @@ document.addEventListener('DOMContentLoaded', function() {
                         ${formatarNumero(item.estoque_min_d7)}
                     </td>
                     <td class="text-center">
-                        ${item.data_producao ? 
-                            `<span class="badge bg-primary">
+                        ${item.data_producao ?
+                        `<span class="badge bg-primary">
                                 ${formatarData(item.data_producao)}
                                 <br>
                                 <small>${formatarNumero(item.qtd_producao)} un</small>
-                            </span>` : 
-                            '<span class="badge bg-danger">Sem Produção</span>'
-                        }
+                            </span>` :
+                        '<span class="badge bg-danger">Sem Produção</span>'
+                    }
                     </td>
                     <td class="text-center">
-                        ${item.data_disponivel ? 
-                            `<span class="badge bg-success">
+                        ${item.data_disponivel ?
+                        `<span class="badge bg-success">
                                 ${formatarData(item.data_disponivel)}
-                            </span>` : 
-                            '<span class="badge bg-secondary">Indisponível</span>'
-                        }
+                            </span>` :
+                        '<span class="badge bg-secondary">Indisponível</span>'
+                    }
                     </td>
                 `;
                 tbody.appendChild(tr);
             });
         }
-        
+
         // Adicionar itens disponíveis
         if (itensDisponiveis.length > 0) {
             const trHeader = document.createElement('tr');
@@ -954,7 +954,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 </td>
             `;
             tbody.appendChild(trHeader);
-            
+
             itensDisponiveis.forEach(item => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
@@ -979,7 +979,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 tbody.appendChild(tr);
             });
         }
-        
+
         if (itensRuptura.length === 0 && itensDisponiveis.length === 0) {
             tbody.innerHTML = `
                 <tr>
@@ -990,14 +990,14 @@ document.addEventListener('DOMContentLoaded', function() {
             `;
         }
     };
-    
+
     // Criar modal de ruptura para lote (igual ao da carteira agrupada)
     function criarModalRupturaLote() {
         const modalHtml = `
             <div class="modal fade" id="modalRupturaLote" tabindex="-1">
                 <div class="modal-dialog modal-xl">
                     <div class="modal-content">
-                        <div class="modal-header bg-info text-white">
+                        <div class="modal-header bg-info">
                             <h5 class="modal-title" id="modalRupturaLoteTitulo">
                                 Análise de Ruptura
                             </h5>
@@ -1041,22 +1041,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             </div>
         `;
-        
+
         document.body.insertAdjacentHTML('beforeend', modalHtml);
         return document.getElementById('modalRupturaLote');
     }
-    
+
     // CONFIRMAÇÃO: Data expedição mudou - calcular D+1 automaticamente
     function handleDataExpedicaoChange(e) {
         const input = e.target;
         const cnpj = input.dataset.cnpj;
         const dataExpedicao = input.value;
-        
+
         if (dataExpedicao) {
             // REGRA CONFIRMADA: Agendamento = D+1 da expedição
             const data = new Date(dataExpedicao);
             data.setDate(data.getDate() + 1);
-            
+
             const inputAgendamento = document.querySelector(`.data-agendamento[data-cnpj="${cnpj}"]`);
             if (inputAgendamento) {
                 inputAgendamento.value = data.toISOString().split('T')[0];
@@ -1064,17 +1064,17 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     }
-    
+
     // Expandir detalhes
     function handleExpandir(e) {
         const btn = e.currentTarget;
         const cnpj = btn.dataset.cnpj;
         const detailRow = document.querySelector(`tr[data-cnpj-detail="${cnpj}"]`);
         const icon = btn.querySelector('i');
-        
+
         if (detailRow) {
             detailRow.classList.toggle('d-none');
-            
+
             if (detailRow.classList.contains('d-none')) {
                 icon.classList.remove('fa-chevron-up');
                 icon.classList.add('fa-chevron-down');
@@ -1084,17 +1084,17 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     }
-    
+
     // Selecionar todos
     function handleCheckTodos(e) {
         const isChecked = e.target.checked;
-        
+
         // Limpar seleções anteriores
         cnpjsSelecionados.clear();
-        
+
         document.querySelectorAll('.check-cnpj').forEach(checkbox => {
             const status = checkbox.dataset.status;
-            
+
             // Selecionar apenas CNPJs com status "Pendente" ou "Reagendar"
             if (isChecked && (status === 'Pendente' || status === 'Reagendar')) {
                 checkbox.checked = true;
@@ -1103,13 +1103,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 checkbox.checked = false;
             }
         });
-        
+
         atualizarBotaoProcessar();
-        
+
         // Mostrar mensagem informativa se alguns foram selecionados
         if (isChecked && cnpjsSelecionados.size > 0) {
             console.log(`${cnpjsSelecionados.size} CNPJs selecionados (apenas Pendente e Reagendar)`);
-            
+
             // Mostrar toast informativo
             Swal.fire({
                 toast: true,
@@ -1123,27 +1123,27 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     }
-    
+
     // Botão selecionar todos
     function handleSelecionarTodos() {
         const checkboxes = document.querySelectorAll('.check-cnpj');
-        
+
         // Filtrar apenas checkboxes com status "Pendente" ou "Reagendar"
         const checkboxesRelevantes = Array.from(checkboxes).filter(cb => {
             const status = cb.dataset.status;
             return status === 'Pendente' || status === 'Reagendar';
         });
-        
+
         const todosRelevantesChecados = checkboxesRelevantes.every(cb => cb.checked);
-        
+
         // Limpar seleções anteriores
         cnpjsSelecionados.clear();
-        
+
         // Desmarcar todos primeiro
         checkboxes.forEach(checkbox => {
             checkbox.checked = false;
         });
-        
+
         // Marcar apenas os relevantes se não estavam todos marcados
         if (!todosRelevantesChecados) {
             checkboxesRelevantes.forEach(checkbox => {
@@ -1151,17 +1151,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 cnpjsSelecionados.add(checkbox.value);
             });
         }
-        
+
         if (checkTodos) {
             checkTodos.checked = !todosRelevantesChecados;
         }
-        
-        btnSelecionarTodos.innerHTML = todosRelevantesChecados ? 
+
+        btnSelecionarTodos.innerHTML = todosRelevantesChecados ?
             '<i class="fas fa-check-square"></i> Selecionar Todos' :
             '<i class="fas fa-square"></i> Desselecionar Todos';
-        
+
         atualizarBotaoProcessar();
-        
+
         // Mostrar mensagem informativa
         if (!todosRelevantesChecados && cnpjsSelecionados.size > 0) {
             Swal.fire({
@@ -1176,30 +1176,30 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     }
-    
+
     // Checkbox individual
     function handleCheckCnpj(e) {
         const cnpj = e.target.value;
-        
+
         if (e.target.checked) {
             cnpjsSelecionados.add(cnpj);
         } else {
             cnpjsSelecionados.delete(cnpj);
         }
-        
+
         const totalCheckboxes = document.querySelectorAll('.check-cnpj').length;
         if (checkTodos) {
             checkTodos.checked = cnpjsSelecionados.size === totalCheckboxes;
         }
-        
+
         atualizarBotaoProcessar();
     }
-    
+
     // Atualizar botão processar
     function atualizarBotaoProcessar() {
         if (btnProcessarLote) {
             btnProcessarLote.disabled = cnpjsSelecionados.size === 0;
-            
+
             if (cnpjsSelecionados.size > 0) {
                 btnProcessarLote.innerHTML = `<i class="fas fa-calendar-alt"></i> Agendar Selecionados (${cnpjsSelecionados.size})`;
             } else {
@@ -1207,41 +1207,41 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     }
-    
+
     // Processar lote
     async function handleProcessarLote() {
         if (cnpjsSelecionados.size === 0) {
             Swal.fire('Atenção', 'Selecione pelo menos um CNPJ', 'warning');
             return;
         }
-        
+
         // Coletar datas
         const dadosAgendamento = [];
         let todasTemDatas = true;
-        
+
         cnpjsSelecionados.forEach(cnpj => {
             const expedicao = document.querySelector(`.data-expedicao[data-cnpj="${cnpj}"]`)?.value;
             const agendamento = document.querySelector(`.data-agendamento[data-cnpj="${cnpj}"]`)?.value;
-            
+
             if (!expedicao) {
                 todasTemDatas = false;
             }
-            
+
             dadosAgendamento.push({
                 cnpj: cnpj,
                 expedicao: expedicao,
                 agendamento: agendamento
             });
         });
-        
+
         if (!todasTemDatas) {
             Swal.fire('Atenção', 'Preencha as datas de expedição para todos os CNPJs selecionados', 'warning');
             return;
         }
-        
+
         // Verificar se é portal Sendas
         const portal = window.PORTAL_CONFIG?.portal;
-        
+
         if (portal === 'sendas') {
             // Fluxo específico do Sendas
             await processarAgendamentoSendas(dadosAgendamento);
@@ -1251,12 +1251,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 icon: 'info',
                 title: 'Processamento em Lote',
                 html: `Pronto para processar ${cnpjsSelecionados.size} CNPJs<br>` +
-                      'Portal: ' + (portal || 'Não identificado'),
+                    'Portal: ' + (portal || 'Não identificado'),
                 confirmButtonText: 'OK'
             });
         }
     }
-    
+
     // Processar agendamento específico do Sendas
     async function processarAgendamentoSendas(dadosAgendamento) {
         // Mostrar loading com etapas
@@ -1287,11 +1287,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 Swal.showLoading();
             }
         });
-        
+
         try {
             // SEMPRE usar endpoint assíncrono
             const endpoint = '/carteira/programacao-lote/api/processar-agendamento-sendas-async';
-            
+
             // Chamar endpoint de processamento Sendas
             const response = await fetch(endpoint, {
                 method: 'POST',
@@ -1304,9 +1304,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     cnpjs: dadosAgendamento  // O endpoint assíncrono espera 'cnpjs'
                 })
             });
-            
+
             const result = await response.json();
-            
+
             // Fazer polling do status do job assíncrono
             if (result.job_id) {
                 // Mostrar notificação simples e continuar trabalhando
@@ -1340,12 +1340,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         checkJobStatusSilently(result.job_id);
                     }
                 });
-                
+
                 // Mostrar notificação toast no canto
                 showToastNotification('info', 'Agendamento iniciado', 'Processando em segundo plano...');
                 return;
             }
-            
+
             if (result.success) {
                 // Se tiver URL de download, baixar automaticamente
                 if (result.download_url) {
@@ -1357,12 +1357,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     link.click();
                     document.body.removeChild(link);
                 }
-                
+
                 // Mostrar sucesso com detalhes
                 let detalhesHtml = '<div class="text-start">';
                 detalhesHtml += '<h5>✅ Processo concluído com sucesso!</h5>';
                 detalhesHtml += '<hr>';
-                
+
                 detalhesHtml += '<p><strong>Etapas realizadas:</strong></p>';
                 detalhesHtml += '<ol>';
                 detalhesHtml += '<li>✅ Planilha baixada do portal</li>';
@@ -1370,7 +1370,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 detalhesHtml += '<li>✅ Upload realizado no portal Sendas</li>';
                 detalhesHtml += '<li>✅ Separações geradas no sistema</li>';
                 detalhesHtml += '</ol>';
-                
+
                 if (result.separacoes_criadas && result.separacoes_criadas.length > 0) {
                     detalhesHtml += '<hr>';
                     detalhesHtml += '<p><strong>Separações criadas:</strong></p>';
@@ -1380,12 +1380,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     });
                     detalhesHtml += '</ul>';
                 }
-                
+
                 detalhesHtml += '<hr>';
                 detalhesHtml += '<p class="text-success"><strong>Agendamento enviado para o portal Sendas!</strong></p>';
                 detalhesHtml += '<p class="text-muted">Aguarde a confirmação do protocolo no portal.</p>';
                 detalhesHtml += '</div>';
-                
+
                 Swal.fire({
                     icon: 'success',
                     title: 'Sucesso!',
@@ -1399,7 +1399,7 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 // Verificar se tem CNPJs ignorados
                 let mensagemErro = result.error || 'Erro desconhecido';
-                
+
                 if (result.cnpjs_ignorados && result.cnpjs_ignorados.length > 0) {
                     mensagemErro += '\n\nCNPJs ignorados (sem data de agendamento):\n';
                     result.cnpjs_ignorados.forEach(cnpj => {
@@ -1407,7 +1407,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     });
                     mensagemErro += '\n⚠️ Data de agendamento é OBRIGATÓRIA para o portal Sendas';
                 }
-                
+
                 Swal.fire({
                     icon: 'error',
                     title: 'Erro ao processar',
@@ -1424,17 +1424,17 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     }
-    
+
     // Função para verificar status do job em background (sem bloquear interface)
     async function checkJobStatusSilently(jobId) {
         try {
             const response = await fetch(`/carteira/programacao-lote/api/status-job-sendas/${jobId}`);
             const data = await response.json();
-            
+
             if (data.status === 'finished') {
                 // Job concluído com sucesso - notificação amigável
                 showToastNotification('success', 'Agendamento Concluído!', 'Todos os CNPJs foram processados com sucesso.');
-                
+
                 // Modal de sucesso com opção de atualizar
                 Swal.fire({
                     icon: 'success',
@@ -1470,16 +1470,16 @@ document.addEventListener('DOMContentLoaded', function() {
                         });
                         document.getElementById('checkTodos').checked = false;
                         atualizarBotaoProcessar();
-                        
+
                         // Mostrar notificação de que pode continuar
                         showToastNotification('info', 'Pronto!', 'Você pode continuar selecionando outros CNPJs.');
                     }
                 });
-                
+
             } else if (data.status === 'failed') {
                 // Erro no processamento - notificação amigável
                 showToastNotification('error', 'Erro no Agendamento', 'Houve um problema ao processar os agendamentos.');
-                
+
                 Swal.fire({
                     icon: 'error',
                     title: 'Erro no Agendamento',
@@ -1495,18 +1495,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     confirmButtonText: 'Entendi',
                     confirmButtonColor: THEME_COLORS.danger
                 });
-                
+
             } else if (data.status === 'not_found') {
                 // Job expirou - não mostrar nada técnico
                 console.log('Job expirou ou foi cancelado:', jobId);
-                
+
             } else {
                 // Ainda processando - continuar verificando silenciosamente
                 setTimeout(() => {
                     checkJobStatusSilently(jobId);
                 }, 5000); // Verificar novamente em 5 segundos
             }
-            
+
         } catch (error) {
             console.error('Erro ao verificar status do job:', error);
             // Em caso de erro de rede, tentar novamente em 10 segundos
@@ -1515,7 +1515,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 10000);
         }
     }
-        
+
     // Função auxiliar para mostrar notificações toast
     function showToastNotification(type, title, message) {
         // Verificar se já existe container de toasts
@@ -1526,7 +1526,7 @@ document.addEventListener('DOMContentLoaded', function() {
             toastContainer.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999;';
             document.body.appendChild(toastContainer);
         }
-        
+
         // Criar elemento do toast
         const toastId = 'toast-' + Date.now();
         const toastHtml = `
@@ -1542,68 +1542,68 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             </div>
         `;
-        
+
         toastContainer.insertAdjacentHTML('beforeend', toastHtml);
-        
+
         // Auto remover após 5 segundos
         setTimeout(() => {
             const toast = document.getElementById(toastId);
             if (toast) toast.remove();
         }, 5000);
     }
-    
+
     // Converter número
     function converterParaNumero(texto) {
         let limpo = texto.replace('R$', '').trim();
         limpo = limpo.replace(/,/g, '');
         return parseFloat(limpo) || 0;
     }
-    
+
     // Calcular totais
     function calcularTotais() {
         let valorTotal = 0;
         let pesoTotal = 0;
         let palletsTotal = 0;
-        
+
         document.querySelectorAll('.cnpj-row').forEach(row => {
             // Nova estrutura de colunas após unificação:
             // 0: Checkbox, 1: Cliente, 2: Cidade, 3: Valor, 4: Peso, 5: Pallets
             const valorText = row.cells[3].textContent;
             const pesoText = row.cells[4].textContent;
             const palletsText = row.cells[5].textContent;
-            
+
             const valor = converterParaNumero(valorText);
             const peso = converterParaNumero(pesoText);
             const pallets = converterParaNumero(palletsText);
-            
+
             valorTotal += valor;
             pesoTotal += peso;
             palletsTotal += pallets;
         });
-        
+
         const valorEl = document.getElementById('valorTotalGeral');
         const pesoEl = document.getElementById('pesoTotalGeral');
         const palletsEl = document.getElementById('palletsTotalGeral');
-        
+
         if (valorEl) {
             valorEl.textContent = valorTotal.toLocaleString('pt-BR', {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2
             });
         }
-        
+
         if (pesoEl) {
             pesoEl.textContent = pesoTotal.toLocaleString('pt-BR', {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2
             });
         }
-        
+
         if (palletsEl) {
             palletsEl.textContent = palletsTotal.toLocaleString('pt-BR', {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2
             });
         }
-    }    
+    }
 });

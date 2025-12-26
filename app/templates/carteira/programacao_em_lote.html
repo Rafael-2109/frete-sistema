@@ -31,7 +31,8 @@
             <h1 class="h3 mb-0">
                 <i class="fas fa-network-wired"></i>
                 Programação em Lote - {{ rede }} SP
-                <span class="fs-6 fw-normal text-muted">- {{ vendedor or 'Sem vendedor' }} - {{ equipe_vendas or 'Sem equipe' }}</span>
+                <span class="fs-6 fw-normal text-muted">- {{ vendedor or 'Sem vendedor' }} - {{ equipe_vendas or 'Sem
+                    equipe' }}</span>
             </h1>
             <p class="text-muted mb-0">
                 Gestão unificada de pedidos para {{ rede }} em São Paulo
@@ -41,7 +42,8 @@
             {% if rede == 'sendas' %}
             <!-- Dropdown Agendamentos Sendas -->
             <div class="btn-group me-2" role="group">
-                <button type="button" class="btn btn-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                <button type="button" class="btn btn-secondary dropdown-toggle" data-bs-toggle="dropdown"
+                    aria-expanded="false">
                     <i class="fas fa-calendar-alt"></i> Agendamentos Sendas
                 </button>
                 <ul class="dropdown-menu">
@@ -55,7 +57,9 @@
                             <i class="fas fa-paper-plane text-success"></i> Solicitar Agendamento
                         </a>
                     </li>
-                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <hr class="dropdown-divider">
+                    </li>
                     <li>
                         <a class="dropdown-item" href="/portal/sendas/exportacao" target="_blank">
                             <i class="fas fa-file-export text-info"></i> Exportar Planilha Preenchida
@@ -210,7 +214,8 @@
                     <thead class="table-thead-theme">
                         <tr>
                             <th width="40">
-                                <input type="checkbox" id="checkTodos" title="Selecionar apenas Pendentes e Reagendar" />
+                                <input type="checkbox" id="checkTodos"
+                                    title="Selecionar apenas Pendentes e Reagendar" />
                             </th>
                             <th>Cliente</th>
                             <th>Cidade</th>
@@ -225,9 +230,11 @@
                     </thead>
                     <tbody>
                         {% for cnpj_data in dados_cnpj %}
-                        <tr class="cnpj-row {{ cnpj_data.cor_linha }}" data-cnpj="{{ cnpj_data.cnpj }}" data-status="{{ cnpj_data.status }}">
+                        <tr class="cnpj-row {{ cnpj_data.cor_linha }}" data-cnpj="{{ cnpj_data.cnpj }}"
+                            data-status="{{ cnpj_data.status }}">
                             <td class="text-center">
-                                <input type="checkbox" class="check-cnpj" value="{{ cnpj_data.cnpj }}" data-status="{{ cnpj_data.status }}" />
+                                <input type="checkbox" class="check-cnpj" value="{{ cnpj_data.cnpj }}"
+                                    data-status="{{ cnpj_data.status }}" />
                             </td>
                             <td>
                                 <div class="fw-medium">{{ cnpj_data.raz_social }}</div>
@@ -237,63 +244,62 @@
                                 <div>{{ cnpj_data.cidade }}</div>
                                 <small class="text-muted">Sub-Rota: {{ cnpj_data.sub_rota or '-' }}</small>
                             </td>
-                            <td class="text-end" style="font-size: 0.9em;">R$ {{ "{:,.2f}".format(cnpj_data.total_valor) }}</td>
-                            <td class="text-end" style="font-size: 0.9em;">{{ "{:,.2f}".format(cnpj_data.total_peso) }}</td>
-                            <td class="text-end" style="font-size: 0.9em;">{{ "{:,.2f}".format(cnpj_data.total_pallets) }}</td>
+                            <td class="text-end" style="font-size: 0.9em;">R$ {{ "{:,.2f}".format(cnpj_data.total_valor)
+                                }}</td>
+                            <td class="text-end" style="font-size: 0.9em;">{{ "{:,.2f}".format(cnpj_data.total_peso) }}
+                            </td>
+                            <td class="text-end" style="font-size: 0.9em;">{{ "{:,.2f}".format(cnpj_data.total_pallets)
+                                }}</td>
                             <td>
-                                <input type="date" class="form-control form-control-sm data-expedicao" 
-                                       data-cnpj="{{ cnpj_data.cnpj }}" 
-                                       value="{{ cnpj_data.expedicao_sugerida }}"
-                                       style="width: 110px; font-size: 0.85em;">
+                                <input type="date" class="form-control form-control-sm data-expedicao"
+                                    data-cnpj="{{ cnpj_data.cnpj }}" value="{{ cnpj_data.expedicao_sugerida }}"
+                                    style="width: 110px; font-size: 0.85em;">
                             </td>
                             <td>
-                                <input type="date" class="form-control form-control-sm data-agendamento" 
-                                       data-cnpj="{{ cnpj_data.cnpj }}"
-                                       value="{{ cnpj_data.agendamento_sugerido }}"
-                                       style="width: 110px; font-size: 0.85em;">
+                                <input type="date" class="form-control form-control-sm data-agendamento"
+                                    data-cnpj="{{ cnpj_data.cnpj }}" value="{{ cnpj_data.agendamento_sugerido }}"
+                                    style="width: 110px; font-size: 0.85em;">
                             </td>
                             <td class="text-center">
                                 {% if cnpj_data.status %}
-                                    <span class="badge 
+                                <span
+                                    class="badge 
                                         {% if cnpj_data.status == 'Reagendar' %}bg-danger{% elif cnpj_data.status == 'Consolidar' %}bg-warning text-dark{% elif cnpj_data.status == 'Ag. Aprovação' %}bg-info{% elif cnpj_data.status == 'Pronto' %}bg-success{% else %}bg-secondary{% endif %}"
-                                        style="font-size: 0.8em; padding: 4px 8px;">
-                                        <i class="fas {{ cnpj_data.icone_status }} me-1"></i>
-                                        {{ cnpj_data.status }}
-                                    </span>
+                                    style="font-size: 0.8em; padding: 4px 8px;">
+                                    <i class="fas {{ cnpj_data.icone_status }} me-1"></i>
+                                    {{ cnpj_data.status }}
+                                </span>
                                 {% else %}
-                                    <span class="badge bg-secondary">Pendente</span>
+                                <span class="badge bg-secondary">Pendente</span>
                                 {% endif %}
                             </td>
                             <td class="text-center">
-                                <button class="btn btn-sm btn-warning btn-priorizar" 
-                                        data-cnpj="{{ cnpj_data.cnpj }}"
-                                        title="Priorizar">
+                                <button class="btn btn-sm btn-warning btn-priorizar" data-cnpj="{{ cnpj_data.cnpj }}"
+                                    title="Priorizar">
                                     <i class="fas fa-arrow-up"></i>
                                 </button>
                                 <button class="btn btn-sm btn-secondary btn-analisar-ruptura"
-                                        data-cnpj="{{ cnpj_data.cnpj }}"
-                                        data-pedidos="{% if cnpj_data.pedidos %}{% for p in cnpj_data.pedidos %}{{ p.num_pedido }}{% if not loop.last %},{% endif %}{% endfor %}{% endif %}"
-                                        title="Analisar ruptura"
-                                        style="min-width: 120px; font-size: 0.75em;">
+                                    data-cnpj="{{ cnpj_data.cnpj }}"
+                                    data-pedidos="{% if cnpj_data.pedidos %}{% for p in cnpj_data.pedidos %}{{ p.num_pedido }}{% if not loop.last %},{% endif %}{% endfor %}{% endif %}"
+                                    title="Analisar ruptura" style="min-width: 120px; font-size: 0.75em;">
                                     <span class="ruptura-info">Analisando...</span>
                                 </button>
-                                <button class="btn btn-sm btn-secondary btn-expandir"
-                                        data-cnpj="{{ cnpj_data.cnpj }}"
-                                        title="Ver detalhes">
+                                <button class="btn btn-sm btn-secondary btn-expandir" data-cnpj="{{ cnpj_data.cnpj }}"
+                                    title="Ver detalhes">
                                     <i class="fas fa-chevron-down"></i>
                                 </button>
                             </td>
                         </tr>
-                        
+
                         <!-- Linha de detalhes (inicialmente oculta) -->
                         <tr class="detail-row d-none" data-cnpj-detail="{{ cnpj_data.cnpj }}">
                             <td colspan="10">
                                 <div class="p-3 bg-light">
                                     <h6 class="mb-3">
-                                        <i class="fas fa-clipboard-list"></i> 
+                                        <i class="fas fa-clipboard-list"></i>
                                         Detalhes dos Pedidos - {{ cnpj_data.raz_social }}
                                     </h6>
-                                    
+
                                     {% for pedido in cnpj_data.pedidos %}
                                     <div class="card mb-2">
                                         <div class="card-body">
@@ -304,7 +310,8 @@
                                                 </div>
                                                 <div class="col-md-2">
                                                     <strong>Data:</strong><br>
-                                                    {{ pedido.data_pedido.strftime('%d/%m/%Y') if pedido.data_pedido else '-' }}
+                                                    {{ pedido.data_pedido.strftime('%d/%m/%Y') if pedido.data_pedido
+                                                    else '-' }}
                                                 </div>
                                                 <div class="col-md-2">
                                                     <strong>Pedido Cliente:</strong><br>
@@ -324,7 +331,7 @@
                                                     {{ pedido.observacoes or '-' }}
                                                 </div>
                                             </div>
-                                            
+
                                             {% if pedido.qtd_pendente > 0 %}
                                             <div class="mt-2">
                                                 <span class="text-muted">Pendente:</span>
@@ -335,7 +342,7 @@
                                                 </span>
                                             </div>
                                             {% endif %}
-                                            
+
                                             {% if pedido.separacoes %}
                                             <div class="mt-2">
                                                 <strong>Separações:</strong>
@@ -346,13 +353,19 @@
                                                         {{ sep.status }}
                                                     </span>
                                                     <span class="badge bg-light text-dark border">
-                                                        R$ {{ "{:,.2f}".format(sep.valor_total) if sep.valor_total else '0,00' }} |
-                                                        {{ "{:,.2f}".format(sep.peso_total) if sep.peso_total else '0,00' }} kg |
-                                                        {{ "{:,.2f}".format(sep.pallet_total) if sep.pallet_total else '0,00' }} pallets
+                                                        R$ {{ "{:,.2f}".format(sep.valor_total) if sep.valor_total else
+                                                        '0,00' }} |
+                                                        {{ "{:,.2f}".format(sep.peso_total) if sep.peso_total else
+                                                        '0,00' }} kg |
+                                                        {{ "{:,.2f}".format(sep.pallet_total) if sep.pallet_total else
+                                                        '0,00' }} pallets
                                                     </span>
-                                                    <span class="badge {% if sep.agendamento_confirmado %}bg-success{% else %}bg-secondary{% endif %}">
-                                                        Exp: {{ sep.expedicao.strftime('%d/%m') if sep.expedicao else '-' }} |
-                                                        Agenda: {{ sep.agendamento.strftime('%d/%m') if sep.agendamento else '-' }}
+                                                    <span
+                                                        class="badge {% if sep.agendamento_confirmado %}bg-success{% else %}bg-secondary{% endif %}">
+                                                        Exp: {{ sep.expedicao.strftime('%d/%m') if sep.expedicao else
+                                                        '-' }} |
+                                                        Agenda: {{ sep.agendamento.strftime('%d/%m') if sep.agendamento
+                                                        else '-' }}
                                                     </span>
                                                     {% if sep.protocolo %}
                                                     <span class="badge bg-secondary">
@@ -368,7 +381,7 @@
                                                 {% endfor %}
                                             </div>
                                             {% endif %}
-                                            
+
                                             {% if pedido.nfs_cd %}
                                             <div class="mt-2">
                                                 <strong>NFs no CD:</strong>
@@ -381,12 +394,15 @@
                                                     <span class="badge bg-light text-dark border">
                                                         R$ {{ "{:,.2f}".format(nf.valor) if nf.valor else '0,00' }} |
                                                         {{ "{:,.2f}".format(nf.peso) if nf.peso else '0,00' }} kg |
-                                                        {{ "{:,.2f}".format(nf.pallet) if nf.pallet else '0,00' }} pallets
+                                                        {{ "{:,.2f}".format(nf.pallet) if nf.pallet else '0,00' }}
+                                                        pallets
                                                     </span>
                                                     {% if nf.expedicao or nf.agendamento %}
                                                     <span class="badge bg-secondary">
-                                                        Exp: {{ nf.expedicao.strftime('%d/%m') if nf.expedicao else '-' }} |
-                                                        Agenda: {{ nf.agendamento.strftime('%d/%m') if nf.agendamento else '-' }}
+                                                        Exp: {{ nf.expedicao.strftime('%d/%m') if nf.expedicao else '-'
+                                                        }} |
+                                                        Agenda: {{ nf.agendamento.strftime('%d/%m') if nf.agendamento
+                                                        else '-' }}
                                                     </span>
                                                     {% endif %}
                                                     {% if nf.protocolo %}
@@ -427,7 +443,7 @@
                     <i class="fas fa-info-circle"></i>
                     <span id="qtdSelecionados">0</span> CNPJs selecionados para agendamento
                 </div>
-                
+
                 <div class="row mb-3">
                     <div class="col-md-6">
                         <label class="form-label">Data de Expedição:</label>
@@ -438,12 +454,12 @@
                         <input type="date" class="form-control" id="dataAgendamento">
                     </div>
                 </div>
-                
+
                 <div class="mb-3">
                     <label class="form-label">Observações:</label>
                     <textarea class="form-control" id="observacoesLote" rows="3"></textarea>
                 </div>
-                
+
                 <div class="alert alert-warning">
                     <i class="fas fa-exclamation-triangle"></i>
                     Esta ação irá processar o agendamento de todos os pedidos pendentes dos CNPJs selecionados.
@@ -460,32 +476,34 @@
 </div>
 
 <!-- Modal de Importação da Planilha Sendas -->
-<div class="modal fade" id="modalImportarPlanilhaSendas" tabindex="-1" aria-labelledby="modalImportarPlanilhaLabel" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="modalImportarPlanilhaLabel">
-          <i class="fas fa-file-import"></i> Importar Agenda Disponível Sendas
-        </h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <form id="formImportarPlanilhaSendas" enctype="multipart/form-data">
-          <div class="mb-3">
-            <label for="arquivoPlanilha" class="form-label">Selecione a planilha modelo (.xlsx)</label>
-            <input type="file" class="form-control" id="arquivoPlanilha" name="arquivo" accept=".xlsx" required>
-            <div class="form-text">Baixe a planilha do portal Sendas e faça upload aqui</div>
-          </div>
-        </form>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-        <button type="button" class="btn btn-primary" onclick="importarPlanilhaSendas()">
-          <i class="fas fa-upload"></i> Importar
-        </button>
-      </div>
+<div class="modal fade" id="modalImportarPlanilhaSendas" tabindex="-1" aria-labelledby="modalImportarPlanilhaLabel"
+    aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalImportarPlanilhaLabel">
+                    <i class="fas fa-file-import"></i> Importar Agenda Disponível Sendas
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formImportarPlanilhaSendas" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="arquivoPlanilha" class="form-label">Selecione a planilha modelo (.xlsx)</label>
+                        <input type="file" class="form-control" id="arquivoPlanilha" name="arquivo" accept=".xlsx"
+                            required>
+                        <div class="form-text">Baixe a planilha do portal Sendas e faça upload aqui</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="importarPlanilhaSendas()">
+                    <i class="fas fa-upload"></i> Importar
+                </button>
+            </div>
+        </div>
     </div>
-  </div>
 </div>
 
 <!-- Incluir modais de comparação Sendas -->
@@ -533,25 +551,25 @@
                 'X-CSRFToken': document.querySelector('[name=csrf_token]')?.value || ''
             }
         })
-        .then(response => response.json())
-        .then(data => {
-            if (data.sucesso) {
-                alert(data.mensagem);
-                // Fechar modal
-                bootstrap.Modal.getInstance(document.getElementById('modalImportarPlanilhaSendas')).hide();
-                // Limpar formulário
-                document.getElementById('formImportarPlanilhaSendas').reset();
-            } else {
-                alert('Erro: ' + data.mensagem);
-            }
-        })
-        .catch(error => {
-            alert('Erro ao importar planilha: ' + error);
-        })
-        .finally(() => {
-            btnImportar.innerHTML = textoOriginal;
-            btnImportar.disabled = false;
-        });
+            .then(response => response.json())
+            .then(data => {
+                if (data.sucesso) {
+                    alert(data.mensagem);
+                    // Fechar modal
+                    bootstrap.Modal.getInstance(document.getElementById('modalImportarPlanilhaSendas')).hide();
+                    // Limpar formulário
+                    document.getElementById('formImportarPlanilhaSendas').reset();
+                } else {
+                    alert('Erro: ' + data.mensagem);
+                }
+            })
+            .catch(error => {
+                alert('Erro ao importar planilha: ' + error);
+            })
+            .finally(() => {
+                btnImportar.innerHTML = textoOriginal;
+                btnImportar.disabled = false;
+            });
     }
 
     // Função para solicitar agendamento Sendas em lote
@@ -627,7 +645,7 @@
         console.log('📤 Enviando para /portal/sendas/solicitar/lote/preparar:', dadosEnviar);
         console.log('   Total de CNPJs:', dadosEnviar.cnpjs.length);
         dadosEnviar.cnpjs.forEach((item, i) => {
-            console.log(`   CNPJ ${i+1}:`, item.cnpj, '- Exp:', item.data_expedicao, '- Agend:', item.data_agendamento);
+            console.log(`   CNPJ ${i + 1}:`, item.cnpj, '- Exp:', item.data_expedicao, '- Agend:', item.data_agendamento);
         });
 
         // Primeiro preparar dados (criar separações do saldo)
@@ -654,52 +672,52 @@
             },
             body: JSON.stringify(dadosEnviar)
         })
-        .then(response => response.json())
-        .then(response => {
-            if (response.sucesso && response.solicitacoes && response.solicitacoes.length > 0) {
-                // Agrupar solicitações por CNPJ
-                const dadosPorCnpj = {};
-                response.solicitacoes.forEach(sol => {
-                    if (!dadosPorCnpj[sol.cnpj]) {
-                        const cnpjInfo = cnpjsSelecionados.find(c => c.cnpj === sol.cnpj);
-                        dadosPorCnpj[sol.cnpj] = {
-                            cnpj: sol.cnpj,
-                            cliente: cnpjInfo?.cliente || '',
-                            cidade: cnpjInfo?.cidade || '',
-                            data_expedicao: cnpjInfo?.data_expedicao,
-                            data_agendamento: cnpjInfo?.data_agendamento || sol.data_agendamento,
-                            pedidos: []
-                        };
-                    }
-                    dadosPorCnpj[sol.cnpj].pedidos.push(sol);
-                });
+            .then(response => response.json())
+            .then(response => {
+                if (response.sucesso && response.solicitacoes && response.solicitacoes.length > 0) {
+                    // Agrupar solicitações por CNPJ
+                    const dadosPorCnpj = {};
+                    response.solicitacoes.forEach(sol => {
+                        if (!dadosPorCnpj[sol.cnpj]) {
+                            const cnpjInfo = cnpjsSelecionados.find(c => c.cnpj === sol.cnpj);
+                            dadosPorCnpj[sol.cnpj] = {
+                                cnpj: sol.cnpj,
+                                cliente: cnpjInfo?.cliente || '',
+                                cidade: cnpjInfo?.cidade || '',
+                                data_expedicao: cnpjInfo?.data_expedicao,
+                                data_agendamento: cnpjInfo?.data_agendamento || sol.data_agendamento,
+                                pedidos: []
+                            };
+                        }
+                        dadosPorCnpj[sol.cnpj].pedidos.push(sol);
+                    });
 
-                // Converter para array e iniciar processamento sequencial
-                filaAgendamentoSendas = Object.values(dadosPorCnpj);
-                indiceAtualFila = 0;
-                protocolosGerados = {};
+                    // Converter para array e iniciar processamento sequencial
+                    filaAgendamentoSendas = Object.values(dadosPorCnpj);
+                    indiceAtualFila = 0;
+                    protocolosGerados = {};
 
-                Swal.close();
+                    Swal.close();
 
-                // Processar o primeiro CNPJ
-                processarProximoCNPJ();
+                    // Processar o primeiro CNPJ
+                    processarProximoCNPJ();
 
-            } else {
+                } else {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Sem dados para comparar',
+                        text: 'Não foram encontrados pedidos ou separações para os CNPJs selecionados'
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao buscar dados:', error);
                 Swal.fire({
-                    icon: 'warning',
-                    title: 'Sem dados para comparar',
-                    text: 'Não foram encontrados pedidos ou separações para os CNPJs selecionados'
+                    icon: 'error',
+                    title: 'Erro',
+                    text: 'Erro ao buscar dados dos CNPJs'
                 });
-            }
-        })
-        .catch(error => {
-            console.error('Erro ao buscar dados:', error);
-            Swal.fire({
-                icon: 'error',
-                title: 'Erro',
-                text: 'Erro ao buscar dados dos CNPJs'
             });
-        });
     }
 
     // Função para processar próximo CNPJ da fila
@@ -741,7 +759,7 @@
               <div class="modal-body">
                 <!-- Info do CNPJ -->
                 <div class="card mb-3">
-                  <div class="card-header bg-info text-white">
+                  <div class="card-header bg-info">
                     <h6 class="mb-0"><i class="fas fa-building"></i> Dados do Cliente</h6>
                   </div>
                   <div class="card-body">
@@ -881,30 +899,30 @@
                 solicitacoes: dadosCnpj.pedidos
             })
         })
-        .then(response => response.json())
-        .then(data => {
-            if (data.sucesso) {
-                exibirResultadoComparacaoIndividual(data.resultados_por_cnpj[dadosCnpj.cnpj]);
-            } else {
-                document.getElementById('resultado-comparacao-individual').innerHTML = `
+            .then(response => response.json())
+            .then(data => {
+                if (data.sucesso) {
+                    exibirResultadoComparacaoIndividual(data.resultados_por_cnpj[dadosCnpj.cnpj]);
+                } else {
+                    document.getElementById('resultado-comparacao-individual').innerHTML = `
                     <div class="alert alert-danger">
                         <i class="fas fa-exclamation-triangle"></i> Erro ao comparar: ${data.erro || 'Erro desconhecido'}
                     </div>
                 `;
-            }
-        })
-        .catch(error => {
-            console.error('Erro:', error);
-            document.getElementById('resultado-comparacao-individual').innerHTML = `
+                }
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                document.getElementById('resultado-comparacao-individual').innerHTML = `
                 <div class="alert alert-danger">
                     <i class="fas fa-exclamation-triangle"></i> Erro ao comparar
                 </div>
             `;
-        })
-        .finally(() => {
-            btnComparar.disabled = false;
-            btnComparar.innerHTML = '<i class="fas fa-search"></i> Comparar';
-        });
+            })
+            .finally(() => {
+                btnComparar.disabled = false;
+                btnComparar.innerHTML = '<i class="fas fa-search"></i> Comparar';
+            });
     }
 
     // Exibir resultado da comparação individual
@@ -1063,34 +1081,34 @@
                 itens_confirmados: itensConfirmados
             })
         })
-        .then(response => response.json())
-        .then(data => {
-            if (data.sucesso) {
-                // Armazenar protocolo gerado
-                protocolosGerados[dadosCnpj.cnpj] = data.protocolos[dadosCnpj.cnpj];
+            .then(response => response.json())
+            .then(data => {
+                if (data.sucesso) {
+                    // Armazenar protocolo gerado
+                    protocolosGerados[dadosCnpj.cnpj] = data.protocolos[dadosCnpj.cnpj];
 
-                // Fechar modal atual
-                const bsModal = bootstrap.Modal.getInstance(modal);
-                bsModal.hide();
+                    // Fechar modal atual
+                    const bsModal = bootstrap.Modal.getInstance(modal);
+                    bsModal.hide();
 
-                // Processar próximo CNPJ
-                indiceAtualFila++;
-                setTimeout(() => {
-                    modal.remove();
-                    processarProximoCNPJ();
-                }, 500);
-            } else {
-                alert('Erro ao confirmar: ' + (data.erro || 'Erro desconhecido'));
+                    // Processar próximo CNPJ
+                    indiceAtualFila++;
+                    setTimeout(() => {
+                        modal.remove();
+                        processarProximoCNPJ();
+                    }, 500);
+                } else {
+                    alert('Erro ao confirmar: ' + (data.erro || 'Erro desconhecido'));
+                    btnConfirmar.disabled = false;
+                    btnConfirmar.innerHTML = '<i class="fas fa-check"></i> Confirmar Agendamento';
+                }
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                alert('Erro ao confirmar agendamento');
                 btnConfirmar.disabled = false;
                 btnConfirmar.innerHTML = '<i class="fas fa-check"></i> Confirmar Agendamento';
-            }
-        })
-        .catch(error => {
-            console.error('Erro:', error);
-            alert('Erro ao confirmar agendamento');
-            btnConfirmar.disabled = false;
-            btnConfirmar.innerHTML = '<i class="fas fa-check"></i> Confirmar Agendamento';
-        });
+            });
     }
 
     // Pular CNPJ atual - DELETAR separações criadas

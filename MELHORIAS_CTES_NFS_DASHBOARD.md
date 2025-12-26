@@ -156,7 +156,7 @@ cte_existente.numeros_nfs = numeros_nfs
 ```html
 <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
     <a href="{{ url_for('cte.listar_ctes') }}" class="text-decoration-none">
-        <div class="card bg-info text-white">
+        <div class="card bg-infoimage.png">
             <div class="card-body">
                 <div class="d-flex justify-content-between">
                     <div>

@@ -1,18 +1,19 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Mapa de Pedidos - Sistema Frete</title>
-    
+
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
     <!-- SweetAlert2 -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
-    
+
     <style>
         /* Estilos do Mapa */
         #map {
@@ -20,28 +21,28 @@
             width: 100%;
             min-height: 500px;
             border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
         }
-        
+
         /* Controles do Mapa */
         .map-controls {
             background: white;
             border-radius: 8px;
             padding: 15px;
             margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
-        
+
         .control-btn {
             margin: 0 5px;
             transition: all 0.3s ease;
         }
-        
+
         .control-btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
         }
-        
+
         /* Painel Lateral */
         .side-panel {
             position: absolute;
@@ -51,11 +52,11 @@
             max-height: calc(100vh - 250px);
             background: white;
             border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
             z-index: 1000;
             overflow-y: auto;
         }
-        
+
         .side-panel-header {
             background: var(--bs-secondary-bg);
             color: var(--bs-body-color);
@@ -66,11 +67,11 @@
             z-index: 1001;
             border-bottom: 1px solid var(--bs-border-color);
         }
-        
+
         .side-panel-content {
             padding: 15px;
         }
-        
+
         /* Lista de Pedidos */
         .pedido-item {
             border-left: 4px solid var(--bs-border-color);
@@ -91,19 +92,19 @@
             background: var(--bs-secondary-bg);
             border-left-color: var(--bs-body-color);
         }
-        
+
         .pedido-item.agendado {
             border-left-color: #28a745;
         }
-        
+
         .pedido-item.urgente {
             border-left-color: #ffc107;
         }
-        
+
         .pedido-item.atrasado {
             border-left-color: #dc3545;
         }
-        
+
         /* InfoWindow Customizado */
         .info-window {
             min-width: 300px;
@@ -118,53 +119,53 @@
             border-radius: 4px 4px 0 0;
             border-bottom: 1px solid var(--bs-border-color);
         }
-        
+
         .info-window-content {
             padding: 10px;
         }
-        
+
         .info-row {
             display: flex;
             justify-content: space-between;
             padding: 5px 0;
             border-bottom: 1px solid #eee;
         }
-        
+
         .info-label {
             font-weight: 600;
             color: #495057;
         }
-        
+
         .info-value {
             color: #212529;
         }
-        
+
         /* Estatísticas */
         .stats-card {
             background: white;
             border-radius: 8px;
             padding: 15px;
             margin-bottom: 15px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             transition: all 0.3s ease;
         }
-        
+
         .stats-card:hover {
-            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
         }
-        
+
         .stat-value {
             font-size: 24px;
             font-weight: bold;
             color: var(--bs-body-color);
         }
-        
+
         .stat-label {
             font-size: 12px;
             color: #6c757d;
             text-transform: uppercase;
         }
-        
+
         /* Legenda do Mapa */
         .map-legend {
             position: absolute;
@@ -173,25 +174,25 @@
             background: white;
             padding: 15px;
             border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
             z-index: 1000;
         }
-        
+
         .legend-item {
             display: flex;
             align-items: center;
             margin-bottom: 8px;
         }
-        
+
         .legend-color {
             width: 20px;
             height: 20px;
             border-radius: 50%;
             margin-right: 10px;
             border: 2px solid white;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         }
-        
+
         /* Loading Overlay */
         .loading-overlay {
             position: absolute;
@@ -199,14 +200,14 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(255,255,255,0.9);
+            background: rgba(255, 255, 255, 0.9);
             display: flex;
             align-items: center;
             justify-content: center;
             z-index: 2000;
             border-radius: 8px;
         }
-        
+
         .loading-spinner {
             width: 50px;
             height: 50px;
@@ -215,12 +216,17 @@
             border-radius: 50%;
             animation: spin 1s linear infinite;
         }
-        
+
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
         }
-        
+
         /* Responsive */
         @media (max-width: 768px) {
             .side-panel {
@@ -232,12 +238,12 @@
                 max-height: 50vh;
                 border-radius: 20px 20px 0 0;
             }
-            
+
             #map {
                 height: 60vh;
             }
         }
-        
+
         /* Botão Flutuante */
         .fab-container {
             position: fixed;
@@ -245,7 +251,7 @@
             right: 30px;
             z-index: 1000;
         }
-        
+
         .fab-btn {
             width: 60px;
             height: 60px;
@@ -258,23 +264,23 @@
             cursor: pointer;
             transition: all 0.3s ease;
         }
-        
+
         .fab-btn:hover {
             transform: scale(1.1);
-            box-shadow: 0 6px 15px rgba(0,0,0,0.4);
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.4);
         }
-        
+
         .fab-menu {
             position: absolute;
             bottom: 70px;
             right: 0;
             display: none;
         }
-        
+
         .fab-menu.active {
             display: block;
         }
-        
+
         .fab-option {
             width: 50px;
             height: 50px;
@@ -297,6 +303,7 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container-fluid">
         <!-- Header -->
@@ -312,7 +319,7 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- Controles do Mapa -->
         <div class="row">
             <div class="col-12">
@@ -339,7 +346,8 @@
                             </button>
                         </div>
                         <div class="col-md-4 text-end">
-                            <select class="form-select d-inline-block w-auto" id="tipoMapa" onchange="mudarTipoMapa(this.value)">
+                            <select class="form-select d-inline-block w-auto" id="tipoMapa"
+                                onchange="mudarTipoMapa(this.value)">
                                 <option value="roadmap">Ruas</option>
                                 <option value="satellite">Satélite</option>
                                 <option value="hybrid">Híbrido</option>
@@ -350,7 +358,7 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- Estatísticas -->
         <div class="row mb-3">
             <div class="col-md-2">
@@ -378,7 +386,7 @@
                 </div>
             </div>
             <div class="col-md-2">
-                <div class="stats-card bg-info text-white">
+                <div class="stats-card bg-info">
                     <div class="stat-value" id="veiculoSelecionado">-</div>
                     <div class="stat-label">Veículo Ideal</div>
                 </div>
@@ -390,17 +398,17 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- Mapa Container -->
         <div class="row">
             <div class="col-12 position-relative">
                 <div id="map"></div>
-                
+
                 <!-- Loading Overlay -->
                 <div class="loading-overlay" id="loadingOverlay" style="display: none;">
                     <div class="loading-spinner"></div>
                 </div>
-                
+
                 <!-- Painel Lateral -->
                 <div class="side-panel" id="sidePanel" style="display: none;">
                     <div class="side-panel-header">
@@ -415,7 +423,7 @@
                         <!-- Lista de pedidos será inserida aqui -->
                     </div>
                 </div>
-                
+
                 <!-- Legenda -->
                 <div class="map-legend" id="mapLegend">
                     <h6>Legenda</h6>
@@ -439,7 +447,7 @@
             </div>
         </div>
     </div>
-    
+
     <!-- Botão Flutuante -->
     <div class="fab-container">
         <div class="fab-menu" id="fabMenu">
@@ -457,7 +465,7 @@
             <i class="fas fa-plus"></i>
         </button>
     </div>
-    
+
     <!-- jQuery -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <!-- Bootstrap JS -->
@@ -478,10 +486,10 @@
         let heatmap;
         let cdMarker;
         let cdData = null;
-        
+
         // Pedidos selecionados
-        const pedidosSelecionados = {{ pedidos_selecionados|tojson }};
-        
+        const pedidosSelecionados = {{ pedidos_selecionados| tojson }};
+
         // Inicializar mapa
         function initMap() {
             // Configuração inicial do mapa - Centro no CD Nacom Goya
@@ -497,7 +505,7 @@
                     }
                 ]
             });
-            
+
             // Inicializar serviços
             directionsService = new google.maps.DirectionsService();
             directionsRenderer = new google.maps.DirectionsRenderer({
@@ -509,15 +517,15 @@
                     strokeOpacity: 0.8
                 }
             });
-            
+
             infoWindow = new google.maps.InfoWindow();
-            
+
             // Carregar pedidos automaticamente se houver selecionados
             if (pedidosSelecionados.length > 0) {
                 carregarPedidos();
             }
         }
-        
+
         // Obter CSRF token
         function getCSRFToken() {
             const token = document.querySelector('meta[name="csrf-token"]');
@@ -531,11 +539,11 @@
                 ?.split('=')[1];
             return cookieValue || '';
         }
-        
+
         // Carregar pedidos no mapa
         function carregarPedidos() {
             showLoading();
-            
+
             $.ajax({
                 url: '/carteira/mapa/api/pedidos',
                 method: 'POST',
@@ -544,7 +552,7 @@
                     'X-CSRFToken': getCSRFToken()
                 },
                 data: JSON.stringify({ pedidos: pedidosSelecionados }),
-                success: function(response) {
+                success: function (response) {
                     if (response.sucesso) {
                         pedidosData = response.pedidos;
                         cdData = response.cd;
@@ -558,17 +566,17 @@
                     }
                     hideLoading();
                 },
-                error: function(xhr) {
+                error: function (xhr) {
                     hideLoading();
                     Swal.fire('Erro', xhr.responseJSON?.erro || 'Erro ao carregar pedidos', 'error');
                 }
             });
         }
-        
+
         // Plotar CD no mapa
         function plotarCDNoMapa() {
             if (!cdData) return;
-            
+
             // Criar marker para o CD
             cdMarker = new google.maps.Marker({
                 position: {
@@ -584,9 +592,9 @@
                 animation: google.maps.Animation.DROP,
                 zIndex: 1000
             });
-            
+
             // InfoWindow do CD
-            cdMarker.addListener('click', function() {
+            cdMarker.addListener('click', function () {
                 const content = `
                     <div class="info-window">
                         <div class="info-window-header" style="background: #28a745;">
@@ -608,21 +616,21 @@
                         </div>
                     </div>
                 `;
-                
+
                 infoWindow.setContent(content);
                 infoWindow.open(map, cdMarker);
             });
-            
+
             markers.push(cdMarker);
         }
-        
+
         // Plotar pedidos no mapa
         function plotarPedidosNoMapa(pedidos) {
             // Limpar markers anteriores
             limparMarkers();
-            
+
             const bounds = new google.maps.LatLngBounds();
-            
+
             // Adicionar CD aos bounds se existir
             if (cdData) {
                 bounds.extend({
@@ -630,16 +638,16 @@
                     lng: cdData.coordenadas.lng
                 });
             }
-            
+
             pedidos.forEach((pedido, index) => {
                 const position = {
                     lat: pedido.coordenadas.lat,
                     lng: pedido.coordenadas.lng
                 };
-                
+
                 // Determinar cor do marker baseado no status
                 const markerColor = getMarkerColor(pedido.status);
-                
+
                 // Criar marker customizado
                 const marker = new google.maps.Marker({
                     position: position,
@@ -652,7 +660,7 @@
                     animation: google.maps.Animation.DROP,
                     pedidoData: pedido
                 });
-                
+
                 // Adicionar label ao marker
                 const label = new google.maps.Marker({
                     position: position,
@@ -666,33 +674,33 @@
                         anchor: new google.maps.Point(15, 40)
                     }
                 });
-                
+
                 // Adicionar evento de clique
-                marker.addListener('click', function() {
+                marker.addListener('click', function () {
                     mostrarInfoWindow(marker, pedido);
                 });
-                
+
                 markers.push(marker);
                 markers.push(label);
                 bounds.extend(position);
             });
-            
+
             // Ajustar zoom para mostrar todos os markers
             if (pedidos.length > 0) {
                 map.fitBounds(bounds);
-                
+
                 // Ajustar zoom se estiver muito próximo
-                google.maps.event.addListenerOnce(map, 'idle', function() {
+                google.maps.event.addListenerOnce(map, 'idle', function () {
                     if (map.getZoom() > 15) {
                         map.setZoom(15);
                     }
                 });
             }
         }
-        
+
         // Obter cor do marker baseado no status
         function getMarkerColor(status) {
-            switch(status) {
+            switch (status) {
                 case 'agendado': return 'green';
                 case 'urgente': return 'yellow';
                 case 'atrasado': return 'red';
@@ -700,7 +708,7 @@
                 default: return 'blue';
             }
         }
-        
+
         // Mostrar InfoWindow
         function mostrarInfoWindow(marker, pedido) {
             const content = `
@@ -729,7 +737,7 @@
                         <hr>
                         <div class="info-row">
                             <span class="info-label">Valor:</span>
-                            <span class="info-value">R$ ${pedido.valores.total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                            <span class="info-value">R$ ${pedido.valores.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                         </div>
                         <div class="info-row">
                             <span class="info-label">Peso:</span>
@@ -776,35 +784,35 @@
                     </div>
                 </div>
             `;
-            
+
             infoWindow.setContent(content);
             infoWindow.open(map, marker);
         }
-        
+
         // Limpar markers
         function limparMarkers() {
             markers.forEach(marker => {
                 marker.setMap(null);
             });
             markers = [];
-            
+
             if (markerCluster) {
                 markerCluster.clearMarkers();
             }
         }
-        
+
         // Atualizar estatísticas
         function atualizarEstatisticas(resumo) {
             $('#totalPedidos').text(pedidosData.length);
-            $('#valorTotal').text('R$ ' + resumo.valor_total.toLocaleString('pt-BR', {minimumFractionDigits: 2}));
+            $('#valorTotal').text('R$ ' + resumo.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
             $('#pesoTotal').text(resumo.peso_total.toFixed(2) + ' kg');
             $('#palletTotal').text(resumo.pallet_total.toFixed(2));
         }
-        
+
         // Atualizar lista de pedidos
         function atualizarListaPedidos(pedidos) {
             let html = '';
-            
+
             pedidos.forEach((pedido, index) => {
                 html += `
                     <div class="pedido-item ${pedido.status}" onclick="focusPedido(${index})">
@@ -815,43 +823,43 @@
                         <div class="small mt-1">
                             <div>${pedido.cliente.nome}</div>
                             <div>${pedido.endereco.cidade}/${pedido.endereco.uf}</div>
-                            <div class="text-muted">R$ ${pedido.valores.total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div>
+                            <div class="text-muted">R$ ${pedido.valores.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
                         </div>
                     </div>
                 `;
             });
-            
+
             $('#pedidosList').html(html);
         }
-        
+
         // Focar em pedido específico
         function focusPedido(index) {
             const pedido = pedidosData[index];
             const marker = markers[index * 2]; // *2 porque temos marker + label
-            
+
             map.setCenter({
                 lat: pedido.coordenadas.lat,
                 lng: pedido.coordenadas.lng
             });
             map.setZoom(15);
-            
+
             // Abrir InfoWindow
             mostrarInfoWindow(marker, pedido);
-            
+
             // Destacar na lista
             $('.pedido-item').removeClass('selected');
             $('.pedido-item').eq(index).addClass('selected');
         }
-        
+
         // Calcular rota otimizada
         function calcularRotaOtimizada() {
             if (pedidosData.length < 2) {
                 Swal.fire('Aviso', 'Selecione pelo menos 2 pedidos para calcular a rota', 'warning');
                 return;
             }
-            
+
             showLoading();
-            
+
             $.ajax({
                 url: '/carteira/mapa/api/rota-otimizada',
                 method: 'POST',
@@ -860,56 +868,56 @@
                     'X-CSRFToken': getCSRFToken()
                 },
                 data: JSON.stringify({ pedidos: pedidosSelecionados }),
-                success: function(response) {
+                success: function (response) {
                     if (response.sucesso) {
                         exibirRotaOtimizada(response.rota);
-                        
+
                         // Atualizar informações do veículo e pedágio
                         if (response.veiculo) {
                             $('#veiculoSelecionado').text(response.veiculo.nome);
-                            $('#veiculoSelecionado').attr('title', 
+                            $('#veiculoSelecionado').attr('title',
                                 `Capacidade: ${response.veiculo.peso_maximo} kg | ${response.veiculo.tipo} | ${response.veiculo.eixos} eixos`);
                         }
-                        
+
                         if (response.pedagio) {
                             $('#pedagioEstimado').text(`R$ ${response.pedagio.valor_total.toFixed(2)}`);
-                            $('#pedagioEstimado').attr('title', 
+                            $('#pedagioEstimado').attr('title',
                                 `${response.pedagio.num_pracas_estimado} praça(s) × R$ ${response.pedagio.valor_medio_praca.toFixed(2)}`);
                         }
-                        
+
                         mostrarEstatisticasRotaCompleta(response.rota, response.estatisticas, response.veiculo, response.pedagio);
                     }
                     hideLoading();
                 },
-                error: function(xhr) {
+                error: function (xhr) {
                     hideLoading();
                     Swal.fire('Erro', xhr.responseJSON?.erro || 'Erro ao calcular rota', 'error');
                 }
             });
         }
-        
+
         // Variáveis para armazenar marcadores de ordem e pedágio
         let ordemMarkers = [];
         let pedagioMarkers = [];
-        
+
         // Exibir rota otimizada
         function exibirRotaOtimizada(rota) {
             // Limpar rota anterior
             if (rotaPolyline) {
                 rotaPolyline.setMap(null);
             }
-            
+
             // Limpar marcadores de ordem anteriores
             ordemMarkers.forEach(marker => marker.setMap(null));
             ordemMarkers = [];
-            
+
             // Limpar marcadores de pedágio anteriores
             pedagioMarkers.forEach(marker => marker.setMap(null));
             pedagioMarkers = [];
-            
+
             // Decodificar polyline
             const path = google.maps.geometry.encoding.decodePath(rota.polyline);
-            
+
             // Criar nova polyline com cor personalizada
             rotaPolyline = new google.maps.Polyline({
                 path: path,
@@ -931,13 +939,13 @@
                 }],
                 map: map
             });
-            
+
             // Adicionar marcadores de ordem e tempo para cada pedido
             if (rota.ordem_pedidos && rota.legs) {
                 // Array para armazenar tempos acumulados para cada pedido
                 const temposAcumulados = [];
                 let tempoTotal = 0;
-                
+
                 // Calcular tempo acumulado para cada ponto
                 for (let i = 0; i <= rota.ordem_pedidos.length && i < rota.legs.length; i++) {
                     if (i === 0) {
@@ -958,20 +966,20 @@
                         temposAcumulados.push(tempoTotal);
                     }
                 }
-                
+
                 rota.ordem_pedidos.forEach((numPedido, index) => {
                     // Encontrar o pedido nos dados
                     const pedido = pedidosData.find(p => p.num_pedido === numPedido);
-                    
+
                     if (pedido) {
                         // Usar o tempo acumulado calculado
                         const tempoAcumulado = temposAcumulados[index] || 0;
-                        
+
                         // Verificar se há outro pedido no mesmo local (mesmo cliente)
                         let offsetLat = 0;
                         let offsetLng = 0;
                         let pedidosNoMesmoLocal = 0;
-                        
+
                         // Verificar pedidos anteriores no mesmo CNPJ ou coordenadas muito próximas
                         for (let j = 0; j < index; j++) {
                             const outroPedido = pedidosData.find(p => p.num_pedido === rota.ordem_pedidos[j]);
@@ -981,7 +989,7 @@
                                 const distanciaLat = Math.abs(outroPedido.coordenadas.lat - pedido.coordenadas.lat);
                                 const distanciaLng = Math.abs(outroPedido.coordenadas.lng - pedido.coordenadas.lng);
                                 const muitoProximo = distanciaLat < 0.0001 && distanciaLng < 0.0001;
-                                
+
                                 if (mesmoCNPJ && muitoProximo) {  // Só aplicar offset se for mesmo CNPJ E mesmo local
                                     pedidosNoMesmoLocal++;
                                     // Aplicar offset diagonal para separar visualmente
@@ -990,7 +998,7 @@
                                 }
                             }
                         }
-                        
+
                         // Criar marcador customizado com ordem (menor tamanho)
                         const ordemLabel = new google.maps.Marker({
                             position: {
@@ -1015,7 +1023,7 @@
                             title: `${index + 1}º - ${pedido.num_pedido}`,
                             zIndex: 1000 + index
                         });
-                        
+
                         // Criar label com tempo estimado (posicionado ACIMA do marcador)
                         const tempoLabel = new google.maps.Marker({
                             position: {
@@ -1036,7 +1044,7 @@
                             },
                             zIndex: 1100 + index  // Maior zIndex para ficar acima
                         });
-                        
+
                         // InfoWindow ao clicar
                         ordemLabel.addListener('click', () => {
                             // Verificar se há outros pedidos do mesmo cliente nesta rota
@@ -1044,12 +1052,12 @@
                                 const p = pedidosData.find(pd => pd.num_pedido === numPed);
                                 return p && p.cliente.cnpj === pedido.cliente.cnpj;
                             });
-                            
+
                             let pedidosInfo = '';
                             if (pedidosMesmoCliente.length > 1) {
                                 pedidosInfo = `<p class="mb-1"><strong>Pedidos neste local:</strong> ${pedidosMesmoCliente.join(', ')}</p>`;
                             }
-                            
+
                             const infoContent = `
                                 <div style="padding: 10px;">
                                     <h6 class="mb-2"><strong>${index + 1}ª Entrega</strong></h6>
@@ -1063,48 +1071,48 @@
                                     ${pedidosNoMesmoLocal > 0 ? `<div class="alert alert-info mt-2 mb-0"><small>⚠️ Múltiplas entregas neste endereço</small></div>` : ''}
                                 </div>
                             `;
-                            
+
                             if (infoWindow) {
                                 infoWindow.close();
                             }
-                            
+
                             infoWindow = new google.maps.InfoWindow({
                                 content: infoContent
                             });
-                            
+
                             infoWindow.open(map, ordemLabel);
                         });
-                        
+
                         ordemMarkers.push(ordemLabel);
                         ordemMarkers.push(tempoLabel);
                     }
                 });
             }
-            
+
             // Adicionar marcadores de pedágio estimados
             adicionarMarcadoresPedagio(path, rota.distancia_total_km);
-            
+
             // Ajustar bounds
             const bounds = new google.maps.LatLngBounds();
             bounds.extend(new google.maps.LatLng(rota.bounds.southwest.lat, rota.bounds.southwest.lng));
             bounds.extend(new google.maps.LatLng(rota.bounds.northeast.lat, rota.bounds.northeast.lng));
             map.fitBounds(bounds);
         }
-        
+
         // Função para adicionar marcadores de pedágio
         function adicionarMarcadoresPedagio(path, distanciaTotal) {
             // Estimar praças de pedágio (1 a cada 45km em rodovias pedagiadas)
             const distanciaPedagiada = distanciaTotal * 0.6; // 60% da rota
             const numPracas = Math.max(1, Math.floor(distanciaPedagiada / 45));
-            
+
             // Distribuir praças ao longo da rota
             const totalPoints = path.length;
             const interval = Math.floor(totalPoints / (numPracas + 1));
-            
+
             for (let i = 1; i <= numPracas; i++) {
                 const pointIndex = Math.min(i * interval, totalPoints - 1);
                 const position = path[pointIndex];
-                
+
                 // Criar marcador de pedágio
                 const pedagioMarker = new google.maps.Marker({
                     position: position,
@@ -1124,12 +1132,12 @@
                     title: `Praça de Pedágio ${i}`,
                     zIndex: 800
                 });
-                
+
                 // Adicionar InfoWindow ao clicar
                 pedagioMarker.addListener('click', () => {
                     const valorEstimado = $('#pedagioEstimado').text();
                     const veiculoNome = $('#veiculoSelecionado').text();
-                    
+
                     const infoContent = `
                         <div style="padding: 10px;">
                             <h6 class="mb-2"><strong>🛣️ Praça de Pedágio ${i}</strong></h6>
@@ -1141,24 +1149,24 @@
                             </div>
                         </div>
                     `;
-                    
+
                     if (infoWindow) {
                         infoWindow.close();
                     }
-                    
+
                     infoWindow = new google.maps.InfoWindow({
                         content: infoContent,
                         maxWidth: 300
                     });
-                    
+
                     infoWindow.open(map, pedagioMarker);
                 });
-                
+
                 // Adicionar label flutuante com valor
-                const valorPorPraca = $('#pedagioEstimado').text() ? 
-                    (parseFloat($('#pedagioEstimado').text().replace('R$ ', '').replace(',', '.')) / numPracas).toFixed(2) : 
+                const valorPorPraca = $('#pedagioEstimado').text() ?
+                    (parseFloat($('#pedagioEstimado').text().replace('R$ ', '').replace(',', '.')) / numPracas).toFixed(2) :
                     '8.50';
-                
+
                 const labelPedagio = new google.maps.Marker({
                     position: {
                         lat: position.lat() - 0.0008,  // Posicionar abaixo
@@ -1178,17 +1186,17 @@
                     },
                     zIndex: 799
                 });
-                
+
                 pedagioMarkers.push(pedagioMarker);
                 pedagioMarkers.push(labelPedagio);
             }
         }
-        
+
         // Mostrar estatísticas da rota (versão simplificada mantida para compatibilidade)
         function mostrarEstatisticasRota(rota, estatisticas) {
             mostrarEstatisticasRotaCompleta(rota, estatisticas, null, null);
         }
-        
+
         // Mostrar estatísticas completas da rota com veículo e pedágio
         function mostrarEstatisticasRotaCompleta(rota, estatisticas, veiculo, pedagio) {
             let legsHtml = '';
@@ -1201,7 +1209,7 @@
                     </tr>
                 `;
             });
-            
+
             // Seção do veículo
             let veiculoHtml = '';
             if (veiculo) {
@@ -1231,7 +1239,7 @@
                     </table>
                 `;
             }
-            
+
             // Seção do pedágio
             let pedagioHtml = '';
             if (pedagio) {
@@ -1264,7 +1272,7 @@
                     </div>
                 `;
             }
-            
+
             Swal.fire({
                 title: '📍 Rota Otimizada',
                 html: `
@@ -1289,7 +1297,7 @@
                             </tr>
                             <tr>
                                 <td><strong>Valor Total:</strong></td>
-                                <td>R$ ${estatisticas.valor_total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                                <td>R$ ${estatisticas.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                             </tr>
                         </table>
                         
@@ -1328,11 +1336,11 @@
                 confirmButtonText: 'Fechar'
             });
         }
-        
+
         // Mostrar densidade regional
         function mostrarDensidade() {
             showLoading();
-            
+
             $.ajax({
                 url: '/carteira/mapa/api/densidade-regional',
                 method: 'POST',
@@ -1341,37 +1349,37 @@
                     'X-CSRFToken': getCSRFToken()
                 },
                 data: JSON.stringify({ pedidos: pedidosSelecionados }),
-                success: function(response) {
+                success: function (response) {
                     if (response.sucesso) {
                         exibirDensidadeNoMapa(response.densidade);
                         mostrarEstatisticasDensidade(response.densidade);
                     }
                     hideLoading();
                 },
-                error: function(xhr) {
+                error: function (xhr) {
                     hideLoading();
                     Swal.fire('Erro', 'Erro ao analisar densidade', 'error');
                 }
             });
         }
-        
+
         // Exibir densidade no mapa (heatmap)
         function exibirDensidadeNoMapa(densidade) {
             // Preparar dados para heatmap
             const heatmapData = [];
-            
+
             pedidosData.forEach(pedido => {
                 heatmapData.push({
                     location: new google.maps.LatLng(pedido.coordenadas.lat, pedido.coordenadas.lng),
                     weight: pedido.valores.total / 1000 // Peso baseado no valor
                 });
             });
-            
+
             // Remover heatmap anterior
             if (heatmap) {
                 heatmap.setMap(null);
             }
-            
+
             // Criar novo heatmap
             heatmap = new google.maps.visualization.HeatmapLayer({
                 data: heatmapData,
@@ -1396,7 +1404,7 @@
                 ]
             });
         }
-        
+
         // Mostrar estatísticas de densidade
         function mostrarEstatisticasDensidade(densidade) {
             let estadosHtml = '';
@@ -1405,23 +1413,23 @@
                     <tr>
                         <td>${uf}</td>
                         <td>${dados.total_pedidos}</td>
-                        <td>R$ ${dados.valor_total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                        <td>R$ ${dados.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                         <td>${dados.peso_total.toFixed(2)} kg</td>
                     </tr>
                 `;
             }
-            
+
             let cidadesHtml = '';
             densidade.por_cidade.slice(0, 10).forEach(cidade => {
                 cidadesHtml += `
                     <tr>
                         <td>${cidade.cidade}/${cidade.uf}</td>
                         <td>${cidade.total_pedidos}</td>
-                        <td>R$ ${cidade.valor_total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                        <td>R$ ${cidade.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                     </tr>
                 `;
             });
-            
+
             Swal.fire({
                 title: 'Análise de Densidade Regional',
                 html: `
@@ -1442,7 +1450,7 @@
                             </tr>
                             <tr>
                                 <td><strong>Valor Total:</strong></td>
-                                <td>R$ ${densidade.resumo.valor_total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                                <td>R$ ${densidade.resumo.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                             </tr>
                         </table>
                         
@@ -1487,16 +1495,16 @@
                 confirmButtonText: 'Fechar'
             });
         }
-        
+
         // Calcular matriz de distâncias
         function calcularMatrizDistancias() {
             if (pedidosData.length < 2) {
                 Swal.fire('Aviso', 'Selecione pelo menos 2 pedidos para calcular a matriz', 'warning');
                 return;
             }
-            
+
             showLoading();
-            
+
             $.ajax({
                 url: '/carteira/mapa/api/matriz-distancias',
                 method: 'POST',
@@ -1505,30 +1513,30 @@
                     'X-CSRFToken': getCSRFToken()
                 },
                 data: JSON.stringify({ pedidos: pedidosSelecionados.slice(0, 10) }),
-                success: function(response) {
+                success: function (response) {
                     if (response.sucesso) {
                         mostrarMatrizDistancias(response.matriz);
                     }
                     hideLoading();
                 },
-                error: function(xhr) {
+                error: function (xhr) {
                     hideLoading();
                     Swal.fire('Erro', xhr.responseJSON?.erro || 'Erro ao calcular matriz', 'error');
                 }
             });
         }
-        
+
         // Mostrar matriz de distâncias
         function mostrarMatrizDistancias(matriz) {
             let matrizHtml = '<table class="table table-sm table-bordered">';
             matrizHtml += '<thead><tr><th>De/Para</th>';
-            
+
             // Header
             matriz.pedidos.forEach(pedido => {
                 matrizHtml += `<th>${pedido}</th>`;
             });
             matrizHtml += '</tr></thead><tbody>';
-            
+
             // Linhas
             matriz.distancias.forEach((linha, i) => {
                 matrizHtml += `<tr><th>${matriz.pedidos[i]}</th>`;
@@ -1544,20 +1552,20 @@
                 matrizHtml += '</tr>';
             });
             matrizHtml += '</tbody></table>';
-            
+
             // Pares próximos e distantes
             let paresHtml = '<h5 class="mt-3">Pares Mais Próximos</h5><ul>';
             matriz.resumo.pares_proximos.forEach(par => {
                 paresHtml += `<li>${par.origem} → ${par.destino}: ${par.distancia.toFixed(1)} km (${par.tempo.toFixed(0)} min)</li>`;
             });
             paresHtml += '</ul>';
-            
+
             paresHtml += '<h5 class="mt-3">Pares Mais Distantes</h5><ul>';
             matriz.resumo.pares_distantes.forEach(par => {
                 paresHtml += `<li>${par.origem} → ${par.destino}: ${par.distancia.toFixed(1)} km (${par.tempo.toFixed(0)} min)</li>`;
             });
             paresHtml += '</ul>';
-            
+
             Swal.fire({
                 title: 'Matriz de Distâncias',
                 html: `
@@ -1574,7 +1582,7 @@
                 confirmButtonText: 'Fechar'
             });
         }
-        
+
         // Alternar clustering
         function alternarClustering() {
             if (markerCluster) {
@@ -1592,16 +1600,16 @@
                 Swal.fire('Clustering Ativado', '', 'success');
             }
         }
-        
+
         // Mudar tipo de mapa
         function mudarTipoMapa(tipo) {
             map.setMapTypeId(tipo);
         }
-        
+
         // Centralizar mapa
         function centralizarMapa() {
             const bounds = new google.maps.LatLngBounds();
-            
+
             // Incluir CD nos bounds
             if (cdData) {
                 bounds.extend({
@@ -1609,7 +1617,7 @@
                     lng: cdData.coordenadas.lng
                 });
             }
-            
+
             // Incluir pedidos nos bounds
             if (pedidosData.length > 0) {
                 pedidosData.forEach(pedido => {
@@ -1619,12 +1627,12 @@
                     });
                 });
             }
-            
+
             if (!bounds.isEmpty()) {
                 map.fitBounds(bounds);
             }
         }
-        
+
         // Toggle fullscreen
         function toggleFullscreen() {
             const mapDiv = document.getElementById('map');
@@ -1634,39 +1642,39 @@
                 document.exitFullscreen();
             }
         }
-        
+
         // Tirar screenshot
         function tirarScreenshot() {
             // Implementar com html2canvas se necessário
             Swal.fire('Screenshot', 'Use Ctrl+Shift+S para capturar a tela', 'info');
         }
-        
+
         // Navegar até localização
         function navegarAte(lat, lng) {
             const url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
             window.open(url, '_blank');
         }
-        
+
         // Ver detalhes do pedido
         function verDetalhesPedido(numPedido) {
             window.open(`/carteira/pedido/${numPedido}`, '_blank');
         }
-        
+
         // Toggle side panel
         function toggleSidePanel() {
             $('#sidePanel').toggle();
         }
-        
+
         // Toggle FAB menu
         function toggleFabMenu() {
             $('#fabMenu').toggleClass('active');
             $('.fab-btn i').toggleClass('fa-plus fa-times');
         }
-        
+
         // Exportar dados
         function exportarDados() {
             showLoading();
-            
+
             $.ajax({
                 url: '/carteira/mapa/api/exportar-mapa',
                 method: 'POST',
@@ -1674,46 +1682,46 @@
                 headers: {
                     'X-CSRFToken': getCSRFToken()
                 },
-                data: JSON.stringify({ 
+                data: JSON.stringify({
                     pedidos: pedidosSelecionados,
                     incluir_rota: true,
                     incluir_densidade: true
                 }),
-                success: function(response) {
+                success: function (response) {
                     if (response.sucesso) {
                         // Criar download
                         const dataStr = JSON.stringify(response.dados, null, 2);
-                        const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-                        
-                        const exportFileDefaultName = `mapa_pedidos_${new Date().toISOString().slice(0,10)}.json`;
-                        
+                        const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+
+                        const exportFileDefaultName = `mapa_pedidos_${new Date().toISOString().slice(0, 10)}.json`;
+
                         const linkElement = document.createElement('a');
                         linkElement.setAttribute('href', dataUri);
                         linkElement.setAttribute('download', exportFileDefaultName);
                         linkElement.click();
-                        
+
                         Swal.fire('Sucesso', 'Dados exportados com sucesso', 'success');
                     }
                     hideLoading();
                 },
-                error: function(xhr) {
+                error: function (xhr) {
                     hideLoading();
                     Swal.fire('Erro', 'Erro ao exportar dados', 'error');
                 }
             });
         }
-        
+
         // Show/Hide loading
         function showLoading() {
             $('#loadingOverlay').show();
         }
-        
+
         function hideLoading() {
             $('#loadingOverlay').hide();
         }
-        
+
         // Atalhos de teclado
-        $(document).keydown(function(e) {
+        $(document).keydown(function (e) {
             // R - Atualizar
             if (e.key === 'r' && !$(e.target).is('input, textarea')) {
                 e.preventDefault();
@@ -1746,13 +1754,14 @@
             }
         });
     </script>
-    
+
     <!-- Carregar Google Maps API com bibliotecas necessárias -->
     <script async defer
         src="https://maps.googleapis.com/maps/api/js?key={{ api_key }}&callback=initMap&libraries=geometry,visualization,places&language=pt-BR">
-    </script>
-    
+        </script>
+
     <!-- MarkerClusterer -->
     <script src="https://unpkg.com/@googlemaps/markerclusterer/dist/index.min.js"></script>
 </body>
+
 </html>

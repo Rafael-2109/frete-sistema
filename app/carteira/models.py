@@ -49,7 +49,17 @@ class CarteiraPrincipal(db.Model):
     qtd_saldo_produto_pedido = db.Column(db.Numeric(15, 3), nullable=False)  # Saldo a faturar
     qtd_cancelada_produto_pedido = db.Column(db.Numeric(15, 3), default=0)  # Quantidade cancelada
     preco_produto_pedido = db.Column(db.Numeric(15, 2), nullable=True)  # Preço unitário
-    
+
+    # 💰 IMPOSTOS DA LINHA (Odoo sale.order.line)
+    icms_valor = db.Column(db.Numeric(15, 2), nullable=True)  # l10n_br_icms_valor
+    icmsst_valor = db.Column(db.Numeric(15, 2), nullable=True)  # l10n_br_icmsst_valor
+    pis_valor = db.Column(db.Numeric(15, 2), nullable=True)  # l10n_br_pis_valor
+    cofins_valor = db.Column(db.Numeric(15, 2), nullable=True)  # l10n_br_cofins_valor
+
+    # 🏷️ DESCONTO CONTRATUAL (Odoo res.partner)
+    desconto_contratual = db.Column(db.Boolean, default=False, nullable=True)  # x_studio_desconto_contratual
+    desconto_percentual = db.Column(db.Numeric(5, 2), nullable=True)  # x_studio_desconto (%)
+
     # 💳 CONDIÇÕES COMERCIAIS
     cond_pgto_pedido = db.Column(db.String(100), nullable=True)  # Condições de pagamento
     forma_pgto_pedido = db.Column(db.String(100), nullable=True)  # Forma de pagamento

@@ -227,7 +227,7 @@ modal-cardex.js:
 <div class="modal fade show" id="modalRuptura" tabindex="-1" style="display: block;" aria-modal="true" role="dialog">
                 <div class="modal-dialog modal-xl" style="margin-top: 70px;">
                     <div class="modal-content">
-                        <div class="modal-header bg-info text-white">
+                        <div class="modal-header bg-info">
                             <h5 class="modal-title" id="modalRupturaTitulo">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
