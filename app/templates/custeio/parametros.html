@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block title %}Custeio - Parametros{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/modules/custeio/custeio.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-1">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1 mt-2"><i class="bi bi-sliders me-2"></i>Parametros de Custeio</h4>
+            <small class="text-muted">Configure parametros globais utilizados nos calculos de custo</small>
+        </div>
+        <div class="crud-actions">
+            <button class="btn btn-outline-secondary btn-sm" onclick="window.location.href='/custeio/api/parametros/modelo'">
+                <i class="bi bi-file-earmark-arrow-down me-1"></i>Modelo
+            </button>
+            <button class="btn btn-outline-primary btn-sm" onclick="document.getElementById('input-importar').click()">
+                <i class="bi bi-upload me-1"></i>Importar
+            </button>
+            <button class="btn btn-outline-success btn-sm" onclick="window.location.href='/custeio/api/parametros/exportar'">
+                <i class="bi bi-download me-1"></i>Exportar
+            </button>
+            <button class="btn btn-success btn-sm" onclick="abrirModalParametro()">
+                <i class="bi bi-plus-lg me-1"></i>Novo
+            </button>
+            <a href="{{ url_for('custeio.index') }}" class="text-decoration-none text-muted">
+                <i class="bi bi-arrow-left me-2"></i>Voltar
+            </a>
+            <input type="file" id="input-importar" accept=".xlsx,.xls" style="display:none" onchange="importarParametros(this)">
+        </div>
+    </div>
+
+    <!-- Cards Destaque - Parametros Principais -->
+    <div class="row mb-4">
+        <!-- Custo de Operacao -->
+        <div class="col-md-6">
+            <div class="card h-100 border-primary">
+                <div class="card-header bg-primary bg-opacity-10 py-2">
+                    <i class="bi bi-gear me-2"></i>Custo de Operacao
+                </div>
+                <div class="card-body">
+                    <p class="mb-2 small">Percentual aplicado sobre o preco de venda para cobrir despesas operacionais.</p>
+                    <div class="row align-items-end">
+                        <div class="col-7">
+                            <label class="form-label small mb-1">Percentual (%)</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control form-control-lg text-end" id="operacao-percentual"
+                                       step="0.01" min="0" max="100" placeholder="0.00">
+                                <span class="input-group-text">%</span>
+                            </div>
+                        </div>
+                        <div class="col-5 text-end">
+                            <button class="btn btn-success" onclick="salvarCustoOperacao()">
+                                <i class="bi bi-check-lg me-1"></i>Salvar
+                            </button>
+                        </div>
+                    </div>
+                    <small class="text-muted d-block mt-2">Atualizado: <span id="operacao-atualizado">-</span></small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Custo Financeiro -->
+        <div class="col-md-6">
+            <div class="card h-100 border-warning">
+                <div class="card-header bg-warning bg-opacity-10 py-2">
+                    <i class="bi bi-bank me-2"></i>Custo Financeiro
+                </div>
+                <div class="card-body">
+                    <p class="mb-2 small">Percentual aplicado sobre o preco de venda para cobrir custos financeiros (juros, taxas).</p>
+                    <div class="row align-items-end">
+                        <div class="col-7">
+                            <label class="form-label small mb-1">Percentual (%)</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control form-control-lg text-end" id="financeiro-percentual"
+                                       step="0.01" min="0" max="100" placeholder="0.00">
+                                <span class="input-group-text">%</span>
+                            </div>
+                        </div>
+                        <div class="col-5 text-end">
+                            <button class="btn btn-success" onclick="salvarCustoFinanceiro()">
+                                <i class="bi bi-check-lg me-1"></i>Salvar
+                            </button>
+                        </div>
+                    </div>
+                    <small class="text-muted d-block mt-2">Atualizado: <span id="financeiro-atualizado">-</span></small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela de Parametros -->
+    <div class="card">
+        <div class="card-header py-2 d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-list-ul me-2"></i>Todos os Parametros</span>
+            <span class="text-muted" id="total-registros">-</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-container">
+                <table class="table table-hover table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Chave</th>
+                            <th class="text-end">Valor</th>
+                            <th>Descricao</th>
+                            <th>Atualizado Em</th>
+                            <th>Atualizado Por</th>
+                            <th class="text-center" style="width: 100px;">Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-parametros">
+                        <tr>
+                            <td colspan="6" class="empty-state">
+                                <i class="bi bi-inbox"></i>
+                                <p>Carregando...</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Parametro -->
+<div class="modal fade" id="modalParametro" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-sliders me-2"></i>Parametro de Custeio</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="parametro-id">
+                <div class="mb-3">
+                    <label class="form-label">Chave</label>
+                    <input type="text" class="form-control" id="parametro-chave" placeholder="Ex: CUSTO_OPERACAO_PERCENTUAL" required>
+                    <small class="text-muted">Use letras maiusculas e underscores</small>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Valor</label>
+                    <input type="number" class="form-control" id="parametro-valor" step="0.000001" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Descricao</label>
+                    <textarea class="form-control" id="parametro-descricao" rows="2"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="salvarParametro()">
+                    <i class="bi bi-check-lg me-1"></i>Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loading-overlay">
+    <div class="spinner-border text-light" role="status">
+        <span class="visually-hidden">Carregando...</span>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/custeio/parametros.js') }}"></script>
+{% endblock %}

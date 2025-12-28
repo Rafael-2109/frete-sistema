@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block title %}Custeio - Custo de Producao{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/modules/custeio/custeio.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-1">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1 mt-2"><i class="bi bi-boxes me-2"></i>Custo de Producao</h4>
+            <small class="text-muted">Produtos produzidos com capacidade e linha de producao</small>
+        </div>
+        <div class="crud-actions">
+            <button class="btn btn-outline-secondary btn-sm" onclick="baixarModelo()">
+                <i class="bi bi-file-earmark-arrow-down me-1"></i>Modelo
+            </button>
+            <button class="btn btn-outline-primary btn-sm" onclick="document.getElementById('input-importar').click()">
+                <i class="bi bi-upload me-1"></i>Importar
+            </button>
+            <button class="btn btn-outline-success btn-sm" onclick="exportarProducao()">
+                <i class="bi bi-download me-1"></i>Exportar
+            </button>
+            <a href="{{ url_for('custeio.index') }}" class="text-decoration-none text-muted">
+                <i class="bi bi-arrow-left me-2"></i>Voltar
+            </a>
+            <input type="file" id="input-importar" accept=".xlsx,.xls" style="display:none" onchange="importarProducao(this)">
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body py-2">
+            <div class="row g-2 align-items-center">
+                <div class="col-md-4">
+                    <select class="form-select form-select-sm" id="filtro-tipo" onchange="carregarDados()">
+                        <option value="">Todos os Tipos</option>
+                        <option value="acabado">Produto Acabado (Vendido)</option>
+                        <option value="intermediario">Produto Intermediario</option>
+                    </select>
+                </div>
+                <div class="col-md-5">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input type="text" class="form-control" id="filtro-busca" placeholder="Buscar produto..." onkeyup="filtrarLocal()">
+                    </div>
+                </div>
+                <div class="col-md-3 text-end">
+                    <span class="text-muted" id="total-registros">-</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Legenda -->
+    <div class="alert alert-info py-2 mb-3">
+        <small>
+            <i class="bi bi-info-circle me-1"></i>
+            O <strong>Custo de Produção</strong> pode ser editado diretamente na tabela. Pressione <kbd>Enter</kbd> ou clique fora para salvar.
+        </small>
+    </div>
+
+    <!-- Tabela -->
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-container">
+                <table class="table table-hover table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Nome do Produto</th>
+                            <th class="text-center">Tipo</th>
+                            <th>Linhas de Produção</th>
+                            <th class="text-end">Custo Considerado</th>
+                            <th class="text-end" style="background-color: var(--bs-warning-bg-subtle);">Custo Produção</th>
+                            <th class="text-center">Versão</th>
+                            <th>Atualizado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-producao">
+                        <tr>
+                            <td colspan="8" class="empty-state">
+                                <i class="bi bi-inbox"></i>
+                                <p>Carregando...</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loading-overlay">
+    <div class="spinner-border text-light" role="status">
+        <span class="visually-hidden">Carregando...</span>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/custeio/producao.js') }}"></script>
+{% endblock %}

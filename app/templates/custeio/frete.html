@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+
+{% block title %}Custeio - Custo de Frete{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/modules/custeio/custeio.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-1">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1 mt-2"><i class="bi bi-truck me-2"></i>Custo de Frete</h4>
+            <small class="text-muted">Tabela de percentual de frete por Incoterm e UF</small>
+        </div>
+        <div class="crud-actions">
+            <button class="btn btn-outline-secondary btn-sm" onclick="baixarModelo()">
+                <i class="bi bi-file-earmark-arrow-down me-1"></i>Modelo
+            </button>
+            <button class="btn btn-outline-primary btn-sm" onclick="document.getElementById('input-importar').click()">
+                <i class="bi bi-upload me-1"></i>Importar
+            </button>
+            <button class="btn btn-outline-success btn-sm" onclick="exportarFrete()">
+                <i class="bi bi-download me-1"></i>Exportar
+            </button>
+            <button class="btn btn-success btn-sm" onclick="abrirModalFrete()">
+                <i class="bi bi-plus-lg me-1"></i>Novo
+            </button>
+            <a href="{{ url_for('custeio.index') }}" class="text-decoration-none text-muted">
+                <i class="bi bi-arrow-left me-2"></i>Voltar
+            </a>
+            <input type="file" id="input-importar" accept=".xlsx,.xls" style="display:none" onchange="importarFrete(this)">
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body py-2">
+            <div class="row g-2 align-items-center">
+                <div class="col-md-3">
+                    <select class="form-select form-select-sm" id="filtro-incoterm" onchange="aplicarFiltros()">
+                        <option value="">Todos os Incoterms</option>
+                        <option value="CIF">CIF</option>
+                        <option value="FOB">FOB</option>
+                        <option value="RED">RED</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <select class="form-select form-select-sm" id="filtro-uf" onchange="aplicarFiltros()">
+                        <option value="">Todas as UFs</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="filtro-vigentes" checked onchange="carregarDados()">
+                        <label class="form-check-label" for="filtro-vigentes">Apenas vigentes</label>
+                    </div>
+                </div>
+                <div class="col-md-3 text-end">
+                    <span class="text-muted" id="total-registros">-</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela -->
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-container">
+                <table class="table table-hover table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Incoterm</th>
+                            <th>UF</th>
+                            <th class="text-end">Percentual (%)</th>
+                            <th>Vigencia Inicio</th>
+                            <th>Vigencia Fim</th>
+                            <th>Criado Por</th>
+                            <th class="text-center" style="width: 100px;">Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-frete">
+                        <tr>
+                            <td colspan="7" class="empty-state">
+                                <i class="bi bi-inbox"></i>
+                                <p>Carregando...</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Frete -->
+<div class="modal fade" id="modalFrete" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-truck me-2"></i>Custo de Frete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="frete-id">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Incoterm</label>
+                        <select class="form-select" id="frete-incoterm" required>
+                            <option value="">Selecione</option>
+                            <option value="CIF">CIF</option>
+                            <option value="FOB">FOB</option>
+                            <option value="RED">RED</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">UF</label>
+                        <select class="form-select" id="frete-uf" required>
+                            <option value="">Selecione</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Percentual de Frete (%)</label>
+                    <input type="number" class="form-control" id="frete-percentual" step="0.01" min="0" max="100" required>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Vigencia Inicio</label>
+                        <input type="date" class="form-control" id="frete-vigencia-inicio">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Vigencia Fim <small class="text-muted">(opcional)</small></label>
+                        <input type="date" class="form-control" id="frete-vigencia-fim">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="salvarFrete()">
+                    <i class="bi bi-check-lg me-1"></i>Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loading-overlay">
+    <div class="spinner-border text-light" role="status">
+        <span class="visually-hidden">Carregando...</span>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/custeio/frete.js') }}"></script>
+{% endblock %}

@@ -24,6 +24,7 @@ from datetime import datetime, date
 from app import db
 from app.odoo.utils.connection import get_odoo_connection
 from app.odoo.utils.carteira_mapper import CarteiraMapper
+from app.custeio.models import CustoConsiderado
 from sqlalchemy import or_
 
 logger = logging.getLogger(__name__)
@@ -1140,6 +1141,156 @@ class CarteiraService:
         except (ValueError, TypeError):
             return 0.0
 
+    def _obter_snapshot_custo(self, cod_produto: str) -> Dict[str, Any]:
+        """
+        Obtém snapshot do custo considerado atual para um produto.
+
+        Usado durante inserção de novos itens na CarteiraPrincipal para
+        capturar o custo vigente no momento da entrada do pedido.
+
+        Args:
+            cod_produto: Código do produto
+
+        Returns:
+            Dict com campos de snapshot ou dict vazio se não encontrar custo
+        """
+        try:
+            custo = CustoConsiderado.query.filter_by(
+                cod_produto=cod_produto,
+                custo_atual=True
+            ).first()
+
+            if custo:
+                return {
+                    'custo_unitario_snapshot': float(custo.custo_considerado) if custo.custo_considerado else None,
+                    'custo_tipo_snapshot': custo.tipo_custo,
+                    'custo_vigencia_snapshot': custo.vigencia_inicio,
+                    'custo_producao_snapshot': float(custo.custo_producao) if custo.custo_producao else None
+                }
+        except Exception as e:
+            logger.debug(f"Erro ao obter snapshot de custo para {cod_produto}: {e}")
+
+        return {}
+
+    def _calcular_margem_bruta(self, item: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Calcula margem bruta e líquida com base no snapshot de custo e preço de venda.
+
+        Fórmulas:
+        margem_bruta = preco - icms - pis - cofins - custo_unitario - desconto_contratual - frete - custo_financeiro
+        margem_bruta_percentual = (margem_bruta / preco) * 100
+
+        margem_liquida = margem_bruta - custo_producao - custo_operacao
+        margem_liquida_percentual = (margem_liquida / preco) * 100
+
+        Origem dos valores:
+        - preco: preco_produto_pedido
+        - icms: icms_valor / qtd_produto_pedido (unitário)
+        - pis: pis_valor / qtd_produto_pedido (unitário)
+        - cofins: cofins_valor / qtd_produto_pedido (unitário)
+        - custo_unitario: custo_unitario_snapshot
+        - custo_producao: custo_producao_snapshot
+        - desconto_contratual: (desconto_percentual / 100) * preco
+        - frete: (CustoFrete.percentual_frete / 100) * preco
+        - custo_operacao: (ParametroCusteio.CUSTO_OPERACAO_PERCENTUAL / 100) * preco
+        - custo_financeiro: (ParametroCusteio.CUSTO_FINANCEIRO_PERCENTUAL / 100) * preco
+
+        Args:
+            item: Dict com dados do item (deve conter snapshot já preenchido)
+
+        Returns:
+            Dict com campos de margem calculados
+        """
+        from app.custeio.models import CustoFrete, ParametroCusteio
+
+        resultado = {}
+
+        try:
+            preco = item.get('preco_produto_pedido')
+            custo_unitario = item.get('custo_unitario_snapshot')
+            qtd = item.get('qtd_produto_pedido')
+
+            # Precisa de preço, custo e quantidade para calcular
+            if preco is None or custo_unitario is None or qtd is None:
+                return resultado
+
+            preco = float(preco)
+            custo_unitario = float(custo_unitario)
+            qtd = float(qtd)
+
+            if preco <= 0 or qtd <= 0:
+                return resultado
+
+            # ============================================
+            # IMPOSTOS POR UNIDADE
+            # ============================================
+            icms_valor = item.get('icms_valor')
+            pis_valor = item.get('pis_valor')
+            cofins_valor = item.get('cofins_valor')
+
+            icms_unit = float(icms_valor) / qtd if icms_valor else 0.0
+            pis_unit = float(pis_valor) / qtd if pis_valor else 0.0
+            cofins_unit = float(cofins_valor) / qtd if cofins_valor else 0.0
+
+            # ============================================
+            # DESCONTO CONTRATUAL
+            # ============================================
+            desconto_percentual = item.get('desconto_percentual')
+            desconto_valor = (float(desconto_percentual) / 100) * preco if desconto_percentual else 0.0
+
+            # ============================================
+            # FRETE (percentual sobre preço)
+            # ============================================
+            incoterm = item.get('incoterm') or ''
+            cod_uf = item.get('cod_uf') or ''
+
+            frete_percentual = 0.0
+            if incoterm and cod_uf:
+                frete_percentual = CustoFrete.buscar_percentual_vigente(incoterm, cod_uf)
+            frete_valor = (frete_percentual / 100) * preco
+
+            # ============================================
+            # CUSTO FINANCEIRO (percentual sobre preço)
+            # ============================================
+            custo_financeiro_percentual = ParametroCusteio.obter_valor('CUSTO_FINANCEIRO_PERCENTUAL', 0.0)
+            custo_financeiro_valor = (custo_financeiro_percentual / 100) * preco
+
+            # ============================================
+            # MARGEM BRUTA
+            # ============================================
+            margem_bruta = preco - icms_unit - pis_unit - cofins_unit - custo_unitario - desconto_valor - frete_valor - custo_financeiro_valor
+            margem_bruta_percentual = (margem_bruta / preco * 100) if preco > 0 else 0.0
+
+            # ============================================
+            # CUSTO DE PRODUÇÃO
+            # ============================================
+            custo_producao = item.get('custo_producao_snapshot')
+            custo_producao = float(custo_producao) if custo_producao else 0.0
+
+            # ============================================
+            # CUSTO OPERAÇÃO (percentual sobre preço)
+            # ============================================
+            custo_operacao_percentual = ParametroCusteio.obter_valor('CUSTO_OPERACAO_PERCENTUAL', 0.0)
+            custo_operacao_valor = (custo_operacao_percentual / 100) * preco
+
+            # ============================================
+            # MARGEM LÍQUIDA
+            # ============================================
+            margem_liquida = margem_bruta - custo_producao - custo_operacao_valor
+            margem_liquida_percentual = (margem_liquida / preco * 100) if preco > 0 else 0.0
+
+            resultado = {
+                'margem_bruta': round(margem_bruta, 2),
+                'margem_bruta_percentual': round(margem_bruta_percentual, 2),
+                'margem_liquida': round(margem_liquida, 2),
+                'margem_liquida_percentual': round(margem_liquida_percentual, 2)
+            }
+
+        except Exception as e:
+            logger.debug(f"Erro ao calcular margem: {e}")
+
+        return resultado
+
     def _mapear_status_pedido(self, status_odoo: str) -> str:
         """
         🎯 MAPEAR STATUS DO ODOO PARA PORTUGUÊS
@@ -2197,6 +2348,15 @@ class CarteiraService:
                         item['cod_uf'] = item['estado']
                     if not item.get('nome_cidade') and item.get('municipio'):
                         item['nome_cidade'] = item['municipio']
+
+                    # SNAPSHOT DE CUSTO - Capturar custo vigente no momento da inserção
+                    snapshot = self._obter_snapshot_custo(item.get('cod_produto'))
+                    if snapshot:
+                        item.update(snapshot)
+                        # CALCULAR MARGEM - Após capturar snapshot
+                        margem = self._calcular_margem_bruta(item)
+                        if margem:
+                            item.update(margem)
 
                     # INSERIR - Criar registro com tratamento de erro
                     try:

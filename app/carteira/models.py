@@ -98,6 +98,19 @@ class CarteiraPrincipal(db.Model):
     # 🏷️ TAGS DO PEDIDO (ODOO)
     tags_pedido = db.Column(db.Text, nullable=True)  # JSON com tags do pedido: [{"name": "VIP", "color": 5}]
 
+    # 💰 SNAPSHOT DE CUSTO (gravado na importacao do Odoo)
+    # Preserva o custo considerado no momento da criacao do item
+    custo_unitario_snapshot = db.Column(db.Numeric(15, 6), nullable=True)
+    custo_tipo_snapshot = db.Column(db.String(20), nullable=True)  # MEDIO_MES, ULTIMO_CUSTO, MEDIO_ESTOQUE, BOM
+    custo_vigencia_snapshot = db.Column(db.DateTime, nullable=True)  # Data do custo usado
+    custo_producao_snapshot = db.Column(db.Numeric(15, 6), nullable=True)  # Custo adicional de producao
+
+    # 📊 MARGENS CALCULADAS
+    margem_bruta = db.Column(db.Numeric(15, 2), nullable=True)
+    margem_bruta_percentual = db.Column(db.Numeric(5, 2), nullable=True)
+    margem_liquida = db.Column(db.Numeric(15, 2), nullable=True)
+    margem_liquida_percentual = db.Column(db.Numeric(5, 2), nullable=True)
+
     # 🛡️ AUDITORIA
     created_at = db.Column(db.DateTime, default=agora_brasil, nullable=False)
     updated_at = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil, nullable=False)

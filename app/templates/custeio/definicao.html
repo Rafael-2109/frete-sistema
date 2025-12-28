@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}Custeio - Definicao de Custo{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/modules/custeio/custeio.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-1">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1 mt-2"><i class="bi bi-pencil-square me-2"></i>Definicao de Custo</h4>
+            <small class="text-muted">Defina o custo considerado para cada produto. Este e o custo utilizado nos pedidos.</small>
+        </div>
+        <div class="crud-actions">
+            <button class="btn btn-outline-secondary btn-sm" onclick="baixarModelo()">
+                <i class="bi bi-file-earmark-arrow-down me-1"></i>Modelo
+            </button>
+            <button class="btn btn-outline-primary btn-sm" onclick="document.getElementById('input-importar').click()">
+                <i class="bi bi-upload me-1"></i>Importar
+            </button>
+            <button class="btn btn-outline-success btn-sm" onclick="exportarDefinicao()">
+                <i class="bi bi-download me-1"></i>Exportar
+            </button>
+            <a href="{{ url_for('custeio.index') }}" class="text-decoration-none text-muted">
+                <i class="bi bi-arrow-left me-2"></i>Voltar
+            </a>
+            <input type="file" id="input-importar" accept=".xlsx,.xls" style="display:none" onchange="importarDefinicao(this)">
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body py-2">
+            <div class="row g-2 align-items-center">
+                <div class="col-md-3">
+                    <select class="form-select form-select-sm" id="filtro-tipo" onchange="carregarDados()">
+                        <option value="">Todos os Tipos</option>
+                        <option value="comprado">Comprados</option>
+                        <option value="produzido">Produzidos</option>
+                    </select>
+                </div>
+                <div class="col-md-5">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input type="text" class="form-control" id="filtro-busca" placeholder="Buscar produto..." onkeyup="filtrarLocal()">
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="filtro-com-custo" onchange="filtrarLocal()">
+                        <label class="form-check-label" for="filtro-com-custo">Apenas com custo</label>
+                    </div>
+                </div>
+                <div class="col-md-2 text-end">
+                    <span class="text-muted" id="total-registros">-</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Legenda -->
+    <div class="alert alert-info py-2 mb-3">
+        <small>
+            <i class="bi bi-info-circle me-1"></i>
+            <strong>Produtos COMPRADOS:</strong> custos vêm das compras.
+            <strong>Produtos PRODUZIDOS:</strong> clique no valor para ver composição BOM (custos calculados recursivamente).
+            O <strong>Custo Considerado</strong> é o valor utilizado nos cálculos.
+        </small>
+    </div>
+
+    <!-- Tabela -->
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-container">
+                <table class="table table-hover table-sm mb-0" id="tabela-definicao">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Nome do Produto</th>
+                            <th class="text-center">Tipo</th>
+                            <th class="text-end expandable-header" data-col="medio_mes" onclick="toggleAllExpand('medio_mes')">
+                                Médio Mês <i class="bi bi-chevron-down expand-all-icon"></i>
+                            </th>
+                            <th class="text-end expandable-header" data-col="ultimo_custo" onclick="toggleAllExpand('ultimo_custo')">
+                                Último Custo <i class="bi bi-chevron-down expand-all-icon"></i>
+                            </th>
+                            <th class="text-end expandable-header" data-col="medio_estoque" onclick="toggleAllExpand('medio_estoque')">
+                                Médio Estoque <i class="bi bi-chevron-down expand-all-icon"></i>
+                            </th>
+                            <th class="text-end" style="background-color: var(--bs-success-bg-subtle);">Custo Considerado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-definicao">
+                        <tr>
+                            <td colspan="7" class="empty-state">
+                                <i class="bi bi-inbox"></i>
+                                <p>Carregando...</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loading-overlay">
+    <div class="spinner-border text-light" role="status">
+        <span class="visually-hidden">Carregando...</span>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/custeio/definicao.js') }}"></script>
+{% endblock %}

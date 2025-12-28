@@ -16,6 +16,7 @@ Estrutura:
 - baixas.py              - Baixa de títulos via Excel (NEW)
 - extrato.py             - Conciliação via extrato bancário (NEW)
 - pagamentos_baixas.py   - Baixa de pagamentos via extrato (NEW)
+- dashboard.py           - Dashboard central financeiro (NEW)
 """
 
 import os
@@ -43,3 +44,4 @@ from app.financeiro.routes import correcao_datas
 from app.financeiro.routes import pagamentos_baixas
 from app.financeiro.routes import contas_pagar
 from app.financeiro.routes import exportacao
+from app.financeiro.routes import dashboard

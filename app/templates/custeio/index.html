@@ -1,0 +1,570 @@
+{% extends "base.html" %}
+
+{% block title %}Sistema de Custeio{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/modules/custeio/custeio.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1"><i class="bi bi-calculator me-2"></i>Sistema de Custeio</h4>
+            <small class="text-muted">Calculo e gerenciamento de custos de produtos</small>
+        </div>
+        <div>
+            <button class="btn btn-outline-secondary btn-sm me-2" onclick="carregarEstatisticas()">
+                <i class="bi bi-arrow-clockwise"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Cards de Estatisticas -->
+    <div class="row mb-4" id="cards-estatisticas">
+        <div class="col-md-3">
+            <div class="card card-stat comprados">
+                <div class="card-body py-3">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="text-muted mb-1">Comprados</h6>
+                            <h4 class="mb-0" id="stat-comprados">-</h4>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="bi bi-box-seam text-primary" style="font-size: 2rem; opacity: 0.5;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card card-stat intermediarios">
+                <div class="card-body py-3">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="text-muted mb-1">Intermediarios</h6>
+                            <h4 class="mb-0" id="stat-intermediarios">-</h4>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="bi bi-gear text-warning" style="font-size: 2rem; opacity: 0.5;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card card-stat acabados">
+                <div class="card-body py-3">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="text-muted mb-1">Acabados</h6>
+                            <h4 class="mb-0" id="stat-acabados">-</h4>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="bi bi-check-circle text-success" style="font-size: 2rem; opacity: 0.5;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body py-3">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="text-muted mb-1">Ultimo Fechamento</h6>
+                            <h5 class="mb-0" id="stat-ultimo-fechamento">-</h5>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="bi bi-calendar-check text-info" style="font-size: 2rem; opacity: 0.5;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card de Configuracao -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label small">Mes</label>
+                    <select class="form-select form-select-sm" id="filtro-mes">
+                        <option value="1">Janeiro</option>
+                        <option value="2">Fevereiro</option>
+                        <option value="3">Marco</option>
+                        <option value="4">Abril</option>
+                        <option value="5">Maio</option>
+                        <option value="6">Junho</option>
+                        <option value="7">Julho</option>
+                        <option value="8">Agosto</option>
+                        <option value="9">Setembro</option>
+                        <option value="10">Outubro</option>
+                        <option value="11">Novembro</option>
+                        <option value="12">Dezembro</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Ano</label>
+                    <select class="form-select form-select-sm" id="filtro-ano">
+                        <option value="2024">2024</option>
+                        <option value="2025" selected>2025</option>
+                        <option value="2026">2026</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small">Buscar Produto</label>
+                    <input type="text" class="form-control form-control-sm" id="filtro-produto" placeholder="Codigo ou nome...">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small">Tipo de Produto</label>
+                    <div class="btn-group w-100" role="group">
+                        <button type="button" class="btn btn-outline-secondary btn-sm filtro-tipo-btn active" data-tipo="">Todos</button>
+                        <button type="button" class="btn btn-outline-primary btn-sm filtro-tipo-btn" data-tipo="COMPRADO">Comprados</button>
+                        <button type="button" class="btn btn-outline-warning btn-sm filtro-tipo-btn" data-tipo="INTERMEDIARIO">Intermed.</button>
+                        <button type="button" class="btn btn-outline-success btn-sm filtro-tipo-btn" data-tipo="ACABADO">Acabados</button>
+                    </div>
+                </div>
+                <div class="col-md-2 text-end">
+                    <button class="btn btn-primary btn-sm me-1" onclick="buscarCustos()">
+                        <i class="bi bi-search"></i> Buscar
+                    </button>
+                    <div class="btn-group">
+                        <button class="btn btn-success btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+                            <i class="bi bi-play-fill"></i> Acoes
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="#" onclick="simularFechamento()"><i class="bi bi-eye me-2"></i>Simular Fechamento</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="confirmarFechamento()"><i class="bi bi-lock me-2"></i>Fechar Mes</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="#" onclick="exportarExcel('mensal')"><i class="bi bi-file-earmark-excel me-2"></i>Exportar Mensal</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="exportarExcel('considerado')"><i class="bi bi-file-earmark-excel me-2"></i>Exportar Considerado</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <ul class="nav nav-tabs mb-3" id="custoTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="mensal-tab" data-bs-toggle="tab" data-bs-target="#mensal" type="button">
+                <i class="bi bi-calendar-month me-1"></i>Custo Mensal
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="considerado-tab" data-bs-toggle="tab" data-bs-target="#considerado" type="button">
+                <i class="bi bi-star me-1"></i>Custo Considerado
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="frete-tab" data-bs-toggle="tab" data-bs-target="#frete" type="button" onclick="carregarCustosFrete()">
+                <i class="bi bi-truck me-1"></i>Custo Frete
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="parametros-tab" data-bs-toggle="tab" data-bs-target="#parametros" type="button" onclick="carregarParametros()">
+                <i class="bi bi-sliders me-1"></i>Parametros
+            </button>
+        </li>
+    </ul>
+
+    <!-- Tab Content -->
+    <div class="tab-content" id="custoTabsContent">
+        <!-- Tab Custo Mensal -->
+        <div class="tab-pane fade show active" id="mensal" role="tabpanel">
+            <div class="card">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm mb-0" id="tabela-mensal">
+                            <thead>
+                                <tr>
+                                    <th class="table-sticky sortable" data-sort="cod_produto">Codigo <i class="bi bi-chevron-expand"></i></th>
+                                    <th class="sortable" data-sort="nome_produto">Nome <i class="bi bi-chevron-expand"></i></th>
+                                    <th class="sortable" data-sort="tipo_produto">Tipo</th>
+                                    <th class="text-end sortable" data-sort="custo_liquido_medio">Custo Liq. Medio</th>
+                                    <th class="text-end sortable" data-sort="ultimo_custo">Ultimo Custo</th>
+                                    <th class="text-end sortable" data-sort="custo_medio_estoque">Custo Med. Estoque</th>
+                                    <th class="text-end sortable" data-sort="custo_bom">Custo BOM</th>
+                                    <th class="text-end">Qtd Comprada</th>
+                                    <th class="text-end">Valor Liquido</th>
+                                    <th class="text-center">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-mensal">
+                                <tr>
+                                    <td colspan="10" class="text-center text-muted py-4">
+                                        <i class="bi bi-arrow-up-circle me-2"></i>Selecione mes/ano e clique em Buscar
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Custo Considerado -->
+        <div class="tab-pane fade" id="considerado" role="tabpanel">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center py-2">
+                    <span><i class="bi bi-star me-2"></i>Custos Considerados Vigentes</span>
+                    <button class="btn btn-success btn-sm" onclick="abrirModalCadastro()">
+                        <i class="bi bi-plus-lg me-1"></i>Cadastrar Custo Manual
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm mb-0" id="tabela-considerado">
+                            <thead>
+                                <tr>
+                                    <th class="table-sticky sortable" data-sort="cod_produto">Codigo</th>
+                                    <th class="sortable" data-sort="nome_produto">Nome</th>
+                                    <th class="sortable" data-sort="tipo_produto">Tipo</th>
+                                    <th class="text-end">Custo Med. Mes</th>
+                                    <th class="text-end">Ultimo Custo</th>
+                                    <th class="text-end">Custo Med. Est.</th>
+                                    <th class="text-end">Custo BOM</th>
+                                    <th class="text-center">Tipo Selecionado</th>
+                                    <th class="text-end">Custo Considerado</th>
+                                    <th class="text-end">Est. Inicial</th>
+                                    <th class="text-end">Est. Final</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-considerado">
+                                <tr>
+                                    <td colspan="11" class="text-center text-muted py-4">
+                                        <i class="bi bi-arrow-up-circle me-2"></i>Clique em Buscar para carregar dados
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Custo Frete -->
+        <div class="tab-pane fade" id="frete" role="tabpanel">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center py-2">
+                    <span><i class="bi bi-truck me-2"></i>Tabela de Custo de Frete por Incoterm/UF</span>
+                    <div class="btn-group">
+                        <button class="btn btn-outline-secondary btn-sm" onclick="window.location.href='/custeio/api/frete/modelo'">
+                            <i class="bi bi-file-earmark-arrow-down me-1"></i>Modelo
+                        </button>
+                        <button class="btn btn-outline-primary btn-sm" onclick="document.getElementById('inputImportFrete').click()">
+                            <i class="bi bi-upload me-1"></i>Importar
+                        </button>
+                        <button class="btn btn-outline-success btn-sm" onclick="window.location.href='/custeio/api/frete/exportar'">
+                            <i class="bi bi-download me-1"></i>Exportar
+                        </button>
+                        <button class="btn btn-success btn-sm" onclick="abrirModalFrete()">
+                            <i class="bi bi-plus-lg me-1"></i>Novo
+                        </button>
+                    </div>
+                    <input type="file" id="inputImportFrete" accept=".xlsx,.xls" style="display:none" onchange="importarFrete(this)">
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm mb-0" id="tabela-frete">
+                            <thead>
+                                <tr>
+                                    <th>Incoterm</th>
+                                    <th>UF</th>
+                                    <th class="text-end">% Frete</th>
+                                    <th>Vigencia Inicio</th>
+                                    <th>Vigencia Fim</th>
+                                    <th>Criado Por</th>
+                                    <th class="text-center">Acoes</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-frete">
+                                <tr>
+                                    <td colspan="7" class="text-center text-muted py-4">
+                                        <i class="bi bi-inbox me-2"></i>Nenhum registro cadastrado
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Parametros -->
+        <div class="tab-pane fade" id="parametros" role="tabpanel">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center py-2">
+                    <span><i class="bi bi-sliders me-2"></i>Parametros Globais de Custeio</span>
+                    <div class="btn-group">
+                        <button class="btn btn-outline-primary btn-sm" onclick="document.getElementById('inputImportParam').click()">
+                            <i class="bi bi-upload me-1"></i>Importar
+                        </button>
+                        <button class="btn btn-outline-success btn-sm" onclick="window.location.href='/custeio/api/parametros/exportar'">
+                            <i class="bi bi-download me-1"></i>Exportar
+                        </button>
+                        <button class="btn btn-success btn-sm" onclick="abrirModalParametro()">
+                            <i class="bi bi-plus-lg me-1"></i>Novo
+                        </button>
+                    </div>
+                    <input type="file" id="inputImportParam" accept=".xlsx,.xls" style="display:none" onchange="importarParametros(this)">
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm mb-0" id="tabela-parametros">
+                            <thead>
+                                <tr>
+                                    <th>Chave</th>
+                                    <th class="text-end">Valor</th>
+                                    <th>Descricao</th>
+                                    <th>Atualizado Em</th>
+                                    <th>Atualizado Por</th>
+                                    <th class="text-center">Acoes</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-parametros">
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted py-4">
+                                        <i class="bi bi-inbox me-2"></i>Nenhum parametro cadastrado
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loading-overlay">
+    <div class="spinner-border text-light" role="status">
+        <span class="visually-hidden">Carregando...</span>
+    </div>
+</div>
+
+<!-- Modal Confirmacao Fechamento -->
+<div class="modal fade" id="modalFechamento" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-lock me-2"></i>Confirmar Fechamento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    Voce esta prestes a fechar os custos do mes <strong id="fechamento-periodo"></strong>.
+                </div>
+                <p>Esta acao ira:</p>
+                <ul>
+                    <li>Calcular custos de todos os produtos COMPRADOS</li>
+                    <li>Calcular custos de produtos INTERMEDIARIOS (via BOM)</li>
+                    <li>Calcular custos de produtos ACABADOS (via BOM)</li>
+                    <li>Atualizar a tabela de Custos Considerados</li>
+                </ul>
+                <p class="mb-0 text-muted small">O fechamento pode levar alguns minutos dependendo da quantidade de produtos.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="executarFechamento()">
+                    <i class="bi bi-check-lg me-1"></i>Confirmar Fechamento
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Preview Simulacao -->
+<div class="modal fade" id="modalPreview" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-eye me-2"></i>Preview do Fechamento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="preview-content">
+                <!-- Conteudo dinamico -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-success" onclick="confirmarFechamento()">
+                    <i class="bi bi-lock me-1"></i>Prosseguir com Fechamento
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Custo Frete -->
+<div class="modal fade" id="modalFrete" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-truck me-2"></i>Custo de Frete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="frete-id">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Incoterm</label>
+                        <select class="form-select" id="frete-incoterm" required>
+                            <option value="">Selecione...</option>
+                            <option value="CIF">CIF</option>
+                            <option value="FOB">FOB</option>
+                            <option value="EXW">EXW</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">UF</label>
+                        <select class="form-select" id="frete-uf" required>
+                            <option value="">Selecione...</option>
+                            <option value="AC">AC</option>
+                            <option value="AL">AL</option>
+                            <option value="AM">AM</option>
+                            <option value="AP">AP</option>
+                            <option value="BA">BA</option>
+                            <option value="CE">CE</option>
+                            <option value="DF">DF</option>
+                            <option value="ES">ES</option>
+                            <option value="GO">GO</option>
+                            <option value="MA">MA</option>
+                            <option value="MG">MG</option>
+                            <option value="MS">MS</option>
+                            <option value="MT">MT</option>
+                            <option value="PA">PA</option>
+                            <option value="PB">PB</option>
+                            <option value="PE">PE</option>
+                            <option value="PI">PI</option>
+                            <option value="PR">PR</option>
+                            <option value="RJ">RJ</option>
+                            <option value="RN">RN</option>
+                            <option value="RO">RO</option>
+                            <option value="RR">RR</option>
+                            <option value="RS">RS</option>
+                            <option value="SC">SC</option>
+                            <option value="SE">SE</option>
+                            <option value="SP">SP</option>
+                            <option value="TO">TO</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Percentual de Frete (%)</label>
+                    <input type="number" class="form-control" id="frete-percentual" step="0.01" min="0" max="100" required>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Vigencia Inicio</label>
+                        <input type="date" class="form-control" id="frete-vigencia-inicio" required>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Vigencia Fim <small class="text-muted">(opcional)</small></label>
+                        <input type="date" class="form-control" id="frete-vigencia-fim">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="salvarFrete()">
+                    <i class="bi bi-check-lg me-1"></i>Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Parametro -->
+<div class="modal fade" id="modalParametro" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-sliders me-2"></i>Parametro de Custeio</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="parametro-id">
+                <div class="mb-3">
+                    <label class="form-label">Chave</label>
+                    <input type="text" class="form-control" id="parametro-chave" placeholder="Ex: CUSTO_OPERACAO_PERCENTUAL" required>
+                    <small class="text-muted">Use letras maiusculas e underscores</small>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Valor</label>
+                    <input type="number" class="form-control" id="parametro-valor" step="0.000001" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Descricao</label>
+                    <textarea class="form-control" id="parametro-descricao" rows="2"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="salvarParametro()">
+                    <i class="bi bi-check-lg me-1"></i>Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Cadastro Manual de Custo -->
+<div class="modal fade" id="modalCadastro" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Cadastrar Custo Manual</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Produto</label>
+                    <input type="text" class="form-control" id="cadastro-produto-busca" placeholder="Digite codigo ou nome para buscar..." autocomplete="off">
+                    <div id="cadastro-produto-lista" class="list-group position-absolute w-100 shadow" style="z-index: 1000; display: none;"></div>
+                    <input type="hidden" id="cadastro-cod-produto">
+                    <small class="text-muted" id="cadastro-produto-selecionado"></small>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Custo Considerado (R$)</label>
+                        <input type="number" class="form-control" id="cadastro-custo" step="0.000001" required>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Custo Producao (R$) <small class="text-muted">(opcional)</small></label>
+                        <input type="number" class="form-control" id="cadastro-producao" step="0.000001">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Tipo de Custo Base</label>
+                    <select class="form-select" id="cadastro-tipo">
+                        <option value="MEDIO_MES">Medio do Mes</option>
+                        <option value="ULTIMO_CUSTO">Ultimo Custo</option>
+                        <option value="MEDIO_ESTOQUE">Medio do Estoque</option>
+                        <option value="BOM">Custo BOM</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Motivo <small class="text-muted">(opcional)</small></label>
+                    <textarea class="form-control" id="cadastro-motivo" rows="2" placeholder="Ex: Cadastro inicial, Ajuste de custo..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="salvarCadastroManual()">
+                    <i class="bi bi-check-lg me-1"></i>Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/custeio/custeio.js') }}"></script>
+{% endblock %}

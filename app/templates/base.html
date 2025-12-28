@@ -205,6 +205,11 @@
               <i class="fas fa-dollar-sign"></i> Financeiro
             </a>
             <ul class="dropdown-menu">
+              <!-- Dashboard Central -->
+              <li><a class="dropdown-item" href="{{ url_for('financeiro.dashboard') }}">
+                  <i class="fas fa-landmark text-primary"></i> <strong>Dashboard Financeiro</strong>
+                </a></li>
+              <li><hr class="dropdown-divider"></li>
               {% if current_user.tem_permissao('fretes') or current_user.pode_acessar_financeiro() or
               current_user.perfil == 'administrador' %}
               <li>
@@ -246,6 +251,13 @@
               <li>
                 <h6 class="dropdown-header">💼 Financeiro</h6>
               </li>
+              {% if current_user.tem_permissao('financeiro') or current_user.pode_acessar_financeiro() or
+              current_user.perfil == 'administrador' %}
+              <li><a class="dropdown-item" href="{{ url_for('custeio.index') }}">
+                  <i class="fas fa-calculator text-info"></i> Sistema de Custeio
+                  <span class="badge bg-info ms-2">NOVO</span>
+                </a></li>
+              {% endif %}
               {% if current_user.tem_permissao('faturamento', 'visualizar') or current_user.pode_acessar_financeiro() or
               current_user.perfil == 'administrador' %}
               <li><a class="dropdown-item" href="{{ url_for('faturamento.listar_relatorios') }}">

@@ -1,0 +1,257 @@
+{% extends "base.html" %}
+
+{% block title %}Custeio - Fechamento Mensal{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/modules/custeio/custeio.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-1">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1 mt-2"><i class="bi bi-calendar-check me-2"></i>Fechamento Mensal de Custos</h4>
+            <small class="text-muted">Calcule e consolide custos de compras, producao e BOM por periodo</small>
+        </div>
+        <div class="btn-group">
+            <button class="btn btn-outline-primary btn-sm" onclick="simularFechamento()">
+                <i class="bi bi-eye me-1"></i>Simular
+            </button>
+            <button class="btn btn-success btn-sm" onclick="confirmarFechamento()">
+                <i class="bi bi-lock me-1"></i>Fechar Mes
+            </button>
+            <a href="{{ url_for('custeio.index') }}" class="text-decoration-none text-muted">
+                <i class="bi bi-arrow-left me-2"></i>Voltar
+            </a>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body py-2">
+            <div class="row g-2 align-items-center">
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Mes</label>
+                    <select class="form-select form-select-sm" id="filtro-mes">
+                        <option value="1">Janeiro</option>
+                        <option value="2">Fevereiro</option>
+                        <option value="3">Marco</option>
+                        <option value="4">Abril</option>
+                        <option value="5">Maio</option>
+                        <option value="6">Junho</option>
+                        <option value="7">Julho</option>
+                        <option value="8">Agosto</option>
+                        <option value="9">Setembro</option>
+                        <option value="10">Outubro</option>
+                        <option value="11">Novembro</option>
+                        <option value="12">Dezembro</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Ano</label>
+                    <select class="form-select form-select-sm" id="filtro-ano">
+                        <option value="2024">2024</option>
+                        <option value="2025" selected>2025</option>
+                        <option value="2026">2026</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Tipo</label>
+                    <select class="form-select form-select-sm" id="filtro-tipo">
+                        <option value="">Todos</option>
+                        <option value="COMPRADO">Comprados</option>
+                        <option value="INTERMEDIARIO">Intermediarios</option>
+                        <option value="ACABADO">Acabados</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small mb-1">Buscar</label>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input type="text" class="form-control" id="filtro-busca" placeholder="Codigo ou nome..." onkeyup="filtrarLocal()">
+                    </div>
+                </div>
+                <div class="col-md-3 text-end">
+                    <label class="form-label small mb-1">&nbsp;</label>
+                    <div>
+                        <button class="btn btn-primary btn-sm" onclick="carregarDados()">
+                            <i class="bi bi-search me-1"></i>Buscar
+                        </button>
+                        <button class="btn btn-outline-success btn-sm" onclick="exportarMensal()">
+                            <i class="bi bi-download me-1"></i>Exportar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cards de Resumo -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card card-stat comprados">
+                <div class="card-body py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Comprados</h6>
+                            <h4 class="mb-0" id="stat-comprados">-</h4>
+                        </div>
+                        <i class="bi bi-box-seam text-primary" style="font-size: 2rem; opacity: 0.3;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card card-stat intermediarios">
+                <div class="card-body py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Intermediarios</h6>
+                            <h4 class="mb-0" id="stat-intermediarios">-</h4>
+                        </div>
+                        <i class="bi bi-gear text-warning" style="font-size: 2rem; opacity: 0.3;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card card-stat acabados">
+                <div class="card-body py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Acabados</h6>
+                            <h4 class="mb-0" id="stat-acabados">-</h4>
+                        </div>
+                        <i class="bi bi-check-circle text-success" style="font-size: 2rem; opacity: 0.3;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Status</h6>
+                            <h5 class="mb-0" id="stat-status">-</h5>
+                        </div>
+                        <i class="bi bi-calendar-check text-info" style="font-size: 2rem; opacity: 0.3;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Legenda -->
+    <div class="alert alert-info py-2 mb-3">
+        <small>
+            <i class="bi bi-info-circle me-1"></i>
+            Clique em um produto <strong>ACABADO</strong> ou <strong>INTERMEDIÁRIO</strong> para expandir e ver a composição BOM.
+            <span class="badge bg-primary ms-2">COMPRADO</span> - Custo vem das compras
+            <span class="badge bg-warning text-dark ms-2">INTERMEDIÁRIO</span> - Custo via BOM
+            <span class="badge bg-success ms-2">ACABADO</span> - Custo via BOM
+        </small>
+    </div>
+
+    <!-- Tabela -->
+    <div class="card">
+        <div class="card-header py-2 d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-table me-2"></i>Custos do Período</span>
+            <span class="text-muted" id="total-registros">-</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-container">
+                <table class="table table-hover table-sm mb-0" id="tabela-mensal">
+                    <thead>
+                        <tr>
+                            <th style="width: 30px;"></th>
+                            <th>Código</th>
+                            <th>Nome do Produto</th>
+                            <th class="text-center">Tipo</th>
+                            <th class="text-end">Qtd Est. Inicial</th>
+                            <th class="text-end">Custo Inicial</th>
+                            <th class="text-end">Qtd Comprada/Prod.</th>
+                            <th class="text-end">Custo Compras/Mat.</th>
+                            <th class="text-end">Custo Médio</th>
+                            <th class="text-end">Est. Final</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-mensal">
+                        <tr>
+                            <td colspan="10" class="empty-state">
+                                <i class="bi bi-inbox"></i>
+                                <p>Selecione mês/ano e clique em Buscar</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Confirmacao Fechamento -->
+<div class="modal fade" id="modalFechamento" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-lock me-2"></i>Confirmar Fechamento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    Voce esta prestes a fechar os custos do mes <strong id="fechamento-periodo"></strong>.
+                </div>
+                <p>Esta acao ira:</p>
+                <ul>
+                    <li>Calcular custos de todos os produtos COMPRADOS</li>
+                    <li>Calcular custos de produtos INTERMEDIARIOS (via BOM)</li>
+                    <li>Calcular custos de produtos ACABADOS (via BOM)</li>
+                    <li>Atualizar a tabela de Custos Considerados</li>
+                </ul>
+                <p class="mb-0 text-muted small">O fechamento pode levar alguns minutos.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="executarFechamento()">
+                    <i class="bi bi-check-lg me-1"></i>Confirmar Fechamento
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Preview Simulacao -->
+<div class="modal fade" id="modalPreview" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-eye me-2"></i>Preview do Fechamento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="preview-content">
+                <!-- Conteudo dinamico -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-success" onclick="confirmarFechamento()">
+                    <i class="bi bi-lock me-1"></i>Prosseguir com Fechamento
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loading-overlay">
+    <div class="spinner-border text-light" role="status">
+        <span class="visually-hidden">Carregando...</span>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/custeio/mensal.js') }}"></script>
+{% endblock %}

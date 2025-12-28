@@ -850,6 +850,18 @@ def create_app(config_name=None):
     app.register_blueprint(relatorios_producao_bp)
     app.register_blueprint(manufatura_bp)
 
+    # Modulo de Custeio
+    try:
+        from app.custeio import custeio_bp
+
+        app.register_blueprint(custeio_bp)
+        app.logger.info("✅ Modulo Custeio registrado com sucesso")
+    except ImportError as e:
+        app.logger.error(f"❌ Modulo Custeio - ImportError: {e}")
+        import traceback
+
+        app.logger.error(f"Traceback completo:\n{traceback.format_exc()}")
+
     # Registrar blueprint de Recursos de Produção
     from app.manufatura.routes.recursos_producao_routes import recursos_bp
     app.register_blueprint(recursos_bp)

@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+
+{% block title %}Custeio - Dashboard{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/modules/custeio/custeio.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1"><i class="bi bi-calculator me-2"></i>Sistema de Custeio</h4>
+            <small class="text-muted">Gerenciamento de custos de produtos</small>
+        </div>
+    </div>
+
+    <!-- Cards de Estatisticas -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body text-center py-3">
+                    <div class="stat-value" id="stat-produtos-custeados">-</div>
+                    <div class="stat-label">Produtos com Custo Definido</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body text-center py-3">
+                    <div class="stat-value" id="stat-comprados">-</div>
+                    <div class="stat-label">Produtos Comprados</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body text-center py-3">
+                    <div class="stat-value" id="stat-produzidos">-</div>
+                    <div class="stat-label">Produtos Produzidos</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body text-center py-3">
+                    <div class="stat-value" id="stat-fretes">-</div>
+                    <div class="stat-label">Tabelas de Frete</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cards de Navegacao -->
+    <div class="row g-4">
+        <!-- Custo Frete -->
+        <div class="col-md-4">
+            <a href="{{ url_for('custeio.tela_frete') }}" class="text-decoration-none">
+                <div class="card dashboard-card card-frete h-100">
+                    <div class="card-body">
+                        <div class="icon-wrapper">
+                            <i class="bi bi-truck"></i>
+                        </div>
+                        <h5>Custo de Frete</h5>
+                        <p>Tabela de custo de frete por Incoterm e UF. Configure percentuais de frete para cada combinacao.</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <!-- Custo Operacao / Parametros -->
+        <div class="col-md-4">
+            <a href="{{ url_for('custeio.tela_parametros') }}" class="text-decoration-none">
+                <div class="card dashboard-card card-operacao h-100">
+                    <div class="card-body">
+                        <div class="icon-wrapper">
+                            <i class="bi bi-sliders"></i>
+                        </div>
+                        <h5>Parametros de Custeio</h5>
+                        <p>Parametros globais de custeio. Custo de operacao, taxas e outras configuracoes do sistema.</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <!-- Custo Producao -->
+        <div class="col-md-4">
+            <a href="{{ url_for('custeio.tela_producao') }}" class="text-decoration-none">
+                <div class="card dashboard-card card-producao h-100">
+                    <div class="card-body">
+                        <div class="icon-wrapper">
+                            <i class="bi bi-boxes"></i>
+                        </div>
+                        <h5>Custo de Producao</h5>
+                        <p>Produtos produzidos com capacidade e linha de producao. Visualize e cadastre custos de producao.</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <!-- Composicao Custo -->
+        <div class="col-md-4">
+            <a href="{{ url_for('custeio.tela_composicao') }}" class="text-decoration-none">
+                <div class="card dashboard-card card-composicao h-100">
+                    <div class="card-body">
+                        <div class="icon-wrapper">
+                            <i class="bi bi-diagram-3"></i>
+                        </div>
+                        <h5>Composicao de Custo</h5>
+                        <p>Visualize a composicao do custo atraves da lista de materiais (BOM). Custos abertos por componente.</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <!-- Definicao Custo -->
+        <div class="col-md-4">
+            <a href="{{ url_for('custeio.tela_definicao') }}" class="text-decoration-none">
+                <div class="card dashboard-card card-definicao h-100">
+                    <div class="card-body">
+                        <div class="icon-wrapper">
+                            <i class="bi bi-pencil-square"></i>
+                        </div>
+                        <h5>Definicao de Custo</h5>
+                        <p>Defina o custo considerado para cada produto. Este e o custo utilizado nos calculos de pedidos.</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <!-- Fechamento Mensal -->
+        <div class="col-md-4">
+            <a href="{{ url_for('custeio.tela_mensal') }}" class="text-decoration-none">
+                <div class="card dashboard-card card-mensal h-100">
+                    <div class="card-body">
+                        <div class="icon-wrapper">
+                            <i class="bi bi-calendar-check"></i>
+                        </div>
+                        <h5>Fechamento Mensal</h5>
+                        <p>Fechamento de custos mensais. Calcule e consolide custos de compras, producao e BOM por periodo.</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loading-overlay">
+    <div class="spinner-border text-light" role="status">
+        <span class="visually-hidden">Carregando...</span>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/custeio/dashboard.js') }}"></script>
+{% endblock %}

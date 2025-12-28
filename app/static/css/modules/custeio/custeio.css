@@ -1,0 +1,607 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   CUSTEIO - Styles
+   Usa design tokens de _design-tokens.css
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TIPO BADGES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.tipo-badge {
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.tipo-comprado {
+    background-color: hsla(210, 80%, 50%, 0.15);
+    color: hsl(210, 80%, 50%);
+}
+
+.tipo-intermediario {
+    background-color: hsla(30, 100%, 45%, 0.15);
+    color: var(--amber-50);
+}
+
+.tipo-acabado {
+    background-color: var(--semantic-success-subtle);
+    color: var(--semantic-success);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   EDITABLE SELECT
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.editable-select {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: var(--text);
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    transition: all var(--transition-fast);
+}
+
+.editable-select:hover {
+    background: var(--bg-light);
+}
+
+.editable-select:focus {
+    outline: none;
+    border-color: var(--amber-55);
+    box-shadow: 0 0 6px 1px hsla(50 100% 55% / 0.6);
+    background: var(--bg-light);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   VALORES E CUSTOS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.valor-custo {
+    font-family: var(--font-mono);
+    text-align: right;
+}
+
+.valor-destaque {
+    font-weight: 600;
+    color: var(--semantic-success);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SAVE INDICATOR
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.save-indicator {
+    display: inline-block;
+    margin-left: 5px;
+    color: var(--semantic-success);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.save-indicator.show {
+    opacity: 1;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TABELA STICKY
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.table-sticky {
+    position: sticky;
+    left: 0;
+    background: var(--bg-light);
+    z-index: 10;
+}
+
+.sortable {
+    cursor: pointer;
+    user-select: none;
+    transition: background-color var(--transition-fast);
+}
+
+.sortable:hover {
+    background-color: var(--bg);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   STAT CARDS CUSTEIO
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.card-stat {
+    border-left: 4px solid;
+    background: var(--gradient);
+    border-top: solid 1px var(--highlight);
+    transition: all var(--transition-fast);
+}
+
+.card-stat:hover {
+    background: var(--gradient-hover);
+}
+
+.card-stat.comprados {
+    border-left-color: hsl(210, 80%, 50%);
+}
+
+.card-stat.intermediarios {
+    border-left-color: var(--amber-50);
+}
+
+.card-stat.acabados {
+    border-left-color: var(--semantic-success);
+}
+
+.card-stat .stat-icon {
+    font-size: 2rem;
+    opacity: 0.5;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   FILTROS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.filtro-tipo-btn {
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-size: 0.85rem;
+    transition: all var(--transition-fast);
+}
+
+.filtro-tipo-btn.active {
+    font-weight: 600;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TABLE CONTAINER
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.table-container {
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.table-container .table thead th {
+    position: sticky;
+    top: 0;
+    background: var(--bg-light);
+    z-index: 5;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LOADING OVERLAY
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: hsla(0, 0%, 0%, 0.5);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+}
+
+.loading-overlay.show {
+    display: flex;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PREVIEW MODAL
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.preview-card {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.preview-card .card-header.bg-primary {
+    background: hsl(210, 80%, 50%) !important;
+    color: white;
+}
+
+.preview-card .card-header.bg-warning {
+    background: var(--amber-50) !important;
+    color: var(--text);
+}
+
+.preview-card .card-header.bg-success {
+    background: var(--semantic-success) !important;
+    color: white;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   NAV TABS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nav-tabs .nav-link {
+    color: var(--text-muted);
+    border: none;
+    border-bottom: 2px solid transparent;
+    transition: all var(--transition-fast);
+}
+
+.nav-tabs .nav-link:hover {
+    color: var(--text);
+    border-bottom-color: var(--border);
+}
+
+.nav-tabs .nav-link.active {
+    color: var(--amber-55);
+    background: transparent;
+    border-bottom-color: var(--amber-55);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   EMPTY STATE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--text-muted);
+}
+
+.empty-state i {
+    font-size: 3rem;
+    opacity: 0.3;
+    margin-bottom: 1rem;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DASHBOARD CARDS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.dashboard-card {
+    transition: all 0.3s ease;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background: var(--gradient);
+}
+
+.dashboard-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px hsla(0, 0%, 0%, 0.15);
+    border-color: var(--amber-55);
+}
+
+.dashboard-card .card-body {
+    padding: 1.5rem;
+}
+
+.dashboard-card .icon-wrapper {
+    width: 60px;
+    height: 60px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1rem;
+}
+
+.dashboard-card .icon-wrapper i {
+    font-size: 1.8rem;
+}
+
+.dashboard-card h5 {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: var(--text);
+}
+
+.dashboard-card p {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    margin-bottom: 0;
+}
+
+/* Dashboard Card Variants */
+.card-frete .icon-wrapper { background: hsla(210, 80%, 50%, 0.1); color: hsl(210, 80%, 50%); }
+.card-operacao .icon-wrapper { background: hsla(270, 50%, 50%, 0.1); color: hsl(270, 50%, 50%); }
+.card-producao .icon-wrapper { background: hsla(45, 100%, 50%, 0.1); color: var(--amber-50); }
+.card-composicao .icon-wrapper { background: var(--semantic-success-subtle); color: var(--semantic-success); }
+.card-definicao .icon-wrapper { background: hsla(0, 70%, 50%, 0.1); color: hsl(0, 70%, 50%); }
+.card-mensal .icon-wrapper { background: hsla(180, 60%, 45%, 0.1); color: hsl(180, 60%, 45%); }
+
+/* Dashboard Stats */
+.stat-value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--text);
+    font-family: var(--font-mono);
+}
+
+.stat-label {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CRUD TABLE HEADER
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.crud-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    background: var(--bg-light);
+    border-bottom: 1px solid var(--border);
+}
+
+.crud-header h6 {
+    margin: 0;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.crud-actions .btn {
+    margin-left: 0.25rem;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BOM TREE VIEW
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.bom-tree {
+    font-size: 0.9rem;
+}
+
+.bom-item {
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.bom-item:hover {
+    background: var(--bg-light);
+}
+
+.bom-item.nivel-0 { padding-left: 1rem; font-weight: 600; background: var(--bg-light); }
+.bom-item.nivel-1 { padding-left: 2rem; }
+.bom-item.nivel-2 { padding-left: 3rem; }
+.bom-item.nivel-3 { padding-left: 4rem; }
+
+.bom-produto {
+    flex: 1;
+}
+
+.bom-custo {
+    font-family: var(--font-mono);
+    text-align: right;
+    min-width: 100px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   EDITABLE INPUT INLINE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.editable-input {
+    border: 1px solid transparent;
+    background: transparent;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    text-align: right;
+    width: 120px;
+    transition: all var(--transition-fast);
+}
+
+.editable-input:hover {
+    border-color: var(--border);
+    background: var(--bg-light);
+}
+
+.editable-input:focus {
+    outline: none;
+    border-color: var(--amber-55);
+    background: var(--bg-light);
+    box-shadow: 0 0 6px 1px hsla(50 100% 55% / 0.3);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PRODUCAO BADGES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.linha-producao-badge {
+    background: hsla(210, 80%, 50%, 0.1);
+    color: hsl(210, 80%, 50%);
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.capacidade-info {
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   EDITABLE INPUT STATES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.editable-input.is-loading {
+    background: var(--bg-light);
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.editable-input.is-valid {
+    border-color: var(--semantic-success) !important;
+    background: var(--semantic-success-subtle) !important;
+}
+
+.editable-input.is-invalid {
+    border-color: var(--semantic-danger) !important;
+    background: hsla(0, 70%, 50%, 0.1) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   COMPOSICAO BOM MODAL
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+#modalBOM .table {
+    font-size: 0.9rem;
+}
+
+#modalBOM .table code {
+    font-size: 0.8rem;
+}
+
+#modalBOM .table tfoot {
+    background: var(--bg-light);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MENSAL BOM EXPANSION INLINE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Linha expandível com cursor */
+.row-expandable {
+    cursor: pointer;
+    transition: background-color var(--transition-fast);
+}
+
+.row-expandable:hover {
+    background-color: var(--bg-light) !important;
+}
+
+/* Ícone de expansão */
+.expand-icon {
+    color: var(--text-muted);
+    transition: transform var(--transition-fast);
+}
+
+.row-expandable:hover .expand-icon {
+    color: var(--amber-55);
+}
+
+/* Linhas de componentes BOM */
+.bom-row {
+    background-color: hsla(210, 30%, 95%, 0.5);
+    border-left: 3px solid var(--amber-55);
+}
+
+[data-bs-theme="dark"] .bom-row {
+    background-color: hsla(210, 30%, 15%, 0.5);
+}
+
+.bom-row td {
+    font-size: 0.9em;
+}
+
+.bom-row code {
+    font-size: 0.85em;
+    opacity: 0.85;
+}
+
+/* Linha de total BOM */
+.bom-total {
+    background-color: hsla(45, 100%, 50%, 0.08) !important;
+    border-left: 3px solid var(--amber-55);
+}
+
+[data-bs-theme="dark"] .bom-total {
+    background-color: hsla(45, 100%, 50%, 0.12) !important;
+}
+
+/* Badge pequeno para componentes */
+.badge-sm {
+    font-size: 0.65rem;
+    padding: 2px 6px;
+}
+
+/* Custo destacado */
+.custo-destacado {
+    font-weight: 600;
+    color: var(--amber-55);
+}
+
+/* Animação de loading em expansão */
+@keyframes bom-loading {
+    0% { opacity: 0.5; }
+    50% { opacity: 1; }
+    100% { opacity: 0.5; }
+}
+
+.bom-row .spinner-border-sm {
+    animation: bom-loading 1s ease-in-out infinite;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DEFINICAO - VALORES EXPANDIVEIS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Valores clicáveis nas colunas de custo */
+.valor-expandivel {
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    border-radius: var(--radius-sm);
+    padding: 2px 6px;
+    margin: -2px -6px;
+}
+
+.valor-expandivel:hover {
+    background-color: var(--bg-light);
+    color: var(--amber-55);
+}
+
+/* Cabeçalho expansível */
+.expandable-header {
+    cursor: pointer;
+    user-select: none;
+    transition: background-color var(--transition-fast);
+}
+
+.expandable-header:hover {
+    background-color: var(--bg-light);
+}
+
+.expand-all-icon {
+    font-size: 0.75rem;
+    opacity: 0.5;
+    margin-left: 4px;
+    transition: transform var(--transition-fast);
+}
+
+.expandable-header:hover .expand-all-icon {
+    opacity: 1;
+}
+
+.expandable-header.expanded .expand-all-icon {
+    transform: rotate(180deg);
+}
+
+/* Linha de detalhe expandida */
+.detail-row {
+    background-color: hsla(45, 100%, 50%, 0.05);
+    border-left: 3px solid var(--amber-55);
+}
+
+[data-bs-theme="dark"] .detail-row {
+    background-color: hsla(45, 100%, 50%, 0.08);
+}
+
+.detail-row td {
+    font-size: 0.85em;
+    padding: 4px 8px !important;
+}
+
+.detail-label {
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.detail-value {
+    font-family: var(--font-mono);
+}

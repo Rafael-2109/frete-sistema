@@ -1,0 +1,426 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard Financeiro{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/financeiro/extrato.css') }}">
+<style>
+/* Dashboard Financeiro - Estilos locais */
+.fin-dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1.5rem;
+    margin-top: 2rem;
+}
+
+.fin-section-card {
+    background: var(--bg-light, #1a1a2e);
+    border-radius: 12px;
+    padding: 1.5rem;
+    border: 1px solid var(--border, rgba(255,255,255,0.1));
+}
+
+.fin-section-card__header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border, rgba(255,255,255,0.1));
+}
+
+.fin-section-card__icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+}
+
+.fin-section-card__icon--custos {
+    background: linear-gradient(135deg, var(--amber-50), var(--amber-100));
+    color: var(--amber-600);
+}
+
+.fin-section-card__icon--receber {
+    background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+    color: #059669;
+}
+
+.fin-section-card__icon--pagar {
+    background: linear-gradient(135deg, #fee2e2, #fecaca);
+    color: #dc2626;
+}
+
+.fin-section-card__icon--fretes {
+    background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+    color: #2563eb;
+}
+
+.fin-section-card__icon--faturamento {
+    background: linear-gradient(135deg, #ede9fe, #ddd6fe);
+    color: #7c3aed;
+}
+
+.fin-section-card__title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 0;
+    color: var(--text, #fff);
+}
+
+.fin-section-card__desc {
+    font-size: 0.85rem;
+    color: var(--text-muted, #888);
+    margin: 0;
+}
+
+.fin-section-links {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.fin-section-link {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    background: var(--bg, #0f0f1a);
+    color: var(--text, #fff);
+    text-decoration: none;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+}
+
+.fin-section-link:hover {
+    background: var(--amber-50);
+    color: var(--amber-700);
+    border-color: var(--amber-200);
+    transform: translateX(4px);
+}
+
+.fin-section-link__icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255,255,255,0.05);
+    font-size: 0.9rem;
+}
+
+.fin-section-link__text {
+    flex: 1;
+}
+
+.fin-section-link__title {
+    font-weight: 500;
+    font-size: 0.95rem;
+}
+
+.fin-section-link__subtitle {
+    font-size: 0.75rem;
+    opacity: 0.7;
+}
+
+.fin-section-link__badge {
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.fin-section-link__badge--new {
+    background: var(--semantic-success);
+    color: white;
+}
+
+.fin-section-link__badge--hot {
+    background: #ef4444;
+    color: white;
+}
+
+/* Destaque para Sistema de Custeio */
+.fin-section-card--featured {
+    border: 2px solid var(--amber-400);
+    box-shadow: 0 0 20px rgba(245, 158, 11, 0.15);
+}
+
+.fin-section-card--featured .fin-section-card__header {
+    border-bottom-color: var(--amber-300);
+}
+
+/* Dark mode adjustments */
+[data-bs-theme="light"] .fin-section-card {
+    background: #fff;
+    border-color: #e5e7eb;
+}
+
+[data-bs-theme="light"] .fin-section-link {
+    background: #f9fafb;
+}
+
+[data-bs-theme="light"] .fin-section-link:hover {
+    background: var(--amber-50);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="fin-container premium-page">
+    <!-- Header -->
+    <header class="fin-header reveal">
+        <div class="fin-header__content">
+            <h1 class="fin-header__title">
+                <i class="fas fa-landmark"></i>
+                Dashboard Financeiro
+            </h1>
+            <p class="fin-header__subtitle">
+                Central de acesso aos modulos financeiros - Custos, Contas a Receber, Contas a Pagar e Fretes
+            </p>
+        </div>
+        <div class="fin-header__actions">
+            <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-light btn-sm">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </header>
+
+    <!-- Grid de Secoes -->
+    <div class="fin-dashboard-grid">
+
+        <!-- CUSTOS - Destaque -->
+        <div class="fin-section-card fin-section-card--featured">
+            <div class="fin-section-card__header">
+                <div class="fin-section-card__icon fin-section-card__icon--custos">
+                    <i class="fas fa-calculator"></i>
+                </div>
+                <div>
+                    <h3 class="fin-section-card__title">Gestao de Custos</h3>
+                    <p class="fin-section-card__desc">Custeio mensal e considerado de produtos</p>
+                </div>
+            </div>
+            <div class="fin-section-links">
+                <a href="{{ url_for('custeio.index') }}" class="fin-section-link">
+                    <div class="fin-section-link__icon">
+                        <i class="fas fa-chart-pie"></i>
+                    </div>
+                    <div class="fin-section-link__text">
+                        <div class="fin-section-link__title">Sistema de Custeio</div>
+                        <div class="fin-section-link__subtitle">Fechamento mensal, custo medio, BOM</div>
+                    </div>
+                    <span class="fin-section-link__badge fin-section-link__badge--new">NOVO</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- CONTAS A RECEBER -->
+        <div class="fin-section-card">
+            <div class="fin-section-card__header">
+                <div class="fin-section-card__icon fin-section-card__icon--receber">
+                    <i class="fas fa-hand-holding-usd"></i>
+                </div>
+                <div>
+                    <h3 class="fin-section-card__title">Contas a Receber</h3>
+                    <p class="fin-section-card__desc">Titulos, baixas e conciliacao</p>
+                </div>
+            </div>
+            <div class="fin-section-links">
+                <a href="{{ url_for('financeiro.contas_receber_hub') }}" class="fin-section-link">
+                    <div class="fin-section-link__icon">
+                        <i class="fas fa-home"></i>
+                    </div>
+                    <div class="fin-section-link__text">
+                        <div class="fin-section-link__title">Central Contas a Receber</div>
+                        <div class="fin-section-link__subtitle">Hub principal</div>
+                    </div>
+                </a>
+                <a href="{{ url_for('financeiro.listar_contas_receber') }}" class="fin-section-link">
+                    <div class="fin-section-link__icon">
+                        <i class="fas fa-list"></i>
+                    </div>
+                    <div class="fin-section-link__text">
+                        <div class="fin-section-link__title">Listar Titulos</div>
+                        <div class="fin-section-link__subtitle">Consultar e gerenciar titulos</div>
+                    </div>
+                </a>
+                <a href="{{ url_for('financeiro.baixas_hub') }}" class="fin-section-link">
+                    <div class="fin-section-link__icon">
+                        <i class="fas fa-check-double"></i>
+                    </div>
+                    <div class="fin-section-link__text">
+                        <div class="fin-section-link__title">Baixas de Titulos</div>
+                        <div class="fin-section-link__subtitle">Baixar titulos via Excel</div>
+                    </div>
+                </a>
+            </div>
+        </div>
+
+        <!-- CONTAS A PAGAR -->
+        <div class="fin-section-card">
+            <div class="fin-section-card__header">
+                <div class="fin-section-card__icon fin-section-card__icon--pagar">
+                    <i class="fas fa-file-invoice-dollar"></i>
+                </div>
+                <div>
+                    <h3 class="fin-section-card__title">Contas a Pagar</h3>
+                    <p class="fin-section-card__desc">Fornecedores e despesas</p>
+                </div>
+            </div>
+            <div class="fin-section-links">
+                <a href="{{ url_for('financeiro.contas_pagar_hub') }}" class="fin-section-link">
+                    <div class="fin-section-link__icon">
+                        <i class="fas fa-home"></i>
+                    </div>
+                    <div class="fin-section-link__text">
+                        <div class="fin-section-link__title">Central Contas a Pagar</div>
+                        <div class="fin-section-link__subtitle">Hub principal</div>
+                    </div>
+                </a>
+                <a href="{{ url_for('financeiro.listar_contas_pagar') }}" class="fin-section-link">
+                    <div class="fin-section-link__icon">
+                        <i class="fas fa-list"></i>
+                    </div>
+                    <div class="fin-section-link__text">
+                        <div class="fin-section-link__title">Listar Contas</div>
+                        <div class="fin-section-link__subtitle">Consultar contas a pagar</div>
+                    </div>
+                </a>
+            </div>
+        </div>
+
+        <!-- FRETES -->
+        <div class="fin-section-card">
+            <div class="fin-section-card__header">
+                <div class="fin-section-card__icon fin-section-card__icon--fretes">
+                    <i class="fas fa-truck"></i>
+                </div>
+                <div>
+                    <h3 class="fin-section-card__title">Gestao de Fretes</h3>
+                    <p class="fin-section-card__desc">CTe, aprovacoes e faturas</p>
+                </div>
+            </div>
+            <div class="fin-section-links">
+                <a href="{{ url_for('fretes.index') }}" class="fin-section-link">
+                    <div class="fin-section-link__icon">
+                        <i class="fas fa-tachometer-alt"></i>
+                    </div>
+                    <div class="fin-section-link__text">
+                        <div class="fin-section-link__title">Dashboard Fretes</div>
+                        <div class="fin-section-link__subtitle">Visao geral de fretes</div>
+                    </div>
+                </a>
+                <a href="{{ url_for('fretes.listar_fretes') }}" class="fin-section-link">
+                    <div class="fin-section-link__icon">
+                        <i class="fas fa-list"></i>
+                    </div>
+                    <div class="fin-section-link__text">
+                        <div class="fin-section-link__title">Listar Fretes</div>
+                        <div class="fin-section-link__subtitle">Consultar CTes lancados</div>
+                    </div>
+                </a>
+                <a href="{{ url_for('fretes.lancar_cte') }}" class="fin-section-link">
+                    <div class="fin-section-link__icon">
+                        <i class="fas fa-plus-circle"></i>
+                    </div>
+                    <div class="fin-section-link__text">
+                        <div class="fin-section-link__title">Lancar CTe</div>
+                        <div class="fin-section-link__subtitle">Novo lancamento de frete</div>
+                    </div>
+                </a>
+                <a href="{{ url_for('fretes.listar_faturas') }}" class="fin-section-link">
+                    <div class="fin-section-link__icon">
+                        <i class="fas fa-file-pdf"></i>
+                    </div>
+                    <div class="fin-section-link__text">
+                        <div class="fin-section-link__title">Faturas de Frete</div>
+                        <div class="fin-section-link__subtitle">Gerenciar faturas</div>
+                    </div>
+                </a>
+            </div>
+        </div>
+
+        <!-- FATURAMENTO -->
+        <div class="fin-section-card">
+            <div class="fin-section-card__header">
+                <div class="fin-section-card__icon fin-section-card__icon--faturamento">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <div>
+                    <h3 class="fin-section-card__title">Faturamento</h3>
+                    <p class="fin-section-card__desc">Relatorios e analises</p>
+                </div>
+            </div>
+            <div class="fin-section-links">
+                <a href="{{ url_for('faturamento.listar_relatorios') }}" class="fin-section-link">
+                    <div class="fin-section-link__icon">
+                        <i class="fas fa-chart-bar"></i>
+                    </div>
+                    <div class="fin-section-link__text">
+                        <div class="fin-section-link__title">Relatorio de Faturamento</div>
+                        <div class="fin-section-link__subtitle">Analise de vendas</div>
+                    </div>
+                </a>
+                <a href="{{ url_for('faturamento.dashboard_faturamento') }}" class="fin-section-link">
+                    <div class="fin-section-link__icon">
+                        <i class="fas fa-receipt"></i>
+                    </div>
+                    <div class="fin-section-link__text">
+                        <div class="fin-section-link__title">Faturamento por Produto</div>
+                        <div class="fin-section-link__subtitle">Analise por produto</div>
+                    </div>
+                </a>
+                <a href="{{ url_for('financeiro.consultar_pendencias') }}" class="fin-section-link">
+                    <div class="fin-section-link__icon">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <div class="fin-section-link__text">
+                        <div class="fin-section-link__title">Pendencias Financeiras</div>
+                        <div class="fin-section-link__subtitle">Titulos com pendencia</div>
+                    </div>
+                </a>
+            </div>
+        </div>
+
+        <!-- CONCILIACAO -->
+        <div class="fin-section-card">
+            <div class="fin-section-card__header">
+                <div class="fin-section-card__icon" style="background: linear-gradient(135deg, #fef3c7, #fde68a); color: #b45309;">
+                    <i class="fas fa-balance-scale"></i>
+                </div>
+                <div>
+                    <h3 class="fin-section-card__title">Conciliacao</h3>
+                    <p class="fin-section-card__desc">Extrato e matching</p>
+                </div>
+            </div>
+            <div class="fin-section-links">
+                <a href="{{ url_for('financeiro.extrato_hub') }}" class="fin-section-link">
+                    <div class="fin-section-link__icon">
+                        <i class="fas fa-file-alt"></i>
+                    </div>
+                    <div class="fin-section-link__text">
+                        <div class="fin-section-link__title">Extrato Unificado</div>
+                        <div class="fin-section-link__subtitle">Conciliar extratos bancarios</div>
+                    </div>
+                </a>
+                <a href="{{ url_for('financeiro.pagamentos_baixas_hub') }}" class="fin-section-link">
+                    <div class="fin-section-link__icon">
+                        <i class="fas fa-sync-alt"></i>
+                    </div>
+                    <div class="fin-section-link__text">
+                        <div class="fin-section-link__title">Pagamentos e Baixas</div>
+                        <div class="fin-section-link__subtitle">Matching automatico</div>
+                    </div>
+                </a>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}
