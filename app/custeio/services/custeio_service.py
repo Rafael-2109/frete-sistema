@@ -869,13 +869,19 @@ class ServicoCusteio:
         )
 
         # Aplicar novos valores se fornecidos
+        custo_definido_manual = False
         if novos_valores:
             for campo, valor in novos_valores.items():
                 if hasattr(nova_versao, campo):
                     setattr(nova_versao, campo, valor)
+                    # Se custo_considerado foi passado explicitamente, não recalcular
+                    if campo == 'custo_considerado' and valor is not None:
+                        custo_definido_manual = True
 
-        # Recalcular custo considerado
-        nova_versao.recalcular_custo_considerado()
+        # Recalcular custo considerado APENAS se não foi definido manualmente
+        # Caso contrário, o valor manual seria sobrescrito pelo tipo_custo_selecionado
+        if not custo_definido_manual:
+            nova_versao.recalcular_custo_considerado()
 
         db.session.add(nova_versao)
         return nova_versao

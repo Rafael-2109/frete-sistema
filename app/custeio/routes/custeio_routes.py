@@ -1894,7 +1894,8 @@ def register_custeio_routes(bp):
             campo_custo = {
                 'medio_mes': 'custo_medio_mes',
                 'ultimo_custo': 'ultimo_custo',
-                'medio_estoque': 'custo_medio_estoque'
+                'medio_estoque': 'custo_medio_estoque',
+                'custo_considerado': 'custo_considerado'
             }.get(criterio, 'custo_medio_mes')
 
             # Buscar todos os custos
@@ -1903,7 +1904,8 @@ def register_custeio_routes(bp):
                 custos_dict[c.cod_produto] = {
                     'custo_medio_mes': float(c.custo_medio_mes) if c.custo_medio_mes else None,
                     'ultimo_custo': float(c.ultimo_custo) if c.ultimo_custo else None,
-                    'custo_medio_estoque': float(c.custo_medio_estoque) if c.custo_medio_estoque else None
+                    'custo_medio_estoque': float(c.custo_medio_estoque) if c.custo_medio_estoque else None,
+                    'custo_considerado': float(c.custo_considerado) if c.custo_considerado else None
                 }
 
             # Buscar produtos com BOM (são intermediários)

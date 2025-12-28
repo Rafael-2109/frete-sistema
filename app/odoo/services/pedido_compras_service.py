@@ -306,7 +306,9 @@ class PedidoComprasServiceOtimizado:
                 'id', 'order_id', 'product_id', 'name',
                 'product_qty', 'qty_received', 'product_uom', 'date_planned',  # ✅ ADICIONADO qty_received
                 'price_unit', 'price_subtotal', 'price_total',
-                'taxes_id', 'state'
+                'taxes_id', 'state',
+                # ✅ IMPOSTOS BRASILEIROS - Valores calculados
+                'l10n_br_icms_valor', 'l10n_br_pis_valor', 'l10n_br_cofins_valor'
             ]
         )
 
@@ -625,6 +627,11 @@ class PedidoComprasServiceOtimizado:
             qtd_recebida=Decimal(str(linha_odoo.get('qty_received', 0))),  # ✅ NOVO
             preco_produto_pedido=Decimal(str(linha_odoo.get('price_unit', 0))),
 
+            # ✅ IMPOSTOS BRASILEIROS - Valores do Odoo
+            icms_produto_pedido=Decimal(str(linha_odoo.get('l10n_br_icms_valor') or 0)),
+            pis_produto_pedido=Decimal(str(linha_odoo.get('l10n_br_pis_valor') or 0)),
+            cofins_produto_pedido=Decimal(str(linha_odoo.get('l10n_br_cofins_valor') or 0)),
+
             # Datas
             data_pedido_criacao=data_pedido_criacao,
             data_pedido_previsao=data_pedido_previsao,
@@ -719,6 +726,21 @@ class PedidoComprasServiceOtimizado:
         novo_preco = Decimal(str(linha_odoo.get('price_unit', 0)))
         if pedido_existente.preco_produto_pedido != novo_preco:
             pedido_existente.preco_produto_pedido = novo_preco
+            alterado = True
+
+        # ✅ Verificar mudanças em impostos
+        novo_icms = Decimal(str(linha_odoo.get('l10n_br_icms_valor') or 0))
+        novo_pis = Decimal(str(linha_odoo.get('l10n_br_pis_valor') or 0))
+        novo_cofins = Decimal(str(linha_odoo.get('l10n_br_cofins_valor') or 0))
+
+        if pedido_existente.icms_produto_pedido != novo_icms:
+            pedido_existente.icms_produto_pedido = novo_icms
+            alterado = True
+        if pedido_existente.pis_produto_pedido != novo_pis:
+            pedido_existente.pis_produto_pedido = novo_pis
+            alterado = True
+        if pedido_existente.cofins_produto_pedido != novo_cofins:
+            pedido_existente.cofins_produto_pedido = novo_cofins
             alterado = True
 
         # ✅ Verificar mudança de status (incluindo cancelamento)

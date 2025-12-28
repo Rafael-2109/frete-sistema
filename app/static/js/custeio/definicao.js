@@ -117,15 +117,21 @@ function renderizarTabela(dados) {
         // O custo é calculado via BOM
         let celulaCustoConsiderado;
         if (eProduzido) {
-            // Campo desabilitado com tooltip explicativo
+            // Produto PRODUZIDO - não editável, mas clicável para ver BOM
+            const expandidosItem = expandidos.get(item.cod_produto) || new Set();
+            const estaExpandido = expandidosItem.has('custo_considerado');
+            const iconClass = estaExpandido ? 'bi-chevron-down' : 'bi-chevron-right';
+            const custoFormatado = custoConsideradoValue ? formatarMoeda(parseFloat(custoConsideradoValue)) : '-';
+
             celulaCustoConsiderado = `
-                <td class="text-end" style="background-color: var(--bs-success-bg-subtle);">
-                    <input type="number"
-                           class="form-control form-control-sm text-end"
-                           value="${custoConsideradoValue}"
-                           disabled
-                           title="Custo calculado automaticamente via BOM"
-                           style="background-color: #e9ecef; cursor: not-allowed;">
+                <td class="text-end valor-expandivel ${estaExpandido ? 'expanded' : ''}"
+                    style="background-color: var(--bs-success-bg-subtle); cursor: pointer;"
+                    data-cod="${item.cod_produto}"
+                    data-tipo="custo_considerado"
+                    onclick="toggleExpand('${item.cod_produto}', 'custo_considerado')"
+                    title="Clique para ver lista de materiais">
+                    ${custoFormatado}
+                    <i class="bi ${iconClass} expand-icon ms-1" style="font-size: 0.7rem;"></i>
                 </td>
             `;
         } else {
@@ -343,6 +349,7 @@ function getNomeCriterio(tipoValor) {
         case 'medio_mes': return 'Médio Mês';
         case 'ultimo_custo': return 'Último Custo';
         case 'medio_estoque': return 'Médio Estoque';
+        case 'custo_considerado': return 'Custo Considerado';
         default: return tipoValor;
     }
 }
