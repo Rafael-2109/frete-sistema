@@ -981,3 +981,229 @@ class ServicoCusteio:
         ).order_by(CustoConsiderado.versao.desc()).all()
 
         return [c.to_dict() for c in custos]
+
+    # ================================================
+    # PROPAGACAO AUTOMATICA DE CUSTOS VIA BOM
+    # ================================================
+
+    @staticmethod
+    def propagar_custos_bom(usuario: str = 'Sistema') -> Dict[str, Any]:
+        """
+        Propaga custos dos COMPRADOS para INTERMEDIARIOS e ACABADOS via BOM.
+
+        Ordem de processamento:
+        1. Busca custos considerados de todos COMPRADOS
+        2. Calcula e salva custos de INTERMEDIARIOS
+        3. Calcula e salva custos de ACABADOS
+
+        Args:
+            usuario: Usuario que disparou a propagacao
+
+        Returns:
+            Dict com resultado da propagacao
+        """
+        from app.manufatura.models import ListaMateriais
+
+        resultado = {
+            'sucesso': True,
+            'intermediarios': {'atualizados': 0, 'erros': []},
+            'acabados': {'atualizados': 0, 'erros': []},
+            'total_atualizados': 0
+        }
+
+        try:
+            # ============================================
+            # FASE 1: Carregar custos dos COMPRADOS
+            # ============================================
+            custos_comprados = {}
+            for c in CustoConsiderado.query.filter_by(custo_atual=True).all():
+                produto = CadastroPalletizacao.query.filter_by(cod_produto=c.cod_produto).first()
+                if produto and produto.produto_comprado and c.custo_considerado:
+                    custos_comprados[c.cod_produto] = float(c.custo_considerado)
+
+            logger.info(f"Propagacao: {len(custos_comprados)} comprados com custo definido")
+
+            if not custos_comprados:
+                resultado['aviso'] = 'Nenhum componente COMPRADO com custo definido'
+                return resultado
+
+            # ============================================
+            # FASE 2: Identificar produtos com BOM
+            # ============================================
+            produtos_com_bom = set(
+                bom.cod_produto_produzido for bom in
+                ListaMateriais.query.filter_by(status='ativo')
+                .with_entities(ListaMateriais.cod_produto_produzido).distinct()
+            )
+
+            # Cache de BOMs
+            bom_cache = {}
+            for bom in ListaMateriais.query.filter_by(status='ativo').all():
+                if bom.cod_produto_produzido not in bom_cache:
+                    bom_cache[bom.cod_produto_produzido] = []
+                bom_cache[bom.cod_produto_produzido].append({
+                    'cod_componente': bom.cod_produto_componente,
+                    'qtd': float(bom.qtd_utilizada) if bom.qtd_utilizada else 0
+                })
+
+            # ============================================
+            # FASE 3: Funcao de calculo recursivo
+            # ============================================
+            custos_calculados = dict(custos_comprados)  # Começa com comprados
+
+            def calcular_custo_bom_recursivo(cod_produto, visitados=None):
+                """Calcula custo via BOM recursivamente"""
+                if visitados is None:
+                    visitados = set()
+
+                if cod_produto in visitados:
+                    return None  # Evitar loop
+
+                # Se já tem custo calculado, retorna
+                if cod_produto in custos_calculados:
+                    return custos_calculados[cod_produto]
+
+                # Se não tem BOM, não pode calcular
+                if cod_produto not in produtos_com_bom:
+                    return None
+
+                visitados.add(cod_produto)
+                componentes = bom_cache.get(cod_produto, [])
+
+                custo_total = 0
+                todos_componentes_ok = True
+
+                for comp in componentes:
+                    custo_comp = calcular_custo_bom_recursivo(comp['cod_componente'], visitados.copy())
+                    if custo_comp is not None:
+                        custo_total += custo_comp * comp['qtd']
+                    else:
+                        todos_componentes_ok = False
+
+                if todos_componentes_ok and custo_total > 0:
+                    custos_calculados[cod_produto] = custo_total
+                    return custo_total
+
+                return None
+
+            # ============================================
+            # FASE 4: Processar INTERMEDIARIOS
+            # ============================================
+            produtos_intermediarios = CadastroPalletizacao.query.filter(
+                CadastroPalletizacao.produto_produzido == True,
+                CadastroPalletizacao.produto_vendido == False,
+                CadastroPalletizacao.ativo == True
+            ).all()
+
+            for produto in produtos_intermediarios:
+                try:
+                    custo = calcular_custo_bom_recursivo(produto.cod_produto)
+                    if custo is not None:
+                        ServicoCusteio._salvar_custo_propagado(
+                            cod_produto=produto.cod_produto,
+                            nome_produto=produto.nome_produto,
+                            tipo_produto='INTERMEDIARIO',
+                            custo_considerado=custo,
+                            usuario=usuario
+                        )
+                        resultado['intermediarios']['atualizados'] += 1
+                except Exception as e:
+                    resultado['intermediarios']['erros'].append(f"{produto.cod_produto}: {str(e)}")
+
+            # ============================================
+            # FASE 5: Processar ACABADOS
+            # ============================================
+            produtos_acabados = CadastroPalletizacao.query.filter(
+                CadastroPalletizacao.produto_produzido == True,
+                CadastroPalletizacao.produto_vendido == True,
+                CadastroPalletizacao.ativo == True
+            ).all()
+
+            for produto in produtos_acabados:
+                try:
+                    custo = calcular_custo_bom_recursivo(produto.cod_produto)
+                    if custo is not None:
+                        ServicoCusteio._salvar_custo_propagado(
+                            cod_produto=produto.cod_produto,
+                            nome_produto=produto.nome_produto,
+                            tipo_produto='ACABADO',
+                            custo_considerado=custo,
+                            usuario=usuario
+                        )
+                        resultado['acabados']['atualizados'] += 1
+                except Exception as e:
+                    resultado['acabados']['erros'].append(f"{produto.cod_produto}: {str(e)}")
+
+            resultado['total_atualizados'] = (
+                resultado['intermediarios']['atualizados'] +
+                resultado['acabados']['atualizados']
+            )
+
+            logger.info(f"Propagacao concluida: {resultado['total_atualizados']} produtos atualizados")
+
+            return resultado
+
+        except Exception as e:
+            logger.error(f"Erro na propagacao de custos: {e}")
+            resultado['sucesso'] = False
+            resultado['erro'] = str(e)
+            return resultado
+
+    @staticmethod
+    def _salvar_custo_propagado(
+        cod_produto: str,
+        nome_produto: str,
+        tipo_produto: str,
+        custo_considerado: float,
+        usuario: str
+    ):
+        """
+        Salva custo propagado via BOM (uso interno)
+        """
+        custo_atual = CustoConsiderado.query.filter_by(
+            cod_produto=cod_produto,
+            custo_atual=True
+        ).first()
+
+        if custo_atual:
+            # Só atualiza se o valor mudou
+            if custo_atual.custo_considerado and abs(float(custo_atual.custo_considerado) - custo_considerado) < 0.000001:
+                return  # Sem alteração
+
+            # Criar nova versão
+            custo_atual.custo_atual = False
+            custo_atual.vigencia_fim = datetime.utcnow()
+
+            nova_versao = CustoConsiderado(
+                cod_produto=cod_produto,
+                nome_produto=nome_produto,
+                tipo_produto=tipo_produto,
+                versao=custo_atual.versao + 1,
+                custo_atual=True,
+                vigencia_inicio=datetime.utcnow(),
+                motivo_alteracao='Propagacao automatica via BOM',
+                tipo_custo_selecionado='BOM',
+                custo_considerado=custo_considerado,
+                custo_medio_mes=custo_atual.custo_medio_mes,
+                ultimo_custo=custo_atual.ultimo_custo,
+                custo_medio_estoque=custo_atual.custo_medio_estoque,
+                atualizado_por=usuario
+            )
+            db.session.add(nova_versao)
+        else:
+            # Primeiro registro
+            nova_versao = CustoConsiderado(
+                cod_produto=cod_produto,
+                nome_produto=nome_produto,
+                tipo_produto=tipo_produto,
+                versao=1,
+                custo_atual=True,
+                vigencia_inicio=datetime.utcnow(),
+                motivo_alteracao='Propagacao automatica via BOM',
+                tipo_custo_selecionado='BOM',
+                custo_considerado=custo_considerado,
+                atualizado_por=usuario
+            )
+            db.session.add(nova_versao)
+
+        db.session.commit()

@@ -113,14 +113,24 @@ function renderizarTabela(dados) {
         const celulaUltimoCusto = criarCelulaExpandivel(item, 'ultimo_custo', ultimoCusto, eProduzido);
         const celulaMedioEstoque = criarCelulaExpandivel(item, 'medio_estoque', medioEstoque, eProduzido);
 
-        return `
-            <tr data-cod="${item.cod_produto}" data-tipo="${item.tipo}">
-                <td><code>${item.cod_produto}</code></td>
-                <td>${item.nome_produto || '-'}</td>
-                <td class="text-center">${tipoBadge}</td>
-                ${celulaMedioMes}
-                ${celulaUltimoCusto}
-                ${celulaMedioEstoque}
+        // Produtos produzidos não podem ter custo editado diretamente
+        // O custo é calculado via BOM
+        let celulaCustoConsiderado;
+        if (eProduzido) {
+            // Campo desabilitado com tooltip explicativo
+            celulaCustoConsiderado = `
+                <td class="text-end" style="background-color: var(--bs-success-bg-subtle);">
+                    <input type="number"
+                           class="form-control form-control-sm text-end"
+                           value="${custoConsideradoValue}"
+                           disabled
+                           title="Custo calculado automaticamente via BOM"
+                           style="background-color: #e9ecef; cursor: not-allowed;">
+                </td>
+            `;
+        } else {
+            // Produto COMPRADO - editável
+            celulaCustoConsiderado = `
                 <td class="text-end" style="background-color: var(--bs-success-bg-subtle);">
                     <input type="number"
                            class="form-control form-control-sm editable-input text-end"
@@ -132,6 +142,18 @@ function renderizarTabela(dados) {
                            onkeydown="handleEnterKey(event, this)"
                            placeholder="0.00">
                 </td>
+            `;
+        }
+
+        return `
+            <tr data-cod="${item.cod_produto}" data-tipo="${item.tipo}">
+                <td><code>${item.cod_produto}</code></td>
+                <td>${item.nome_produto || '-'}</td>
+                <td class="text-center">${tipoBadge}</td>
+                ${celulaMedioMes}
+                ${celulaUltimoCusto}
+                ${celulaMedioEstoque}
+                ${celulaCustoConsiderado}
             </tr>
         `;
     }).join('');

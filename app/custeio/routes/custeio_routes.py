@@ -2012,8 +2012,15 @@ def register_custeio_routes(bp):
     @bp.route('/api/definicao/salvar', methods=['POST']) #type: ignore
     @login_required
     def salvar_definicao():
-        """Salva custo considerado para um produto"""
+        """
+        Salva custo considerado para um produto COMPRADO.
+
+        IMPORTANTE: Produtos INTERMEDIARIOS e ACABADOS nao podem ter
+        custo editado diretamente - sao calculados via BOM.
+        """
         try:
+            from app.producao.models import CadastroPalletizacao
+
             dados = request.json or {}
             cod_produto = dados.get('cod_produto')
             custo_considerado = dados.get('custo_considerado')
@@ -2021,19 +2028,48 @@ def register_custeio_routes(bp):
             if not cod_produto or custo_considerado is None:
                 return jsonify({'erro': 'cod_produto e custo_considerado sao obrigatorios'}), 400
 
+            # Verificar tipo do produto
+            produto = CadastroPalletizacao.query.filter_by(cod_produto=cod_produto).first()
+            if not produto:
+                return jsonify({'erro': 'Produto nao encontrado'}), 404
+
+            # Bloquear edicao de produtos produzidos (exceto se tambem for comprado)
+            if produto.produto_produzido and not produto.produto_comprado:
+                tipo = 'INTERMEDIARIO' if not produto.produto_vendido else 'ACABADO'
+                return jsonify({
+                    'sucesso': False,
+                    'erro': f'Produto {tipo} nao pode ter custo editado diretamente. '
+                            f'O custo e calculado automaticamente via BOM.'
+                }), 400
+
+            usuario = current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
+
             resultado = ServicoCusteio.cadastrar_custo_manual(
                 cod_produto=cod_produto,
                 custo_considerado=float(custo_considerado),
                 custo_producao=None,
                 tipo_custo='MANUAL',
-                usuario=current_user.nome if hasattr(current_user, 'nome') else 'Sistema',
+                usuario=usuario,
                 motivo='Definicao manual de custo'
             )
 
             if resultado.get('erro'):
                 return jsonify({'sucesso': False, 'erro': resultado['erro']}), 400
 
-            return jsonify({'sucesso': True, 'mensagem': f'Custo definido para {cod_produto}'})
+            # ============================================
+            # PROPAGAR CUSTOS PARA PRODUTOS QUE USAM ESTE COMPONENTE
+            # ============================================
+            propagacao = ServicoCusteio.propagar_custos_bom(usuario=usuario)
+
+            mensagem = f'Custo definido para {cod_produto}'
+            if propagacao.get('total_atualizados', 0) > 0:
+                mensagem += f' e {propagacao["total_atualizados"]} produtos recalculados via BOM'
+
+            return jsonify({
+                'sucesso': True,
+                'mensagem': mensagem,
+                'propagacao': propagacao
+            })
 
         except Exception as e:
             logger.error(f"Erro ao salvar definicao: {e}")
@@ -2094,9 +2130,16 @@ def register_custeio_routes(bp):
     @bp.route('/api/definicao/importar', methods=['POST']) #type: ignore
     @login_required
     def importar_definicao():
-        """Importa definicoes de custo de arquivo Excel"""
+        """
+        Importa definicoes de custo de arquivo Excel.
+
+        IMPORTANTE: Apenas produtos COMPRADOS sao importados diretamente.
+        Produtos INTERMEDIARIOS e ACABADOS tem seus custos calculados
+        automaticamente via BOM apos a importacao.
+        """
         try:
             import pandas as pd
+            from app.producao.models import CadastroPalletizacao
 
             if 'arquivo' not in request.files:
                 return jsonify({'erro': 'Nenhum arquivo enviado'}), 400
@@ -2108,7 +2151,9 @@ def register_custeio_routes(bp):
                 return jsonify({'erro': 'Colunas Codigo e Custo Considerado sao obrigatorias'}), 400
 
             atualizados = 0
+            ignorados_produzidos = 0
             erros = []
+            usuario = current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
 
             for idx, row in df.iterrows():
                 try:
@@ -2118,12 +2163,23 @@ def register_custeio_routes(bp):
                     if pd.isna(custo) or custo == '':
                         continue
 
+                    # Verificar se e produto COMPRADO
+                    produto = CadastroPalletizacao.query.filter_by(cod_produto=cod_produto).first()
+                    if not produto:
+                        erros.append(f"Linha {idx + 2}: Produto {cod_produto} nao encontrado")
+                        continue
+
+                    # Ignorar produtos produzidos (serao calculados via BOM)
+                    if produto.produto_produzido and not produto.produto_comprado:
+                        ignorados_produzidos += 1
+                        continue
+
                     resultado = ServicoCusteio.cadastrar_custo_manual(
                         cod_produto=cod_produto,
                         custo_considerado=float(custo),
                         custo_producao=None,
                         tipo_custo='MANUAL',
-                        usuario=current_user.nome if hasattr(current_user, 'nome') else 'Sistema',
+                        usuario=usuario,
                         motivo='Importacao via Excel'
                     )
 
@@ -2133,11 +2189,28 @@ def register_custeio_routes(bp):
                 except Exception as e:
                     erros.append(f"Linha {idx + 2}: {str(e)}") # type: ignore
 
+            # ============================================
+            # PROPAGAR CUSTOS PARA INTERMEDIARIOS E ACABADOS
+            # ============================================
+            propagacao = {'total_atualizados': 0}
+            if atualizados > 0:
+                propagacao = ServicoCusteio.propagar_custos_bom(usuario=usuario)
+
+            mensagem = f'{atualizados} comprados importados'
+            if propagacao.get('total_atualizados', 0) > 0:
+                mensagem += f', {propagacao["total_atualizados"]} produzidos recalculados via BOM'
+            if ignorados_produzidos > 0:
+                mensagem += f' ({ignorados_produzidos} produzidos ignorados na importacao)'
+            if erros:
+                mensagem += f', {len(erros)} erros'
+
             return jsonify({
                 'sucesso': True,
                 'atualizados': atualizados,
+                'propagacao': propagacao,
+                'ignorados_produzidos': ignorados_produzidos,
                 'erros': erros[:10],
-                'mensagem': f'{atualizados} atualizados' + (f', {len(erros)} erros' if erros else '')
+                'mensagem': mensagem
             })
 
         except Exception as e:
