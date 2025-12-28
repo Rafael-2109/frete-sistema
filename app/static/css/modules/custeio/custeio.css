@@ -308,6 +308,7 @@
 .card-composicao .icon-wrapper { background: var(--semantic-success-subtle); color: var(--semantic-success); }
 .card-definicao .icon-wrapper { background: hsla(0, 70%, 50%, 0.1); color: hsl(0, 70%, 50%); }
 .card-mensal .icon-wrapper { background: hsla(180, 60%, 45%, 0.1); color: hsl(180, 60%, 45%); }
+.card-comissao .icon-wrapper { background: hsla(280, 60%, 50%, 0.1); color: hsl(280, 60%, 50%); }
 
 /* Dashboard Stats */
 .stat-value {

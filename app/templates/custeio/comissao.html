@@ -1,0 +1,366 @@
+{% extends "base.html" %}
+
+{% block title %}Custeio - Regras de Comissao{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/modules/custeio/custeio.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-1">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1 mt-2"><i class="bi bi-percent me-2"></i>Regras de Comissao</h4>
+            <small class="text-muted">Hierarquia de especificidade: regra mais especifica prevalece</small>
+        </div>
+        <div class="crud-actions">
+            <button class="btn btn-outline-secondary btn-sm" onclick="baixarModelo()">
+                <i class="bi bi-file-earmark-arrow-down me-1"></i>Modelo
+            </button>
+            <button class="btn btn-outline-primary btn-sm" onclick="document.getElementById('input-importar').click()">
+                <i class="bi bi-upload me-1"></i>Importar
+            </button>
+            <button class="btn btn-outline-success btn-sm" onclick="exportarComissao()">
+                <i class="bi bi-download me-1"></i>Exportar
+            </button>
+            <button class="btn btn-success btn-sm" onclick="abrirModalComissao()">
+                <i class="bi bi-plus-lg me-1"></i>Novo
+            </button>
+            <a href="{{ url_for('custeio.index') }}" class="text-decoration-none text-muted">
+                <i class="bi bi-arrow-left me-2"></i>Voltar
+            </a>
+            <input type="file" id="input-importar" accept=".xlsx,.xls" style="display:none" onchange="importarComissao(this)">
+        </div>
+    </div>
+
+    <!-- Cards Resumo -->
+    <div class="row mb-3">
+        <div class="col-md-3">
+            <div class="card card-stat">
+                <div class="card-body py-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted">Compostas</small>
+                            <h5 class="mb-0" id="stat-compostas">0</h5>
+                        </div>
+                        <i class="bi bi-layers text-primary" style="font-size: 1.5rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card card-stat">
+                <div class="card-body py-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted">Simples</small>
+                            <h5 class="mb-0" id="stat-simples">0</h5>
+                        </div>
+                        <i class="bi bi-circle text-success" style="font-size: 1.5rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card card-stat">
+                <div class="card-body py-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted">Total Ativas</small>
+                            <h5 class="mb-0" id="stat-total">0</h5>
+                        </div>
+                        <i class="bi bi-check-circle text-info" style="font-size: 1.5rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card card-stat">
+                <div class="card-body py-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted">Padrao</small>
+                            <h5 class="mb-0" id="stat-padrao">3%</h5>
+                        </div>
+                        <i class="bi bi-gear text-warning" style="font-size: 1.5rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <div class="row g-2 align-items-center">
+                <div class="col-md-2">
+                    <select class="form-select form-select-sm" id="filtro-tipo" onchange="carregarDados()">
+                        <option value="">Todos os Tipos</option>
+                        <optgroup label="Compostas (+ Produto)">
+                            <option value="CLIENTE_PRODUTO">Cliente + Produto</option>
+                            <option value="GRUPO_PRODUTO">Grupo + Produto</option>
+                            <option value="VENDEDOR_PRODUTO">Vendedor + Produto</option>
+                        </optgroup>
+                        <optgroup label="Simples">
+                            <option value="CLIENTE">Apenas Cliente</option>
+                            <option value="GRUPO">Apenas Grupo</option>
+                            <option value="VENDEDOR">Apenas Vendedor</option>
+                            <option value="PRODUTO">Apenas Produto</option>
+                        </optgroup>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <input type="text" class="form-control form-control-sm" id="filtro-busca"
+                           placeholder="Buscar..." onkeyup="filtrarLocal()">
+                </div>
+                <div class="col-md-2">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="filtro-ativos" checked onchange="carregarDados()">
+                        <label class="form-check-label small" for="filtro-ativos">Apenas ativas</label>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <button class="btn btn-outline-warning btn-sm" onclick="abrirModalRecalculo()">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Recalcular Margem
+                    </button>
+                </div>
+                <div class="col-md-2 text-end">
+                    <span class="text-muted small" id="total-registros">-</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Legenda -->
+    <div class="alert alert-info py-2 mb-3">
+        <small>
+            <i class="bi bi-info-circle me-1"></i>
+            <strong>Hierarquia:</strong>
+            <span class="badge bg-danger me-1">1</span>Cliente+Produto
+            <span class="badge bg-warning text-dark ms-1 me-1">2</span>Grupo+Produto
+            <span class="badge bg-primary ms-1 me-1">3</span>Vendedor+Produto
+            <span class="badge bg-success ms-1 me-1">4</span>Cliente
+            <span class="badge bg-secondary ms-1 me-1">5</span>Grupo
+            <span class="badge bg-info ms-1 me-1">6</span>Vendedor
+            <span class="badge bg-dark ms-1 me-1">7</span>Produto
+            <span class="ms-2">| Padrao: 3%</span>
+        </small>
+    </div>
+
+    <!-- Tabela -->
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-container">
+                <table class="table table-hover table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th style="width: 30px;">#</th>
+                            <th style="width: 130px;">Tipo</th>
+                            <th>Criterios</th>
+                            <th class="text-end" style="width: 100px;">Comissao %</th>
+                            <th style="width: 100px;">Vigencia</th>
+                            <th style="width: 150px;">Descricao</th>
+                            <th class="text-center" style="width: 80px;">Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-comissao">
+                        <tr>
+                            <td colspan="7" class="empty-state">
+                                <i class="bi bi-inbox"></i>
+                                <p>Carregando...</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Comissao -->
+<div class="modal fade" id="modalComissao" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-percent me-2"></i>Regra de Comissao</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="comissao-id">
+
+                <!-- Tipo de Regra -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Tipo de Regra (Especificidade)</label>
+                    <select class="form-select" id="comissao-tipo" onchange="alterarTipoRegra()">
+                        <option value="">Selecione o tipo...</option>
+                        <optgroup label="Compostas (Cliente/Grupo/Vendedor + Produto)">
+                            <option value="CLIENTE_PRODUTO">1. Cliente + Produto (mais especifico)</option>
+                            <option value="GRUPO_PRODUTO">2. Grupo Empresarial + Produto</option>
+                            <option value="VENDEDOR_PRODUTO">3. Vendedor + Produto</option>
+                        </optgroup>
+                        <optgroup label="Simples">
+                            <option value="CLIENTE">4. Apenas Cliente</option>
+                            <option value="GRUPO">5. Apenas Grupo Empresarial</option>
+                            <option value="VENDEDOR">6. Apenas Vendedor</option>
+                            <option value="PRODUTO">7. Apenas Produto (menos especifico)</option>
+                        </optgroup>
+                    </select>
+                </div>
+
+                <!-- Campos dinamicos -->
+                <div id="campos-dinamicos" class="criterio-container" style="display: none;">
+                    <!-- Cliente -->
+                    <div id="campo-cliente" class="mb-3" style="display: none;">
+                        <label class="form-label">Cliente (Razao Social Red)</label>
+                        <input type="text" class="form-control" id="comissao-cliente"
+                               placeholder="Digite para buscar..." autocomplete="off">
+                        <div id="sugestoes-cliente" class="sugestoes-autocomplete"></div>
+                    </div>
+
+                    <!-- Grupo -->
+                    <div id="campo-grupo" class="mb-3" style="display: none;">
+                        <label class="form-label">Grupo Empresarial</label>
+                        <select class="form-select" id="comissao-grupo">
+                            <option value="">Selecione</option>
+                        </select>
+                    </div>
+
+                    <!-- Vendedor -->
+                    <div id="campo-vendedor" class="mb-3" style="display: none;">
+                        <label class="form-label">Vendedor</label>
+                        <select class="form-select" id="comissao-vendedor">
+                            <option value="">Selecione</option>
+                        </select>
+                    </div>
+
+                    <!-- Produto -->
+                    <div id="campo-produto" class="mb-3" style="display: none;">
+                        <label class="form-label">Produto</label>
+                        <input type="text" class="form-control" id="comissao-produto"
+                               placeholder="Digite para buscar..." autocomplete="off">
+                        <div id="sugestoes-produto" class="sugestoes-autocomplete"></div>
+                    </div>
+                </div>
+
+                <hr>
+
+                <!-- Comissao e Vigencia -->
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label fw-bold">Comissao (%)</label>
+                        <input type="number" class="form-control" id="comissao-percentual"
+                               step="0.01" min="0" max="100" required>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Vigencia Inicio</label>
+                        <input type="date" class="form-control" id="comissao-vigencia-inicio">
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Vigencia Fim <small class="text-muted">(opcional)</small></label>
+                        <input type="date" class="form-control" id="comissao-vigencia-fim">
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Descricao <small class="text-muted">(opcional)</small></label>
+                    <input type="text" class="form-control" id="comissao-descricao"
+                           placeholder="Ex: Comissao especial para cliente X">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="salvarComissao()">
+                    <i class="bi bi-check-lg me-1"></i>Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Recalculo -->
+<div class="modal fade" id="modalRecalculo" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-arrow-clockwise me-2"></i>Recalcular Margem</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    Esta acao ira recalcular as margens com base nas regras de comissao atuais.
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Escopo do Recalculo</label>
+                    <select class="form-select" id="recalculo-escopo" onchange="alterarEscopoRecalculo()">
+                        <option value="pedido">Pedido especifico</option>
+                        <option value="produto">Produto especifico</option>
+                        <option value="todos">Todos os pedidos com saldo</option>
+                    </select>
+                </div>
+                <div id="recalculo-pedido" class="mb-3">
+                    <label class="form-label">Numero do Pedido</label>
+                    <input type="text" class="form-control" id="recalculo-num-pedido" placeholder="Ex: VCD123456">
+                </div>
+                <div id="recalculo-produto" class="mb-3" style="display: none;">
+                    <label class="form-label">Codigo do Produto</label>
+                    <input type="text" class="form-control" id="recalculo-cod-produto" placeholder="Ex: 101000001">
+                </div>
+                <div id="recalculo-resultado" class="alert alert-info" style="display: none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-warning" onclick="executarRecalculo()">
+                    <i class="bi bi-arrow-clockwise me-1"></i>Recalcular
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loading-overlay">
+    <div class="spinner-border text-light" role="status">
+        <span class="visually-hidden">Carregando...</span>
+    </div>
+</div>
+
+<style>
+.sugestoes-autocomplete {
+    position: absolute;
+    z-index: 1000;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+    width: calc(100% - 24px);
+    display: none;
+}
+.sugestoes-autocomplete.show {
+    display: block;
+}
+.sugestoes-autocomplete .sugestao-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid #eee;
+}
+.sugestoes-autocomplete .sugestao-item:hover {
+    background-color: #f8f9fa;
+}
+.sugestoes-autocomplete .sugestao-item:last-child {
+    border-bottom: none;
+}
+.criterio-container {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/custeio/comissao.js') }}"></script>
+{% endblock %}

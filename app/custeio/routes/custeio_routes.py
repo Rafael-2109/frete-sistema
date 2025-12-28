@@ -2173,3 +2173,664 @@ def register_custeio_routes(bp):
         except Exception as e:
             logger.error(f"Erro ao gerar modelo definicao: {e}")
             return jsonify({'erro': str(e)}), 500
+
+    # ================================================
+    # PAGINA - COMISSAO
+    # ================================================
+
+    @bp.route('/comissao') #type: ignore
+    @login_required
+    def tela_comissao():
+        """Tela CRUD de Regras de Comissao"""
+        return render_template('custeio/comissao.html')
+
+    # ================================================
+    # API - COMISSAO
+    # ================================================
+
+    @bp.route('/api/comissao/listar') #type: ignore
+    @login_required
+    def listar_comissoes():
+        """Lista regras de comissao com filtros"""
+        try:
+            from app.custeio.models import RegraComissao
+            from datetime import date
+
+            tipo_regra = request.args.get('tipo_regra')
+            grupo_empresarial = request.args.get('grupo_empresarial')
+            raz_social_red = request.args.get('raz_social_red')
+            cod_produto = request.args.get('cod_produto')
+            apenas_ativos = request.args.get('apenas_ativos', 'true').lower() == 'true'
+
+            query = RegraComissao.query
+
+            if tipo_regra:
+                query = query.filter(RegraComissao.tipo_regra == tipo_regra)
+            if grupo_empresarial:
+                query = query.filter(RegraComissao.grupo_empresarial.ilike(f'%{grupo_empresarial}%'))
+            if raz_social_red:
+                query = query.filter(RegraComissao.raz_social_red.ilike(f'%{raz_social_red}%'))
+            if cod_produto:
+                query = query.filter(RegraComissao.cod_produto.ilike(f'%{cod_produto}%'))
+            if apenas_ativos:
+                query = query.filter(RegraComissao.ativo == True)
+
+            regras = query.order_by(RegraComissao.tipo_regra, RegraComissao.prioridade.desc()).all()
+
+            return jsonify({
+                'sucesso': True,
+                'dados': [{
+                    'id': r.id,
+                    'tipo_regra': r.tipo_regra,
+                    'grupo_empresarial': r.grupo_empresarial,
+                    'raz_social_red': r.raz_social_red,
+                    'vendedor': r.vendedor,
+                    'cod_produto': r.cod_produto,
+                    'cliente_cod_uf': r.cliente_cod_uf,
+                    'cliente_vendedor': r.cliente_vendedor,
+                    'cliente_equipe': r.cliente_equipe,
+                    'produto_grupo': r.produto_grupo,
+                    'produto_cliente': r.produto_cliente,
+                    'comissao_percentual': float(r.comissao_percentual) if r.comissao_percentual else 0,
+                    'vigencia_inicio': r.vigencia_inicio.strftime('%Y-%m-%d') if r.vigencia_inicio else None,
+                    'vigencia_fim': r.vigencia_fim.strftime('%Y-%m-%d') if r.vigencia_fim else None,
+                    'prioridade': r.prioridade,
+                    'descricao': r.descricao,
+                    'ativo': r.ativo,
+                    'criado_em': r.criado_em.strftime('%d/%m/%Y %H:%M') if r.criado_em else None,
+                    'criado_por': r.criado_por
+                } for r in regras],
+                'total': len(regras)
+            })
+
+        except Exception as e:
+            logger.error(f"Erro ao listar regras de comissao: {e}")
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/api/comissao/salvar', methods=['POST']) #type: ignore
+    @login_required
+    def salvar_comissao():
+        """Cria ou atualiza regra de comissao"""
+        try:
+            from app.custeio.models import RegraComissao
+            from app import db
+            from datetime import datetime
+
+            dados = request.json or {}
+            id_registro = dados.get('id')
+            tipo_regra = dados.get('tipo_regra')
+            comissao_percentual = dados.get('comissao_percentual')
+
+            if not tipo_regra or comissao_percentual is None:
+                return jsonify({'erro': 'tipo_regra e comissao_percentual sao obrigatorios'}), 400
+
+            tipos_validos = ('CLIENTE_PRODUTO', 'GRUPO_PRODUTO', 'VENDEDOR_PRODUTO',
+                           'CLIENTE', 'GRUPO', 'VENDEDOR', 'PRODUTO')
+            if tipo_regra not in tipos_validos:
+                return jsonify({'erro': f'tipo_regra deve ser um de: {", ".join(tipos_validos)}'}), 400
+
+            # Validar criterios conforme tipo
+            if tipo_regra == 'CLIENTE_PRODUTO':
+                if not dados.get('raz_social_red') or not dados.get('cod_produto'):
+                    return jsonify({'erro': 'raz_social_red e cod_produto sao obrigatorios para CLIENTE_PRODUTO'}), 400
+            elif tipo_regra == 'GRUPO_PRODUTO':
+                if not dados.get('grupo_empresarial') or not dados.get('cod_produto'):
+                    return jsonify({'erro': 'grupo_empresarial e cod_produto sao obrigatorios para GRUPO_PRODUTO'}), 400
+            elif tipo_regra == 'VENDEDOR_PRODUTO':
+                if not dados.get('vendedor') or not dados.get('cod_produto'):
+                    return jsonify({'erro': 'vendedor e cod_produto sao obrigatorios para VENDEDOR_PRODUTO'}), 400
+            elif tipo_regra == 'CLIENTE' and not dados.get('raz_social_red'):
+                return jsonify({'erro': 'raz_social_red e obrigatorio para tipo CLIENTE'}), 400
+            elif tipo_regra == 'GRUPO' and not dados.get('grupo_empresarial'):
+                return jsonify({'erro': 'grupo_empresarial e obrigatorio para tipo GRUPO'}), 400
+            elif tipo_regra == 'VENDEDOR' and not dados.get('vendedor'):
+                return jsonify({'erro': 'vendedor e obrigatorio para tipo VENDEDOR'}), 400
+            elif tipo_regra == 'PRODUTO' and not dados.get('cod_produto'):
+                return jsonify({'erro': 'cod_produto e obrigatorio para tipo PRODUTO'}), 400
+
+            vigencia_inicio = dados.get('vigencia_inicio')
+            vigencia_fim = dados.get('vigencia_fim')
+
+            if id_registro:
+                # Atualizar existente
+                registro = RegraComissao.query.get(id_registro)
+                if not registro:
+                    return jsonify({'erro': 'Regra nao encontrada'}), 404
+
+                registro.tipo_regra = tipo_regra
+                registro.grupo_empresarial = dados.get('grupo_empresarial')
+                registro.raz_social_red = dados.get('raz_social_red')
+                registro.vendedor = dados.get('vendedor')
+                registro.cod_produto = dados.get('cod_produto')
+                registro.cliente_cod_uf = dados.get('cliente_cod_uf')
+                registro.cliente_vendedor = dados.get('cliente_vendedor')
+                registro.cliente_equipe = dados.get('cliente_equipe')
+                registro.produto_grupo = dados.get('produto_grupo')
+                registro.produto_cliente = dados.get('produto_cliente')
+                registro.comissao_percentual = comissao_percentual
+                registro.vigencia_inicio = datetime.strptime(vigencia_inicio, '%Y-%m-%d').date() if vigencia_inicio else registro.vigencia_inicio
+                registro.vigencia_fim = datetime.strptime(vigencia_fim, '%Y-%m-%d').date() if vigencia_fim else None
+                registro.prioridade = dados.get('prioridade', 0)
+                registro.descricao = dados.get('descricao')
+                registro.ativo = dados.get('ativo', True)
+                registro.atualizado_em = datetime.utcnow()
+                registro.atualizado_por = current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
+            else:
+                # Criar novo
+                registro = RegraComissao(
+                    tipo_regra=tipo_regra,
+                    grupo_empresarial=dados.get('grupo_empresarial'),
+                    raz_social_red=dados.get('raz_social_red'),
+                    vendedor=dados.get('vendedor'),
+                    cod_produto=dados.get('cod_produto'),
+                    cliente_cod_uf=dados.get('cliente_cod_uf'),
+                    cliente_vendedor=dados.get('cliente_vendedor'),
+                    cliente_equipe=dados.get('cliente_equipe'),
+                    produto_grupo=dados.get('produto_grupo'),
+                    produto_cliente=dados.get('produto_cliente'),
+                    comissao_percentual=comissao_percentual,
+                    vigencia_inicio=datetime.strptime(vigencia_inicio, '%Y-%m-%d').date() if vigencia_inicio else datetime.now().date(),
+                    vigencia_fim=datetime.strptime(vigencia_fim, '%Y-%m-%d').date() if vigencia_fim else None,
+                    prioridade=dados.get('prioridade', 0),
+                    descricao=dados.get('descricao'),
+                    ativo=dados.get('ativo', True),
+                    criado_por=current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
+                )
+                db.session.add(registro)
+
+            db.session.commit()
+
+            return jsonify({
+                'sucesso': True,
+                'id': registro.id,
+                'mensagem': 'Regra de comissao salva com sucesso'
+            })
+
+        except Exception as e:
+            logger.error(f"Erro ao salvar regra de comissao: {e}")
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/api/comissao/excluir/<int:id_registro>', methods=['DELETE']) #type: ignore
+    @login_required
+    def excluir_comissao(id_registro):
+        """Soft delete de regra de comissao"""
+        try:
+            from app.custeio.models import RegraComissao
+            from app import db
+
+            registro = RegraComissao.query.get(id_registro)
+            if not registro:
+                return jsonify({'erro': 'Regra nao encontrada'}), 404
+
+            registro.ativo = False
+            registro.atualizado_em = datetime.utcnow()
+            registro.atualizado_por = current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
+            db.session.commit()
+
+            return jsonify({
+                'sucesso': True,
+                'mensagem': 'Regra desativada com sucesso'
+            })
+
+        except Exception as e:
+            logger.error(f"Erro ao excluir regra de comissao: {e}")
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/api/comissao/grupos') #type: ignore
+    @login_required
+    def listar_grupos_comissao():
+        """Lista grupos empresariais disponiveis para comissao"""
+        try:
+            from app.portal.utils.grupo_empresarial import GrupoEmpresarial
+
+            # Obter lista de grupos do mapeamento
+            grupos = list(GrupoEmpresarial.GRUPOS.keys())
+            grupos.sort()
+
+            return jsonify({
+                'sucesso': True,
+                'dados': grupos
+            })
+
+        except Exception as e:
+            logger.error(f"Erro ao listar grupos: {e}")
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/api/comissao/clientes') #type: ignore
+    @login_required
+    def listar_clientes_comissao():
+        """Lista clientes disponiveis para regra de comissao"""
+        try:
+            from app.carteira.models import CarteiraPrincipal
+            from sqlalchemy import func
+
+            termo = request.args.get('termo', '')
+            uf = request.args.get('uf')
+            vendedor = request.args.get('vendedor')
+            equipe = request.args.get('equipe')
+
+            query = CarteiraPrincipal.query.with_entities(
+                CarteiraPrincipal.raz_social_red,
+                CarteiraPrincipal.cnpj_cpf,
+                CarteiraPrincipal.cod_uf,
+                CarteiraPrincipal.vendedor,
+                CarteiraPrincipal.equipe_vendas
+            ).distinct()
+
+            if termo:
+                query = query.filter(CarteiraPrincipal.raz_social_red.ilike(f'%{termo}%'))
+            if uf:
+                query = query.filter(CarteiraPrincipal.cod_uf == uf)
+            if vendedor:
+                query = query.filter(CarteiraPrincipal.vendedor.ilike(f'%{vendedor}%'))
+            if equipe:
+                query = query.filter(CarteiraPrincipal.equipe_vendas.ilike(f'%{equipe}%'))
+
+            clientes = query.limit(50).all()
+
+            return jsonify({
+                'sucesso': True,
+                'dados': [{
+                    'raz_social_red': c.raz_social_red,
+                    'cnpj_cpf': c.cnpj_cpf,
+                    'cod_uf': c.cod_uf,
+                    'vendedor': c.vendedor,
+                    'equipe_vendas': c.equipe_vendas
+                } for c in clientes if c.raz_social_red]
+            })
+
+        except Exception as e:
+            logger.error(f"Erro ao listar clientes: {e}")
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/api/comissao/produtos') #type: ignore
+    @login_required
+    def listar_produtos_comissao():
+        """Lista produtos disponiveis para regra de comissao"""
+        try:
+            from app.producao.models import CadastroPalletizacao
+
+            termo = request.args.get('termo', '')
+
+            query = CadastroPalletizacao.query.filter(
+                CadastroPalletizacao.ativo == True
+            )
+
+            if termo:
+                query = query.filter(
+                    (CadastroPalletizacao.cod_produto.ilike(f'%{termo}%')) |
+                    (CadastroPalletizacao.nome_produto.ilike(f'%{termo}%'))
+                )
+
+            produtos = query.order_by(CadastroPalletizacao.cod_produto).limit(50).all()
+
+            return jsonify({
+                'sucesso': True,
+                'dados': [{
+                    'cod_produto': p.cod_produto,
+                    'nome_produto': p.nome_produto
+                } for p in produtos]
+            })
+
+        except Exception as e:
+            logger.error(f"Erro ao listar produtos: {e}")
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/api/comissao/ufs') #type: ignore
+    @login_required
+    def listar_ufs_comissao():
+        """Lista UFs disponiveis"""
+        try:
+            from app.carteira.models import CarteiraPrincipal
+
+            ufs = CarteiraPrincipal.query.with_entities(
+                CarteiraPrincipal.cod_uf
+            ).distinct().filter(
+                CarteiraPrincipal.cod_uf.isnot(None)
+            ).all()
+
+            return jsonify({
+                'sucesso': True,
+                'dados': sorted([u.cod_uf for u in ufs if u.cod_uf])
+            })
+
+        except Exception as e:
+            logger.error(f"Erro ao listar UFs: {e}")
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/api/comissao/vendedores') #type: ignore
+    @login_required
+    def listar_vendedores_comissao():
+        """Lista vendedores disponiveis"""
+        try:
+            from app.carteira.models import CarteiraPrincipal
+
+            vendedores = CarteiraPrincipal.query.with_entities(
+                CarteiraPrincipal.vendedor
+            ).distinct().filter(
+                CarteiraPrincipal.vendedor.isnot(None)
+            ).all()
+
+            return jsonify({
+                'sucesso': True,
+                'dados': sorted([v.vendedor for v in vendedores if v.vendedor])
+            })
+
+        except Exception as e:
+            logger.error(f"Erro ao listar vendedores: {e}")
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/api/comissao/equipes') #type: ignore
+    @login_required
+    def listar_equipes_comissao():
+        """Lista equipes de vendas disponiveis"""
+        try:
+            from app.carteira.models import CarteiraPrincipal
+
+            equipes = CarteiraPrincipal.query.with_entities(
+                CarteiraPrincipal.equipe_vendas
+            ).distinct().filter(
+                CarteiraPrincipal.equipe_vendas.isnot(None)
+            ).all()
+
+            return jsonify({
+                'sucesso': True,
+                'dados': sorted([e.equipe_vendas for e in equipes if e.equipe_vendas])
+            })
+
+        except Exception as e:
+            logger.error(f"Erro ao listar equipes: {e}")
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/api/comissao/importar', methods=['POST']) #type: ignore
+    @login_required
+    def importar_comissao():
+        """Importa regras de comissao via Excel"""
+        try:
+            import pandas as pd
+            from app.custeio.models import RegraComissao
+            from app import db
+            from datetime import datetime
+
+            if 'arquivo' not in request.files:
+                return jsonify({'erro': 'Nenhum arquivo enviado'}), 400
+
+            arquivo = request.files['arquivo']
+            df = pd.read_excel(arquivo)
+
+            colunas_obrigatorias = ['Tipo Regra', 'Comissao %']
+            for col in colunas_obrigatorias:
+                if col not in df.columns:
+                    return jsonify({'erro': f'Coluna {col} e obrigatoria'}), 400
+
+            importados = 0
+            erros = []
+
+            for idx, row in df.iterrows():
+                try:
+                    tipo_regra = str(row['Tipo Regra']).strip().upper()
+                    comissao = row['Comissao %']
+
+                    if tipo_regra not in ('GRUPO', 'CLIENTE', 'PRODUTO'):
+                        erros.append(f"Linha {idx + 2}: Tipo Regra invalido '{tipo_regra}'")
+                        continue
+
+                    if pd.isna(comissao):
+                        erros.append(f"Linha {idx + 2}: Comissao % vazia")
+                        continue
+
+                    registro = RegraComissao(
+                        tipo_regra=tipo_regra,
+                        grupo_empresarial=str(row.get('Grupo Empresarial', '')).strip() if pd.notna(row.get('Grupo Empresarial')) else None,
+                        raz_social_red=str(row.get('Cliente', '')).strip() if pd.notna(row.get('Cliente')) else None,
+                        cliente_cod_uf=str(row.get('UF', '')).strip() if pd.notna(row.get('UF')) else None,
+                        cliente_vendedor=str(row.get('Vendedor', '')).strip() if pd.notna(row.get('Vendedor')) else None,
+                        cliente_equipe=str(row.get('Equipe', '')).strip() if pd.notna(row.get('Equipe')) else None,
+                        cod_produto=str(row.get('Cod Produto', '')).strip() if pd.notna(row.get('Cod Produto')) else None,
+                        produto_grupo=str(row.get('Produto Grupo', '')).strip() if pd.notna(row.get('Produto Grupo')) else None,
+                        produto_cliente=str(row.get('Produto Cliente', '')).strip() if pd.notna(row.get('Produto Cliente')) else None,
+                        comissao_percentual=float(comissao),
+                        vigencia_inicio=datetime.now().date(),
+                        descricao=str(row.get('Descricao', '')).strip() if pd.notna(row.get('Descricao')) else 'Importado via Excel',
+                        ativo=True,
+                        criado_por=current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
+                    )
+                    db.session.add(registro)
+                    importados += 1
+
+                except Exception as e:
+                    erros.append(f"Linha {idx + 2}: {str(e)}")
+
+            db.session.commit()
+
+            return jsonify({
+                'sucesso': True,
+                'importados': importados,
+                'erros': erros[:10],
+                'mensagem': f'{importados} regras importadas' + (f', {len(erros)} erros' if erros else '')
+            })
+
+        except Exception as e:
+            logger.error(f"Erro ao importar comissoes: {e}")
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/api/comissao/exportar') #type: ignore
+    @login_required
+    def exportar_comissao():
+        """Exporta regras de comissao para Excel"""
+        try:
+            import pandas as pd
+            from app.custeio.models import RegraComissao
+
+            regras = RegraComissao.query.filter_by(ativo=True).order_by(
+                RegraComissao.tipo_regra, RegraComissao.prioridade.desc()
+            ).all()
+
+            dados_excel = []
+            for r in regras:
+                dados_excel.append({
+                    'Tipo Regra': r.tipo_regra,
+                    'Grupo Empresarial': r.grupo_empresarial or '',
+                    'Cliente': r.raz_social_red or '',
+                    'UF': r.cliente_cod_uf or '',
+                    'Vendedor': r.cliente_vendedor or '',
+                    'Equipe': r.cliente_equipe or '',
+                    'Cod Produto': r.cod_produto or '',
+                    'Produto Grupo': r.produto_grupo or '',
+                    'Produto Cliente': r.produto_cliente or '',
+                    'Comissao %': float(r.comissao_percentual) if r.comissao_percentual else 0,
+                    'Vigencia Inicio': r.vigencia_inicio.strftime('%d/%m/%Y') if r.vigencia_inicio else '',
+                    'Vigencia Fim': r.vigencia_fim.strftime('%d/%m/%Y') if r.vigencia_fim else '',
+                    'Prioridade': r.prioridade,
+                    'Descricao': r.descricao or ''
+                })
+
+            df = pd.DataFrame(dados_excel)
+            output = BytesIO()
+
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df.to_excel(writer, index=False, sheet_name='Regras Comissao')
+
+                worksheet = writer.sheets['Regras Comissao']
+                for idx, col in enumerate(df.columns):
+                    max_length = max(
+                        df[col].astype(str).map(len).max(),
+                        len(col)
+                    ) + 2
+                    worksheet.column_dimensions[chr(65 + idx)].width = min(max_length, 40)
+
+            output.seek(0)
+
+            return send_file(
+                output,
+                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                as_attachment=True,
+                download_name='regras_comissao.xlsx'
+            )
+
+        except Exception as e:
+            logger.error(f"Erro ao exportar comissoes: {e}")
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/api/comissao/modelo') #type: ignore
+    @login_required
+    def modelo_comissao():
+        """Gera modelo Excel para importacao de regras de comissao"""
+        try:
+            import pandas as pd
+
+            dados = [
+                {
+                    'Tipo Regra': 'GRUPO',
+                    'Grupo Empresarial': 'ATACADAO',
+                    'Cliente': '',
+                    'UF': '',
+                    'Vendedor': '',
+                    'Equipe': '',
+                    'Cod Produto': '',
+                    'Produto Grupo': '',
+                    'Produto Cliente': '',
+                    'Comissao %': 2.5,
+                    'Descricao': 'Comissao padrao Atacadao'
+                },
+                {
+                    'Tipo Regra': 'CLIENTE',
+                    'Grupo Empresarial': '',
+                    'Cliente': 'SUPERMERCADO XYZ',
+                    'UF': 'SP',
+                    'Vendedor': '',
+                    'Equipe': '',
+                    'Cod Produto': '',
+                    'Produto Grupo': '',
+                    'Produto Cliente': '',
+                    'Comissao %': 3.0,
+                    'Descricao': 'Comissao cliente especifico'
+                },
+                {
+                    'Tipo Regra': 'PRODUTO',
+                    'Grupo Empresarial': '',
+                    'Cliente': '',
+                    'UF': '',
+                    'Vendedor': '',
+                    'Equipe': '',
+                    'Cod Produto': '101000001',
+                    'Produto Grupo': '',
+                    'Produto Cliente': '',
+                    'Comissao %': 1.5,
+                    'Descricao': 'Comissao produto especifico'
+                }
+            ]
+
+            df = pd.DataFrame(dados)
+            output = BytesIO()
+
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df.to_excel(writer, index=False, sheet_name='Modelo')
+
+                worksheet = writer.sheets['Modelo']
+                for idx, col in enumerate(df.columns):
+                    max_length = max(
+                        df[col].astype(str).map(len).max(),
+                        len(col)
+                    ) + 2
+                    worksheet.column_dimensions[chr(65 + idx)].width = min(max_length, 40)
+
+            output.seek(0)
+
+            return send_file(
+                output,
+                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                as_attachment=True,
+                download_name='modelo_regras_comissao.xlsx'
+            )
+
+        except Exception as e:
+            logger.error(f"Erro ao gerar modelo comissao: {e}")
+            return jsonify({'erro': str(e)}), 500
+
+    # ================================================
+    # API - RECALCULO DE MARGEM
+    # ================================================
+
+    @bp.route('/api/margem/recalcular', methods=['POST']) #type: ignore
+    @login_required
+    def recalcular_margem():
+        """Recalcula margem para pedidos especificos ou todos"""
+        try:
+            from app.carteira.models import CarteiraPrincipal
+            from app.odoo.services.carteira_service import CarteiraService
+            from app import db
+
+            dados = request.json or {}
+            num_pedido = dados.get('num_pedido')
+            cod_produto = dados.get('cod_produto')
+            recalcular_todos = dados.get('todos', False)
+
+            query = CarteiraPrincipal.query.filter(
+                CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+            )
+
+            if num_pedido:
+                query = query.filter(CarteiraPrincipal.num_pedido == num_pedido)
+            if cod_produto:
+                query = query.filter(CarteiraPrincipal.cod_produto == cod_produto)
+            if not recalcular_todos and not num_pedido and not cod_produto:
+                return jsonify({'erro': 'Informe num_pedido, cod_produto ou todos=true'}), 400
+
+            items = query.all()
+            total = len(items)
+            atualizados = 0
+            erros = []
+
+            service = CarteiraService()
+
+            for item in items:
+                try:
+                    # Montar dict com dados do item para recalculo
+                    item_dict = {
+                        'num_pedido': item.num_pedido,
+                        'cod_produto': item.cod_produto,
+                        'preco_produto_pedido': float(item.preco_produto_pedido) if item.preco_produto_pedido else 0,
+                        'qtd_produto_pedido': float(item.qtd_produto_pedido) if item.qtd_produto_pedido else 0,
+                        'icms_st_item_pedido': float(item.icms_st_item_pedido) if item.icms_st_item_pedido else 0,
+                        'pis_item_pedido': float(item.pis_item_pedido) if item.pis_item_pedido else 0,
+                        'cofins_item_pedido': float(item.cofins_item_pedido) if item.cofins_item_pedido else 0,
+                        'desconto_item_pedido': float(item.desconto_item_pedido) if item.desconto_item_pedido else 0,
+                        'cod_uf': item.cod_uf,
+                        'incoterm': item.incoterm,
+                        'custo_considerado_snapshot': float(item.custo_considerado_snapshot) if item.custo_considerado_snapshot else 0,
+                        'custo_producao_snapshot': float(item.custo_producao_snapshot) if item.custo_producao_snapshot else 0,
+                        'desconto_contratual_snapshot': float(item.desconto_contratual_snapshot) if item.desconto_contratual_snapshot else 0,
+                        'cnpj_cpf': item.cnpj_cpf,
+                        'raz_social_red': item.raz_social_red,
+                        'vendedor': item.vendedor,
+                        'equipe_vendas': item.equipe_vendas,
+                        'forma_pgto_pedido': item.forma_pgto_pedido
+                    }
+
+                    resultado = service._calcular_margem_bruta(item_dict)
+
+                    item.margem_bruta = resultado.get('margem_bruta')
+                    item.margem_bruta_percentual = resultado.get('margem_bruta_percentual')
+                    item.margem_liquida = resultado.get('margem_liquida')
+                    item.margem_liquida_percentual = resultado.get('margem_liquida_percentual')
+                    item.comissao_percentual = resultado.get('comissao_percentual', 0)
+
+                    atualizados += 1
+
+                except Exception as e:
+                    erros.append(f"{item.num_pedido}/{item.cod_produto}: {str(e)}")
+
+            db.session.commit()
+
+            return jsonify({
+                'sucesso': True,
+                'total': total,
+                'atualizados': atualizados,
+                'erros': erros[:10],
+                'mensagem': f'{atualizados} de {total} registros atualizados'
+            })
+
+        except Exception as e:
+            logger.error(f"Erro ao recalcular margem: {e}")
+            return jsonify({'erro': str(e)}), 500

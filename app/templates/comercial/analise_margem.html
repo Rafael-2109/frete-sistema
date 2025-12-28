@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+
+{% block title %}Comercial - Analise de Margem{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/modules/margem/margem.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-1">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1 mt-2"><i class="bi bi-graph-up-arrow me-2"></i>Analise de Margem</h4>
+            <small class="text-muted">Analise margens por pedido, produto, data, equipe e vendedor</small>
+        </div>
+        <div class="btn-group">
+            <button class="btn btn-outline-success btn-sm" onclick="exportarDados()">
+                <i class="bi bi-download me-1"></i>Exportar
+            </button>
+            <a href="{{ url_for('comercial.dashboard_diretoria') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-arrow-left me-1"></i>Voltar
+            </a>
+        </div>
+    </div>
+
+    <!-- Filtros Principais -->
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <div class="row g-2 align-items-end">
+                <!-- Agrupamento -->
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Agrupar por</label>
+                    <select class="form-select form-select-sm" id="filtro-agrupamento" onchange="carregarDados()">
+                        <option value="produto_pedido">Produto/Pedido</option>
+                        <option value="pedido">Por Pedido</option>
+                        <option value="data">Por Data</option>
+                        <option value="tipo_produto">Por Tipo Produto</option>
+                        <option value="equipe">Por Equipe</option>
+                        <option value="vendedor">Por Vendedor</option>
+                    </select>
+                </div>
+
+                <!-- Periodo -->
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Data Inicio</label>
+                    <input type="date" class="form-control form-control-sm" id="filtro-data-inicio">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Data Fim</label>
+                    <input type="date" class="form-control form-control-sm" id="filtro-data-fim">
+                </div>
+
+                <!-- Equipe -->
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Equipe</label>
+                    <select class="form-select form-select-sm" id="filtro-equipe">
+                        <option value="">Todas</option>
+                    </select>
+                </div>
+
+                <!-- Vendedor -->
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Vendedor</label>
+                    <select class="form-select form-select-sm" id="filtro-vendedor">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+
+                <!-- Botao Buscar -->
+                <div class="col-md-2">
+                    <button class="btn btn-primary btn-sm w-100" onclick="carregarDados()">
+                        <i class="bi bi-search me-1"></i>Buscar
+                    </button>
+                </div>
+            </div>
+
+            <!-- Segunda linha - Tipo Produto -->
+            <div class="row g-2 align-items-end mt-2" id="filtros-tipo-produto">
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Campo Tipo</label>
+                    <select class="form-select form-select-sm" id="filtro-tipo-campo" onchange="carregarTiposProduto()">
+                        <option value="embalagem">Embalagem</option>
+                        <option value="materia_prima">Materia Prima</option>
+                        <option value="categoria">Categoria</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small mb-1">Tipo Produto</label>
+                    <select class="form-select form-select-sm" id="filtro-tipo-produto">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small mb-1">Buscar</label>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input type="text" class="form-control" id="filtro-busca" placeholder="Pedido, cliente, produto..." onkeyup="filtrarLocal()">
+                    </div>
+                </div>
+                <div class="col-md-3 text-end">
+                    <span class="text-muted small" id="total-registros">-</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cards de Resumo -->
+    <div class="row mb-3">
+        <div class="col-md-4">
+            <div class="card card-stat valor-total">
+                <div class="card-body py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Valor Total</h6>
+                            <h4 class="mb-0" id="stat-valor">R$ -</h4>
+                        </div>
+                        <i class="bi bi-currency-dollar text-primary stat-icon"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card card-stat margem-total">
+                <div class="card-body py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Margem Liquida Total</h6>
+                            <h4 class="mb-0" id="stat-margem">R$ -</h4>
+                        </div>
+                        <i class="bi bi-graph-up text-success stat-icon"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card card-stat margem-percentual">
+                <div class="card-body py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Margem Media %</h6>
+                            <h4 class="mb-0" id="stat-margem-pct">- %</h4>
+                        </div>
+                        <i class="bi bi-percent text-info stat-icon"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Legenda -->
+    <div class="alert alert-info py-2 mb-3">
+        <small>
+            <i class="bi bi-info-circle me-1"></i>
+            <span class="badge bg-success me-1">Margem +</span> Margem positiva
+            <span class="badge bg-danger ms-2 me-1">Margem -</span> Margem negativa
+            <span class="badge bg-warning text-dark ms-2 me-1">Contrato</span> Possui desconto contratual
+            <span class="ms-3">Clique no <strong>cliente</strong> para ver historico de pedidos.</span>
+        </small>
+    </div>
+
+    <!-- Tabela -->
+    <div class="card">
+        <div class="card-header py-2 d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-table me-2"></i>Dados de Margem</span>
+            <div class="btn-group btn-group-sm">
+                <button class="btn btn-outline-secondary" onclick="paginaAnterior()" id="btn-pagina-anterior" disabled>
+                    <i class="bi bi-chevron-left"></i>
+                </button>
+                <button class="btn btn-outline-secondary" disabled id="paginacao-info">1/1</button>
+                <button class="btn btn-outline-secondary" onclick="proximaPagina()" id="btn-proxima-pagina" disabled>
+                    <i class="bi bi-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-sm mb-0" id="tabela-margem">
+                    <thead id="thead-margem">
+                        <!-- Cabecalho dinamico -->
+                    </thead>
+                    <tbody id="tbody-margem">
+                        <tr>
+                            <td colspan="10" class="empty-state">
+                                <i class="bi bi-inbox"></i>
+                                <p>Selecione os filtros e clique em Buscar</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Historico Cliente -->
+<div class="modal fade" id="modalHistoricoCliente" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-clock-history me-2"></i>Historico do Cliente</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <h6 id="modal-cliente-nome">-</h6>
+                    <small class="text-muted" id="modal-cliente-cnpj">-</small>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped">
+                        <thead>
+                            <tr>
+                                <th>Pedido</th>
+                                <th>Data</th>
+                                <th class="text-end">Valor Total</th>
+                                <th class="text-end">Margem R$</th>
+                                <th class="text-end">Margem %</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-historico">
+                            <tr>
+                                <td colspan="5" class="text-center text-muted">Carregando...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loading-overlay">
+    <div class="spinner-border text-light" role="status">
+        <span class="visually-hidden">Carregando...</span>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/comercial/margem.js') }}"></script>
+{% endblock %}

@@ -2,7 +2,7 @@
 Modelos do modulo de Custeio
 """
 from app import db
-from datetime import datetime
+from datetime import datetime, date
 
 
 class CustoMensal(db.Model):
@@ -402,3 +402,209 @@ class ParametroCusteio(db.Model):
         """
         param = ParametroCusteio.query.filter_by(chave=chave).first()
         return float(param.valor) if param else padrao
+
+
+class RegraComissao(db.Model):
+    """
+    Regras de comissao com HIERARQUIA DE ESPECIFICIDADE.
+    A regra mais especifica que se aplica e utilizada (nao soma).
+
+    Ordem de especificidade (maior para menor):
+    1. CLIENTE_PRODUTO   = cliente + produto (mais especifico)
+    2. GRUPO_PRODUTO     = grupo empresarial + produto
+    3. VENDEDOR_PRODUTO  = vendedor + produto
+    4. CLIENTE           = apenas cliente
+    5. GRUPO             = apenas grupo empresarial
+    6. VENDEDOR          = apenas vendedor
+    7. PRODUTO           = apenas produto (menos especifico)
+    8. (nenhuma regra)   = COMISSAO_PADRAO (default 3%)
+    """
+    __tablename__ = 'regra_comissao'
+
+    # Ordem de especificidade (menor numero = mais especifico)
+    ORDEM_ESPECIFICIDADE = {
+        'CLIENTE_PRODUTO': 1,
+        'GRUPO_PRODUTO': 2,
+        'VENDEDOR_PRODUTO': 3,
+        'CLIENTE': 4,
+        'GRUPO': 5,
+        'VENDEDOR': 6,
+        'PRODUTO': 7
+    }
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Tipo de regra (determina especificidade)
+    tipo_regra = db.Column(db.String(20), nullable=False)
+
+    # Criterio: Grupo empresarial
+    grupo_empresarial = db.Column(db.String(100), index=True)
+
+    # Criterio: Cliente
+    raz_social_red = db.Column(db.String(100), index=True)
+
+    # Criterio: Vendedor (standalone)
+    vendedor = db.Column(db.String(100), index=True)
+
+    # Criterio: Produto
+    cod_produto = db.Column(db.String(50), index=True)
+
+    # Campos legados (mantidos para compatibilidade)
+    cliente_cod_uf = db.Column(db.String(2))
+    cliente_vendedor = db.Column(db.String(100))
+    cliente_equipe = db.Column(db.String(100))
+    produto_grupo = db.Column(db.String(100))
+    produto_cliente = db.Column(db.String(100))
+
+    # Comissao
+    comissao_percentual = db.Column(db.Numeric(5, 2), nullable=False)
+
+    # Vigencia e controle
+    vigencia_inicio = db.Column(db.Date, nullable=False, default=date.today)
+    vigencia_fim = db.Column(db.Date)
+    prioridade = db.Column(db.Integer, default=0)
+    descricao = db.Column(db.Text)
+    ativo = db.Column(db.Boolean, default=True, index=True)
+
+    # Auditoria
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_por = db.Column(db.String(100))
+    atualizado_em = db.Column(db.DateTime, onupdate=datetime.utcnow)
+    atualizado_por = db.Column(db.String(100))
+
+    def to_dict(self):
+        """Converte para dicionario"""
+        return {
+            'id': self.id,
+            'tipo_regra': self.tipo_regra,
+            'grupo_empresarial': self.grupo_empresarial,
+            'raz_social_red': self.raz_social_red,
+            'vendedor': self.vendedor,
+            'cod_produto': self.cod_produto,
+            'cliente_cod_uf': self.cliente_cod_uf,
+            'cliente_vendedor': self.cliente_vendedor,
+            'cliente_equipe': self.cliente_equipe,
+            'produto_grupo': self.produto_grupo,
+            'produto_cliente': self.produto_cliente,
+            'comissao_percentual': float(self.comissao_percentual) if self.comissao_percentual else 0,
+            'vigencia_inicio': self.vigencia_inicio.isoformat() if self.vigencia_inicio else None,
+            'vigencia_fim': self.vigencia_fim.isoformat() if self.vigencia_fim else None,
+            'prioridade': self.prioridade,
+            'descricao': self.descricao,
+            'ativo': self.ativo,
+            'criado_em': self.criado_em.isoformat() if self.criado_em else None,
+            'criado_por': self.criado_por
+        }
+
+    @staticmethod
+    def buscar_comissao(cnpj: str, raz_social_red: str, cod_produto: str,
+                        vendedor: str = None) -> float:
+        """
+        Busca a comissao aplicavel seguindo hierarquia de especificidade.
+        Retorna a regra MAIS ESPECIFICA que se aplica.
+
+        Ordem de busca (para no primeiro match):
+        1. CLIENTE_PRODUTO   (cliente + produto)
+        2. GRUPO_PRODUTO     (grupo + produto)
+        3. VENDEDOR_PRODUTO  (vendedor + produto)
+        4. CLIENTE           (apenas cliente)
+        5. GRUPO             (apenas grupo)
+        6. VENDEDOR          (apenas vendedor)
+        7. PRODUTO           (apenas produto)
+        8. COMISSAO_PADRAO   (default 3%)
+
+        Args:
+            cnpj: CNPJ do cliente (para identificar grupo empresarial)
+            raz_social_red: Razao social reduzida do cliente
+            cod_produto: Codigo do produto
+            vendedor: Nome do vendedor
+
+        Returns:
+            Percentual de comissao aplicavel
+        """
+        from app.portal.utils.grupo_empresarial import GrupoEmpresarial
+
+        hoje = date.today()
+
+        # Identificar grupo empresarial do cliente
+        grupo = GrupoEmpresarial.identificar_grupo(cnpj) if cnpj else None
+
+        # Buscar regras vigentes e ativas ordenadas por especificidade
+        regras = RegraComissao.query.filter(
+            RegraComissao.ativo == True,
+            RegraComissao.vigencia_inicio <= hoje,
+            db.or_(
+                RegraComissao.vigencia_fim.is_(None),
+                RegraComissao.vigencia_fim >= hoje
+            )
+        ).all()
+
+        # Ordenar por especificidade (menor = mais especifico)
+        def get_especificidade(regra):
+            return RegraComissao.ORDEM_ESPECIFICIDADE.get(regra.tipo_regra, 99)
+
+        regras_ordenadas = sorted(regras, key=get_especificidade)
+
+        # Buscar primeira regra que aplica (mais especifica)
+        for regra in regras_ordenadas:
+            if RegraComissao._regra_aplica(regra, raz_social_red, grupo, vendedor, cod_produto):
+                return float(regra.comissao_percentual)
+
+        # Nenhuma regra encontrada - usar padrao
+        return ParametroCusteio.obter_valor('COMISSAO_PADRAO', 3.0)
+
+    @staticmethod
+    def _regra_aplica(regra, raz_social_red: str, grupo: str,
+                      vendedor: str, cod_produto: str) -> bool:
+        """
+        Verifica se uma regra se aplica aos criterios informados.
+        """
+        tipo = regra.tipo_regra
+
+        # 1. CLIENTE_PRODUTO: cliente + produto
+        if tipo == 'CLIENTE_PRODUTO':
+            return (regra.raz_social_red == raz_social_red and
+                    regra.cod_produto == cod_produto)
+
+        # 2. GRUPO_PRODUTO: grupo + produto
+        if tipo == 'GRUPO_PRODUTO':
+            return (regra.grupo_empresarial == grupo and
+                    regra.cod_produto == cod_produto)
+
+        # 3. VENDEDOR_PRODUTO: vendedor + produto
+        if tipo == 'VENDEDOR_PRODUTO':
+            return (regra.vendedor == vendedor and
+                    regra.cod_produto == cod_produto)
+
+        # 4. CLIENTE: apenas cliente
+        if tipo == 'CLIENTE':
+            return regra.raz_social_red == raz_social_red
+
+        # 5. GRUPO: apenas grupo
+        if tipo == 'GRUPO':
+            return regra.grupo_empresarial == grupo
+
+        # 6. VENDEDOR: apenas vendedor
+        if tipo == 'VENDEDOR':
+            return regra.vendedor == vendedor
+
+        # 7. PRODUTO: apenas produto
+        if tipo == 'PRODUTO':
+            return regra.cod_produto == cod_produto
+
+        return False
+
+    # Alias para manter compatibilidade com codigo existente
+    @staticmethod
+    def calcular_comissao_total(cnpj: str, raz_social_red: str, cod_produto: str,
+                                cod_uf: str = None, vendedor: str = None,
+                                equipe: str = None) -> float:
+        """
+        Alias para buscar_comissao (compatibilidade).
+        """
+        return RegraComissao.buscar_comissao(
+            cnpj=cnpj,
+            raz_social_red=raz_social_red,
+            cod_produto=cod_produto,
+            vendedor=vendedor
+        )

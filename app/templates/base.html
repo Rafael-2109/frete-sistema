@@ -522,6 +522,11 @@
               <li><a class="dropdown-item" href="{{ url_for('comercial.lista_clientes', posicao='todos') }}">
                   <i class="fas fa-list-alt"></i> Posição Total de Clientes
                 </a></li>
+              {% if current_user.perfil != 'vendedor' %}
+              <li><a class="dropdown-item" href="{{ url_for('comercial.analise_margem') }}">
+                  <i class="fas fa-chart-pie text-success"></i> Análise de Margem
+                </a></li>
+              {% endif %}
               {% if current_user.perfil in ['administrador', 'gerente_comercial'] %}
               <li>
                 <hr class="dropdown-divider">

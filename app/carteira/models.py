@@ -110,6 +110,7 @@ class CarteiraPrincipal(db.Model):
     margem_bruta_percentual = db.Column(db.Numeric(5, 2), nullable=True)
     margem_liquida = db.Column(db.Numeric(15, 2), nullable=True)
     margem_liquida_percentual = db.Column(db.Numeric(5, 2), nullable=True)
+    comissao_percentual = db.Column(db.Numeric(5, 2), nullable=True, default=0)  # Soma das regras de comissao
 
     # 🛡️ AUDITORIA
     created_at = db.Column(db.DateTime, default=agora_brasil, nullable=False)

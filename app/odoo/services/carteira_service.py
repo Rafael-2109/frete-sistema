@@ -1174,34 +1174,30 @@ class CarteiraService:
 
     def _calcular_margem_bruta(self, item: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Calcula margem bruta e líquida com base no snapshot de custo e preço de venda.
+        Calcula margem bruta e liquida com base no snapshot de custo e preco de venda.
 
-        Fórmulas:
-        margem_bruta = preco - icms - pis - cofins - custo_unitario - desconto_contratual - frete - custo_financeiro
-        margem_bruta_percentual = (margem_bruta / preco) * 100
+        MELHORIAS v2:
+        - Percentual de perda sobre custo (ParametroCusteio.PERCENTUAL_PERDA)
+        - Comissao por regras (RegraComissao - soma das aplicaveis)
+        - Tratamento especial para bonificacao (forma_pgto = 'SEM PAGAMENTO')
 
-        margem_liquida = margem_bruta - custo_producao - custo_operacao
-        margem_liquida_percentual = (margem_liquida / preco) * 100
+        Formulas VENDA NORMAL:
+        custo_total = (custo_unitario + custo_producao) * (1 + percentual_perda/100)
+        comissao_valor = preco * comissao_percentual / 100
+        margem_bruta = preco - icms - pis - cofins - custo_total - desconto - frete - custo_financeiro - comissao
+        margem_liquida = margem_bruta - custo_operacao
 
-        Origem dos valores:
-        - preco: preco_produto_pedido
-        - icms: icms_valor / qtd_produto_pedido (unitário)
-        - pis: pis_valor / qtd_produto_pedido (unitário)
-        - cofins: cofins_valor / qtd_produto_pedido (unitário)
-        - custo_unitario: custo_unitario_snapshot
-        - custo_producao: custo_producao_snapshot
-        - desconto_contratual: (desconto_percentual / 100) * preco
-        - frete: (CustoFrete.percentual_frete / 100) * preco
-        - custo_operacao: (ParametroCusteio.CUSTO_OPERACAO_PERCENTUAL / 100) * preco
-        - custo_financeiro: (ParametroCusteio.CUSTO_FINANCEIRO_PERCENTUAL / 100) * preco
+        Formulas BONIFICACAO (forma_pgto = 'SEM PAGAMENTO'):
+        margem_bruta = -custo_total - icms - frete - custo_financeiro
+        (NAO inclui: comissao, desconto contratual, pis/cofins)
 
         Args:
-            item: Dict com dados do item (deve conter snapshot já preenchido)
+            item: Dict com dados do item (deve conter snapshot ja preenchido)
 
         Returns:
             Dict com campos de margem calculados
         """
-        from app.custeio.models import CustoFrete, ParametroCusteio
+        from app.custeio.models import CustoFrete, ParametroCusteio, RegraComissao
 
         resultado = {}
 
@@ -1210,7 +1206,7 @@ class CarteiraService:
             custo_unitario = item.get('custo_unitario_snapshot')
             qtd = item.get('qtd_produto_pedido')
 
-            # Precisa de preço, custo e quantidade para calcular
+            # Precisa de preco, custo e quantidade para calcular
             if preco is None or custo_unitario is None or qtd is None:
                 return resultado
 
@@ -1220,6 +1216,24 @@ class CarteiraService:
 
             if preco <= 0 or qtd <= 0:
                 return resultado
+
+            # ============================================
+            # PARAMETROS GLOBAIS
+            # ============================================
+            percentual_perda = ParametroCusteio.obter_valor('PERCENTUAL_PERDA', 0.0)
+            custo_financeiro_percentual = ParametroCusteio.obter_valor('CUSTO_FINANCEIRO_PERCENTUAL', 0.0)
+            custo_operacao_percentual = ParametroCusteio.obter_valor('CUSTO_OPERACAO_PERCENTUAL', 0.0)
+
+            # ============================================
+            # CUSTO DE PRODUCAO (snapshot)
+            # ============================================
+            custo_producao = item.get('custo_producao_snapshot')
+            custo_producao = float(custo_producao) if custo_producao else 0.0
+
+            # ============================================
+            # CUSTO TOTAL COM PERDA
+            # ============================================
+            custo_total_com_perda = (custo_unitario + custo_producao) * (1 + percentual_perda / 100)
 
             # ============================================
             # IMPOSTOS POR UNIDADE
@@ -1233,13 +1247,7 @@ class CarteiraService:
             cofins_unit = float(cofins_valor) / qtd if cofins_valor else 0.0
 
             # ============================================
-            # DESCONTO CONTRATUAL
-            # ============================================
-            desconto_percentual = item.get('desconto_percentual')
-            desconto_valor = (float(desconto_percentual) / 100) * preco if desconto_percentual else 0.0
-
-            # ============================================
-            # FRETE (percentual sobre preço)
+            # FRETE (percentual sobre preco)
             # ============================================
             incoterm = item.get('incoterm') or ''
             cod_uf = item.get('cod_uf') or ''
@@ -1250,40 +1258,78 @@ class CarteiraService:
             frete_valor = (frete_percentual / 100) * preco
 
             # ============================================
-            # CUSTO FINANCEIRO (percentual sobre preço)
+            # CUSTO FINANCEIRO (percentual sobre preco)
             # ============================================
-            custo_financeiro_percentual = ParametroCusteio.obter_valor('CUSTO_FINANCEIRO_PERCENTUAL', 0.0)
             custo_financeiro_valor = (custo_financeiro_percentual / 100) * preco
 
             # ============================================
-            # MARGEM BRUTA
+            # VERIFICAR SE E BONIFICACAO
             # ============================================
-            margem_bruta = preco - icms_unit - pis_unit - cofins_unit - custo_unitario - desconto_valor - frete_valor - custo_financeiro_valor
+            forma_pgto = item.get('forma_pgto_pedido') or ''
+            eh_bonificacao = forma_pgto.upper() == 'SEM PAGAMENTO'
+
+            if eh_bonificacao:
+                # ============================================
+                # MARGEM BRUTA PARA BONIFICACAO
+                # NAO inclui: comissao, desconto contratual, PIS/COFINS
+                # ============================================
+                margem_bruta = -custo_total_com_perda - icms_unit - custo_financeiro_valor - frete_valor
+
+                # Comissao zerada para bonificacao
+                comissao_percentual = 0.0
+
+            else:
+                # ============================================
+                # DESCONTO CONTRATUAL
+                # ============================================
+                desconto_percentual_valor = item.get('desconto_percentual')
+                desconto_valor = (float(desconto_percentual_valor) / 100) * preco if desconto_percentual_valor else 0.0
+
+                # ============================================
+                # COMISSAO (soma das regras aplicaveis)
+                # ============================================
+                cnpj = item.get('cnpj_cpf') or ''
+                raz_social_red = item.get('raz_social_red') or ''
+                cod_produto = item.get('cod_produto') or ''
+                vendedor = item.get('vendedor') or ''
+                equipe = item.get('equipe_vendas') or ''
+
+                comissao_percentual = RegraComissao.calcular_comissao_total(
+                    cnpj=cnpj,
+                    raz_social_red=raz_social_red,
+                    cod_produto=cod_produto,
+                    cod_uf=cod_uf,
+                    vendedor=vendedor,
+                    equipe=equipe
+                )
+                comissao_valor = (comissao_percentual / 100) * preco
+
+                # ============================================
+                # MARGEM BRUTA NORMAL
+                # ============================================
+                margem_bruta = (preco - icms_unit - pis_unit - cofins_unit -
+                               custo_total_com_perda - desconto_valor -
+                               frete_valor - custo_financeiro_valor - comissao_valor)
+
             margem_bruta_percentual = (margem_bruta / preco * 100) if preco > 0 else 0.0
 
             # ============================================
-            # CUSTO DE PRODUÇÃO
+            # CUSTO OPERACAO (percentual sobre preco)
             # ============================================
-            custo_producao = item.get('custo_producao_snapshot')
-            custo_producao = float(custo_producao) if custo_producao else 0.0
-
-            # ============================================
-            # CUSTO OPERAÇÃO (percentual sobre preço)
-            # ============================================
-            custo_operacao_percentual = ParametroCusteio.obter_valor('CUSTO_OPERACAO_PERCENTUAL', 0.0)
             custo_operacao_valor = (custo_operacao_percentual / 100) * preco
 
             # ============================================
-            # MARGEM LÍQUIDA
+            # MARGEM LIQUIDA (mesma formula para ambos)
             # ============================================
-            margem_liquida = margem_bruta - custo_producao - custo_operacao_valor
+            margem_liquida = margem_bruta - custo_operacao_valor
             margem_liquida_percentual = (margem_liquida / preco * 100) if preco > 0 else 0.0
 
             resultado = {
                 'margem_bruta': round(margem_bruta, 2),
                 'margem_bruta_percentual': round(margem_bruta_percentual, 2),
                 'margem_liquida': round(margem_liquida, 2),
-                'margem_liquida_percentual': round(margem_liquida_percentual, 2)
+                'margem_liquida_percentual': round(margem_liquida_percentual, 2),
+                'comissao_percentual': round(comissao_percentual, 2)
             }
 
         except Exception as e:
