@@ -157,6 +157,12 @@ def recalcular_margens():
                 item.margem_liquida_percentual = round(margem_liquida_percentual, 2)
                 item.comissao_percentual = round(comissao_percentual, 2)
 
+                # Snapshot de parametros (rastreabilidade)
+                item.frete_percentual_snapshot = round(frete_percentual, 2)
+                item.custo_financeiro_pct_snapshot = round(custo_financeiro_percentual, 2)
+                item.custo_operacao_pct_snapshot = round(custo_operacao_percentual, 2)
+                item.percentual_perda_snapshot = round(percentual_perda, 2)
+
                 resultado['atualizados'] += 1
 
                 # Log a cada 100 itens

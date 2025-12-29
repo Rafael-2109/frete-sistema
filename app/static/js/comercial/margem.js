@@ -10,6 +10,12 @@ let paginaAtual = 1;
 let totalPaginas = 1;
 const ITENS_POR_PAGINA = 50;
 
+// Modais
+let modalHistorico = null;
+let modalDetalhe = null;
+let modalCalculo = null;
+let cnpjClienteAtual = null;
+
 // Inicializacao
 document.addEventListener('DOMContentLoaded', function() {
     carregarFiltros();
@@ -152,12 +158,16 @@ function construirParametros() {
 function atualizarTotais(totais) {
     document.getElementById('stat-valor').textContent = formatarMoeda(totais.valor_total || 0);
     document.getElementById('stat-margem').textContent = formatarMoeda(totais.margem_liquida_total || 0);
-    document.getElementById('stat-margem-pct').textContent = formatarPercentual(totais.margem_media_percentual || 0);
+    // Margem % = Margem Total / Valor Total (não é média)
+    document.getElementById('stat-margem-pct').textContent = formatarPercentual(totais.margem_percentual || 0);
 
     // Cores baseadas na margem
     const statMargem = document.getElementById('stat-margem');
+    const statMargemPct = document.getElementById('stat-margem-pct');
     statMargem.classList.remove('text-success', 'text-danger');
+    statMargemPct.classList.remove('text-success', 'text-danger');
     statMargem.classList.add(totais.margem_liquida_total >= 0 ? 'text-success' : 'text-danger');
+    statMargemPct.classList.add(totais.margem_percentual >= 0 ? 'text-success' : 'text-danger');
 }
 
 /**
@@ -187,7 +197,7 @@ function renderizarTabela() {
     if (!dadosAtuais || dadosAtuais.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="10" class="empty-state">
+                <td colspan="8" class="empty-state">
                     <i class="bi bi-inbox"></i>
                     <p>Nenhum dado encontrado</p>
                 </td>
@@ -206,15 +216,13 @@ function getCabecalho(agrupamento) {
     const cabecalhos = {
         'produto_pedido': `
             <tr>
-                <th>Pedido</th>
-                <th>Produto</th>
-                <th>Cliente</th>
-                <th>UF</th>
-                <th>Cidade</th>
-                <th>Frete</th>
+                <th>Pedido<br><small class="text-muted fw-normal">Cliente</small></th>
+                <th>Frete<br><small class="text-muted fw-normal">UF - Cidade</small></th>
+                <th>Vendedor<br><small class="text-muted fw-normal">Equipe</small></th>
+                <th class="produto-col">Produto</th>
+                <th class="text-end">Qtd</th>
                 <th class="text-end">Valor</th>
-                <th class="text-end">Margem R$</th>
-                <th class="text-end">Margem %</th>
+                <th class="text-center">Margem</th>
                 <th class="text-center">Contrato</th>
             </tr>
         `,
@@ -286,25 +294,37 @@ function getCabecalho(agrupamento) {
 function getLinha(row, agrupamento) {
     const margemClass = (row.margem_liquida || 0) >= 0 ? 'margem-positiva' : 'margem-negativa';
     const margemPctClass = (row.margem_liquida_percentual || 0) >= 0 ? 'text-success' : 'text-danger';
+    const margemBadgeClass = (row.margem_liquida || 0) >= 0 ? 'bg-success' : 'bg-danger';
 
     switch (agrupamento) {
         case 'produto_pedido':
             return `
                 <tr>
-                    <td><span class="badge bg-secondary">${row.num_pedido || '-'}</span></td>
                     <td>
-                        <small class="text-muted">${row.cod_produto || ''}</small><br>
-                        ${truncar(row.nome_produto, 30)}
+                        <span class="badge bg-secondary">${row.num_pedido || '-'}</span><br>
+                        <span class="cliente-link" onclick="mostrarHistorico('${row.cnpj_cpf || ''}')" title="Clique para ver historico">
+                            ${truncar(row.raz_social_red, 25)}
+                        </span>
                     </td>
-                    <td class="cliente-link" onclick="mostrarHistorico('${row.cnpj_cpf || ''}')" title="Clique para ver historico">
-                        ${truncar(row.raz_social_red, 25)}
+                    <td>
+                        <span class="badge bg-info">${row.incoterm || '-'}</span><br>
+                        <small>${row.cod_uf || '-'} - ${truncar(row.nome_cidade, 20)}</small>
                     </td>
-                    <td>${row.cod_uf || '-'}</td>
-                    <td>${truncar(row.nome_cidade, 15)}</td>
-                    <td><span class="badge bg-info">${row.incoterm || '-'}</span></td>
+                    <td>
+                        <span class="vendedor-nome">${truncar(row.vendedor, 18) || '-'}</span><br>
+                        <small class="text-muted">${truncar(row.equipe_vendas, 30) || '-'}</small>
+                    </td>
+                    <td class="produto-col">
+                        <span class="produto-codigo">${row.cod_produto || ''}</span><br>
+                        <span class="produto-nome">${truncar(row.nome_produto, 50)}</span>
+                    </td>
+                    <td class="text-end">${formatarNumero(row.qtd_produto)}</td>
                     <td class="text-end">${formatarMoeda(row.valor_total)}</td>
-                    <td class="text-end ${margemClass}">${formatarMoeda(row.margem_liquida)}</td>
-                    <td class="text-end ${margemPctClass}">${formatarPercentual(row.margem_liquida_percentual)}</td>
+                    <td class="text-center">
+                        <span class="badge ${margemBadgeClass} margem-badge cursor-pointer" onclick="mostrarDetalheCalculo('${row.num_pedido}', '${row.cod_produto}')" title="Clique para ver detalhe do calculo">
+                            ${formatarMoedaCurto(row.margem_liquida)} | ${formatarPercentual(row.margem_liquida_percentual)}
+                        </span>
+                    </td>
                     <td class="text-center">${getContratoTag(row.contrato)}</td>
                 </tr>
             `;
@@ -401,12 +421,13 @@ function getContratoTag(contrato) {
 async function mostrarHistorico(cnpj) {
     if (!cnpj) return;
 
-    const modal = new bootstrap.Modal(document.getElementById('modalHistoricoCliente'));
+    cnpjClienteAtual = cnpj;
+    modalHistorico = new bootstrap.Modal(document.getElementById('modalHistoricoCliente'));
     document.getElementById('modal-cliente-nome').textContent = 'Carregando...';
     document.getElementById('modal-cliente-cnpj').textContent = cnpj;
-    document.getElementById('tbody-historico').innerHTML = '<tr><td colspan="5" class="text-center">Carregando...</td></tr>';
+    document.getElementById('tbody-historico').innerHTML = '<tr><td colspan="6" class="text-center">Carregando...</td></tr>';
 
-    modal.show();
+    modalHistorico.show();
 
     try {
         const response = await fetch(`/comercial/api/margem/cliente/${encodeURIComponent(cnpj)}/historico`);
@@ -416,14 +437,15 @@ async function mostrarHistorico(cnpj) {
             document.getElementById('modal-cliente-nome').textContent = data.cliente.raz_social_red || 'Cliente';
 
             if (data.pedidos.length === 0) {
-                document.getElementById('tbody-historico').innerHTML = '<tr><td colspan="5" class="text-center text-muted">Nenhum pedido encontrado</td></tr>';
+                document.getElementById('tbody-historico').innerHTML = '<tr><td colspan="6" class="text-center text-muted">Nenhum pedido encontrado</td></tr>';
             } else {
                 document.getElementById('tbody-historico').innerHTML = data.pedidos.map(p => {
                     const margemClass = (p.margem_liquida || 0) >= 0 ? 'text-success' : 'text-danger';
                     return `
-                        <tr>
+                        <tr class="cursor-pointer" onclick="mostrarDetalhePedido('${p.num_pedido}')" title="Clique para ver itens">
                             <td><span class="badge bg-secondary">${p.num_pedido}</span></td>
                             <td>${formatarData(p.data_pedido)}</td>
+                            <td class="text-center">${p.qtd_itens || '-'}</td>
                             <td class="text-end">${formatarMoeda(p.valor_total)}</td>
                             <td class="text-end ${margemClass}">${formatarMoeda(p.margem_liquida)}</td>
                             <td class="text-end ${margemClass}">${formatarPercentual(p.margem_liquida_percentual)}</td>
@@ -432,11 +454,181 @@ async function mostrarHistorico(cnpj) {
                 }).join('');
             }
         } else {
-            document.getElementById('tbody-historico').innerHTML = `<tr><td colspan="5" class="text-center text-danger">${data.erro || 'Erro'}</td></tr>`;
+            document.getElementById('tbody-historico').innerHTML = `<tr><td colspan="6" class="text-center text-danger">${data.erro || 'Erro'}</td></tr>`;
         }
     } catch (error) {
         console.error('Erro:', error);
-        document.getElementById('tbody-historico').innerHTML = '<tr><td colspan="5" class="text-center text-danger">Erro de conexao</td></tr>';
+        document.getElementById('tbody-historico').innerHTML = '<tr><td colspan="6" class="text-center text-danger">Erro de conexao</td></tr>';
+    }
+}
+
+/**
+ * Mostra detalhe do pedido (itens com margem)
+ */
+async function mostrarDetalhePedido(numPedido) {
+    if (!numPedido) return;
+
+    // Esconder modal de historico
+    if (modalHistorico) {
+        modalHistorico.hide();
+    }
+
+    // Mostrar modal de detalhe
+    modalDetalhe = new bootstrap.Modal(document.getElementById('modalDetalhePedido'));
+    document.getElementById('modal-pedido-numero').textContent = numPedido;
+    document.getElementById('modal-pedido-data').textContent = '-';
+    document.getElementById('modal-pedido-valor').textContent = '-';
+    document.getElementById('modal-pedido-margem').textContent = '-';
+    document.getElementById('modal-pedido-margem-pct').textContent = '-';
+    document.getElementById('tbody-pedido-itens').innerHTML = '<tr><td colspan="8" class="text-center">Carregando...</td></tr>';
+
+    modalDetalhe.show();
+
+    try {
+        const response = await fetch(`/comercial/api/margem/pedido/${encodeURIComponent(numPedido)}/itens`);
+        const data = await response.json();
+
+        if (data.sucesso) {
+            // Preencher resumo
+            const ped = data.pedido;
+            document.getElementById('modal-pedido-data').textContent = formatarData(ped.data_pedido);
+            document.getElementById('modal-pedido-valor').textContent = formatarMoeda(ped.valor_total);
+
+            const margemClass = (ped.margem_total || 0) >= 0 ? 'text-success' : 'text-danger';
+            document.getElementById('modal-pedido-margem').innerHTML = `<span class="${margemClass}">${formatarMoeda(ped.margem_total)}</span>`;
+            document.getElementById('modal-pedido-margem-pct').innerHTML = `<span class="${margemClass}">${formatarPercentual(ped.margem_percentual_media)}</span>`;
+
+            // Preencher itens
+            if (data.itens.length === 0) {
+                document.getElementById('tbody-pedido-itens').innerHTML = '<tr><td colspan="8" class="text-center text-muted">Nenhum item encontrado</td></tr>';
+            } else {
+                document.getElementById('tbody-pedido-itens').innerHTML = data.itens.map(item => {
+                    const margemItemClass = (item.margem_total || 0) >= 0 ? 'text-success' : 'text-danger';
+                    const custo = item.custo_unitario + item.custo_producao;
+                    const perdaPct = item.perda_pct || 0;
+                    const custoComPerda = custo * (1 + perdaPct / 100);
+
+                    return `
+                        <tr>
+                            <td>
+                                <small class="text-muted">${item.cod_produto}</small><br>
+                                ${truncar(item.nome_produto, 35)}
+                            </td>
+                            <td class="text-end">${formatarNumero(item.qtd)}</td>
+                            <td class="text-end">${formatarMoeda(item.preco_unitario)}</td>
+                            <td class="text-end">${formatarMoeda(item.valor_total)}</td>
+                            <td class="text-end">
+                                <span title="Material: ${formatarMoeda(item.custo_unitario)} + Prod: ${formatarMoeda(item.custo_producao)} + Perda: ${perdaPct}%">
+                                    ${formatarMoeda(custoComPerda)}
+                                </span>
+                            </td>
+                            <td class="text-end ${margemItemClass}">${formatarMoeda(item.margem_unitaria)}</td>
+                            <td class="text-end ${margemItemClass}">${formatarMoeda(item.margem_total)}</td>
+                            <td class="text-end ${margemItemClass}">${formatarPercentual(item.margem_percentual)}</td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+        } else {
+            document.getElementById('tbody-pedido-itens').innerHTML = `<tr><td colspan="8" class="text-center text-danger">${data.erro || 'Erro'}</td></tr>`;
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        document.getElementById('tbody-pedido-itens').innerHTML = '<tr><td colspan="8" class="text-center text-danger">Erro de conexao</td></tr>';
+    }
+}
+
+/**
+ * Volta para o modal de historico do cliente
+ */
+function voltarParaHistorico() {
+    if (modalDetalhe) {
+        modalDetalhe.hide();
+    }
+
+    // Reabrir modal de historico com o cliente atual
+    if (cnpjClienteAtual) {
+        setTimeout(() => {
+            mostrarHistorico(cnpjClienteAtual);
+        }, 300);
+    }
+}
+
+/**
+ * Mostra detalhe do calculo da margem
+ */
+async function mostrarDetalheCalculo(numPedido, codProduto) {
+    if (!numPedido || !codProduto) return;
+
+    modalCalculo = new bootstrap.Modal(document.getElementById('modalDetalheCalculo'));
+
+    // Limpar modal
+    document.getElementById('modal-calc-produto').textContent = 'Carregando...';
+    document.getElementById('modal-calc-pedido').textContent = numPedido;
+
+    modalCalculo.show();
+
+    try {
+        const response = await fetch(`/comercial/api/margem/calculo/${encodeURIComponent(numPedido)}/${encodeURIComponent(codProduto)}`);
+        const data = await response.json();
+
+        if (data.sucesso) {
+            const item = data.item;
+
+            // Produto
+            document.getElementById('modal-calc-produto').innerHTML = `
+                <small class="text-muted">${item.cod_produto}</small><br>
+                ${item.nome_produto}
+            `;
+
+            // Receita
+            document.getElementById('modal-calc-preco').textContent = formatarMoeda(item.preco);
+            document.getElementById('modal-calc-qtd').textContent = formatarNumero(item.qtd);
+            document.getElementById('modal-calc-receita').textContent = formatarMoeda(item.receita_total);
+
+            // Impostos
+            document.getElementById('modal-calc-icms').textContent = `- ${formatarMoeda(item.icms)}`;
+            document.getElementById('modal-calc-pis').textContent = `- ${formatarMoeda(item.pis)}`;
+            document.getElementById('modal-calc-cofins').textContent = `- ${formatarMoeda(item.cofins)}`;
+
+            // Custos
+            document.getElementById('modal-calc-perda-pct').textContent = formatarNumero(item.perda_pct);
+            document.getElementById('modal-calc-custo-material').textContent = `- ${formatarMoeda(item.custo_material_perda)}`;
+            document.getElementById('modal-calc-custo-producao').textContent = `- ${formatarMoeda(item.custo_producao_perda)}`;
+
+            // Desconto e percentuais
+            document.getElementById('modal-calc-desconto').textContent = `- ${formatarMoeda(item.desconto_valor)}`;
+            document.getElementById('modal-calc-frete-pct').textContent = formatarNumero(item.frete_pct);
+            document.getElementById('modal-calc-frete').textContent = `- ${formatarMoeda(item.frete_valor)}`;
+            document.getElementById('modal-calc-financeiro-pct').textContent = formatarNumero(item.financeiro_pct);
+            document.getElementById('modal-calc-financeiro').textContent = `- ${formatarMoeda(item.financeiro_valor)}`;
+            document.getElementById('modal-calc-comissao-pct').textContent = formatarNumero(item.comissao_pct);
+            document.getElementById('modal-calc-comissao').textContent = `- ${formatarMoeda(item.comissao_valor)}`;
+
+            // Total deducoes
+            document.getElementById('modal-calc-total-deducoes').textContent = `- ${formatarMoeda(item.total_deducoes)}`;
+
+            // Margem Bruta
+            const margemBrutaClass = item.margem_bruta >= 0 ? 'text-success' : 'text-danger';
+            document.getElementById('modal-calc-margem-bruta').innerHTML = `<span class="${margemBrutaClass}">${formatarMoeda(item.margem_bruta)}</span>`;
+            document.getElementById('modal-calc-margem-bruta-pct').innerHTML = `<span class="${margemBrutaClass}">${formatarPercentual(item.margem_bruta_pct)}</span>`;
+
+            // Custo Operacao
+            document.getElementById('modal-calc-operacao-pct').textContent = formatarNumero(item.operacao_pct);
+            document.getElementById('modal-calc-operacao').textContent = `- ${formatarMoeda(item.operacao_valor)}`;
+
+            // Margem Liquida
+            const margemLiqClass = item.margem_liquida >= 0 ? 'text-success' : 'text-danger';
+            document.getElementById('modal-calc-margem-liquida').innerHTML = `<span class="${margemLiqClass}">${formatarMoeda(item.margem_liquida)}</span>`;
+            document.getElementById('modal-calc-margem-liquida-pct').innerHTML = `<span class="${margemLiqClass}">${formatarPercentual(item.margem_liquida_pct)}</span>`;
+            document.getElementById('modal-calc-margem-total').innerHTML = `<span class="${margemLiqClass}">${formatarMoeda(item.margem_total)}</span>`;
+
+        } else {
+            document.getElementById('modal-calc-produto').textContent = data.erro || 'Erro ao carregar';
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        document.getElementById('modal-calc-produto').textContent = 'Erro de conexao';
     }
 }
 
@@ -507,8 +699,27 @@ function formatarMoeda(valor) {
     }).format(valor || 0);
 }
 
+function formatarMoedaCurto(valor) {
+    return new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    }).format(valor || 0);
+}
+
+function formatarNumero(valor) {
+    return new Intl.NumberFormat('pt-BR', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2
+    }).format(valor || 0);
+}
+
 function formatarPercentual(valor) {
-    return `${(valor || 0).toFixed(2)}%`;
+    return new Intl.NumberFormat('pt-BR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    }).format(valor || 0) + '%';
 }
 
 function formatarData(data) {
@@ -529,7 +740,7 @@ function mostrarLoading(show) {
 function mostrarErro(msg) {
     document.getElementById('tbody-margem').innerHTML = `
         <tr>
-            <td colspan="10" class="empty-state">
+            <td colspan="8" class="empty-state">
                 <i class="bi bi-exclamation-triangle text-danger"></i>
                 <p class="text-danger">${msg}</p>
             </td>

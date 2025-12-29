@@ -211,7 +211,9 @@ class AssaiExtractor(PDFExtractor):
         """
         # Padrão: código numérico seguido de descrição em maiúsculas
         # O código pode ter 5-7 dígitos
-        pattern = r'^(\d{5,7})\s+([A-Z][A-Z\s\./\-0-9]+)$'
+        # [A-ZÀ-Ÿ] inclui maiúsculas acentuadas (Á, É, Í, Ó, Ú, Ã, Õ, Ç, etc.)
+        # Inclui vírgula para pesos como "1,8KG"
+        pattern = r'^(\d{5,7})\s+([A-ZÀ-Ÿ][A-ZÀ-Ÿ\s\./\-0-9,]+)$'
         match = re.match(pattern, line)
 
         if match:
@@ -235,8 +237,9 @@ class AssaiExtractor(PDFExtractor):
         Colunas: Número Loja | Nome | Data | Qtd | Emb | Preço Unit | Valor Total
         """
         # Padrão para linha de loja
-        # Número de 3 dígitos, nome alfanumérico, data, números separados por espaços
-        pattern = r'^(\d{3})\s+([A-Za-z\s]+?)\s+(\d{2}/\d{2}/\d{4})\s+([\d\.,]+)\s+(\d+)\s+([\d\.,]+)\s+([\d\.,]+)$'
+        # Número de 3 dígitos, nome alfanumérico (incluindo acentos), data, números separados por espaços
+        # [A-Za-zÀ-ÿ\s] inclui caracteres acentuados (Taboão, Taubaté, Tietê, etc.)
+        pattern = r'^(\d{3})\s+([A-Za-zÀ-ÿ\s]+?)\s+(\d{2}/\d{2}/\d{4})\s+([\d\.,]+)\s+(\d+)\s+([\d\.,]+)\s+([\d\.,]+)$'
         match = re.match(pattern, line)
 
         if match:

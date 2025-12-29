@@ -112,6 +112,12 @@ class CarteiraPrincipal(db.Model):
     margem_liquida_percentual = db.Column(db.Numeric(5, 2), nullable=True)
     comissao_percentual = db.Column(db.Numeric(5, 2), nullable=True, default=0)  # Soma das regras de comissao
 
+    # 📸 SNAPSHOT DE PARAMETROS (rastreabilidade do calculo de margem)
+    frete_percentual_snapshot = db.Column(db.Numeric(5, 2), nullable=True)  # % Frete usado
+    custo_financeiro_pct_snapshot = db.Column(db.Numeric(5, 2), nullable=True)  # % Custo financeiro
+    custo_operacao_pct_snapshot = db.Column(db.Numeric(5, 2), nullable=True)  # % Custo operacao
+    percentual_perda_snapshot = db.Column(db.Numeric(5, 2), nullable=True)  # % Perda
+
     # 🛡️ AUDITORIA
     created_at = db.Column(db.DateTime, default=agora_brasil, nullable=False)
     updated_at = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil, nullable=False)

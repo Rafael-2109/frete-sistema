@@ -670,10 +670,10 @@ class ServicoCusteio:
                 db.session.add(considerado)
 
                 # Atualizar valores do novo registro
-                considerado.custo_medio_mes = custo.custo_liquido_medio
-                considerado.ultimo_custo = custo.ultimo_custo
+                # FECHAMENTO: Atualiza apenas custo_medio_estoque e posicoes de estoque
+                # custo_medio_mes e ultimo_custo sao atualizados no momento da compra
+                # custo_considerado NAO e alterado pelo fechamento (somente manual/importacao)
                 considerado.custo_medio_estoque = custo.custo_medio_estoque
-                considerado.custo_bom = custo.custo_bom
                 considerado.qtd_estoque_inicial = custo.qtd_estoque_inicial
                 considerado.custo_estoque_inicial = custo.custo_estoque_inicial
                 considerado.qtd_comprada_periodo = custo.qtd_comprada
@@ -682,14 +682,13 @@ class ServicoCusteio:
                 considerado.custo_estoque_final = custo.custo_estoque_final
                 considerado.ultimo_mes_fechado = mes
                 considerado.ultimo_ano_fechado = ano
-                considerado.recalcular_custo_considerado()
+                # NAO chama recalcular_custo_considerado() - custo_considerado e manual
             else:
                 # Ja existe - atualizar versao atual (fechamento nao cria nova versao)
-                # Apenas alterar tipo de custo cria nova versao
-                considerado.custo_medio_mes = custo.custo_liquido_medio
-                considerado.ultimo_custo = custo.ultimo_custo
+                # FECHAMENTO: Atualiza apenas custo_medio_estoque e posicoes de estoque
+                # custo_medio_mes e ultimo_custo sao atualizados no momento da compra
+                # custo_considerado NAO e alterado pelo fechamento (somente manual/importacao)
                 considerado.custo_medio_estoque = custo.custo_medio_estoque
-                considerado.custo_bom = custo.custo_bom
                 considerado.qtd_estoque_inicial = custo.qtd_estoque_inicial
                 considerado.custo_estoque_inicial = custo.custo_estoque_inicial
                 considerado.qtd_comprada_periodo = custo.qtd_comprada
@@ -698,7 +697,7 @@ class ServicoCusteio:
                 considerado.custo_estoque_final = custo.custo_estoque_final
                 considerado.ultimo_mes_fechado = mes
                 considerado.ultimo_ano_fechado = ano
-                considerado.recalcular_custo_considerado()
+                # NAO chama recalcular_custo_considerado() - custo_considerado e manual
 
     # ================================================
     # CONSULTAS

@@ -124,7 +124,7 @@ def api_margem_dados():
         }), 500
 
 
-@comercial_bp.route('/api/margem/cliente/<cnpj>/historico')
+@comercial_bp.route('/api/margem/cliente/<path:cnpj>/historico')
 @nao_vendedor_required
 def api_margem_cliente_historico(cnpj):
     """
@@ -145,6 +145,55 @@ def api_margem_cliente_historico(cnpj):
 
     except Exception as e:
         logger.error(f"Erro ao obter historico do cliente {cnpj}: {e}")
+        return jsonify({
+            'sucesso': False,
+            'erro': str(e)
+        }), 500
+
+
+@comercial_bp.route('/api/margem/pedido/<num_pedido>/itens')
+@nao_vendedor_required
+def api_margem_pedido_itens(num_pedido):
+    """
+    Retorna itens de um pedido com margem detalhada
+
+    Args:
+        num_pedido: Numero do pedido
+
+    Returns:
+        JSON com dados do pedido e lista de itens
+    """
+    try:
+        resultado = MargemService.obter_itens_pedido(num_pedido)
+        return jsonify(resultado)
+
+    except Exception as e:
+        logger.error(f"Erro ao obter itens do pedido {num_pedido}: {e}")
+        return jsonify({
+            'sucesso': False,
+            'erro': str(e)
+        }), 500
+
+
+@comercial_bp.route('/api/margem/calculo/<num_pedido>/<cod_produto>')
+@nao_vendedor_required
+def api_margem_detalhe_calculo(num_pedido, cod_produto):
+    """
+    Retorna detalhe completo do calculo de margem de um item
+
+    Args:
+        num_pedido: Numero do pedido
+        cod_produto: Codigo do produto
+
+    Returns:
+        JSON com todos os componentes do calculo
+    """
+    try:
+        resultado = MargemService.obter_detalhe_calculo(num_pedido, cod_produto)
+        return jsonify(resultado)
+
+    except Exception as e:
+        logger.error(f"Erro ao obter detalhe calculo {num_pedido}/{cod_produto}: {e}")
         return jsonify({
             'sucesso': False,
             'erro': str(e)

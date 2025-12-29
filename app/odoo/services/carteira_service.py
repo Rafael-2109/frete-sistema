@@ -25,7 +25,6 @@ from app import db
 from app.odoo.utils.connection import get_odoo_connection
 from app.odoo.utils.carteira_mapper import CarteiraMapper
 from app.custeio.models import CustoConsiderado
-from sqlalchemy import or_
 
 logger = logging.getLogger(__name__)
 
@@ -190,7 +189,7 @@ class CarteiraService:
         """
         from datetime import datetime
         from app.carteira.models import CarteiraPrincipal
-        from sqlalchemy import func, distinct
+        from sqlalchemy import distinct
 
         inicio = datetime.now()
 
@@ -1182,13 +1181,14 @@ class CarteiraService:
         - Tratamento especial para bonificacao (forma_pgto = 'SEM PAGAMENTO')
 
         Formulas VENDA NORMAL:
-        custo_total = (custo_unitario + custo_producao) * (1 + percentual_perda/100)
+        custo_material_com_perda = custo_unitario * (1 + percentual_perda/100)
+        custo_producao_com_perda = custo_producao * (1 + percentual_perda/100) if custo_producao else 0.0
         comissao_valor = preco * comissao_percentual / 100
-        margem_bruta = preco - icms - pis - cofins - custo_total - desconto - frete - custo_financeiro - comissao
-        margem_liquida = margem_bruta - custo_operacao
+        margem_bruta = preco - icms - pis - cofins - custo_material_com_perda - desconto - frete - custo_financeiro - comissao
+        margem_liquida = margem_bruta - custo_operacao - custo_producao_com_perda
 
         Formulas BONIFICACAO (forma_pgto = 'SEM PAGAMENTO'):
-        margem_bruta = -custo_total - icms - frete - custo_financeiro
+        margem_bruta = -custo_material_com_perda - icms - frete - custo_financeiro
         (NAO inclui: comissao, desconto contratual, pis/cofins)
 
         Args:
@@ -1335,7 +1335,12 @@ class CarteiraService:
                 'margem_bruta_percentual': round(margem_bruta_percentual, 2),
                 'margem_liquida': round(margem_liquida, 2),
                 'margem_liquida_percentual': round(margem_liquida_percentual, 2),
-                'comissao_percentual': round(comissao_percentual, 2)
+                'comissao_percentual': round(comissao_percentual, 2),
+                # SNAPSHOT DE PARAMETROS (rastreabilidade)
+                'frete_percentual_snapshot': round(frete_percentual, 2),
+                'custo_financeiro_pct_snapshot': round(custo_financeiro_percentual, 2),
+                'custo_operacao_pct_snapshot': round(custo_operacao_percentual, 2),
+                'percentual_perda_snapshot': round(percentual_perda, 2)
             }
 
         except Exception as e:

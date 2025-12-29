@@ -198,15 +198,18 @@ class MargemService:
             CarteiraPrincipal.vendedor,
             CarteiraPrincipal.equipe_vendas,
             CarteiraPrincipal.data_pedido,
+            CarteiraPrincipal.qtd_produto_pedido,
             (CarteiraPrincipal.qtd_saldo_produto_pedido * CarteiraPrincipal.preco_produto_pedido).label('valor_total'),
-            CarteiraPrincipal.margem_liquida,
+            # Margem TOTAL da linha (unitaria * quantidade original do pedido)
+            (CarteiraPrincipal.margem_liquida * CarteiraPrincipal.qtd_produto_pedido).label('margem_liquida_total'),
             CarteiraPrincipal.margem_liquida_percentual,
             CarteiraPrincipal.desconto_contratual,
             CarteiraPrincipal.desconto_percentual
         )
 
         query = MargemService._aplicar_filtros_base(query, filtros)
-        query = query.order_by(CarteiraPrincipal.margem_liquida.desc())
+        # Ordenar por data de pedido decrescente, depois por num_pedido decrescente
+        query = query.order_by(CarteiraPrincipal.data_pedido.desc(), CarteiraPrincipal.num_pedido.desc())
 
         # Paginacao
         total = query.count()
@@ -215,19 +218,24 @@ class MargemService:
         # Calcular totais
         totais_query = db.session.query(
             func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido * CarteiraPrincipal.preco_produto_pedido).label('valor_total'),
-            func.sum(CarteiraPrincipal.margem_liquida).label('margem_total'),
-            func.avg(CarteiraPrincipal.margem_liquida_percentual).label('margem_media_pct')
+            # Margem total = soma de (margem_unitaria * quantidade original)
+            func.sum(CarteiraPrincipal.margem_liquida * CarteiraPrincipal.qtd_produto_pedido).label('margem_total')
         )
         totais_query = MargemService._aplicar_filtros_base(totais_query, filtros)
         totais_row = totais_query.first()
+
+        # Margem % = Margem Total / Valor Total (nao media)
+        valor_total = float(totais_row.valor_total or 0)
+        margem_total = float(totais_row.margem_total or 0)
+        margem_percentual = (margem_total / valor_total * 100) if valor_total > 0 else 0
 
         return {
             'sucesso': True,
             'dados': [MargemService._row_produto_pedido_to_dict(row) for row in dados],
             'totais': {
-                'valor_total': float(totais_row.valor_total or 0),
-                'margem_liquida_total': float(totais_row.margem_total or 0),
-                'margem_media_percentual': float(totais_row.margem_media_pct or 0)
+                'valor_total': valor_total,
+                'margem_liquida_total': margem_total,
+                'margem_percentual': round(margem_percentual, 2)
             },
             'paginacao': {
                 'page': page,
@@ -252,8 +260,10 @@ class MargemService:
             'vendedor': row.vendedor,
             'equipe_vendas': row.equipe_vendas,
             'data_pedido': row.data_pedido.isoformat() if row.data_pedido else None,
+            'qtd_produto': float(row.qtd_produto_pedido or 0),
             'valor_total': float(row.valor_total or 0),
-            'margem_liquida': float(row.margem_liquida or 0),
+            # Margem total da linha (unitaria * quantidade)
+            'margem_liquida': float(row.margem_liquida_total or 0),
             'margem_liquida_percentual': float(row.margem_liquida_percentual or 0),
             'contrato': {
                 'tem_desconto': bool(row.desconto_contratual),
@@ -297,19 +307,23 @@ class MargemService:
         # Totais
         totais_query = db.session.query(
             func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido * CarteiraPrincipal.preco_produto_pedido).label('valor_total'),
-            func.sum(CarteiraPrincipal.margem_liquida).label('margem_total'),
-            func.avg(CarteiraPrincipal.margem_liquida_percentual).label('margem_media_pct')
+            func.sum(CarteiraPrincipal.margem_liquida * CarteiraPrincipal.qtd_produto_pedido).label('margem_total')
         )
         totais_query = MargemService._aplicar_filtros_base(totais_query, filtros)
         totais_row = totais_query.first()
+
+        # Margem % = Margem Total / Valor Total
+        valor_total = float(totais_row.valor_total or 0)
+        margem_total = float(totais_row.margem_total or 0)
+        margem_percentual = (margem_total / valor_total * 100) if valor_total > 0 else 0
 
         return {
             'sucesso': True,
             'dados': [MargemService._row_pedido_to_dict(row) for row in dados],
             'totais': {
-                'valor_total': float(totais_row.valor_total or 0),
-                'margem_liquida_total': float(totais_row.margem_total or 0),
-                'margem_media_percentual': float(totais_row.margem_media_pct or 0)
+                'valor_total': valor_total,
+                'margem_liquida_total': margem_total,
+                'margem_percentual': round(margem_percentual, 2)
             },
             'paginacao': {
                 'page': page,
@@ -371,11 +385,15 @@ class MargemService:
         # Totais
         totais_query = db.session.query(
             func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido * CarteiraPrincipal.preco_produto_pedido).label('valor_total'),
-            func.sum(CarteiraPrincipal.margem_liquida).label('margem_total'),
-            func.avg(CarteiraPrincipal.margem_liquida_percentual).label('margem_media_pct')
+            func.sum(CarteiraPrincipal.margem_liquida * CarteiraPrincipal.qtd_produto_pedido).label('margem_total')
         )
         totais_query = MargemService._aplicar_filtros_base(totais_query, filtros)
         totais_row = totais_query.first()
+
+        # Margem % = Margem Total / Valor Total
+        valor_total = float(totais_row.valor_total or 0)
+        margem_total = float(totais_row.margem_total or 0)
+        margem_percentual = (margem_total / valor_total * 100) if valor_total > 0 else 0
 
         return {
             'sucesso': True,
@@ -388,9 +406,9 @@ class MargemService:
                 'margem_liquida_percentual': float(row.margem_liquida_percentual or 0)
             } for row in dados],
             'totais': {
-                'valor_total': float(totais_row.valor_total or 0),
-                'margem_liquida_total': float(totais_row.margem_total or 0),
-                'margem_media_percentual': float(totais_row.margem_media_pct or 0)
+                'valor_total': valor_total,
+                'margem_liquida_total': margem_total,
+                'margem_percentual': round(margem_percentual, 2)
             },
             'paginacao': {
                 'page': page,
@@ -439,11 +457,15 @@ class MargemService:
         # Totais
         totais_query = db.session.query(
             func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido * CarteiraPrincipal.preco_produto_pedido).label('valor_total'),
-            func.sum(CarteiraPrincipal.margem_liquida).label('margem_total'),
-            func.avg(CarteiraPrincipal.margem_liquida_percentual).label('margem_media_pct')
+            func.sum(CarteiraPrincipal.margem_liquida * CarteiraPrincipal.qtd_produto_pedido).label('margem_total')
         )
         totais_query = MargemService._aplicar_filtros_base(totais_query, filtros)
         totais_row = totais_query.first()
+
+        # Margem % = Margem Total / Valor Total
+        valor_total = float(totais_row.valor_total or 0)
+        margem_total = float(totais_row.margem_total or 0)
+        margem_percentual = (margem_total / valor_total * 100) if valor_total > 0 else 0
 
         return {
             'sucesso': True,
@@ -457,9 +479,9 @@ class MargemService:
                 'margem_liquida_percentual': float(row.margem_liquida_percentual or 0)
             } for row in dados],
             'totais': {
-                'valor_total': float(totais_row.valor_total or 0),
-                'margem_liquida_total': float(totais_row.margem_total or 0),
-                'margem_media_percentual': float(totais_row.margem_media_pct or 0)
+                'valor_total': valor_total,
+                'margem_liquida_total': margem_total,
+                'margem_percentual': round(margem_percentual, 2)
             },
             'paginacao': {
                 'page': page,
@@ -499,11 +521,15 @@ class MargemService:
         # Totais
         totais_query = db.session.query(
             func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido * CarteiraPrincipal.preco_produto_pedido).label('valor_total'),
-            func.sum(CarteiraPrincipal.margem_liquida).label('margem_total'),
-            func.avg(CarteiraPrincipal.margem_liquida_percentual).label('margem_media_pct')
+            func.sum(CarteiraPrincipal.margem_liquida * CarteiraPrincipal.qtd_produto_pedido).label('margem_total')
         )
         totais_query = MargemService._aplicar_filtros_base(totais_query, filtros)
         totais_row = totais_query.first()
+
+        # Margem % = Margem Total / Valor Total
+        valor_total = float(totais_row.valor_total or 0)
+        margem_total = float(totais_row.margem_total or 0)
+        margem_percentual = (margem_total / valor_total * 100) if valor_total > 0 else 0
 
         return {
             'sucesso': True,
@@ -517,9 +543,9 @@ class MargemService:
                 'margem_liquida_percentual': float(row.margem_liquida_percentual or 0)
             } for row in dados],
             'totais': {
-                'valor_total': float(totais_row.valor_total or 0),
-                'margem_liquida_total': float(totais_row.margem_total or 0),
-                'margem_media_percentual': float(totais_row.margem_media_pct or 0)
+                'valor_total': valor_total,
+                'margem_liquida_total': margem_total,
+                'margem_percentual': round(margem_percentual, 2)
             },
             'paginacao': {
                 'page': page,
@@ -539,14 +565,14 @@ class MargemService:
             func.count(distinct(CarteiraPrincipal.cnpj_cpf)).label('qtd_clientes'),
             func.count(distinct(CarteiraPrincipal.num_pedido)).label('qtd_pedidos'),
             func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido * CarteiraPrincipal.preco_produto_pedido).label('valor_total'),
-            func.sum(CarteiraPrincipal.margem_liquida).label('margem_liquida'),
+            func.sum(CarteiraPrincipal.margem_liquida * CarteiraPrincipal.qtd_produto_pedido).label('margem_liquida'),
             func.avg(CarteiraPrincipal.margem_liquida_percentual).label('margem_liquida_percentual')
         )
 
         query = MargemService._aplicar_filtros_base(query, filtros)
         query = query.filter(CarteiraPrincipal.vendedor.isnot(None))
         query = query.group_by(CarteiraPrincipal.vendedor)
-        query = query.order_by(func.sum(CarteiraPrincipal.margem_liquida).desc())
+        query = query.order_by(func.sum(CarteiraPrincipal.margem_liquida * CarteiraPrincipal.qtd_produto_pedido).desc())
 
         # Total
         total_subq = db.session.query(func.count(distinct(CarteiraPrincipal.vendedor)))
@@ -559,11 +585,15 @@ class MargemService:
         # Totais
         totais_query = db.session.query(
             func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido * CarteiraPrincipal.preco_produto_pedido).label('valor_total'),
-            func.sum(CarteiraPrincipal.margem_liquida).label('margem_total'),
-            func.avg(CarteiraPrincipal.margem_liquida_percentual).label('margem_media_pct')
+            func.sum(CarteiraPrincipal.margem_liquida * CarteiraPrincipal.qtd_produto_pedido).label('margem_total')
         )
         totais_query = MargemService._aplicar_filtros_base(totais_query, filtros)
         totais_row = totais_query.first()
+
+        # Margem % = Margem Total / Valor Total
+        valor_total = float(totais_row.valor_total or 0)
+        margem_total = float(totais_row.margem_total or 0)
+        margem_percentual = (margem_total / valor_total * 100) if valor_total > 0 else 0
 
         return {
             'sucesso': True,
@@ -577,9 +607,9 @@ class MargemService:
                 'margem_liquida_percentual': float(row.margem_liquida_percentual or 0)
             } for row in dados],
             'totais': {
-                'valor_total': float(totais_row.valor_total or 0),
-                'margem_liquida_total': float(totais_row.margem_total or 0),
-                'margem_media_percentual': float(totais_row.margem_media_pct or 0)
+                'valor_total': valor_total,
+                'margem_liquida_total': margem_total,
+                'margem_percentual': round(margem_percentual, 2)
             },
             'paginacao': {
                 'page': page,
@@ -588,6 +618,112 @@ class MargemService:
                 'total_pages': (total + per_page - 1) // per_page
             }
         }
+
+    @staticmethod
+    def obter_detalhe_calculo(num_pedido: str, cod_produto: str) -> Dict[str, Any]:
+        """
+        Retorna detalhes completos do calculo de margem de um item
+
+        Args:
+            num_pedido: Numero do pedido
+            cod_produto: Codigo do produto
+
+        Returns:
+            Dict com todos os componentes do calculo
+        """
+        try:
+            item = CarteiraPrincipal.query.filter_by(
+                num_pedido=num_pedido,
+                cod_produto=cod_produto
+            ).first()
+
+            if not item:
+                return {
+                    'sucesso': False,
+                    'erro': 'Item nao encontrado'
+                }
+
+            # Valores base
+            preco = float(item.preco_produto_pedido or 0)
+            qtd = float(item.qtd_produto_pedido or 1)
+
+            # Impostos por unidade
+            icms = float(item.icms_valor or 0) / qtd if item.icms_valor and qtd > 0 else 0
+            pis = float(item.pis_valor or 0) / qtd if item.pis_valor and qtd > 0 else 0
+            cofins = float(item.cofins_valor or 0) / qtd if item.cofins_valor and qtd > 0 else 0
+
+            # Snapshots
+            custo_material = float(item.custo_unitario_snapshot or 0)
+            custo_producao = float(item.custo_producao_snapshot or 0) if item.custo_producao_snapshot else 0
+            perda_pct = float(item.percentual_perda_snapshot or 0) if item.percentual_perda_snapshot else 0
+            frete_pct = float(item.frete_percentual_snapshot or 0) if item.frete_percentual_snapshot else 0
+            financeiro_pct = float(item.custo_financeiro_pct_snapshot or 0) if item.custo_financeiro_pct_snapshot else 0
+            operacao_pct = float(item.custo_operacao_pct_snapshot or 0) if item.custo_operacao_pct_snapshot else 0
+            comissao_pct = float(item.comissao_percentual or 0)
+
+            # Custos com perda
+            custo_material_perda = custo_material * (1 + perda_pct / 100)
+            custo_producao_perda = custo_producao * (1 + perda_pct / 100)
+
+            # Valores calculados
+            desconto_pct = float(item.desconto_percentual or 0)
+            desconto_valor = (desconto_pct / 100) * preco
+            frete_valor = (frete_pct / 100) * preco
+            financeiro_valor = (financeiro_pct / 100) * preco
+            operacao_valor = (operacao_pct / 100) * preco
+            comissao_valor = (comissao_pct / 100) * preco
+
+            # Total deducoes
+            total_deducoes = (icms + pis + cofins + custo_material_perda + custo_producao_perda +
+                             desconto_valor + frete_valor + financeiro_valor + comissao_valor + operacao_valor)
+
+            return {
+                'sucesso': True,
+                'item': {
+                    'num_pedido': num_pedido,
+                    'cod_produto': cod_produto,
+                    'nome_produto': item.nome_produto,
+                    'preco': preco,
+                    'qtd': qtd,
+                    'receita_total': preco * qtd,
+                    # Impostos
+                    'icms': icms,
+                    'pis': pis,
+                    'cofins': cofins,
+                    # Custos
+                    'custo_material': custo_material,
+                    'custo_producao': custo_producao,
+                    'perda_pct': perda_pct,
+                    'custo_material_perda': custo_material_perda,
+                    'custo_producao_perda': custo_producao_perda,
+                    # Percentuais
+                    'desconto_pct': desconto_pct,
+                    'desconto_valor': desconto_valor,
+                    'frete_pct': frete_pct,
+                    'frete_valor': frete_valor,
+                    'financeiro_pct': financeiro_pct,
+                    'financeiro_valor': financeiro_valor,
+                    'operacao_pct': operacao_pct,
+                    'operacao_valor': operacao_valor,
+                    'comissao_pct': comissao_pct,
+                    'comissao_valor': comissao_valor,
+                    # Totais
+                    'total_deducoes': total_deducoes,
+                    # Margens
+                    'margem_bruta': float(item.margem_bruta or 0),
+                    'margem_bruta_pct': float(item.margem_bruta_percentual or 0),
+                    'margem_liquida': float(item.margem_liquida or 0),
+                    'margem_liquida_pct': float(item.margem_liquida_percentual or 0),
+                    'margem_total': float(item.margem_liquida or 0) * qtd
+                }
+            }
+
+        except Exception as e:
+            logger.error(f"Erro ao obter detalhe do calculo {num_pedido}/{cod_produto}: {e}")
+            return {
+                'sucesso': False,
+                'erro': str(e)
+            }
 
     @staticmethod
     def obter_historico_cliente(cnpj: str, limite: int = 4) -> Dict[str, Any]:
@@ -617,11 +753,14 @@ class MargemService:
                 }
 
             # Ultimos pedidos agrupados
+            # CORRECAO: margem_liquida e por unidade, multiplicar por qtd_produto_pedido
             pedidos_query = db.session.query(
                 CarteiraPrincipal.num_pedido,
                 func.max(CarteiraPrincipal.data_pedido).label('data_pedido'),
-                func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido * CarteiraPrincipal.preco_produto_pedido).label('valor_total'),
-                func.sum(CarteiraPrincipal.margem_liquida).label('margem_liquida'),
+                func.count(CarteiraPrincipal.cod_produto).label('qtd_itens'),
+                func.sum(CarteiraPrincipal.qtd_produto_pedido * CarteiraPrincipal.preco_produto_pedido).label('valor_total'),
+                # Margem TOTAL = margem_unitaria * quantidade original do pedido
+                func.sum(CarteiraPrincipal.margem_liquida * CarteiraPrincipal.qtd_produto_pedido).label('margem_liquida'),
                 func.avg(CarteiraPrincipal.margem_liquida_percentual).label('margem_liquida_percentual')
             ).filter(
                 CarteiraPrincipal.cnpj_cpf == cnpj,
@@ -643,6 +782,7 @@ class MargemService:
                 'pedidos': [{
                     'num_pedido': p.num_pedido,
                     'data_pedido': p.data_pedido.isoformat() if p.data_pedido else None,
+                    'qtd_itens': int(p.qtd_itens or 0),
                     'valor_total': float(p.valor_total or 0),
                     'margem_liquida': float(p.margem_liquida or 0),
                     'margem_liquida_percentual': float(p.margem_liquida_percentual or 0)
@@ -651,6 +791,95 @@ class MargemService:
 
         except Exception as e:
             logger.error(f"Erro ao obter historico do cliente {cnpj}: {e}")
+            return {
+                'sucesso': False,
+                'erro': str(e)
+            }
+
+    @staticmethod
+    def obter_itens_pedido(num_pedido: str) -> Dict[str, Any]:
+        """
+        Retorna itens de um pedido especifico com margem detalhada
+
+        Args:
+            num_pedido: Numero do pedido
+
+        Returns:
+            Dict com dados do pedido e lista de itens
+        """
+        try:
+            # Buscar itens do pedido
+            itens = db.session.query(
+                CarteiraPrincipal.cod_produto,
+                CarteiraPrincipal.nome_produto,
+                CarteiraPrincipal.qtd_produto_pedido,
+                CarteiraPrincipal.preco_produto_pedido,
+                CarteiraPrincipal.margem_liquida,
+                CarteiraPrincipal.margem_liquida_percentual,
+                CarteiraPrincipal.margem_bruta,
+                CarteiraPrincipal.margem_bruta_percentual,
+                CarteiraPrincipal.data_pedido,
+                CarteiraPrincipal.incoterm,
+                CarteiraPrincipal.comissao_percentual,
+                # Snapshots para rastreabilidade
+                CarteiraPrincipal.custo_unitario_snapshot,
+                CarteiraPrincipal.custo_producao_snapshot,
+                CarteiraPrincipal.frete_percentual_snapshot,
+                CarteiraPrincipal.custo_financeiro_pct_snapshot,
+                CarteiraPrincipal.custo_operacao_pct_snapshot,
+                CarteiraPrincipal.percentual_perda_snapshot
+            ).filter(
+                CarteiraPrincipal.num_pedido == num_pedido
+            ).order_by(
+                CarteiraPrincipal.cod_produto
+            ).all()
+
+            if not itens:
+                return {
+                    'sucesso': False,
+                    'erro': 'Pedido nao encontrado'
+                }
+
+            # Calcular totais do pedido
+            total_valor = sum(float(i.qtd_produto_pedido or 0) * float(i.preco_produto_pedido or 0) for i in itens)
+            total_margem = sum(float(i.margem_liquida or 0) * float(i.qtd_produto_pedido or 0) for i in itens)
+            margem_pct_media = sum(float(i.margem_liquida_percentual or 0) for i in itens) / len(itens) if itens else 0
+
+            return {
+                'sucesso': True,
+                'pedido': {
+                    'num_pedido': num_pedido,
+                    'data_pedido': itens[0].data_pedido.isoformat() if itens[0].data_pedido else None,
+                    'incoterm': itens[0].incoterm,
+                    'qtd_itens': len(itens),
+                    'valor_total': round(total_valor, 2),
+                    'margem_total': round(total_margem, 2),
+                    'margem_percentual_media': round(margem_pct_media, 2)
+                },
+                'itens': [{
+                    'cod_produto': i.cod_produto,
+                    'nome_produto': i.nome_produto,
+                    'qtd': float(i.qtd_produto_pedido or 0),
+                    'preco_unitario': float(i.preco_produto_pedido or 0),
+                    'valor_total': float(i.qtd_produto_pedido or 0) * float(i.preco_produto_pedido or 0),
+                    'margem_unitaria': float(i.margem_liquida or 0),
+                    'margem_total': float(i.margem_liquida or 0) * float(i.qtd_produto_pedido or 0),
+                    'margem_percentual': float(i.margem_liquida_percentual or 0),
+                    'margem_bruta_unitaria': float(i.margem_bruta or 0),
+                    'margem_bruta_percentual': float(i.margem_bruta_percentual or 0),
+                    'comissao_pct': float(i.comissao_percentual or 0),
+                    # Rastreabilidade
+                    'custo_unitario': float(i.custo_unitario_snapshot or 0),
+                    'custo_producao': float(i.custo_producao_snapshot or 0) if i.custo_producao_snapshot else 0,
+                    'frete_pct': float(i.frete_percentual_snapshot or 0) if i.frete_percentual_snapshot else 0,
+                    'financeiro_pct': float(i.custo_financeiro_pct_snapshot or 0) if i.custo_financeiro_pct_snapshot else 0,
+                    'operacao_pct': float(i.custo_operacao_pct_snapshot or 0) if i.custo_operacao_pct_snapshot else 0,
+                    'perda_pct': float(i.percentual_perda_snapshot or 0) if i.percentual_perda_snapshot else 0
+                } for i in itens]
+            }
+
+        except Exception as e:
+            logger.error(f"Erro ao obter itens do pedido {num_pedido}: {e}")
             return {
                 'sucesso': False,
                 'erro': str(e)

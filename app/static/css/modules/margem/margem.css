@@ -190,3 +190,76 @@
     min-width: 60px;
     text-align: center;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   COLUNA PRODUTO
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.produto-col {
+    min-width: 220px;
+}
+
+.produto-codigo {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+}
+
+.produto-nome {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--text);
+    line-height: 1.3;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   COLUNA VENDEDOR
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.vendedor-nome {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MARGEM BADGE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.margem-badge {
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 6px 10px;
+    white-space: nowrap;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LINHA CLICAVEL
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.cursor-pointer {
+    cursor: pointer;
+}
+
+.cursor-pointer:hover {
+    background-color: var(--bg-light) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MODAL DETALHE PEDIDO
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+#modalDetalhePedido .card {
+    border: none;
+}
+
+#modalDetalhePedido .table thead th {
+    font-size: 0.85rem;
+    font-weight: 600;
+    background: var(--bg-light);
+}
+
+#modalDetalhePedido .table tbody td {
+    font-size: 0.9rem;
+    vertical-align: middle;
+}
