@@ -249,7 +249,7 @@ function expandirDetalhe(codProduto, rowPai, tipoValor) {
     `;
     rowPai.after(loadingRow);
 
-    // Buscar composição BOM com custos calculados pelo critério selecionado
+    // Buscar composição BOM com TODOS os 4 custos
     fetch(`/custeio/api/definicao/bom/${codProduto}?criterio=${tipoValor}`)
         .then(r => r.json())
         .then(data => {
@@ -261,16 +261,20 @@ function expandirDetalhe(codProduto, rowPai, tipoValor) {
                 return;
             }
 
+            // Linha de total primeiro (será inserida por último visualmente)
+            const totalRow = criarLinhaTotalBOM(codProduto, tipoValor, data.totais, data.criterio_selecionado);
+            rowPai.after(totalRow);
+
             // Criar linhas de componentes (em ordem reversa para inserir corretamente)
             const componentes = data.componentes.slice().reverse();
             for (const comp of componentes) {
-                const compRow = criarLinhaComponenteBOM(codProduto, tipoValor, comp);
+                const compRow = criarLinhaComponenteBOM(codProduto, tipoValor, comp, data.criterio_selecionado);
                 rowPai.after(compRow);
             }
 
-            // Linha de total
-            const totalRow = criarLinhaTotalBOM(codProduto, tipoValor, data.custo_total);
-            rowPai.after(totalRow);
+            // Linha de cabeçalho dos custos
+            const headerRow = criarLinhaCabecalhoBOM(codProduto, tipoValor, data.criterio_selecionado);
+            rowPai.after(headerRow);
         })
         .catch(err => {
             loadingRow.remove();
@@ -294,9 +298,30 @@ function criarLinhaDetalheVazia(codProduto, tipoValor, mensagem) {
     return row;
 }
 
-function criarLinhaComponenteBOM(codProduto, tipoValor, comp) {
+function criarLinhaCabecalhoBOM(codProduto, tipoValor, criterioSelecionado) {
     const row = document.createElement('tr');
-    row.className = 'detail-row bom-row';
+    row.className = 'detail-row bom-header';
+    row.dataset.parent = codProduto;
+    row.dataset.tipo = tipoValor;
+
+    const tipos = ['medio_mes', 'ultimo_custo', 'medio_estoque', 'custo_considerado'];
+
+    row.innerHTML = `
+        <td></td>
+        <td class="small fw-bold text-muted">Componente</td>
+        <td class="small fw-bold text-muted">Qtd</td>
+        ${tipos.map(t => `
+            <td class="text-center small fw-bold bom-custo-header ${t === criterioSelecionado ? 'custo-destacado' : ''}">
+                ${getNomeCriterioAbrev(t)}
+            </td>
+        `).join('')}
+    `;
+    return row;
+}
+
+function criarLinhaComponenteBOM(codProduto, tipoValor, comp, criterioSelecionado) {
+    const row = document.createElement('tr');
+    row.className = 'detail-row bom-row bom-multi-custo';
     row.dataset.parent = codProduto;
     row.dataset.tipo = tipoValor;
 
@@ -312,36 +337,83 @@ function criarLinhaComponenteBOM(codProduto, tipoValor, comp) {
     const indent = '&nbsp;&nbsp;'.repeat(comp.nivel || 0);
     const prefixo = comp.nivel > 0 ? '└─' : '•';
 
+    // Tipos de custo
+    const tipos = ['medio_mes', 'ultimo_custo', 'medio_estoque', 'custo_considerado'];
+
+    // Criar células de custo
+    const celulasCusto = tipos.map(tipo => {
+        const custo = comp.custos?.[tipo] || {};
+        const unitario = custo.unitario;
+        const total = custo.total;
+        const eDestacado = tipo === criterioSelecionado;
+
+        return `
+            <td class="text-end small bom-custo-cell ${eDestacado ? 'custo-destacado' : ''}"
+                onclick="abrirModalDetalhesCusto('${comp.cod_produto}', '${tipo}')"
+                title="Clique para ver detalhes">
+                <div class="custo-unitario">${formatarMoedaCompacto(unitario)}</div>
+                <div class="custo-total text-muted">${formatarMoedaCompacto(total)}</div>
+            </td>
+        `;
+    }).join('');
+
     row.innerHTML = `
         <td></td>
-        <td class="ps-3 text-muted small">
-            ${indent}${prefixo} <code>${comp.cod_produto}</code>
+        <td class="ps-3 small">
+            ${indent}${prefixo} <code>${comp.cod_produto}</code> ${tipoBadge}
+            <div class="text-muted small">${comp.nome_produto || ''}</div>
         </td>
-        <td class="small">${comp.nome_produto || '-'}</td>
-        <td class="text-center">${tipoBadge}</td>
         <td class="text-end small">${formatarNumero(comp.qtd_utilizada, 4)}</td>
-        <td class="text-end small valor-custo">${formatarMoeda(comp.custo_unitario)}</td>
-        <td class="text-end small valor-custo fw-bold">${formatarMoeda(comp.custo_total)}</td>
+        ${celulasCusto}
     `;
 
     return row;
 }
 
-function criarLinhaTotalBOM(codProduto, tipoValor, custoTotal) {
+function criarLinhaTotalBOM(codProduto, tipoValor, totais, criterioSelecionado) {
     const row = document.createElement('tr');
     row.className = 'detail-row bom-total';
     row.dataset.parent = codProduto;
     row.dataset.tipo = tipoValor;
+
+    const tipos = ['medio_mes', 'ultimo_custo', 'medio_estoque', 'custo_considerado'];
+
+    const celulasTotais = tipos.map(tipo => {
+        const total = totais?.[tipo];
+        const eDestacado = tipo === criterioSelecionado;
+
+        return `
+            <td class="text-end small fw-bold bom-custo-cell ${eDestacado ? 'custo-destacado' : ''}">
+                ${formatarMoeda(total)}
+            </td>
+        `;
+    }).join('');
+
     row.innerHTML = `
         <td></td>
-        <td colspan="5" class="text-end small fw-bold text-muted pe-2">
-            Custo Total (${getNomeCriterio(tipoValor)}):
-        </td>
-        <td class="text-end valor-custo fw-bold custo-destacado">
-            ${formatarMoeda(custoTotal)}
-        </td>
+        <td class="text-end small fw-bold text-muted">TOTAL BOM:</td>
+        <td></td>
+        ${celulasTotais}
     `;
     return row;
+}
+
+function getNomeCriterioAbrev(tipoValor) {
+    switch (tipoValor) {
+        case 'medio_mes': return 'Méd.Mês';
+        case 'ultimo_custo': return 'Últ.Custo';
+        case 'medio_estoque': return 'Méd.Est.';
+        case 'custo_considerado': return 'Consid.';
+        default: return tipoValor;
+    }
+}
+
+function formatarMoedaCompacto(valor) {
+    if (valor === null || valor === undefined) return '-';
+    return Number(valor).toLocaleString('pt-BR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
 }
 
 function getNomeCriterio(tipoValor) {
@@ -544,6 +616,17 @@ function exportarDefinicao() {
     window.location.href = `/custeio/api/definicao/exportar?tipo=${tipo}`;
 }
 
+function exportarCustosDetalhados(codProduto = null) {
+    // Exporta custos detalhados com BOM recursivo
+    // Se codProduto for passado, exporta apenas aquele produto
+    // Senão, exporta todos ACABADOS/INTERMEDIARIOS
+    let url = '/custeio/api/definicao/exportar-detalhado';
+    if (codProduto) {
+        url += `?cod_produto=${codProduto}`;
+    }
+    window.location.href = url;
+}
+
 function baixarModelo() {
     window.location.href = '/custeio/api/definicao/modelo';
 }
@@ -595,4 +678,383 @@ function mostrarLoading(show) {
     if (overlay) {
         overlay.classList.toggle('show', show);
     }
+}
+
+// ==========================================================================
+// MODAL DE DETALHES DO CUSTO
+// ==========================================================================
+let modalDetalhesCustoInstance = null;
+let modalHistoricoAtivo = false;
+
+async function abrirModalDetalhesCusto(codProduto, tipoCusto) {
+    const modal = document.getElementById('modalDetalhesCusto');
+    if (!modal) {
+        console.error('Modal de detalhes não encontrado');
+        return;
+    }
+
+    if (!modalDetalhesCustoInstance) {
+        modalDetalhesCustoInstance = new bootstrap.Modal(modal);
+    }
+
+    const conteudo = document.getElementById('conteudo-modal-custo');
+    const titulo = document.getElementById('titulo-modal-custo');
+
+    // Loading
+    titulo.innerHTML = `<i class="bi bi-search me-2"></i>Carregando...`;
+    conteudo.innerHTML = `
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2 text-muted">Buscando detalhes do custo...</p>
+        </div>
+    `;
+    modalDetalhesCustoInstance.show();
+
+    // Reset histórico
+    modalHistoricoAtivo = false;
+
+    try {
+        const resp = await fetch(`/custeio/api/definicao/custo-detalhes/${codProduto}?tipo=${tipoCusto}`);
+        const dados = await resp.json();
+
+        if (!dados.sucesso) {
+            conteudo.innerHTML = `<div class="alert alert-danger">${dados.erro || 'Erro ao carregar dados'}</div>`;
+            return;
+        }
+
+        // Atualizar título
+        titulo.innerHTML = `
+            <i class="bi bi-search me-2"></i>
+            ${getNomeCriterio(tipoCusto)} - ${dados.cod_produto}
+        `;
+
+        // Renderizar baseado no tipo
+        if (tipoCusto === 'medio_mes' || tipoCusto === 'ultimo_custo') {
+            conteudo.innerHTML = renderizarModalPedidos(dados, tipoCusto, codProduto);
+        } else if (tipoCusto === 'medio_estoque') {
+            conteudo.innerHTML = renderizarModalEstoque(dados, codProduto);
+        } else if (tipoCusto === 'custo_considerado') {
+            conteudo.innerHTML = renderizarModalConsiderado(dados);
+        }
+
+    } catch (err) {
+        console.error(err);
+        conteudo.innerHTML = `<div class="alert alert-danger">Erro ao carregar dados: ${err.message}</div>`;
+    }
+}
+
+async function toggleHistorico(codProduto, tipoCusto) {
+    modalHistoricoAtivo = !modalHistoricoAtivo;
+    const btn = document.getElementById('btn-historico');
+    if (btn) {
+        btn.innerHTML = modalHistoricoAtivo
+            ? '<i class="bi bi-calendar-check me-1"></i>Ver Período'
+            : '<i class="bi bi-clock-history me-1"></i>Últimos 90 dias';
+    }
+
+    const conteudo = document.getElementById('conteudo-modal-custo');
+    conteudo.innerHTML = `
+        <div class="text-center py-3">
+            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+            <span class="ms-2">Atualizando...</span>
+        </div>
+    `;
+
+    try {
+        const resp = await fetch(`/custeio/api/definicao/custo-detalhes/${codProduto}?tipo=${tipoCusto}&historico=${modalHistoricoAtivo}`);
+        const dados = await resp.json();
+
+        if (tipoCusto === 'medio_mes' || tipoCusto === 'ultimo_custo') {
+            conteudo.innerHTML = renderizarModalPedidos(dados, tipoCusto, codProduto);
+        } else if (tipoCusto === 'medio_estoque') {
+            conteudo.innerHTML = renderizarModalEstoque(dados, codProduto);
+        }
+    } catch (err) {
+        conteudo.innerHTML = `<div class="alert alert-danger">Erro: ${err.message}</div>`;
+    }
+}
+
+function renderizarModalPedidos(dados, tipoCusto, codProduto) {
+    const { resumo, pedidos, periodo, nome_produto } = dados;
+
+    const periodoLabel = periodo?.historico
+        ? `${periodo.data_inicio} a ${periodo.data_fim}`
+        : `${String(periodo?.mes || '').padStart(2, '0')}/${periodo?.ano || ''}`;
+
+    let html = `
+        <div class="mb-3">
+            <h6 class="mb-1">${nome_produto || codProduto}</h6>
+            <small class="text-muted">Período: ${periodoLabel}</small>
+            <button class="btn btn-outline-secondary btn-sm ms-2" id="btn-historico"
+                    onclick="toggleHistorico('${codProduto}', '${tipoCusto}')">
+                <i class="bi bi-clock-history me-1"></i>${periodo?.historico ? 'Ver Período' : 'Últimos 90 dias'}
+            </button>
+        </div>
+
+        <!-- Resumo -->
+        <div class="card mb-3 card-resumo-custo">
+            <div class="card-body py-2">
+                <div class="row text-center">
+                    <div class="col">
+                        <div class="small text-muted">Pedidos</div>
+                        <div class="fw-bold">${resumo?.qtd_pedidos || 0}</div>
+                    </div>
+                    <div class="col">
+                        <div class="small text-muted">Qtd Comprada</div>
+                        <div class="fw-bold">${formatarNumero(resumo?.qtd_comprada, 3)}</div>
+                    </div>
+                    <div class="col">
+                        <div class="small text-muted">Valor Bruto</div>
+                        <div class="fw-bold">${formatarMoeda(resumo?.valor_bruto)}</div>
+                    </div>
+                    <div class="col">
+                        <div class="small text-muted">Impostos</div>
+                        <div class="fw-bold text-danger">${formatarMoeda((resumo?.icms || 0) + (resumo?.pis || 0) + (resumo?.cofins || 0))}</div>
+                    </div>
+                    <div class="col">
+                        <div class="small text-muted">Valor Líquido</div>
+                        <div class="fw-bold text-success">${formatarMoeda(resumo?.valor_liquido)}</div>
+                    </div>
+                    <div class="col">
+                        <div class="small text-muted">Custo Médio</div>
+                        <div class="fw-bold text-primary fs-5">${formatarMoeda(resumo?.custo_medio)}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    if (pedidos && pedidos.length > 0) {
+        html += `
+            <div class="table-responsive">
+                <table class="table table-sm table-hover tabela-pedidos-compra">
+                    <thead>
+                        <tr>
+                            <th>Pedido</th>
+                            <th>Fornecedor</th>
+                            <th>Data</th>
+                            <th>NF</th>
+                            <th class="text-end">Qtd</th>
+                            <th class="text-end">Preço Unit.</th>
+                            <th class="text-end">Bruto</th>
+                            <th class="text-end">ICMS</th>
+                            <th class="text-end">PIS</th>
+                            <th class="text-end">COFINS</th>
+                            <th class="text-end">Líquido</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${pedidos.map(p => `
+                            <tr>
+                                <td><code>${p.num_pedido || '-'}</code></td>
+                                <td class="text-truncate" style="max-width: 150px;" title="${p.fornecedor}">${p.fornecedor || '-'}</td>
+                                <td>${p.data || '-'}</td>
+                                <td>${p.numero_nf || '-'}</td>
+                                <td class="text-end">${formatarNumero(p.qtd_recebida, 3)}</td>
+                                <td class="text-end">${formatarMoeda(p.preco_unitario)}</td>
+                                <td class="text-end">${formatarMoeda(p.valor_bruto)}</td>
+                                <td class="text-end text-danger">${formatarMoeda(p.icms)}</td>
+                                <td class="text-end text-danger">${formatarMoeda(p.pis)}</td>
+                                <td class="text-end text-danger">${formatarMoeda(p.cofins)}</td>
+                                <td class="text-end text-success fw-bold">${formatarMoeda(p.valor_liquido)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    } else {
+        html += `<div class="alert alert-info">Nenhum pedido de compra encontrado no período.</div>`;
+    }
+
+    return html;
+}
+
+function renderizarModalEstoque(dados, codProduto) {
+    const { estoque_inicial, compras, estoque_final, formula, pedidos, periodo, nome_produto } = dados;
+
+    let html = `
+        <div class="mb-3">
+            <h6 class="mb-1">${nome_produto || codProduto}</h6>
+            <small class="text-muted">Período: ${String(periodo?.mes || '').padStart(2, '0')}/${periodo?.ano || ''}</small>
+            <button class="btn btn-outline-secondary btn-sm ms-2" id="btn-historico"
+                    onclick="toggleHistorico('${codProduto}', 'medio_estoque')">
+                <i class="bi bi-clock-history me-1"></i>${periodo?.historico ? 'Ver Período' : 'Últimos 90 dias'}
+            </button>
+        </div>
+
+        <!-- Cards de Estoque -->
+        <div class="row g-3 mb-3">
+            <div class="col-md-4">
+                <div class="card-estoque h-100">
+                    <div class="card-header-themed header-secondary">
+                        <small>Estoque Inicial</small>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">Quantidade:</span>
+                            <span class="fw-bold">${formatarNumero(estoque_inicial?.qtd, 3)}</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">Valor Total:</span>
+                            <span class="fw-bold">${formatarMoeda(estoque_inicial?.valor)}</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">Custo Unit.:</span>
+                            <span class="fw-bold text-primary">${formatarMoeda(estoque_inicial?.custo_unitario)}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card-estoque h-100">
+                    <div class="card-header-themed header-info">
+                        <small>Compras no Período (${compras?.qtd_pedidos || 0} pedidos)</small>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">Quantidade:</span>
+                            <span class="fw-bold">${formatarNumero(compras?.qtd, 3)}</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">Valor Líquido:</span>
+                            <span class="fw-bold text-success">${formatarMoeda(compras?.valor_liquido)}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card-estoque h-100">
+                    <div class="card-header-themed header-success">
+                        <small>Estoque Final</small>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">Quantidade:</span>
+                            <span class="fw-bold">${formatarNumero(estoque_final?.qtd, 3)}</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">Valor Total:</span>
+                            <span class="fw-bold">${formatarMoeda(estoque_final?.valor)}</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">Custo Médio:</span>
+                            <span class="fw-bold text-success fs-5">${formatarMoeda(estoque_final?.custo_medio)}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Fórmula -->
+        <div class="formula-custo mb-3">
+            <i class="bi bi-calculator me-2"></i>
+            <strong>Fórmula:</strong> ${formula || '-'}
+        </div>
+    `;
+
+    if (pedidos && pedidos.length > 0) {
+        html += `
+            <h6 class="mb-2">Pedidos de Compra no Período</h6>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover">
+                    <thead>
+                        <tr>
+                            <th>Pedido</th>
+                            <th>Fornecedor</th>
+                            <th>Data</th>
+                            <th class="text-end">Qtd</th>
+                            <th class="text-end">Valor Líquido</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${pedidos.map(p => `
+                            <tr>
+                                <td><code>${p.num_pedido || '-'}</code></td>
+                                <td>${p.fornecedor || '-'}</td>
+                                <td>${p.data || '-'}</td>
+                                <td class="text-end">${formatarNumero(p.qtd_recebida, 3)}</td>
+                                <td class="text-end text-success">${formatarMoeda(p.valor_liquido)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    return html;
+}
+
+function renderizarModalConsiderado(dados) {
+    const { atual, historico, nome_produto, cod_produto } = dados;
+
+    let html = `
+        <div class="mb-3">
+            <h6 class="mb-1">${nome_produto || cod_produto}</h6>
+        </div>
+    `;
+
+    if (atual) {
+        html += `
+            <div class="card-estoque mb-3">
+                <div class="card-header-themed header-success">
+                    <small>Custo Atual</small>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4 text-center">
+                            <div class="text-muted small">Valor</div>
+                            <div class="fs-3 fw-bold text-success">${formatarMoeda(atual.valor)}</div>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <div class="text-muted small">Tipo Base</div>
+                            <div class="fw-bold">${atual.tipo_base || '-'}</div>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <div class="text-muted small">Atualizado</div>
+                            <div class="small">${atual.atualizado_em || '-'}</div>
+                            <div class="small text-muted">por ${atual.atualizado_por || 'Sistema'}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    if (historico && historico.length > 0) {
+        html += `
+            <h6 class="mb-2">Histórico de Versões</h6>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover">
+                    <thead>
+                        <tr>
+                            <th>Versão</th>
+                            <th class="text-end">Custo</th>
+                            <th>Tipo</th>
+                            <th>Vigência Início</th>
+                            <th>Vigência Fim</th>
+                            <th>Motivo</th>
+                            <th>Por</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${historico.map(v => `
+                            <tr class="${v.atual ? 'table-row-success' : ''}">
+                                <td>${v.versao}${v.atual ? ' <span class="badge bg-success">Atual</span>' : ''}</td>
+                                <td class="text-end fw-bold">${formatarMoeda(v.custo_considerado)}</td>
+                                <td><span class="badge bg-secondary">${v.tipo_selecionado || '-'}</span></td>
+                                <td class="small">${v.vigencia_inicio || '-'}</td>
+                                <td class="small">${v.vigencia_fim || '-'}</td>
+                                <td class="small text-truncate" style="max-width: 150px;" title="${v.motivo || ''}">${v.motivo || '-'}</td>
+                                <td class="small">${v.atualizado_por || '-'}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    return html;
 }

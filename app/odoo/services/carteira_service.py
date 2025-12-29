@@ -1231,9 +1231,12 @@ class CarteiraService:
             custo_producao = float(custo_producao) if custo_producao else 0.0
 
             # ============================================
-            # CUSTO TOTAL COM PERDA
+            # CUSTOS COM PERDA (separados)
+            # Material entra na margem bruta
+            # Producao entra apenas na margem liquida
             # ============================================
-            custo_total_com_perda = (custo_unitario + custo_producao) * (1 + percentual_perda / 100)
+            custo_material_com_perda = custo_unitario * (1 + percentual_perda / 100)
+            custo_producao_com_perda = custo_producao * (1 + percentual_perda / 100) if custo_producao else 0.0
 
             # ============================================
             # IMPOSTOS POR UNIDADE
@@ -1272,8 +1275,9 @@ class CarteiraService:
                 # ============================================
                 # MARGEM BRUTA PARA BONIFICACAO
                 # NAO inclui: comissao, desconto contratual, PIS/COFINS
+                # Custo producao entra apenas na margem liquida
                 # ============================================
-                margem_bruta = -custo_total_com_perda - icms_unit - custo_financeiro_valor - frete_valor
+                margem_bruta = -custo_material_com_perda - icms_unit - custo_financeiro_valor - frete_valor
 
                 # Comissao zerada para bonificacao
                 comissao_percentual = 0.0
@@ -1306,9 +1310,10 @@ class CarteiraService:
 
                 # ============================================
                 # MARGEM BRUTA NORMAL
+                # Custo producao entra apenas na margem liquida
                 # ============================================
                 margem_bruta = (preco - icms_unit - pis_unit - cofins_unit -
-                               custo_total_com_perda - desconto_valor -
+                               custo_material_com_perda - desconto_valor -
                                frete_valor - custo_financeiro_valor - comissao_valor)
 
             margem_bruta_percentual = (margem_bruta / preco * 100) if preco > 0 else 0.0
@@ -1320,8 +1325,9 @@ class CarteiraService:
 
             # ============================================
             # MARGEM LIQUIDA (mesma formula para ambos)
+            # Inclui custo de producao com perda
             # ============================================
-            margem_liquida = margem_bruta - custo_operacao_valor
+            margem_liquida = margem_bruta - custo_operacao_valor - custo_producao_com_perda
             margem_liquida_percentual = (margem_liquida / preco * 100) if preco > 0 else 0.0
 
             resultado = {

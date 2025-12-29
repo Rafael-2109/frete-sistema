@@ -37,12 +37,6 @@ def register_custeio_routes(bp):
         """Tela de Custo de Producao"""
         return render_template('custeio/producao.html')
 
-    @bp.route('/composicao') #type: ignore
-    @login_required
-    def tela_composicao():
-        """Tela de Composicao de Custo via BOM"""
-        return render_template('custeio/composicao.html')
-
     @bp.route('/definicao') #type: ignore
     @login_required
     def tela_definicao():
@@ -114,7 +108,6 @@ def register_custeio_routes(bp):
     def listar_custos_mensais():
         """Lista custos mensais com filtros e estatísticas"""
         try:
-            from app.custeio.models import CustoMensal
 
             mes = request.args.get('mes', type=int)
             ano = request.args.get('ano', type=int)
@@ -1458,7 +1451,6 @@ def register_custeio_routes(bp):
         """Importa custos de producao de arquivo Excel"""
         try:
             import pandas as pd
-            from app import db
 
             if 'arquivo' not in request.files:
                 return jsonify({'erro': 'Nenhum arquivo enviado'}), 400
@@ -1536,240 +1528,19 @@ def register_custeio_routes(bp):
             return jsonify({'erro': str(e)}), 500
 
     # ================================================
-    # API - COMPOSICAO DE CUSTO (BOM)
-    # ================================================
-
-    @bp.route('/api/composicao/listar') #type: ignore
-    @login_required
-    def listar_composicao():
-        """Lista produtos com composicao de custo via BOM"""
-        try:
-            from app.producao.models import CadastroPalletizacao
-            from app.manufatura.models import ListaMateriais
-            from app.custeio.models import CustoConsiderado
-
-            filtro_tipo = request.args.get('tipo')  # 'produzido' ou 'comprado'
-            termo = request.args.get('termo', '')
-
-            # Buscar produtos - priorizar produzidos (que têm BOM)
-            query = CadastroPalletizacao.query.filter(
-                CadastroPalletizacao.ativo == True
-            )
-
-            if filtro_tipo == 'produzido':
-                query = query.filter(CadastroPalletizacao.produto_produzido == True)
-            elif filtro_tipo == 'comprado':
-                query = query.filter(CadastroPalletizacao.produto_comprado == True)
-            else:
-                # Sem filtro: priorizar produtos produzidos (que têm BOM)
-                query = query.filter(CadastroPalletizacao.produto_produzido == True)
-
-            if termo:
-                query = query.filter(
-                    (CadastroPalletizacao.cod_produto.ilike(f'%{termo}%')) |
-                    (CadastroPalletizacao.nome_produto.ilike(f'%{termo}%'))
-                )
-
-            produtos = query.order_by(CadastroPalletizacao.cod_produto).all()
-
-            # Buscar custos
-            custos = {}
-            for c in CustoConsiderado.query.filter_by(custo_atual=True).all():
-                custos[c.cod_produto] = float(c.custo_considerado) if c.custo_considerado else None
-
-            # Buscar BOM
-            bom_dict = {}
-            for bom in ListaMateriais.query.filter_by(status='ativo').all():
-                if bom.cod_produto_produzido not in bom_dict:
-                    bom_dict[bom.cod_produto_produzido] = []
-                bom_dict[bom.cod_produto_produzido].append({
-                    'cod_componente': bom.cod_produto_componente,
-                    'nome_componente': bom.nome_produto_componente,
-                    'qtd_utilizada': float(bom.qtd_utilizada) if bom.qtd_utilizada else 0,
-                    'custo_componente': custos.get(bom.cod_produto_componente)
-                })
-
-            dados = []
-            for p in produtos:
-                tipo = 'COMPRADO' if p.produto_comprado else ('INTERMEDIARIO' if p.produto_produzido and not p.produto_vendido else 'ACABADO')
-                componentes = bom_dict.get(p.cod_produto, [])
-
-                # Calcular custo BOM
-                custo_bom = 0
-                for comp in componentes:
-                    if comp['custo_componente']:
-                        custo_bom += comp['qtd_utilizada'] * comp['custo_componente']
-
-                dados.append({
-                    'cod_produto': p.cod_produto,
-                    'nome_produto': p.nome_produto,
-                    'tipo': tipo,
-                    'custo_considerado': custos.get(p.cod_produto),
-                    'custo_bom': custo_bom if componentes else None,
-                    'componentes': componentes,
-                    'tem_bom': len(componentes) > 0
-                })
-
-            return jsonify({
-                'sucesso': True,
-                'dados': dados,
-                'total': len(dados)
-            })
-
-        except Exception as e:
-            logger.error(f"Erro ao listar composicao: {e}")
-            return jsonify({'erro': str(e)}), 500
-
-    @bp.route('/api/composicao/detalhe/<cod_produto>') #type: ignore
-    @login_required
-    def detalhe_composicao(cod_produto):
-        """Retorna composicao detalhada de um produto (BOM expandida)"""
-        try:
-            from app.manufatura.models import ListaMateriais
-            from app.custeio.models import CustoConsiderado
-
-            # Buscar custos
-            custos = {}
-            for c in CustoConsiderado.query.filter_by(custo_atual=True).all():
-                custos[c.cod_produto] = float(c.custo_considerado) if c.custo_considerado else None
-
-            # Buscar produtos que tem BOM (intermediarios)
-            produtos_com_bom = set(
-                bom.cod_produto_produzido for bom in
-                ListaMateriais.query.filter_by(status='ativo').with_entities(ListaMateriais.cod_produto_produzido).distinct()
-            )
-
-            def expandir_bom(cod, nivel=0, visitados=None):
-                if visitados is None:
-                    visitados = set()
-
-                if cod in visitados or nivel > 5:  # Evitar recursao infinita
-                    return []
-
-                visitados.add(cod)
-
-                componentes = ListaMateriais.query.filter_by(
-                    cod_produto_produzido=cod,
-                    status='ativo'
-                ).all()
-
-                resultado = []
-                for comp in componentes:
-                    custo_unit = custos.get(comp.cod_produto_componente)
-                    qtd = float(comp.qtd_utilizada) if comp.qtd_utilizada else 0
-                    custo_total = (custo_unit * qtd) if custo_unit else None
-
-                    # Determinar tipo: INTERMEDIARIO se tem BOM, senao COMPRADO
-                    tipo_comp = 'INTERMEDIARIO' if comp.cod_produto_componente in produtos_com_bom else 'COMPRADO'
-
-                    item = {
-                        'nivel': nivel,
-                        'cod_produto': comp.cod_produto_componente,
-                        'nome_produto': comp.nome_produto_componente,
-                        'qtd_utilizada': qtd,
-                        'custo_unitario': custo_unit,
-                        'custo_total': custo_total,
-                        'tipo': tipo_comp
-                    }
-                    resultado.append(item)
-
-                    # Expandir sub-componentes
-                    sub = expandir_bom(comp.cod_produto_componente, nivel + 1, visitados.copy())
-                    resultado.extend(sub)
-
-                return resultado
-
-            composicao = expandir_bom(cod_produto)
-
-            # Calcular custo total
-            custo_total = sum(c['custo_total'] or 0 for c in composicao if c['nivel'] == 0)
-
-            return jsonify({
-                'sucesso': True,
-                'cod_produto': cod_produto,
-                'composicao': composicao,
-                'custo_total_bom': custo_total
-            })
-
-        except Exception as e:
-            logger.error(f"Erro ao buscar composicao: {e}")
-            return jsonify({'erro': str(e)}), 500
-
-    @bp.route('/api/composicao/exportar') #type: ignore
-    @login_required
-    def exportar_composicao():
-        """Exporta composicao de custo para Excel"""
-        try:
-            import pandas as pd
-            from app.producao.models import CadastroPalletizacao
-            from app.manufatura.models import ListaMateriais
-            from app.custeio.models import CustoConsiderado
-
-            produtos = CadastroPalletizacao.query.filter(
-                CadastroPalletizacao.ativo == True
-            ).order_by(CadastroPalletizacao.cod_produto).all()
-
-            custos = {}
-            for c in CustoConsiderado.query.filter_by(custo_atual=True).all():
-                custos[c.cod_produto] = float(c.custo_considerado) if c.custo_considerado else 0
-
-            bom_dict = {}
-            for bom in ListaMateriais.query.filter_by(status='ativo').all():
-                if bom.cod_produto_produzido not in bom_dict:
-                    bom_dict[bom.cod_produto_produzido] = []
-                bom_dict[bom.cod_produto_produzido].append(bom)
-
-            dados_excel = []
-            for p in produtos:
-                tipo = 'COMPRADO' if p.produto_comprado else ('INTERMEDIARIO' if p.produto_produzido and not p.produto_vendido else 'ACABADO')
-                componentes = bom_dict.get(p.cod_produto, [])
-
-                custo_bom = 0
-                for comp in componentes:
-                    custo_comp = custos.get(comp.cod_produto_componente, 0)
-                    qtd = float(comp.qtd_utilizada) if comp.qtd_utilizada else 0
-                    custo_bom += custo_comp * qtd
-
-                dados_excel.append({
-                    'Codigo': p.cod_produto,
-                    'Nome': p.nome_produto,
-                    'Tipo': tipo,
-                    'Custo Considerado': custos.get(p.cod_produto, 0),
-                    'Custo BOM': custo_bom if componentes else '',
-                    'Qtd Componentes': len(componentes)
-                })
-
-            df = pd.DataFrame(dados_excel)
-            output = BytesIO()
-
-            with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                df.to_excel(writer, index=False, sheet_name='Composicao Custo')
-
-            output.seek(0)
-
-            return send_file(
-                output,
-                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                as_attachment=True,
-                download_name='composicao_custo.xlsx'
-            )
-
-        except Exception as e:
-            logger.error(f"Erro ao exportar composicao: {e}")
-            return jsonify({'erro': str(e)}), 500
-
-    # ================================================
     # API - DEFINICAO DE CUSTO CONSIDERADO
     # ================================================
 
     @bp.route('/api/definicao/listar') #type: ignore
     @login_required
     def listar_definicao():
-        """Lista produtos com custos para definicao (calcula BOM para produzidos)"""
+        """Lista produtos com custos para definicao (calcula dinamicamente para comprados, BOM para produzidos)"""
         try:
             from app.producao.models import CadastroPalletizacao
             from app.custeio.models import CustoConsiderado
             from app.manufatura.models import ListaMateriais
+            from app.custeio.services.custeio_service import ServicoCusteio
+            from datetime import date
 
             filtro_tipo = request.args.get('tipo')
             termo = request.args.get('termo', '')
@@ -1791,15 +1562,40 @@ def register_custeio_routes(bp):
 
             produtos = query.order_by(CadastroPalletizacao.cod_produto).all()
 
-            # Buscar custos diretos
-            custos_dict = {}
+            # Determinar periodo de referencia (mes atual)
+            hoje = date.today()
+            mes_ref = hoje.month
+            ano_ref = hoje.year
+
+            # Buscar custo_considerado (definido manualmente) e tipo_custo do banco
+            custos_considerados_dict = {}
             for c in CustoConsiderado.query.filter_by(custo_atual=True).all():
-                custos_dict[c.cod_produto] = {
+                custos_considerados_dict[c.cod_produto] = {
                     'custo_considerado': float(c.custo_considerado) if c.custo_considerado else None,
-                    'custo_medio_mes': float(c.custo_medio_mes) if c.custo_medio_mes else None,
-                    'ultimo_custo': float(c.ultimo_custo) if c.ultimo_custo else None,
-                    'custo_medio_estoque': float(c.custo_medio_estoque) if c.custo_medio_estoque else None,
-                    'tipo_custo': c.tipo_custo_selecionado
+                    'tipo_custo': c.tipo_custo_selecionado,
+                    'ultimo_mes_fechado': c.ultimo_mes_fechado,
+                    'ultimo_ano_fechado': c.ultimo_ano_fechado
+                }
+
+            # Identificar produtos comprados para calculo dinamico
+            produtos_comprados = set(
+                p.cod_produto for p in produtos if p.produto_comprado
+            )
+
+            # Cache de custos calculados dinamicamente para COMPRADOS
+            custos_dinamicos_dict = {}
+            for cod_produto in produtos_comprados:
+                # Determinar periodo baseado no ultimo fechamento ou mes atual
+                custo_info = custos_considerados_dict.get(cod_produto, {})
+                mes_calc = custo_info.get('ultimo_mes_fechado') or mes_ref
+                ano_calc = custo_info.get('ultimo_ano_fechado') or ano_ref
+
+                # Calcular dinamicamente usando o servico (mesma logica do modal)
+                custos_calc = ServicoCusteio.calcular_custo_comprados(cod_produto, mes_calc, ano_calc)
+                custos_dinamicos_dict[cod_produto] = {
+                    'custo_medio_mes': custos_calc.get('custo_liquido_medio'),
+                    'ultimo_custo': custos_calc.get('ultimo_custo'),
+                    'custo_medio_estoque': custos_calc.get('custo_medio_estoque')
                 }
 
             # Identificar produtos com BOM (são produzidos)
@@ -1819,17 +1615,19 @@ def register_custeio_routes(bp):
                 })
 
             def calcular_custo_bom(cod, campo_custo, visitados=None):
-                """Calcula custo de um produto via BOM recursivamente"""
+                """Calcula custo de um produto via BOM recursivamente usando custos dinamicos"""
                 if visitados is None:
                     visitados = set()
 
                 if cod in visitados:
                     return None  # Evitar loop infinito
 
-                # Se não tem BOM, usar custo direto
+                # Se nao tem BOM (folha = COMPRADO), usar custo dinamico ou considerado
                 if cod not in produtos_com_bom:
-                    custo_info = custos_dict.get(cod, {})
-                    return custo_info.get(campo_custo)
+                    if campo_custo == 'custo_considerado':
+                        return custos_considerados_dict.get(cod, {}).get('custo_considerado')
+                    else:
+                        return custos_dinamicos_dict.get(cod, {}).get(campo_custo)
 
                 # Tem BOM - calcular recursivamente
                 visitados.add(cod)
@@ -1846,27 +1644,31 @@ def register_custeio_routes(bp):
             dados = []
             for p in produtos:
                 tipo = 'COMPRADO' if p.produto_comprado else ('INTERMEDIARIO' if p.produto_produzido and not p.produto_vendido else 'ACABADO')
-                custo = custos_dict.get(p.cod_produto, {})
+                custo_considerado_info = custos_considerados_dict.get(p.cod_produto, {})
+                custo_dinamico_info = custos_dinamicos_dict.get(p.cod_produto, {})
 
-                # Para produtos produzidos, calcular custos via BOM
+                # Para produtos produzidos, calcular TODOS os custos via BOM (incluindo custo_considerado)
                 if tipo in ('INTERMEDIARIO', 'ACABADO'):
                     custo_medio_mes = calcular_custo_bom(p.cod_produto, 'custo_medio_mes')
                     ultimo_custo = calcular_custo_bom(p.cod_produto, 'ultimo_custo')
                     custo_medio_estoque = calcular_custo_bom(p.cod_produto, 'custo_medio_estoque')
+                    custo_considerado = calcular_custo_bom(p.cod_produto, 'custo_considerado')
                 else:
-                    custo_medio_mes = custo.get('custo_medio_mes')
-                    ultimo_custo = custo.get('ultimo_custo')
-                    custo_medio_estoque = custo.get('custo_medio_estoque')
+                    # COMPRADO: usar custos calculados dinamicamente + custo_considerado do banco
+                    custo_medio_mes = custo_dinamico_info.get('custo_medio_mes')
+                    ultimo_custo = custo_dinamico_info.get('ultimo_custo')
+                    custo_medio_estoque = custo_dinamico_info.get('custo_medio_estoque')
+                    custo_considerado = custo_considerado_info.get('custo_considerado')
 
                 dados.append({
                     'cod_produto': p.cod_produto,
                     'nome_produto': p.nome_produto,
                     'tipo': tipo,
-                    'custo_considerado': custo.get('custo_considerado'),
+                    'custo_considerado': custo_considerado,
                     'custo_medio_mes': custo_medio_mes,
                     'ultimo_custo': ultimo_custo,
                     'custo_medio_estoque': custo_medio_estoque,
-                    'tipo_custo': custo.get('tipo_custo')
+                    'tipo_custo': custo_considerado_info.get('tipo_custo')
                 })
 
             return jsonify({
@@ -1882,31 +1684,59 @@ def register_custeio_routes(bp):
     @bp.route('/api/definicao/bom/<cod_produto>') #type: ignore
     @login_required
     def detalhe_bom_por_criterio(cod_produto):
-        """Retorna composição BOM com custos calculados recursivamente por critério"""
+        """
+        Retorna composição BOM com TODOS os 4 tipos de custo para cada componente.
+        O parâmetro 'criterio' indica qual custo deve ser destacado visualmente.
+        Custos sao calculados dinamicamente para garantir consistencia com o modal.
+        """
         try:
             from app.manufatura.models import ListaMateriais
             from app.custeio.models import CustoConsiderado
+            from app.custeio.services.custeio_service import ServicoCusteio
             from app.producao.models import CadastroPalletizacao
+            from datetime import date
 
-            criterio = request.args.get('criterio', 'medio_mes')
+            criterio_selecionado = request.args.get('criterio', 'custo_considerado')
 
-            # Mapear critério para campo
-            campo_custo = {
-                'medio_mes': 'custo_medio_mes',
-                'ultimo_custo': 'ultimo_custo',
-                'medio_estoque': 'custo_medio_estoque',
-                'custo_considerado': 'custo_considerado'
-            }.get(criterio, 'custo_medio_mes')
+            # Lista de todos os tipos de custo
+            TIPOS_CUSTO = ['custo_medio_mes', 'ultimo_custo', 'custo_medio_estoque', 'custo_considerado']
 
-            # Buscar todos os custos
-            custos_dict = {}
+            # Determinar periodo de referencia
+            hoje = date.today()
+            mes_ref = hoje.month
+            ano_ref = hoje.year
+
+            # Buscar custo_considerado do banco (e definido manualmente)
+            custos_considerados_dict = {}
             for c in CustoConsiderado.query.filter_by(custo_atual=True).all():
-                custos_dict[c.cod_produto] = {
-                    'custo_medio_mes': float(c.custo_medio_mes) if c.custo_medio_mes else None,
-                    'ultimo_custo': float(c.ultimo_custo) if c.ultimo_custo else None,
-                    'custo_medio_estoque': float(c.custo_medio_estoque) if c.custo_medio_estoque else None,
-                    'custo_considerado': float(c.custo_considerado) if c.custo_considerado else None
+                custos_considerados_dict[c.cod_produto] = {
+                    'custo_considerado': float(c.custo_considerado) if c.custo_considerado else None,
+                    'ultimo_mes_fechado': c.ultimo_mes_fechado,
+                    'ultimo_ano_fechado': c.ultimo_ano_fechado
                 }
+
+            # Identificar produtos comprados
+            produtos_comprados = set(
+                p.cod_produto for p in
+                CadastroPalletizacao.query.filter_by(ativo=True, produto_comprado=True).all()
+            )
+
+            # Cache de custos dinamicos para COMPRADOS
+            custos_dinamicos_dict = {}
+            def obter_custo_dinamico(cod):
+                """Obtem custos calculados dinamicamente para um COMPRADO"""
+                if cod not in custos_dinamicos_dict and cod in produtos_comprados:
+                    custo_info = custos_considerados_dict.get(cod, {})
+                    mes_calc = custo_info.get('ultimo_mes_fechado') or mes_ref
+                    ano_calc = custo_info.get('ultimo_ano_fechado') or ano_ref
+                    custos_calc = ServicoCusteio.calcular_custo_comprados(cod, mes_calc, ano_calc)
+                    custos_dinamicos_dict[cod] = {
+                        'custo_medio_mes': custos_calc.get('custo_liquido_medio'),
+                        'ultimo_custo': custos_calc.get('ultimo_custo'),
+                        'custo_medio_estoque': custos_calc.get('custo_medio_estoque'),
+                        'custo_considerado': custos_considerados_dict.get(cod, {}).get('custo_considerado')
+                    }
+                return custos_dinamicos_dict.get(cod, {})
 
             # Buscar produtos com BOM (são intermediários)
             produtos_com_bom = set(
@@ -1915,19 +1745,18 @@ def register_custeio_routes(bp):
             )
 
             def calcular_custo_recursivo(cod, criterio_campo, visitados=None):
-                """Calcula custo de um produto recursivamente via BOM"""
+                """Calcula custo de um produto recursivamente via BOM usando custos dinamicos"""
                 if visitados is None:
                     visitados = set()
 
                 if cod in visitados:
-                    return None  # Evitar loop infinito
+                    return None
 
-                # Se é produto comprado ou não tem BOM, usar custo direto
+                # Se nao tem BOM (folha = COMPRADO), usar custo dinamico
                 if cod not in produtos_com_bom:
-                    custo_info = custos_dict.get(cod, {})
+                    custo_info = obter_custo_dinamico(cod)
                     return custo_info.get(criterio_campo)
 
-                # É intermediário - calcular via BOM
                 visitados.add(cod)
                 componentes = ListaMateriais.query.filter_by(
                     cod_produto_produzido=cod,
@@ -1943,8 +1772,35 @@ def register_custeio_routes(bp):
 
                 return custo_total if custo_total > 0 else None
 
-            def expandir_bom(cod, criterio_campo, nivel=0, visitados=None):
-                """Expande BOM e retorna componentes com custos calculados"""
+            def calcular_todos_custos(cod_comp, qtd, e_intermediario):
+                """Calcula todos os 4 tipos de custo para um componente usando custos dinamicos"""
+                custos = {}
+                for tipo in TIPOS_CUSTO:
+                    if e_intermediario:
+                        custo_unit = calcular_custo_recursivo(cod_comp, tipo, set())
+                    else:
+                        # COMPRADO: usar custo dinamico calculado
+                        custo_info = obter_custo_dinamico(cod_comp)
+                        custo_unit = custo_info.get(tipo)
+
+                    custo_total = (custo_unit * qtd) if custo_unit else None
+
+                    # Mapear nome interno para nome da API
+                    nome_api = {
+                        'custo_medio_mes': 'medio_mes',
+                        'ultimo_custo': 'ultimo_custo',
+                        'custo_medio_estoque': 'medio_estoque',
+                        'custo_considerado': 'custo_considerado'
+                    }.get(tipo, tipo)
+
+                    custos[nome_api] = {
+                        'unitario': round(custo_unit, 4) if custo_unit else None,
+                        'total': round(custo_total, 4) if custo_total else None
+                    }
+                return custos
+
+            def expandir_bom_completo(cod, nivel=0, visitados=None):
+                """Expande BOM e retorna componentes com TODOS os custos calculados"""
                 if visitados is None:
                     visitados = set()
 
@@ -1962,53 +1818,327 @@ def register_custeio_routes(bp):
                 for comp in componentes:
                     cod_comp = comp.cod_produto_componente
                     qtd = float(comp.qtd_utilizada) if comp.qtd_utilizada else 0
-
-                    # Determinar tipo e calcular custo
                     e_intermediario = cod_comp in produtos_com_bom
 
-                    if e_intermediario:
-                        # Calcular custo recursivamente
-                        custo_unit = calcular_custo_recursivo(cod_comp, criterio_campo, set())
-                    else:
-                        # Usar custo direto
-                        custo_info = custos_dict.get(cod_comp, {})
-                        custo_unit = custo_info.get(criterio_campo)
-
-                    custo_total = (custo_unit * qtd) if custo_unit else None
+                    # Calcular TODOS os 4 custos
+                    custos = calcular_todos_custos(cod_comp, qtd, e_intermediario)
 
                     item = {
                         'nivel': nivel,
                         'cod_produto': cod_comp,
                         'nome_produto': comp.nome_produto_componente,
                         'qtd_utilizada': qtd,
-                        'custo_unitario': custo_unit,
-                        'custo_total': custo_total,
-                        'tipo': 'INTERMEDIARIO' if e_intermediario else 'COMPRADO'
+                        'tipo': 'INTERMEDIARIO' if e_intermediario else 'COMPRADO',
+                        'custos': custos
                     }
                     resultado.append(item)
 
-                    # Expandir sub-componentes se for intermediário
                     if e_intermediario:
-                        sub = expandir_bom(cod_comp, criterio_campo, nivel + 1, visitados.copy())
+                        sub = expandir_bom_completo(cod_comp, nivel + 1, visitados.copy())
                         resultado.extend(sub)
 
                 return resultado
 
-            composicao = expandir_bom(cod_produto, campo_custo)
+            composicao = expandir_bom_completo(cod_produto)
 
-            # Calcular custo total (apenas nível 0)
-            custo_total = sum(c['custo_total'] or 0 for c in composicao if c['nivel'] == 0)
+            # Calcular totais para cada tipo de custo (apenas nível 0)
+            totais = {}
+            for tipo_api in ['medio_mes', 'ultimo_custo', 'medio_estoque', 'custo_considerado']:
+                total = sum(
+                    (c['custos'].get(tipo_api, {}).get('total') or 0)
+                    for c in composicao if c['nivel'] == 0
+                )
+                totais[tipo_api] = round(total, 4) if total > 0 else None
 
             return jsonify({
                 'sucesso': True,
                 'cod_produto': cod_produto,
-                'criterio': criterio,
+                'criterio_selecionado': criterio_selecionado,
                 'componentes': composicao,
-                'custo_total': custo_total
+                'totais': totais
             })
 
         except Exception as e:
             logger.error(f"Erro ao buscar BOM por criterio: {e}")
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/api/definicao/custo-detalhes/<cod_produto>') #type: ignore
+    @login_required
+    def detalhe_custo_produto(cod_produto):
+        """
+        Retorna detalhes da fonte de um custo para drill-down no modal.
+
+        Parâmetros:
+            tipo: medio_mes | ultimo_custo | medio_estoque | custo_considerado
+            historico: true para buscar últimos 90 dias (opcional)
+
+        Retorna dados específicos conforme o tipo:
+        - medio_mes/ultimo_custo: Lista de pedidos de compra
+        - medio_estoque: Estoque inicial + compras + fórmula
+        - custo_considerado: Valor atual + histórico de versões
+        """
+        try:
+            from app import db
+            from app.manufatura.models import PedidoCompras
+            from app.custeio.models import CustoConsiderado, CustoMensal
+            from app.producao.models import CadastroPalletizacao
+            from datetime import date, timedelta
+
+            tipo = request.args.get('tipo', 'medio_mes')
+            mostrar_historico = request.args.get('historico', 'false').lower() == 'true'
+
+            # Buscar produto
+            produto = CadastroPalletizacao.query.filter_by(cod_produto=cod_produto).first()
+            nome_produto = produto.nome_produto if produto else cod_produto
+
+            # Buscar custo atual para determinar período de referência
+            custo_atual = CustoConsiderado.query.filter_by(
+                cod_produto=cod_produto,
+                custo_atual=True
+            ).first()
+
+            # Determinar período
+            hoje = date.today()
+            if custo_atual and custo_atual.ultimo_mes_fechado and custo_atual.ultimo_ano_fechado:
+                mes_ref = custo_atual.ultimo_mes_fechado
+                ano_ref = custo_atual.ultimo_ano_fechado
+            else:
+                mes_ref = hoje.month
+                ano_ref = hoje.year
+
+            # Calcular datas do período
+            data_inicio_periodo = date(ano_ref, mes_ref, 1)
+            if mes_ref == 12:
+                data_fim_periodo = date(ano_ref + 1, 1, 1)
+            else:
+                data_fim_periodo = date(ano_ref, mes_ref + 1, 1)
+
+            # Se histórico, buscar últimos 90 dias
+            if mostrar_historico:
+                data_inicio_periodo = hoje - timedelta(days=90)
+                data_fim_periodo = hoje + timedelta(days=1)
+
+            # ============================================
+            # TIPO: medio_mes ou ultimo_custo
+            # ============================================
+            if tipo in ['medio_mes', 'ultimo_custo']:
+                # Buscar pedidos de compra
+                pedidos = PedidoCompras.query.filter(
+                    PedidoCompras.cod_produto == cod_produto,
+                    PedidoCompras.data_pedido_criacao >= data_inicio_periodo,
+                    PedidoCompras.data_pedido_criacao < data_fim_periodo,
+                    PedidoCompras.status_odoo.in_(['done', 'purchase']),
+                    db.or_(
+                        PedidoCompras.tipo_pedido.in_(['compra', 'importacao']),
+                        PedidoCompras.tipo_pedido.is_(None)
+                    )
+                ).order_by(PedidoCompras.data_pedido_criacao.desc()).all()
+
+                # Calcular resumo
+                qtd_total = 0
+                valor_bruto_total = 0
+                icms_total = 0
+                pis_total = 0
+                cofins_total = 0
+
+                lista_pedidos = []
+                for p in pedidos:
+                    qtd = float(p.qtd_recebida or p.qtd_produto_pedido or 0)
+                    preco = float(p.preco_produto_pedido or 0)
+                    valor_bruto = preco * qtd
+                    icms = float(p.icms_produto_pedido or 0)
+                    pis = float(p.pis_produto_pedido or 0)
+                    cofins = float(p.cofins_produto_pedido or 0)
+                    valor_liquido = valor_bruto - icms - pis - cofins
+
+                    qtd_total += qtd
+                    valor_bruto_total += valor_bruto
+                    icms_total += icms
+                    pis_total += pis
+                    cofins_total += cofins
+
+                    lista_pedidos.append({
+                        'num_pedido': p.num_pedido,
+                        'fornecedor': p.raz_social or 'N/I',
+                        'cnpj': p.cnpj_fornecedor,
+                        'data': p.data_pedido_criacao.strftime('%d/%m/%Y') if p.data_pedido_criacao else None,
+                        'numero_nf': p.numero_nf or p.nf_numero,
+                        'qtd_recebida': qtd,
+                        'preco_unitario': preco,
+                        'valor_bruto': round(valor_bruto, 2),
+                        'icms': round(icms, 2),
+                        'pis': round(pis, 2),
+                        'cofins': round(cofins, 2),
+                        'valor_liquido': round(valor_liquido, 2)
+                    })
+
+                valor_liquido_total = valor_bruto_total - icms_total - pis_total - cofins_total
+                custo_medio = valor_liquido_total / qtd_total if qtd_total > 0 else 0
+
+                return jsonify({
+                    'sucesso': True,
+                    'cod_produto': cod_produto,
+                    'nome_produto': nome_produto,
+                    'tipo': tipo,
+                    'periodo': {
+                        'mes': mes_ref,
+                        'ano': ano_ref,
+                        'historico': mostrar_historico,
+                        'data_inicio': data_inicio_periodo.strftime('%d/%m/%Y'),
+                        'data_fim': (data_fim_periodo - timedelta(days=1)).strftime('%d/%m/%Y')
+                    },
+                    'resumo': {
+                        'qtd_pedidos': len(pedidos),
+                        'qtd_comprada': round(qtd_total, 3),
+                        'valor_bruto': round(valor_bruto_total, 2),
+                        'icms': round(icms_total, 2),
+                        'pis': round(pis_total, 2),
+                        'cofins': round(cofins_total, 2),
+                        'valor_liquido': round(valor_liquido_total, 2),
+                        'custo_medio': round(custo_medio, 4)
+                    },
+                    'pedidos': lista_pedidos
+                })
+
+            # ============================================
+            # TIPO: medio_estoque
+            # ============================================
+            elif tipo == 'medio_estoque':
+                # Buscar estoque inicial (do mês anterior)
+                mes_anterior = mes_ref - 1 if mes_ref > 1 else 12
+                ano_anterior = ano_ref if mes_ref > 1 else ano_ref - 1
+
+                custo_anterior = CustoMensal.query.filter_by(
+                    cod_produto=cod_produto,
+                    mes=mes_anterior,
+                    ano=ano_anterior,
+                    status='FECHADO'
+                ).first()
+
+                qtd_inicial = float(custo_anterior.qtd_estoque_final or 0) if custo_anterior else 0
+                custo_inicial = float(custo_anterior.custo_estoque_final or 0) if custo_anterior else 0
+                custo_unit_inicial = custo_inicial / qtd_inicial if qtd_inicial > 0 else 0
+
+                # Buscar compras do período (mesmo código acima)
+                pedidos = PedidoCompras.query.filter(
+                    PedidoCompras.cod_produto == cod_produto,
+                    PedidoCompras.data_pedido_criacao >= data_inicio_periodo,
+                    PedidoCompras.data_pedido_criacao < data_fim_periodo,
+                    PedidoCompras.status_odoo.in_(['done', 'purchase']),
+                    db.or_(
+                        PedidoCompras.tipo_pedido.in_(['compra', 'importacao']),
+                        PedidoCompras.tipo_pedido.is_(None)
+                    )
+                ).order_by(PedidoCompras.data_pedido_criacao.desc()).all()
+
+                qtd_compras = 0
+                valor_liquido_compras = 0
+                lista_pedidos = []
+
+                for p in pedidos:
+                    qtd = float(p.qtd_recebida or p.qtd_produto_pedido or 0)
+                    preco = float(p.preco_produto_pedido or 0)
+                    valor_bruto = preco * qtd
+                    icms = float(p.icms_produto_pedido or 0)
+                    pis = float(p.pis_produto_pedido or 0)
+                    cofins = float(p.cofins_produto_pedido or 0)
+                    valor_liquido = valor_bruto - icms - pis - cofins
+
+                    qtd_compras += qtd
+                    valor_liquido_compras += valor_liquido
+
+                    lista_pedidos.append({
+                        'num_pedido': p.num_pedido,
+                        'fornecedor': p.raz_social or 'N/I',
+                        'data': p.data_pedido_criacao.strftime('%d/%m/%Y') if p.data_pedido_criacao else None,
+                        'qtd_recebida': qtd,
+                        'valor_liquido': round(valor_liquido, 2)
+                    })
+
+                # Calcular estoque final
+                qtd_final = qtd_inicial + qtd_compras
+                custo_total_final = custo_inicial + valor_liquido_compras
+                custo_medio_final = custo_total_final / qtd_final if qtd_final > 0 else 0
+
+                # Montar fórmula
+                formula = f"({round(custo_inicial, 2)} + {round(valor_liquido_compras, 2)}) / ({round(qtd_inicial, 3)} + {round(qtd_compras, 3)}) = {round(custo_medio_final, 4)}"
+
+                return jsonify({
+                    'sucesso': True,
+                    'cod_produto': cod_produto,
+                    'nome_produto': nome_produto,
+                    'tipo': tipo,
+                    'periodo': {
+                        'mes': mes_ref,
+                        'ano': ano_ref,
+                        'historico': mostrar_historico
+                    },
+                    'estoque_inicial': {
+                        'qtd': round(qtd_inicial, 3),
+                        'valor': round(custo_inicial, 2),
+                        'custo_unitario': round(custo_unit_inicial, 4)
+                    },
+                    'compras': {
+                        'qtd': round(qtd_compras, 3),
+                        'valor_liquido': round(valor_liquido_compras, 2),
+                        'qtd_pedidos': len(pedidos)
+                    },
+                    'estoque_final': {
+                        'qtd': round(qtd_final, 3),
+                        'valor': round(custo_total_final, 2),
+                        'custo_medio': round(custo_medio_final, 4)
+                    },
+                    'formula': formula,
+                    'pedidos': lista_pedidos
+                })
+
+            # ============================================
+            # TIPO: custo_considerado
+            # ============================================
+            elif tipo == 'custo_considerado':
+                # Buscar histórico de versões
+                versoes = CustoConsiderado.query.filter_by(
+                    cod_produto=cod_produto
+                ).order_by(CustoConsiderado.versao.desc()).limit(10).all()
+
+                historico = []
+                for v in versoes:
+                    historico.append({
+                        'versao': v.versao,
+                        'custo_considerado': float(v.custo_considerado) if v.custo_considerado else None,
+                        'tipo_selecionado': v.tipo_custo_selecionado,
+                        'vigencia_inicio': v.vigencia_inicio.strftime('%d/%m/%Y %H:%M') if v.vigencia_inicio else None,
+                        'vigencia_fim': v.vigencia_fim.strftime('%d/%m/%Y %H:%M') if v.vigencia_fim else None,
+                        'motivo': v.motivo_alteracao,
+                        'atualizado_por': v.atualizado_por,
+                        'atual': v.custo_atual
+                    })
+
+                atual = None
+                if custo_atual:
+                    atual = {
+                        'valor': float(custo_atual.custo_considerado) if custo_atual.custo_considerado else None,
+                        'tipo_base': custo_atual.tipo_custo_selecionado,
+                        'atualizado_em': custo_atual.vigencia_inicio.strftime('%d/%m/%Y %H:%M') if custo_atual.vigencia_inicio else None,
+                        'atualizado_por': custo_atual.atualizado_por
+                    }
+
+                return jsonify({
+                    'sucesso': True,
+                    'cod_produto': cod_produto,
+                    'nome_produto': nome_produto,
+                    'tipo': tipo,
+                    'atual': atual,
+                    'historico': historico
+                })
+
+            else:
+                return jsonify({'erro': f'Tipo de custo invalido: {tipo}'}), 400
+
+        except Exception as e:
+            logger.error(f"Erro ao buscar detalhes do custo: {e}")
+            import traceback
+            traceback.print_exc()
             return jsonify({'erro': str(e)}), 500
 
     @bp.route('/api/definicao/salvar', methods=['POST']) #type: ignore
@@ -2129,6 +2259,244 @@ def register_custeio_routes(bp):
             logger.error(f"Erro ao exportar definicao: {e}")
             return jsonify({'erro': str(e)}), 500
 
+    @bp.route('/api/definicao/exportar-detalhado') #type: ignore
+    @login_required
+    def exportar_custos_detalhados():
+        """
+        Exporta custos detalhados com BOM recursivo para ACABADOS/INTERMEDIARIOS.
+
+        Parâmetros:
+            cod_produto: Código do produto específico (opcional)
+                        Se não informado, exporta todos ACABADOS/INTERMEDIARIOS
+        """
+        try:
+            import pandas as pd
+            from app.producao.models import CadastroPalletizacao
+            from app.custeio.models import CustoConsiderado
+            from app.manufatura.models import ListaMateriais
+            from app.custeio.services.custeio_service import ServicoCusteio
+            from datetime import date
+
+            cod_produto_filtro = request.args.get('cod_produto')
+
+            # Determinar período de referência
+            hoje = date.today()
+            mes_ref = hoje.month
+            ano_ref = hoje.year
+
+            # Buscar custo_considerado do banco
+            custos_considerados_dict = {}
+            for c in CustoConsiderado.query.filter_by(custo_atual=True).all():
+                custos_considerados_dict[c.cod_produto] = {
+                    'custo_considerado': float(c.custo_considerado) if c.custo_considerado else None,
+                    'ultimo_mes_fechado': c.ultimo_mes_fechado,
+                    'ultimo_ano_fechado': c.ultimo_ano_fechado
+                }
+
+            # Identificar produtos comprados
+            produtos_comprados = set(
+                p.cod_produto for p in
+                CadastroPalletizacao.query.filter_by(ativo=True, produto_comprado=True).all()
+            )
+
+            # Cache de custos dinâmicos para COMPRADOS
+            custos_dinamicos_dict = {}
+            def obter_custo_dinamico(cod):
+                if cod not in custos_dinamicos_dict and cod in produtos_comprados:
+                    custo_info = custos_considerados_dict.get(cod, {})
+                    mes_calc = custo_info.get('ultimo_mes_fechado') or mes_ref
+                    ano_calc = custo_info.get('ultimo_ano_fechado') or ano_ref
+                    custos_calc = ServicoCusteio.calcular_custo_comprados(cod, mes_calc, ano_calc)
+                    custos_dinamicos_dict[cod] = {
+                        'custo_medio_mes': custos_calc.get('custo_liquido_medio'),
+                        'ultimo_custo': custos_calc.get('ultimo_custo'),
+                        'custo_medio_estoque': custos_calc.get('custo_medio_estoque'),
+                        'custo_considerado': custos_considerados_dict.get(cod, {}).get('custo_considerado')
+                    }
+                return custos_dinamicos_dict.get(cod, {})
+
+            # Buscar produtos com BOM
+            produtos_com_bom = set(
+                bom.cod_produto_produzido for bom in
+                ListaMateriais.query.filter_by(status='ativo').with_entities(ListaMateriais.cod_produto_produzido).distinct()
+            )
+
+            # Nomes dos produtos
+            nomes_produtos = {
+                p.cod_produto: p.nome_produto for p in CadastroPalletizacao.query.all()
+            }
+
+            def calcular_custo_recursivo(cod, campo_custo, visitados=None):
+                """Calcula custo recursivamente via BOM"""
+                if visitados is None:
+                    visitados = set()
+                if cod in visitados:
+                    return None
+
+                if cod not in produtos_com_bom:
+                    custo_info = obter_custo_dinamico(cod)
+                    return custo_info.get(campo_custo)
+
+                visitados.add(cod)
+                componentes = ListaMateriais.query.filter_by(
+                    cod_produto_produzido=cod, status='ativo'
+                ).all()
+
+                custo_total = 0
+                for comp in componentes:
+                    qtd = float(comp.qtd_utilizada) if comp.qtd_utilizada else 0
+                    custo_comp = calcular_custo_recursivo(comp.cod_produto_componente, campo_custo, visitados.copy())
+                    if custo_comp is not None:
+                        custo_total += custo_comp * qtd
+
+                return custo_total if custo_total > 0 else None
+
+            def expandir_bom_para_export(cod_produto, cod_pai_raiz, nivel=0, visitados=None):
+                """Expande BOM recursivamente para exportação com cod_pai separado"""
+                if visitados is None:
+                    visitados = set()
+                if cod_produto in visitados or nivel > 10:
+                    return []
+
+                visitados.add(cod_produto)
+                componentes = ListaMateriais.query.filter_by(
+                    cod_produto_produzido=cod_produto, status='ativo'
+                ).all()
+
+                resultado = []
+                for comp in componentes:
+                    cod_comp = comp.cod_produto_componente
+                    qtd = float(comp.qtd_utilizada) if comp.qtd_utilizada else 0
+                    e_intermediario = cod_comp in produtos_com_bom
+
+                    # Calcular custos
+                    if e_intermediario:
+                        custos = {
+                            'custo_medio_mes': calcular_custo_recursivo(cod_comp, 'custo_medio_mes'),
+                            'ultimo_custo': calcular_custo_recursivo(cod_comp, 'ultimo_custo'),
+                            'custo_medio_estoque': calcular_custo_recursivo(cod_comp, 'custo_medio_estoque'),
+                            'custo_considerado': calcular_custo_recursivo(cod_comp, 'custo_considerado')
+                        }
+                    else:
+                        custo_info = obter_custo_dinamico(cod_comp)
+                        custos = {
+                            'custo_medio_mes': custo_info.get('custo_medio_mes'),
+                            'ultimo_custo': custo_info.get('ultimo_custo'),
+                            'custo_medio_estoque': custo_info.get('custo_medio_estoque'),
+                            'custo_considerado': custo_info.get('custo_considerado')
+                        }
+
+                    resultado.append({
+                        'nivel': nivel,
+                        'cod_pai': cod_pai_raiz,
+                        'cod_pai_direto': cod_produto,
+                        'cod_componente': cod_comp,
+                        'nome_produto': comp.nome_produto_componente or nomes_produtos.get(cod_comp, ''),
+                        'qtd': qtd,
+                        'tipo': 'INTERMEDIARIO' if e_intermediario else 'COMPRADO',
+                        **custos
+                    })
+
+                    # Recursão para intermediários
+                    if e_intermediario:
+                        sub = expandir_bom_para_export(cod_comp, cod_pai_raiz, nivel + 1, visitados.copy())
+                        resultado.extend(sub)
+
+                return resultado
+
+            # Determinar quais produtos exportar
+            if cod_produto_filtro:
+                # Produto específico
+                produtos_exportar = [cod_produto_filtro]
+            else:
+                # Todos ACABADOS e INTERMEDIARIOS
+                produtos_exportar = [
+                    p.cod_produto for p in CadastroPalletizacao.query.filter(
+                        CadastroPalletizacao.ativo == True,
+                        CadastroPalletizacao.produto_produzido == True
+                    ).order_by(CadastroPalletizacao.cod_produto).all()
+                ]
+
+            # Gerar dados para Excel com colunas separadas para filtros
+            dados_excel = []
+            for cod_prod in produtos_exportar:
+                nome_prod = nomes_produtos.get(cod_prod, '')
+                tipo_prod = 'ACABADO' if CadastroPalletizacao.query.filter_by(
+                    cod_produto=cod_prod, produto_vendido=True
+                ).first() else 'INTERMEDIARIO'
+
+                # Calcular custos do produto principal
+                custo_medio_mes = calcular_custo_recursivo(cod_prod, 'custo_medio_mes')
+                ultimo_custo = calcular_custo_recursivo(cod_prod, 'ultimo_custo')
+                custo_medio_estoque = calcular_custo_recursivo(cod_prod, 'custo_medio_estoque')
+                custo_considerado = calcular_custo_recursivo(cod_prod, 'custo_considerado')
+
+                # Linha do produto principal (cod_pai = ele mesmo, cod_componente vazio)
+                dados_excel.append({
+                    'Cod Pai': cod_prod,
+                    'Cod Pai Direto': '',
+                    'Cod Componente': '',
+                    'Nivel': 0,
+                    'Nome Produto': nome_prod,
+                    'Tipo': tipo_prod,
+                    'Qtd': '',
+                    'Custo Medio Mes': round(custo_medio_mes, 4) if custo_medio_mes else '',
+                    'Ultimo Custo': round(ultimo_custo, 4) if ultimo_custo else '',
+                    'Custo Medio Estoque': round(custo_medio_estoque, 4) if custo_medio_estoque else '',
+                    'Custo Considerado': round(custo_considerado, 4) if custo_considerado else ''
+                })
+
+                # Expandir BOM
+                componentes = expandir_bom_para_export(cod_prod, cod_prod)
+                for comp in componentes:
+                    dados_excel.append({
+                        'Cod Pai': comp['cod_pai'],
+                        'Cod Pai Direto': comp['cod_pai_direto'],
+                        'Cod Componente': comp['cod_componente'],
+                        'Nivel': comp['nivel'] + 1,
+                        'Nome Produto': comp['nome_produto'],
+                        'Tipo': comp['tipo'],
+                        'Qtd': round(comp['qtd'], 4),
+                        'Custo Medio Mes': round(comp['custo_medio_mes'], 4) if comp['custo_medio_mes'] else '',
+                        'Ultimo Custo': round(comp['ultimo_custo'], 4) if comp['ultimo_custo'] else '',
+                        'Custo Medio Estoque': round(comp['custo_medio_estoque'], 4) if comp['custo_medio_estoque'] else '',
+                        'Custo Considerado': round(comp['custo_considerado'], 4) if comp['custo_considerado'] else ''
+                    })
+
+            df = pd.DataFrame(dados_excel)
+            output = BytesIO()
+
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df.to_excel(writer, index=False, sheet_name='Custos Detalhados')
+
+                # Ajustar largura das colunas
+                worksheet = writer.sheets['Custos Detalhados']
+                worksheet.column_dimensions['A'].width = 15  # Cod Pai
+                worksheet.column_dimensions['B'].width = 15  # Cod Pai Direto
+                worksheet.column_dimensions['C'].width = 15  # Cod Componente
+                worksheet.column_dimensions['D'].width = 8   # Nivel
+                worksheet.column_dimensions['E'].width = 40  # Nome
+                worksheet.column_dimensions['F'].width = 15  # Tipo
+                worksheet.column_dimensions['G'].width = 10  # Qtd
+                worksheet.column_dimensions['H'].width = 15  # Medio Mes
+                worksheet.column_dimensions['I'].width = 15  # Ultimo
+                worksheet.column_dimensions['J'].width = 15  # Medio Estoque
+                worksheet.column_dimensions['K'].width = 15  # Considerado
+
+            output.seek(0)
+
+            nome_arquivo = f'custos_detalhados_{cod_produto_filtro}.xlsx' if cod_produto_filtro else 'custos_detalhados_todos.xlsx'
+            return send_file(
+                output,
+                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                as_attachment=True,
+                download_name=nome_arquivo
+            )
+
+        except Exception as e:
+            logger.error(f"Erro ao exportar custos detalhados: {e}")
+            return jsonify({'erro': str(e)}), 500
+
     @bp.route('/api/definicao/importar', methods=['POST']) #type: ignore
     @login_required
     def importar_definicao():
@@ -2168,7 +2536,7 @@ def register_custeio_routes(bp):
                     # Verificar se e produto COMPRADO
                     produto = CadastroPalletizacao.query.filter_by(cod_produto=cod_produto).first()
                     if not produto:
-                        erros.append(f"Linha {idx + 2}: Produto {cod_produto} nao encontrado")
+                        erros.append(f"Linha {idx + 2}: Produto {cod_produto} nao encontrado") # type: ignore
                         continue
 
                     # Ignorar produtos produzidos (serao calculados via BOM)
@@ -2269,7 +2637,6 @@ def register_custeio_routes(bp):
         """Lista regras de comissao com filtros"""
         try:
             from app.custeio.models import RegraComissao
-            from datetime import date
 
             tipo_regra = request.args.get('tipo_regra')
             grupo_empresarial = request.args.get('grupo_empresarial')
@@ -2477,7 +2844,6 @@ def register_custeio_routes(bp):
         """Lista clientes disponiveis para regra de comissao"""
         try:
             from app.carteira.models import CarteiraPrincipal
-            from sqlalchemy import func
 
             termo = request.args.get('termo', '')
             uf = request.args.get('uf')
@@ -2647,11 +3013,11 @@ def register_custeio_routes(bp):
                     comissao = row['Comissao %']
 
                     if tipo_regra not in ('GRUPO', 'CLIENTE', 'PRODUTO'):
-                        erros.append(f"Linha {idx + 2}: Tipo Regra invalido '{tipo_regra}'")
+                        erros.append(f"Linha {idx + 2}: Tipo Regra invalido '{tipo_regra}'") # type: ignore
                         continue
 
                     if pd.isna(comissao):
-                        erros.append(f"Linha {idx + 2}: Comissao % vazia")
+                        erros.append(f"Linha {idx + 2}: Comissao % vazia") # type: ignore
                         continue
 
                     registro = RegraComissao(
@@ -2674,7 +3040,7 @@ def register_custeio_routes(bp):
                     importados += 1
 
                 except Exception as e:
-                    erros.append(f"Linha {idx + 2}: {str(e)}")
+                    erros.append(f"Linha {idx + 2}: {str(e)}") # type: ignore
 
             db.session.commit()
 

@@ -4,7 +4,6 @@ Calcula custos de produtos comprados, intermediarios e acabados
 """
 from typing import Dict, List, Any, Optional
 from datetime import datetime, date
-from decimal import Decimal
 import logging
 
 from app import db
@@ -12,7 +11,6 @@ from app.custeio.models import CustoMensal, CustoConsiderado
 from app.manufatura.models import PedidoCompras, ListaMateriais
 from app.producao.models import CadastroPalletizacao
 from app.manufatura.services.bom_service import ServicoBOM
-from sqlalchemy import func, extract
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +111,7 @@ class ServicoCusteio:
             custo_liquido_medio = valor_liquido / qtd_total if qtd_total > 0 else 0
 
             # Ultimo custo (ultima compra do periodo)
+            # Usa os impostos da PROPRIA ultima compra, nao a media do periodo
             compras_ordenadas = sorted(
                 [c for c in compras if c.data_pedido_criacao],
                 key=lambda c: c.data_pedido_criacao,
@@ -122,14 +121,17 @@ class ServicoCusteio:
             ultimo_custo = 0
             if compras_ordenadas:
                 ultima_compra = compras_ordenadas[0]
+                qtd_ultima = float(ultima_compra.qtd_recebida or ultima_compra.qtd_produto_pedido or 0)
                 preco_unitario = float(ultima_compra.preco_produto_pedido or 0)
 
-                # Descontar impostos proporcionalmente do ultimo custo
-                if valor_bruto > 0:
-                    taxa_impostos = (valor_icms + valor_pis + valor_cofins) / valor_bruto
-                    ultimo_custo = preco_unitario * (1 - taxa_impostos)
-                else:
-                    ultimo_custo = preco_unitario
+                # Calcular valor liquido da ultima compra usando SEUS PROPRIOS impostos
+                valor_bruto_ultima = preco_unitario * qtd_ultima
+                icms_ultima = float(ultima_compra.icms_produto_pedido or 0)
+                pis_ultima = float(ultima_compra.pis_produto_pedido or 0)
+                cofins_ultima = float(ultima_compra.cofins_produto_pedido or 0)
+                valor_liquido_ultima = valor_bruto_ultima - icms_ultima - pis_ultima - cofins_ultima
+
+                ultimo_custo = valor_liquido_ultima / qtd_ultima if qtd_ultima > 0 else 0
 
             # Buscar estoque inicial do mes
             estoque_inicial = ServicoCusteio._buscar_estoque_inicial(cod_produto, mes, ano)
@@ -1008,7 +1010,6 @@ class ServicoCusteio:
         Returns:
             Dict com resultado da propagacao
         """
-        from app.manufatura.models import ListaMateriais
 
         resultado = {
             'sucesso': True,
@@ -1058,7 +1059,10 @@ class ServicoCusteio:
             custos_calculados = dict(custos_comprados)  # Começa com comprados
 
             def calcular_custo_bom_recursivo(cod_produto, visitados=None):
-                """Calcula custo via BOM recursivamente"""
+                """
+                Calcula custo via BOM recursivamente.
+                Usa soma parcial: soma os componentes que têm custo, ignora os que não têm.
+                """
                 if visitados is None:
                     visitados = set()
 
@@ -1077,16 +1081,14 @@ class ServicoCusteio:
                 componentes = bom_cache.get(cod_produto, [])
 
                 custo_total = 0
-                todos_componentes_ok = True
-
+                # Soma parcial: soma o que tem, ignora o que não tem
                 for comp in componentes:
                     custo_comp = calcular_custo_bom_recursivo(comp['cod_componente'], visitados.copy())
                     if custo_comp is not None:
                         custo_total += custo_comp * comp['qtd']
-                    else:
-                        todos_componentes_ok = False
 
-                if todos_componentes_ok and custo_total > 0:
+                # Retorna o total se > 0, mesmo que alguns componentes não tenham custo
+                if custo_total > 0:
                     custos_calculados[cod_produto] = custo_total
                     return custo_total
 

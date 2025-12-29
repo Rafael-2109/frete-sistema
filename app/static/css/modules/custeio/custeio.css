@@ -387,25 +387,38 @@
 
 .editable-input {
     border: 1px solid transparent;
-    background: transparent;
+    background: hsla(120, 40%, 40%, 0.15);
     padding: 4px 8px;
     border-radius: var(--radius-sm);
     font-family: var(--font-mono);
     text-align: right;
-    width: 120px;
+    width: 100%;
+    max-width: 120px;
     transition: all var(--transition-fast);
+}
+
+[data-bs-theme="dark"] .editable-input {
+    background: hsla(120, 40%, 30%, 0.25);
 }
 
 .editable-input:hover {
     border-color: var(--border);
-    background: var(--bg-light);
+    background: hsla(120, 40%, 40%, 0.25);
+}
+
+[data-bs-theme="dark"] .editable-input:hover {
+    background: hsla(120, 40%, 30%, 0.35);
 }
 
 .editable-input:focus {
     outline: none;
     border-color: var(--amber-55);
-    background: var(--bg-light);
+    background: hsla(120, 40%, 40%, 0.25);
     box-shadow: 0 0 6px 1px hsla(50 100% 55% / 0.3);
+}
+
+[data-bs-theme="dark"] .editable-input:focus {
+    background: hsla(120, 40%, 30%, 0.35);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -557,6 +570,29 @@
     color: var(--amber-55);
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   DEFINICAO - COLUNA CUSTO CONSIDERADO
+   Alinhamento entre editaveis (COMPRADO) e nao-editaveis (PRODUZIDO)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Celula de custo considerado - valor nao editavel (PRODUZIDO) */
+#tabela-definicao td[data-tipo="custo_considerado"] {
+    font-family: var(--font-mono);
+    text-align: center !important;
+}
+
+/* Celula de custo considerado - container do input (COMPRADO) */
+#tabela-definicao td:has(.editable-input) {
+    padding: 4px 8px !important;
+    text-align: center !important;
+}
+
+/* Input editavel centralizado */
+#tabela-definicao .editable-input {
+    text-align: center;
+    margin: 0 auto;
+}
+
 /* Cabeçalho expansível */
 .expandable-header {
     cursor: pointer;
@@ -605,4 +641,385 @@
 
 .detail-value {
     font-family: var(--font-mono);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   EXPANSAO BOM COM 4 CUSTOS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Cabecalho BOM com 4 colunas de custo */
+.bom-header-row {
+    background-color: hsla(210, 30%, 90%, 0.5);
+    border-left: 3px solid var(--amber-55);
+}
+
+[data-bs-theme="dark"] .bom-header-row {
+    background-color: hsla(210, 30%, 20%, 0.5);
+}
+
+.bom-header-row th {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: var(--text-muted);
+    padding: 6px 8px !important;
+    white-space: nowrap;
+}
+
+/* Celulas de custo clicaveis */
+.bom-custo-cell {
+    min-width: 80px;
+    cursor: pointer;
+    transition: background-color var(--transition-fast);
+    border-left: 1px solid var(--border);
+    padding: 4px 6px !important;
+    vertical-align: middle !important;
+}
+
+.bom-custo-cell:hover {
+    background-color: hsla(45, 100%, 50%, 0.15) !important;
+}
+
+.bom-custo-cell.custo-destacado {
+    background-color: hsla(45, 100%, 50%, 0.12);
+    font-weight: 600;
+}
+
+[data-bs-theme="dark"] .bom-custo-cell.custo-destacado {
+    background-color: hsla(45, 100%, 50%, 0.18);
+}
+
+/* Valores unitario e total na mesma celula */
+.bom-custo-cell .custo-unitario {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text);
+}
+
+.bom-custo-cell .custo-total {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+/* Linha de total BOM com 4 colunas */
+.bom-total .bom-custo-cell {
+    font-weight: 600;
+    background-color: hsla(45, 100%, 50%, 0.08);
+}
+
+.bom-total .bom-custo-cell.custo-destacado {
+    background-color: hsla(45, 100%, 50%, 0.18);
+    color: var(--amber-55);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MODAL DETALHES DE CUSTO
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+#modalDetalhesCusto .modal-header {
+    background: var(--bg-light);
+    border-bottom: 1px solid var(--border);
+}
+
+#modalDetalhesCusto .modal-body {
+    padding: 1rem;
+    background: var(--bg);
+    color: var(--text);
+}
+
+#modalDetalhesCusto .modal-title {
+    color: var(--text);
+}
+
+/* Tabelas dentro do modal */
+#modalDetalhesCusto .table {
+    color: var(--text);
+    background: var(--bg-light);
+}
+
+#modalDetalhesCusto .table thead {
+    background: var(--bg-light);
+}
+
+#modalDetalhesCusto .table thead th {
+    background: var(--bg-light);
+    color: var(--text-muted);
+    border-bottom: 2px solid var(--border);
+}
+
+#modalDetalhesCusto .table tbody tr:hover {
+    background: hsla(0 0% 50% / 0.05);
+}
+
+/* Cards de estoque customizados para tema */
+.card-estoque {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.card-estoque .card-header-themed {
+    padding: 0.5rem 1rem;
+    color: hsl(0 0% 100%);
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+
+.card-estoque .card-header-themed.header-secondary {
+    background: hsl(0 0% 40%);
+}
+
+.card-estoque .card-header-themed.header-info {
+    background: hsl(200 70% 45%);
+}
+
+.card-estoque .card-header-themed.header-success {
+    background: var(--semantic-success);
+}
+
+.card-estoque .card-body {
+    padding: 0.75rem 1rem;
+    background: var(--bg-light);
+}
+
+.card-estoque .card-body .d-flex {
+    padding: 0.25rem 0;
+}
+
+.card-estoque .card-body .text-muted {
+    color: var(--text-muted) !important;
+}
+
+.card-estoque .card-body .fw-bold {
+    color: var(--text);
+}
+
+/* Linha destacada na tabela */
+#modalDetalhesCusto .table-row-success {
+    background: var(--semantic-success-subtle) !important;
+}
+
+#modalDetalhesCusto .table-row-success td {
+    background: transparent;
+}
+
+/* Card de resumo no modal */
+.card-resumo-custo {
+    border-left: 4px solid var(--amber-55);
+    background: var(--gradient);
+    border: 1px solid var(--border);
+    border-left-width: 4px;
+    border-left-color: var(--amber-55);
+}
+
+.card-resumo-custo .stat-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: var(--text-muted);
+    margin-bottom: 0.25rem;
+}
+
+.card-resumo-custo .stat-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: var(--text);
+}
+
+/* Formula de custo */
+.formula-custo {
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    background: var(--bg-light);
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    color: var(--text);
+}
+
+.formula-custo .operador {
+    color: var(--amber-55);
+    font-weight: 600;
+}
+
+/* Tabela de pedidos no modal */
+.tabela-pedidos-custo {
+    font-size: 0.85rem;
+}
+
+.tabela-pedidos-custo th {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: var(--text-muted);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.tabela-pedidos-custo td {
+    vertical-align: middle;
+}
+
+.tabela-pedidos-custo .valor-imposto {
+    color: var(--semantic-danger);
+    font-size: 0.8rem;
+}
+
+.tabela-pedidos-custo tfoot {
+    background: var(--bg-light);
+    font-weight: 600;
+}
+
+/* Badge de historico */
+.badge-historico {
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.badge-historico:hover {
+    opacity: 0.8;
+}
+
+.badge-historico.active {
+    background: var(--amber-55) !important;
+    color: var(--bg) !important;
+}
+
+/* Secao de estoque */
+.secao-estoque {
+    background: var(--bg-light);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.secao-estoque h6 {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.secao-estoque .row-estoque {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+    border-bottom: 1px dashed var(--border);
+}
+
+.secao-estoque .row-estoque:last-child {
+    border-bottom: none;
+    font-weight: 600;
+}
+
+.secao-estoque .label-estoque {
+    color: var(--text-muted);
+}
+
+.secao-estoque .valor-estoque {
+    font-family: var(--font-mono);
+    color: var(--text);
+}
+
+/* Timeline de versoes */
+.timeline-versoes {
+    position: relative;
+    padding-left: 20px;
+}
+
+.timeline-versoes::before {
+    content: '';
+    position: absolute;
+    left: 6px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--border);
+}
+
+.versao-item {
+    position: relative;
+    padding: 0.75rem 0;
+    padding-left: 1rem;
+}
+
+.versao-item::before {
+    content: '';
+    position: absolute;
+    left: -14px;
+    top: 1rem;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--border);
+    border: 2px solid var(--bg);
+}
+
+.versao-item.atual::before {
+    background: var(--amber-55);
+}
+
+.versao-item .versao-data {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.versao-item .versao-valor {
+    font-family: var(--font-mono);
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.versao-item .versao-tipo {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+/* Botao de historico toggle */
+.btn-toggle-historico {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+}
+
+.btn-toggle-historico.active {
+    background: var(--amber-55);
+    border-color: var(--amber-55);
+    color: var(--bg);
+}
+
+/* Loading no modal */
+.modal-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem;
+    color: var(--text-muted);
+}
+
+.modal-loading .spinner-border {
+    color: var(--amber-55);
+    margin-bottom: 1rem;
+}
+
+/* Mensagem vazia no modal */
+.modal-empty {
+    text-align: center;
+    padding: 2rem;
+    color: var(--text-muted);
+}
+
+.modal-empty i {
+    font-size: 2.5rem;
+    opacity: 0.3;
+    margin-bottom: 1rem;
 }
