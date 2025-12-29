@@ -551,3 +551,297 @@ def visualizar_nf(tipo, pedido_id):
         logger.error(f"Erro ao visualizar {tipo} da NF: {e}")
         flash(f'❌ Erro ao abrir {tipo.upper()}: {str(e)}', 'danger')
         return redirect(url_for('pedidos_compras.index'))
+
+
+# ============================================================================
+# ENDPOINT TEMPORÁRIO - Correção de company_id
+# REMOVER APÓS EXECUÇÃO EM PRODUÇÃO
+# ============================================================================
+
+@pedidos_compras_bp.route('/api/corrigir-company-id', methods=['POST'])
+@login_required
+def corrigir_company_id():
+    """
+    [TEMPORÁRIO] Corrige company_id dos pedidos buscando no Odoo
+
+    Parâmetros (JSON):
+        - dry_run: bool (default: True) - Se True, apenas simula
+        - batch_size: int (default: 100) - Quantidade por batch
+        - tabela: str (default: 'pedidos') - 'pedidos', 'requisicoes' ou 'alocacoes'
+    """
+    from app.odoo.utils.connection import get_odoo_connection
+    from app.manufatura.models import RequisicaoCompras, RequisicaoCompraAlocacao
+
+    try:
+        data = request.get_json() or {}
+        dry_run = data.get('dry_run', True)
+        batch_size = min(data.get('batch_size', 100), 500)  # Max 500
+        tabela = data.get('tabela', 'pedidos')
+
+        logger.info(f"[CORRIGIR] Iniciando correção de company_id - tabela={tabela}, dry_run={dry_run}, batch={batch_size}")
+
+        connection = get_odoo_connection()
+        uid = connection.authenticate()
+
+        if not uid:
+            return jsonify({'erro': 'Falha na autenticação com Odoo'}), 500
+
+        if tabela == 'pedidos':
+            resultado = _corrigir_pedidos(connection, batch_size, dry_run)
+        elif tabela == 'requisicoes':
+            resultado = _corrigir_requisicoes(connection, batch_size, dry_run)
+        elif tabela == 'alocacoes':
+            resultado = _corrigir_alocacoes(connection, batch_size, dry_run)
+        else:
+            return jsonify({'erro': f'Tabela inválida: {tabela}'}), 400
+
+        return jsonify(resultado)
+
+    except Exception as e:
+        logger.error(f"[CORRIGIR] Erro: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'erro': str(e)}), 500
+
+
+def _corrigir_pedidos(connection, batch_size: int, dry_run: bool):
+    """Corrige company_id nos pedidos"""
+    from app.manufatura.models import PedidoCompras
+
+    # Buscar pedidos sem company_id
+    pedidos = PedidoCompras.query.filter(
+        PedidoCompras.importado_odoo == True,
+        PedidoCompras.company_id.is_(None),
+        PedidoCompras.odoo_id.isnot(None)
+    ).limit(batch_size).all()
+
+    total = len(pedidos)
+    if total == 0:
+        return {'tabela': 'pedidos', 'total': 0, 'corrigidos': 0, 'dry_run': dry_run}
+
+    # Coletar line_ids
+    line_ids = [int(p.odoo_id) for p in pedidos if p.odoo_id and p.odoo_id.isdigit()]
+
+    if not line_ids:
+        return {'tabela': 'pedidos', 'total': total, 'corrigidos': 0, 'erro': 'Sem IDs válidos'}
+
+    # Buscar linhas no Odoo
+    linhas = connection.read('purchase.order.line', line_ids, fields=['id', 'order_id'])
+
+    # Mapear line_id -> order_id
+    line_to_order = {}
+    order_ids = set()
+    for l in linhas:
+        if l.get('order_id'):
+            line_to_order[str(l['id'])] = l['order_id'][0]
+            order_ids.add(l['order_id'][0])
+
+    # Buscar pedidos no Odoo
+    orders = connection.read('purchase.order', list(order_ids), fields=['id', 'company_id'])
+
+    # Mapear order_id -> company_name
+    order_to_company = {}
+    for o in orders:
+        if o.get('company_id'):
+            company_name = o['company_id'][1] if len(o['company_id']) > 1 else None
+            order_to_company[o['id']] = company_name
+
+    # Atualizar pedidos
+    corrigidos = 0
+    for pedido in pedidos:
+        if pedido.odoo_id and pedido.odoo_id in line_to_order:
+            order_id = line_to_order[pedido.odoo_id]
+            company_name = order_to_company.get(order_id)
+
+            if company_name:
+                if not dry_run:
+                    pedido.company_id = company_name
+                corrigidos += 1
+
+    if not dry_run:
+        db.session.commit()
+
+    return {
+        'tabela': 'pedidos',
+        'total': total,
+        'corrigidos': corrigidos,
+        'dry_run': dry_run,
+        'restantes': PedidoCompras.query.filter(
+            PedidoCompras.importado_odoo == True,
+            PedidoCompras.company_id.is_(None)
+        ).count() if not dry_run else None
+    }
+
+
+def _corrigir_requisicoes(connection, batch_size: int, dry_run: bool):
+    """Corrige company_id nas requisições"""
+    from app.manufatura.models import RequisicaoCompras
+
+    # Buscar requisições sem company_id
+    requisicoes = RequisicaoCompras.query.filter(
+        RequisicaoCompras.importado_odoo == True,
+        RequisicaoCompras.company_id.is_(None),
+        RequisicaoCompras.requisicao_odoo_id.isnot(None)
+    ).limit(batch_size).all()
+
+    total = len(requisicoes)
+    if total == 0:
+        return {'tabela': 'requisicoes', 'total': 0, 'corrigidos': 0, 'dry_run': dry_run}
+
+    # Coletar request_ids únicos
+    request_ids = list(set([
+        int(r.requisicao_odoo_id) for r in requisicoes
+        if r.requisicao_odoo_id and r.requisicao_odoo_id.isdigit()
+    ]))
+
+    if not request_ids:
+        return {'tabela': 'requisicoes', 'total': total, 'corrigidos': 0, 'erro': 'Sem IDs válidos'}
+
+    # Buscar requisições no Odoo
+    requests = connection.read('purchase.request', request_ids, fields=['id', 'company_id'])
+
+    # Mapear request_id -> company_name
+    request_to_company = {}
+    for r in requests:
+        if r.get('company_id'):
+            company_name = r['company_id'][1] if len(r['company_id']) > 1 else None
+            request_to_company[str(r['id'])] = company_name
+
+    # Atualizar requisições
+    corrigidos = 0
+    for requisicao in requisicoes:
+        if requisicao.requisicao_odoo_id:
+            company_name = request_to_company.get(requisicao.requisicao_odoo_id)
+
+            if company_name:
+                if not dry_run:
+                    requisicao.company_id = company_name
+                corrigidos += 1
+
+    if not dry_run:
+        db.session.commit()
+
+    return {
+        'tabela': 'requisicoes',
+        'total': total,
+        'corrigidos': corrigidos,
+        'dry_run': dry_run,
+        'restantes': RequisicaoCompras.query.filter(
+            RequisicaoCompras.importado_odoo == True,
+            RequisicaoCompras.company_id.is_(None)
+        ).count() if not dry_run else None
+    }
+
+
+def _corrigir_alocacoes(connection, batch_size: int, dry_run: bool):
+    """Corrige company_id nas alocações"""
+    from app.manufatura.models import RequisicaoCompraAlocacao
+
+    # Buscar alocações sem company_id
+    alocacoes = RequisicaoCompraAlocacao.query.filter(
+        RequisicaoCompraAlocacao.importado_odoo == True,
+        RequisicaoCompraAlocacao.company_id.is_(None),
+        RequisicaoCompraAlocacao.odoo_allocation_id.isnot(None)
+    ).limit(batch_size).all()
+
+    total = len(alocacoes)
+    if total == 0:
+        return {'tabela': 'alocacoes', 'total': 0, 'corrigidos': 0, 'dry_run': dry_run}
+
+    # Coletar allocation_ids
+    allocation_ids = [
+        int(a.odoo_allocation_id) for a in alocacoes
+        if a.odoo_allocation_id and a.odoo_allocation_id.isdigit()
+    ]
+
+    if not allocation_ids:
+        return {'tabela': 'alocacoes', 'total': total, 'corrigidos': 0, 'erro': 'Sem IDs válidos'}
+
+    # Buscar alocações no Odoo
+    allocations = connection.read('purchase.request.allocation', allocation_ids, fields=['id', 'company_id'])
+
+    # Mapear allocation_id -> company_name
+    allocation_to_company = {}
+    for a in allocations:
+        if a.get('company_id'):
+            company_name = a['company_id'][1] if len(a['company_id']) > 1 else None
+            allocation_to_company[str(a['id'])] = company_name
+
+    # Atualizar alocações
+    corrigidos = 0
+    for alocacao in alocacoes:
+        if alocacao.odoo_allocation_id:
+            company_name = allocation_to_company.get(alocacao.odoo_allocation_id)
+
+            if company_name:
+                if not dry_run:
+                    alocacao.company_id = company_name
+                corrigidos += 1
+
+    if not dry_run:
+        db.session.commit()
+
+    return {
+        'tabela': 'alocacoes',
+        'total': total,
+        'corrigidos': corrigidos,
+        'dry_run': dry_run,
+        'restantes': RequisicaoCompraAlocacao.query.filter(
+            RequisicaoCompraAlocacao.importado_odoo == True,
+            RequisicaoCompraAlocacao.company_id.is_(None)
+        ).count() if not dry_run else None
+    }
+
+
+@pedidos_compras_bp.route('/api/status-company-id')
+@login_required
+def status_company_id():
+    """
+    [TEMPORÁRIO] Retorna status de preenchimento do company_id
+    """
+    from app.manufatura.models import RequisicaoCompras, RequisicaoCompraAlocacao
+    from sqlalchemy import text
+
+    try:
+        # Pedidos
+        pedidos_total = PedidoCompras.query.filter(PedidoCompras.importado_odoo == True).count()
+        pedidos_sem = PedidoCompras.query.filter(
+            PedidoCompras.importado_odoo == True,
+            PedidoCompras.company_id.is_(None)
+        ).count()
+
+        # Requisições
+        requisicoes_total = RequisicaoCompras.query.filter(RequisicaoCompras.importado_odoo == True).count()
+        requisicoes_sem = RequisicaoCompras.query.filter(
+            RequisicaoCompras.importado_odoo == True,
+            RequisicaoCompras.company_id.is_(None)
+        ).count()
+
+        # Alocações
+        alocacoes_total = RequisicaoCompraAlocacao.query.filter(RequisicaoCompraAlocacao.importado_odoo == True).count()
+        alocacoes_sem = RequisicaoCompraAlocacao.query.filter(
+            RequisicaoCompraAlocacao.importado_odoo == True,
+            RequisicaoCompraAlocacao.company_id.is_(None)
+        ).count()
+
+        return jsonify({
+            'pedidos': {
+                'total': pedidos_total,
+                'sem_empresa': pedidos_sem,
+                'percentual_ok': round((pedidos_total - pedidos_sem) / pedidos_total * 100, 1) if pedidos_total > 0 else 100
+            },
+            'requisicoes': {
+                'total': requisicoes_total,
+                'sem_empresa': requisicoes_sem,
+                'percentual_ok': round((requisicoes_total - requisicoes_sem) / requisicoes_total * 100, 1) if requisicoes_total > 0 else 100
+            },
+            'alocacoes': {
+                'total': alocacoes_total,
+                'sem_empresa': alocacoes_sem,
+                'percentual_ok': round((alocacoes_total - alocacoes_sem) / alocacoes_total * 100, 1) if alocacoes_total > 0 else 100
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"[STATUS] Erro: {e}")
+        return jsonify({'erro': str(e)}), 500

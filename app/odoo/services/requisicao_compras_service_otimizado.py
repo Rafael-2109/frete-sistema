@@ -19,8 +19,7 @@ Data: 31/10/2025
 
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional, Tuple, Set
-from decimal import Decimal
+from typing import Dict, List, Any, Set
 from collections import defaultdict
 
 from app import db
@@ -263,12 +262,14 @@ class RequisicaoComprasServiceOtimizado:
 
         return produtos_cache
 
-    def _carregar_requisicoes_existentes(self) -> Dict[str, RequisicaoCompras]:
+    def _carregar_requisicoes_existentes(self) -> Dict[str, Dict]:
         """
         🚀 OTIMIZAÇÃO 3: Carrega TODAS as requisições existentes em 1 query
 
         Returns:
-            Dict com múltiplos índices para busca rápida
+            Dict com múltiplos índices para busca rápida:
+            - 'por_odoo_id': {odoo_id: RequisicaoCompras}
+            - 'por_req_produto_empresa': {(num_requisicao, cod_produto, company_id): RequisicaoCompras}
         """
         self.logger.info("🚀 Carregando requisições existentes em batch...")
 
@@ -277,16 +278,17 @@ class RequisicaoComprasServiceOtimizado:
             importado_odoo=True
         ).all()
 
-        # Criar 2 índices para busca rápida
+        # ✅ ATUALIZADO: Criar 2 índices para busca rápida O(1) incluindo company_id
         cache = {
-            'por_odoo_id': {},      # odoo_id -> RequisicaoCompras
-            'por_req_produto': {}   # (num_requisicao, cod_produto) -> RequisicaoCompras
+            'por_odoo_id': {},              # odoo_id -> RequisicaoCompras
+            'por_req_produto_empresa': {}   # (num_requisicao, cod_produto, company_id) -> RequisicaoCompras
         }
 
         for req in todas_requisicoes:
             if req.odoo_id:
                 cache['por_odoo_id'][req.odoo_id] = req
-            cache['por_req_produto'][(req.num_requisicao, req.cod_produto)] = req
+            # ✅ ATUALIZADO: Incluir company_id na chave
+            cache['por_req_produto_empresa'][(req.num_requisicao, req.cod_produto, req.company_id)] = req
 
         self.logger.info(f"   ✅ {len(todas_requisicoes)} requisições carregadas em memória")
 
@@ -415,13 +417,18 @@ class RequisicaoComprasServiceOtimizado:
             odoo_id = str(linha_odoo['id'])
             num_requisicao = req_odoo['name']
 
+            # ✅ NOVO: Extrair company_id do Odoo
+            company_name = None
+            if req_odoo.get('company_id'):
+                company_name = req_odoo['company_id'][1] if len(req_odoo['company_id']) > 1 else None
+
             # 🚀 Busca no CACHE em vez de 2 queries
             requisicao_existente = requisicoes_existentes_cache['por_odoo_id'].get(odoo_id)
 
             if not requisicao_existente:
-                # Verificar por (num_requisicao, cod_produto)
-                requisicao_existente = requisicoes_existentes_cache['por_req_produto'].get(
-                    (num_requisicao, cod_produto)
+                # ✅ ATUALIZADO: Verificar por (num_requisicao, cod_produto, company_id)
+                requisicao_existente = requisicoes_existentes_cache['por_req_produto_empresa'].get(
+                    (num_requisicao, cod_produto, company_name)
                 )
 
             if requisicao_existente:
@@ -440,7 +447,8 @@ class RequisicaoComprasServiceOtimizado:
                 # 🚀 Atualizar CACHE com nova requisição
                 if nova_req.odoo_id:
                     requisicoes_existentes_cache['por_odoo_id'][nova_req.odoo_id] = nova_req
-                requisicoes_existentes_cache['por_req_produto'][(nova_req.num_requisicao, nova_req.cod_produto)] = nova_req
+                # ✅ ATUALIZADO: Incluir company_id na chave do cache
+                requisicoes_existentes_cache['por_req_produto_empresa'][(nova_req.num_requisicao, nova_req.cod_produto, nova_req.company_id)] = nova_req
 
                 return {'processado': True, 'nova': True, 'atualizada': False}
 
@@ -448,4 +456,237 @@ class RequisicaoComprasServiceOtimizado:
             self.logger.error(f"❌ Erro ao processar linha {linha_odoo.get('id')}: {e}")
             return {'processado': False, 'nova': False, 'atualizada': False}
 
-    # ... métodos _criar_requisicao e _atualizar_requisicao continuam iguais ...
+    def _criar_requisicao(
+        self,
+        req_odoo: Dict,
+        linha_odoo: Dict,
+        produto_odoo: Dict
+    ) -> RequisicaoCompras:
+        """
+        Cria nova requisição de compras
+
+        Args:
+            req_odoo: Dados da requisição pai
+            linha_odoo: Dados da linha
+            produto_odoo: Dados do produto
+
+        Returns:
+            RequisicaoCompras criada
+        """
+        from decimal import Decimal
+
+        # Extrair dados
+        cod_produto = produto_odoo['default_code']
+        nome_produto = produto_odoo['name']
+        num_requisicao = req_odoo['name']
+
+        # ✅ NOVO: Extrair company_id (nome da empresa)
+        company_name = None
+        if req_odoo.get('company_id'):
+            company_name = req_odoo['company_id'][1] if len(req_odoo['company_id']) > 1 else None
+
+        # 🔴 VERIFICAÇÃO ADICIONAL: Checar se já existe por (num_requisicao + cod_produto + company_id)
+        requisicao_duplicada = RequisicaoCompras.query.filter_by(
+            num_requisicao=num_requisicao,
+            cod_produto=cod_produto,
+            company_id=company_name
+        ).first()
+
+        if requisicao_duplicada:
+            self.logger.warning(
+                f"   ⚠️  Requisição duplicada encontrada: {num_requisicao} + {cod_produto} + {company_name} "
+                f"(ID existente: {requisicao_duplicada.id}) - PULANDO"
+            )
+            return requisicao_duplicada
+
+        # Processar datas
+        data_requisicao_criacao = datetime.strptime(
+            req_odoo['create_date'], '%Y-%m-%d %H:%M:%S'
+        ).date()
+
+        data_requisicao_solicitada = None
+        if req_odoo.get('date_start'):
+            data_requisicao_solicitada = datetime.strptime(
+                req_odoo['date_start'], '%Y-%m-%d'
+            ).date()
+
+        # ✅ CORRIGIDO: Extrair data_necessidade (date_required do Odoo)
+        data_necessidade = None
+        lead_time_requisicao = None
+        if linha_odoo.get('date_required'):
+            data_necessidade = datetime.strptime(linha_odoo['date_required'], '%Y-%m-%d').date()
+
+            # Calcular lead_time se tiver data_requisicao_solicitada
+            if data_requisicao_solicitada:
+                lead_time_requisicao = (data_necessidade - data_requisicao_solicitada).days
+
+        # Status
+        status = self.MAPA_STATUS.get(req_odoo['state'], 'Pendente')
+
+        # Criar objeto
+        requisicao = RequisicaoCompras(
+            num_requisicao=num_requisicao,
+            company_id=company_name,  # ✅ NOVO: Empresa compradora
+            data_requisicao_criacao=data_requisicao_criacao,
+            usuario_requisicao_criacao=req_odoo['requested_by'][1] if req_odoo.get('requested_by') else None,
+            data_requisicao_solicitada=data_requisicao_solicitada,
+            cod_produto=cod_produto,
+            nome_produto=nome_produto,
+            qtd_produto_requisicao=Decimal(str(linha_odoo['product_qty'])),
+            data_necessidade=data_necessidade,
+            lead_time_requisicao=lead_time_requisicao,
+            lead_time_previsto=None,  # Será preenchido quando houver pedido
+            qtd_produto_sem_requisicao=Decimal('0'),
+            status=status,
+            observacoes_odoo=req_odoo.get('description') if req_odoo.get('description') != False else None,
+            importado_odoo=True,
+            odoo_id=str(linha_odoo['id']),
+            requisicao_odoo_id=str(req_odoo['id']),
+        )
+
+        db.session.add(requisicao)
+
+        try:
+            db.session.flush()  # Para ter o ID
+        except Exception as e:
+            db.session.rollback()  # 🔴 ROLLBACK em caso de erro
+            self.logger.error(f"❌ Erro ao criar requisição {num_requisicao} + {cod_produto}: {e}")
+            raise
+
+        # Criar snapshot completo no histórico (CRIAÇÃO)
+        write_date = req_odoo.get('write_date')
+        write_date_dt = datetime.strptime(write_date, '%Y-%m-%d %H:%M:%S') if write_date else None
+
+        historico = HistoricoRequisicaoCompras(
+            # Controle
+            requisicao_id=requisicao.id,
+            operacao='CRIAR',
+            alterado_por='Odoo',
+            write_date_odoo=write_date_dt,
+
+            # Snapshot completo - TODOS os campos
+            num_requisicao=requisicao.num_requisicao,
+            company_id=requisicao.company_id,
+            data_requisicao_criacao=requisicao.data_requisicao_criacao,
+            usuario_requisicao_criacao=requisicao.usuario_requisicao_criacao,
+            lead_time_requisicao=requisicao.lead_time_requisicao,
+            lead_time_previsto=requisicao.lead_time_previsto,
+            data_requisicao_solicitada=requisicao.data_requisicao_solicitada,
+            cod_produto=requisicao.cod_produto,
+            nome_produto=requisicao.nome_produto,
+            qtd_produto_requisicao=requisicao.qtd_produto_requisicao,
+            qtd_produto_sem_requisicao=requisicao.qtd_produto_sem_requisicao,
+            necessidade=requisicao.necessidade,
+            data_necessidade=requisicao.data_necessidade,
+            status=requisicao.status,
+            importado_odoo=requisicao.importado_odoo,
+            odoo_id=requisicao.odoo_id,
+            requisicao_odoo_id=requisicao.requisicao_odoo_id,
+            status_requisicao=requisicao.status_requisicao,
+            data_envio_odoo=requisicao.data_envio_odoo,
+            data_confirmacao_odoo=requisicao.data_confirmacao_odoo,
+            observacoes_odoo=requisicao.observacoes_odoo,
+            criado_em=requisicao.criado_em
+        )
+
+        db.session.add(historico)
+
+        self.logger.info(f"   ✅ Requisição {requisicao.num_requisicao} CRIADA - Produto: {cod_produto} - Empresa: {company_name}")
+
+        return requisicao
+
+    def _atualizar_requisicao(
+        self,
+        requisicao_existente: RequisicaoCompras,
+        req_odoo: Dict,
+        linha_odoo: Dict,
+        produto_odoo: Dict
+    ) -> bool:
+        """
+        Atualiza requisição existente e registra mudanças
+
+        Args:
+            requisicao_existente: Requisição no banco
+            req_odoo: Dados atuais do Odoo (requisição pai)
+            linha_odoo: Dados atuais do Odoo (linha)
+            produto_odoo: Dados do produto
+
+        Returns:
+            True se houve alteração, False caso contrário
+        """
+        from decimal import Decimal
+
+        alteracoes = []
+
+        # Comparar campos mapeados
+        campos_para_comparar = {
+            'qtd_produto_requisicao': Decimal(str(linha_odoo['product_qty'])),
+            'status': self.MAPA_STATUS.get(req_odoo['state'], 'Pendente'),
+            'observacoes_odoo': req_odoo.get('description') if req_odoo.get('description') != False else None,
+        }
+
+        # Verificar mudanças
+        for campo, novo_valor in campos_para_comparar.items():
+            valor_atual = getattr(requisicao_existente, campo)
+
+            # Normalizar para comparação
+            if isinstance(valor_atual, Decimal) and not isinstance(novo_valor, Decimal):
+                novo_valor = Decimal(str(novo_valor)) if novo_valor is not None else None
+
+            if valor_atual != novo_valor:
+                alteracoes.append({
+                    'campo': campo,
+                    'valor_antes': str(valor_atual),
+                    'valor_depois': str(novo_valor)
+                })
+
+                # Atualizar campo
+                setattr(requisicao_existente, campo, novo_valor)
+
+        if not alteracoes:
+            self.logger.debug(f"   Requisição {requisicao_existente.num_requisicao} sem alterações")
+            return False
+
+        # Gravar snapshot completo no histórico (após alteração)
+        write_date = req_odoo.get('write_date')
+        write_date_dt = datetime.strptime(write_date, '%Y-%m-%d %H:%M:%S') if write_date else None
+
+        historico = HistoricoRequisicaoCompras(
+            # Controle
+            requisicao_id=requisicao_existente.id,
+            operacao='EDITAR',
+            alterado_por='Odoo',
+            write_date_odoo=write_date_dt,
+
+            # Snapshot completo - TODOS os campos (estado APÓS alteração)
+            num_requisicao=requisicao_existente.num_requisicao,
+            company_id=requisicao_existente.company_id,
+            data_requisicao_criacao=requisicao_existente.data_requisicao_criacao,
+            usuario_requisicao_criacao=requisicao_existente.usuario_requisicao_criacao,
+            lead_time_requisicao=requisicao_existente.lead_time_requisicao,
+            lead_time_previsto=requisicao_existente.lead_time_previsto,
+            data_requisicao_solicitada=requisicao_existente.data_requisicao_solicitada,
+            cod_produto=requisicao_existente.cod_produto,
+            nome_produto=requisicao_existente.nome_produto,
+            qtd_produto_requisicao=requisicao_existente.qtd_produto_requisicao,
+            qtd_produto_sem_requisicao=requisicao_existente.qtd_produto_sem_requisicao,
+            necessidade=requisicao_existente.necessidade,
+            data_necessidade=requisicao_existente.data_necessidade,
+            status=requisicao_existente.status,
+            importado_odoo=requisicao_existente.importado_odoo,
+            odoo_id=requisicao_existente.odoo_id,
+            requisicao_odoo_id=requisicao_existente.requisicao_odoo_id,
+            status_requisicao=requisicao_existente.status_requisicao,
+            data_envio_odoo=requisicao_existente.data_envio_odoo,
+            data_confirmacao_odoo=requisicao_existente.data_confirmacao_odoo,
+            observacoes_odoo=requisicao_existente.observacoes_odoo,
+            criado_em=requisicao_existente.criado_em
+        )
+
+        db.session.add(historico)
+
+        self.logger.info(f"   📝 Requisição {requisicao_existente.num_requisicao} ATUALIZADA - {len(alteracoes)} mudanças")
+        for alteracao in alteracoes:
+            self.logger.info(f"      {alteracao['campo']}: {alteracao['valor_antes']} → {alteracao['valor_depois']}")
+
+        return True

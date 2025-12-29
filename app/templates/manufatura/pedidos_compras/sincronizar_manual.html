@@ -144,6 +144,50 @@
                 </div>
             </div>
 
+            <!-- Card de Correção de Company ID -->
+            <div class="card shadow-sm mt-4 border-warning">
+                <div class="card-header bg-warning text-dark">
+                    <h6 class="mb-0">
+                        <i class="fas fa-building"></i> Correção de Empresa (Company ID)
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted mb-3">
+                        Corrige registros importados sem identificação de empresa, buscando no Odoo.
+                    </p>
+
+                    <!-- Status -->
+                    <div id="status-company-id" class="mb-3">
+                        <div class="spinner-border spinner-border-sm" role="status">
+                            <span class="visually-hidden">Carregando...</span>
+                        </div>
+                        <span class="text-muted">Carregando status...</span>
+                    </div>
+
+                    <!-- Botões de Correção -->
+                    <div class="row g-2">
+                        <div class="col-md-4">
+                            <button type="button" class="btn btn-warning w-100 btn-corrigir" data-tabela="pedidos">
+                                <i class="fas fa-shopping-cart"></i> Corrigir Pedidos
+                            </button>
+                        </div>
+                        <div class="col-md-4">
+                            <button type="button" class="btn btn-warning w-100 btn-corrigir" data-tabela="requisicoes">
+                                <i class="fas fa-clipboard-list"></i> Corrigir Requisições
+                            </button>
+                        </div>
+                        <div class="col-md-4">
+                            <button type="button" class="btn btn-warning w-100 btn-corrigir" data-tabela="alocacoes">
+                                <i class="fas fa-link"></i> Corrigir Alocações
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Resultado da Correção -->
+                    <div id="resultado-correcao" class="mt-3" style="display: none;"></div>
+                </div>
+            </div>
+
             <!-- Card de Dicas -->
             <div class="card shadow-sm mt-4">
                 <div class="card-header card-header-theme">
@@ -256,6 +300,135 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Inicializar
     atualizarInfoPeriodo();
+
+    // ========================================
+    // CORREÇÃO DE COMPANY ID
+    // ========================================
+
+    // Carregar status inicial
+    carregarStatusCompanyId();
+
+    // Botões de correção
+    document.querySelectorAll('.btn-corrigir').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const tabela = this.dataset.tabela;
+            corrigirCompanyId(tabela, this);
+        });
+    });
 });
+
+// Carregar status de company_id
+function carregarStatusCompanyId() {
+    const container = document.getElementById('status-company-id');
+
+    fetch('/manufatura/pedidos-compras/api/status-company-id')
+        .then(response => response.json())
+        .then(data => {
+            if (data.erro) {
+                container.innerHTML = `<div class="alert alert-danger py-1 mb-0">${data.erro}</div>`;
+                return;
+            }
+
+            let html = '<div class="row g-2">';
+
+            // Pedidos
+            const pedidosClass = data.pedidos.sem_empresa > 0 ? 'text-danger' : 'text-success';
+            html += `
+                <div class="col-md-4">
+                    <div class="border rounded p-2 text-center">
+                        <small class="text-muted">Pedidos</small>
+                        <div class="${pedidosClass}">
+                            <strong>${data.pedidos.sem_empresa}</strong>/${data.pedidos.total}
+                        </div>
+                        <small class="text-muted">${data.pedidos.percentual_ok}% OK</small>
+                    </div>
+                </div>
+            `;
+
+            // Requisições
+            const reqClass = data.requisicoes.sem_empresa > 0 ? 'text-danger' : 'text-success';
+            html += `
+                <div class="col-md-4">
+                    <div class="border rounded p-2 text-center">
+                        <small class="text-muted">Requisições</small>
+                        <div class="${reqClass}">
+                            <strong>${data.requisicoes.sem_empresa}</strong>/${data.requisicoes.total}
+                        </div>
+                        <small class="text-muted">${data.requisicoes.percentual_ok}% OK</small>
+                    </div>
+                </div>
+            `;
+
+            // Alocações
+            const alocClass = data.alocacoes.sem_empresa > 0 ? 'text-danger' : 'text-success';
+            html += `
+                <div class="col-md-4">
+                    <div class="border rounded p-2 text-center">
+                        <small class="text-muted">Alocações</small>
+                        <div class="${alocClass}">
+                            <strong>${data.alocacoes.sem_empresa}</strong>/${data.alocacoes.total}
+                        </div>
+                        <small class="text-muted">${data.alocacoes.percentual_ok}% OK</small>
+                    </div>
+                </div>
+            `;
+
+            html += '</div>';
+            container.innerHTML = html;
+        })
+        .catch(error => {
+            container.innerHTML = `<div class="alert alert-danger py-1 mb-0">Erro: ${error.message}</div>`;
+        });
+}
+
+// Corrigir company_id
+function corrigirCompanyId(tabela, btn) {
+    const resultadoContainer = document.getElementById('resultado-correcao');
+    const originalHtml = btn.innerHTML;
+
+    // Desabilitar botão
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Corrigindo...';
+
+    resultadoContainer.style.display = 'block';
+    resultadoContainer.innerHTML = '<div class="alert alert-info py-2">Processando... Aguarde.</div>';
+
+    fetch('/manufatura/pedidos-compras/api/corrigir-company-id', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            tabela: tabela,
+            dry_run: false,
+            batch_size: 500
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.erro) {
+            resultadoContainer.innerHTML = `<div class="alert alert-danger py-2">${data.erro}</div>`;
+        } else {
+            let msgClass = data.corrigidos > 0 ? 'success' : 'info';
+            let restantes = data.restantes !== null ? ` | Restantes: ${data.restantes}` : '';
+            resultadoContainer.innerHTML = `
+                <div class="alert alert-${msgClass} py-2">
+                    <strong>${data.tabela.toUpperCase()}:</strong>
+                    ${data.corrigidos}/${data.total} corrigidos${restantes}
+                </div>
+            `;
+
+            // Atualizar status
+            carregarStatusCompanyId();
+        }
+    })
+    .catch(error => {
+        resultadoContainer.innerHTML = `<div class="alert alert-danger py-2">Erro: ${error.message}</div>`;
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+    });
+}
 </script>
 {% endblock %}
