@@ -605,8 +605,8 @@ def corrigir_company_id():
 
 
 def _corrigir_pedidos(connection, batch_size: int, dry_run: bool):
-    """Corrige company_id nos pedidos"""
-    from app.manufatura.models import PedidoCompras
+    """Corrige company_id nos pedidos, tratando duplicatas"""
+    from app.manufatura.models import PedidoCompras, RequisicaoCompraAlocacao
 
     # Buscar pedidos sem company_id
     pedidos = PedidoCompras.query.filter(
@@ -617,13 +617,13 @@ def _corrigir_pedidos(connection, batch_size: int, dry_run: bool):
 
     total = len(pedidos)
     if total == 0:
-        return {'tabela': 'pedidos', 'total': 0, 'corrigidos': 0, 'dry_run': dry_run}
+        return {'tabela': 'pedidos', 'total': 0, 'corrigidos': 0, 'deletados': 0, 'dry_run': dry_run}
 
     # Coletar line_ids
     line_ids = [int(p.odoo_id) for p in pedidos if p.odoo_id and p.odoo_id.isdigit()]
 
     if not line_ids:
-        return {'tabela': 'pedidos', 'total': total, 'corrigidos': 0, 'erro': 'Sem IDs válidos'}
+        return {'tabela': 'pedidos', 'total': total, 'corrigidos': 0, 'deletados': 0, 'erro': 'Sem IDs válidos'}
 
     # Buscar linhas no Odoo
     linhas = connection.read('purchase.order.line', line_ids, fields=['id', 'order_id'])
@@ -631,10 +631,10 @@ def _corrigir_pedidos(connection, batch_size: int, dry_run: bool):
     # Mapear line_id -> order_id
     line_to_order = {}
     order_ids = set()
-    for l in linhas:
-        if l.get('order_id'):
-            line_to_order[str(l['id'])] = l['order_id'][0]
-            order_ids.add(l['order_id'][0])
+    for linha in linhas:
+        if linha.get('order_id'):
+            line_to_order[str(linha['id'])] = linha['order_id'][0]
+            order_ids.add(linha['order_id'][0])
 
     # Buscar pedidos no Odoo
     orders = connection.read('purchase.order', list(order_ids), fields=['id', 'company_id'])
@@ -646,8 +646,10 @@ def _corrigir_pedidos(connection, batch_size: int, dry_run: bool):
             company_name = o['company_id'][1] if len(o['company_id']) > 1 else None
             order_to_company[o['id']] = company_name
 
-    # Atualizar pedidos
+    # Atualizar pedidos (tratando duplicatas)
     corrigidos = 0
+    deletados = 0
+
     for pedido in pedidos:
         if pedido.odoo_id and pedido.odoo_id in line_to_order:
             order_id = line_to_order[pedido.odoo_id]
@@ -655,8 +657,38 @@ def _corrigir_pedidos(connection, batch_size: int, dry_run: bool):
 
             if company_name:
                 if not dry_run:
-                    pedido.company_id = company_name
-                corrigidos += 1
+                    # Verificar se já existe pedido com essa combinação
+                    existente = PedidoCompras.query.filter(
+                        PedidoCompras.num_pedido == pedido.num_pedido,
+                        PedidoCompras.cod_produto == pedido.cod_produto,
+                        PedidoCompras.company_id == company_name,
+                        PedidoCompras.id != pedido.id
+                    ).first()
+
+                    if existente:
+                        # Já existe - transferir alocações e deletar duplicado
+                        RequisicaoCompraAlocacao.query.filter_by(
+                            pedido_compra_id=pedido.id
+                        ).update({'pedido_compra_id': existente.id})
+                        # HistoricoPedidoCompras será deletado automaticamente (CASCADE)
+                        db.session.delete(pedido)
+                        deletados += 1
+                    else:
+                        # Não existe - atualizar company_id
+                        pedido.company_id = company_name
+                        corrigidos += 1
+                else:
+                    # Dry run - apenas contar
+                    existente = PedidoCompras.query.filter(
+                        PedidoCompras.num_pedido == pedido.num_pedido,
+                        PedidoCompras.cod_produto == pedido.cod_produto,
+                        PedidoCompras.company_id == company_name,
+                        PedidoCompras.id != pedido.id
+                    ).first()
+                    if existente:
+                        deletados += 1
+                    else:
+                        corrigidos += 1
 
     if not dry_run:
         db.session.commit()
@@ -665,6 +697,7 @@ def _corrigir_pedidos(connection, batch_size: int, dry_run: bool):
         'tabela': 'pedidos',
         'total': total,
         'corrigidos': corrigidos,
+        'deletados': deletados,
         'dry_run': dry_run,
         'restantes': PedidoCompras.query.filter(
             PedidoCompras.importado_odoo == True,
@@ -674,8 +707,8 @@ def _corrigir_pedidos(connection, batch_size: int, dry_run: bool):
 
 
 def _corrigir_requisicoes(connection, batch_size: int, dry_run: bool):
-    """Corrige company_id nas requisições"""
-    from app.manufatura.models import RequisicaoCompras
+    """Corrige company_id nas requisições, tratando duplicatas"""
+    from app.manufatura.models import RequisicaoCompras, RequisicaoCompraAlocacao
 
     # Buscar requisições sem company_id
     requisicoes = RequisicaoCompras.query.filter(
@@ -686,7 +719,7 @@ def _corrigir_requisicoes(connection, batch_size: int, dry_run: bool):
 
     total = len(requisicoes)
     if total == 0:
-        return {'tabela': 'requisicoes', 'total': 0, 'corrigidos': 0, 'dry_run': dry_run}
+        return {'tabela': 'requisicoes', 'total': 0, 'corrigidos': 0, 'deletados': 0, 'dry_run': dry_run}
 
     # Coletar request_ids únicos
     request_ids = list(set([
@@ -695,7 +728,7 @@ def _corrigir_requisicoes(connection, batch_size: int, dry_run: bool):
     ]))
 
     if not request_ids:
-        return {'tabela': 'requisicoes', 'total': total, 'corrigidos': 0, 'erro': 'Sem IDs válidos'}
+        return {'tabela': 'requisicoes', 'total': total, 'corrigidos': 0, 'deletados': 0, 'erro': 'Sem IDs válidos'}
 
     # Buscar requisições no Odoo
     requests = connection.read('purchase.request', request_ids, fields=['id', 'company_id'])
@@ -707,16 +740,47 @@ def _corrigir_requisicoes(connection, batch_size: int, dry_run: bool):
             company_name = r['company_id'][1] if len(r['company_id']) > 1 else None
             request_to_company[str(r['id'])] = company_name
 
-    # Atualizar requisições
+    # Atualizar requisições (tratando duplicatas)
     corrigidos = 0
+    deletados = 0
+
     for requisicao in requisicoes:
         if requisicao.requisicao_odoo_id:
             company_name = request_to_company.get(requisicao.requisicao_odoo_id)
 
             if company_name:
                 if not dry_run:
-                    requisicao.company_id = company_name
-                corrigidos += 1
+                    # Verificar se já existe requisição com essa combinação
+                    existente = RequisicaoCompras.query.filter(
+                        RequisicaoCompras.num_requisicao == requisicao.num_requisicao,
+                        RequisicaoCompras.cod_produto == requisicao.cod_produto,
+                        RequisicaoCompras.company_id == company_name,
+                        RequisicaoCompras.id != requisicao.id
+                    ).first()
+
+                    if existente:
+                        # Já existe - transferir alocações e deletar duplicado
+                        RequisicaoCompraAlocacao.query.filter_by(
+                            requisicao_compra_id=requisicao.id
+                        ).update({'requisicao_compra_id': existente.id})
+                        db.session.delete(requisicao)
+                        deletados += 1
+                    else:
+                        # Não existe - atualizar company_id
+                        requisicao.company_id = company_name
+                        corrigidos += 1
+                else:
+                    # Dry run - apenas contar
+                    existente = RequisicaoCompras.query.filter(
+                        RequisicaoCompras.num_requisicao == requisicao.num_requisicao,
+                        RequisicaoCompras.cod_produto == requisicao.cod_produto,
+                        RequisicaoCompras.company_id == company_name,
+                        RequisicaoCompras.id != requisicao.id
+                    ).first()
+                    if existente:
+                        deletados += 1
+                    else:
+                        corrigidos += 1
 
     if not dry_run:
         db.session.commit()
@@ -725,6 +789,7 @@ def _corrigir_requisicoes(connection, batch_size: int, dry_run: bool):
         'tabela': 'requisicoes',
         'total': total,
         'corrigidos': corrigidos,
+        'deletados': deletados,
         'dry_run': dry_run,
         'restantes': RequisicaoCompras.query.filter(
             RequisicaoCompras.importado_odoo == True,
@@ -746,7 +811,7 @@ def _corrigir_alocacoes(connection, batch_size: int, dry_run: bool):
 
     total = len(alocacoes)
     if total == 0:
-        return {'tabela': 'alocacoes', 'total': 0, 'corrigidos': 0, 'dry_run': dry_run}
+        return {'tabela': 'alocacoes', 'total': 0, 'corrigidos': 0, 'deletados': 0, 'dry_run': dry_run}
 
     # Coletar allocation_ids
     allocation_ids = [
@@ -785,6 +850,7 @@ def _corrigir_alocacoes(connection, batch_size: int, dry_run: bool):
         'tabela': 'alocacoes',
         'total': total,
         'corrigidos': corrigidos,
+        'deletados': 0,
         'dry_run': dry_run,
         'restantes': RequisicaoCompraAlocacao.query.filter(
             RequisicaoCompraAlocacao.importado_odoo == True,
