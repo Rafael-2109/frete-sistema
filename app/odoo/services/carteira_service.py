@@ -1162,7 +1162,7 @@ class CarteiraService:
             if custo:
                 return {
                     'custo_unitario_snapshot': float(custo.custo_considerado) if custo.custo_considerado else None,
-                    'custo_tipo_snapshot': custo.tipo_custo,
+                    'custo_tipo_snapshot': custo.tipo_custo_selecionado,
                     'custo_vigencia_snapshot': custo.vigencia_inicio,
                     'custo_producao_snapshot': float(custo.custo_producao) if custo.custo_producao else None
                 }
