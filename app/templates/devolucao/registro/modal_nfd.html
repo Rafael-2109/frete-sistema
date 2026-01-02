@@ -1,0 +1,153 @@
+<!--
+Modal de Registro de NFD (Nota Fiscal de Devolucao)
+===================================================
+Usado no monitoramento para registrar devolucoes durante a finalizacao de entregas.
+-->
+
+<div class="modal-header">
+    <h5 class="modal-title">
+        Registrar NFD - NF {{ entrega.numero_nf }}
+    </h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+</div>
+
+<div class="modal-body">
+    <!-- Info da Entrega -->
+    <div class="alert alert-light mb-3">
+        <div class="row">
+            <div class="col-md-6">
+                <strong>Cliente:</strong> {{ entrega.cliente }}<br>
+                <strong>CNPJ:</strong> {{ entrega.cnpj_cliente or '-' }}
+            </div>
+            <div class="col-md-6">
+                <strong>NF Venda:</strong> {{ entrega.numero_nf }}<br>
+                <strong>Transportadora:</strong> {{ entrega.transportadora or '-' }}
+            </div>
+        </div>
+    </div>
+
+    <!-- NFDs ja registradas -->
+    {% if nfds_existentes %}
+    <div class="mb-4">
+        <h6>NFDs Registradas</h6>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>NFD</th>
+                        <th>Motivo</th>
+                        <th>Status</th>
+                        <th>Registrado em</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for nfd in nfds_existentes %}
+                    <tr id="nfd-row-{{ nfd.id }}">
+                        <td>
+                            <strong>{{ nfd.numero_nfd }}</strong>
+                            {% if nfd.ocorrencia %}
+                            <br><small class="text-muted">{{ nfd.ocorrencia.numero_ocorrencia }}</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-{{ 'danger' if nfd.motivo == 'AVARIA' else 'warning' if nfd.motivo == 'FALTA' else 'info' }}">
+                                {{ nfd.motivo }}
+                            </span>
+                            {% if nfd.descricao_motivo %}
+                            <br><small class="text-muted">{{ nfd.descricao_motivo[:50] }}{% if nfd.descricao_motivo|length > 50 %}...{% endif %}</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-{{ 'success' if nfd.status == 'FINALIZADA' else 'primary' if nfd.status == 'REGISTRADA' else 'secondary' }}">
+                                {{ nfd.status }}
+                            </span>
+                        </td>
+                        <td>
+                            <small>{{ nfd.criado_em.strftime('%d/%m/%Y %H:%M') }}</small>
+                            <br><small class="text-muted">por {{ nfd.criado_por }}</small>
+                        </td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-outline-danger"
+                                    onclick="excluirNfd({{ nfd.id }}, '{{ nfd.numero_nfd }}')"
+                                    title="Excluir NFD">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <hr>
+    {% endif %}
+
+    <!-- Formulario Nova NFD -->
+    <h6>Nova NFD</h6>
+    <form id="form-registrar-nfd">
+        <input type="hidden" name="entrega_id" value="{{ entrega.id }}">
+        <input type="hidden" name="numero_nf_venda" value="{{ entrega.numero_nf }}">
+
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <label for="numero_nfd" class="form-label">Numero da NFD <span class="text-danger">*</span></label>
+                <input type="text"
+                       class="form-control"
+                       id="numero_nfd"
+                       name="numero_nfd"
+                       required
+                       placeholder="Ex: 12345"
+                       maxlength="20">
+                <div class="invalid-feedback">Numero da NFD e obrigatorio</div>
+            </div>
+
+            <div class="col-md-6 mb-3">
+                <label for="motivo" class="form-label">Motivo <span class="text-danger">*</span></label>
+                <select class="form-select" id="motivo" name="motivo" required>
+                    <option value="">Selecione o motivo...</option>
+                    {% for valor, descricao in motivos %}
+                    <option value="{{ valor }}">{{ descricao }}</option>
+                    {% endfor %}
+                </select>
+                <div class="invalid-feedback">Selecione o motivo da devolucao</div>
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label for="descricao_motivo" class="form-label">
+                Motivo extraído por IA
+                <button type="button" class="btn btn-sm btn-outline-info ms-2" onclick="analisarDescricao()" id="btn-analisar">
+                    Analisar com IA
+                </button>
+            </label>
+            <textarea class="form-control"
+                      id="descricao_motivo"
+                      name="descricao_motivo"
+                      rows="3"
+                      placeholder="Cole o texto da observacao da NFD aqui e clique em 'Analisar com IA'..."
+                      maxlength="500"></textarea>
+            <div class="form-text">
+                Opcional. Cole a observacao da NFD e clique em "Analisar com IA" para extrair motivo automaticamente.
+            </div>
+        </div>
+
+        <!-- Resultado da analise IA -->
+        <div id="resultado-analise" class="alert alert-info d-none">
+            <strong>Analise IA:</strong>
+            <div id="analise-conteudo"></div>
+        </div>
+    </form>
+
+    <!-- Feedback -->
+    <div id="nfd-feedback" class="alert d-none" role="alert"></div>
+</div>
+
+<div class="modal-footer">
+    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+    <button type="button" class="btn btn-primary" onclick="registrarNfd()" id="btn-registrar-nfd-submit">
+        <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+        Registrar NFD
+    </button>
+</div>
+<!-- Scripts estao no template pai (visualizar_entrega.html) -->

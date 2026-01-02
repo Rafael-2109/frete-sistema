@@ -11,6 +11,7 @@ O usuario pode usar diversos termos para a mesma coisa. Normalize antes de proce
 | Termo Usuario | Termo Padrao | Significado |
 |---------------|--------------|-------------|
 | ketchup, catchup, ketichap | ketchup | Produto ketchup |
+| c car, int, com caroço | inteiro/a | Produtos inteiros, que não foram fatiados / processados |
 | caixa, cx, unidade, un | unidade | Quantidade de produto |
 | loja, filial, unidade (cliente) | loja | Filial do cliente |
 | embarque, despacho, saida | expedicao | Data de envio |

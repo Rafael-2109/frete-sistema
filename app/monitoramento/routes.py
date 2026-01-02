@@ -42,6 +42,9 @@ from app.embarques.models import EmbarqueItem  # ✅ Adicionar import
 
 from app.cadastros_agendamento.models import ContatoAgendamento
 
+# Devolucoes - para exibir links no monitoramento
+from app.devolucao.models import NFDevolucao, OcorrenciaDevolucao
+
 from app.utils.sincronizar_todas_entregas import sincronizar_todas_entregas
 from app.pedidos.models import Pedido  # ✅ ADICIONADO: Para controle de status NF no CD
 
@@ -174,6 +177,36 @@ def visualizar_entrega(id):
 
     feedback = session.pop('feedback', None)
 
+    # Buscar ocorrências de devolução vinculadas a esta entrega
+    ocorrencias_devolucao = []
+    if entrega.teve_devolucao:
+        # Buscar NFDs vinculadas a esta entrega de duas formas:
+        # 1. Por entrega_monitorada_id (vinculação direta)
+        # 2. Por numero_nf_venda (vinculação por número da NF)
+        nfds = NFDevolucao.query.filter(
+            db.or_(
+                NFDevolucao.entrega_monitorada_id == entrega.id,
+                NFDevolucao.numero_nf_venda == entrega.numero_nf
+            )
+        ).all()
+
+        for nfd in nfds:
+            # Buscar ocorrência vinculada à NFD
+            ocorrencia = OcorrenciaDevolucao.query.filter_by(
+                nf_devolucao_id=nfd.id,
+                ativo=True
+            ).first()
+
+            if ocorrencia:
+                ocorrencias_devolucao.append({
+                    'id': ocorrencia.id,
+                    'numero_ocorrencia': ocorrencia.numero_ocorrencia,
+                    'numero_nfd': nfd.numero_nfd,
+                    'status': ocorrencia.status,
+                    'motivo': nfd.motivo,
+                    'destino': ocorrencia.destino
+                })
+
     return render_template(
         'monitoramento/visualizar_entrega.html',
         entrega=entrega,
@@ -183,7 +216,8 @@ def visualizar_entrega(id):
         form_agendamento=form_agendamento,
         form=form_comentario,
         comentarios=comentarios,
-        feedback=feedback
+        feedback=feedback,
+        ocorrencias_devolucao=ocorrencias_devolucao
     )
 
 @monitoramento_bp.route('/<int:id>/adicionar_log', methods=['POST'])

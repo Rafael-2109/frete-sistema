@@ -23,6 +23,21 @@
       <a href="{{ url_for('monitoramento.visualizar_arquivos', id=entrega.id) }}" class="btn btn-outline-dark">Arquivos</a>
     </div>
 
+  {% if ocorrencias_devolucao %}
+  <div class="alert alert-warning mt-3 mb-2">
+    <strong>Esta entrega possui {{ ocorrencias_devolucao|length }} devolucao(oes):</strong>
+    <div class="mt-2">
+      {% for ocorr in ocorrencias_devolucao %}
+        <a href="{{ url_for('devolucao.devolucao_ocorrencia.detalhe', ocorrencia_id=ocorr.id) }}"
+           class="btn btn-sm btn-{{ 'danger' if ocorr.status == 'ABERTA' else 'warning' if ocorr.status == 'EM_ANALISE' else 'success' }} me-2 mb-1"
+           title="Clique para ver detalhes da devolucao">
+          NFD {{ ocorr.numero_nfd }} <span class="badge bg-light text-dark">{{ ocorr.status }}</span>
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
   <ul class="nav nav-tabs mb-4" id="tabs-entrega" role="tablist">
     <li class="nav-item"><a class="nav-link active" id="log-tab" data-bs-toggle="tab" href="#log" role="tab">Acompanhamento</a></li>
     <li class="nav-item"><a class="nav-link" id="evento-tab" data-bs-toggle="tab" href="#evento" role="tab">Eventos</a></li>
@@ -425,6 +440,29 @@
     <!-- FINALIZAÇÃO -->
     <div class="tab-pane fade" id="finalizacao" role="tabpanel">
       <h5>Finalizar entrega</h5>
+
+      {% if entrega.teve_devolucao %}
+      <div class="alert alert-warning mb-3">
+        <strong>Atencao:</strong> Esta entrega possui devolucao(oes) registrada(s).
+        <button type="button" class="btn btn-sm btn-outline-warning ms-2" onclick="abrirModalNfd({{ entrega.id }})">
+          Ver/Editar NFDs
+        </button>
+        {% if ocorrencias_devolucao %}
+        <div class="mt-2">
+          <strong>NFDs de Devolucao:</strong>
+          {% for ocorr in ocorrencias_devolucao %}
+            <a href="{{ url_for('devolucao.devolucao_ocorrencia.detalhe', ocorrencia_id=ocorr.id) }}"
+               class="btn btn-sm btn-{{ 'danger' if ocorr.status == 'ABERTA' else 'warning' if ocorr.status == 'EM_ANALISE' else 'success' }} ms-1"
+               title="Motivo: {{ ocorr.motivo or 'N/A' }} | Destino: {{ ocorr.destino or 'Indefinido' }}">
+              NFD {{ ocorr.numero_nfd }}
+              <span class="badge bg-light text-dark">{{ ocorr.status }}</span>
+            </a>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+
 {% if entrega.finalizado_em %}
 <div class="alert alert-info">
   <strong>Finalizada em:</strong> {{ (entrega.data_hora_entrega_realizada if entrega.data_hora_entrega_realizada else entrega.finalizado_em).strftime('%d/%m/%Y %H:%M') if (entrega.data_hora_entrega_realizada or entrega.finalizado_em) else '-' }}<br>
@@ -433,23 +471,23 @@
   <strong>Registrado em:</strong> {{ entrega.finalizado_em | formatar_data_hora_brasil }}<br>
   <form method="post" action="{{ url_for('monitoramento.remover_finalizacao', id=entrega.id) }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <button class="btn btn-sm btn-outline-danger">Excluir Finalização</button>
+    <button class="btn btn-sm btn-outline-danger">Excluir Finalizacao</button>
   </form>
 </div>
       {% else %}
-      <form method="POST" action="{{ url_for('monitoramento.finalizar_entrega', id=entrega.id) }}">
+      <form id="form-finalizacao" method="POST" action="{{ url_for('monitoramento.finalizar_entrega', id=entrega.id) }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    
-        <!-- Campo original (necessário) -->
+
+        <!-- Campo original (necessario) -->
         <div class="mb-3">
             <label>Data e Hora da Entrega</label>
-            <input type="datetime-local" name="data_hora_entrega" class="form-control">
+            <input type="datetime-local" name="data_hora_entrega" class="form-control" id="data_hora_entrega">
         </div>
-    
+
         <!-- Novos campos -->
         <div class="mb-3">
-            <label>Status Finalização</label>
-            <select name="status_finalizacao" class="form-control">
+            <label>Status Finalizacao</label>
+            <select name="status_finalizacao" class="form-control" id="status_finalizacao">
                 <option value="">Selecione o Status</option>
                 <option value="Cancelada">Cancelada</option>
                 <option value="Devolvida">Devolvida</option>
@@ -457,18 +495,376 @@
                 <option value="Sinistro">Sinistro</option>
             </select>
         </div>
-    
+
         <div class="mb-3">
             <label>Nova NF (apenas se houver troca)</label>
             <input type="text" name="nova_nf" class="form-control" placeholder="Nova NF (se houver)">
         </div>
-    
-        <button type="submit" class="btn btn-success">Finalizar Entrega</button>
+
+        <!-- Botao que abre modal de confirmacao -->
+        <button type="button" class="btn btn-success" onclick="confirmarFinalizacao({{ entrega.id }})">
+          Finalizar Entrega
+        </button>
     </form>
-    
+
       {% endif %}
     </div>
 
   </div>
 </div>
+
+<!-- Modal de Confirmacao de Finalizacao -->
+<div class="modal fade" id="modal-confirmar-finalizacao" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Finalizar Entrega</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <p class="fs-5 text-center mb-4">Houve devolucao nesta entrega?</p>
+        <div class="d-grid gap-2">
+          <button type="button" class="btn btn-warning btn-lg" id="btn-registrar-nfd">
+            Sim, Registrar NFD
+          </button>
+          <button type="button" class="btn btn-success btn-lg" id="btn-sem-devolucao">
+            Nao, Finalizar sem Devolucao
+          </button>
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal para registro de NFD -->
+<div class="modal fade" id="modal-nfd" tabindex="-1" aria-labelledby="modal-nfd-label" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <!-- Conteudo carregado dinamicamente -->
+      <div class="modal-body text-center py-5">
+        <div class="spinner-border text-primary" role="status">
+          <span class="visually-hidden">Carregando...</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Variavel global para armazenar entrega_id
+let entregaIdAtual = null;
+
+// Funcao chamada ao clicar em "Finalizar Entrega"
+function confirmarFinalizacao(entregaId) {
+    entregaIdAtual = entregaId;
+
+    // Fechar modal de NFD se estiver aberto
+    const modalNfdEl = document.getElementById('modal-nfd');
+    const modalNfd = bootstrap.Modal.getInstance(modalNfdEl);
+    if (modalNfd) modalNfd.hide();
+
+    // Abrir modal de confirmacao
+    const modalConfirmar = new bootstrap.Modal(document.getElementById('modal-confirmar-finalizacao'));
+    modalConfirmar.show();
+}
+
+// Botao "Sim, Registrar NFD"
+document.getElementById('btn-registrar-nfd').addEventListener('click', function() {
+    // Fechar modal de confirmacao
+    const modalConfirmar = bootstrap.Modal.getInstance(document.getElementById('modal-confirmar-finalizacao'));
+    modalConfirmar.hide();
+
+    // Abrir modal de NFD
+    setTimeout(() => {
+        abrirModalNfd(entregaIdAtual);
+    }, 300);
+});
+
+// Botao "Nao, Finalizar sem Devolucao"
+document.getElementById('btn-sem-devolucao').addEventListener('click', function() {
+    // Fechar modal de confirmacao
+    const modalConfirmar = bootstrap.Modal.getInstance(document.getElementById('modal-confirmar-finalizacao'));
+    modalConfirmar.hide();
+
+    // Submeter formulario de finalizacao
+    document.getElementById('form-finalizacao').submit();
+});
+
+// Funcao para abrir o modal de NFD
+function abrirModalNfd(entregaId) {
+    entregaIdAtual = entregaId;
+    const modal = new bootstrap.Modal(document.getElementById('modal-nfd'));
+    const modalContent = document.querySelector('#modal-nfd .modal-content');
+
+    // Mostrar loading
+    modalContent.innerHTML = `
+        <div class="modal-body text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Carregando...</span>
+            </div>
+        </div>
+    `;
+
+    // Abrir modal
+    modal.show();
+
+    // Carregar conteudo
+    fetch('/devolucao/registro/modal/' + entregaId)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Erro ao carregar modal');
+            }
+            return response.text();
+        })
+        .then(html => {
+            modalContent.innerHTML = html;
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            modalContent.innerHTML = `
+                <div class="modal-header">
+                    <h5 class="modal-title">Erro</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-danger">
+                        Erro ao carregar o formulario de devolucao. Tente novamente.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                </div>
+            `;
+        });
+}
+
+// =========================================================================
+// Funcoes do Modal de NFD (movidas do template do modal)
+// =========================================================================
+
+// Registrar nova NFD
+function registrarNfd() {
+    const form = document.getElementById('form-registrar-nfd');
+    const btnRegistrar = document.querySelector('#modal-nfd #btn-registrar-nfd-submit');
+    const spinner = btnRegistrar ? btnRegistrar.querySelector('.spinner-border') : null;
+    const feedback = document.getElementById('nfd-feedback');
+
+    // Validar formulario
+    if (!form.checkValidity()) {
+        form.classList.add('was-validated');
+        return;
+    }
+
+    // Coletar dados
+    const formData = new FormData(form);
+    const data = {
+        entrega_id: parseInt(formData.get('entrega_id')),
+        numero_nfd: formData.get('numero_nfd').trim(),
+        motivo: formData.get('motivo'),
+        descricao_motivo: formData.get('descricao_motivo').trim(),
+        numero_nf_venda: formData.get('numero_nf_venda')
+    };
+
+    // Mostrar loading
+    if (btnRegistrar) btnRegistrar.disabled = true;
+    if (spinner) spinner.classList.remove('d-none');
+    if (feedback) feedback.classList.add('d-none');
+
+    // Enviar requisicao
+    fetch('/devolucao/registro/api/registrar', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('input[name="csrf_token"]')?.value || ''
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            // Sucesso
+            if (feedback) {
+                feedback.className = 'alert alert-success';
+                feedback.innerHTML = `
+                    <strong>NFD registrada!</strong><br>
+                    NFD: ${result.numero_nfd}<br>
+                    Ocorrencia: ${result.numero_ocorrencia}
+                `;
+                feedback.classList.remove('d-none');
+            }
+
+            // Limpar formulario
+            form.reset();
+            form.classList.remove('was-validated');
+
+            // Recarregar modal apos 1.5s para mostrar a nova NFD
+            setTimeout(() => {
+                carregarModalNfd(data.entrega_id);
+            }, 1500);
+        } else {
+            // Erro
+            if (feedback) {
+                feedback.className = 'alert alert-danger';
+                feedback.textContent = result.error || 'Erro ao registrar NFD';
+                feedback.classList.remove('d-none');
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        if (feedback) {
+            feedback.className = 'alert alert-danger';
+            feedback.textContent = 'Erro de conexao. Tente novamente.';
+            feedback.classList.remove('d-none');
+        }
+    })
+    .finally(() => {
+        if (btnRegistrar) btnRegistrar.disabled = false;
+        if (spinner) spinner.classList.add('d-none');
+    });
+}
+
+// Excluir NFD
+function excluirNfd(nfdId, numeroNfd) {
+    if (!confirm(`Deseja excluir a NFD ${numeroNfd}?`)) {
+        return;
+    }
+
+    fetch(`/devolucao/registro/api/${nfdId}`, {
+        method: 'DELETE',
+        headers: {
+            'X-CSRFToken': document.querySelector('input[name="csrf_token"]')?.value || ''
+        }
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            // Remover linha da tabela
+            const row = document.getElementById(`nfd-row-${nfdId}`);
+            if (row) {
+                row.remove();
+            }
+
+            // Mostrar feedback
+            const feedback = document.getElementById('nfd-feedback');
+            if (feedback) {
+                feedback.className = 'alert alert-success';
+                feedback.textContent = `NFD ${numeroNfd} excluida com sucesso!`;
+                feedback.classList.remove('d-none');
+
+                setTimeout(() => {
+                    feedback.classList.add('d-none');
+                }, 3000);
+            }
+        } else {
+            alert(result.error || 'Erro ao excluir NFD');
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro de conexao. Tente novamente.');
+    });
+}
+
+// Funcao para recarregar o modal de NFD
+function carregarModalNfd(entregaId) {
+    const modalContent = document.querySelector('#modal-nfd .modal-content');
+    if (modalContent) {
+        fetch(`/devolucao/registro/modal/${entregaId}`)
+            .then(response => response.text())
+            .then(html => {
+                modalContent.innerHTML = html;
+            })
+            .catch(error => {
+                console.error('Erro ao recarregar modal:', error);
+            });
+    }
+}
+
+// Analisar descricao com Claude Haiku para extrair motivo
+function analisarDescricao() {
+    const descricao = document.getElementById('descricao_motivo').value.trim();
+    const btnAnalisar = document.getElementById('btn-analisar');
+    const resultadoDiv = document.getElementById('resultado-analise');
+    const conteudoDiv = document.getElementById('analise-conteudo');
+    const selectMotivo = document.getElementById('motivo');
+
+    if (!descricao) {
+        alert('Digite uma descricao para analisar');
+        return;
+    }
+
+    // Mostrar loading
+    btnAnalisar.disabled = true;
+    btnAnalisar.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Analisando...';
+    resultadoDiv.classList.add('d-none');
+
+    fetch('/devolucao/ai/api/extrair-observacao', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('input[name="csrf_token"]')?.value || ''
+        },
+        body: JSON.stringify({ texto: descricao })
+    })
+    .then(response => response.json())
+    .then(data => {
+        btnAnalisar.disabled = false;
+        btnAnalisar.innerHTML = 'Analisar com IA';
+
+        if (data.sucesso) {
+            const confianca = (data.confianca * 100).toFixed(0);
+            let html = `<p class="mb-1">Confianca: <strong>${confianca}%</strong></p>`;
+
+            if (data.numero_nf_venda) {
+                html += `<p class="mb-1">NF Venda: <strong>${data.numero_nf_venda}</strong></p>`;
+            }
+
+            if (data.motivo_sugerido) {
+                html += `<p class="mb-1">Motivo: <strong>${data.motivo_sugerido}</strong>`;
+                html += ` <button type="button" class="btn btn-sm btn-success ms-2" onclick="aplicarMotivo('${data.motivo_sugerido}')">Aplicar</button></p>`;
+            }
+
+            if (data.descricao_motivo) {
+                html += `<p class="mb-0 text-muted small">${data.descricao_motivo}</p>`;
+            }
+
+            conteudoDiv.innerHTML = html;
+            resultadoDiv.classList.remove('d-none');
+
+            // Se confianca alta, aplicar automaticamente
+            if (data.confianca >= 0.9 && data.motivo_sugerido) {
+                aplicarMotivo(data.motivo_sugerido);
+            }
+        } else {
+            conteudoDiv.innerHTML = `<p class="text-danger mb-0">Erro: ${data.erro || 'Nao foi possivel analisar'}</p>`;
+            resultadoDiv.classList.remove('d-none');
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        btnAnalisar.disabled = false;
+        btnAnalisar.innerHTML = 'Analisar com IA';
+        alert('Erro ao analisar. Tente novamente.');
+    });
+}
+
+// Aplicar motivo sugerido pela IA
+function aplicarMotivo(motivo) {
+    const selectMotivo = document.getElementById('motivo');
+    if (selectMotivo) {
+        // Verificar se o motivo existe nas opcoes
+        const opcao = Array.from(selectMotivo.options).find(opt => opt.value === motivo);
+        if (opcao) {
+            selectMotivo.value = motivo;
+            // Visual feedback
+            selectMotivo.classList.add('border-success');
+            setTimeout(() => selectMotivo.classList.remove('border-success'), 2000);
+        }
+    }
+}
+</script>
 {% endblock %}

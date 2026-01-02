@@ -141,3 +141,4 @@ qrcode==8.0              # Geração de QR Codes
 pillow==11.0.0           # Processamento de imagens (requerido por qrcode)
 haversine==2.9.0         # Distância entre coordenadas GPS
 # Geocoding agora usa Google Maps API (mesma do mapa_service.py)
+weasyprint==67.0         # Geração de PDFs

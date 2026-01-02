@@ -158,7 +158,22 @@
         </div>
         <div class="card-body">
             <form method="GET" action="{{ url_for('cte.listar_ctes') }}">
-                <div class="row">
+                <div class="row mb-2">
+                    <div class="col-md-2">
+                        <label for="tipo_cte" class="form-label">Tipo</label>
+                        <select name="tipo_cte" id="tipo_cte" class="form-select">
+                            <option value="">Todos</option>
+                            <option value="normal" {% if filtro_tipo_cte == 'normal' %}selected{% endif %}>Normal</option>
+                            <option value="complementar" {% if filtro_tipo_cte == 'complementar' %}selected{% endif %}>Compl.</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-2">
+                        <label for="numero_cte" class="form-label">Número CTe</label>
+                        <input type="text" name="numero_cte" id="numero_cte" class="form-control"
+                               value="{{ filtro_numero_cte }}" placeholder="Ex: 123456">
+                    </div>
+
                     <div class="col-md-2">
                         <label for="status" class="form-label">Status</label>
                         <select name="status" id="status" class="form-select">
@@ -179,12 +194,22 @@
                                value="{{ filtro_numero_nf }}" placeholder="Ex: 12345">
                     </div>
 
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <label for="transportadora" class="form-label">Transportadora</label>
                         <input type="text" name="transportadora" id="transportadora" class="form-control"
                                value="{{ filtro_transportadora }}" placeholder="Nome ou CNPJ">
                     </div>
 
+                    <div class="col-md-2">
+                        <label for="vinculado" class="form-label">Vinculado?</label>
+                        <select name="vinculado" id="vinculado" class="form-select">
+                            <option value="">Todos</option>
+                            <option value="sim" {% if filtro_vinculado == 'sim' %}selected{% endif %}>Sim</option>
+                            <option value="nao" {% if filtro_vinculado == 'nao' %}selected{% endif %}>Não</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row">
                     <div class="col-md-2">
                         <label for="data_inicio" class="form-label">Data Início</label>
                         <input type="date" name="data_inicio" id="data_inicio" class="form-control"
@@ -197,19 +222,15 @@
                                value="{{ filtro_data_fim }}">
                     </div>
 
-                    <div class="col-md-2">
-                        <label for="vinculado" class="form-label">Vinculado?</label>
-                        <select name="vinculado" id="vinculado" class="form-select">
-                            <option value="">Todos</option>
-                            <option value="sim" {% if filtro_vinculado == 'sim' %}selected{% endif %}>Sim</option>
-                            <option value="nao" {% if filtro_vinculado == 'nao' %}selected{% endif %}>Não</option>
-                        </select>
-                    </div>
-
-                    <div class="col-md-1 d-flex align-items-end">
+                    <div class="col-md-2 d-flex align-items-end">
                         <button type="submit" class="btn btn-primary w-100">
-                            <i class="fas fa-search"></i>
+                            <i class="fas fa-search"></i> Filtrar
                         </button>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <a href="{{ url_for('cte.listar_ctes') }}" class="btn btn-secondary w-100">
+                            <i class="fas fa-times"></i> Limpar
+                        </a>
                     </div>
                 </div>
             </form>
@@ -402,7 +423,7 @@
             <nav>
                 <ul class="pagination mb-0 justify-content-center">
                     <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
-                        <a class="page-link" href="{{ url_for('cte.listar_ctes', page=paginacao.prev_num, **request.args.to_dict(flat=False)) if paginacao.has_prev else '#' }}">
+                        <a class="page-link" href="{{ url_for('cte.listar_ctes', page=paginacao.prev_num, status=filtro_status, numero_nf=filtro_numero_nf, transportadora=filtro_transportadora, data_inicio=filtro_data_inicio, data_fim=filtro_data_fim, vinculado=filtro_vinculado, tipo_cte=filtro_tipo_cte, numero_cte=filtro_numero_cte) if paginacao.has_prev else '#' }}">
                             Anterior
                         </a>
                     </li>
@@ -410,7 +431,7 @@
                     {% for page_num in range(1, paginacao.pages + 1) %}
                         {% if page_num <= 3 or page_num > paginacao.pages - 3 or (page_num >= paginacao.page - 1 and page_num <= paginacao.page + 1) %}
                             <li class="page-item {% if page_num == paginacao.page %}active{% endif %}">
-                                <a class="page-link" href="{{ url_for('cte.listar_ctes', page=page_num, **request.args.to_dict(flat=False)) }}">
+                                <a class="page-link" href="{{ url_for('cte.listar_ctes', page=page_num, status=filtro_status, numero_nf=filtro_numero_nf, transportadora=filtro_transportadora, data_inicio=filtro_data_inicio, data_fim=filtro_data_fim, vinculado=filtro_vinculado, tipo_cte=filtro_tipo_cte, numero_cte=filtro_numero_cte) }}">
                                     {{ page_num }}
                                 </a>
                             </li>
@@ -422,7 +443,7 @@
                     {% endfor %}
 
                     <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
-                        <a class="page-link" href="{{ url_for('cte.listar_ctes', page=paginacao.next_num, **request.args.to_dict(flat=False)) if paginacao.has_next else '#' }}">
+                        <a class="page-link" href="{{ url_for('cte.listar_ctes', page=paginacao.next_num, status=filtro_status, numero_nf=filtro_numero_nf, transportadora=filtro_transportadora, data_inicio=filtro_data_inicio, data_fim=filtro_data_fim, vinculado=filtro_vinculado, tipo_cte=filtro_tipo_cte, numero_cte=filtro_numero_cte) if paginacao.has_next else '#' }}">
                             Próxima
                         </a>
                     </li>

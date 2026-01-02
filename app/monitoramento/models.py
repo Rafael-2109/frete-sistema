@@ -46,6 +46,9 @@ class EntregaMonitorada(db.Model):
     # Canhoto da entrega
     canhoto_arquivo = db.Column(db.String(500), nullable=True)  # Caminho do arquivo do canhoto
 
+    # Devolucao
+    teve_devolucao = db.Column(db.Boolean, default=False, nullable=False)  # Indica se houve devolucao
+
     @property
     def possui_comentarios(self):
         return self.comentarios.count() > 0

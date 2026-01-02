@@ -589,3 +589,64 @@ cod_uf = db.Column(db.String(2))                 # UF
 nome_cidade = db.Column(db.String(100))          # Nome da cidade
 sub_rota = db.Column(db.String(50))              # Codigo da sub-rota
 ```
+
+---
+
+## 📦 Devolucoes (app/devolucao/models.py)
+
+> **Documentacao completa**: `app/devolucao/README.md`
+
+### NFDevolucao - Tabela Principal Unificada
+
+```python
+__tablename__ = 'nf_devolucao'
+
+# Campos do registro inicial:
+numero_nfd = db.Column(db.String(20), nullable=False)      # Numero da NFD
+data_registro = db.Column(db.DateTime)                      # Data do registro
+motivo = db.Column(db.String(50), nullable=False)           # AVARIA, FALTA, SOBRA...
+descricao_motivo = db.Column(db.Text)                       # Descricao detalhada
+numero_nf_venda = db.Column(db.String(20))                  # NF de venda relacionada
+
+# Campos do DFe Odoo:
+odoo_dfe_id = db.Column(db.Integer, unique=True)            # ID do DFe no Odoo
+chave_nfd = db.Column(db.String(44), unique=True)           # Chave de acesso
+valor_total = db.Column(db.Numeric(15, 2))                  # Valor total
+
+# Arquivos:
+nfd_xml_path = db.Column(db.String(500))                    # Caminho XML no S3
+nfd_pdf_path = db.Column(db.String(500))                    # Caminho PDF no S3
+
+# Status: REGISTRADA -> VINCULADA_DFE -> EM_TRATATIVA -> FINALIZADA
+status = db.Column(db.String(30), default='REGISTRADA')
+```
+
+### OcorrenciaDevolucao - Tratativa Comercial/Logistica
+
+```python
+__tablename__ = 'ocorrencia_devolucao'
+
+numero_ocorrencia = db.Column(db.String(20), unique=True)   # OC-YYYYMM-XXXX
+
+# Secao Logistica:
+destino = db.Column(db.String(20))                          # RETORNO, DESCARTE
+localizacao_atual = db.Column(db.String(20))                # CLIENTE, EM_TRANSITO, CD
+
+# Secao Comercial:
+categoria = db.Column(db.String(30))                        # QUALIDADE, COMERCIAL...
+responsavel = db.Column(db.String(30))                      # NACOM, TRANSPORTADORA, CLIENTE
+status = db.Column(db.String(30), default='ABERTA')         # ABERTA, EM_ANALISE, RESOLVIDA
+```
+
+### DeParaProdutoCliente - Mapeamento de Codigos
+
+```python
+__tablename__ = 'depara_produto_cliente'
+
+prefixo_cnpj = db.Column(db.String(8), nullable=False)      # 8 primeiros digitos CNPJ
+codigo_cliente = db.Column(db.String(50), nullable=False)   # Codigo usado pelo cliente
+nosso_codigo = db.Column(db.String(50), nullable=False)     # Nosso codigo interno
+fator_conversao = db.Column(db.Numeric(10, 4), default=1.0) # Fator de conversao
+
+# Constraint unica: prefixo_cnpj + codigo_cliente
+```

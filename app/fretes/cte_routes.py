@@ -40,10 +40,12 @@ def listar_ctes():
     # Filtros
     filtro_status = request.args.get('status', '')
     filtro_numero_nf = request.args.get('numero_nf', '').strip()
-    filtro_transportadora = request.args.get('transportadora', '')
+    filtro_transportadora = request.args.get('transportadora', '').strip()
     filtro_data_inicio = request.args.get('data_inicio', '')
     filtro_data_fim = request.args.get('data_fim', '')
     filtro_vinculado = request.args.get('vinculado', '')
+    filtro_tipo_cte = request.args.get('tipo_cte', '').strip()
+    filtro_numero_cte = request.args.get('numero_cte', '').strip()
 
     # Query base - Filtrar CTes com valor >= R$ 1,00
     query = ConhecimentoTransporte.query.filter(
@@ -55,7 +57,23 @@ def listar_ctes():
     if filtro_status:
         query = query.filter_by(odoo_status_codigo=filtro_status)
 
-    # ✅ Filtro por Número NF (busca no campo numeros_nfs que é CSV)
+    # Filtro por Tipo de CTe (Normal ou Complementar)
+    if filtro_tipo_cte == 'normal':
+        query = query.filter(
+            or_(
+                ConhecimentoTransporte.tipo_cte.is_(None),
+                ConhecimentoTransporte.tipo_cte == '0',
+                ConhecimentoTransporte.tipo_cte == ''
+            )
+        )
+    elif filtro_tipo_cte == 'complementar':
+        query = query.filter(ConhecimentoTransporte.tipo_cte == '1')
+
+    # Filtro por Número do CTe
+    if filtro_numero_cte:
+        query = query.filter(ConhecimentoTransporte.numero_cte.ilike(f'%{filtro_numero_cte}%'))
+
+    # Filtro por Número NF (busca no campo numeros_nfs que é CSV)
     # Inclui CTes complementares através do CTe original
     if filtro_numero_nf:
         # Subquery: CTes que contêm essa NF (CTes normais)
@@ -68,7 +86,7 @@ def listar_ctes():
             ConhecimentoTransporte.cte_complementa_id == CteOriginal.id
         ).filter(
             or_(
-                # ✅ CASO 1: CTe normal com NF própria
+                # CASO 1: CTe normal com NF própria
                 # NF no início: "123,..."
                 ConhecimentoTransporte.numeros_nfs.like(f'{filtro_numero_nf},%'),
                 # NF no meio: "...,123,..."
@@ -78,7 +96,7 @@ def listar_ctes():
                 # NF sozinha: "123"
                 ConhecimentoTransporte.numeros_nfs == filtro_numero_nf,
 
-                # ✅ CASO 2: CTe complementar cujo CTe ORIGINAL tem a NF
+                # CASO 2: CTe complementar cujo CTe ORIGINAL tem a NF
                 # (CTe complementar não tem NF própria, busca no original)
                 CteOriginal.numeros_nfs.like(f'{filtro_numero_nf},%'),
                 CteOriginal.numeros_nfs.like(f'%,{filtro_numero_nf},%'),
@@ -88,11 +106,12 @@ def listar_ctes():
         )
         logger.info(f"🔍 Filtrando CTes (incluindo complementares) por NF: {filtro_numero_nf}")
 
+    # Filtro por transportadora - case insensitive
     if filtro_transportadora:
         query = query.filter(
             or_(
-                ConhecimentoTransporte.cnpj_emitente.contains(filtro_transportadora),
-                ConhecimentoTransporte.nome_emitente.contains(filtro_transportadora)
+                ConhecimentoTransporte.cnpj_emitente.ilike(f'%{filtro_transportadora}%'),
+                ConhecimentoTransporte.nome_emitente.ilike(f'%{filtro_transportadora}%')
             )
         )
 
@@ -150,7 +169,9 @@ def listar_ctes():
         filtro_transportadora=filtro_transportadora,
         filtro_data_inicio=filtro_data_inicio,
         filtro_data_fim=filtro_data_fim,
-        filtro_vinculado=filtro_vinculado
+        filtro_vinculado=filtro_vinculado,
+        filtro_tipo_cte=filtro_tipo_cte,
+        filtro_numero_cte=filtro_numero_cte
     )
 
 

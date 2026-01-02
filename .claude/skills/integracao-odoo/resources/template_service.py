@@ -12,7 +12,7 @@ Arquivos de referência:
 
 import json
 import time
-from datetime import datetime, date
+from datetime import date
 from typing import Dict, Optional, Any
 
 from flask import current_app
@@ -21,11 +21,9 @@ from app import db
 from app.fretes.models import (
     # Importar seu modelo aqui
     # Xxx,
-    ConhecimentoTransporte,
     LancamentoFreteOdooAuditoria
 )
 from app.fretes.services.lancamento_odoo_service import LancamentoOdooService
-from app.utils.timezone import agora_brasil
 
 
 class LancamentoXxxOdooService(LancamentoOdooService):

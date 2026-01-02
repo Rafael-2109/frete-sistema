@@ -626,6 +626,7 @@ def create_app(config_name=None):
     from app.localidades.routes import localidades_bp
     from app.main.routes import main_bp
     from app.monitoramento.routes import monitoramento_bp
+    from app.devolucao import devolucao_bp
     from app.tabelas.routes import tabelas_bp
     from app.transportadoras import transportadoras_bp
     from app.veiculos.routes import veiculos_bp
@@ -687,6 +688,7 @@ def create_app(config_name=None):
     app.register_blueprint(localidades_bp)
     app.register_blueprint(main_bp)
     app.register_blueprint(monitoramento_bp)
+    app.register_blueprint(devolucao_bp)
     app.register_blueprint(tabelas_bp)
     app.register_blueprint(transportadoras_bp)
     app.register_blueprint(veiculos_bp)

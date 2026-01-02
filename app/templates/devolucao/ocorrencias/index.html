@@ -1,0 +1,575 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>Ocorrencias de Devolucao</h2>
+            <p class="text-muted mb-0">Gerenciamento de ocorrencias para Comercial e Logistica</p>
+        </div>
+        <div>
+            <!-- Dropdown de Sincronizacao -->
+            <div class="btn-group me-2">
+                <button type="button" class="btn btn-success dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                    Sincronizar NFDs
+                </button>
+                <ul class="dropdown-menu">
+                    <li>
+                        <a class="dropdown-item" href="#" onclick="sincronizarRapido(); return false;">
+                            Ultimos 60 minutos
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item" href="#" onclick="sincronizarDias(7); return false;">
+                            Ultimos 7 dias
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item" href="#" onclick="sincronizarDias(30); return false;">
+                            Ultimos 30 dias
+                        </a>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#modalSincPeriodo">
+                            Por periodo...
+                        </a>
+                    </li>
+                </ul>
+            </div>
+            <a href="{{ url_for('devolucao.devolucao_ai.pagina_depara') }}" class="btn btn-info me-2">
+                De-Para de Produtos
+            </a>
+            <a href="{{ url_for('monitoramento.listar_entregas') }}" class="btn btn-outline-secondary">
+                Voltar ao Monitoramento
+            </a>
+        </div>
+    </div>
+
+    <!-- Cards de Estatisticas -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card border-left-primary">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase small">Total</h6>
+                    <h2 class="mb-0">{{ stats.total }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-left-warning">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase small">Abertas</h6>
+                    <h2 class="mb-0">{{ stats.abertas }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-left-info">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase small">Em Analise</h6>
+                    <h2 class="mb-0">{{ stats.em_analise }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-left-success">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase small">Resolvidas</h6>
+                    <h2 class="mb-0">{{ stats.resolvidas }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h6 class="mb-0">Filtros</h6>
+        </div>
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('devolucao.devolucao_ocorrencia.index') }}">
+                <div class="row">
+                    <div class="col-md-2">
+                        <label class="form-label">Status</label>
+                        <select name="status" class="form-select form-select-sm">
+                            <option value="">Todos</option>
+                            {% for valor, descricao in opcoes_status %}
+                            <option value="{{ valor }}" {% if filtros.status == valor %}selected{% endif %}>
+                                {{ descricao }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Destino</label>
+                        <select name="destino" class="form-select form-select-sm">
+                            <option value="">Todos</option>
+                            {% for valor, descricao in opcoes_destino %}
+                            <option value="{{ valor }}" {% if filtros.destino == valor %}selected{% endif %}>
+                                {{ descricao }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Categoria</label>
+                        <select name="categoria" class="form-select form-select-sm">
+                            <option value="">Todas</option>
+                            {% for valor, descricao in opcoes_categoria %}
+                            <option value="{{ valor }}" {% if filtros.categoria == valor %}selected{% endif %}>
+                                {{ descricao }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Responsavel</label>
+                        <select name="responsavel" class="form-select form-select-sm">
+                            <option value="">Todos</option>
+                            {% for valor, descricao in opcoes_responsavel %}
+                            <option value="{{ valor }}" {% if filtros.responsavel == valor %}selected{% endif %}>
+                                {{ descricao }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Data Inicio</label>
+                        <input type="date" name="data_inicio" class="form-control form-control-sm"
+                               value="{{ filtros.data_inicio }}">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Data Fim</label>
+                        <input type="date" name="data_fim" class="form-control form-control-sm"
+                               value="{{ filtros.data_fim }}">
+                    </div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col-md-6">
+                        <label class="form-label">Busca</label>
+                        <input type="text" name="busca" class="form-control form-control-sm"
+                               placeholder="Numero ocorrencia, NFD ou cliente..."
+                               value="{{ filtros.busca }}">
+                    </div>
+                    <div class="col-md-6 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary btn-sm me-2">Filtrar</button>
+                        <a href="{{ url_for('devolucao.devolucao_ocorrencia.index') }}" class="btn btn-outline-secondary btn-sm">
+                            Limpar
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela de Ocorrencias -->
+    <div class="card">
+        <div class="card-body p-0">
+            {% if ocorrencias %}
+            <div class="table-responsive">
+                <table class="table table-hover table-sm mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Ocorrencia</th>
+                            <th>NFD</th>
+                            <th>Cliente</th>
+                            <th>Produtos</th>
+                            <th>Valor</th>
+                            <th>Status</th>
+                            <th>Docs</th>
+                            <th>Abertura</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for oc in ocorrencias %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('devolucao.devolucao_ocorrencia.detalhe', ocorrencia_id=oc.id) }}"
+                                   class="fw-bold text-decoration-none">
+                                    {{ oc.numero_ocorrencia }}
+                                </a>
+                                {% if oc.nf_devolucao and oc.nf_devolucao.motivo %}
+                                <br>
+                                <span class="badge bg-{{ 'danger' if oc.nf_devolucao.motivo == 'AVARIA' else 'warning' if oc.nf_devolucao.motivo == 'FALTA' else 'info' }} badge-sm">
+                                    {{ oc.nf_devolucao.motivo }}
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if oc.nf_devolucao %}
+                                <strong>{{ oc.nf_devolucao.numero_nfd }}</strong>
+                                {% if oc.nf_devolucao.numero_nf_venda %}
+                                <br><small class="text-muted">Ref: NF {{ oc.nf_devolucao.numero_nf_venda }}</small>
+                                {% endif %}
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if oc.nf_devolucao and oc.nf_devolucao.nome_emitente %}
+                                {{ oc.nf_devolucao.nome_emitente[:25] }}{% if oc.nf_devolucao.nome_emitente|length > 25 %}...{% endif %}
+                                <br><small class="text-muted">{{ oc.nf_devolucao.cnpj_emitente[:14] if oc.nf_devolucao.cnpj_emitente else '' }}</small>
+                                {% elif oc.nf_devolucao and oc.nf_devolucao.entrega_monitorada %}
+                                {{ oc.nf_devolucao.entrega_monitorada.cliente[:25] }}{% if oc.nf_devolucao.entrega_monitorada.cliente|length > 25 %}...{% endif %}
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if oc.nf_devolucao %}
+                                {% set total_linhas = oc.nf_devolucao.linhas.count() %}
+                                {% set resolvidas = oc.nf_devolucao.linhas.filter_by(produto_resolvido=True).count() %}
+                                <div class="d-flex align-items-center">
+                                    <span class="badge bg-{{ 'success' if resolvidas == total_linhas and total_linhas > 0 else 'warning' if resolvidas > 0 else 'secondary' }} me-2">
+                                        {{ resolvidas }}/{{ total_linhas }}
+                                    </span>
+                                    {% if total_linhas > 0 %}
+                                    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1"
+                                            onclick="abrirModalProdutos({{ oc.nf_devolucao.id }}, '{{ oc.numero_ocorrencia }}')"
+                                            title="Ver produtos">
+                                        <i class="bi bi-box-seam"></i>
+                                    </button>
+                                    {% endif %}
+                                </div>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if oc.nf_devolucao and oc.nf_devolucao.valor_total %}
+                                <strong>R$ {{ "%.2f"|format(oc.nf_devolucao.valor_total|float) }}</strong>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge bg-{{ 'warning' if oc.status == 'ABERTA' else 'info' if oc.status == 'EM_ANALISE' else 'success' }}">
+                                    {{ 'Pendente' if oc.status in ['ABERTA', 'EM_ANALISE'] else 'Resolvida' }}
+                                </span>
+                                {% if oc.destino and oc.destino != 'INDEFINIDO' %}
+                                <br><small class="text-muted">{{ oc.destino }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if oc.nf_devolucao %}
+                                <div class="btn-group-vertical btn-group-sm">
+                                    {% if oc.nf_devolucao.nfd_xml_path %}
+                                    <a href="{{ url_for('devolucao.devolucao_ocorrencia.download_xml', nfd_id=oc.nf_devolucao.id) }}"
+                                       class="btn btn-outline-secondary py-0" title="Download XML" target="_blank">
+                                        XML
+                                    </a>
+                                    {% endif %}
+                                    {% if oc.nf_devolucao.nfd_pdf_path %}
+                                    <a href="{{ url_for('devolucao.devolucao_ocorrencia.download_pdf', nfd_id=oc.nf_devolucao.id) }}"
+                                       class="btn btn-outline-danger py-0" title="Download PDF" target="_blank">
+                                        PDF
+                                    </a>
+                                    {% endif %}
+                                    {% if not oc.nf_devolucao.nfd_xml_path and not oc.nf_devolucao.nfd_pdf_path %}
+                                    <small class="text-muted">-</small>
+                                    {% endif %}
+                                </div>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>
+                                <small>{{ oc.data_abertura.strftime('%d/%m/%Y') }}</small>
+                                <br>
+                                <small class="text-muted">{{ oc.data_abertura.strftime('%H:%M') }}</small>
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{{ url_for('devolucao.devolucao_ocorrencia.detalhe', ocorrencia_id=oc.id) }}"
+                                       class="btn btn-outline-primary" title="Ver detalhes">
+                                        Ver
+                                    </a>
+                                    {% if oc.nf_devolucao %}
+                                    {% set total_linhas = oc.nf_devolucao.linhas.count() %}
+                                    {% set resolvidas = oc.nf_devolucao.linhas.filter_by(produto_resolvido=True).count() %}
+                                    {% if resolvidas < total_linhas and total_linhas > 0 %}
+                                    <a href="{{ url_for('devolucao.devolucao_ai.pagina_resolver_nfd', nfd_id=oc.nf_devolucao.id) }}"
+                                       class="btn btn-outline-info">
+                                        Produtos
+                                    </a>
+                                    {% endif %}
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginacao -->
+            {% if pagination.pages > 1 %}
+            <nav aria-label="Paginacao">
+                <ul class="pagination justify-content-center mb-0">
+                    {% if pagination.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('devolucao.devolucao_ocorrencia.index', page=pagination.prev_num, **filtros) }}">
+                            Anterior
+                        </a>
+                    </li>
+                    {% endif %}
+
+                    {% for p in pagination.iter_pages() %}
+                        {% if p %}
+                        <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                            <a class="page-link" href="{{ url_for('devolucao.devolucao_ocorrencia.index', page=p, **filtros) }}">
+                                {{ p }}
+                            </a>
+                        </li>
+                        {% else %}
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if pagination.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('devolucao.devolucao_ocorrencia.index', page=pagination.next_num, **filtros) }}">
+                            Proximo
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+
+            {% else %}
+            <div class="text-center py-5">
+                <p class="text-muted mb-0">Nenhuma ocorrencia encontrada</p>
+                {% if filtros.busca or filtros.status or filtros.destino or filtros.categoria %}
+                <a href="{{ url_for('devolucao.devolucao_ocorrencia.index') }}" class="btn btn-link">
+                    Limpar filtros
+                </a>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal Sincronizacao por Periodo -->
+<div class="modal fade" id="modalSincPeriodo" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Sincronizar NFDs por Periodo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Data Inicio</label>
+                    <input type="date" id="sinc-data-inicio" class="form-control">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Data Fim</label>
+                    <input type="date" id="sinc-data-fim" class="form-control">
+                </div>
+                <div class="alert alert-info">
+                    A sincronizacao ira buscar NFDs de devolucao (finnfe=4) no Odoo
+                    e importar automaticamente para o sistema.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="sincronizarPeriodo()">
+                    Sincronizar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Produtos da NFD -->
+<div class="modal fade" id="modalProdutos" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    Produtos - <span id="modal-ocorrencia-numero"></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="loading-produtos" class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                </div>
+                <div id="lista-produtos" class="d-none">
+                    <table class="table table-sm table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Codigo Cliente</th>
+                                <th>Descricao</th>
+                                <th>Qtd</th>
+                                <th>UN</th>
+                                <th>Codigo Interno</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-produtos"></tbody>
+                    </table>
+                </div>
+                <div id="erro-produtos" class="alert alert-danger d-none"></div>
+            </div>
+            <div class="modal-footer">
+                <a id="btn-resolver-produtos" href="#" class="btn btn-info">
+                    Resolver Produtos
+                </a>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast de Feedback -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+    <div id="toastSinc" class="toast" role="alert">
+        <div class="toast-header">
+            <strong class="me-auto" id="toastTitulo">Sincronizacao</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+        </div>
+        <div class="toast-body" id="toastMensagem"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const API_SINC = '/devolucao/vinculacao/api';
+
+function mostrarToast(titulo, mensagem, sucesso = true) {
+    const toast = document.getElementById('toastSinc');
+    document.getElementById('toastTitulo').textContent = titulo;
+    document.getElementById('toastMensagem').innerHTML = mensagem;
+    toast.classList.remove('bg-success', 'bg-danger', 'text-white');
+    if (sucesso) {
+        toast.classList.add('bg-success', 'text-white');
+    } else {
+        toast.classList.add('bg-danger', 'text-white');
+    }
+    new bootstrap.Toast(toast).show();
+}
+
+async function sincronizarRapido() {
+    try {
+        mostrarToast('Sincronizando...', 'Buscando NFDs dos ultimos 60 minutos...', true);
+
+        const response = await fetch(`${API_SINC}/sincronizar/incremental`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const data = await response.json();
+
+        if (data.sucesso) {
+            let msg = `<strong>Sucesso!</strong><br>`;
+            msg += `Processadas: ${data.nfds_processadas}<br>`;
+            msg += `Novas: ${data.nfds_novas}<br>`;
+            msg += `Orfas: ${data.nfds_orfas}<br>`;
+            msg += `Ocorrencias criadas: ${data.ocorrencias_criadas}`;
+            mostrarToast('Sincronizacao Concluida', msg, true);
+
+            if (data.nfds_novas > 0 || data.ocorrencias_criadas > 0) {
+                setTimeout(() => location.reload(), 2000);
+            }
+        } else {
+            mostrarToast('Erro', data.erro || 'Erro na sincronizacao', false);
+        }
+    } catch (error) {
+        mostrarToast('Erro', error.message, false);
+    }
+}
+
+async function sincronizarDias(dias) {
+    try {
+        mostrarToast('Sincronizando...', `Buscando NFDs dos ultimos ${dias} dias...`, true);
+
+        const response = await fetch(`${API_SINC}/sincronizar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dias_retroativos: dias })
+        });
+
+        const data = await response.json();
+
+        if (data.sucesso) {
+            let msg = `<strong>Sucesso!</strong><br>`;
+            msg += `Processadas: ${data.nfds_processadas}<br>`;
+            msg += `Novas: ${data.nfds_novas}<br>`;
+            msg += `Orfas: ${data.nfds_orfas}<br>`;
+            msg += `Ocorrencias criadas: ${data.ocorrencias_criadas}`;
+            mostrarToast('Sincronizacao Concluida', msg, true);
+
+            if (data.nfds_novas > 0 || data.ocorrencias_criadas > 0) {
+                setTimeout(() => location.reload(), 2000);
+            }
+        } else {
+            mostrarToast('Erro', data.erro || 'Erro na sincronizacao', false);
+        }
+    } catch (error) {
+        mostrarToast('Erro', error.message, false);
+    }
+}
+
+async function sincronizarPeriodo() {
+    const dataInicio = document.getElementById('sinc-data-inicio').value;
+    const dataFim = document.getElementById('sinc-data-fim').value;
+
+    if (!dataInicio || !dataFim) {
+        alert('Informe o periodo completo');
+        return;
+    }
+
+    try {
+        bootstrap.Modal.getInstance(document.getElementById('modalSincPeriodo')).hide();
+        mostrarToast('Sincronizando...', `Buscando NFDs de ${dataInicio} ate ${dataFim}...`, true);
+
+        const response = await fetch(`${API_SINC}/sincronizar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                data_inicio: dataInicio,
+                data_fim: dataFim
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.sucesso) {
+            let msg = `<strong>Sucesso!</strong><br>`;
+            msg += `Processadas: ${data.nfds_processadas}<br>`;
+            msg += `Novas: ${data.nfds_novas}<br>`;
+            msg += `Orfas: ${data.nfds_orfas}<br>`;
+            msg += `Ocorrencias criadas: ${data.ocorrencias_criadas}`;
+            mostrarToast('Sincronizacao Concluida', msg, true);
+
+            if (data.nfds_novas > 0 || data.ocorrencias_criadas > 0) {
+                setTimeout(() => location.reload(), 2000);
+            }
+        } else {
+            mostrarToast('Erro', data.erro || 'Erro na sincronizacao', false);
+        }
+    } catch (error) {
+        mostrarToast('Erro', error.message, false);
+    }
+}
+
+// Preencher data atual no modal
+document.addEventListener('DOMContentLoaded', function() {
+    const hoje = new Date().toISOString().split('T')[0];
+    const mesPassado = new Date();
+    mesPassado.setMonth(mesPassado.getMonth() - 1);
+
+    document.getElementById('sinc-data-inicio').value = mesPassado.toISOString().split('T')[0];
+    document.getElementById('sinc-data-fim').value = hoje;
+});
+</script>
+{% endblock %}

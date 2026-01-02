@@ -746,6 +746,7 @@
                             <thead>
                                 <tr>
                                     <th>Tipo</th>
+                                    <th>NFD</th>
                                     <th>Motivo</th>
                                     <th>Documento</th>
                                     <th>Fatura</th>
@@ -762,6 +763,18 @@
                                     <td>
                                         {{ despesa.tipo_despesa }}<br>
                                         <small class="text-muted">{{ despesa.setor_responsavel }}</small>
+                                    </td>
+                                    <td>
+                                        {% if despesa.nfd_id %}
+                                            <a href="{{ url_for('devolucao.devolucao_ocorrencia.detalhe', ocorrencia_id=despesa.nfd.ocorrencia.id if despesa.nfd and despesa.nfd.ocorrencia else 0) }}"
+                                               class="badge bg-warning text-dark" title="Ver devolução">
+                                                NFD {{ despesa.numero_nfd or despesa.nfd.numero_nfd }}
+                                            </a>
+                                        {% elif despesa.tipo_despesa == 'DEVOLUÇÃO' %}
+                                            <span class="text-muted small">-</span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
                                     </td>
                                     <td>{{ despesa.motivo_despesa[:20] }}{% if despesa.motivo_despesa|length > 20 %}...{% endif %}</td>
                                     <td>

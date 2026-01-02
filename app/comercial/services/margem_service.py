@@ -6,10 +6,9 @@ Autor: Sistema de Fretes
 Data: 27/12/2025
 """
 
-from sqlalchemy import func, distinct, text, case, and_, or_
-from decimal import Decimal
-from typing import List, Dict, Any, Optional
-from datetime import date, datetime
+from sqlalchemy import func, distinct
+from typing import Dict, Any
+from datetime import datetime
 from app import db
 from app.carteira.models import CarteiraPrincipal
 import logging

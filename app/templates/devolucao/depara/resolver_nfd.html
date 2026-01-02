@@ -1,0 +1,1000 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>Resolver Produtos - NFD {{ nfd.numero_nfd }}</h2>
+            <p class="text-muted mb-0">
+                Emitente: {{ nfd.nome_emitente }} ({{ nfd.cnpj_emitente }})
+            </p>
+        </div>
+        <div>
+            <a href="{{ url_for('devolucao.devolucao_ocorrencia.index') }}" class="btn btn-outline-secondary">
+                Voltar para Ocorrencias
+            </a>
+            <button class="btn btn-info" onclick="resolverTodas()">
+                Resolver Todas com Haiku
+            </button>
+        </div>
+    </div>
+
+    <!-- Info da NFD -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <strong>Numero:</strong> {{ nfd.numero_nfd }}<br>
+                    <strong>Serie:</strong> {{ nfd.serie_nfd or '-' }}
+                </div>
+                <div class="col-md-3">
+                    <strong>Data Emissao:</strong> {{ nfd.data_emissao.strftime('%d/%m/%Y') if nfd.data_emissao else '-' }}<br>
+                    <strong>Valor:</strong> R$ {{ "%.2f"|format(nfd.valor_total|float) if nfd.valor_total else '-' }}
+                </div>
+                <div class="col-md-3">
+                    <strong>Motivo:</strong> {{ nfd.motivo or '-' }}<br>
+                    <strong>NF Venda:</strong> {{ nfd.numero_nf_venda or '-' }}
+                </div>
+                <div class="col-md-3">
+                    <strong>Status:</strong>
+                    <span class="badge bg-{{ 'success' if nfd.status == 'FINALIZADA' else 'warning' }}">
+                        {{ nfd.status }}
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Informacoes Complementares (Motivo da Devolucao) -->
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">
+                <i class="bi bi-info-circle"></i> Informacoes Complementares
+            </h6>
+            <button class="btn btn-sm btn-outline-primary" onclick="extrairMotivo()" id="btn-extrair-motivo"
+                    {% if not nfd.info_complementar %}disabled{% endif %}>
+                <i class="bi bi-cpu"></i> Extrair Motivo (IA)
+            </button>
+        </div>
+        <div class="card-body">
+            {% if nfd.info_complementar %}
+                <div class="mb-3">
+                    <textarea class="form-control" id="txt-info-complementar" rows="3" readonly>{{ nfd.info_complementar }}</textarea>
+                </div>
+                <div id="resultado-extracao" class="d-none">
+                    <div class="alert alert-info mb-2">
+                        <strong>Analise IA:</strong>
+                        <div class="row mt-2">
+                            <div class="col-md-4">
+                                <label class="form-label small">NF de Venda:</label>
+                                <input type="text" class="form-control form-control-sm" id="extracao-nf-venda" readonly>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small">Motivo Sugerido:</label>
+                                <input type="text" class="form-control form-control-sm" id="extracao-motivo" readonly>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small">Confianca:</label>
+                                <input type="text" class="form-control form-control-sm" id="extracao-confianca" readonly>
+                            </div>
+                        </div>
+                        <div class="mt-2">
+                            <label class="form-label small">Motivo extraído por IA:</label>
+                            <textarea class="form-control form-control-sm" id="extracao-descricao" rows="2" readonly></textarea>
+                        </div>
+                        <div class="mt-2">
+                            <button class="btn btn-sm btn-success" onclick="aplicarExtracao()">
+                                <i class="bi bi-check-lg"></i> Aplicar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            {% else %}
+                <p class="text-muted mb-0">
+                    <em>Sem informacoes complementares no XML da NFD.</em>
+                </p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Tabela de Linhas -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between">
+            <h6 class="mb-0">Linhas de Produto ({{ linhas|length }})</h6>
+            <span>
+                <span class="badge bg-success">{{ linhas|selectattr('produto_resolvido')|list|length }} resolvidas</span>
+                <span class="badge bg-warning">{{ linhas|rejectattr('produto_resolvido')|list|length }} pendentes</span>
+            </span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-sm mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>Codigo Cliente</th>
+                            <th>Descricao Cliente</th>
+                            <th>Qtd</th>
+                            <th>Nosso Codigo</th>
+                            <th>Qtd Conv.</th>
+                            <th>Peso (kg)</th>
+                            <th>Status</th>
+                            <th>Metodo</th>
+                            <th>Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for linha in linhas %}
+                        <tr id="linha-{{ linha.id }}" class="{{ 'table-success' if linha.produto_resolvido else '' }}">
+                            <td>{{ linha.numero_item or loop.index }}</td>
+                            <td><code>{{ linha.codigo_produto_cliente or '-' }}</code></td>
+                            <td>{{ linha.descricao_produto_cliente or '-' }}</td>
+                            <td>{{ linha.quantidade }} {{ linha.unidade_medida }}</td>
+                            <td id="nosso-codigo-{{ linha.id }}">
+                                {% if linha.codigo_produto_interno %}
+                                    <strong class="text-primary">{{ linha.codigo_produto_interno }}</strong>
+                                    <br><small class="text-muted">{{ linha.descricao_produto_interno or '' }}</small>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td id="qtd-conv-{{ linha.id }}">
+                                {% if linha.quantidade_convertida %}
+                                    <span class="badge bg-success">{{ "%.2f"|format(linha.quantidade_convertida|float) }} cx</span>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td id="peso-{{ linha.id }}">
+                                {% if linha.peso_bruto %}
+                                    <span class="badge bg-info">{{ "%.2f"|format(linha.peso_bruto|float) }} kg</span>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td id="status-{{ linha.id }}">
+                                {% if linha.produto_resolvido %}
+                                    <span class="badge bg-success">Resolvido</span>
+                                {% else %}
+                                    <span class="badge bg-warning">Pendente</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if linha.metodo_resolucao %}
+                                    <span class="badge bg-{{ 'info' if linha.metodo_resolucao == 'HAIKU' else 'secondary' }}">
+                                        {{ linha.metodo_resolucao }}
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if not linha.produto_resolvido %}
+                                <button class="btn btn-sm btn-outline-info"
+                                        onclick="resolverLinha({{ linha.id }}, '{{ linha.codigo_produto_cliente }}', '{{ linha.descricao_produto_cliente }}', {{ linha.quantidade|default(0) }}, '{{ linha.unidade_medida|default('') }}')">
+                                    Resolver
+                                </button>
+                                {% endif %}
+                                <button class="btn btn-sm btn-outline-primary"
+                                        onclick="editarLinha({{ linha.id }})">
+                                    Editar
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Resolver Todos -->
+<div class="modal fade" id="modalResolverTodos" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Resolver Todas as Linhas com Haiku</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" id="btnFecharResolverTodos"></button>
+            </div>
+            <div class="modal-body">
+                <div id="loading-resolver-todos" class="text-center py-5">
+                    <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;"></div>
+                    <p class="mt-3">Consultando Haiku para todas as linhas...</p>
+                    <p class="text-muted small">Isso pode levar alguns segundos</p>
+                </div>
+                <div id="resultado-resolver-todos" class="d-none">
+                    <!-- Resumo -->
+                    <div class="alert alert-info mb-3" id="resumo-resolver-todos"></div>
+
+                    <!-- Tabela de resultados -->
+                    <div class="table-responsive" style="max-height: 60vh; overflow-y: auto;">
+                        <table class="table table-sm table-hover">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th style="width: 30px;"><input type="checkbox" id="checkAll" onchange="toggleCheckAll(this)"></th>
+                                    <th>Produto Cliente</th>
+                                    <th>Qtd/UN</th>
+                                    <th>Sugestao Principal</th>
+                                    <th>Outras Opcoes</th>
+                                    <th>Confianca</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-resolver-todos"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div id="erro-resolver-todos" class="alert alert-danger d-none"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="confirmarSelecionados()" id="btnConfirmarSelecionados">
+                    Confirmar Selecionados
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Resolver Linha -->
+<div class="modal fade" id="modalResolver" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Resolver Produto</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <strong>Produto do Cliente:</strong>
+                    <div id="modal-produto-cliente"></div>
+                </div>
+
+                <hr>
+
+                <div id="modal-sugestoes">
+                    <div class="text-center py-4">
+                        <div class="spinner-border"></div>
+                        <p class="mt-2">Consultando Haiku...</p>
+                    </div>
+                </div>
+
+                <hr>
+
+                <div class="row">
+                    <div class="col-md-5">
+                        <label class="form-label">Nosso Codigo</label>
+                        <div class="position-relative">
+                            <input type="text" id="modal-nosso-codigo" class="form-control"
+                                   placeholder="Digite codigo ou nome..."
+                                   autocomplete="off"
+                                   oninput="buscarProdutos(this.value)">
+                            <div id="autocomplete-produtos" class="dropdown-menu w-100" style="max-height: 300px; overflow-y: auto;"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-7">
+                        <label class="form-label">Descricao</label>
+                        <input type="text" id="modal-nosso-descricao" class="form-control" readonly>
+                    </div>
+                </div>
+                <div id="info-produto" class="alert alert-light mt-2 d-none">
+                    <small>
+                        <strong>Embalagem:</strong> <span id="info-embalagem">-</span> |
+                        <strong>Materia:</strong> <span id="info-materia">-</span> |
+                        <strong>Marca:</strong> <span id="info-marca">-</span>
+                    </small>
+                </div>
+                <div class="form-check mt-3">
+                    <input type="checkbox" class="form-check-input" id="modal-gravar-depara" checked>
+                    <label class="form-check-label" for="modal-gravar-depara">
+                        Gravar no De-Para para uso futuro
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="confirmarResolucao()">
+                    Confirmar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const API_BASE = '/devolucao/ai/api';
+const NFD_ID = {{ nfd.id }};
+const PREFIXO_CNPJ = '{{ nfd.prefixo_cnpj_emitente or "" }}';
+
+let linhaAtual = null;
+let resultadosResolverTodos = null;  // Armazena resultados para confirmacao
+let dadosExtracao = null;  // Armazena resultado da extracao de motivo
+let sugestaoSelecionada = null;  // Armazena dados completos da sugestao selecionada
+
+// =============================================================================
+// EXTRAIR MOTIVO DA INFO COMPLEMENTAR
+// =============================================================================
+
+async function extrairMotivo() {
+    const btnExtrair = document.getElementById('btn-extrair-motivo');
+    const resultadoDiv = document.getElementById('resultado-extracao');
+    const texto = document.getElementById('txt-info-complementar')?.value;
+
+    if (!texto) {
+        alert('Sem informacoes complementares para analisar');
+        return;
+    }
+
+    // Mostrar loading
+    btnExtrair.disabled = true;
+    btnExtrair.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Analisando...';
+
+    try {
+        const response = await fetch(`${API_BASE}/extrair-observacao`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ texto: texto })
+        });
+
+        const data = await response.json();
+
+        if (data.sucesso) {
+            dadosExtracao = data;
+
+            // Preencher campos
+            document.getElementById('extracao-nf-venda').value = data.numero_nf_venda || '-';
+            document.getElementById('extracao-motivo').value = data.motivo_sugerido || '-';
+            document.getElementById('extracao-confianca').value = data.confianca ?
+                (data.confianca * 100).toFixed(0) + '%' : '-';
+            document.getElementById('extracao-descricao').value = data.descricao_motivo || '-';
+
+            // Mostrar resultado
+            resultadoDiv.classList.remove('d-none');
+        } else {
+            alert('Erro: ' + (data.erro || 'Falha na analise'));
+        }
+
+    } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro de conexao: ' + error.message);
+    } finally {
+        btnExtrair.disabled = false;
+        btnExtrair.innerHTML = '<i class="bi bi-cpu"></i> Extrair Motivo (IA)';
+    }
+}
+
+async function aplicarExtracao() {
+    if (!dadosExtracao) {
+        alert('Nenhum resultado para aplicar');
+        return;
+    }
+
+    try {
+        // Atualizar a NFD com motivo e NF de venda
+        const response = await fetch(`${API_BASE}/nfd/${NFD_ID}/atualizar-motivo`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                motivo: dadosExtracao.motivo_sugerido,
+                descricao_motivo: dadosExtracao.descricao_motivo,
+                numero_nf_venda: dadosExtracao.numero_nf_venda
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.sucesso) {
+            // Recarregar a pagina para mostrar os dados atualizados
+            alert('Motivo aplicado com sucesso!');
+            location.reload();
+        } else {
+            alert('Erro: ' + (data.erro || 'Falha ao aplicar'));
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro de conexao: ' + error.message);
+    }
+}
+
+// =============================================================================
+// RESOLVER TODAS - COM MODAL DE OPCOES
+// =============================================================================
+
+async function resolverTodas() {
+    // Abrir modal
+    const modal = new bootstrap.Modal(document.getElementById('modalResolverTodos'));
+    document.getElementById('loading-resolver-todos').classList.remove('d-none');
+    document.getElementById('resultado-resolver-todos').classList.add('d-none');
+    document.getElementById('erro-resolver-todos').classList.add('d-none');
+    modal.show();
+
+    try {
+        const response = await fetch(`${API_BASE}/nfd/${NFD_ID}/resolver-linhas`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ auto_gravar_depara: false })  // NAO auto-gravar, mostrar opcoes
+        });
+
+        const data = await response.json();
+
+        if (data.sucesso) {
+            resultadosResolverTodos = data;
+            renderizarResultadosTodos(data);
+        } else {
+            mostrarErroResolverTodos(data.erro || 'Erro ao resolver linhas');
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        mostrarErroResolverTodos('Erro de conexao: ' + error.message);
+    }
+}
+
+function renderizarResultadosTodos(data) {
+    document.getElementById('loading-resolver-todos').classList.add('d-none');
+    document.getElementById('resultado-resolver-todos').classList.remove('d-none');
+
+    // Resumo
+    document.getElementById('resumo-resolver-todos').innerHTML = `
+        <strong>Resultado:</strong>
+        <span class="badge bg-success">${data.resolvidas_auto} alta confianca</span>
+        <span class="badge bg-warning">${data.requerem_confirmacao} precisam confirmar</span>
+        <span class="badge bg-danger">${data.nao_identificadas} nao identificadas</span>
+        <br><small class="text-muted">Selecione os itens corretos e clique em Confirmar</small>
+    `;
+
+    // Tabela de linhas
+    const tbody = document.getElementById('tbody-resolver-todos');
+    tbody.innerHTML = '';
+
+    data.linhas.forEach((linha, index) => {
+        const tr = document.createElement('tr');
+        const temSugestao = linha.sugestao && linha.sugestao.codigo;
+        const confiancaClass = linha.confianca >= 0.9 ? 'bg-success' :
+                               linha.confianca >= 0.5 ? 'bg-warning' : 'bg-danger';
+
+        // Opcoes alternativas
+        let opcoesHtml = '';
+        if (linha.outras_sugestoes && linha.outras_sugestoes.length > 0) {
+            opcoesHtml = '<div class="btn-group-vertical btn-group-sm">';
+            linha.outras_sugestoes.forEach((s, i) => {
+                const opcaoData = JSON.stringify(s).replace(/"/g, '&quot;');
+                opcoesHtml += `
+                    <button type="button" class="btn btn-outline-secondary btn-sm text-start py-0"
+                            data-opcao='${JSON.stringify(s)}'
+                            onclick="selecionarOpcaoLote(${index}, this)">
+                        <small>${s.codigo}</small>
+                        ${s.qtd_por_caixa ? `<span class="badge bg-light text-dark">${s.qtd_por_caixa}un/cx</span>` : ''}
+                        <span class="badge bg-secondary">${(s.confianca * 100).toFixed(0)}%</span>
+                    </button>
+                `;
+            });
+            opcoesHtml += '</div>';
+        } else {
+            opcoesHtml = '<small class="text-muted">-</small>';
+        }
+
+        // Info de unidade
+        let unidadeHtml = `<small>${linha.quantidade || '-'} ${linha.unidade_cliente || ''}</small>`;
+        if (linha.tipo_unidade) {
+            const tipoClass = linha.tipo_unidade === 'CAIXA' ? 'text-success' :
+                              linha.tipo_unidade === 'UNIDADE' ? 'text-warning' : 'text-info';
+            unidadeHtml += `<br><span class="badge bg-light ${tipoClass}" title="Tipo detectado">${linha.tipo_unidade}</span>`;
+        }
+
+        tr.innerHTML = `
+            <td>
+                <input type="checkbox" class="check-linha" data-index="${index}"
+                       ${temSugestao ? 'checked' : ''} ${!temSugestao ? 'disabled' : ''}>
+            </td>
+            <td>
+                <code>${linha.codigo_cliente || '-'}</code>
+                <br><small class="text-muted">${linha.descricao_cliente || '-'}</small>
+            </td>
+            <td>
+                ${unidadeHtml}
+            </td>
+            <td id="sugestao-${index}">
+                ${temSugestao ? `
+                    <strong class="text-primary">${linha.sugestao.codigo}</strong>
+                    <br><small>${linha.sugestao.nome || ''}</small>
+                    ${linha.sugestao.qtd_por_caixa ? `<br><span class="badge bg-info">${linha.sugestao.qtd_por_caixa} un/cx</span>` : ''}
+                    ${linha.sugestao.qtd_convertida_caixas ? `
+                        <br><span class="badge bg-success">
+                            ${linha.quantidade} un → <strong>${linha.sugestao.qtd_convertida_caixas} cx</strong>
+                        </span>
+                    ` : ''}
+                    ${linha.sugestao.peso_calculado ? `
+                        <br><span class="badge bg-info">${linha.sugestao.peso_calculado.toFixed(2)} kg</span>
+                    ` : ''}
+                    ${linha.sugestao.valor_convertido_caixa ? `
+                        <br><small class="text-success">R$ ${linha.sugestao.valor_convertido_caixa.toFixed(2)}/cx</small>
+                    ` : ''}
+                ` : '<span class="text-muted">Nao encontrado</span>'}
+            </td>
+            <td>
+                ${opcoesHtml}
+            </td>
+            <td>
+                <span class="badge ${confiancaClass}">${(linha.confianca * 100).toFixed(0)}%</span>
+                ${linha.metodo_resolucao ? `
+                    <br><span class="badge ${
+                        linha.metodo_resolucao === 'DEPARA' ? 'bg-success' :
+                        linha.metodo_resolucao === 'DEPARA_GRUPO' ? 'bg-success' :
+                        linha.metodo_resolucao === 'HAIKU_POWER' ? 'bg-info' : 'bg-secondary'
+                    }" style="font-size: 0.65em;">
+                        ${linha.metodo_resolucao === 'HAIKU_POWER' ? 'HAIKU POWER' :
+                          linha.metodo_resolucao === 'DEPARA' ? 'DE-PARA' :
+                          linha.metodo_resolucao === 'DEPARA_GRUPO' ? 'DE-PARA GRUPO' : linha.metodo_resolucao}
+                    </span>
+                ` : ''}
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function selecionarOpcaoLote(index, btnElement) {
+    // Pegar dados da opcao do atributo data-opcao
+    const opcao = JSON.parse(btnElement.dataset.opcao);
+    const linha = resultadosResolverTodos.linhas[index];
+
+    // Atualizar a sugestao selecionada
+    linha.sugestao = opcao;
+
+    // Atualizar visual
+    let html = `
+        <strong class="text-primary">${opcao.codigo}</strong>
+        <br><small>${opcao.nome || ''}</small>
+    `;
+    if (opcao.qtd_por_caixa) {
+        html += `<br><span class="badge bg-info">${opcao.qtd_por_caixa} un/cx</span>`;
+    }
+    if (opcao.qtd_convertida_caixas) {
+        html += `
+            <br><span class="badge bg-success">
+                ${linha.quantidade} un → <strong>${opcao.qtd_convertida_caixas} cx</strong>
+            </span>
+        `;
+    }
+    if (opcao.peso_calculado) {
+        html += `<br><span class="badge bg-info">${opcao.peso_calculado.toFixed(2)} kg</span>`;
+    }
+    if (opcao.valor_convertido_caixa) {
+        html += `<br><small class="text-success">R$ ${opcao.valor_convertido_caixa.toFixed(2)}/cx</small>`;
+    }
+
+    document.getElementById(`sugestao-${index}`).innerHTML = html;
+
+    // Marcar checkbox
+    const checkbox = document.querySelector(`.check-linha[data-index="${index}"]`);
+    if (checkbox) {
+        checkbox.checked = true;
+        checkbox.disabled = false;
+    }
+}
+
+function toggleCheckAll(checkbox) {
+    document.querySelectorAll('.check-linha:not(:disabled)').forEach(cb => {
+        cb.checked = checkbox.checked;
+    });
+}
+
+async function confirmarSelecionados() {
+    const checkboxes = document.querySelectorAll('.check-linha:checked');
+
+    if (checkboxes.length === 0) {
+        alert('Selecione pelo menos uma linha para confirmar');
+        return;
+    }
+
+    const btnConfirmar = document.getElementById('btnConfirmarSelecionados');
+    btnConfirmar.disabled = true;
+    btnConfirmar.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Confirmando...';
+
+    let confirmados = 0;
+    let erros = 0;
+
+    for (const cb of checkboxes) {
+        const index = parseInt(cb.dataset.index);
+        const linha = resultadosResolverTodos.linhas[index];
+
+        if (!linha.sugestao || !linha.sugestao.codigo) continue;
+
+        try {
+            const response = await fetch(`${API_BASE}/linha/${linha.linha_id}/confirmar`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    codigo_interno: linha.sugestao.codigo,
+                    descricao_interno: linha.sugestao.nome || '',
+                    gravar_depara: true,
+                    qtd_por_caixa: linha.sugestao.qtd_por_caixa || null,
+                    quantidade_convertida: linha.sugestao.qtd_convertida_caixas || null
+                })
+            });
+
+            const data = await response.json();
+            if (data.sucesso) {
+                confirmados++;
+            } else {
+                erros++;
+            }
+        } catch (error) {
+            erros++;
+        }
+    }
+
+    btnConfirmar.disabled = false;
+    btnConfirmar.innerHTML = 'Confirmar Selecionados';
+
+    alert(`Confirmados: ${confirmados}\nErros: ${erros}`);
+    location.reload();
+}
+
+function mostrarErroResolverTodos(mensagem) {
+    document.getElementById('loading-resolver-todos').classList.add('d-none');
+    document.getElementById('erro-resolver-todos').classList.remove('d-none');
+    document.getElementById('erro-resolver-todos').textContent = mensagem;
+}
+
+async function resolverLinha(linhaId, codigoCliente, descricaoCliente, quantidade, unidade) {
+    linhaAtual = linhaId;
+
+    document.getElementById('modal-produto-cliente').innerHTML = `
+        <code>${codigoCliente || '-'}</code> - ${descricaoCliente || '-'}
+        <br><small class="text-muted">Qtd: ${quantidade || '-'} ${unidade || ''}</small>
+    `;
+
+    document.getElementById('modal-sugestoes').innerHTML = `
+        <div class="text-center py-4">
+            <div class="spinner-border"></div>
+            <p class="mt-2">Consultando Haiku...</p>
+        </div>
+    `;
+
+    document.getElementById('modal-nosso-codigo').value = '';
+    document.getElementById('modal-nosso-descricao').value = '';
+
+    const modal = new bootstrap.Modal(document.getElementById('modalResolver'));
+    modal.show();
+
+    // Chamar API com quantidade e unidade
+    try {
+        const response = await fetch(`${API_BASE}/resolver-produto`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                prefixo_cnpj: PREFIXO_CNPJ,
+                codigo_cliente: codigoCliente,
+                descricao_cliente: descricaoCliente,
+                quantidade: quantidade || null,
+                unidade_cliente: unidade || null
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.sucesso && data.sugestao_principal) {
+            renderizarSugestoes(data);
+
+            // Preencher campos com sugestao principal
+            document.getElementById('modal-nosso-codigo').value = data.sugestao_principal.codigo;
+            document.getElementById('modal-nosso-descricao').value = data.sugestao_principal.nome;
+        } else {
+            document.getElementById('modal-sugestoes').innerHTML = `
+                <div class="alert alert-warning">
+                    Nenhuma sugestao encontrada. Preencha manualmente.
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        document.getElementById('modal-sugestoes').innerHTML = `
+            <div class="alert alert-danger">
+                Erro ao consultar Haiku. Preencha manualmente.
+            </div>
+        `;
+    }
+}
+
+function renderizarSugestoes(data) {
+    const confiancaClass = data.confianca >= 0.9 ? 'text-success' :
+                           data.confianca >= 0.5 ? 'text-warning' : 'text-danger';
+
+    // Info de unidade detectada
+    let unidadeHtml = '';
+    if (data.tipo_unidade) {
+        const tipoClass = data.tipo_unidade === 'CAIXA' ? 'success' :
+                          data.tipo_unidade === 'UNIDADE' ? 'warning' : 'info';
+        unidadeHtml = `
+            <span class="badge bg-${tipoClass} ms-2">
+                Unidade detectada: ${data.tipo_unidade}
+            </span>
+        `;
+    }
+
+    // Info do metodo de resolucao
+    let metodoHtml = '';
+    if (data.metodo_resolucao) {
+        const metodoClass = data.metodo_resolucao === 'DEPARA' ? 'success' :
+                            data.metodo_resolucao === 'DEPARA_GRUPO' ? 'success' :
+                            data.metodo_resolucao === 'HAIKU_POWER' ? 'info' : 'secondary';
+        const metodoLabel = data.metodo_resolucao === 'HAIKU_POWER' ? 'HAIKU POWER MODE' :
+                            data.metodo_resolucao === 'DEPARA' ? 'DE-PARA' :
+                            data.metodo_resolucao === 'DEPARA_GRUPO' ? 'DE-PARA GRUPO' : data.metodo_resolucao;
+        metodoHtml = `
+            <span class="badge bg-${metodoClass} ms-2" title="Metodo de resolucao">
+                ${metodoLabel}
+            </span>
+        `;
+    }
+
+    let html = `
+        <div class="alert alert-${data.confianca >= 0.9 ? 'success' : 'warning'}">
+            Confianca: <strong class="${confiancaClass}">${(data.confianca * 100).toFixed(0)}%</strong>
+            ${unidadeHtml}
+            ${metodoHtml}
+        </div>
+    `;
+
+    // Funcao auxiliar para gerar HTML de conversao
+    function getConversaoHtml(sugestao, quantidade) {
+        let convHtml = '';
+        if (sugestao.qtd_por_caixa) {
+            convHtml += `<span class="badge bg-info ms-1">${sugestao.qtd_por_caixa} un/cx</span>`;
+        }
+        if (sugestao.qtd_convertida_caixas && quantidade) {
+            convHtml += `<span class="badge bg-success ms-1">${quantidade} un → ${sugestao.qtd_convertida_caixas} cx</span>`;
+        }
+        return convHtml;
+    }
+
+    if (data.sugestao_principal) {
+        const convPrincipal = getConversaoHtml(data.sugestao_principal, data.quantidade);
+        const sp = data.sugestao_principal;
+
+        // Armazenar sugestao principal automaticamente
+        sugestaoSelecionada = {
+            codigo: sp.codigo,
+            nome: sp.nome,
+            qtd_por_caixa: sp.qtd_por_caixa || null,
+            quantidade_convertida: sp.qtd_convertida_caixas || null
+        };
+
+        html += `
+            <div class="list-group">
+                <button type="button" class="list-group-item list-group-item-action active"
+                        onclick="selecionarSugestao('${sp.codigo}', '${sp.nome}', ${sp.qtd_por_caixa || 'null'}, ${sp.qtd_convertida_caixas || 'null'})">
+                    <div class="d-flex w-100 justify-content-between">
+                        <strong>${sp.codigo}</strong>
+                        <div>
+                            ${convPrincipal}
+                            <span class="badge bg-primary ms-1">${(sp.confianca * 100).toFixed(0)}%</span>
+                        </div>
+                    </div>
+                    <small>${sp.nome}</small>
+                    ${sp.justificativa ? `<br><small class="text-muted fst-italic">${sp.justificativa}</small>` : ''}
+                </button>
+        `;
+
+        if (data.outras_sugestoes && data.outras_sugestoes.length > 0) {
+            data.outras_sugestoes.forEach(s => {
+                const convOutra = getConversaoHtml(s, data.quantidade);
+                html += `
+                    <button type="button" class="list-group-item list-group-item-action"
+                            onclick="selecionarSugestao('${s.codigo}', '${s.nome}', ${s.qtd_por_caixa || 'null'}, ${s.qtd_convertida_caixas || 'null'})">
+                        <div class="d-flex w-100 justify-content-between">
+                            <strong>${s.codigo}</strong>
+                            <div>
+                                ${convOutra}
+                                <span class="badge bg-secondary ms-1">${(s.confianca * 100).toFixed(0)}%</span>
+                            </div>
+                        </div>
+                        <small>${s.nome}</small>
+                        ${s.justificativa ? `<br><small class="text-muted fst-italic">${s.justificativa}</small>` : ''}
+                    </button>
+                `;
+            });
+        }
+
+        html += '</div>';
+    }
+
+    document.getElementById('modal-sugestoes').innerHTML = html;
+}
+
+function selecionarSugestao(codigo, nome, qtdPorCaixa, qtdConvertida) {
+    document.getElementById('modal-nosso-codigo').value = codigo;
+    document.getElementById('modal-nosso-descricao').value = nome;
+
+    // Armazenar dados completos da sugestao
+    sugestaoSelecionada = {
+        codigo: codigo,
+        nome: nome,
+        qtd_por_caixa: qtdPorCaixa || null,
+        quantidade_convertida: qtdConvertida || null
+    };
+
+    // Atualizar visual da lista
+    document.querySelectorAll('#modal-sugestoes .list-group-item').forEach(el => {
+        el.classList.remove('active');
+        if (el.querySelector('strong').textContent === codigo) {
+            el.classList.add('active');
+        }
+    });
+}
+
+async function confirmarResolucao() {
+    const codigo = document.getElementById('modal-nosso-codigo').value;
+    const descricao = document.getElementById('modal-nosso-descricao').value;
+    const gravarDePara = document.getElementById('modal-gravar-depara').checked;
+
+    if (!codigo) {
+        alert('Informe o nosso codigo');
+        return;
+    }
+
+    // Pegar dados de conversao da sugestao selecionada
+    let qtdPorCaixa = null;
+    let qtdConvertida = null;
+    if (sugestaoSelecionada && sugestaoSelecionada.codigo === codigo) {
+        qtdPorCaixa = sugestaoSelecionada.qtd_por_caixa;
+        qtdConvertida = sugestaoSelecionada.quantidade_convertida;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/linha/${linhaAtual}/confirmar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                codigo_interno: codigo,
+                descricao_interno: descricao,
+                gravar_depara: gravarDePara,
+                qtd_por_caixa: qtdPorCaixa,
+                quantidade_convertida: qtdConvertida
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.sucesso) {
+            // Atualizar coluna nosso codigo
+            document.getElementById(`nosso-codigo-${linhaAtual}`).innerHTML = `
+                <strong class="text-primary">${codigo}</strong>
+                <br><small class="text-muted">${descricao}</small>
+            `;
+
+            // Atualizar coluna quantidade convertida
+            if (data.quantidade_convertida) {
+                document.getElementById(`qtd-conv-${linhaAtual}`).innerHTML = `
+                    <span class="badge bg-success">${data.quantidade_convertida.toFixed(2)} cx</span>
+                `;
+            } else {
+                document.getElementById(`qtd-conv-${linhaAtual}`).innerHTML = `
+                    <span class="text-muted">-</span>
+                `;
+            }
+
+            // Atualizar coluna peso
+            if (data.peso_bruto) {
+                document.getElementById(`peso-${linhaAtual}`).innerHTML = `
+                    <span class="badge bg-info">${data.peso_bruto.toFixed(2)} kg</span>
+                `;
+            } else {
+                document.getElementById(`peso-${linhaAtual}`).innerHTML = `
+                    <span class="text-muted">-</span>
+                `;
+            }
+
+            // Atualizar status
+            document.getElementById(`status-${linhaAtual}`).innerHTML = `
+                <span class="badge bg-success">Resolvido</span>
+            `;
+            document.getElementById(`linha-${linhaAtual}`).classList.add('table-success');
+
+            bootstrap.Modal.getInstance(document.getElementById('modalResolver')).hide();
+        } else {
+            alert('Erro: ' + data.erro);
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro ao confirmar');
+    }
+}
+
+function editarLinha(linhaId) {
+    // Reutiliza o modal de resolver
+    linhaAtual = linhaId;
+
+    const row = document.getElementById(`linha-${linhaId}`);
+    const codigoCell = row.cells[1].textContent.trim();
+    const descricaoCell = row.cells[2].textContent.trim();
+
+    document.getElementById('modal-produto-cliente').innerHTML = `
+        <code>${codigoCell}</code> - ${descricaoCell}
+    `;
+    document.getElementById('modal-sugestoes').innerHTML = `
+        <div class="alert alert-info">
+            Edite manualmente os campos abaixo. Digite o codigo ou nome do produto para buscar.
+        </div>
+    `;
+
+    // Limpar campos
+    document.getElementById('modal-nosso-codigo').value = '';
+    document.getElementById('modal-nosso-descricao').value = '';
+    document.getElementById('info-produto').classList.add('d-none');
+
+    const modal = new bootstrap.Modal(document.getElementById('modalResolver'));
+    modal.show();
+}
+
+// =============================================================================
+// AUTOCOMPLETE DE PRODUTOS
+// =============================================================================
+
+let timeoutBusca = null;
+
+async function buscarProdutos(query) {
+    // Debounce
+    if (timeoutBusca) clearTimeout(timeoutBusca);
+
+    if (!query || query.length < 2) {
+        document.getElementById('autocomplete-produtos').classList.remove('show');
+        return;
+    }
+
+    timeoutBusca = setTimeout(async () => {
+        try {
+            const response = await fetch(`${API_BASE}/produtos/buscar?q=${encodeURIComponent(query)}&limit=15`);
+            const data = await response.json();
+
+            const dropdown = document.getElementById('autocomplete-produtos');
+
+            if (data.sucesso && data.produtos.length > 0) {
+                let html = '';
+                data.produtos.forEach(p => {
+                    html += `
+                        <a class="dropdown-item" href="#"
+                           onclick="selecionarProdutoAutocomplete('${p.codigo}', '${p.nome.replace(/'/g, "\\'")}', '${p.embalagem || ''}', '${p.materia_prima || ''}', '${p.marca || ''}'); return false;">
+                            <strong>${p.codigo}</strong>
+                            <br><small class="text-muted">${p.nome}</small>
+                            <br><small class="text-secondary">
+                                ${p.embalagem || ''} | ${p.materia_prima || ''} | ${p.marca || ''}
+                            </small>
+                        </a>
+                    `;
+                });
+                dropdown.innerHTML = html;
+                dropdown.classList.add('show');
+            } else {
+                dropdown.innerHTML = '<span class="dropdown-item text-muted">Nenhum produto encontrado</span>';
+                dropdown.classList.add('show');
+            }
+        } catch (error) {
+            console.error('Erro ao buscar produtos:', error);
+        }
+    }, 300);
+}
+
+function selecionarProdutoAutocomplete(codigo, nome, embalagem, materia, marca) {
+    document.getElementById('modal-nosso-codigo').value = codigo;
+    document.getElementById('modal-nosso-descricao').value = nome;
+    document.getElementById('autocomplete-produtos').classList.remove('show');
+
+    // Mostrar info do produto
+    document.getElementById('info-produto').classList.remove('d-none');
+    document.getElementById('info-embalagem').textContent = embalagem || '-';
+    document.getElementById('info-materia').textContent = materia || '-';
+    document.getElementById('info-marca').textContent = marca || '-';
+}
+
+// Fechar dropdown ao clicar fora
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('#modal-nosso-codigo') && !e.target.closest('#autocomplete-produtos')) {
+        document.getElementById('autocomplete-produtos').classList.remove('show');
+    }
+});
+</script>
+{% endblock %}

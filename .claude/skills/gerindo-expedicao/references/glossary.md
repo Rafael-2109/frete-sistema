@@ -16,10 +16,11 @@ Termos e jargoes utilizados no dominio logistico da Nacom Goya.
 | Falta relativa | Estoque comprometido com outros pedidos |
 | Travando a carteira | Pedidos consumindo estoque que impede outros |
 | RED | Redespacho via SP |
-| FOB | Cliente coleta no CD |
+| FOB, Coleta | Cliente coleta no CD |
 | CIF | Nacom entrega no cliente |
 | BD IND | Balde Industrial |
 | BD | Balde |
+| C CAR, INT, COM CAROCO | Inteiro/a |
 | D-2, D-1, D0 | Dias relativos a data de entrega |
 | Chegou? | Verificar entrada recente no estoque |
 | Falta embarcar | Qtd na carteira ainda nao separada |
@@ -27,7 +28,6 @@ Termos e jargoes utilizados no dominio logistico da Nacom Goya.
 | Mandar junto | Consolidar entregas na mesma viagem |
 | Criar separacao | Gerar registros em Separacao com status ABERTO |
 | Enviar o que tem | Separar apenas quantidade disponivel em estoque |
-
 ---
 
 **Nota:** Para sinonimos de entrada do usuario (ketchup→catchup, caixa→unidade), ver [synonyms.md](synonyms.md).

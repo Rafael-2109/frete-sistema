@@ -76,9 +76,11 @@
                     </h5>
                 </div>
                 <div class="card-body">
-                    <form method="GET" action="{{ url_for('fretes.gerenciar_despesas_extras') }}">
+                    <form method="GET" action="{{ url_for('fretes.gerenciar_despesas_extras') }}" id="formFiltros">
+                        <!-- Campo oculto para preservar a aba ativa -->
+                        <input type="hidden" name="aba" id="filtro_aba" value="{{ aba_ativa if aba_ativa else 'sem' }}">
                         <div class="row">
-                            <div class="col-md-5">
+                            <div class="col-md-2">
                                 <div class="form-group">
                                     <label for="filtro_nf">
                                         <i class="fas fa-file-invoice"></i> Número da NF
@@ -89,7 +91,7 @@
                                            placeholder="Ex: 12345">
                                 </div>
                             </div>
-                            <div class="col-md-5">
+                            <div class="col-md-2">
                                 <div class="form-group">
                                     <label for="filtro_documento">
                                         <i class="fas fa-file-alt"></i> Número do Documento
@@ -98,6 +100,42 @@
                                            class="form-control"
                                            value="{{ filtro_documento if filtro_documento else '' }}"
                                            placeholder="Ex: CTe-123">
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="form-group">
+                                    <label for="filtro_tipo_despesa">
+                                        <i class="fas fa-tag"></i> Tipo de Despesa
+                                    </label>
+                                    <select name="filtro_tipo_despesa" id="filtro_tipo_despesa" class="form-control">
+                                        <option value="">Todos</option>
+                                        {% for tipo in tipos_despesa %}
+                                        <option value="{{ tipo }}" {% if filtro_tipo_despesa == tipo %}selected{% endif %}>{{ tipo }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="form-group">
+                                    <label for="filtro_transportadora">
+                                        <i class="fas fa-truck"></i> Transportadora
+                                    </label>
+                                    <input type="text" name="filtro_transportadora" id="filtro_transportadora"
+                                           class="form-control"
+                                           value="{{ filtro_transportadora if filtro_transportadora else '' }}"
+                                           placeholder="Nome ou CNPJ">
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="form-group">
+                                    <label for="filtro_com_fatura">
+                                        <i class="fas fa-file-invoice-dollar"></i> C/ Fatura
+                                    </label>
+                                    <select name="filtro_com_fatura" id="filtro_com_fatura" class="form-control">
+                                        <option value="">Todos</option>
+                                        <option value="sim" {% if filtro_com_fatura == 'sim' %}selected{% endif %}>Sim</option>
+                                        <option value="nao" {% if filtro_com_fatura == 'nao' %}selected{% endif %}>Não</option>
+                                    </select>
                                 </div>
                             </div>
                             <div class="col-md-2 d-flex align-items-end">
@@ -199,6 +237,7 @@
                                     <th>Cliente</th>
                                     <th>Transportadora</th>
                                     <th>Tipo Despesa</th>
+                                    <th>NFD</th>
                                     <th>Valor</th>
                                     <th>Vencimento</th>
                                     <th>Criado em</th>
@@ -220,6 +259,18 @@
                                         despesa.frete.transportadora.razao_social|length > 20 %}...{% endif %}</td>
                                     <td>
                                         <span class="badge bg-info">{{ despesa.tipo_despesa }}</span>
+                                    </td>
+                                    <td>
+                                        {% if despesa.nfd_id %}
+                                            <a href="{{ url_for('devolucao.devolucao_ocorrencia.detalhe', ocorrencia_id=despesa.nfd.ocorrencia.id if despesa.nfd and despesa.nfd.ocorrencia else 0) }}"
+                                               class="badge bg-warning text-dark" title="Ver devolução">
+                                                NFD {{ despesa.numero_nfd or despesa.nfd.numero_nfd }}
+                                            </a>
+                                        {% elif despesa.tipo_despesa == 'DEVOLUÇÃO' %}
+                                            <span class="text-muted small">-</span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
                                     </td>
                                     <td><strong>{{ (despesa.valor_despesa)|moeda_carteira }}</strong></td>
                                     <td>{{ despesa.vencimento_despesa | formatar_data_segura if
@@ -243,7 +294,7 @@
                         <ul class="pagination justify-content-center">
                             {% if despesas_sem_fatura.has_prev %}
                             <li class="page-item">
-                                <a class="page-link" href="{{ url_for('fretes.gerenciar_despesas_extras', pagina_sem=despesas_sem_fatura.prev_num, filtro_nf=filtro_nf, filtro_documento=filtro_documento) }}">
+                                <a class="page-link" href="{{ url_for('fretes.gerenciar_despesas_extras', pagina_sem=despesas_sem_fatura.prev_num, aba='sem', filtro_nf=filtro_nf, filtro_documento=filtro_documento, filtro_tipo_despesa=filtro_tipo_despesa, filtro_transportadora=filtro_transportadora, filtro_com_fatura=filtro_com_fatura) }}">
                                     Anterior
                                 </a>
                             </li>
@@ -261,7 +312,7 @@
                                     </li>
                                     {% else %}
                                     <li class="page-item">
-                                        <a class="page-link" href="{{ url_for('fretes.gerenciar_despesas_extras', pagina_sem=page_num, filtro_nf=filtro_nf, filtro_documento=filtro_documento) }}">
+                                        <a class="page-link" href="{{ url_for('fretes.gerenciar_despesas_extras', pagina_sem=page_num, aba='sem', filtro_nf=filtro_nf, filtro_documento=filtro_documento, filtro_tipo_despesa=filtro_tipo_despesa, filtro_transportadora=filtro_transportadora, filtro_com_fatura=filtro_com_fatura) }}">
                                             {{ page_num }}
                                         </a>
                                     </li>
@@ -275,7 +326,7 @@
 
                             {% if despesas_sem_fatura.has_next %}
                             <li class="page-item">
-                                <a class="page-link" href="{{ url_for('fretes.gerenciar_despesas_extras', pagina_sem=despesas_sem_fatura.next_num, filtro_nf=filtro_nf, filtro_documento=filtro_documento) }}">
+                                <a class="page-link" href="{{ url_for('fretes.gerenciar_despesas_extras', pagina_sem=despesas_sem_fatura.next_num, aba='sem', filtro_nf=filtro_nf, filtro_documento=filtro_documento, filtro_tipo_despesa=filtro_tipo_despesa, filtro_transportadora=filtro_transportadora, filtro_com_fatura=filtro_com_fatura) }}">
                                     Próximo
                                 </a>
                             </li>
@@ -318,6 +369,7 @@
                                     <th>Cliente</th>
                                     <th>Transportadora</th>
                                     <th>Tipo Despesa</th>
+                                    <th>NFD</th>
                                     <th>Valor</th>
                                     <th>Fatura</th>
                                     <th>Vencimento</th>
@@ -339,6 +391,18 @@
                                         despesa.frete.transportadora.razao_social|length > 20 %}...{% endif %}</td>
                                     <td>
                                         <span class="badge bg-success">{{ despesa.tipo_despesa }}</span>
+                                    </td>
+                                    <td>
+                                        {% if despesa.nfd_id %}
+                                            <a href="{{ url_for('devolucao.devolucao_ocorrencia.detalhe', ocorrencia_id=despesa.nfd.ocorrencia.id if despesa.nfd and despesa.nfd.ocorrencia else 0) }}"
+                                               class="badge bg-warning text-dark" title="Ver devolução">
+                                                NFD {{ despesa.numero_nfd or despesa.nfd.numero_nfd }}
+                                            </a>
+                                        {% elif despesa.tipo_despesa == 'DEVOLUÇÃO' %}
+                                            <span class="text-muted small">-</span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
                                     </td>
                                     <td><strong>{{ (despesa.valor_despesa)|moeda_carteira }}</strong></td>
                                     <td>
@@ -376,7 +440,7 @@
                         <ul class="pagination justify-content-center">
                             {% if despesas_com_fatura.has_prev %}
                             <li class="page-item">
-                                <a class="page-link" href="{{ url_for('fretes.gerenciar_despesas_extras', pagina_com=despesas_com_fatura.prev_num, filtro_nf=filtro_nf, filtro_documento=filtro_documento) }}">
+                                <a class="page-link" href="{{ url_for('fretes.gerenciar_despesas_extras', pagina_com=despesas_com_fatura.prev_num, aba='com', filtro_nf=filtro_nf, filtro_documento=filtro_documento, filtro_tipo_despesa=filtro_tipo_despesa, filtro_transportadora=filtro_transportadora, filtro_com_fatura=filtro_com_fatura) }}">
                                     Anterior
                                 </a>
                             </li>
@@ -394,7 +458,7 @@
                                     </li>
                                     {% else %}
                                     <li class="page-item">
-                                        <a class="page-link" href="{{ url_for('fretes.gerenciar_despesas_extras', pagina_com=page_num, filtro_nf=filtro_nf, filtro_documento=filtro_documento) }}">
+                                        <a class="page-link" href="{{ url_for('fretes.gerenciar_despesas_extras', pagina_com=page_num, aba='com', filtro_nf=filtro_nf, filtro_documento=filtro_documento, filtro_tipo_despesa=filtro_tipo_despesa, filtro_transportadora=filtro_transportadora, filtro_com_fatura=filtro_com_fatura) }}">
                                             {{ page_num }}
                                         </a>
                                     </li>
@@ -408,7 +472,7 @@
 
                             {% if despesas_com_fatura.has_next %}
                             <li class="page-item">
-                                <a class="page-link" href="{{ url_for('fretes.gerenciar_despesas_extras', pagina_com=despesas_com_fatura.next_num, filtro_nf=filtro_nf, filtro_documento=filtro_documento) }}">
+                                <a class="page-link" href="{{ url_for('fretes.gerenciar_despesas_extras', pagina_com=despesas_com_fatura.next_num, aba='com', filtro_nf=filtro_nf, filtro_documento=filtro_documento, filtro_tipo_despesa=filtro_tipo_despesa, filtro_transportadora=filtro_transportadora, filtro_com_fatura=filtro_com_fatura) }}">
                                     Próximo
                                 </a>
                             </li>
@@ -448,29 +512,42 @@
     </div>
 </div>
 
-<!-- ✅ Script para garantir funcionamento das abas -->
+<!-- Script para garantir funcionamento das abas e preservar estado -->
 <script>
-    // Inicializa as abas do Bootstrap quando o documento estiver pronto
     document.addEventListener('DOMContentLoaded', function() {
-        // Para Bootstrap 5
-        const triggerTabList = document.querySelectorAll('#despesasTabs button');
-        triggerTabList.forEach(function(triggerEl) {
-            const tabTrigger = new bootstrap.Tab(triggerEl);
+        // Elementos
+        const semFaturaTab = document.querySelector('#sem-fatura-tab');
+        const comFaturaTab = document.querySelector('#com-fatura-tab');
+        const filtroAbaInput = document.getElementById('filtro_aba');
 
-            triggerEl.addEventListener('click', function(event) {
-                event.preventDefault();
-                tabTrigger.show();
-            });
-        });
+        // Obter parâmetro 'aba' da URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const abaParam = urlParams.get('aba');
 
-        // Se houver hash na URL, ativar a aba correspondente
-        const hash = window.location.hash;
-        if (hash === '#com-fatura') {
-            const comFaturaTab = document.querySelector('#com-fatura-tab');
+        // Ativar aba baseada no parâmetro da URL
+        if (abaParam === 'com') {
             if (comFaturaTab) {
                 const tab = new bootstrap.Tab(comFaturaTab);
                 tab.show();
             }
+        } else {
+            // Default: aba "sem fatura"
+            if (semFaturaTab) {
+                const tab = new bootstrap.Tab(semFaturaTab);
+                tab.show();
+            }
+        }
+
+        // Atualizar campo oculto quando trocar de aba
+        if (semFaturaTab) {
+            semFaturaTab.addEventListener('shown.bs.tab', function() {
+                if (filtroAbaInput) filtroAbaInput.value = 'sem';
+            });
+        }
+        if (comFaturaTab) {
+            comFaturaTab.addEventListener('shown.bs.tab', function() {
+                if (filtroAbaInput) filtroAbaInput.value = 'com';
+            });
         }
     });
 </script>

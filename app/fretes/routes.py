@@ -3565,42 +3565,83 @@ def tentar_lancamento_frete_automatico(embarque_id, cnpj_cliente, usuario="Siste
 @login_required
 def gerenciar_despesas_extras():
     """Lista despesas extras para gerenciamento (vinculação a faturas, etc.)"""
-    # ✅ NOVOS FILTROS: NF, documento e fatura
+    # Filtros
     filtro_nf = request.args.get("filtro_nf", "").strip()
     filtro_documento = request.args.get("filtro_documento", "").strip()
+    filtro_tipo_despesa = request.args.get("filtro_tipo_despesa", "").strip()
+    filtro_transportadora = request.args.get("filtro_transportadora", "").strip()
+    filtro_com_fatura = request.args.get("filtro_com_fatura", "").strip()
+    aba_ativa = request.args.get("aba", "sem")
 
     # Paginação
     pagina_sem = request.args.get("pagina_sem", 1, type=int)
     pagina_com = request.args.get("pagina_com", 1, type=int)
     por_pagina = 20
 
-    # ✅ Query base para despesas SEM fatura
-    query_sem_fatura = db.session.query(DespesaExtra).join(Frete).filter(DespesaExtra.fatura_frete_id.is_(None))
+    # Buscar tipos de despesa distintos para o filtro
+    tipos_despesa_query = db.session.query(DespesaExtra.tipo_despesa).distinct().order_by(DespesaExtra.tipo_despesa).all()
+    tipos_despesa = [t[0] for t in tipos_despesa_query if t[0]]
 
-    # Aplicar filtros para despesas SEM fatura
-    if filtro_nf:
-        query_sem_fatura = query_sem_fatura.filter(Frete.numeros_nfs.ilike(f"%{filtro_nf}%"))
-    if filtro_documento:
-        query_sem_fatura = query_sem_fatura.filter(DespesaExtra.numero_documento.ilike(f"%{filtro_documento}%"))
+    # Função para aplicar filtros comuns
+    def aplicar_filtros(query):
+        if filtro_nf:
+            query = query.filter(Frete.numeros_nfs.ilike(f"%{filtro_nf}%"))
+        if filtro_documento:
+            query = query.filter(DespesaExtra.numero_documento.ilike(f"%{filtro_documento}%"))
+        if filtro_tipo_despesa:
+            query = query.filter(DespesaExtra.tipo_despesa == filtro_tipo_despesa)
+        if filtro_transportadora:
+            query = query.filter(
+                or_(
+                    Transportadora.razao_social.ilike(f"%{filtro_transportadora}%"),
+                    Transportadora.cnpj.ilike(f"%{filtro_transportadora}%")
+                )
+            )
+        return query
 
-    # Paginação para despesas SEM fatura
-    despesas_sem_fatura_paginadas = query_sem_fatura.order_by(desc(DespesaExtra.criado_em)).paginate(
-        page=pagina_sem, per_page=por_pagina, error_out=False
+    # Query base para despesas SEM fatura
+    query_sem_fatura = (
+        db.session.query(DespesaExtra)
+        .join(Frete)
+        .join(Transportadora, Frete.transportadora_id == Transportadora.id)
+        .filter(DespesaExtra.fatura_frete_id.is_(None))
     )
+    query_sem_fatura = aplicar_filtros(query_sem_fatura)
 
-    # ✅ Query base para despesas COM fatura
-    query_com_fatura = db.session.query(DespesaExtra).join(Frete).filter(DespesaExtra.fatura_frete_id.isnot(None))
-
-    # Aplicar filtros para despesas COM fatura
-    if filtro_nf:
-        query_com_fatura = query_com_fatura.filter(Frete.numeros_nfs.ilike(f"%{filtro_nf}%"))
-    if filtro_documento:
-        query_com_fatura = query_com_fatura.filter(DespesaExtra.numero_documento.ilike(f"%{filtro_documento}%"))
-
-    # Paginação para despesas COM fatura
-    despesas_com_fatura_paginadas = query_com_fatura.order_by(desc(DespesaExtra.criado_em)).paginate(
-        page=pagina_com, per_page=por_pagina, error_out=False
+    # Query base para despesas COM fatura
+    query_com_fatura = (
+        db.session.query(DespesaExtra)
+        .join(Frete)
+        .join(Transportadora, Frete.transportadora_id == Transportadora.id)
+        .filter(DespesaExtra.fatura_frete_id.isnot(None))
     )
+    query_com_fatura = aplicar_filtros(query_com_fatura)
+
+    # Se filtro_com_fatura estiver definido, filtra nas duas queries
+    if filtro_com_fatura == "sim":
+        # Mostra apenas COM fatura
+        despesas_sem_fatura_paginadas = query_sem_fatura.filter(False).paginate(
+            page=1, per_page=por_pagina, error_out=False
+        )
+        despesas_com_fatura_paginadas = query_com_fatura.order_by(desc(DespesaExtra.criado_em)).paginate(
+            page=pagina_com, per_page=por_pagina, error_out=False
+        )
+    elif filtro_com_fatura == "nao":
+        # Mostra apenas SEM fatura
+        despesas_sem_fatura_paginadas = query_sem_fatura.order_by(desc(DespesaExtra.criado_em)).paginate(
+            page=pagina_sem, per_page=por_pagina, error_out=False
+        )
+        despesas_com_fatura_paginadas = query_com_fatura.filter(False).paginate(
+            page=1, per_page=por_pagina, error_out=False
+        )
+    else:
+        # Mostra ambas
+        despesas_sem_fatura_paginadas = query_sem_fatura.order_by(desc(DespesaExtra.criado_em)).paginate(
+            page=pagina_sem, per_page=por_pagina, error_out=False
+        )
+        despesas_com_fatura_paginadas = query_com_fatura.order_by(desc(DespesaExtra.criado_em)).paginate(
+            page=pagina_com, per_page=por_pagina, error_out=False
+        )
 
     return render_template(
         "fretes/gerenciar_despesas_extras.html",
@@ -3608,6 +3649,11 @@ def gerenciar_despesas_extras():
         despesas_com_fatura=despesas_com_fatura_paginadas,
         filtro_nf=filtro_nf,
         filtro_documento=filtro_documento,
+        filtro_tipo_despesa=filtro_tipo_despesa,
+        filtro_transportadora=filtro_transportadora,
+        filtro_com_fatura=filtro_com_fatura,
+        aba_ativa=aba_ativa,
+        tipos_despesa=tipos_despesa,
     )
 
 

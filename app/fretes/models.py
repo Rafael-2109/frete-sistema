@@ -347,6 +347,12 @@ class DespesaExtra(db.Model):
     chave_cte = db.Column(db.String(44), nullable=True, index=True)  # Chave do CTe (facilita buscas)
 
     # ================================================
+    # VÍNCULO COM DEVOLUÇÃO (quando tipo_despesa='DEVOLUÇÃO')
+    # ================================================
+    nfd_id = db.Column(db.Integer, db.ForeignKey('nf_devolucao.id'), nullable=True, index=True)
+    numero_nfd = db.Column(db.String(20), nullable=True)  # Cache do número para facilitar exibição
+
+    # ================================================
     # INTEGRAÇÃO ODOO
     # ================================================
     odoo_dfe_id = db.Column(db.Integer, nullable=True, index=True)       # ID do DFe no Odoo
@@ -410,6 +416,7 @@ class DespesaExtra(db.Model):
     # ================================================
     fatura_frete = db.relationship('FaturaFrete', backref='despesas_extras')
     cte = db.relationship('ConhecimentoTransporte', foreign_keys=[despesa_cte_id], backref='despesas_extras_vinculadas')
+    nfd = db.relationship('NFDevolucao', backref='despesas_extras')
 
     def __repr__(self):
         return f'<DespesaExtra {self.tipo_despesa} - R$ {self.valor_despesa} - {self.status}>'
