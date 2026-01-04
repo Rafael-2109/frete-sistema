@@ -1192,7 +1192,7 @@ def gerar_resumo_executivo(analise: dict) -> str:
     # PEDIDOS DISPONIVEIS
     if pedidos_disponiveis:
         linhas.extend(["", "-" * 70, "PEDIDOS DISPONIVEIS PARA SEPARAR:", "-" * 70])
-        for ped in pedidos_disponiveis[:15]:
+        for ped in pedidos_disponiveis[:25]:
             agenda_str = f" - AGENDA: {ped['forma_agendamento']}" if ped['exige_agendamento'] else ""
             entrega_str = f" - Entrega: {ped['data_entrega']}" if ped.get('data_entrega') else ""
             tipo_str = f" [{ped['tipo']}]" if ped.get('tipo') in ['PARCIAL_AUTOMATICO', 'PARCIAL_CARGA_MAXIMA'] else ""
@@ -1230,8 +1230,8 @@ def gerar_resumo_executivo(analise: dict) -> str:
         linhas.extend(["", "-" * 70, "COMERCIAL - CONSULTAR GESTORES:", "-" * 70])
         for gestor, dados in comercial.items():
             linhas.append(f"\n  [{gestor}] ({dados['canal']}) - {dados['total_pedidos']} pedidos - R$ {dados['valor_total']:,.0f}")
-            for ped in dados['pedidos'][:5]:
-                prods = ', '.join(p.split(' (')[0][:15] for p in ped['produtos_faltantes'][:3])
+            for ped in dados['pedidos'][:10]:
+                prods = ', '.join(p.split(' (')[0][:15] for p in ped['produtos_faltantes'][:5])
                 linhas.append(f"    {ped['pedido']} | {ped['cliente'][:20]} | R$ {ped['valor']:,.0f} | falta {ped['percentual_falta']:.0f}% | {prods}")
 
     # SUGESTÕES DE AJUSTE (separações com data incorreta)

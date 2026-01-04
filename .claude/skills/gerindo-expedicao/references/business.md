@@ -22,35 +22,8 @@ Constantes, calculos e regras de negocio utilizadas pelos scripts desta skill.
 
 ## Grupos Empresariais
 
-> **FONTE UNICA** - Esta e a referencia canonica para identificacao de grupos por CNPJ.
-
-| Grupo | Prefixos CNPJ (formatados) | Comando |
-|-------|----------------------------|---------|
-| `atacadao` | 93.209.76, 75.315.33, 00.063.96 | `--grupo atacadao` |
-| `assai` | 06.057.22 | `--grupo assai` |
-| `tenda` | 01.157.55 | `--grupo tenda` |
-
-**IMPORTANTE:** CNPJs no banco estao FORMATADOS com pontos: `93.209.765/XXXX-XX`
-
-```python
-GRUPOS_EMPRESARIAIS = {
-    'atacadao': ['93.209.76', '75.315.33', '00.063.96'],
-    'assai': ['06.057.22'],
-    'tenda': ['01.157.55']
-}
-```
-
-**Como buscar (usar formato com pontos):**
-```sql
--- Atacadao
-WHERE cnpj_cpf LIKE '93.209.76%' OR cnpj_cpf LIKE '75.315.33%' OR cnpj_cpf LIKE '00.063.96%'
-
--- Assai
-WHERE cnpj_cpf LIKE '06.057.22%'
-
--- Tenda
-WHERE cnpj_cpf LIKE '01.157.55%'
-```
+> **VER CLAUDE.md** - Grupos empresariais estao documentados no arquivo CLAUDE.md na raiz do projeto (secao "Regras de Negocio").
+> Scripts usam `resolver_entidades.GRUPOS_EMPRESARIAIS` que ja contem os prefixos CNPJ corretos.
 
 ---
 
@@ -161,26 +134,4 @@ sub_rota = buscar_sub_rota_por_uf_cidade(cod_uf, nome_cidade)
 
 ## Identificacao de Gestores
 
-Extraido do campo `equipe_vendas`:
-
-| Valor no Campo | Gestor | Canal |
-|----------------|--------|-------|
-| VENDA EXTERNA ATACADAO | Junior | WhatsApp |
-| VENDA EXTERNA SENDAS SP | Junior | WhatsApp |
-| VENDA EXTERNA MILER | Miler | WhatsApp |
-| VENDA EXTERNA FERNANDO | Fernando | WhatsApp |
-| VENDA EXTERNA JUNIOR | Junior | WhatsApp |
-| VENDA INTERNA DENISE | Denise | Teams |
-
----
-
-## Normalizacao de Texto
-
-Para comparacoes de nomes (cidades, produtos):
-
-```python
-from resolver_entidades import normalizar_texto
-
-normalizar_texto("Itanhaem")  # -> "itanhaem"
-normalizar_texto("Sao Paulo")  # -> "sao paulo"
-```
+> **VER communication.md** - Mapeamento de gestores e canais esta em `references/communication.md`.

@@ -475,7 +475,7 @@ def consultar_situacao_pedidos_cliente_produto(args):
         'termo': args.cliente,
         'estrategia': cliente_info['estrategia'],
         'total_encontrados': len(cnpjs_encontrados),
-        'clientes': cliente_info['clientes_encontrados'][:5]  # Limitar para nao poluir
+        'clientes': cliente_info['clientes_encontrados'] # Limitar para nao poluir
     }
 
     # 2. Resolver produto
@@ -587,13 +587,13 @@ def consultar_situacao_pedidos_cliente_produto(args):
             preco = float(item.preco_produto_pedido or 0)
             valor = qtd * preco
 
-        pedidos_dict[num]['qtd_produto'] += qtd
-        pedidos_dict[num]['valor_produto'] += valor
-        pedidos_dict[num]['total_itens'] += 1
+        pedidos_dict[num]['qtd_produto'] += qtd # type: ignore
+        pedidos_dict[num]['valor_produto'] += valor # type: ignore
+        pedidos_dict[num]['total_itens'] += 1 # type: ignore
 
     # Converter para lista
     pedidos_lista = list(pedidos_dict.values())
-    pedidos_lista.sort(key=lambda x: -x['valor_produto'])
+    pedidos_lista.sort(key=lambda x: -x['valor_produto']) # type: ignore
 
     resultado['pedidos'] = pedidos_lista[:args.limit]
 
@@ -1045,7 +1045,7 @@ def consultar_status_pedido(args):
         'pendente_separar': {
             'itens': len(itens_pendentes),
             'valor': valor_pendente,
-            'detalhes': itens_pendentes[:10]  # Limitar para nao poluir
+            'detalhes': itens_pendentes[:30]  # Limitar para nao poluir
         },
         'valor_total_pedido': valor_total_pedido,
         'faturado': {

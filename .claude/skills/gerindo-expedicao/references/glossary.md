@@ -22,7 +22,7 @@ Termos e jargoes utilizados no dominio logistico da Nacom Goya.
 | BD | Balde |
 | C CAR, INT, COM CAROCO | Inteiro/a |
 | D-2, D-1, D0 | Dias relativos a data de entrega |
-| Chegou? | Verificar entrada recente no estoque |
+| Chegou? | Verificar entrada recente → usar `consultando_produtos_estoque.py --produto X --entradas` |
 | Falta embarcar | Qtd na carteira ainda nao separada |
 | Vai sobrar | Estoque apos atender toda demanda |
 | Mandar junto | Consolidar entregas na mesma viagem |

@@ -1,29 +1,31 @@
-# Sinonimos de Entrada
+# Sinonimos de Entrada - CRITICOS
 
-Mapeamento de termos que o usuario pode usar para a mesma coisa.
+Apenas termos NAO OBVIOS que Claude nao saberia inferir do contexto.
 
-> **Quando usar:** Consulte este arquivo quando precisar normalizar a entrada do usuario para termos padrao do sistema.
-
----
-
-O usuario pode usar diversos termos para a mesma coisa. Normalize antes de processar:
-
-| Termo Usuario | Termo Padrao | Significado |
-|---------------|--------------|-------------|
-| ketchup, catchup, ketichap | ketchup | Produto ketchup |
-| c car, int, com caroço | inteiro/a | Produtos inteiros, que não foram fatiados / processados |
-| caixa, cx, unidade, un | unidade | Quantidade de produto |
-| loja, filial, unidade (cliente) | loja | Filial do cliente |
-| embarque, despacho, saida | expedicao | Data de envio |
-| chegada, recebimento, entrega | agendamento | Data de entrega no cliente |
-| pedido, PV, OV, venda | pedido | Ordem de venda |
-| cliente, comprador, destinatario | cliente | Quem compra |
-| transportadora, frete, carrier | transportadora | Empresa de transporte |
-| estoque, saldo, disponivel | estoque | Quantidade em armazem |
-| falta, ruptura, stockout | ruptura | Estoque insuficiente |
-| separacao, picking, sep | separacao | Preparacao de pedido |
-| programacao, OP, ordem producao | producao | Ordem de producao |
+> **Quando usar:** Consulte este arquivo quando precisar normalizar termos especificos do dominio logistico.
 
 ---
 
-**Importante**: Quando o termo for ambiguo no contexto, PERGUNTE. Ex: "unidade" pode ser quantidade ou filial.
+## Termos Criticos (NAO remover)
+
+| Termo Usuario | Termo Padrao | Por que e critico |
+|---------------|--------------|-------------------|
+| c car, int, com caroco | inteiro/a | Jargao interno: produtos nao fatiados |
+| embarque, despacho, saida | expedicao | Termo tecnico: data que SAI do CD |
+| chegada, recebimento | agendamento | DIFERENTE de entrega! E a data que CHEGA no cliente |
+| RED, redespacho | redespacho | Operacao via SP |
+| OP, ordem producao | producao | Programacao de fabrica |
+
+---
+
+## Termos Ambiguos (SEMPRE perguntar)
+
+| Termo | Pode significar | Acao |
+|-------|-----------------|------|
+| unidade | Quantidade OU filial do cliente | Perguntar contexto |
+| entrega | data_entrega_pedido OU agendamento | Perguntar qual |
+| disponivel | Estoque atual OU quando fica disponivel | Perguntar qual |
+
+---
+
+**Nota:** Sinonimos obvios (ketchup→catchup, caixa→cx, cliente→comprador) NAO estao aqui porque Claude ja entende.

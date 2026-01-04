@@ -166,14 +166,19 @@ class NFDService:
                     resultado['nfs_referenciadas'] += estatisticas.get('nfs_referenciadas', 0)
                     resultado['linhas_criadas'] += estatisticas.get('linhas_criadas', 0)
 
+                    # Commit após cada NFD processada com sucesso
+                    # Isso evita perder processamentos anteriores em caso de erro posterior
+                    db.session.commit()
+
                 except Exception as e:
+                    # CRÍTICO: Fazer rollback para limpar estado da sessão
+                    # Isso permite continuar processando outras NFDs após um erro
+                    db.session.rollback()
                     erro_msg = f"Erro ao processar NFD {nfd_data.get('id')}: {str(e)}"
                     logger.error(f"❌ {erro_msg}")
                     resultado['erros'].append(erro_msg)
 
-            # 3. Commit final
-            db.session.commit()
-
+            # Commit final removido - cada NFD já é commitada individualmente
             resultado['sucesso'] = True
             logger.info("=" * 80)
             logger.info("✅ IMPORTAÇÃO DE NFDs CONCLUÍDA")

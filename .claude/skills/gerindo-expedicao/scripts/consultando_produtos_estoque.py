@@ -775,17 +775,17 @@ def consultar_produtos_previsao_ruptura(args):
 
     if total_critico > 0:
         msg_linhas.append(f"\nCRITICO (proximos 2 dias): {total_critico} produto(s)")
-        for p in resultado['produtos_ruptura']['critico'][:3]:
+        for p in resultado['produtos_ruptura']['critico'][:10]:
             msg_linhas.append(f"  - {p['nome_produto']}: Ruptura em {p['dia_ruptura']} - Faltam {p['deficit']:.0f} un")
 
     if total_alerta > 0:
         msg_linhas.append(f"\nALERTA (3-5 dias): {total_alerta} produto(s)")
-        for p in resultado['produtos_ruptura']['alerta'][:3]:
+        for p in resultado['produtos_ruptura']['alerta'][:10]:
             msg_linhas.append(f"  - {p['nome_produto']}: Ruptura em {p['dia_ruptura']} - Faltam {p['deficit']:.0f} un")
 
     if total_atencao > 0:
         msg_linhas.append(f"\nATENCAO (6+ dias): {total_atencao} produto(s)")
-        for p in resultado['produtos_ruptura']['atencao'][:3]:
+        for p in resultado['produtos_ruptura']['atencao'][:10]:
             msg_linhas.append(f"  - {p['nome_produto']}: Ruptura em {p['dia_ruptura']} - Faltam {p['deficit']:.0f} un")
 
     if total == 0:

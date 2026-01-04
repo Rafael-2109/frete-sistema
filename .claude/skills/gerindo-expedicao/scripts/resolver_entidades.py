@@ -763,7 +763,7 @@ def resolver_pedido(termo: str, fonte: str = 'ambos'):
             info['fonte'] = fonte_str
             info['multiplos_encontrados'] = True
             info['pedidos_candidatos'] = [
-                pedidos_dict[p] for p in pedidos_lista[:20]
+                pedidos_dict[p] for p in pedidos_lista[:50]
             ]
             info['total_pedidos_encontrados'] = len(pedidos_lista)
             if extra_info:
@@ -1293,7 +1293,7 @@ def resolver_produto_unico(termo: str):
         - produto_dict: Dict com dados do produto ou None
         - info: Dict com metadados {encontrado, multiplos, candidatos}
     """
-    resultados = resolver_produto(termo, limit=5)
+    resultados = resolver_produto(termo, limit=10)
 
     info = {
         'termo_original': termo,
@@ -1439,7 +1439,7 @@ def formatar_sugestao_pedido(info: dict) -> str:
         return (
             f"Multiplos pedidos encontrados para '{info['termo_original']}'. "
             f"Usando o primeiro: {candidatos[0] if candidatos else 'N/A'}. "
-            f"Outros candidatos: {', '.join(candidatos[1:5])}"
+            f"Outros candidatos: {', '.join(candidatos[1:10])}"
         )
 
     return None # type: ignore
@@ -1497,7 +1497,7 @@ if __name__ == '__main__':
         itens, num, info = resolver_pedido("123")
         print(f"Busca '123': {info['estrategia']}, pedido={num}, itens={len(itens)}")
         if info.get('multiplos_encontrados'):
-            print(f"  Candidatos: {info.get('pedidos_candidatos', [])[:5]}")
+            print(f"  Candidatos: {info.get('pedidos_candidatos', [])[:10]}")
 
         # Teste 3: Grupo + loja
         itens, num, info = resolver_pedido("atacadao 183")

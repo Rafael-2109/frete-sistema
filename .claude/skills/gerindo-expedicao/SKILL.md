@@ -48,6 +48,47 @@ NAO USE para:
 
 ---
 
+## REGRAS CRITICAS (NUNCA VIOLAR)
+
+<regras_criticas>
+
+### 1. GUARDRAIL ANTI-ALUCINACAO
+
+**PROIBIDO** criar, calcular ou inferir dados que NAO foram retornados pelo script.
+
+| PERMITIDO | PROIBIDO |
+|-----------|----------|
+| Mostrar dados retornados pelo script | Inventar "cobertura de X dias" sem calculo |
+| Formatar/agrupar dados existentes | Criar campos que nao existem no JSON |
+| Resumir informacoes do JSON | Estimar valores sem base no script |
+
+**Se precisar de dado que nao veio no script:** EXECUTE o script com flag adequado ou PERGUNTE ao usuario.
+
+### 2. REGRA DE FALLBACK (NUNCA TRAVAR)
+
+**Se um script falhar ou retornar erro:** SEMPRE responda ao usuario.
+
+| Situacao | Acao |
+|----------|------|
+| Script retornou erro | Explicar o erro e sugerir alternativa |
+| Parametro nao suportado | Usar parametros disponiveis ou perguntar |
+| Entidade nao encontrada | Informar "nao encontrei X, voce quis dizer Y?" |
+| Timeout/falha tecnica | "Houve um problema ao consultar. Posso tentar de outra forma?" |
+
+**NUNCA:** Ficar em silencio, travar, ou tentar criar scripts customizados.
+
+### 3. SIMULAR ANTES DE EXECUTAR (ACOES)
+
+**Para QUALQUER acao que modifica dados (criar separacao):**
+1. Executar SEM --executar (simular)
+2. Mostrar resultado ao usuario
+3. AGUARDAR confirmacao explicita
+4. So entao executar COM --executar
+
+</regras_criticas>
+
+---
+
 ## DECISION TREE - Qual Script Usar?
 
 <decision_tree>
@@ -232,77 +273,14 @@ Se resultado tiver mais de 1 loja do mesmo grupo (ex: Atacadao):
 
 ### Exemplos de Boas e Mas Escolhas
 
-<exemplo_bom>
-Pergunta: "quantas caixas de ketchup tem pendentes pro atacadao 183"
-Escolha: consultando_situacao_pedidos.py --grupo atacadao --produto ketchup
-Motivo: Combina PRODUTO + GRUPO, que e o caso 1 das regras de decisao.
-</exemplo_bom>
+> **VER references/examples.md** para exemplos detalhados de uso correto e anti-patterns.
 
-<exemplo_ruim>
-Pergunta: "quantas caixas de ketchup tem pendentes pro atacadao 183"
-Escolha ERRADA: consultando_produtos_estoque.py --produto ketchup
-Problema: Mostra catalogo de produtos, NAO pedidos do cliente. O usuario quer saber qtd pendente para o atacadao, nao estoque geral.
-</exemplo_ruim>
-
-<exemplo_bom>
-Pergunta: "quanto tem de palmito?"
-Escolha: consultando_produtos_estoque.py --produto palmito --completo
-Motivo: Pergunta sobre ESTOQUE de produto, sem mencionar cliente.
-</exemplo_bom>
-
-<exemplo_ruim>
-Pergunta: "quanto tem de palmito?"
-Escolha ERRADA: consultando_situacao_pedidos.py --produto palmito
-Problema: Mostra pedidos com palmito, NAO estoque. O usuario quer saber quantidade em estoque.
-</exemplo_ruim>
-
-<exemplo_bom>
-Pergunta: "quando o pedido VCD123 fica disponivel?"
-Escolha: analisando_disponibilidade_estoque.py --pedido VCD123
-Motivo: Pergunta sobre DISPONIBILIDADE de pedido especifico. Analisa estoque vs demanda.
-</exemplo_bom>
-
-<exemplo_ruim>
-Pergunta: "quando o pedido VCD123 fica disponivel?"
-Escolha ERRADA: consultando_situacao_pedidos.py --pedido VCD123 --status
-Problema: Mostra status atual do pedido, NAO projeta quando tera estoque disponivel.
-</exemplo_ruim>
-
-<exemplo_bom>
-Pergunta: "se embarcar amanha, quando chega em Manaus?"
-Escolha: calculando_leadtime_entrega.py --pedido X --data-embarque amanha
-Motivo: Calculo de PRAZO de entrega com data de embarque fornecida.
-</exemplo_bom>
-
-<exemplo_ruim>
-Pergunta: "se embarcar amanha, quando chega em Manaus?"
-Escolha ERRADA: analisando_disponibilidade_estoque.py --pedido X
-Problema: Analisa disponibilidade de estoque, NAO calcula prazo de transporte.
-</exemplo_ruim>
-
-<exemplo_bom>
-Pergunta: "crie separacao do VCD123 pra segunda"
-Escolha: criando_separacao_pedidos.py --pedido VCD123 --expedicao segunda
-Motivo: ACAO de criar separacao com data informada. SEMPRE simular primeiro (SEM --executar).
-</exemplo_bom>
-
-<exemplo_ruim>
-Pergunta: "crie separacao do VCD123 pra segunda"
-Escolha ERRADA: criando_separacao_pedidos.py --pedido VCD123 --expedicao segunda --executar
-Problema: NUNCA usar --executar sem simular primeiro e confirmar com usuario!
-</exemplo_ruim>
-
-<exemplo_bom>
-Pergunta: "o que vai ser produzido essa semana?"
-Escolha: consultando_programacao_producao.py --listar --dias 7 --por-dia
-Motivo: Consulta de PROGRAMACAO de producao futura com agrupamento por dia.
-</exemplo_bom>
-
-<exemplo_ruim>
-Pergunta: "o que vai ser produzido essa semana?"
-Escolha ERRADA: consultando_produtos_estoque.py --entradas
-Problema: Mostra entradas de estoque (producao JA realizada), NAO programacao futura.
-</exemplo_ruim>
+**Resumo rapido:**
+- PRODUTO + CLIENTE → `consultando_situacao_pedidos --grupo/--cliente + --produto`
+- So ESTOQUE (sem cliente) → `consultando_produtos_estoque --produto X --completo`
+- QUANDO DISPONIVEL → `analisando_disponibilidade_estoque --pedido X`
+- QUANDO CHEGA (prazo) → `calculando_leadtime_entrega --pedido X --data-embarque Y`
+- CRIAR SEPARACAO → `criando_separacao_pedidos` (SEM --executar primeiro!)
 
 ---
 
@@ -570,15 +548,30 @@ Os arquivos em `references/` sao carregados sob demanda.
 **NAO leia todos de uma vez** - consulte apenas quando necessario.
 </progressive_disclosure>
 
+### Gatilhos para Consulta de References
+
+| Se pergunta menciona... | Consultar | Motivo |
+|-------------------------|-----------|--------|
+| PRIORIZACAO, qual cliente primeiro | `context.md` → Top Clientes | Atacadao=50%, Assai=13% |
+| ATRASO, agenda, gargalo | `context.md` → Gargalos | Agendas sao o maior gargalo |
+| PARCIAL vs AGUARDAR, decisao | `context.md` → Contexto Estrategico | Fundos limitam estoques |
+| "Chegou?", entradas | `glossary.md` → Usar --entradas | Mapeamento de acao |
+| Abreviacao (CI, AZ VF, BD) | `products.md` | Resolver abreviacao |
+| Termo desconhecido (matar, FOB) | `glossary.md` | Entender jargao |
+| Cliente importante (Atacadao, Assai) | `context.md` → SLAs | SLA 45 dias Atacadao |
+
+### Tabela de Referencias
+
 | Arquivo | Quando Consultar |
 |---------|------------------|
-| [tables.md](references/tables.md) | Precisa saber nome de campo ou tipo de dados |
-| [business.md](references/business.md) | Precisa de constantes, prefixos CNPJ, limites veiculos, ou formulas |
-| [glossary.md](references/glossary.md) | Encontrou termo desconhecido (ruptura, matar, FOB, RED) |
-| [synonyms.md](references/synonyms.md) | Usuario usou termo diferente do padrao (catchup, caixa, embarque) |
-| [products.md](references/products.md) | Usuario usou abreviacao de produto (CI, AZ VF, BD, IND) |
-| [examples.md](references/examples.md) | Precisa ver resposta esperada ou output de exemplo |
-| [context.md](references/context.md) | Precisa entender contexto da empresa, clientes, ou escalar decisao |
-| [communication.md](references/communication.md) | Vai gerar mensagem para PCP ou Comercial |
+| [business.md](references/business.md) | Constantes, limites veiculos, formulas de calculo |
+| [glossary.md](references/glossary.md) | Termos do dominio (ruptura, matar, FOB, RED, "Chegou?") |
+| [synonyms.md](references/synonyms.md) | Termos criticos nao obvios (c car, RED, OP) |
+| [products.md](references/products.md) | Abreviacoes de produto (CI, AZ VF, BD, IND) |
+| [examples.md](references/examples.md) | Exemplos de uso e anti-patterns |
+| [context.md](references/context.md) | Contexto estrategico, clientes top, gargalos, SLAs |
+| [communication.md](references/communication.md) | Templates de mensagem para PCP ou Comercial |
+
+> **NOTA:** Para schemas de tabelas, consulte `CLAUDE.md` na raiz do projeto (secao "MODELOS CRITICOS").
 
 **Grupos Empresariais:** `--grupo atacadao`, `--grupo assai`, `--grupo tenda`

@@ -393,3 +393,128 @@ OPCAO 1: Trocar VF Pouch com Azeitona Fatiada
   03/12: VF Pouch 150g <- RESOLVE RUPTURA
   05/12: Azeitona Fatiada <- Adiada 2 dias
 ```
+
+---
+
+## Anti-Patterns (O QUE NAO FAZER)
+
+### ERRO 1: Usar estoque quando usuario perguntou sobre cliente
+
+**Pergunta:** "quantas caixas de ketchup tem pendentes pro atacadao 183"
+
+❌ **ERRADO:**
+```bash
+consultando_produtos_estoque.py --produto ketchup
+```
+Problema: Mostra catalogo de produtos, NAO pedidos do cliente.
+
+✅ **CORRETO:**
+```bash
+consultando_situacao_pedidos.py --grupo atacadao --produto ketchup
+```
+
+---
+
+### ERRO 2: Usar pedidos quando usuario perguntou sobre estoque
+
+**Pergunta:** "quanto tem de palmito?"
+
+❌ **ERRADO:**
+```bash
+consultando_situacao_pedidos.py --produto palmito
+```
+Problema: Mostra pedidos com palmito, NAO estoque.
+
+✅ **CORRETO:**
+```bash
+consultando_produtos_estoque.py --produto palmito --completo
+```
+
+---
+
+### ERRO 3: Confundir disponibilidade com prazo
+
+**Pergunta:** "quando o pedido VCD123 fica disponivel?"
+
+❌ **ERRADO:**
+```bash
+calculando_leadtime_entrega.py --pedido VCD123
+```
+Problema: Calcula prazo de transporte, NAO quando tera estoque.
+
+✅ **CORRETO:**
+```bash
+analisando_disponibilidade_estoque.py --pedido VCD123
+```
+
+---
+
+### ERRO 4: Confundir prazo com disponibilidade
+
+**Pergunta:** "se embarcar amanha, quando chega em Manaus?"
+
+❌ **ERRADO:**
+```bash
+analisando_disponibilidade_estoque.py --pedido X
+```
+Problema: Analisa estoque, NAO calcula prazo de transporte.
+
+✅ **CORRETO:**
+```bash
+calculando_leadtime_entrega.py --pedido X --data-embarque amanha
+```
+
+---
+
+### ERRO 5: Executar sem simular
+
+**Pergunta:** "crie separacao do VCD123 pra segunda"
+
+❌ **ERRADO:**
+```bash
+criando_separacao_pedidos.py --pedido VCD123 --expedicao segunda --executar
+```
+Problema: NUNCA usar --executar sem simular primeiro!
+
+✅ **CORRETO (2 passos):**
+```bash
+# Passo 1: Simular
+criando_separacao_pedidos.py --pedido VCD123 --expedicao segunda
+
+# Passo 2: Apos confirmacao do usuario
+criando_separacao_pedidos.py --pedido VCD123 --expedicao segunda --executar
+```
+
+---
+
+### ERRO 6: Confundir producao futura com entrada passada
+
+**Pergunta:** "o que vai ser produzido essa semana?"
+
+❌ **ERRADO:**
+```bash
+consultando_produtos_estoque.py --entradas
+```
+Problema: Mostra entradas PASSADAS, NAO programacao futura.
+
+✅ **CORRETO:**
+```bash
+consultando_programacao_producao.py --listar --dias 7 --por-dia
+```
+
+---
+
+### ERRO 7: Nao usar --entradas para "Chegou?"
+
+**Pergunta:** "Chegou cogumelo?"
+
+❌ **ERRADO:**
+```bash
+consultando_produtos_estoque.py --produto cogumelo --completo
+```
+Problema: Mostra estoque geral, NAO entradas recentes.
+
+✅ **CORRETO:**
+```bash
+consultando_produtos_estoque.py --produto cogumelo --entradas
+```
