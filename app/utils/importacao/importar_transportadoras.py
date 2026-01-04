@@ -13,6 +13,11 @@ def importar_transportadoras(caminho_arquivo):
     # Converte campo 'OPTANTE' para booleano
     df['OPTANTE'] = df['OPTANTE'].astype(str).str.upper().map({'SIM': True, 'S': True, 'NÃO': False, 'NAO': False, 'N': False}).fillna(False)
 
+    # Converte campo 'Aceita NF Pallet' para booleano (opcional)
+    # Se a coluna existir, converte. SIM = aceita (nao_aceita_nf_pallet = False)
+    if 'Aceita NF Pallet' in df.columns:
+        df['_aceita_nf_pallet'] = df['Aceita NF Pallet'].astype(str).str.upper().map({'SIM': True, 'S': True, 'NÃO': False, 'NAO': False, 'N': False}).fillna(True)
+
     # Itera pelas linhas e valida os dados
     for index, row in df.iterrows():
         linha_atual = index + 2  # +2 porque Excel começa em 1 e tem cabeçalho
@@ -46,6 +51,11 @@ def importar_transportadoras(caminho_arquivo):
                 'optante': row['OPTANTE'],
                 'condicao_pgto': row.get('Condição de pgto', None)
             }
+
+            # Adiciona campo nao_aceita_nf_pallet se a coluna existir
+            # Inverte a lógica: Aceita NF Pallet = SIM → nao_aceita_nf_pallet = False
+            if '_aceita_nf_pallet' in row:
+                dados['nao_aceita_nf_pallet'] = not row['_aceita_nf_pallet']
             
             if transportadora_existente:
                 # Atualiza os dados da transportadora existente

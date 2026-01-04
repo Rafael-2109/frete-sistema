@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-10">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0">
+                        <i class="fas fa-link text-primary"></i>
+                        Vincular Venda a Remessa
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <!-- Dados da venda -->
+                    <div class="alert alert-success mb-4">
+                        <h6><i class="fas fa-dollar-sign"></i> Venda a Vincular</h6>
+                        <div class="row">
+                            <div class="col-md-3">
+                                <strong>NF:</strong> {{ venda.numero_nf }}
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Quantidade:</strong> {{ venda.qtd_movimentacao|int }} pallets
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Data:</strong> {{ venda.data_movimentacao.strftime('%d/%m/%Y') if venda.data_movimentacao else '-' }}
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Comprador:</strong> {{ venda.nome_destinatario or venda.cnpj_destinatario or '-' }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                        <h5 class="mb-3"><i class="fas fa-truck-loading text-warning"></i> Selecione a Remessa</h5>
+                        <p class="text-muted">Selecione qual remessa de pallet esta venda abate:</p>
+
+                        {% if remessas %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th width="50"></th>
+                                        <th>NF Remessa</th>
+                                        <th>Data</th>
+                                        <th>Destinatario</th>
+                                        <th class="text-center">Quantidade</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for remessa in remessas %}
+                                    <tr>
+                                        <td>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio"
+                                                       name="remessa_id" value="{{ remessa.id }}"
+                                                       id="remessa_{{ remessa.id }}" required>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <label for="remessa_{{ remessa.id }}" class="form-check-label">
+                                                <strong>{{ remessa.numero_nf }}</strong>
+                                            </label>
+                                        </td>
+                                        <td>{{ remessa.data_movimentacao.strftime('%d/%m/%Y') if remessa.data_movimentacao else '-' }}</td>
+                                        <td>
+                                            <span class="badge bg-{{ 'info' if remessa.tipo_destinatario == 'TRANSPORTADORA' else 'secondary' }}">
+                                                {{ remessa.tipo_destinatario }}
+                                            </span><br>
+                                            <small>{{ remessa.nome_destinatario or remessa.cnpj_destinatario or '-' }}</small>
+                                        </td>
+                                        <td class="text-center fw-bold">{{ remessa.qtd_movimentacao|int }}</td>
+                                        <td>
+                                            <span class="badge bg-warning text-dark">Pendente</span>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            Nenhuma remessa pendente encontrada.
+                        </div>
+                        {% endif %}
+
+                        <hr>
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('pallet.listar_movimentos') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Cancelar
+                            </a>
+                            {% if remessas %}
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-link"></i> Vincular
+                            </button>
+                            {% endif %}
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -639,6 +639,12 @@ def listar_embarques():
         form_filtros.status_fretes.data = status_fretes
         filtros_aplicados = True
 
+    # Filtro por pallets pendentes
+    pallets_pendentes = request.args.get('pallets_pendentes', '').strip()
+    if pallets_pendentes and pallets_pendentes == 'sim':
+        # Como pallets_pendentes é uma propriedade calculada, precisamos filtrar após a query
+        filtros_aplicados = True
+
     # Busca geral (mantém funcionalidade original)
     buscar_texto = request.args.get('buscar_texto', '').strip()
     if buscar_texto:
@@ -662,7 +668,7 @@ def listar_embarques():
     query = query.distinct()
 
     # ✅ CORREÇÃO: Se há filtros de propriedades calculadas, buscar TODOS antes de paginar
-    if (status_nfs and status_nfs != '') or (status_fretes and status_fretes != ''):
+    if (status_nfs and status_nfs != '') or (status_fretes and status_fretes != '') or (pallets_pendentes == 'sim'):
         # Buscar todos os embarques (sem paginação)
         embarques_todos = query.all()
 
@@ -672,6 +678,9 @@ def listar_embarques():
 
         if status_fretes and status_fretes != '':
             embarques_todos = [e for e in embarques_todos if e.status_fretes == status_fretes]
+
+        if pallets_pendentes == 'sim':
+            embarques_todos = [e for e in embarques_todos if e.pallets_pendentes]
 
         # Criar paginação MANUAL após filtros
         page = request.args.get('page', 1, type=int)

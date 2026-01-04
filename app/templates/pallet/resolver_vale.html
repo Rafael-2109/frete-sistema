@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-check-double"></i>
+                        Resolver Vale Pallet
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <!-- Resumo do vale -->
+                    <div class="alert alert-info mb-4">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <strong>Vale #{{ vale.id }}</strong><br>
+                                <span class="text-muted">NF: {{ vale.nf_pallet }}</span>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>{{ vale.quantidade }} pallets</strong><br>
+                                <span class="text-muted">{{ vale.nome_cliente or vale.cnpj_cliente or '-' }}</span>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Tipo: {{ vale.tipo_resolucao or 'PENDENTE' }}</strong><br>
+                                {% if vale.responsavel_resolucao %}
+                                    <span class="text-muted">{{ vale.responsavel_resolucao }}</span>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-3">
+                                {% if vale.valor_resolucao %}
+                                    <strong>R$ {{ "%.2f"|format(vale.valor_resolucao) }}</strong>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Timeline de status -->
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between text-center">
+                            <div>
+                                <span class="badge bg-success rounded-pill">
+                                    <i class="fas fa-check"></i>
+                                </span>
+                                <br><small class="text-muted">Recebido</small>
+                                {% if vale.recebido_em %}
+                                    <br><small>{{ vale.recebido_em.strftime('%d/%m') }}</small>
+                                {% endif %}
+                            </div>
+                            <div class="flex-grow-1 align-self-center">
+                                <hr class="bg-{{ 'success' if vale.enviado_coleta else 'secondary' }}">
+                            </div>
+                            <div>
+                                <span class="badge bg-{{ 'warning' if vale.enviado_coleta else 'secondary' }} {{ 'text-dark' if vale.enviado_coleta else '' }} rounded-pill">
+                                    {% if vale.enviado_coleta %}
+                                        <i class="fas fa-check"></i>
+                                    {% else %}
+                                        <i class="fas fa-clock"></i>
+                                    {% endif %}
+                                </span>
+                                <br><small class="text-muted">Enviado</small>
+                                {% if vale.enviado_coleta_em %}
+                                    <br><small>{{ vale.enviado_coleta_em.strftime('%d/%m') }}</small>
+                                {% endif %}
+                            </div>
+                            <div class="flex-grow-1 align-self-center">
+                                <hr class="bg-secondary">
+                            </div>
+                            <div>
+                                <span class="badge bg-primary rounded-pill">
+                                    <i class="fas fa-arrow-right"></i>
+                                </span>
+                                <br><small class="text-primary fw-bold">Resolver</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">NF de Resolucao</label>
+                                <input type="text" name="nf_resolucao" class="form-control"
+                                       value="{{ vale.nf_resolucao or '' }}"
+                                       placeholder="Numero da NF de venda/recebimento">
+                                <small class="text-muted">NF que comprova a venda ou recebimento dos pallets</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Valor Final (R$)</label>
+                                <input type="text" name="valor_resolucao" class="form-control"
+                                       value="{{ '%.2f'|format(vale.valor_resolucao) if vale.valor_resolucao else '' }}"
+                                       placeholder="0,00">
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label">Observacao da Resolucao</label>
+                            <textarea name="observacao" class="form-control" rows="3"
+                                      placeholder="Detalhes sobre a resolucao..."></textarea>
+                        </div>
+
+                        <div class="alert alert-warning mb-4">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <strong>Atencao:</strong> Ao resolver o vale, ele sera marcado como concluido e nao podera mais ser alterado.
+                        </div>
+
+                        <hr>
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('pallet.listar_vales') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Cancelar
+                            </a>
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-check-double"></i> Resolver Vale
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

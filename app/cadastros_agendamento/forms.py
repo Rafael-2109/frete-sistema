@@ -1,5 +1,5 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, TextAreaField, SelectField, SubmitField, FileField, HiddenField
+from wtforms import StringField, TextAreaField, SelectField, SubmitField, FileField, HiddenField, BooleanField
 from wtforms.validators import DataRequired, Optional
 from flask_wtf.file import FileAllowed
 
@@ -16,6 +16,7 @@ class ContatoAgendamentoForm(FlaskForm):
     ], validators=[Optional()])
     contato = StringField('Contato', validators=[DataRequired()])
     observacao = TextAreaField('Observação', validators=[Optional()])
+    nao_aceita_nf_pallet = BooleanField('Não aceita NF de Pallet')
     submit = SubmitField('Salvar')
 
 class EditarContatoAgendamentoForm(FlaskForm):
@@ -32,6 +33,7 @@ class EditarContatoAgendamentoForm(FlaskForm):
     ], validators=[Optional()])
     contato = StringField('Contato', validators=[DataRequired()])
     observacao = TextAreaField('Observação', validators=[Optional()])
+    nao_aceita_nf_pallet = BooleanField('Não aceita NF de Pallet')
     submit = SubmitField('Atualizar')
 
 class PesquisarAgendamentoForm(FlaskForm):

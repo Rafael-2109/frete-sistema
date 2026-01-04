@@ -116,7 +116,20 @@
                 <label for="status_fretes" class="form-label">Status dos Fretes</label>
                 {{ form_filtros.status_fretes(id="status_fretes") }}
               </div>
-              
+            </div>
+
+            <div class="row mt-3">
+              <!-- Filtro Pallets Pendentes -->
+              <div class="col-md-3">
+                <label for="pallets_pendentes" class="form-label">Pallets Pendentes</label>
+                <select name="pallets_pendentes" id="pallets_pendentes" class="form-select">
+                  <option value="">Todos</option>
+                  <option value="sim" {% if request.args.get('pallets_pendentes') == 'sim' %}selected{% endif %}>
+                    Com Pallets Pendentes
+                  </option>
+                </select>
+              </div>
+
               <!-- Busca Geral -->
               <div class="col-md-3">
                 <label for="buscar_texto" class="form-label">Busca Geral</label>
@@ -241,6 +254,11 @@
             <span class="badge bg-{% if embarque.status == 'ativo' %}success{% elif embarque.status == 'cancelado' %}danger{% else %}secondary{% endif %}">
               {{ (embarque.status or 'DRAFT').upper() }}
             </span>
+            {% if embarque.pallets_pendentes %}
+              <span class="badge bg-warning text-dark" title="{{ embarque.saldo_pallets_pendentes }} pallet(s) pendente(s)">
+                <i class="fas fa-pallet"></i> {{ embarque.saldo_pallets_pendentes }}
+              </span>
+            {% endif %}
           </td>
           <td>
             {% set dados_portaria = embarque.registros_portaria %}

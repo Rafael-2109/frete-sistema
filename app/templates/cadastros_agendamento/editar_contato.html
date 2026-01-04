@@ -63,11 +63,22 @@
                 </div>
               {% endif %}
             </div>
-            
+
+            <div class="mb-3">
+              <div class="form-check form-switch">
+                {{ form.nao_aceita_nf_pallet(class="form-check-input") }}
+                <label class="form-check-label" for="nao_aceita_nf_pallet">
+                  <strong>Não aceita NF de Pallet</strong>
+                  <br>
+                  <small class="text-muted">Marque se este cliente não aceita NF de pallet emitida contra ele</small>
+                </label>
+              </div>
+            </div>
+
             <div class="row">
               <div class="col-md-6">
                 <small class="text-muted">
-                  <i class="fas fa-info-circle"></i> 
+                  <i class="fas fa-info-circle"></i>
                   Criado/Atualizado em: {{ contato.atualizado_em | formatar_data_hora_brasil }}
                 </small>
               </div>

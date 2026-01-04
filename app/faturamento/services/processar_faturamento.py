@@ -460,6 +460,9 @@ class ProcessadorFaturamento:
                     embarque_items_atualizados += 1
                     logger.info(f"✅ EmbarqueItem atualizado com NF {nf.numero_nf}")
 
+                # GATILHO PALLET: Sincronizar FK de NF de pallet
+                self._sincronizar_nf_pallet_referencia(embarque_item)
+
             # 2. Atualizar Separações do lote
             separacoes_atualizadas = Separacao.query.filter_by(
                 separacao_lote_id=separacao_lote_id, num_pedido=nf.origem, sincronizado_nf=False
@@ -1024,3 +1027,47 @@ class ProcessadorFaturamento:
             db.session.rollback()
 
         return contador
+
+    def _sincronizar_nf_pallet_referencia(self, embarque_item: EmbarqueItem) -> bool:
+        """
+        Sincroniza o FK de NF de pallet no EmbarqueItem.
+
+        Regra:
+        - Se EmbarqueItem tem nf_pallet_cliente própria → usa essa (origem = 'ITEM')
+        - Senão, se Embarque tem nf_pallet_transportadora → usa essa (origem = 'EMBARQUE')
+
+        Args:
+            embarque_item: O EmbarqueItem a ser sincronizado
+
+        Returns:
+            True se atualizou, False caso contrário
+        """
+        try:
+            # Se já tem referência definida, não sobrescrever
+            if embarque_item.nf_pallet_referencia:
+                return False
+
+            # Prioridade 1: NF de pallet própria do item (1:1)
+            if embarque_item.nf_pallet_cliente:
+                embarque_item.nf_pallet_referencia = embarque_item.nf_pallet_cliente
+                embarque_item.nf_pallet_origem = 'ITEM'
+                logger.info(
+                    f"✅ EmbarqueItem {embarque_item.id}: nf_pallet_referencia = {embarque_item.nf_pallet_cliente} (ITEM)"
+                )
+                return True
+
+            # Prioridade 2: NF de pallet do embarque (N:1)
+            embarque = embarque_item.embarque
+            if embarque and embarque.nf_pallet_transportadora:
+                embarque_item.nf_pallet_referencia = embarque.nf_pallet_transportadora
+                embarque_item.nf_pallet_origem = 'EMBARQUE'
+                logger.info(
+                    f"✅ EmbarqueItem {embarque_item.id}: nf_pallet_referencia = {embarque.nf_pallet_transportadora} (EMBARQUE)"
+                )
+                return True
+
+            return False
+
+        except Exception as e:
+            logger.error(f"❌ Erro ao sincronizar NF pallet para EmbarqueItem {embarque_item.id}: {e}")
+            return False

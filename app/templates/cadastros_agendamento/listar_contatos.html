@@ -135,6 +135,7 @@
               <th>CNPJ</th>
               <th>Forma</th>
               <th>Contato</th>
+              <th>NF Pallet</th>
               <th>Observação</th>
               <th>Atualizado</th>
               <th width="120">Ações</th>
@@ -154,6 +155,13 @@
                 {% endif %}
               </td>
               <td>{{ c.contato or '-' }}</td>
+              <td>
+                {% if c.nao_aceita_nf_pallet %}
+                  <span class="badge bg-danger" title="Não aceita NF de pallet">Não</span>
+                {% else %}
+                  <span class="badge bg-success" title="Aceita NF de pallet">Sim</span>
+                {% endif %}
+              </td>
               <td>
                 {% if c.observacao %}
                   <span title="{{ c.observacao }}">

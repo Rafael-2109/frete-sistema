@@ -646,7 +646,15 @@ class EntradaMaterialService:
             else:
                 purchase_line_id_value = str(purchase_line_data)
 
-        # 8. Criar nova movimentação
+        # 8. Determinar local_movimentacao baseado no tipo de pedido
+        # Retorno de vasilhame -> local_movimentacao = 'RETORNO'
+        local_mov = 'COMPRA'  # Default
+        if pedido_local and hasattr(pedido_local, 'tipo_pedido') and pedido_local.tipo_pedido:
+            if 'retorno' in pedido_local.tipo_pedido.lower() and 'vasilhame' in pedido_local.tipo_pedido.lower():
+                local_mov = 'RETORNO'
+                logger.info(f"   📦 Retorno de vasilhame detectado - local_movimentacao=RETORNO")
+
+        # 9. Criar nova movimentação
         logger.info(f"   ✨ Criando nova movimentação: {cod_produto} - {qtd_recebida}")
 
         movimentacao = MovimentacaoEstoque(
@@ -657,7 +665,7 @@ class EntradaMaterialService:
             # Movimentação
             data_movimentacao=date_done,
             tipo_movimentacao='ENTRADA',
-            local_movimentacao='COMPRA',
+            local_movimentacao=local_mov,
             qtd_movimentacao=qtd_recebida,
 
             # Rastreabilidade
@@ -679,5 +687,37 @@ class EntradaMaterialService:
         )
 
         db.session.add(movimentacao)
+        db.session.flush()  # Para obter o ID da movimentação
+
+        # 10. Baixa automática de remessa de pallet (se for retorno de vasilhame + produto pallet)
+        COD_PRODUTO_PALLET = '208000012'
+        if local_mov == 'RETORNO' and str(cod_produto) == COD_PRODUTO_PALLET:
+            try:
+                from app.pallet.utils import normalizar_cnpj
+                cnpj_norm = normalizar_cnpj(cnpj_fornecedor) if cnpj_fornecedor else ''
+
+                # Buscar remessa pendente do mesmo CNPJ (pela raiz - 8 primeiros digitos)
+                if cnpj_norm and len(cnpj_norm) >= 8:
+                    raiz = cnpj_norm[:8]
+                    remessa = MovimentacaoEstoque.query.filter(
+                        MovimentacaoEstoque.cod_produto == COD_PRODUTO_PALLET,
+                        MovimentacaoEstoque.local_movimentacao == 'PALLET',
+                        MovimentacaoEstoque.tipo_movimentacao == 'REMESSA',
+                        MovimentacaoEstoque.baixado == False,
+                        MovimentacaoEstoque.ativo == True
+                    ).all()
+
+                    # Filtrar pela raiz do CNPJ
+                    for rem in remessa:
+                        rem_raiz = normalizar_cnpj(rem.cnpj_destinatario)[:8] if rem.cnpj_destinatario else ''
+                        if rem_raiz == raiz:
+                            rem.baixado = True
+                            rem.baixado_em = datetime.now()
+                            rem.baixado_por = 'Sistema Odoo (Retorno Automatico)'
+                            rem.movimento_baixado_id = movimentacao.id
+                            logger.info(f"   ✅ Remessa NF {rem.numero_nf} baixada automaticamente pelo retorno")
+                            break
+            except Exception as e:
+                logger.warning(f"   ⚠️ Erro ao baixar remessa automaticamente: {e}")
 
         return {'novo': True}

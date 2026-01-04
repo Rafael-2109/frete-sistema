@@ -232,6 +232,7 @@
                             <th>UF</th>
                             <th>Optante</th>
                             <th>Freteiro</th>
+                            <th>NF Pallet</th>
                             <th>Condição Pgto</th>
                             <th>Status</th>
                             <th>Ações</th>
@@ -250,6 +251,13 @@
                                     <span class="badge bg-success">Sim</span>
                                 {% else %}
                                     <span class="badge bg-secondary">Não</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if transportadora.nao_aceita_nf_pallet %}
+                                    <span class="badge bg-danger" title="Não aceita NF de pallet">Não</span>
+                                {% else %}
+                                    <span class="badge bg-success" title="Aceita NF de pallet">Sim</span>
                                 {% endif %}
                             </td>
                             <td>{{ transportadora.condicao_pgto or '-' }}</td>
@@ -547,7 +555,7 @@
                         </div>
                     </div>
                     <div class="row">
-                        <div class="col-md-12">
+                        <div class="col-md-6">
                             <div class="mb-3">
                                 <div class="form-check form-switch">
                                     <input class="form-check-input" type="checkbox" id="edit_ativo" name="ativo" checked>
@@ -555,6 +563,18 @@
                                         <strong>Transportadora Ativa para Cotações</strong>
                                         <br>
                                         <small class="text-muted">Desmarque para excluir esta transportadora das cotações automáticas</small>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="edit_nao_aceita_nf_pallet" name="nao_aceita_nf_pallet">
+                                    <label class="form-check-label" for="edit_nao_aceita_nf_pallet">
+                                        <strong>Não aceita NF de Pallet</strong>
+                                        <br>
+                                        <small class="text-muted">Marque se esta transportadora não aceita NF de pallet emitida contra ela</small>
                                     </label>
                                 </div>
                             </div>
@@ -673,12 +693,14 @@ function editarTransportadora(id) {
                 const optante = data.transportadora.optante === true || data.transportadora.optante === 'true';
                 const freteiro = data.transportadora.freteiro === true || data.transportadora.freteiro === 'true';
                 const ativo = data.transportadora.ativo !== false; // Default true se não existir
-                
+                const nao_aceita_nf_pallet = data.transportadora.nao_aceita_nf_pallet === true || data.transportadora.nao_aceita_nf_pallet === 'true';
+
                 document.getElementById('edit_optante').value = optante ? 'True' : 'False';
                 document.getElementById('edit_freteiro').value = freteiro ? 'True' : 'False';
                 document.getElementById('edit_condicao_pgto').value = data.transportadora.condicao_pgto || '';
                 document.getElementById('edit_ativo').checked = ativo;
-                
+                document.getElementById('edit_nao_aceita_nf_pallet').checked = nao_aceita_nf_pallet;
+
                 // Abre o modal
                 new bootstrap.Modal(document.getElementById('modalEditarTransportadora')).show();
             } else {

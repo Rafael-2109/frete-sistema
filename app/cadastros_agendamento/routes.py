@@ -96,8 +96,9 @@ def editar_contato(id):
         contato.forma = form.forma.data
         contato.contato = form.contato.data
         contato.observacao = form.observacao.data
+        contato.nao_aceita_nf_pallet = form.nao_aceita_nf_pallet.data
         contato.atualizado_em = datetime.utcnow()
-        
+
         db.session.commit()
         flash("Contato atualizado com sucesso.", "success")
         return redirect(url_for('cadastros_agendamento.listar_contatos'))
@@ -179,6 +180,9 @@ def importar_contatos():
                     flash(f"Coluna obrigatória '{coluna}' não encontrada no arquivo.", "danger")
                     return redirect(request.url)
 
+            # Processa coluna "Aceita NF Pallet" se existir
+            tem_coluna_pallet = 'Aceita NF Pallet' in df.columns
+
             contador_importados = 0
             contador_erros = 0
             
@@ -202,10 +206,22 @@ def importar_contatos():
                     forma = tratar_valor_vazio(row.get("Forma", ""))
                     contato = tratar_valor_vazio(row.get("Contato", ""))
                     observacao = tratar_valor_vazio(row.get("Observação", ""))
-                    
+
+                    # Processa campo "Aceita NF Pallet" se existir
+                    # SIM = aceita (nao_aceita_nf_pallet = False), NÃO = não aceita (nao_aceita_nf_pallet = True)
+                    nao_aceita_nf_pallet = None
+                    if tem_coluna_pallet:
+                        valor_pallet = tratar_valor_vazio(row.get("Aceita NF Pallet", ""))
+                        if valor_pallet:
+                            valor_upper = valor_pallet.upper()
+                            if valor_upper in ('NÃO', 'NAO', 'N', 'NAO'):
+                                nao_aceita_nf_pallet = True
+                            elif valor_upper in ('SIM', 'S'):
+                                nao_aceita_nf_pallet = False
+
                     # Verifica se já existe um contato para este CNPJ
                     contato_existente = ContatoAgendamento.query.filter_by(cnpj=cnpj).first()
-                    
+
                     if contato_existente:
                         # Atualiza o contato existente (só atualiza se o novo valor não for None)
                         if forma is not None:
@@ -214,6 +230,8 @@ def importar_contatos():
                             contato_existente.contato = contato
                         if observacao is not None:
                             contato_existente.observacao = observacao
+                        if nao_aceita_nf_pallet is not None:
+                            contato_existente.nao_aceita_nf_pallet = nao_aceita_nf_pallet
                         contato_existente.atualizado_em = datetime.utcnow()
                     else:
                         # Cria novo contato
@@ -222,6 +240,7 @@ def importar_contatos():
                             forma=forma,  # Pode ser None
                             contato=contato,  # Pode ser None
                             observacao=observacao,  # Pode ser None
+                            nao_aceita_nf_pallet=nao_aceita_nf_pallet if nao_aceita_nf_pallet is not None else False,
                             atualizado_em=datetime.utcnow()
                         )
                         db.session.add(novo_contato)
@@ -287,6 +306,7 @@ def exportar_contatos():
             'CNPJ': contato.cnpj,
             'Forma': contato.forma or '',
             'Contato': contato.contato or '',
+            'Aceita NF Pallet': 'NÃO' if contato.nao_aceita_nf_pallet else 'SIM',
             'Observação': contato.observacao or '',
             'Atualizado Em': contato.atualizado_em.strftime('%d/%m/%Y %H:%M')
         })

@@ -131,7 +131,6 @@ python .claude/skills/memoria-usuario/scripts/memoria.py delete --user-id 1 --pa
 | ROADMAP_IMPLEMENTACAO.md | `.claude/references/` | Roadmap de implementacao geral |
 | historia_organizada.md | `.claude/references/` | Historico de decisoes do projeto |
 | README.md (Devolucoes) | `app/devolucao/` | Sistema de Gestao de Devolucoes |
-| Plano Devolucoes | `.claude/plans/foamy-juggling-lynx.md` | Plano completo de implementacao |
 
 ## Cookbooks (Exemplos de Codigo)
 - `.claude/references/cookbooks/` - Exemplos praticos de implementacao

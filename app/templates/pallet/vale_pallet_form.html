@@ -1,0 +1,223 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-10">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0">
+                        <i class="fas fa-{{ 'edit' if vale else 'plus' }}"></i>
+                        {{ 'Editar' if vale else 'Novo' }} Vale Pallet
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                        <!-- Dados do Vale -->
+                        <h5 class="border-bottom pb-2 mb-3">
+                            <i class="fas fa-file-alt text-primary"></i> Dados do Vale
+                        </h5>
+                        <div class="row mb-4">
+                            <div class="col-md-4">
+                                <label class="form-label">NF de Pallet *</label>
+                                <input type="text" name="nf_pallet" class="form-control"
+                                       value="{{ vale.nf_pallet if vale else '' }}" required>
+                                <small class="text-muted">Numero da NF de remessa de pallet</small>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Quantidade *</label>
+                                <input type="number" name="quantidade" class="form-control"
+                                       value="{{ vale.quantidade if vale else '' }}" required min="1">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Data Emissao *</label>
+                                <input type="date" name="data_emissao" class="form-control" id="data_emissao"
+                                       value="{{ vale.data_emissao.strftime('%Y-%m-%d') if vale and vale.data_emissao else '' }}" required>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Data Validade</label>
+                                <input type="date" name="data_validade" class="form-control" id="data_validade"
+                                       value="{{ vale.data_validade.strftime('%Y-%m-%d') if vale and vale.data_validade else '' }}">
+                                <small class="text-muted">Padrao: {{ prazo_dias }} dias apos emissao</small>
+                            </div>
+                        </div>
+
+                        <!-- Cliente que emitiu o vale -->
+                        <h5 class="border-bottom pb-2 mb-3">
+                            <i class="fas fa-building text-info"></i> Cliente que Emitiu o Vale
+                        </h5>
+                        <div class="row mb-4">
+                            <div class="col-md-4">
+                                <label class="form-label">CNPJ do Cliente</label>
+                                <input type="text" name="cnpj_cliente" class="form-control"
+                                       value="{{ vale.cnpj_cliente if vale else '' }}"
+                                       placeholder="00.000.000/0000-00">
+                            </div>
+                            <div class="col-md-8">
+                                <label class="form-label">Nome do Cliente</label>
+                                <input type="text" name="nome_cliente" class="form-control"
+                                       value="{{ vale.nome_cliente if vale else '' }}">
+                            </div>
+                        </div>
+
+                        <!-- Transportadora responsavel -->
+                        <h5 class="border-bottom pb-2 mb-3">
+                            <i class="fas fa-truck text-warning"></i> Transportadora Responsavel
+                        </h5>
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <label class="form-label">Transportadora</label>
+                                <select name="cnpj_transportadora" class="form-select" id="select_transportadora">
+                                    <option value="">Selecione...</option>
+                                    {% for t in transportadoras %}
+                                        <option value="{{ t.cnpj }}"
+                                                data-nome="{{ t.razao_social }}"
+                                                {{ 'selected' if vale and vale.cnpj_transportadora == t.cnpj }}>
+                                            {{ t.razao_social }} ({{ t.cnpj }})
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                                <input type="hidden" name="nome_transportadora" id="nome_transportadora"
+                                       value="{{ vale.nome_transportadora if vale else '' }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Posse Atual</label>
+                                <select name="posse_atual" class="form-select">
+                                    <option value="TRANSPORTADORA" {{ 'selected' if not vale or vale.posse_atual == 'TRANSPORTADORA' }}>
+                                        TRANSPORTADORA - Aguardando entregar
+                                    </option>
+                                    <option value="NACOM" {{ 'selected' if vale and vale.posse_atual == 'NACOM' }}>
+                                        NACOM - Em nossa posse
+                                    </option>
+                                    <option value="CLIENTE" {{ 'selected' if vale and vale.posse_atual == 'CLIENTE' }}>
+                                        CLIENTE - Ainda nao emitido
+                                    </option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Informacoes de posse (opcional) -->
+                        <div class="row mb-4">
+                            <div class="col-md-4">
+                                <label class="form-label">CNPJ Posse Atual</label>
+                                <input type="text" name="cnpj_posse" class="form-control"
+                                       value="{{ vale.cnpj_posse if vale else '' }}">
+                            </div>
+                            <div class="col-md-8">
+                                <label class="form-label">Nome Posse Atual</label>
+                                <input type="text" name="nome_posse" class="form-control"
+                                       value="{{ vale.nome_posse if vale else '' }}">
+                            </div>
+                        </div>
+
+                        <!-- Arquivamento -->
+                        <h5 class="border-bottom pb-2 mb-3">
+                            <i class="fas fa-folder text-secondary"></i> Arquivamento Fisico
+                        </h5>
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <label class="form-label">Pasta</label>
+                                <input type="text" name="pasta_arquivo" class="form-control"
+                                       value="{{ vale.pasta_arquivo if vale else '' }}"
+                                       placeholder="Ex: PALLETS 2025">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Aba/Secao</label>
+                                <input type="text" name="aba_arquivo" class="form-control"
+                                       value="{{ vale.aba_arquivo if vale else '' }}"
+                                       placeholder="Ex: JANEIRO">
+                            </div>
+                        </div>
+
+                        <!-- Observacoes -->
+                        <div class="mb-4">
+                            <label class="form-label">Observacoes</label>
+                            <textarea name="observacao" class="form-control" rows="3">{{ vale.observacao if vale else '' }}</textarea>
+                        </div>
+
+                        <!-- Informacoes de auditoria (somente em edicao) -->
+                        {% if vale %}
+                        <div class="alert alert-light mb-4">
+                            <small>
+                                <strong>Criado em:</strong> {{ vale.criado_em.strftime('%d/%m/%Y %H:%M') if vale.criado_em else '-' }}
+                                por {{ vale.criado_por or '-' }} |
+                                <strong>Atualizado em:</strong> {{ vale.atualizado_em.strftime('%d/%m/%Y %H:%M') if vale.atualizado_em else '-' }}
+                                por {{ vale.atualizado_por or '-' }}
+                            </small>
+                        </div>
+                        {% endif %}
+
+                        <!-- Status do vale (somente em edicao) -->
+                        {% if vale %}
+                        <div class="card bg-light mb-4">
+                            <div class="card-body">
+                                <h6 class="card-title">Status do Vale</h6>
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <span class="badge bg-{{ 'success' if vale.recebido else 'secondary' }}">
+                                            <i class="fas fa-{{ 'check' if vale.recebido else 'clock' }}"></i>
+                                            {{ 'Recebido' if vale.recebido else 'Nao Recebido' }}
+                                        </span>
+                                        {% if vale.recebido_em %}
+                                            <br><small class="text-muted">{{ vale.recebido_em.strftime('%d/%m/%Y') }}</small>
+                                        {% endif %}
+                                    </div>
+                                    <div class="col-md-4">
+                                        <span class="badge bg-{{ 'warning' if vale.enviado_coleta else 'secondary' }} {{ 'text-dark' if vale.enviado_coleta else '' }}">
+                                            <i class="fas fa-{{ 'paper-plane' if vale.enviado_coleta else 'clock' }}"></i>
+                                            {{ 'Enviado p/ Resolucao' if vale.enviado_coleta else 'Nao Enviado' }}
+                                        </span>
+                                        {% if vale.enviado_coleta_em %}
+                                            <br><small class="text-muted">{{ vale.enviado_coleta_em.strftime('%d/%m/%Y') }}</small>
+                                        {% endif %}
+                                    </div>
+                                    <div class="col-md-4">
+                                        <span class="badge bg-{{ 'success' if vale.resolvido else 'secondary' }}">
+                                            <i class="fas fa-{{ 'check-double' if vale.resolvido else 'clock' }}"></i>
+                                            {{ 'Resolvido' if vale.resolvido else 'Nao Resolvido' }}
+                                        </span>
+                                        {% if vale.resolvido_em %}
+                                            <br><small class="text-muted">{{ vale.resolvido_em.strftime('%d/%m/%Y') }}</small>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Botoes -->
+                        <hr>
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('pallet.listar_vales') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Voltar
+                            </a>
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-save"></i> {{ 'Atualizar' if vale else 'Criar' }} Vale
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Atualizar nome da transportadora ao selecionar
+document.getElementById('select_transportadora').addEventListener('change', function() {
+    var selected = this.options[this.selectedIndex];
+    document.getElementById('nome_transportadora').value = selected.dataset.nome || '';
+});
+
+// Calcular data de validade automaticamente
+document.getElementById('data_emissao').addEventListener('change', function() {
+    var dataValidade = document.getElementById('data_validade');
+    if (!dataValidade.value && this.value) {
+        var emissao = new Date(this.value);
+        emissao.setDate(emissao.getDate() + {{ prazo_dias }});
+        dataValidade.value = emissao.toISOString().split('T')[0];
+    }
+});
+</script>
+{% endblock %}

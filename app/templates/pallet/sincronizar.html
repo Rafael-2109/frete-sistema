@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0">
+                        <i class="fas fa-sync text-primary"></i>
+                        Sincronizar Pallets com Odoo
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-4">
+                        Esta funcao importa movimentacoes de pallet do Odoo:
+                    </p>
+
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h6><i class="fas fa-truck-loading text-warning"></i> Remessas</h6>
+                                    <small class="text-muted">
+                                        NFs com l10n_br_tipo_pedido = 'vasilhame'<br>
+                                        Cria tipo_movimentacao = 'REMESSA'
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h6><i class="fas fa-dollar-sign text-success"></i> Vendas</h6>
+                                    <small class="text-muted">
+                                        NFs com produto cod = '208000012'<br>
+                                        Cria tipo_movimentacao = 'SAIDA'
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <label class="form-label">Tipo de Sincronizacao</label>
+                                <select name="tipo" class="form-select">
+                                    <option value="tudo" selected>Tudo (Remessas + Vendas)</option>
+                                    <option value="remessas">Apenas Remessas</option>
+                                    <option value="vendas">Apenas Vendas</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Periodo (dias retroativos)</label>
+                                <input type="number" name="dias" class="form-control" value="30" min="1" max="365">
+                                <small class="text-muted">Buscar NFs dos ultimos X dias</small>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i>
+                            <strong>Nota:</strong> A sincronizacao nao duplica registros. NFs ja importadas serao ignoradas.
+                        </div>
+
+                        <hr>
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('pallet.index') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Voltar
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-sync"></i> Iniciar Sincronizacao
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

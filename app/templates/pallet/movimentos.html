@@ -1,0 +1,183 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-exchange-alt"></i> Movimentos de Pallet</h2>
+        <div>
+            <a href="{{ url_for('pallet.registrar_saida') }}" class="btn btn-success">
+                <i class="fas fa-plus"></i> Nova Saida
+            </a>
+            <a href="{{ url_for('pallet.registrar_retorno') }}" class="btn btn-warning">
+                <i class="fas fa-undo"></i> Novo Retorno
+            </a>
+            <a href="{{ url_for('pallet.index') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-filter"></i> Filtros</h5>
+        </div>
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="col-md-3">
+                    <label class="form-label">Tipo Movimento</label>
+                    <select name="tipo" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="SAIDA" {{ 'selected' if filtro_tipo == 'SAIDA' }}>Saida</option>
+                        <option value="RETORNO" {{ 'selected' if filtro_tipo == 'RETORNO' }}>Retorno</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Tipo Destinatario</label>
+                    <select name="destinatario" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="CLIENTE" {{ 'selected' if filtro_destinatario == 'CLIENTE' }}>Cliente</option>
+                        <option value="TRANSPORTADORA" {{ 'selected' if filtro_destinatario == 'TRANSPORTADORA' }}>Transportadora</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Status Baixa</label>
+                    <select name="baixado" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="nao" {{ 'selected' if filtro_baixado == 'nao' }}>Pendentes</option>
+                        <option value="sim" {{ 'selected' if filtro_baixado == 'sim' }}>Baixados</option>
+                    </select>
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary me-2">
+                        <i class="fas fa-search"></i> Filtrar
+                    </button>
+                    <a href="{{ url_for('pallet.listar_movimentos') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-eraser"></i> Limpar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Lista de movimentos -->
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>ID</th>
+                            <th>Data</th>
+                            <th>Tipo</th>
+                            <th>Destinatario</th>
+                            <th>NF</th>
+                            <th class="text-end">Qtd</th>
+                            <th>Status</th>
+                            <th>Embarque</th>
+                            <th class="text-center">Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for mov in movimentos.items %}
+                        <tr>
+                            <td>{{ mov.id }}</td>
+                            <td>{{ mov.criado_em.strftime('%d/%m/%Y %H:%M') }}</td>
+                            <td>
+                                <span class="badge bg-{{ 'danger' if mov.tipo_movimentacao == 'SAIDA' else 'success' }}">
+                                    {{ mov.tipo_movimentacao }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge bg-{{ 'info' if mov.tipo_destinatario == 'TRANSPORTADORA' else 'secondary' }} mb-1">
+                                    {{ mov.tipo_destinatario }}
+                                </span><br>
+                                <small>{{ mov.cnpj_destinatario }}</small><br>
+                                {{ mov.nome_destinatario or '-' }}
+                            </td>
+                            <td>{{ mov.numero_nf or '-' }}</td>
+                            <td class="text-end fw-bold">{{ mov.qtd_movimentacao|int }}</td>
+                            <td>
+                                {% if mov.tipo_movimentacao == 'SAIDA' %}
+                                    {% if mov.baixado %}
+                                        <span class="badge bg-success">Baixado</span>
+                                        {% if mov.baixado_em %}
+                                        <br><small class="text-muted">{{ mov.baixado_em.strftime('%d/%m/%Y') }}</small>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="badge bg-warning text-dark">Pendente</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="badge bg-secondary">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if mov.codigo_embarque %}
+                                    <a href="{{ url_for('embarques.visualizar_embarque', id=mov.codigo_embarque) }}" target="_blank">
+                                        #{{ mov.codigo_embarque }}
+                                    </a>
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if mov.tipo_movimentacao == 'SAIDA' and not mov.baixado %}
+                                <a href="{{ url_for('pallet.baixar_movimento', movimento_id=mov.id) }}"
+                                   class="btn btn-sm btn-outline-success" title="Baixar">
+                                    <i class="fas fa-check"></i>
+                                </a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="9" class="text-center text-muted py-4">
+                                <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
+                                Nenhum movimento encontrado
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Paginacao -->
+        {% if movimentos.pages > 1 %}
+        <div class="card-footer">
+            <nav>
+                <ul class="pagination justify-content-center mb-0">
+                    {% if movimentos.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('pallet.listar_movimentos', page=movimentos.prev_num, tipo=filtro_tipo, baixado=filtro_baixado, destinatario=filtro_destinatario) }}">
+                            <i class="fas fa-chevron-left"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+
+                    {% for page_num in movimentos.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                        {% if page_num %}
+                            <li class="page-item {{ 'active' if page_num == movimentos.page }}">
+                                <a class="page-link" href="{{ url_for('pallet.listar_movimentos', page=page_num, tipo=filtro_tipo, baixado=filtro_baixado, destinatario=filtro_destinatario) }}">
+                                    {{ page_num }}
+                                </a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if movimentos.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('pallet.listar_movimentos', page=movimentos.next_num, tipo=filtro_tipo, baixado=filtro_baixado, destinatario=filtro_destinatario) }}">
+                            <i class="fas fa-chevron-right"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

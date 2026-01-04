@@ -66,6 +66,16 @@ class MovimentacaoEstoque(db.Model):
     # FK para produção que gerou este consumo (auto-referência)
     producao_pai_id = db.Column(db.Integer, db.ForeignKey('movimentacao_estoque.id', ondelete='SET NULL'), nullable=True, index=True)
 
+    # Campos para controle de Pallet em Terceiros
+    tipo_destinatario = db.Column(db.String(20), nullable=True)  # CLIENTE ou TRANSPORTADORA
+    cnpj_destinatario = db.Column(db.String(20), nullable=True, index=True)
+    nome_destinatario = db.Column(db.String(255), nullable=True)
+    embarque_item_id = db.Column(db.Integer, db.ForeignKey('embarque_itens.id', ondelete='SET NULL'), nullable=True)
+    baixado = db.Column(db.Boolean, default=False, nullable=True)  # Se a saida de pallet foi baixada
+    baixado_em = db.Column(db.DateTime, nullable=True)
+    baixado_por = db.Column(db.String(100), nullable=True)
+    movimento_baixado_id = db.Column(db.Integer, db.ForeignKey('movimentacao_estoque.id', ondelete='SET NULL'), nullable=True)
+
     # Auditoria
     criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
     atualizado_em = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil, nullable=False)
@@ -84,6 +94,10 @@ class MovimentacaoEstoque(db.Model):
         db.Index('idx_movimentacao_status_nf', 'status_nf'),
         db.Index('idx_movimentacao_odoo_picking', 'odoo_picking_id'),
         db.Index('idx_movimentacao_odoo_move', 'odoo_move_id'),
+        # Índices para pallet em terceiros
+        db.Index('idx_movimentacao_cnpj_destinatario', 'cnpj_destinatario'),
+        db.Index('idx_movimentacao_tipo_destinatario', 'tipo_destinatario'),
+        db.Index('idx_movimentacao_baixado', 'baixado'),
     )
 
     def __repr__(self):
@@ -109,8 +123,68 @@ class MovimentacaoEstoque(db.Model):
             'operacao_producao_id': self.operacao_producao_id,
             'tipo_origem_producao': self.tipo_origem_producao,
             'cod_produto_raiz': self.cod_produto_raiz,
-            'producao_pai_id': self.producao_pai_id
+            'producao_pai_id': self.producao_pai_id,
+            # Campos de pallet em terceiros
+            'tipo_destinatario': self.tipo_destinatario,
+            'cnpj_destinatario': self.cnpj_destinatario,
+            'nome_destinatario': self.nome_destinatario,
+            'embarque_item_id': self.embarque_item_id,
+            'baixado': self.baixado,
+            'baixado_em': self.baixado_em.strftime('%d/%m/%Y %H:%M') if self.baixado_em else None,
+            'baixado_por': self.baixado_por,
+            'movimento_baixado_id': self.movimento_baixado_id
         }
+
+    # ========== MÉTODOS PARA PALLET EM TERCEIROS ==========
+
+    @classmethod
+    def saldo_pallet_por_destinatario(cls, cnpj_destinatario):
+        """Calcula o saldo de pallets em um destinatario (saidas nao baixadas)"""
+        from sqlalchemy import func
+        return db.session.query(func.coalesce(func.sum(cls.qtd_movimentacao), 0)).filter(
+            cls.cnpj_destinatario == cnpj_destinatario,
+            cls.local_movimentacao == 'PALLET',
+            cls.tipo_movimentacao == 'SAIDA',
+            cls.baixado == False,
+            cls.ativo == True
+        ).scalar() or 0
+
+    @classmethod
+    def listar_saldos_pallet_pendentes(cls):
+        """Lista todos os destinatarios com saldo de pallet pendente"""
+        from sqlalchemy import func
+        return db.session.query(
+            cls.tipo_destinatario,
+            cls.cnpj_destinatario,
+            cls.nome_destinatario,
+            func.sum(cls.qtd_movimentacao).label('saldo')
+        ).filter(
+            cls.local_movimentacao == 'PALLET',
+            cls.tipo_movimentacao == 'SAIDA',
+            cls.baixado == False,
+            cls.ativo == True
+        ).group_by(
+            cls.tipo_destinatario,
+            cls.cnpj_destinatario,
+            cls.nome_destinatario
+        ).having(func.sum(cls.qtd_movimentacao) > 0).order_by(
+            func.sum(cls.qtd_movimentacao).desc()
+        ).all()
+
+    @classmethod
+    def listar_movimentos_pallet(cls, tipo_movimento=None, baixado=None, tipo_destinatario=None):
+        """Lista movimentos de pallet com filtros"""
+        query = cls.query.filter(
+            cls.local_movimentacao == 'PALLET',
+            cls.ativo == True
+        )
+        if tipo_movimento:
+            query = query.filter(cls.tipo_movimentacao == tipo_movimento)
+        if baixado is not None:
+            query = query.filter(cls.baixado == baixado)
+        if tipo_destinatario:
+            query = query.filter(cls.tipo_destinatario == tipo_destinatario)
+        return query.order_by(cls.criado_em.desc())
 
 
 class UnificacaoCodigos(db.Model):

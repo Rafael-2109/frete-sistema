@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0">
+                        <i class="fas fa-paper-plane text-warning"></i>
+                        Enviar Vale para Resolucao
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <!-- Resumo do vale -->
+                    <div class="alert alert-info mb-4">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <strong>Vale #{{ vale.id }}</strong><br>
+                                <span class="text-muted">NF: {{ vale.nf_pallet }}</span>
+                            </div>
+                            <div class="col-md-4">
+                                <strong>{{ vale.quantidade }} pallets</strong><br>
+                                <span class="text-muted">Cliente: {{ vale.nome_cliente or vale.cnpj_cliente or '-' }}</span>
+                            </div>
+                            <div class="col-md-4">
+                                <strong>Validade: {{ vale.data_validade.strftime('%d/%m/%Y') if vale.data_validade else '-' }}</strong><br>
+                                {% if vale.dias_para_vencer is not none %}
+                                    {% if vale.dias_para_vencer < 0 %}
+                                        <span class="text-danger">{{ vale.dias_para_vencer|abs }} dias atrasado</span>
+                                    {% elif vale.dias_para_vencer == 0 %}
+                                        <span class="text-danger">Vence hoje!</span>
+                                    {% else %}
+                                        <span class="text-{{ 'warning' if vale.dias_para_vencer <= 30 else 'muted' }}">{{ vale.dias_para_vencer }} dias restantes</span>
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                        <div class="mb-4">
+                            <label class="form-label">Tipo de Resolucao *</label>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-check form-check-inline card p-3 w-100">
+                                        <input class="form-check-input" type="radio" name="tipo_resolucao"
+                                               id="tipo_venda" value="VENDA" checked>
+                                        <label class="form-check-label" for="tipo_venda">
+                                            <i class="fas fa-dollar-sign text-success"></i>
+                                            <strong>VENDA</strong><br>
+                                            <small class="text-muted">Os pallets serao vendidos para outra empresa</small>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check form-check-inline card p-3 w-100">
+                                        <input class="form-check-input" type="radio" name="tipo_resolucao"
+                                               id="tipo_coleta" value="COLETA">
+                                        <label class="form-check-label" for="tipo_coleta">
+                                            <i class="fas fa-truck-loading text-info"></i>
+                                            <strong>COLETA</strong><br>
+                                            <small class="text-muted">Os pallets serao coletados fisicamente</small>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Responsavel pela Resolucao</label>
+                            <input type="text" name="responsavel_resolucao" class="form-control"
+                                   placeholder="Nome da empresa que vai comprar/coletar">
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">CNPJ do Responsavel</label>
+                                <input type="text" name="cnpj_resolucao" class="form-control"
+                                       placeholder="00.000.000/0000-00">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Valor (R$)</label>
+                                <input type="text" name="valor_resolucao" class="form-control"
+                                       placeholder="0,00">
+                                <small class="text-muted">Valor da venda ou custo estimado da coleta</small>
+                            </div>
+                        </div>
+
+                        <hr>
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('pallet.listar_vales') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Cancelar
+                            </a>
+                            <button type="submit" class="btn btn-warning">
+                                <i class="fas fa-paper-plane"></i> Enviar para Resolucao
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

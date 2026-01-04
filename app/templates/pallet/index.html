@@ -1,0 +1,311 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-pallet"></i> Gestao de Pallet</h2>
+        <a href="{{ url_for('pallet.sincronizar_odoo') }}" class="btn btn-outline-primary">
+            <i class="fas fa-sync"></i> Sincronizar Odoo
+        </a>
+    </div>
+
+    <!-- Cards de resumo -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body text-center">
+                    <h3 class="mb-0">{{ total_em_terceiros }}</h3>
+                    <p class="mb-0">Pallets em Terceiros</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <a href="{{ url_for('pallet.registrar_saida') }}" class="card bg-success text-white text-decoration-none h-100">
+                <div class="card-body d-flex align-items-center justify-content-center">
+                    <h5 class="mb-0"><i class="fas fa-plus-circle me-2"></i> Registrar Saida</h5>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-3">
+            <a href="{{ url_for('pallet.registrar_retorno') }}" class="card bg-warning text-dark text-decoration-none h-100">
+                <div class="card-body d-flex align-items-center justify-content-center">
+                    <h5 class="mb-0"><i class="fas fa-undo me-2"></i> Registrar Retorno</h5>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-3">
+            <a href="{{ url_for('pallet.listar_vales') }}" class="card bg-info text-white text-decoration-none h-100">
+                <div class="card-body d-flex align-items-center justify-content-center">
+                    <h5 class="mb-0"><i class="fas fa-ticket-alt me-2"></i> Vale Pallets</h5>
+                    {% if vales_pendentes > 0 %}
+                        <span class="badge bg-danger ms-2">{{ vales_pendentes }}</span>
+                    {% endif %}
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <!-- ALERTAS DE PRAZO -->
+    {% if remessas_vencidas or remessas_prestes_vencer or vendas_pendentes_vinculo or vales_vencidos %}
+    <div class="row mb-4">
+        <!-- Remessas Vencidas -->
+        {% if remessas_vencidas %}
+        <div class="col-md-6">
+            <div class="card border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h6 class="mb-0">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        Remessas Vencidas (> {{ prazo_dias }} dias)
+                        <span class="badge bg-light text-danger">{{ remessas_vencidas|length }}</span>
+                    </h6>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive" style="max-height: 200px; overflow-y: auto;">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th>NF</th>
+                                    <th>Data</th>
+                                    <th>Destinatario</th>
+                                    <th class="text-center">Qtd</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for rem in remessas_vencidas[:5] %}
+                                <tr>
+                                    <td><strong>{{ rem.numero_nf }}</strong></td>
+                                    <td class="text-danger">{{ rem.data_movimentacao.strftime('%d/%m/%Y') }}</td>
+                                    <td>{{ rem.nome_destinatario or rem.cnpj_destinatario or '-' }}</td>
+                                    <td class="text-center">{{ rem.qtd_movimentacao|int }}</td>
+                                </tr>
+                                {% endfor %}
+                                {% if remessas_vencidas|length > 5 %}
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted">
+                                        <small>+ {{ remessas_vencidas|length - 5 }} mais...</small>
+                                    </td>
+                                </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Remessas Prestes a Vencer -->
+        {% if remessas_prestes_vencer %}
+        <div class="col-md-6">
+            <div class="card border-warning">
+                <div class="card-header bg-warning text-dark">
+                    <h6 class="mb-0">
+                        <i class="fas fa-clock"></i>
+                        Remessas Prestes a Vencer (25-30 dias)
+                        <span class="badge bg-dark">{{ remessas_prestes_vencer|length }}</span>
+                    </h6>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive" style="max-height: 200px; overflow-y: auto;">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th>NF</th>
+                                    <th>Data</th>
+                                    <th>Destinatario</th>
+                                    <th class="text-center">Qtd</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for rem in remessas_prestes_vencer[:5] %}
+                                <tr>
+                                    <td><strong>{{ rem.numero_nf }}</strong></td>
+                                    <td class="text-warning">{{ rem.data_movimentacao.strftime('%d/%m/%Y') }}</td>
+                                    <td>{{ rem.nome_destinatario or rem.cnpj_destinatario or '-' }}</td>
+                                    <td class="text-center">{{ rem.qtd_movimentacao|int }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Vendas Pendentes de Vinculo -->
+        {% if vendas_pendentes_vinculo %}
+        <div class="col-md-6 mt-3">
+            <div class="card border-info">
+                <div class="card-header bg-info text-white">
+                    <h6 class="mb-0">
+                        <i class="fas fa-link"></i>
+                        Vendas Pendentes de Vinculo
+                        <span class="badge bg-light text-info">{{ vendas_pendentes_vinculo|length }}</span>
+                    </h6>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive" style="max-height: 200px; overflow-y: auto;">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th>NF</th>
+                                    <th>Data</th>
+                                    <th>Comprador</th>
+                                    <th class="text-center">Qtd</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for venda in vendas_pendentes_vinculo[:5] %}
+                                <tr>
+                                    <td><strong>{{ venda.numero_nf }}</strong></td>
+                                    <td>{{ venda.data_movimentacao.strftime('%d/%m/%Y') }}</td>
+                                    <td>{{ venda.nome_destinatario or venda.cnpj_destinatario or '-' }}</td>
+                                    <td class="text-center">{{ venda.qtd_movimentacao|int }}</td>
+                                    <td>
+                                        <a href="{{ url_for('pallet.vincular_venda', movimento_id=venda.id) }}"
+                                           class="btn btn-sm btn-outline-primary" title="Vincular">
+                                            <i class="fas fa-link"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Vales Vencidos -->
+        {% if vales_vencidos > 0 %}
+        <div class="col-md-6 mt-3">
+            <div class="alert alert-danger d-flex align-items-center">
+                <i class="fas fa-exclamation-circle fa-2x me-3"></i>
+                <div>
+                    <strong>{{ vales_vencidos }} Vale(s) Pallet Vencido(s)</strong><br>
+                    <a href="{{ url_for('pallet.listar_vales', status='VENCIDO') }}" class="text-danger">
+                        Visualizar vales vencidos <i class="fas fa-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Tabela de saldos por destinatario -->
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-warehouse me-2"></i>Saldos por Destinatario</h5>
+            <a href="{{ url_for('pallet.listar_movimentos') }}" class="btn btn-outline-primary btn-sm">
+                <i class="fas fa-list"></i> Ver Todos os Movimentos
+            </a>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Tipo</th>
+                            <th>CNPJ</th>
+                            <th>Nome</th>
+                            <th class="text-end">Saldo</th>
+                            <th class="text-center">Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for saldo in saldos %}
+                        <tr>
+                            <td>
+                                <span class="badge bg-{{ 'info' if saldo.tipo_destinatario == 'TRANSPORTADORA' else 'secondary' }}">
+                                    {{ saldo.tipo_destinatario }}
+                                </span>
+                            </td>
+                            <td>{{ saldo.cnpj_destinatario }}</td>
+                            <td>{{ saldo.nome_destinatario or '-' }}</td>
+                            <td class="text-end fw-bold">{{ saldo.saldo }}</td>
+                            <td class="text-center">
+                                <a href="{{ url_for('pallet.listar_movimentos', destinatario=saldo.tipo_destinatario) }}&cnpj={{ saldo.cnpj_destinatario }}"
+                                   class="btn btn-sm btn-outline-primary" title="Ver movimentos">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted py-4">
+                                <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
+                                Nenhum pallet em terceiros
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ultimos movimentos -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-history me-2"></i>Ultimos Movimentos</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Data</th>
+                            <th>Tipo</th>
+                            <th>Destinatario</th>
+                            <th>NF</th>
+                            <th class="text-end">Qtd</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for mov in ultimos_movimentos %}
+                        <tr>
+                            <td>{{ mov.criado_em.strftime('%d/%m/%Y %H:%M') }}</td>
+                            <td>
+                                <span class="badge bg-{{
+                                    'warning text-dark' if mov.tipo_movimentacao == 'REMESSA' else
+                                    ('danger' if mov.tipo_movimentacao == 'SAIDA' else 'success')
+                                }}">
+                                    {{ mov.tipo_movimentacao }}
+                                </span>
+                            </td>
+                            <td>
+                                <small class="text-muted">{{ mov.tipo_destinatario }}</small><br>
+                                {{ mov.nome_destinatario or mov.cnpj_destinatario }}
+                            </td>
+                            <td>{{ mov.numero_nf or '-' }}</td>
+                            <td class="text-end fw-bold">{{ mov.qtd_movimentacao|int }}</td>
+                            <td>
+                                {% if mov.tipo_movimentacao in ['SAIDA', 'REMESSA'] %}
+                                    {% if mov.baixado %}
+                                        <span class="badge bg-success">Baixado</span>
+                                    {% else %}
+                                        <span class="badge bg-warning text-dark">Pendente</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="badge bg-secondary">-</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted py-4">
+                                Nenhum movimento registrado
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

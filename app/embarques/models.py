@@ -66,6 +66,14 @@ class Embarque(db.Model):
     icms_destino = db.Column(db.Float)
     transportadora_optante = db.Column(db.Boolean)
 
+    # Campos de NF de Pallet para Transportadora
+    nf_pallet_transportadora = db.Column(db.String(20), nullable=True)
+    qtd_pallet_transportadora = db.Column(db.Float, default=0, nullable=True)
+
+    # Controle de Pallets no Embarque
+    qtd_pallets_separados = db.Column(db.Integer, default=0, nullable=True)  # Total pallets expedidos
+    qtd_pallets_trazidos = db.Column(db.Integer, default=0, nullable=True)   # Pallets trazidos pela transportadora
+
     # Relacionamentos
     transportadora = db.relationship('Transportadora', backref='embarques')
     # ✅ CORREÇÃO: Relacionamento base (sem order_by para evitar erros do SQLAlchemy)
@@ -126,6 +134,49 @@ class Embarque(db.Model):
     def itens_ativos(self):
         """Retorna apenas os itens ativos do embarque"""
         return [item for item in self.itens if item.status == 'ativo']
+
+    @property
+    def transportadora_aceita_nf_pallet(self):
+        """Verifica se a transportadora aceita NF de pallet"""
+        if self.transportadora:
+            return not self.transportadora.nao_aceita_nf_pallet
+        return True
+
+    @property
+    def saldo_pallets_pendentes(self):
+        """
+        Calcula saldo de pallets pendentes de faturamento.
+        Saldo = Separados - Trazidos - Faturados (NF pallet preenchida)
+
+        Returns:
+            int: Quantidade de pallets pendentes (pode ser negativo se houve excesso)
+        """
+        separados = self.qtd_pallets_separados or 0
+        trazidos = self.qtd_pallets_trazidos or 0
+
+        # Pallets faturados = soma das quantidades com NF preenchida
+        faturados = 0
+
+        # NF pallet da transportadora
+        if self.nf_pallet_transportadora:
+            faturados += int(self.qtd_pallet_transportadora or 0)
+
+        # NF pallet de cada cliente (nos itens)
+        for item in self.itens_ativos:
+            if item.nf_pallet_cliente:
+                faturados += int(item.qtd_pallet_cliente or 0)
+
+        return separados - trazidos - faturados
+
+    @property
+    def pallets_pendentes(self):
+        """
+        Verifica se há pallets pendentes de faturamento.
+
+        Returns:
+            bool: True se saldo_pallets_pendentes > 0
+        """
+        return self.saldo_pallets_pendentes > 0
 
     @property
     def status_nfs(self):
@@ -241,5 +292,34 @@ class EmbarqueItem(db.Model):
     # Campo para armazenar erros de validação
     erro_validacao = db.Column(db.String(500), nullable=True)  # Armazena erros como "CNPJ_DIFERENTE", etc.
 
+    # Campos de NF de Pallet para Cliente
+    nf_pallet_cliente = db.Column(db.String(20), nullable=True)
+    qtd_pallet_cliente = db.Column(db.Float, default=0, nullable=True)
+
+    # FK para rastrear qual NF de pallet cobre esta NF de venda
+    # Pode vir do Embarque (N:1) ou do próprio item (1:1)
+    nf_pallet_referencia = db.Column(db.String(20), nullable=True)  # NF de pallet que cobre esta NF
+    nf_pallet_origem = db.Column(db.String(10), nullable=True)  # 'EMBARQUE' ou 'ITEM'
+
     # Para carga FRACIONADA: Uma cotação -> Um item do embarque
     cotacao = db.relationship('Cotacao', backref='embarque_item', foreign_keys=[cotacao_id])
+
+    @property
+    def cliente_aceita_nf_pallet(self):
+        """Verifica se o cliente aceita NF de pallet (via ContatoAgendamento)"""
+        if self.cnpj_cliente:
+            from app.cadastros_agendamento.models import ContatoAgendamento
+            contato = ContatoAgendamento.query.filter_by(cnpj=self.cnpj_cliente).first()
+            if contato:
+                return not contato.nao_aceita_nf_pallet
+        return True
+
+    @property
+    def forma_agendamento(self):
+        """Retorna a forma de agendamento do cliente (via ContatoAgendamento)"""
+        if self.cnpj_cliente:
+            from app.cadastros_agendamento.models import ContatoAgendamento
+            contato = ContatoAgendamento.query.filter_by(cnpj=self.cnpj_cliente).first()
+            if contato and contato.forma:
+                return contato.forma
+        return None

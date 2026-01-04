@@ -1,0 +1,278 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-ticket-alt"></i> Vale Pallets</h2>
+        <div>
+            <a href="{{ url_for('pallet.index') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+            <a href="{{ url_for('pallet.criar_vale') }}" class="btn btn-success">
+                <i class="fas fa-plus"></i> Novo Vale
+            </a>
+        </div>
+    </div>
+
+    <!-- Cards de estatisticas -->
+    <div class="row mb-4">
+        <div class="col-md-2">
+            <div class="card {{ 'bg-primary' if not filtro_status else 'bg-light' }} {{ 'text-white' if not filtro_status else '' }}">
+                <a href="{{ url_for('pallet.listar_vales') }}" class="card-body text-center text-decoration-none {{ 'text-white' if not filtro_status else 'text-dark' }}">
+                    <h4 class="mb-0">{{ stats.total }}</h4>
+                    <small>Total Abertos</small>
+                </a>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card {{ 'bg-warning' if filtro_status == 'PENDENTE' else 'bg-light' }}">
+                <a href="{{ url_for('pallet.listar_vales', status='PENDENTE') }}" class="card-body text-center text-decoration-none text-dark">
+                    <h4 class="mb-0">{{ stats.pendentes }}</h4>
+                    <small>Pendentes</small>
+                </a>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card {{ 'bg-info' if filtro_status == 'RECEBIDO' else 'bg-light' }} {{ 'text-white' if filtro_status == 'RECEBIDO' else '' }}">
+                <a href="{{ url_for('pallet.listar_vales', status='RECEBIDO') }}" class="card-body text-center text-decoration-none {{ 'text-white' if filtro_status == 'RECEBIDO' else 'text-dark' }}">
+                    <h4 class="mb-0">{{ stats.recebidos }}</h4>
+                    <small>Recebidos</small>
+                </a>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card {{ 'bg-danger' if filtro_status == 'VENCIDO' else 'bg-light' }} {{ 'text-white' if filtro_status == 'VENCIDO' else '' }}">
+                <a href="{{ url_for('pallet.listar_vales', status='VENCIDO') }}" class="card-body text-center text-decoration-none {{ 'text-white' if filtro_status == 'VENCIDO' else 'text-dark' }}">
+                    <h4 class="mb-0">{{ stats.vencidos }}</h4>
+                    <small>Vencidos</small>
+                </a>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card {{ 'bg-warning' if filtro_status == 'A_VENCER' else 'bg-light' }}">
+                <a href="{{ url_for('pallet.listar_vales', status='A_VENCER') }}" class="card-body text-center text-decoration-none text-dark">
+                    <h4 class="mb-0">{{ stats.a_vencer }}</h4>
+                    <small>A Vencer (30d)</small>
+                </a>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card {{ 'bg-success' if filtro_status == 'RESOLVIDO' else 'bg-light' }} {{ 'text-white' if filtro_status == 'RESOLVIDO' else '' }}">
+                <a href="{{ url_for('pallet.listar_vales', status='RESOLVIDO') }}" class="card-body text-center text-decoration-none {{ 'text-white' if filtro_status == 'RESOLVIDO' else 'text-dark' }}">
+                    <i class="fas fa-check-circle"></i>
+                    <small>Resolvidos</small>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Status</label>
+                    <select name="status" class="form-select" onchange="this.form.submit()">
+                        <option value="">Todos</option>
+                        <option value="PENDENTE" {{ 'selected' if filtro_status == 'PENDENTE' }}>Pendentes</option>
+                        <option value="RECEBIDO" {{ 'selected' if filtro_status == 'RECEBIDO' }}>Recebidos</option>
+                        <option value="VENCIDO" {{ 'selected' if filtro_status == 'VENCIDO' }}>Vencidos</option>
+                        <option value="A_VENCER" {{ 'selected' if filtro_status == 'A_VENCER' }}>A Vencer (30d)</option>
+                        <option value="RESOLVIDO" {{ 'selected' if filtro_status == 'RESOLVIDO' }}>Resolvidos</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Transportadora</label>
+                    <input type="text" name="transportadora" class="form-control"
+                           value="{{ filtro_transportadora }}" placeholder="CNPJ ou nome">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Cliente</label>
+                    <input type="text" name="cliente" class="form-control"
+                           value="{{ filtro_cliente }}" placeholder="CNPJ ou nome">
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary me-2">
+                        <i class="fas fa-search"></i> Filtrar
+                    </button>
+                    <a href="{{ url_for('pallet.listar_vales') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-eraser"></i> Limpar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela de vales -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="fas fa-list"></i>
+                Vales Cadastrados
+                {% if vales.total > 0 %}
+                    ({{ vales.total }} registros)
+                {% endif %}
+            </h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>NF Pallet</th>
+                            <th>Cliente</th>
+                            <th>Transportadora</th>
+                            <th class="text-center">Qtd</th>
+                            <th>Validade</th>
+                            <th>Posse</th>
+                            <th>Status</th>
+                            <th class="text-center">Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for vale in vales.items %}
+                        <tr class="{{ 'table-danger' if vale.vencido else ('table-warning' if vale.prestes_a_vencer else '') }}">
+                            <td>{{ vale.id }}</td>
+                            <td><strong>{{ vale.nf_pallet }}</strong></td>
+                            <td>
+                                <small class="text-muted">{{ vale.cnpj_cliente }}</small><br>
+                                {{ vale.nome_cliente or '-' }}
+                            </td>
+                            <td>
+                                <small class="text-muted">{{ vale.cnpj_transportadora }}</small><br>
+                                {{ vale.nome_transportadora or '-' }}
+                            </td>
+                            <td class="text-center fw-bold">{{ vale.quantidade }}</td>
+                            <td>
+                                {{ vale.data_validade.strftime('%d/%m/%Y') if vale.data_validade else '-' }}
+                                {% if vale.dias_para_vencer is not none %}
+                                    <br>
+                                    {% if vale.dias_para_vencer < 0 %}
+                                        <small class="text-danger">{{ vale.dias_para_vencer|abs }}d atrasado</small>
+                                    {% elif vale.dias_para_vencer == 0 %}
+                                        <small class="text-danger">Vence hoje!</small>
+                                    {% elif vale.dias_para_vencer <= 30 %}
+                                        <small class="text-warning">{{ vale.dias_para_vencer }}d restantes</small>
+                                    {% else %}
+                                        <small class="text-muted">{{ vale.dias_para_vencer }}d restantes</small>
+                                    {% endif %}
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge bg-{{ 'success' if vale.posse_atual == 'NACOM' else ('info' if vale.posse_atual == 'TRANSPORTADORA' else 'secondary') }}">
+                                    {{ vale.posse_atual }}
+                                </span>
+                                {% if vale.nome_posse %}
+                                    <br><small class="text-muted">{{ vale.nome_posse }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% set status = vale.status_display %}
+                                <span class="badge bg-{{
+                                    'success' if status == 'RESOLVIDO' else
+                                    ('info' if status == 'RECEBIDO' else
+                                    ('primary' if status == 'EM RESOLUÇÃO' else
+                                    ('danger' if status == 'VENCIDO' else
+                                    ('warning' if status == 'A VENCER' else 'secondary'))))
+                                }} {{ 'text-dark' if status in ['A VENCER', 'PENDENTE'] else '' }}">
+                                    {{ status }}
+                                </span>
+                                {% if vale.tipo_resolucao and vale.tipo_resolucao != 'PENDENTE' %}
+                                    <br><small class="text-muted">{{ vale.tipo_resolucao }}</small>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{{ url_for('pallet.editar_vale', vale_id=vale.id) }}"
+                                       class="btn btn-outline-primary" title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    {% if not vale.recebido %}
+                                        <form action="{{ url_for('pallet.receber_vale', vale_id=vale.id) }}"
+                                              method="POST" class="d-inline">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <button type="submit" class="btn btn-outline-info"
+                                                    title="Marcar como Recebido">
+                                                <i class="fas fa-inbox"></i>
+                                            </button>
+                                        </form>
+                                    {% endif %}
+                                    {% if vale.recebido and not vale.resolvido %}
+                                        {% if not vale.enviado_coleta %}
+                                            <a href="{{ url_for('pallet.enviar_resolucao', vale_id=vale.id) }}"
+                                               class="btn btn-outline-warning" title="Enviar para Resolucao">
+                                                <i class="fas fa-paper-plane"></i>
+                                            </a>
+                                        {% endif %}
+                                        <a href="{{ url_for('pallet.resolver_vale', vale_id=vale.id) }}"
+                                           class="btn btn-outline-success" title="Resolver">
+                                            <i class="fas fa-check"></i>
+                                        </a>
+                                    {% endif %}
+                                    {% if not vale.resolvido %}
+                                        <form action="{{ url_for('pallet.excluir_vale', vale_id=vale.id) }}"
+                                              method="POST" class="d-inline"
+                                              onsubmit="return confirm('Tem certeza que deseja excluir este vale?')">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <button type="submit" class="btn btn-outline-danger" title="Excluir">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </form>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="9" class="text-center text-muted py-4">
+                                <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
+                                Nenhum vale pallet encontrado
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Paginacao -->
+        {% if vales.pages > 1 %}
+        <div class="card-footer">
+            <nav aria-label="Navegacao">
+                <ul class="pagination justify-content-center mb-0">
+                    {% if vales.has_prev %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('pallet.listar_vales', page=vales.prev_num, status=filtro_status, transportadora=filtro_transportadora, cliente=filtro_cliente) }}">Anterior</a>
+                        </li>
+                    {% endif %}
+
+                    {% for page_num in vales.iter_pages() %}
+                        {% if page_num %}
+                            {% if page_num != vales.page %}
+                                <li class="page-item">
+                                    <a class="page-link" href="{{ url_for('pallet.listar_vales', page=page_num, status=filtro_status, transportadora=filtro_transportadora, cliente=filtro_cliente) }}">{{ page_num }}</a>
+                                </li>
+                            {% else %}
+                                <li class="page-item active">
+                                    <span class="page-link">{{ page_num }}</span>
+                                </li>
+                            {% endif %}
+                        {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">...</span>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if vales.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('pallet.listar_vales', page=vales.next_num, status=filtro_status, transportadora=filtro_transportadora, cliente=filtro_cliente) }}">Proximo</a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

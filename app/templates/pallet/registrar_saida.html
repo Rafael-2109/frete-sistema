@@ -1,0 +1,150 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-plus-circle"></i> Registrar Saida de Pallet</h2>
+        <a href="{{ url_for('pallet.index') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <form method="POST" id="formSaida">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+                <!-- Tipo de destinatario -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <label class="form-label fw-bold">Tipo de Destinatario</label>
+                        <div class="btn-group w-100" role="group">
+                            <input type="radio" class="btn-check" name="tipo_destinatario" id="tipoCliente" value="CLIENTE" checked>
+                            <label class="btn btn-outline-secondary" for="tipoCliente">
+                                <i class="fas fa-user me-2"></i>Cliente
+                            </label>
+                            <input type="radio" class="btn-check" name="tipo_destinatario" id="tipoTransportadora" value="TRANSPORTADORA">
+                            <label class="btn btn-outline-info" for="tipoTransportadora">
+                                <i class="fas fa-truck me-2"></i>Transportadora
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dados do destinatario -->
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label">CNPJ <span class="text-danger">*</span></label>
+                        <input type="text" name="cnpj_destinatario" class="form-control" required
+                               placeholder="00.000.000/0000-00" id="cnpjDestinatario">
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label">Nome/Razao Social</label>
+                        <input type="text" name="nome_destinatario" class="form-control"
+                               placeholder="Nome do destinatario" id="nomeDestinatario">
+                    </div>
+                </div>
+
+                <!-- Dados da NF -->
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Numero da NF</label>
+                        <input type="text" name="numero_nf" class="form-control"
+                               placeholder="Numero da NF de pallet">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Quantidade de Pallets <span class="text-danger">*</span></label>
+                        <input type="number" name="quantidade" class="form-control" required min="1" value="1">
+                    </div>
+                </div>
+
+                <!-- Vinculo com embarque (opcional) -->
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Embarque (opcional)</label>
+                        <select name="embarque_id" class="form-select" id="selectEmbarque">
+                            <option value="">Selecione...</option>
+                            {% for emb in embarques %}
+                            <option value="{{ emb.id }}">#{{ emb.numero }} - {{ emb.transportadora.razao_social if emb.transportadora else 'S/ Transp.' }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-8" id="divItensEmbarque" style="display: none;">
+                        <label class="form-label">Item do Embarque (cliente)</label>
+                        <select name="embarque_item_id" class="form-select" id="selectEmbarqueItem">
+                            <option value="">Selecione...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Observacao -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <label class="form-label">Observacao</label>
+                        <textarea name="observacao" class="form-control" rows="2"
+                                  placeholder="Observacoes adicionais..."></textarea>
+                    </div>
+                </div>
+
+                <!-- Botoes -->
+                <div class="d-flex justify-content-end gap-2">
+                    <a href="{{ url_for('pallet.index') }}" class="btn btn-secondary">
+                        <i class="fas fa-times"></i> Cancelar
+                    </a>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-save"></i> Registrar Saida
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const selectEmbarque = document.getElementById('selectEmbarque');
+    const divItensEmbarque = document.getElementById('divItensEmbarque');
+    const selectEmbarqueItem = document.getElementById('selectEmbarqueItem');
+    const tipoCliente = document.getElementById('tipoCliente');
+
+    // Quando selecionar embarque, carregar itens
+    selectEmbarque.addEventListener('change', function() {
+        if (this.value) {
+            // Mostrar select de itens apenas se tipo for CLIENTE
+            if (tipoCliente.checked) {
+                divItensEmbarque.style.display = 'block';
+                // Carregar itens via API
+                fetch(`/pallet/api/embarque/${this.value}/itens`)
+                    .then(response => response.json())
+                    .then(data => {
+                        selectEmbarqueItem.innerHTML = '<option value="">Selecione...</option>';
+                        data.forEach(item => {
+                            const opt = document.createElement('option');
+                            opt.value = item.id;
+                            opt.textContent = `${item.cliente} - Pedido: ${item.pedido}`;
+                            if (!item.aceita_nf_pallet) {
+                                opt.textContent += ' (NAO ACEITA NF PALLET)';
+                                opt.disabled = true;
+                            }
+                            selectEmbarqueItem.appendChild(opt);
+                        });
+                    });
+            }
+        } else {
+            divItensEmbarque.style.display = 'none';
+        }
+    });
+
+    // Quando mudar tipo, esconder itens se for transportadora
+    document.querySelectorAll('input[name="tipo_destinatario"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            if (this.value === 'TRANSPORTADORA') {
+                divItensEmbarque.style.display = 'none';
+                selectEmbarqueItem.value = '';
+            } else if (selectEmbarque.value) {
+                divItensEmbarque.style.display = 'block';
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

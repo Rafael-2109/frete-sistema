@@ -9,6 +9,7 @@ class ContatoAgendamento(db.Model):
     forma = db.Column(db.String(50))  # Portal, Telefone, E-mail, WhatsApp
     contato = db.Column(db.String(255))  # Usuário, telefone ou e-mail
     observacao = db.Column(db.String(255))
+    nao_aceita_nf_pallet = db.Column(db.Boolean, default=False, nullable=False)  # Cliente não aceita NF de pallet
     atualizado_em = db.Column(db.DateTime, default=datetime.utcnow)
 
     def __repr__(self):

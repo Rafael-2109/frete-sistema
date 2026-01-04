@@ -848,6 +848,10 @@ def create_app(config_name=None):
 
     app.register_blueprint(estoque_bp)
 
+    # Modulo de Pallet (Gestao de NF de Pallet em Terceiros)
+    from app.pallet.routes import pallet_bp
+    app.register_blueprint(pallet_bp)
+
     app.register_blueprint(producao_bp)
     app.register_blueprint(relatorios_producao_bp)
     app.register_blueprint(manufatura_bp)

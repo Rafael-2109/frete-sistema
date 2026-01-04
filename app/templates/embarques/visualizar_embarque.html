@@ -17,64 +17,77 @@
 
   /* ======================================================================== */
   /* CONFIGURAÇÃO DO TAMANHO DAS COLUNAS DOS ITENS DO EMBARQUE               */
-  /* Ajuste os valores abaixo para alterar a largura das colunas             */
+  /* Tabela ocupa 100% da tela - 13 colunas proporcionais                    */
   /* ======================================================================== */
-  .itens-embarque-table th:nth-child(1),  /* Cliente */
+  .itens-embarque-table th:nth-child(1),  /* Cliente - 13% */
   .itens-embarque-table td:nth-child(1) {
-    width: 20%;
-    min-width: 150px;
+    width: 13%;
   }
-  
-  .itens-embarque-table th:nth-child(2),  /* Pedido */
+
+  .itens-embarque-table th:nth-child(2),  /* Pedido - 6% */
   .itens-embarque-table td:nth-child(2) {
-    width: 10%;
-    min-width: 80px;
-  }
-  
-  .itens-embarque-table th:nth-child(3),  /* Nota Fiscal */
-  .itens-embarque-table td:nth-child(3) {
-    width: 10%;
-    min-width: 100px;
-  }
-  
-  .itens-embarque-table th:nth-child(4),  /* Protocolo */
-  .itens-embarque-table td:nth-child(4) {
-    width: 12%;
-    min-width: 130px;
-  }
-  
-  .itens-embarque-table th:nth-child(5),  /* Agendamento (Data + Confirmação) */
-  .itens-embarque-table td:nth-child(5) {
-    width: 15%;
-    min-width: 140px;
-  }
-
-  .itens-embarque-table th:nth-child(6),  /* Volumes */
-  .itens-embarque-table td:nth-child(6) {
     width: 6%;
-    min-width: 70px;
   }
 
-  .itens-embarque-table th:nth-child(7),  /* UF */
+  .itens-embarque-table th:nth-child(3),  /* Nota Fiscal - 6% */
+  .itens-embarque-table td:nth-child(3) {
+    width: 6%;
+  }
+
+  .itens-embarque-table th:nth-child(4),  /* Protocolo - 8% */
+  .itens-embarque-table td:nth-child(4) {
+    width: 8%;
+  }
+
+  .itens-embarque-table th:nth-child(5),  /* Forma Agendamento - 7% */
+  .itens-embarque-table td:nth-child(5) {
+    width: 7%;
+    text-align: center;
+  }
+
+  .itens-embarque-table th:nth-child(6),  /* Data Agendamento - 9% */
+  .itens-embarque-table td:nth-child(6) {
+    width: 9%;
+  }
+
+  .itens-embarque-table th:nth-child(7),  /* Volumes - 4% */
   .itens-embarque-table td:nth-child(7) {
     width: 4%;
-    min-width: 50px;
   }
 
-  .itens-embarque-table th:nth-child(8),  /* Cidade */
+  .itens-embarque-table th:nth-child(8),  /* UF - 3% */
   .itens-embarque-table td:nth-child(8) {
-    width: 15%;
-    min-width: 120px;
+    width: 3%;
   }
 
-  .itens-embarque-table th:nth-child(9),  /* Status/Ações */
+  .itens-embarque-table th:nth-child(9),  /* Cidade - 9% */
   .itens-embarque-table td:nth-child(9) {
-    width: 18%;
-    min-width: 180px;
+    width: 9%;
+  }
+
+  .itens-embarque-table th:nth-child(10),  /* Aceita NF - 5% */
+  .itens-embarque-table td:nth-child(10) {
+    width: 5%;
+    text-align: center;
+  }
+
+  .itens-embarque-table th:nth-child(11),  /* NF Pallet - 6% */
+  .itens-embarque-table td:nth-child(11) {
+    width: 6%;
+  }
+
+  .itens-embarque-table th:nth-child(12),  /* Qtd Pallet - 5% */
+  .itens-embarque-table td:nth-child(12) {
+    width: 5%;
+  }
+
+  .itens-embarque-table th:nth-child(13),  /* Status/Ações - 19% */
+  .itens-embarque-table td:nth-child(13) {
+    width: 19%;
     white-space: nowrap;
   }
-  
-  /* Configurações gerais da tabela */
+
+  /* Configurações gerais da tabela - TELA CHEIA */
   .itens-embarque-table {
     table-layout: fixed;
     width: 100%;
@@ -256,7 +269,7 @@
   }
 </style>
 
-<div class="container my-4">
+<div class="container-fluid my-4 px-4">
   
 
 
@@ -416,6 +429,72 @@
       </div>
     </div>
 
+    <!-- Controle de Pallets -->
+    <div class="row mb-3">
+      <div class="col-md-12">
+        <div class="card bg-light">
+          <div class="card-body py-2">
+            <!-- Linha 1: NF Pallet Transportadora -->
+            <div class="row align-items-center mb-2">
+              <div class="col-md-3">
+                <strong><i class="fas fa-pallet me-1"></i> NF Pallet Transportadora:</strong>
+                {% if embarque.transportadora_aceita_nf_pallet %}
+                  <span class="badge bg-success ms-1">Aceita NF Pallet</span>
+                {% else %}
+                  <span class="badge bg-warning text-dark ms-1">Nao Aceita NF Pallet</span>
+                {% endif %}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label mb-0 small">Numero NF</label>
+                <input type="text" name="nf_pallet_transportadora" class="form-control form-control-sm"
+                       value="{{ embarque.nf_pallet_transportadora or '' }}" placeholder="NF Pallet">
+              </div>
+              <div class="col-md-2">
+                <label class="form-label mb-0 small">Qtd Pallet</label>
+                <input type="number" name="qtd_pallet_transportadora" class="form-control form-control-sm"
+                       value="{{ embarque.qtd_pallet_transportadora|int if embarque.qtd_pallet_transportadora else '' }}" placeholder="Qtd" min="0">
+              </div>
+              <div class="col-md-4 text-end">
+                <a href="{{ url_for('pallet.index') }}" class="btn btn-outline-primary btn-sm" target="_blank">
+                  <i class="fas fa-external-link-alt"></i> Gestao de Pallet
+                </a>
+              </div>
+            </div>
+            <!-- Linha 2: Controle de Pallets Expedidos -->
+            <hr class="my-2">
+            <div class="row align-items-center">
+              <div class="col-md-3">
+                <label class="form-label mb-0 small">Total Pallets Separados</label>
+                <input type="number" name="qtd_pallets_separados" class="form-control form-control-sm"
+                       value="{{ embarque.qtd_pallets_separados or '' }}" placeholder="0" min="0">
+              </div>
+              <div class="col-md-3">
+                <label class="form-label mb-0 small">Pallets Trazidos (Transp.)</label>
+                <input type="number" name="qtd_pallets_trazidos" class="form-control form-control-sm"
+                       value="{{ embarque.qtd_pallets_trazidos or '' }}" placeholder="0" min="0">
+              </div>
+              <div class="col-md-3">
+                <label class="form-label mb-0 small">Saldo Pendente</label>
+                <div class="form-control form-control-sm {% if embarque.pallets_pendentes %}bg-warning text-dark{% else %}bg-light{% endif %}">
+                  <strong>{{ embarque.saldo_pallets_pendentes }}</strong>
+                  {% if embarque.pallets_pendentes %}
+                    <i class="fas fa-exclamation-triangle ms-1" title="Pallets pendentes de faturamento"></i>
+                  {% else %}
+                    <i class="fas fa-check-circle text-success ms-1" title="Sem pendencias"></i>
+                  {% endif %}
+                </div>
+              </div>
+              <div class="col-md-3">
+                <small class="text-muted">
+                  Saldo = Separados - Trazidos - Faturados
+                </small>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Checkboxes e etc -->
     <div class="row mb-2">
       <div class="col">
@@ -468,10 +547,14 @@
                 <th>Pedido</th>
                 <th>Nota Fiscal</th>
                 <th>Protocolo</th>
+                <th title="Forma de Agendamento do Cliente">Forma</th>
                 <th>Agendamento</th>
                 <th>Volumes</th>
                 <th>UF</th>
                 <th>Cidade</th>
+                <th title="Cliente aceita NF de Pallet?">Aceita NF</th>
+                <th>NF Pallet</th>
+                <th>Qtd</th>
                 <th>Status/Ações</th>
             </tr>
           </thead>
@@ -503,6 +586,27 @@
                       </button>
                     {% endif %}
                   </div>
+                </td>
+                <!-- Forma de Agendamento -->
+                <td class="text-center">
+                  {% if item and item.forma_agendamento %}
+                    {% set forma = item.forma_agendamento %}
+                    {% if forma == 'PORTAL' %}
+                      <span class="badge bg-primary" title="Agendamento via Portal">{{ forma }}</span>
+                    {% elif forma == 'TELEFONE' %}
+                      <span class="badge bg-info text-dark" title="Agendamento via Telefone">{{ forma }}</span>
+                    {% elif forma == 'E-MAIL' %}
+                      <span class="badge bg-success" title="Agendamento via E-mail">{{ forma }}</span>
+                    {% elif forma == 'COMERCIAL' %}
+                      <span class="badge bg-warning text-dark" title="Agendamento via Comercial">{{ forma }}</span>
+                    {% elif forma == 'SEM AGENDAMENTO' %}
+                      <span class="badge bg-secondary" title="Sem necessidade de agendamento">S/AG</span>
+                    {% else %}
+                      <span class="badge bg-dark" title="{{ forma }}">{{ forma }}</span>
+                    {% endif %}
+                  {% else %}
+                    <span class="text-muted">-</span>
+                  {% endif %}
                 </td>
                 <td>
                   <div class="agendamento-cell">
@@ -551,6 +655,58 @@
                 </td>
                 <td title="{{ item.cidade_destino if item else '' }}">
                   {{ item_form.cidade_destino(style="border: none; background: transparent;" if item else "form-control") }}
+                </td>
+                <!-- Aceita NF Pallet -->
+                <td class="text-center">
+                  {% if item %}
+                    {% if item.cliente_aceita_nf_pallet %}
+                      <span class="badge bg-success" title="Cliente aceita NF de Pallet">
+                        <i class="fas fa-check"></i>
+                      </span>
+                    {% else %}
+                      <span class="badge bg-danger" title="Cliente NAO aceita NF de Pallet">
+                        <i class="fas fa-times"></i>
+                      </span>
+                    {% endif %}
+                  {% else %}
+                    <span>-</span>
+                  {% endif %}
+                </td>
+                <!-- NF Pallet Cliente -->
+                <td>
+                  {% if item %}
+                    {% if item.cliente_aceita_nf_pallet %}
+                      <input type="text"
+                             name="itens-{{ loop_index }}-nf_pallet_cliente"
+                             value="{{ item.nf_pallet_cliente or '' }}"
+                             class="form-control form-control-sm"
+                             placeholder="NF"
+                             {% if item.status == 'cancelado' %}disabled{% endif %}>
+                    {% else %}
+                      <span class="badge bg-secondary" title="Cliente não aceita NF Pallet">N/A</span>
+                    {% endif %}
+                  {% else %}
+                    <span>-</span>
+                  {% endif %}
+                </td>
+                <!-- Qtd Pallet Cliente -->
+                <td>
+                  {% if item %}
+                    {% if item.cliente_aceita_nf_pallet %}
+                      <input type="number"
+                             name="itens-{{ loop_index }}-qtd_pallet_cliente"
+                             value="{{ item.qtd_pallet_cliente|int if item.qtd_pallet_cliente else '' }}"
+                             class="form-control form-control-sm text-center"
+                             placeholder="0"
+                             min="0"
+                             style="width: 60px;"
+                             {% if item.status == 'cancelado' %}disabled{% endif %}>
+                    {% else %}
+                      <span>-</span>
+                    {% endif %}
+                  {% else %}
+                    <span>-</span>
+                  {% endif %}
                 </td>
                 <td>
                   {% if item and item.status == 'cancelado' %}

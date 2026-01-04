@@ -111,7 +111,8 @@ def dados_transportadora(id):
         # Garante que os valores boolean sejam tratados corretamente
         optante_valor = transportadora.optante if transportadora.optante is not None else False
         freteiro_valor = transportadora.freteiro if transportadora.freteiro is not None else False
-        
+        nao_aceita_nf_pallet_valor = transportadora.nao_aceita_nf_pallet if hasattr(transportadora, 'nao_aceita_nf_pallet') and transportadora.nao_aceita_nf_pallet is not None else False
+
         return jsonify({
             'success': True,
             'transportadora': {
@@ -123,7 +124,8 @@ def dados_transportadora(id):
                 'optante': optante_valor,
                 'freteiro': freteiro_valor,
                 'condicao_pgto': transportadora.condicao_pgto or '',
-                'ativo': transportadora.ativo if hasattr(transportadora, 'ativo') else True
+                'ativo': transportadora.ativo if hasattr(transportadora, 'ativo') else True,
+                'nao_aceita_nf_pallet': nao_aceita_nf_pallet_valor
             }
         })
     except Exception as e:
@@ -162,6 +164,8 @@ def editar_transportadora_ajax(id):
         transportadora.condicao_pgto = request.form.get('condicao_pgto', '')
         # Campo ativo - checkbox envia 'on' quando marcado
         transportadora.ativo = request.form.get('ativo') == 'on'
+        # Campo NF de pallet - checkbox envia 'on' quando marcado
+        transportadora.nao_aceita_nf_pallet = request.form.get('nao_aceita_nf_pallet') == 'on'
         
         # TODO: Adicionar campos de auditoria no futuro
         # transportadora.alterado_por = current_user.nome

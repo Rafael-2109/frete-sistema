@@ -311,7 +311,15 @@ def registrar_movimento():
                                             # Não interrompe o processo por erro de sincronização
                                 
                                 flash(f'Sistema de entregas sincronizado para {len(embarque.itens)} nota(s) fiscal(is)!', 'success')
-                    
+
+                        # ⚠️ ALERTA DE PALLETS PENDENTES
+                        if embarque.pallets_pendentes:
+                            saldo = embarque.saldo_pallets_pendentes
+                            flash(
+                                f'⚠️ ALERTA: Embarque #{embarque.numero} tem {saldo} pallet(s) pendente(s) de faturamento!',
+                                'warning'
+                            )
+
                     db.session.commit()
                     flash('Saída registrada com sucesso!', 'success')
         

@@ -1,0 +1,147 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-check-circle"></i> Baixar Movimento de Pallet</h2>
+        <a href="{{ url_for('pallet.listar_movimentos') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <div class="row">
+        <!-- Detalhes da Saida -->
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0"><i class="fas fa-arrow-up me-2"></i>Movimento de Saida #{{ saida.id }}</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-borderless mb-0">
+                        <tr>
+                            <th width="40%">Data:</th>
+                            <td>{{ saida.criado_em.strftime('%d/%m/%Y %H:%M') }}</td>
+                        </tr>
+                        <tr>
+                            <th>Tipo Destinatario:</th>
+                            <td>
+                                <span class="badge bg-{{ 'info' if saida.tipo_destinatario == 'TRANSPORTADORA' else 'secondary' }}">
+                                    {{ saida.tipo_destinatario }}
+                                </span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>CNPJ:</th>
+                            <td>{{ saida.cnpj_destinatario }}</td>
+                        </tr>
+                        <tr>
+                            <th>Nome:</th>
+                            <td>{{ saida.nome_destinatario or '-' }}</td>
+                        </tr>
+                        <tr>
+                            <th>NF:</th>
+                            <td>{{ saida.numero_nf or '-' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Quantidade:</th>
+                            <td><span class="fs-4 fw-bold text-danger">{{ saida.qtd_movimentacao|int }}</span> pallets</td>
+                        </tr>
+                        {% if saida.codigo_embarque %}
+                        <tr>
+                            <th>Embarque:</th>
+                            <td>
+                                <a href="{{ url_for('embarques.visualizar_embarque', id=saida.codigo_embarque) }}" target="_blank">
+                                    #{{ saida.codigo_embarque }}
+                                </a>
+                            </td>
+                        </tr>
+                        {% endif %}
+                        {% if saida.observacao %}
+                        <tr>
+                            <th>Observacao:</th>
+                            <td>{{ saida.observacao }}</td>
+                        </tr>
+                        {% endif %}
+                    </table>
+                </div>
+            </div>
+
+            <!-- Formulario de Baixa -->
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="fas fa-check me-2"></i>Confirmar Baixa</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+                        <div class="mb-3">
+                            <label class="form-label">Vincular a Retorno (opcional)</label>
+                            <select name="retorno_id" class="form-select">
+                                <option value="">Sem vinculo - Baixa manual</option>
+                                {% for ret in retornos_disponiveis %}
+                                <option value="{{ ret.id }}">
+                                    #{{ ret.id }} - {{ ret.criado_em.strftime('%d/%m/%Y') }} -
+                                    {{ ret.nome_destinatario or ret.cnpj_destinatario }} -
+                                    {{ ret.qtd_movimentacao|int }} pallets
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Selecione um retorno para vincular a esta saida</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Observacao da Baixa</label>
+                            <textarea name="observacao_baixa" class="form-control" rows="2"
+                                      placeholder="Observacoes sobre a baixa..."></textarea>
+                        </div>
+
+                        <div class="d-flex justify-content-end gap-2">
+                            <a href="{{ url_for('pallet.listar_movimentos') }}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Cancelar
+                            </a>
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-check"></i> Confirmar Baixa
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Retornos disponiveis -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-undo me-2"></i>Retornos Recentes</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush" style="max-height: 500px; overflow-y: auto;">
+                        {% for ret in retornos_disponiveis %}
+                        <div class="list-group-item">
+                            <div class="d-flex w-100 justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-1">
+                                        <span class="badge bg-success me-2">#{{ ret.id }}</span>
+                                        {{ ret.nome_destinatario or ret.cnpj_destinatario }}
+                                    </h6>
+                                    <small class="text-muted">
+                                        {{ ret.criado_em.strftime('%d/%m/%Y %H:%M') }}
+                                        {% if ret.numero_nf %} | NF: {{ ret.numero_nf }}{% endif %}
+                                    </small>
+                                </div>
+                                <span class="badge bg-success fs-6">{{ ret.qtd_movimentacao|int }}</span>
+                            </div>
+                        </div>
+                        {% else %}
+                        <div class="list-group-item text-center text-muted py-4">
+                            <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
+                            Nenhum retorno registrado
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

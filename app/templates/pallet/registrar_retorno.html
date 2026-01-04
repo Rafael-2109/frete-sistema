@@ -1,0 +1,146 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-undo"></i> Registrar Retorno de Pallet</h2>
+        <a href="{{ url_for('pallet.index') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <div class="row">
+        <!-- Formulario -->
+        <div class="col-md-7">
+            <div class="card">
+                <div class="card-body">
+                    <form method="POST" id="formRetorno">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+                        <!-- Tipo de destinatario -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <label class="form-label fw-bold">Tipo de Destinatario</label>
+                                <div class="btn-group w-100" role="group">
+                                    <input type="radio" class="btn-check" name="tipo_destinatario" id="tipoCliente" value="CLIENTE">
+                                    <label class="btn btn-outline-secondary" for="tipoCliente">
+                                        <i class="fas fa-user me-2"></i>Cliente
+                                    </label>
+                                    <input type="radio" class="btn-check" name="tipo_destinatario" id="tipoTransportadora" value="TRANSPORTADORA" checked>
+                                    <label class="btn btn-outline-info" for="tipoTransportadora">
+                                        <i class="fas fa-truck me-2"></i>Transportadora
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Dados do destinatario -->
+                        <div class="row mb-3">
+                            <div class="col-md-5">
+                                <label class="form-label">CNPJ <span class="text-danger">*</span></label>
+                                <input type="text" name="cnpj_destinatario" class="form-control" required
+                                       placeholder="00.000.000/0000-00" id="cnpjDestinatario">
+                            </div>
+                            <div class="col-md-7">
+                                <label class="form-label">Nome/Razao Social</label>
+                                <input type="text" name="nome_destinatario" class="form-control"
+                                       placeholder="Nome do destinatario" id="nomeDestinatario">
+                            </div>
+                        </div>
+
+                        <!-- Dados da NF -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Numero da NF de Retorno</label>
+                                <input type="text" name="numero_nf" class="form-control"
+                                       placeholder="Numero da NF">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Quantidade de Pallets <span class="text-danger">*</span></label>
+                                <input type="number" name="quantidade" class="form-control" required min="1" value="1">
+                            </div>
+                        </div>
+
+                        <!-- Observacao -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <label class="form-label">Observacao</label>
+                                <textarea name="observacao" class="form-control" rows="2"
+                                          placeholder="Observacoes adicionais..."></textarea>
+                            </div>
+                        </div>
+
+                        <!-- Botoes -->
+                        <div class="d-flex justify-content-end gap-2">
+                            <a href="{{ url_for('pallet.index') }}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Cancelar
+                            </a>
+                            <button type="submit" class="btn btn-warning">
+                                <i class="fas fa-save"></i> Registrar Retorno
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Saldos pendentes -->
+        <div class="col-md-5">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-warehouse me-2"></i>Saldos Pendentes</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush" style="max-height: 400px; overflow-y: auto;">
+                        {% for saldo in saldos_pendentes %}
+                        <a href="#" class="list-group-item list-group-item-action saldo-item"
+                           data-cnpj="{{ saldo.cnpj_destinatario }}"
+                           data-nome="{{ saldo.nome_destinatario or '' }}"
+                           data-tipo="{{ saldo.tipo_destinatario }}">
+                            <div class="d-flex w-100 justify-content-between align-items-center">
+                                <div>
+                                    <span class="badge bg-{{ 'info' if saldo.tipo_destinatario == 'TRANSPORTADORA' else 'secondary' }} mb-1">
+                                        {{ saldo.tipo_destinatario }}
+                                    </span>
+                                    <h6 class="mb-1">{{ saldo.nome_destinatario or saldo.cnpj_destinatario }}</h6>
+                                    <small class="text-muted">{{ saldo.cnpj_destinatario }}</small>
+                                </div>
+                                <span class="badge bg-warning text-dark fs-6">{{ saldo.saldo }}</span>
+                            </div>
+                        </a>
+                        {% else %}
+                        <div class="list-group-item text-center text-muted py-4">
+                            <i class="fas fa-check-circle fa-2x mb-2 d-block text-success"></i>
+                            Nenhum saldo pendente
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Preencher formulario ao clicar em saldo pendente
+    document.querySelectorAll('.saldo-item').forEach(item => {
+        item.addEventListener('click', function(e) {
+            e.preventDefault();
+            document.getElementById('cnpjDestinatario').value = this.dataset.cnpj;
+            document.getElementById('nomeDestinatario').value = this.dataset.nome;
+
+            // Selecionar tipo
+            if (this.dataset.tipo === 'TRANSPORTADORA') {
+                document.getElementById('tipoTransportadora').checked = true;
+            } else {
+                document.getElementById('tipoCliente').checked = true;
+            }
+
+            // Highlight
+            document.querySelectorAll('.saldo-item').forEach(s => s.classList.remove('active'));
+            this.classList.add('active');
+        });
+    });
+});
+</script>
+{% endblock %}
