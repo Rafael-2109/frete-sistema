@@ -71,7 +71,7 @@ class EmbarqueForm(FlaskForm):
     
     # ✅ CAMPOS EDITÁVEIS pelo usuário
     observacoes = StringField('Observações')
-    itens = FieldList(FormField(EmbarqueItemForm), min_entries=1)
+    itens = FieldList(FormField(EmbarqueItemForm))
     placa_veiculo = StringField(
         'Placa do Veículo',
         validators=[

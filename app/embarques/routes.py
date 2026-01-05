@@ -102,7 +102,8 @@ def visualizar_embarque(id):
         form.transportadora.choices = transportadoras
 
         # Para cada item do FieldList, montar uf/cidade
-        for item_form in form.itens:
+        for entry in form.itens.entries:
+            item_form = entry.form
             uf_sel = item_form.uf_destino.data
             if uf_sel:
                 # Carregar cidades da UF do DB
@@ -177,64 +178,90 @@ def visualizar_embarque(id):
                 # ✅ CORREÇÃO FINAL: Dados da tabela NÃO precisam ser alterados - já estão corretos da cotação!
                 # Atualizar APENAS campos básicos editáveis pelo usuário:
 
-                # ✅ NOVA ESTRATÉGIA: Mapear por POSIÇÃO ao invés de ID (WTForms gera IDs automáticos)
-                # Mapear itens do formulário com itens do banco por POSIÇÃO
-                for i, item_form in enumerate(form.itens):
-                    # ✅ PROTEÇÃO: Verificar se existe item correspondente no banco
-                    if i < len(embarque.itens):
-                        item_existente = embarque.itens[i]
-                        
-                        # ✅ ATUALIZA apenas campos editáveis pelo usuário
-                        item_existente.nota_fiscal = item_form.nota_fiscal.data.strip() if item_form.nota_fiscal.data else None
-                        item_existente.volumes = int(item_form.volumes.data or 0)
-                        item_existente.protocolo_agendamento = item_form.protocolo_agendamento.data.strip() if item_form.protocolo_agendamento.data else None
-                        item_existente.data_agenda = item_form.data_agenda.data.strip() if item_form.data_agenda.data else None
+                # ✅ CORREÇÃO: Mapear por ID (não por posição) - evita problemas de ordem
+                from app.embarques.models import EmbarqueItem
 
-                        # ✅ SINCRONIZAÇÃO: Propagar alterações para outras tabelas
-                        from app.pedidos.services.sincronizacao_agendamento_service import SincronizadorAgendamentoService
+                # 🔍 DEBUG: Log para verificar mapeamento correto
+                print(f"[DEBUG EMBARQUE POST] form.itens tem {len(form.itens.entries)} entries")
 
-                        try:
-                            sincronizador = SincronizadorAgendamentoService(usuario=current_user.nome if hasattr(current_user, 'nome') else 'Sistema')
+                for idx, entry in enumerate(form.itens.entries):
+                    # Acessar o subformulário dentro do FormField
+                    item_form = entry.form
 
-                            # Converter data_agenda (String DD/MM/YYYY) para Date
-                            data_agendamento = None
-                            if item_existente.data_agenda:
-                                try:
-                                    data_agendamento = datetime.strptime(item_existente.data_agenda, '%d/%m/%Y').date()
-                                except Exception as e:
-                                    print(f"[SINCRONIZAÇÃO EMBARQUE_ITEM] Erro ao converter data_agenda: {e}")
-                                    pass
+                    # Buscar item pelo ID do formulário (não pela posição)
+                    item_id = item_form.id.data
 
-                            dados_agendamento = {
-                                'agendamento': data_agendamento,
-                                'protocolo': item_existente.protocolo_agendamento,
-                                'agendamento_confirmado': getattr(item_existente, 'agendamento_confirmado', False),
-                                'numero_nf': item_existente.nota_fiscal
-                            }
+                    # 🔍 DEBUG: Log cada item
+                    print(f"[DEBUG EMBARQUE POST] Entry[{idx}]: id={item_id}, cliente={item_form.cliente.data}, nf={item_form.nota_fiscal.data}")
 
-                            identificador = {
-                                'separacao_lote_id': item_existente.separacao_lote_id,
-                                'numero_nf': item_existente.nota_fiscal
-                            }
+                    if not item_id:
+                        continue  # Pula entries vazias (sem ID)
 
-                            resultado = sincronizador.sincronizar_agendamento(dados_agendamento, identificador)
+                    try:
+                        item_existente = EmbarqueItem.query.get(int(item_id))
+                    except (ValueError, TypeError):
+                        print(f"[DEBUG EMBARQUE POST] ID inválido: {item_id}")
+                        continue  # ID inválido
 
-                            if resultado['success'] and resultado['tabelas_atualizadas']:
-                                print(f"[SINCRONIZAÇÃO EMBARQUE_ITEM] Lote {item_existente.separacao_lote_id}: {', '.join(resultado['tabelas_atualizadas'])}")
+                    # Verificar se o item pertence a este embarque (segurança)
+                    if not item_existente or item_existente.embarque_id != embarque.id:
+                        print(f"[DEBUG EMBARQUE POST] Item {item_id} não pertence ao embarque {embarque.id}")
+                        continue
 
-                        except Exception as e:
-                            print(f"[SINCRONIZAÇÃO EMBARQUE_ITEM] Erro: {e}")
+                    # 🔍 DEBUG: Confirmar match
+                    print(f"[DEBUG EMBARQUE POST] ✅ Atualizando item {item_id} ({item_existente.cliente}) com NF={item_form.nota_fiscal.data}")
 
-                        # ✅ PRESERVA todos os dados importantes: CNPJ, peso, valor, tabelas, separação
-                        # Estes dados SÓ vêm da cotação e NUNCA devem ser alterados manualmente
+                    # ✅ ATUALIZA apenas campos editáveis pelo usuário
+                    item_existente.nota_fiscal = item_form.nota_fiscal.data.strip() if item_form.nota_fiscal.data else None
+                    item_existente.volumes = int(item_form.volumes.data or 0)
+                    item_existente.protocolo_agendamento = item_form.protocolo_agendamento.data.strip() if item_form.protocolo_agendamento.data else None
+                    item_existente.data_agenda = item_form.data_agenda.data.strip() if item_form.data_agenda.data else None
 
-                        # Validar NF do cliente
-                        try:
-                            sucesso, erro = validar_nf_cliente(item_existente)
-                            if not sucesso:
-                                flash(f"⚠️ {erro}", "warning")
-                        except Exception as e:
-                            pass
+                    # ✅ SINCRONIZAÇÃO: Propagar alterações para outras tabelas
+                    from app.pedidos.services.sincronizacao_agendamento_service import SincronizadorAgendamentoService
+
+                    try:
+                        sincronizador = SincronizadorAgendamentoService(usuario=current_user.nome if hasattr(current_user, 'nome') else 'Sistema')
+
+                        # Converter data_agenda (String DD/MM/YYYY) para Date
+                        data_agendamento = None
+                        if item_existente.data_agenda:
+                            try:
+                                data_agendamento = datetime.strptime(item_existente.data_agenda, '%d/%m/%Y').date()
+                            except Exception as e:
+                                print(f"[SINCRONIZAÇÃO EMBARQUE_ITEM] Erro ao converter data_agenda: {e}")
+                                pass
+
+                        dados_agendamento = {
+                            'agendamento': data_agendamento,
+                            'protocolo': item_existente.protocolo_agendamento,
+                            'agendamento_confirmado': getattr(item_existente, 'agendamento_confirmado', False),
+                            'numero_nf': item_existente.nota_fiscal
+                        }
+
+                        identificador = {
+                            'separacao_lote_id': item_existente.separacao_lote_id,
+                            'numero_nf': item_existente.nota_fiscal
+                        }
+
+                        resultado = sincronizador.sincronizar_agendamento(dados_agendamento, identificador)
+
+                        if resultado['success'] and resultado['tabelas_atualizadas']:
+                            print(f"[SINCRONIZAÇÃO EMBARQUE_ITEM] Lote {item_existente.separacao_lote_id}: {', '.join(resultado['tabelas_atualizadas'])}")
+
+                    except Exception as e:
+                        print(f"[SINCRONIZAÇÃO EMBARQUE_ITEM] Erro: {e}")
+
+                    # ✅ PRESERVA todos os dados importantes: CNPJ, peso, valor, tabelas, separação
+                    # Estes dados SÓ vêm da cotação e NUNCA devem ser alterados manualmente
+
+                    # Validar NF do cliente
+                    try:
+                        sucesso, erro = validar_nf_cliente(item_existente)
+                        if not sucesso:
+                            flash(f"⚠️ {erro}", "warning")
+                    except Exception as e:
+                        pass
                 
                 # ✅ NOVA LÓGICA: Remove apenas itens que foram realmente removidos do formulário
                 # (não implementado por enquanto - manter todos os itens existentes)
@@ -391,8 +418,8 @@ def visualizar_embarque(id):
         # ✅ SIMPLIFICAÇÃO: Campos ocultos removidos - dados preservados automaticamente no banco
 
         # ✅ CORREÇÃO DEFINITIVA: Limpar form.itens e adicionar APENAS os existentes
-        form.itens.entries = []  # ⚡ Limpa tudo primeiro
-        
+        form.itens.entries = []
+
         if embarque.itens:
             for i, it in enumerate(embarque.itens):
                 entry_data = {
@@ -763,8 +790,8 @@ def editar_embarque(id):
         form.qtd_pallets.data = embarque.qtd_pallets
 
         # ✅ CORREÇÃO DEFINITIVA: Limpar form.itens e adicionar itens conforme necessário
-        form.itens.entries = []  # ⚡ Limpa tudo primeiro
-        
+        form.itens.entries = []
+
         # Adicionar itens existentes
         for i, it in enumerate(embarque.itens):
             entry_data = {

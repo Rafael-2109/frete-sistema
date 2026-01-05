@@ -32,8 +32,7 @@ from collections import defaultdict
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..')))
 
 # Importar modulo centralizado de resolucao de entidades
-from resolver_entidades import (
-    resolver_produto,
+from resolver_entidades import ( # noqa: E402
     resolver_produto_unico,
     formatar_sugestao_produto
 )
@@ -59,7 +58,6 @@ def consultar_movimentacoes(args, tipo='entradas'):
     from app.estoque.models import MovimentacaoEstoque
     from app.estoque.services.estoque_simples import ServicoEstoqueSimples
     from app.producao.models import CadastroPalletizacao
-    from sqlalchemy import func
 
     tipo_analise = 'ENTRADAS_PRODUTO' if tipo == 'entradas' else 'SAIDAS_PRODUTO'
 
@@ -202,7 +200,6 @@ def consultar_produtos_pendente_embarque(args):
     from app.carteira.models import CarteiraPrincipal
     from app.separacao.models import Separacao
     from app.producao.models import CadastroPalletizacao
-    from sqlalchemy import func
 
     resultado = {
         'sucesso': True,
@@ -466,7 +463,6 @@ def consultar_situacao_completa_produto(args):
     from app.separacao.models import Separacao
     from app.producao.models import CadastroPalletizacao, ProgramacaoProducao
     from app.estoque.services.estoque_simples import ServicoEstoqueSimples
-    from sqlalchemy import func
     from collections import defaultdict
 
     resultado = {
@@ -542,10 +538,10 @@ def consultar_situacao_completa_produto(args):
             qtd = float(sep.qtd_saldo or 0)
             valor = float(sep.valor_saldo or 0)
 
-            separacoes_por_data[data_exp]['qtd'] += qtd
-            separacoes_por_data[data_exp]['valor'] += valor
+            separacoes_por_data[data_exp]['qtd'] += qtd # type: ignore
+            separacoes_por_data[data_exp]['valor'] += valor # type: ignore
             if sep.num_pedido not in separacoes_por_data[data_exp]['pedidos']:
-                separacoes_por_data[data_exp]['pedidos'].append(sep.num_pedido)
+                separacoes_por_data[data_exp]['pedidos'].append(sep.num_pedido) # type: ignore
             total_separado += qtd
 
         # Converter para lista ordenada
@@ -696,7 +692,6 @@ def consultar_produtos_previsao_ruptura(args):
     from app.estoque.services.estoque_simples import ServicoEstoqueSimples
     from app.producao.models import CadastroPalletizacao
     from app.estoque.models import MovimentacaoEstoque
-    from sqlalchemy import func
 
     resultado = {
         'sucesso': True,

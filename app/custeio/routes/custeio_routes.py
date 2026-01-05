@@ -1723,6 +1723,7 @@ def register_custeio_routes(bp):
 
             # Cache de custos dinamicos para COMPRADOS
             custos_dinamicos_dict = {}
+
             def obter_custo_dinamico(cod):
                 """Obtem custos calculados dinamicamente para um COMPRADO"""
                 if cod not in custos_dinamicos_dict and cod in produtos_comprados:
@@ -2301,6 +2302,7 @@ def register_custeio_routes(bp):
 
             # Cache de custos dinâmicos para COMPRADOS
             custos_dinamicos_dict = {}
+            
             def obter_custo_dinamico(cod):
                 if cod not in custos_dinamicos_dict and cod in produtos_comprados:
                     custo_info = custos_considerados_dict.get(cod, {})
