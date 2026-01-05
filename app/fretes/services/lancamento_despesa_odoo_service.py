@@ -756,7 +756,26 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
                         f"(partner_ref: '{referencia_fatura}')"
                     )
 
+                # 🔧 CORREÇÃO 05/01/2026: Buscar valor CORRETO do DFE (fonte da verdade)
+                # O valor deve vir do DFE, não do PO que pode ter sido alterado incorretamente
+                valor_correto_dfe = None
+                try:
+                    dfe_valor = self.odoo.read(
+                        'l10n_br_ciel_it_account.dfe',
+                        [dfe_id],
+                        ['nfe_infnfe_total_icmstot_vnf']
+                    )
+                    if dfe_valor and dfe_valor[0].get('nfe_infnfe_total_icmstot_vnf'):
+                        valor_correto_dfe = dfe_valor[0]['nfe_infnfe_total_icmstot_vnf']
+                        current_app.logger.info(
+                            f"💰 Valor correto do DFE {dfe_id}: R$ {valor_correto_dfe:.2f}"
+                        )
+                except Exception as e:
+                    current_app.logger.warning(f"⚠️ Erro ao buscar valor do DFE: {e}")
+
                 # ✅ CORRIGIR OPERAÇÃO FISCAL: De-Para FB → CD (cabeçalho e linhas)
+                operacao_correta_id = None
+                line_ids_po = []  # Guardar IDs das linhas para verificação posterior
                 try:
                     po_operacao = self.odoo.read(
                         'purchase.order',
@@ -777,6 +796,7 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
 
                             # ✅ CORRIGIR TAMBÉM AS LINHAS DO PO (COM PROTEÇÃO DE VALORES)
                             line_ids = po_operacao[0].get('order_line', [])
+                            line_ids_po = line_ids  # Guardar para verificação posterior
                             if line_ids:
                                 # 1. Ler dados atuais das linhas ANTES de alterar
                                 linhas_data = self.odoo.read(
@@ -842,9 +862,15 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
                                         f"✅ Todas as {len(line_ids)} linha(s) já estão com operação fiscal correta"
                                     )
                         else:
+                            # Mesmo sem correção de operação, pegar line_ids para verificação posterior
+                            line_ids_po = po_operacao[0].get('order_line', [])
                             current_app.logger.info(
                                 f"✅ Operação fiscal já está correta: {operacao_atual_id} ({operacao_atual_nome})"
                             )
+                    else:
+                        # Mesmo sem operação fiscal, pegar line_ids para verificação posterior
+                        if po_operacao:
+                            line_ids_po = po_operacao[0].get('order_line', [])
                 except Exception as e:
                     current_app.logger.warning(f"⚠️ Erro ao verificar/corrigir operação fiscal: {e}")
 
@@ -872,6 +898,49 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
                     purchase_order_id=po_id
                 )
                 resultado['etapas_concluidas'] = 7
+
+                # 🔧 CORREÇÃO 05/01/2026: Verificar e corrigir valor da linha APÓS o write do header
+                # O onchange do Odoo pode recalcular incorretamente os valores das linhas
+                # Usamos o valor do DFE como fonte da verdade
+                if valor_correto_dfe and line_ids_po:
+                    try:
+                        # Ler valor atual da linha do PO
+                        linha_atual = self.odoo.read(
+                            'purchase.order.line',
+                            line_ids_po[:1],  # Pegar apenas a primeira linha (CTe tem 1 linha)
+                            ['price_unit', 'price_subtotal']
+                        )
+
+                        if linha_atual:
+                            price_unit_atual = linha_atual[0].get('price_unit', 0)
+
+                            # Comparar com tolerância de R$ 0.01
+                            diferenca = abs(price_unit_atual - valor_correto_dfe)
+                            if diferenca > 0.01:
+                                current_app.logger.warning(
+                                    f"⚠️ VALOR INCORRETO DETECTADO NA DESPESA! "
+                                    f"PO linha: R$ {price_unit_atual:.2f} | "
+                                    f"DFE correto: R$ {valor_correto_dfe:.2f} | "
+                                    f"Diferença: R$ {diferenca:.2f}"
+                                )
+
+                                # Corrigir o valor da linha com o valor do DFE
+                                self.odoo.write(
+                                    'purchase.order.line',
+                                    line_ids_po[:1],
+                                    {'price_unit': valor_correto_dfe}
+                                )
+                                current_app.logger.info(
+                                    f"✅ VALOR CORRIGIDO: R$ {price_unit_atual:.2f} → R$ {valor_correto_dfe:.2f}"
+                                )
+                            else:
+                                current_app.logger.info(
+                                    f"✅ Valor da linha PO está correto: R$ {price_unit_atual:.2f}"
+                                )
+                    except Exception as e:
+                        current_app.logger.warning(
+                            f"⚠️ Erro ao verificar/corrigir valor da linha PO: {e}"
+                        )
             else:
                 current_app.logger.info(f"⏭️ ETAPA 7 PULADA - Retomando de etapa {continuar_de_etapa}")
 
