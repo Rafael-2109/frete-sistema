@@ -163,6 +163,7 @@
                             <th>Valor Considerado</th>
                             <th>Valor Pago</th>
                             <th>Status</th>
+                            <th>Odoo</th>
                             <th>Ações</th>
                         </tr>
                     </thead>
@@ -207,6 +208,22 @@
                                 <span class="badge bg-secondary">{{ frete.status }}</span>
                                 {% endif %}
                             </td>
+                            <!-- Status Odoo -->
+                            <td>
+                                {% if frete.status == 'LANCADO_ODOO' and frete.odoo_invoice_id %}
+                                <span class="badge bg-success" title="Lançado no Odoo - Invoice ID: {{ frete.odoo_invoice_id }}">
+                                    <i class="fas fa-check-circle"></i> OK
+                                </span>
+                                {% elif frete.odoo_erro %}
+                                <span class="badge bg-danger" title="{{ frete.odoo_erro[:100] }}">
+                                    <i class="fas fa-times-circle"></i> Erro
+                                </span>
+                                {% else %}
+                                <span class="badge bg-secondary" title="Pendente de lançamento no Odoo">
+                                    <i class="fas fa-clock"></i> Pendente
+                                </span>
+                                {% endif %}
+                            </td>
                             <td>
                                 <a href="{{ url_for('fretes.visualizar_frete', frete_id=frete.id) }}"
                                     class="btn btn-sm btn-outline-primary" title="Ver Frete">
@@ -242,6 +259,7 @@
                             <th>Documento</th>
                             <th>Valor</th>
                             <th>Vencimento</th>
+                            <th>Odoo</th>
                             <th>Ações</th>
                         </tr>
                     </thead>
@@ -278,6 +296,22 @@
                             <td><strong>{{ (despesa.valor_despesa)|moeda_carteira }}</strong></td>
                             <td>{{ despesa.vencimento_despesa | formatar_data_segura if despesa.vencimento_despesa else
                                 'N/A' }}</td>
+                            <!-- Status Odoo -->
+                            <td>
+                                {% if despesa.status == 'LANCADO_ODOO' and despesa.odoo_invoice_id %}
+                                <span class="badge bg-success" title="Lançado no Odoo - Invoice ID: {{ despesa.odoo_invoice_id }}">
+                                    <i class="fas fa-check-circle"></i> OK
+                                </span>
+                                {% elif despesa.odoo_erro %}
+                                <span class="badge bg-danger" title="{{ despesa.odoo_erro[:100] if despesa.odoo_erro else 'Erro' }}">
+                                    <i class="fas fa-times-circle"></i> Erro
+                                </span>
+                                {% else %}
+                                <span class="badge bg-secondary" title="Pendente de lançamento no Odoo">
+                                    <i class="fas fa-clock"></i> Pendente
+                                </span>
+                                {% endif %}
+                            </td>
                             <td>
                                 <a href="{{ url_for('fretes.visualizar_frete', frete_id=despesa.frete.id) }}"
                                     class="btn btn-sm btn-outline-primary" title="Ver Frete">

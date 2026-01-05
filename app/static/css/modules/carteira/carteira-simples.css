@@ -150,14 +150,14 @@
 
 /* Separacao ABERTO - warning */
 .table-carteira-simples tr.table-warning td {
-    background-color: rgba(var(--bs-warning-rgb), 0.15) !important;
-    color: var(--bs-warning) !important;
+    background-color: rgba(var(--bs-aberto-rgb), 0.05) !important;
+    color: var(--bs-aberto-color) !important;
 }
 
 /* Separacao COTADO - info (mapeado para secondary) */
 .table-carteira-simples tr.table-info td {
-    background-color: var(--bs-secondary-bg) !important;
-    color: var(--bs-secondary-color) !important;
+    background-color: rgba(var(--bs-cotacao-rgb), 0.15) !important;
+    color: var(--bs-cotacao-color) !important;
 }
 
 /* Hover em linhas especiais */

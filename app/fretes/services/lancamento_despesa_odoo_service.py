@@ -684,6 +684,23 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
             # ⏱️ TIMEOUT ESTENDIDO: 90 segundos (operação pode demorar no Odoo)
             # ========================================
             if continuar_de_etapa < 7:  # Só executa se não está retomando de etapa posterior
+                # 🔧 CORREÇÃO 05/01/2026: Forçar leitura do DFE antes de gerar PO
+                # Isso evita que o Odoo use dados em cache de um DFE anterior
+                # quando múltiplas despesas são processadas em sequência
+                try:
+                    dfe_refresh = self.odoo.read(
+                        'l10n_br_ciel_it_account.dfe',
+                        [dfe_id],
+                        ['id', 'name', 'nfe_infnfe_total_icmstot_vnf', 'lines_ids', 'dups_ids']
+                    )
+                    if dfe_refresh:
+                        valor_dfe_refresh = dfe_refresh[0].get('nfe_infnfe_total_icmstot_vnf', 0)
+                        current_app.logger.info(
+                            f"🔄 DFE {dfe_id} recarregado antes de gerar PO. Valor: R$ {valor_dfe_refresh:.2f}"
+                        )
+                except Exception as e:
+                    current_app.logger.warning(f"⚠️ Erro ao recarregar DFE antes de gerar PO: {e}")
+
                 contexto = {'validate_analytic': True}
 
                 # 🔧 Timeout estendido de 90s para action_gerar_po_dfe

@@ -93,6 +93,10 @@
     --bs-tertiary-bg: var(--bg-light);
     --bs-border-color: var(--border);
     --bs-secondary-color: var(--text-muted);
+    --bs-cotacao-color: hsl(220,100%,70%);
+    --bs-cotacao-rgb: 66, 153, 225;
+    --bs-aberto-color: hsl(40,100%,70%);
+    --bs-aberto-rgb: 255, 212, 38;
     --bs-primary: var(--amber-55);
     --bs-primary-rgb: 255, 212, 38;
     --bs-success: var(--semantic-success);
@@ -142,6 +146,8 @@
     --bs-tertiary-bg: var(--bg-light);
     --bs-border-color: var(--border);
     --bs-secondary-color: var(--text-muted);
+    --bs-cotacao-color: hsl(220,100%,30%);
+    --bs-aberto-color: hsl(40,100%,30%);
     --bs-primary: var(--amber-50);
     --bs-primary-rgb: 255, 204, 0;
     --bs-success: hsl(145 70% 32%);

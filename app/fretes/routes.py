@@ -1029,7 +1029,34 @@ def lancar_frete_odoo(frete_id):
                     400,
                 )
 
-        # FALLBACK: Busca automática por NFs + CNPJ (SOMENTE se não houver CTe vinculado)
+        # PRIORIDADE 2: CTe vinculado via backref (conhecimentos_transporte)
+        # Só usa se tiver EXATAMENTE 1 CTe vinculado
+        if not cte and frete.conhecimentos_transporte:
+            ctes_vinculados = [ct for ct in frete.conhecimentos_transporte if ct.ativo]
+            if len(ctes_vinculados) == 1:
+                cte = ctes_vinculados[0]
+                chave_cte = cte.chave_acesso
+                logger.info(f"✅ Usando CTe vinculado (backref): {cte.numero_cte} (ID {cte.id})")
+            elif len(ctes_vinculados) > 1:
+                # Múltiplos CTes vinculados - requer seleção manual via frete_cte_id
+                ctes_info = [f"CTe {c.numero_cte}" for c in ctes_vinculados[:5]]
+                ctes_msg = ", ".join(ctes_info)
+                if len(ctes_vinculados) > 5:
+                    ctes_msg += f" e mais {len(ctes_vinculados) - 5}..."
+
+                return (
+                    jsonify(
+                        {
+                            "sucesso": False,
+                            "mensagem": f"Múltiplos CTes vinculados ({len(ctes_vinculados)}): {ctes_msg}",
+                            "erro": "Por favor, selecione manualmente o CTe correto antes de lançar",
+                            "error_type": "MULTIPLOS_CTES",
+                        }
+                    ),
+                    400,
+                )
+
+        # PRIORIDADE 3: Busca automática por NFs + CNPJ (SOMENTE se não houver CTe vinculado)
         if not cte:
             logger.info("🔍 Buscando CTe por NFs em comum + CNPJ...")
             ctes_relacionados = frete.buscar_ctes_relacionados()
@@ -1059,6 +1086,7 @@ def lancar_frete_odoo(frete_id):
                             "sucesso": False,
                             "mensagem": f"Múltiplos CTes sugeridos ({len(ctes_relacionados)}): {ctes_msg}",
                             "erro": "Por favor, vincule manualmente o CTe correto antes de lançar",
+                            "error_type": "MULTIPLOS_CTES",
                         }
                     ),
                     400,

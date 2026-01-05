@@ -263,7 +263,25 @@ def lancar_frete_job(
                         logger.error(f"❌ [Job Frete] {resultado['error']}")
                         return resultado
 
-                # PRIORIDADE 2: Busca automática por NFs + CNPJ
+                # PRIORIDADE 2: CTe vinculado via backref (conhecimentos_transporte)
+                # Só usa se tiver EXATAMENTE 1 CTe vinculado
+                if not cte and frete.conhecimentos_transporte:
+                    ctes_vinculados = [ct for ct in frete.conhecimentos_transporte if ct.ativo]
+                    if len(ctes_vinculados) == 1:
+                        cte = ctes_vinculados[0]
+                        cte_chave = cte.chave_acesso
+                        logger.info(f"✅ [Job Frete] Usando CTe vinculado (backref): {cte.numero_cte}")
+                    elif len(ctes_vinculados) > 1:
+                        # Múltiplos CTes vinculados - requer seleção manual via frete_cte_id
+                        ctes_info = ', '.join([f"CTe {c.numero_cte}" for c in ctes_vinculados[:5]])
+                        resultado['error'] = f"Múltiplos CTes vinculados ({len(ctes_vinculados)}): {ctes_info}. Selecione um CTe específico."
+                        resultado['error_type'] = 'MULTIPLOS_CTES'
+                        resultado['message'] = resultado['error']
+                        logger.warning(f"⚠️ [Job Frete] {resultado['error']}")
+                        return resultado
+
+                # PRIORIDADE 3: Busca automática por NFs + CNPJ
+                # Só usa se não tiver CTe vinculado E encontrar EXATAMENTE 1 CTe
                 if not cte:
                     ctes_relacionados = frete.buscar_ctes_relacionados()
 
@@ -274,17 +292,18 @@ def lancar_frete_job(
                         logger.error(f"❌ [Job Frete] {resultado['error']}")
                         return resultado
 
-                    if len(ctes_relacionados) > 1:
+                    if len(ctes_relacionados) == 1:
+                        cte = ctes_relacionados[0]
+                        cte_chave = cte.chave_acesso
+                        logger.info(f"✅ [Job Frete] CTe automático: {cte.numero_cte}")
+                    else:
+                        # Múltiplos CTes encontrados - requer vinculação manual
                         ctes_info = ', '.join([f"CTe {c.numero_cte}" for c in ctes_relacionados[:5]])
                         resultado['error'] = f"Múltiplos CTes ({len(ctes_relacionados)}): {ctes_info}. Vincule manualmente."
                         resultado['error_type'] = 'MULTIPLOS_CTES'
                         resultado['message'] = resultado['error']
                         logger.warning(f"⚠️ [Job Frete] {resultado['error']}")
                         return resultado
-
-                    cte = ctes_relacionados[0]
-                    cte_chave = cte.chave_acesso
-                    logger.info(f"✅ [Job Frete] CTe automático: {cte.numero_cte}")
 
             # Validar chave (44 dígitos)
             if not cte_chave or len(cte_chave) != 44:
