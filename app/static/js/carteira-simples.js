@@ -1690,18 +1690,15 @@
         const novaData = dataAtual.toISOString().split('T')[0];
 
         // Encontrar todos os itens do mesmo pedido e aplicar a data
+        // ✅ CORREÇÃO: Pular itens que já estão em separação (têm separacao_lote_id)
+        // Separações já têm controle de datas próprio via separacao_lote_id
         for (const [idx, d] of state.dados.entries()) {
-            if (d.num_pedido === numPedido) {
-                const inputId = d.tipo === 'separacao' ? `dt-exped-sep-${idx}` : `dt-exped-${idx}`;
+            if (d.num_pedido === numPedido && !d.separacao_lote_id) {
+                const inputId = `dt-exped-${idx}`;
                 const inputData = document.getElementById(inputId);
                 if (inputData) {
                     inputData.value = novaData;
                     produtosAfetados.add(d.cod_produto);
-
-                    // Se for separação, atualizar no backend também
-                    if (d.tipo === 'separacao' && d.separacao_lote_id) {
-                        await atualizarCampoSeparacaoLote(d.separacao_lote_id, 'expedicao', novaData);
-                    }
                 }
             }
         }
