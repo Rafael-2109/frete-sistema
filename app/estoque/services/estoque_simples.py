@@ -594,3 +594,134 @@ class ServicoEstoqueSimples:
                 'projecao': [],
                 'projecao_detalhada': []
             }
+
+    # ==============================================
+    # 🚀 MÉTODOS BATCH OTIMIZADOS (OTIMIZAÇÃO CARTEIRA SIMPLES)
+    # ==============================================
+
+    @staticmethod
+    def calcular_estoque_batch(
+        codigos_produtos: List[str],
+        data_fim: date,
+        mapa_unificacao: Dict[str, List[str]] = None
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        Calcula estoque atual + entradas previstas para TODOS os produtos em batch.
+        USA queries agregadas para máxima performance.
+
+        SEGURANÇA: Dados frescos do banco, não cache.
+
+        Args:
+            codigos_produtos: Lista de códigos de produtos
+            data_fim: Data limite para entradas previstas
+            mapa_unificacao: Mapa de códigos unificados (opcional, será calculado se não fornecido)
+
+        Returns:
+            Dict[cod_produto] -> {estoque_atual, programacao: [{data, qtd}]}
+
+        Performance esperada: < 100ms para 200 produtos (vs ~2s com N queries)
+        """
+        if not codigos_produtos:
+            return {}
+
+        try:
+            hoje = date.today()
+
+            # Se mapa_unificacao não fornecido, calcular em batch
+            if mapa_unificacao is None:
+                mapa_unificacao = UnificacaoCodigos.get_todos_codigos_relacionados_batch(codigos_produtos)
+
+            # Expandir todos os códigos (incluindo unificados)
+            todos_codigos = set()
+            for cod, relacionados in mapa_unificacao.items():
+                todos_codigos.update(relacionados)
+            todos_codigos = list(todos_codigos)
+
+            if not todos_codigos:
+                return {}
+
+            # ==============================================
+            # QUERY 1: Estoque atual em batch
+            # ==============================================
+            resultados_estoque = db.session.query(
+                MovimentacaoEstoque.cod_produto,
+                func.sum(MovimentacaoEstoque.qtd_movimentacao).label('estoque')
+            ).filter(
+                MovimentacaoEstoque.cod_produto.in_(todos_codigos),
+                MovimentacaoEstoque.ativo == True
+            ).group_by(
+                MovimentacaoEstoque.cod_produto
+            ).all()
+
+            estoque_por_codigo = {str(r.cod_produto): float(r.estoque or 0) for r in resultados_estoque}
+
+            # ==============================================
+            # QUERY 2: Entradas previstas (programação) em batch
+            # ==============================================
+            resultados_programacao = db.session.query(
+                ProgramacaoProducao.cod_produto,
+                func.date(ProgramacaoProducao.data_programacao).label('data'),
+                func.sum(ProgramacaoProducao.qtd_programada).label('quantidade')
+            ).filter(
+                ProgramacaoProducao.cod_produto.in_(todos_codigos),
+                func.date(ProgramacaoProducao.data_programacao) >= hoje,
+                func.date(ProgramacaoProducao.data_programacao) <= data_fim
+            ).group_by(
+                ProgramacaoProducao.cod_produto,
+                func.date(ProgramacaoProducao.data_programacao)
+            ).all()
+
+            # Agrupar programação por código
+            programacao_por_codigo = {}
+            for r in resultados_programacao:
+                cod = str(r.cod_produto)
+                if cod not in programacao_por_codigo:
+                    programacao_por_codigo[cod] = []
+                if r.data and r.quantidade:
+                    programacao_por_codigo[cod].append({
+                        'data': r.data.isoformat() if hasattr(r.data, 'isoformat') else str(r.data),
+                        'qtd': float(r.quantidade)
+                    })
+
+            # ==============================================
+            # AGREGAR resultados para produtos originais (somando unificados)
+            # ==============================================
+            resultado_final = {}
+
+            for cod_original in codigos_produtos:
+                codigos_relacionados = mapa_unificacao.get(cod_original, [cod_original])
+
+                # Somar estoque de todos os códigos relacionados
+                estoque_total = sum(
+                    estoque_por_codigo.get(str(cod), 0) for cod in codigos_relacionados
+                )
+
+                # Agregar programação de todos os códigos relacionados
+                programacao_agregada = {}
+                for cod_rel in codigos_relacionados:
+                    for prog in programacao_por_codigo.get(str(cod_rel), []):
+                        data_str = prog['data']
+                        if data_str in programacao_agregada:
+                            programacao_agregada[data_str] += prog['qtd']
+                        else:
+                            programacao_agregada[data_str] = prog['qtd']
+
+                # Converter para formato esperado pelo frontend
+                programacao_lista = [
+                    {'data': data, 'qtd': qtd}
+                    for data, qtd in sorted(programacao_agregada.items())
+                    if qtd > 0
+                ]
+
+                resultado_final[cod_original] = {
+                    'estoque_atual': estoque_total,
+                    'programacao': programacao_lista
+                }
+
+            logger.info(f"✅ calcular_estoque_batch: {len(codigos_produtos)} produtos processados em batch")
+            return resultado_final
+
+        except Exception as e:
+            logger.error(f"Erro em calcular_estoque_batch: {e}")
+            # Retornar dicionário vazio para cada produto em caso de erro
+            return {cod: {'estoque_atual': 0, 'programacao': []} for cod in codigos_produtos}

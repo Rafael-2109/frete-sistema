@@ -208,13 +208,22 @@
                             </td>
                             <td>
                                 {% if lanc.dfe_id %}
-                                <span class="badge bg-secondary" title="DFe ID">D:{{ lanc.dfe_id }}</span>
+                                <a href="https://odoo.nacomgoya.com.br/web#id={{ lanc.dfe_id }}&model=l10n_br_ciel_it_account.dfe&view_type=form"
+                                   target="_blank" class="badge bg-info text-white text-decoration-none" title="Abrir DFe no Odoo">
+                                    <i class="fas fa-external-link-alt me-1"></i>D:{{ lanc.dfe_id }}
+                                </a>
                                 {% endif %}
                                 {% if lanc.po_id %}
-                                <span class="badge bg-secondary" title="PO ID">P:{{ lanc.po_id }}</span>
+                                <a href="https://odoo.nacomgoya.com.br/web#id={{ lanc.po_id }}&model=purchase.order&view_type=form"
+                                   target="_blank" class="badge bg-primary text-white text-decoration-none" title="Abrir PO no Odoo">
+                                    <i class="fas fa-external-link-alt me-1"></i>P:{{ lanc.po_id }}
+                                </a>
                                 {% endif %}
                                 {% if lanc.invoice_id %}
-                                <span class="badge bg-secondary" title="Invoice ID">I:{{ lanc.invoice_id }}</span>
+                                <a href="https://odoo.nacomgoya.com.br/web#id={{ lanc.invoice_id }}&model=account.move&view_type=form"
+                                   target="_blank" class="badge bg-success text-white text-decoration-none" title="Abrir Invoice no Odoo">
+                                    <i class="fas fa-external-link-alt me-1"></i>I:{{ lanc.invoice_id }}
+                                </a>
                                 {% endif %}
                             </td>
                             <td>
@@ -752,15 +761,21 @@ document.addEventListener('DOMContentLoaded', function() {
                             });
                             html += '</tbody></table></div>';
 
-                            // IDs do Odoo
+                            // IDs do Odoo - Links clicáveis
                             const lastEtapa = data.etapas[data.etapas.length - 1];
                             if (lastEtapa.dfe_id || lastEtapa.purchase_order_id || lastEtapa.invoice_id) {
                                 html += '<div class="mt-2">';
-                                html += '<small class="text-muted">IDs Odoo: ';
-                                if (lastEtapa.dfe_id) html += `DFe: ${lastEtapa.dfe_id} `;
-                                if (lastEtapa.purchase_order_id) html += `| PO: ${lastEtapa.purchase_order_id} `;
-                                if (lastEtapa.invoice_id) html += `| Invoice: ${lastEtapa.invoice_id}`;
-                                html += '</small></div>';
+                                html += '<small class="text-muted">IDs Odoo:</small> ';
+                                if (lastEtapa.dfe_id) {
+                                    html += `<a href="https://odoo.nacomgoya.com.br/web#id=${lastEtapa.dfe_id}&model=l10n_br_ciel_it_account.dfe&view_type=form" target="_blank" class="badge bg-info text-white text-decoration-none me-1" title="Abrir DFe no Odoo"><i class="fas fa-external-link-alt me-1"></i>DFe: ${lastEtapa.dfe_id}</a>`;
+                                }
+                                if (lastEtapa.purchase_order_id) {
+                                    html += `<a href="https://odoo.nacomgoya.com.br/web#id=${lastEtapa.purchase_order_id}&model=purchase.order&view_type=form" target="_blank" class="badge bg-primary text-white text-decoration-none me-1" title="Abrir PO no Odoo"><i class="fas fa-external-link-alt me-1"></i>PO: ${lastEtapa.purchase_order_id}</a>`;
+                                }
+                                if (lastEtapa.invoice_id) {
+                                    html += `<a href="https://odoo.nacomgoya.com.br/web#id=${lastEtapa.invoice_id}&model=account.move&view_type=form" target="_blank" class="badge bg-success text-white text-decoration-none" title="Abrir Invoice no Odoo"><i class="fas fa-external-link-alt me-1"></i>Invoice: ${lastEtapa.invoice_id}</a>`;
+                                }
+                                html += '</div>';
                             }
 
                             content.innerHTML = html;

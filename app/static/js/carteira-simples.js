@@ -24,6 +24,11 @@
         saidasNaoVisiveis: {}, // 🆕 Saídas de pedidos NÃO visíveis {cod_produto: [{data, qtd}]}
         mapaUnificacao: {}, // 🆕 Mapa de códigos unificados {cod_produto: [cod1, cod2, cod3]}
 
+        // 🚀 ÍNDICES DE LOOKUP (otimização: O(n) → O(k))
+        indices: {
+            porProduto: new Map(),  // cod_produto -> [índices no state.dados]
+        },
+
         // 🚀 VIRTUAL SCROLLING
         virtualScroll: {
             firstVisibleIndex: 0,
@@ -140,6 +145,8 @@
             console.log(`✅ Saídas não visíveis: ${Object.keys(state.saidasNaoVisiveis).length} produtos`);
             console.log(`✅ Mapa de unificação: ${Object.keys(state.mapaUnificacao).length} produtos com códigos unificados`);
 
+            // 🚀 CRÍTICO: Construir índices ANTES de renderizar (coletarTodasSaidas depende deles)
+            construirIndices();
             renderizarTabela();
             popularFiltrosRotas(); // 🆕 Popular filtros de rota/sub-rota
             atualizarIndicadorFiltros(); // 🆕 Mostrar indicador de filtros ativos
@@ -332,6 +339,79 @@
                 btnAplicarFiltros.classList.add('btn-primary');
             }
         }
+    }
+
+    // ==============================================
+    // 🚀 ÍNDICES DE LOOKUP (OTIMIZAÇÃO)
+    // ==============================================
+
+    /**
+     * Constrói índices de lookup para acesso O(1) por cod_produto.
+     * DEVE ser chamado após carregarDados() e sempre que state.dados mudar.
+     *
+     * SEGURANÇA: Apenas mapeia posições, NÃO cacheia dados.
+     */
+    function construirIndices() {
+        console.time('⏱️ construirIndices');
+
+        // Limpar índices anteriores
+        state.indices.porProduto.clear();
+
+        // Construir índice por produto
+        state.dados.forEach((item, index) => {
+            const cod = item.cod_produto;
+            if (!state.indices.porProduto.has(cod)) {
+                state.indices.porProduto.set(cod, []);
+            }
+            state.indices.porProduto.get(cod).push(index);
+        });
+
+        console.timeEnd('⏱️ construirIndices');
+        console.log(`📊 Índices construídos: ${state.indices.porProduto.size} produtos únicos`);
+    }
+
+    // ==============================================
+    // 🚀 DEBOUNCE AGRUPADO POR PRODUTO (OTIMIZAÇÃO)
+    // ==============================================
+
+    /**
+     * Gerenciador de debounce para recálculos.
+     * Agrupa múltiplas edições rápidas em uma única atualização.
+     *
+     * SEGURANÇA: Dados são lidos FRESCOS do DOM quando o timer dispara.
+     */
+    const recalculoPendente = {
+        produtos: new Set(),
+        timer: null,
+        DELAY: 150  // ms - curto o suficiente para parecer instantâneo
+    };
+
+    /**
+     * Agenda recálculo de um produto (debounce agrupado).
+     * Múltiplas chamadas dentro de 150ms são agrupadas.
+     *
+     * @param {string} codProduto - Código do produto a recalcular
+     */
+    function agendarRecalculoProduto(codProduto) {
+        recalculoPendente.produtos.add(codProduto);
+
+        if (recalculoPendente.timer) {
+            clearTimeout(recalculoPendente.timer);
+        }
+
+        recalculoPendente.timer = setTimeout(() => {
+            // 🚀 requestAnimationFrame: Agrupar todas atualizações DOM em um único frame
+            requestAnimationFrame(() => {
+                // Executar recálculo com dados FRESCOS do DOM
+                recalculoPendente.produtos.forEach(cod => {
+                    recalcularTodasLinhasProduto(cod);
+                });
+                recalculoPendente.produtos.clear();
+
+                // Atualizar resumo apenas UMA vez ao final
+                atualizarResumoSeparacao();
+            });
+        }, recalculoPendente.DELAY);
     }
 
     // 🆕 POPULAR FILTROS DE ROTA E SUB-ROTA DINAMICAMENTE
@@ -584,13 +664,18 @@
     }
 
     // 🆕 FUNÇÃO PARA APLICAR CLASSES VISUAIS (bordas - cor já aplicada na renderização)
+    // 🚀 OTIMIZADO: Itera apenas range visível (não mais 2000+ items)
     function aplicarClassesVisuais() {
         let pedidoAnterior = null;
         let loteAnterior = null;
 
-        state.dados.forEach((item, index) => {
+        // 🚀 Limitar ao range renderizado + buffer de segurança
+        const endIndex = Math.min(state.virtualScroll.lastVisibleIndex + 50, state.dados.length);
+
+        for (let index = 0; index < endIndex; index++) {
+            const item = state.dados[index];
             const row = document.getElementById(item.tipo === 'separacao' ? `row-sep-${index}` : `row-${index}`);
-            if (!row) return;
+            if (!row) continue; // Skip se não renderizado
 
             // 🆕 SEPARADORES VISUAIS
             // Linha GROSSA ao mudar de num_pedido
@@ -609,7 +694,7 @@
             // Atualizar rastreamento
             pedidoAnterior = item.num_pedido;
             loteAnterior = item.separacao_lote_id || null;
-        });
+        }
     }
 
     // 🆕 FUNÇÃO PARA ATUALIZAR CABEÇALHO DE ESTOQUE COM DATAS DINÂMICAS (28 DIAS)
@@ -1285,11 +1370,8 @@
             // ✅ REMOVIDO: Não atualizar CarteiraPrincipal - edição é apenas local até clicar "OK"
             // Quando clicar "OK", a data será copiada para a Separacao criada
 
-            // Recalcular TODAS as linhas do mesmo produto (atualiza UI)
-            recalcularTodasLinhasProduto(item.cod_produto);
-
-            // 🆕 ATUALIZAR RESUMO DA SEPARAÇÃO EM TEMPO REAL
-            atualizarResumoSeparacao();
+            // 🚀 OTIMIZADO: Usar debounce agrupado (150ms)
+            agendarRecalculoProduto(item.cod_produto);
         }
 
         // ✅ NOVO: Mudança na data de agendamento
@@ -1316,14 +1398,11 @@
             const rowIndex = parseInt(target.dataset.rowIndex);
             const item = state.dados[rowIndex];
 
-            // Recalcular valores da linha (valor total, pallets, peso)
+            // Recalcular valores da linha (valor total, pallets, peso) - IMEDIATO
             recalcularValoresLinha(rowIndex);
 
-            // Recalcular TODAS as linhas do mesmo produto
-            recalcularTodasLinhasProduto(item.cod_produto);
-
-            // 🆕 ATUALIZAR RESUMO DA SEPARAÇÃO EM TEMPO REAL
-            atualizarResumoSeparacao();
+            // 🚀 OTIMIZADO: Usar debounce agrupado (150ms)
+            agendarRecalculoProduto(item.cod_produto);
         }
 
         // 🆕 Mudança na quantidade editável de SEPARAÇÃO
@@ -2420,12 +2499,21 @@
     /**
      * Recalcula TODAS as linhas de um produto específico.
      * Usado quando qtd ou data editável muda em qualquer linha.
+     *
+     * 🚀 OTIMIZADO: Usa índices de lookup O(k) em vez de O(n).
+     * SEGURANÇA: Lê dados frescos do state.dados (não cache).
      */
     function recalcularTodasLinhasProduto(codProduto) {
-        state.dados.forEach((item, index) => {
-            if (item.cod_produto === codProduto) {
+        // Buscar códigos unificados (inclui o próprio código)
+        const codigosUnificados = state.mapaUnificacao[codProduto] || [codProduto];
+
+        // Iterar apenas sobre índices relevantes (O(k) em vez de O(n))
+        codigosUnificados.forEach(codigo => {
+            const indices = state.indices.porProduto.get(codigo) || [];
+            indices.forEach(index => {
+                const item = state.dados[index];
                 renderizarEstoquePrecalculado(index, item);
-            }
+            });
         });
     }
 
@@ -2434,6 +2522,9 @@
      * ✅ SEM DUPLICAÇÃO: Separações JÁ estão no state.dados.
      * ✅ COM UNIFICAÇÃO: Busca saídas de TODOS os códigos unificados.
      * Retorna array de saídas: [{data, qtd}, ...]
+     *
+     * 🚀 OTIMIZADO: Usa índices de lookup O(k) em vez de O(n).
+     * SEGURANÇA: Lê valores FRESCOS do DOM (não cache).
      */
     function coletarTodasSaidas(codProduto) {
         const saidas = [];
@@ -2445,59 +2536,58 @@
         const codigosUnificados = state.mapaUnificacao[codProduto] || [codProduto];
 
         // ============================================
-        // PARTE 1: COLETAR SAÍDAS VISÍVEIS (state.dados)
+        // PARTE 1: COLETAR SAÍDAS VISÍVEIS (via índices)
+        // 🚀 OTIMIZADO: O(k) em vez de O(n)
         // ============================================
-        state.dados.forEach((item, index) => {
-            // ✅ CORREÇÃO: Verificar se é QUALQUER código do grupo unificado
-            if (!codigosUnificados.includes(item.cod_produto)) return;
+        codigosUnificados.forEach(codigo => {
+            // Usar índice de lookup em vez de iterar todos os dados
+            const indices = state.indices.porProduto.get(codigo) || [];
 
-            let qtd = 0;
-            let data = null;
+            indices.forEach(index => {
+                const item = state.dados[index];
+                let qtd = 0;
+                let data = null;
 
-            if (item.tipo === 'separacao') {
-                // ✅ SEPARAÇÕES: Coletar qtd_saldo + expedicao de state.dados
-                qtd = parseFloat(item.qtd_saldo) || 0;
-                data = item.expedicao;
-            } else {
-                // ✅ PEDIDOS: Buscar inputs editáveis (qtd_edit > 0)
-                const qtdInput = document.getElementById(`qtd-edit-${index}`);
-                const dataInput = document.getElementById(`dt-exped-${index}`);
-
-                if (qtdInput && dataInput) {
-                    qtd = parseFloat(qtdInput.value || 0);
-                    data = dataInput.value;
-                }
-            }
-
-            // ✅ CORREÇÃO: Agrupar separações atrasadas (data < hoje) ou sem data em D0 (hoje)
-            if (qtd > 0) {
-                if (!data) {
-                    // Sem data → D0 (hoje)
-                    data = hojeStr;
+                if (item.tipo === 'separacao') {
+                    // ✅ SEPARAÇÕES: Coletar qtd_saldo + expedicao de state.dados
+                    qtd = parseFloat(item.qtd_saldo) || 0;
+                    data = item.expedicao;
                 } else {
-                    const dataExpedicao = new Date(data + 'T00:00:00');
-                    if (dataExpedicao < hoje) {
-                        // Atrasada → D0 (hoje)
-                        data = hojeStr;
+                    // ✅ PEDIDOS: Buscar inputs editáveis (LEITURA FRESCA DO DOM)
+                    const qtdInput = document.getElementById(`qtd-edit-${index}`);
+                    const dataInput = document.getElementById(`dt-exped-${index}`);
+
+                    if (qtdInput && dataInput) {
+                        qtd = parseFloat(qtdInput.value || 0);
+                        data = dataInput.value;
                     }
                 }
 
-                saidas.push({
-                    data: data,
-                    qtd: qtd
-                });
-            }
-        });
+                // ✅ CORREÇÃO: Agrupar separações atrasadas (data < hoje) ou sem data em D0 (hoje)
+                if (qtd > 0) {
+                    if (!data) {
+                        // Sem data → D0 (hoje)
+                        data = hojeStr;
+                    } else {
+                        const dataExpedicao = new Date(data + 'T00:00:00');
+                        if (dataExpedicao < hoje) {
+                            // Atrasada → D0 (hoje)
+                            data = hojeStr;
+                        }
+                    }
 
-        // ============================================
-        // PARTE 2: 🆕 ADICIONAR SAÍDAS NÃO VISÍVEIS (backend)
-        // ✅ CORREÇÃO: Buscar saídas de TODOS os códigos unificados
-        // ============================================
-        codigosUnificados.forEach(codigo => {
+                    saidas.push({
+                        data: data,
+                        qtd: qtd
+                    });
+                }
+            });
+
+            // ============================================
+            // PARTE 2: 🆕 ADICIONAR SAÍDAS NÃO VISÍVEIS (backend)
+            // ============================================
             const saidasNaoVisiveis = state.saidasNaoVisiveis[codigo] || [];
-
             if (saidasNaoVisiveis.length > 0) {
-                console.log(`   🔧 Adicionando ${saidasNaoVisiveis.length} saída(s) NÃO visível(is) do produto ${codigo}`);
                 saidas.push(...saidasNaoVisiveis);
             }
         });
@@ -2519,22 +2609,24 @@
      * @returns {Object} {projecao: [...], menor_estoque_d7: number}
      */
     function calcularProjecaoCompleta(estoqueAtual = 0, saidas = [], entradas = []) {
-        // Criar projeção de 28 dias do zero
+        // 🚀 OTIMIZADO: Reduzido de 5 loops para 4 loops com Map de índices
         const hoje = new Date();
         hoje.setHours(0, 0, 0, 0);
 
         const projecao = [];
+        const dateIndex = new Map(); // 🚀 Map para lookup O(1) por data
 
-        // Criar estrutura de 29 dias (D0 a D28)
+        // Loop 1: Criar estrutura de 29 dias + Map de índices
         for (let dia = 0; dia <= 28; dia++) {
             const data = new Date(hoje);
             data.setDate(data.getDate() + dia);
             const dataStr = data.toISOString().split('T')[0];
 
+            dateIndex.set(dataStr, dia); // O(1) lookup
             projecao.push({
                 dia: dia,
                 data: dataStr,
-                saldo_inicial: 0,  // Será calculado em cascata
+                saldo_inicial: 0,
                 entrada: 0,
                 saida: 0,
                 saldo: 0,
@@ -2542,36 +2634,29 @@
             });
         }
 
-        // Agrupar saídas por data
-        const saidasPorData = {};
+        // Loop 2: Processar saídas diretamente no array (sem objeto intermediário)
         saidas.forEach(s => {
-            if (!saidasPorData[s.data]) {
-                saidasPorData[s.data] = 0;
+            const idx = dateIndex.get(s.data);
+            if (idx !== undefined) {
+                projecao[idx].saida += s.qtd;
             }
-            saidasPorData[s.data] += s.qtd;
+            // Saídas fora do range de 29 dias são ignoradas (comportamento mantido)
         });
 
-        // Agrupar entradas por data (programação + D+1)
-        const entradasPorData = {};
+        // Loop 3: Processar entradas diretamente (com D+1)
         entradas.forEach(e => {
             // ✅ ENTRADA EM D+1 (apenas na Carteira Simples)
             const dataEntrada = new Date(e.data + 'T00:00:00');
-            dataEntrada.setDate(dataEntrada.getDate() + 1); // Adicionar 1 dia
+            dataEntrada.setDate(dataEntrada.getDate() + 1);
             const dataEntradaStr = dataEntrada.toISOString().split('T')[0];
 
-            if (!entradasPorData[dataEntradaStr]) {
-                entradasPorData[dataEntradaStr] = 0;
+            const idx = dateIndex.get(dataEntradaStr);
+            if (idx !== undefined) {
+                projecao[idx].entrada += e.qtd;
             }
-            entradasPorData[dataEntradaStr] += e.qtd;
         });
 
-        // Preencher saídas e entradas na projeção
-        projecao.forEach(proj => {
-            proj.saida = saidasPorData[proj.data] || 0;
-            proj.entrada = entradasPorData[proj.data] || 0;
-        });
-
-        // Calcular saldo_final em cascata
+        // Loop 4: Calcular saldo_final em cascata (sequencial por natureza)
         let menorEstoque = estoqueAtual;
 
         for (let i = 0; i < projecao.length; i++) {

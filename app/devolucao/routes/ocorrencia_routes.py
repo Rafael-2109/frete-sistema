@@ -564,7 +564,7 @@ def api_download_anexo(ocorrencia_id, anexo_id):
 
         if storage.use_s3:
             # Gerar URL assinada do S3
-            url = storage.get_presigned_url(anexo.caminho_s3)
+            url = storage.get_file_url(anexo.caminho_s3)
             if url:
                 return redirect(url)
             else:
@@ -666,7 +666,7 @@ def download_xml(nfd_id):
             storage = FileStorage()
 
             if storage.use_s3:
-                url = storage.get_presigned_url(nfd.nfd_xml_path)
+                url = storage.get_file_url(nfd.nfd_xml_path)
                 if url:
                     return redirect(url)
             else:
@@ -721,7 +721,7 @@ def download_pdf(nfd_id):
             storage = FileStorage()
 
             if storage.use_s3:
-                url = storage.get_presigned_url(nfd.nfd_pdf_path)
+                url = storage.get_file_url(nfd.nfd_pdf_path)
                 if url:
                     return redirect(url)
             else:

@@ -333,30 +333,48 @@ def obter_dados():
         pallet_map = {p.cod_produto: p for p in palletizacoes}
         tempos['pallet_map'] = time.time() - t1
 
-        # 🆕 GERAR MAPA DE CÓDIGOS UNIFICADOS para frontend
+        # 🚀 OTIMIZADO: GERAR MAPA DE CÓDIGOS UNIFICADOS em BATCH (1 query em vez de N)
         # Formato: {cod_produto: [cod1, cod2, cod3]} - todos os códigos do mesmo grupo
-        mapa_unificacao = {}
-        for cod_produto in codigos_produtos:
-            codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(cod_produto)
-            # Cada código aponta para a lista completa de códigos do grupo
-            mapa_unificacao[cod_produto] = list(codigos_relacionados)
+        t1_unif = time.time()
+        mapa_unificacao = UnificacaoCodigos.get_todos_codigos_relacionados_batch(codigos_produtos)
+        logger.info(f"⏱️ Unificação batch: {(time.time() - t1_unif)*1000:.1f}ms para {len(codigos_produtos)} produtos")
 
-        # 🆕 CALCULAR QTD_CARTEIRA TOTAL POR PRODUTO (✅ COM UNIFICAÇÃO)
+        # 🚀 OTIMIZADO: CALCULAR QTD_CARTEIRA TOTAL EM BATCH (1 query em vez de N)
+        t1_qtd = time.time()
         qtd_carteira_por_produto = {}
 
-        # Para cada código da página, calcular soma de TODOS os códigos unificados
-        for cod_produto in codigos_produtos:
-            codigos_relacionados = mapa_unificacao.get(cod_produto, [cod_produto])
+        # Expandir todos os códigos (incluindo unificados)
+        todos_codigos_expandidos = set()
+        for cod, relacionados in mapa_unificacao.items():
+            todos_codigos_expandidos.update(relacionados)
 
-            # Somar quantidades de TODOS os códigos relacionados
-            resultados_soma = db.session.query(
+        if todos_codigos_expandidos:
+            # UMA query agregada para todos os produtos
+            resultados_qtd = db.session.query(
+                CarteiraPrincipal.cod_produto,
                 func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido).label('qtd_total')
             ).filter(
                 CarteiraPrincipal.ativo == True,
-                CarteiraPrincipal.cod_produto.in_(codigos_relacionados)  # ✅ USA UNIFICAÇÃO!
-            ).scalar()
+                CarteiraPrincipal.cod_produto.in_(list(todos_codigos_expandidos))
+            ).group_by(
+                CarteiraPrincipal.cod_produto
+            ).all()
 
-            qtd_carteira_por_produto[cod_produto] = float(resultados_soma or 0)
+            # Mapear resultados por código
+            qtd_por_codigo = {str(r.cod_produto): float(r.qtd_total or 0) for r in resultados_qtd}
+
+            # Agregar para cada produto original (somando códigos unificados)
+            for cod_original in codigos_produtos:
+                codigos_relacionados = mapa_unificacao.get(cod_original, [cod_original])
+                qtd_carteira_por_produto[cod_original] = sum(
+                    qtd_por_codigo.get(str(cod), 0) for cod in codigos_relacionados
+                )
+        else:
+            # Sem códigos, todos com qtd 0
+            for cod in codigos_produtos:
+                qtd_carteira_por_produto[cod] = 0
+
+        logger.info(f"⏱️ Qtd carteira batch: {(time.time() - t1_qtd)*1000:.1f}ms")
 
         # Buscar separações não sincronizadas (batch)
         separacoes = db.session.query(
@@ -394,46 +412,30 @@ def obter_dados():
             if qtd_saldo > 0:
                 produtos_unicos[item.cod_produto]['qtd_total_carteira'] += qtd_saldo
 
-        # 🚀 OTIMIZAÇÃO CRÍTICA: Calcular APENAS estoque atual (não projeção completa)
+        # 🚀 OTIMIZAÇÃO CRÍTICA: Calcular estoque em BATCH (2 queries em vez de N*2)
         # Front-end fará o cálculo dinâmico de projeção
         t1 = time.time()
         estoque_map = {}
         try:
             # Usar método otimizado de cálculo em batch
-            codigos_produtos = list(produtos_unicos.keys())
+            codigos_produtos_estoque = list(produtos_unicos.keys())
 
             # ✅ PROTEÇÃO: Só calcular estoque se houver produtos
-            if not codigos_produtos:
+            if not codigos_produtos_estoque:
                 logger.warning("⚠️ Nenhum produto para calcular estoque")
                 tempos['estoque_batch'] = time.time() - t1
-                # Pular para próxima etapa
             else:
-                # ✅ MUDANÇA: Calcular APENAS estoque atual (performance 10x melhor)
                 hoje = date.today()
                 data_fim = hoje + timedelta(days=28)
 
-                # Buscar estoque atual para todos os produtos em batch
-                for cod_produto in codigos_produtos:
-                    estoque_atual = ServicoEstoqueSimples.calcular_estoque_atual(cod_produto)
+                # 🚀 NOVO: Usar método batch (2 queries em vez de N*2)
+                estoque_map = ServicoEstoqueSimples.calcular_estoque_batch(
+                    codigos_produtos=codigos_produtos_estoque,
+                    data_fim=data_fim,
+                    mapa_unificacao=mapa_unificacao  # Reutilizar mapa já calculado
+                )
 
-                    # ✅ USAR ServicoEstoqueSimples para buscar programação com UNIFICAÇÃO DE CÓDIGOS
-                    # IMPORTANTE: entrada_em_d_plus_1=False porque frontend já aplica D+1 (linha 2444 JS)
-                    entradas_dict = ServicoEstoqueSimples.calcular_entradas_previstas(
-                        cod_produto,
-                        hoje,
-                        data_fim,
-                        entrada_em_d_plus_1=False  # Frontend aplica D+1, então backend não deve aplicar
-                    )
-
-                    # Converter Dict[date, float] → List[Dict[str, Any]] para frontend
-                    programacao = converter_entradas_para_frontend(entradas_dict)
-
-                    estoque_map[cod_produto] = {
-                        'estoque_atual': estoque_atual,
-                        'programacao': programacao  # ✅ NOVO: Programação para front-end calcular
-                    }
-
-                logger.info(f"✅ Estoque atual calculado em BATCH para {len(codigos_produtos)} produtos")
+                logger.info(f"✅ Estoque batch: {len(codigos_produtos_estoque)} produtos em {(time.time() - t1)*1000:.1f}ms")
                 tempos['estoque_batch'] = time.time() - t1
 
         except Exception as e:
@@ -795,10 +797,12 @@ def obter_dados():
 
         try:
             # ✅ Calcular saídas NÃO visíveis: TODAS - FILTRADAS
+            # 🚀 OTIMIZADO: Passa mapa_unificacao pré-computado (evita N queries)
             saidas_nao_visiveis = calcular_saidas_nao_visiveis(
                 codigos_produtos=codigos_produtos,
                 separacoes_todas=separacoes_todas,  # TODAS as separações dos produtos
-                separacoes_filtradas=separacoes_query  # Separações FILTRADAS (com rota/sub-rota)
+                separacoes_filtradas=separacoes_query,  # Separações FILTRADAS (com rota/sub-rota)
+                mapa_unificacao=mapa_unificacao  # 🚀 NOVO: Mapa pré-computado
             )
 
             tempos['saidas_nao_visiveis'] = time.time() - t1
@@ -842,7 +846,8 @@ def obter_dados():
 def calcular_saidas_nao_visiveis(
     codigos_produtos,
     separacoes_todas,
-    separacoes_filtradas
+    separacoes_filtradas,
+    mapa_unificacao=None  # 🚀 NOVO: Mapa pré-computado para evitar N queries
 ):
     """
     Calcula saídas NÃO visíveis usando: TODAS - FILTRADAS
@@ -859,6 +864,7 @@ def calcular_saidas_nao_visiveis(
         codigos_produtos (list): Lista de códigos de produtos
         separacoes_todas (list): TODAS as separações dos pedidos (sem filtros)
         separacoes_filtradas (list): Separações FILTRADAS (visíveis)
+        mapa_unificacao (dict): 🚀 NOVO - Mapa pré-computado {cod: [cod1, cod2, ...]}
 
     Returns:
         dict: {cod_produto: [{'data': '2025-10-23', 'qtd': 100.0}]}
@@ -885,6 +891,13 @@ def calcular_saidas_nao_visiveis(
         hoje = date.today()
         saidas_por_produto_data = {}
 
+        # 🚀 OTIMIZADO: Construir lookup reverso ANTES do loop (O(1) por separação)
+        codigo_to_grupo = {}
+        if mapa_unificacao:
+            for cod, grupo in mapa_unificacao.items():
+                for related_cod in grupo:
+                    codigo_to_grupo[related_cod] = grupo
+
         for sep in separacoes_nao_visiveis:
             cod_prod_original = sep.cod_produto
             qtd = float(sep.qtd_saldo or 0)
@@ -900,7 +913,12 @@ def calcular_saidas_nao_visiveis(
 
             # ✅ ADICIONAR apenas para o "código representante" do grupo (menor código)
             # Isso evita duplicação quando múltiplos códigos do mesmo grupo estão na página
-            codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(cod_prod_original)
+            # 🚀 OTIMIZADO: Usar lookup pré-computado (evita N queries SQL)
+            if codigo_to_grupo and cod_prod_original in codigo_to_grupo:
+                codigos_relacionados = codigo_to_grupo[cod_prod_original]
+            else:
+                # Fallback: código isolado ou mapa não disponível
+                codigos_relacionados = [cod_prod_original]
 
             # Encontrar quais códigos do grupo estão na página
             codigos_na_pagina = [c for c in codigos_relacionados if c in codigos_produtos]

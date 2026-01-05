@@ -313,10 +313,115 @@ class UnificacaoCodigos(db.Model):
                 pass
             
             return list(codigos_relacionados)
-            
+
         except Exception:
             # Em caso de qualquer erro, sempre retorna pelo menos o código original
             return [str(codigo_produto)]
+
+    @classmethod
+    def get_todos_codigos_relacionados_batch(cls, codigos_produtos):
+        """
+        Versão BATCH otimizada de get_todos_codigos_relacionados.
+        Busca TODOS os códigos relacionados em UMA única query.
+
+        SEGURANÇA: Dados frescos do banco, não cache.
+
+        Args:
+            codigos_produtos: Lista de códigos de produtos
+
+        Returns:
+            Dict[cod_produto] -> [lista de códigos relacionados]
+
+        Performance esperada: < 50ms para 200 produtos (vs ~400ms com N queries)
+        """
+        from typing import Dict, List
+
+        # Inicializar resultado com cada código apontando para si mesmo
+        resultado: Dict[str, List[str]] = {
+            str(cod): [str(cod)] for cod in codigos_produtos
+        }
+
+        try:
+            # Converter para int para busca no banco
+            codigos_int = []
+            cod_to_str = {}
+            for cod in codigos_produtos:
+                try:
+                    cod_int = int(cod)
+                    codigos_int.append(cod_int)
+                    cod_to_str[cod_int] = str(cod)
+                except (ValueError, TypeError):
+                    pass
+
+            if not codigos_int:
+                return resultado
+
+            # UMA ÚNICA QUERY para buscar TODAS as unificações relevantes
+            unificacoes = cls.query.filter(
+                cls.ativo == True,
+                db.or_(
+                    cls.codigo_origem.in_(codigos_int),
+                    cls.codigo_destino.in_(codigos_int)
+                )
+            ).all()
+
+            # Construir grafo de relacionamentos bidirecionais
+            for unif in unificacoes:
+                origem_str = str(unif.codigo_origem)
+                destino_str = str(unif.codigo_destino)
+
+                # Se origem está na lista de produtos, adicionar destino
+                if origem_str in resultado:
+                    if destino_str not in resultado[origem_str]:
+                        resultado[origem_str].append(destino_str)
+
+                # Se destino está na lista de produtos, adicionar origem
+                if destino_str in resultado:
+                    if origem_str not in resultado[destino_str]:
+                        resultado[destino_str].append(origem_str)
+
+                # Buscar outros códigos que apontam para o mesmo destino
+                # (já incluídos na query acima por causa do OR)
+
+            # Segunda passada: garantir transitividade (A->B, C->B => A,B,C são relacionados)
+            # Construir grupos conectados
+            destinos_para_origens = {}  # destino -> [origens]
+            for unif in unificacoes:
+                dest = str(unif.codigo_destino)
+                orig = str(unif.codigo_origem)
+                if dest not in destinos_para_origens:
+                    destinos_para_origens[dest] = set([dest])
+                destinos_para_origens[dest].add(orig)
+
+            # Para cada produto na lista, verificar se é origem ou destino
+            for cod_original in resultado.keys():
+                try:
+                    cod_int = int(cod_original)
+                    # Verificar se este código é origem de alguma unificação
+                    for unif in unificacoes:
+                        if unif.codigo_origem == cod_int:
+                            # Adicionar todos os outros que apontam para o mesmo destino
+                            dest = str(unif.codigo_destino)
+                            if dest in destinos_para_origens:
+                                for relacionado in destinos_para_origens[dest]:
+                                    if relacionado not in resultado[cod_original]:
+                                        resultado[cod_original].append(relacionado)
+                        elif unif.codigo_destino == cod_int:
+                            # Este código é destino, adicionar todos que apontam para ele
+                            if cod_original in destinos_para_origens:
+                                for relacionado in destinos_para_origens[cod_original]:
+                                    if relacionado not in resultado[cod_original]:
+                                        resultado[cod_original].append(relacionado)
+                except (ValueError, TypeError):
+                    pass
+
+            return resultado
+
+        except Exception as e:
+            # Em caso de erro, retornar cada código apenas com ele mesmo
+            import logging
+            logging.getLogger(__name__).error(f"Erro em get_todos_codigos_relacionados_batch: {e}")
+            return resultado
 
     def ativar(self, usuario=None, motivo=None):
         """Ativa a unificação"""
