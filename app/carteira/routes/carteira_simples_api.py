@@ -1120,7 +1120,11 @@ def gerar_separacao():
         tipo_envio_correto = determinar_tipo_envio(num_pedido, produtos, produtos_carteira)
         logger.info(f"✅ tipo_envio determinado: {tipo_envio_correto} para pedido {num_pedido}")
 
+        # 🔧 CORREÇÃO: Log detalhado e tracking de itens rejeitados
+        logger.info(f"📥 Recebidos {len(produtos)} produtos para pedido {num_pedido}: {[p.get('cod_produto') for p in produtos]}")
+
         separacoes_criadas = []
+        itens_rejeitados = []  # 🔧 NOVO: Tracking de itens rejeitados
 
         for produto in produtos:
             cod_produto = produto.get('cod_produto')
@@ -1130,6 +1134,12 @@ def gerar_separacao():
             protocolo = produto.get('protocolo', '')
 
             if not cod_produto or quantidade <= 0:
+                # 🔧 CORREÇÃO: Log detalhado quando item é rejeitado
+                logger.warning(f"⚠️ Produto ignorado (dados inválidos): cod={cod_produto}, qtd={quantidade}")
+                itens_rejeitados.append({
+                    'cod_produto': cod_produto or 'VAZIO',
+                    'motivo': 'Quantidade inválida ou código vazio'
+                })
                 continue
 
             # Buscar item na carteira
@@ -1140,7 +1150,11 @@ def gerar_separacao():
             ).first()
 
             if not item_carteira:
-                logger.warning(f"Item não encontrado na carteira: {num_pedido}/{cod_produto}")
+                logger.warning(f"⚠️ Item não encontrado na carteira: {num_pedido}/{cod_produto}")
+                itens_rejeitados.append({
+                    'cod_produto': cod_produto,
+                    'motivo': 'Item não encontrado na carteira (ativo=False ou não existe)'
+                })
                 continue
 
             # Verificar se quantidade está disponível
@@ -1303,13 +1317,18 @@ def gerar_separacao():
 
         logger.info(f"✅ Lote {lote_id}: {len(separacoes_criadas)} separação(ões) criada(s)")
 
+        # 🔧 CORREÇÃO: Log se houve itens rejeitados
+        if itens_rejeitados:
+            logger.warning(f"⚠️ {len(itens_rejeitados)} item(ns) rejeitado(s) para pedido {num_pedido}: {itens_rejeitados}")
+
         return jsonify({
             'success': True,
             'message': f'{len(separacoes_criadas)} separação(ões) criada(s) com sucesso',
             'separacao_lote_id': lote_id,
             'qtd_itens': len(separacoes_criadas),
             'separacoes': separacoes_retorno,  # ✅ Dados completos para frontend
-            'produtos_afetados': list(produtos_afetados)  # ✅ Para recalcular estoques
+            'produtos_afetados': list(produtos_afetados),  # ✅ Para recalcular estoques
+            'itens_rejeitados': itens_rejeitados  # 🔧 NOVO: Feedback de itens rejeitados
         })
 
     except Exception as e:

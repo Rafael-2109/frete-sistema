@@ -107,9 +107,9 @@ class CarteiraPrincipal(db.Model):
 
     # 📊 MARGENS CALCULADAS
     margem_bruta = db.Column(db.Numeric(15, 2), nullable=True)
-    margem_bruta_percentual = db.Column(db.Numeric(5, 2), nullable=True)
+    margem_bruta_percentual = db.Column(db.Numeric(7, 2), nullable=True)  # Suporta até ±99999.99%
     margem_liquida = db.Column(db.Numeric(15, 2), nullable=True)
-    margem_liquida_percentual = db.Column(db.Numeric(5, 2), nullable=True)
+    margem_liquida_percentual = db.Column(db.Numeric(7, 2), nullable=True)  # Suporta até ±99999.99%
     comissao_percentual = db.Column(db.Numeric(5, 2), nullable=True, default=0)  # Soma das regras de comissao
 
     # 📸 SNAPSHOT DE PARAMETROS (rastreabilidade do calculo de margem)

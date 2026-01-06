@@ -1398,11 +1398,38 @@
             const rowIndex = parseInt(target.dataset.rowIndex);
             const item = state.dados[rowIndex];
 
+            // 🔧 CORREÇÃO: Sincronizar valor do DOM para state.dados
+            item.qtd_editavel = parseFloat(target.value || 0);
+
             // Recalcular valores da linha (valor total, pallets, peso) - IMEDIATO
             recalcularValoresLinha(rowIndex);
 
             // 🚀 OTIMIZADO: Usar debounce agrupado (150ms)
             agendarRecalculoProduto(item.cod_produto);
+        }
+
+        // 🔧 CORREÇÃO: Mudança na data de expedição de PEDIDO
+        if (target.id && target.id.startsWith('dt-exped-') && !target.id.startsWith('dt-exped-sep-')) {
+            const rowIndex = parseInt(target.id.replace('dt-exped-', ''));
+            if (state.dados[rowIndex] && state.dados[rowIndex].tipo === 'pedido') {
+                state.dados[rowIndex].expedicao_editavel = target.value;
+            }
+        }
+
+        // 🔧 CORREÇÃO: Mudança na data de agendamento de PEDIDO
+        if (target.id && target.id.startsWith('dt-agend-') && !target.id.startsWith('dt-agend-sep-')) {
+            const rowIndex = parseInt(target.id.replace('dt-agend-', ''));
+            if (state.dados[rowIndex] && state.dados[rowIndex].tipo === 'pedido') {
+                state.dados[rowIndex].agendamento_editavel = target.value;
+            }
+        }
+
+        // 🔧 CORREÇÃO: Mudança no protocolo de PEDIDO
+        if (target.id && target.id.startsWith('protocolo-') && !target.id.startsWith('protocolo-sep-')) {
+            const rowIndex = parseInt(target.id.replace('protocolo-', ''));
+            if (state.dados[rowIndex] && state.dados[rowIndex].tipo === 'pedido') {
+                state.dados[rowIndex].protocolo_editavel = target.value.trim();
+            }
         }
 
         // 🆕 Mudança na quantidade editável de SEPARAÇÃO
@@ -1688,14 +1715,19 @@
         const produtosAfetados = new Set();
 
         // Encontrar todos os produtos do mesmo pedido
+        // 🔧 CORREÇÃO: Filtrar apenas tipo='pedido' e armazenar no state.dados
         state.dados.forEach((d, idx) => {
-            if (d.num_pedido === numPedido) {
+            if (d.tipo === 'pedido' && d.num_pedido === numPedido) {
+                // 🔧 CORREÇÃO: Armazenar no state.dados (funciona mesmo sem DOM renderizado)
+                d.qtd_editavel = d.qtd_saldo;
+
+                // Tentar atualizar DOM se existir (para UI)
                 const inputQtd = document.getElementById(`qtd-edit-${idx}`);
                 if (inputQtd) {
                     inputQtd.value = d.qtd_saldo;
                     recalcularValoresLinha(idx);
-                    produtosAfetados.add(d.cod_produto);
                 }
+                produtosAfetados.add(d.cod_produto);
             }
         });
 
@@ -1771,14 +1803,19 @@
         // Encontrar todos os itens do mesmo pedido e aplicar a data
         // ✅ CORREÇÃO: Pular itens que já estão em separação (têm separacao_lote_id)
         // Separações já têm controle de datas próprio via separacao_lote_id
+        // 🔧 CORREÇÃO: Filtrar apenas tipo='pedido' e armazenar no state.dados
         for (const [idx, d] of state.dados.entries()) {
-            if (d.num_pedido === numPedido && !d.separacao_lote_id) {
+            if (d.tipo === 'pedido' && d.num_pedido === numPedido && !d.separacao_lote_id) {
+                // 🔧 CORREÇÃO: Armazenar no state.dados (funciona mesmo sem DOM renderizado)
+                d.expedicao_editavel = novaData;
+
+                // Tentar atualizar DOM se existir (para UI)
                 const inputId = `dt-exped-${idx}`;
                 const inputData = document.getElementById(inputId);
                 if (inputData) {
                     inputData.value = novaData;
-                    produtosAfetados.add(d.cod_produto);
                 }
+                produtosAfetados.add(d.cod_produto);
             }
         }
 
@@ -2005,16 +2042,30 @@
         state.dados.forEach((d, idx) => {
             // Filtrar apenas produtos do mesmo pedido (tipo='pedido')
             if (d.tipo === 'pedido' && d.num_pedido === numPedido) {
-                // Buscar qtd_editavel e expedicao dos inputs
-                const qtdInput = document.getElementById(`qtd-edit-${idx}`);
-                const dataExpedicaoInput = document.getElementById(`dt-exped-${idx}`);
-                const agendamentoInput = document.getElementById(`dt-agend-${idx}`);
-                const protocoloInput = document.getElementById(`protocolo-${idx}`);
+                // 🔧 CORREÇÃO: Ler do state.dados PRIMEIRO, com fallback para DOM
+                // Isso garante que funcione mesmo sem elementos DOM renderizados (Virtual Scrolling)
+                let qtdEditavel = d.qtd_editavel || 0;
+                let expedicao = d.expedicao_editavel || '';
+                let agendamento = d.agendamento_editavel || '';
+                let protocolo = d.protocolo_editavel || '';
 
-                const qtdEditavel = qtdInput ? parseFloat(qtdInput.value || 0) : 0;
-                const expedicao = dataExpedicaoInput ? dataExpedicaoInput.value : '';
-                const agendamento = agendamentoInput ? agendamentoInput.value : '';
-                const protocolo = protocoloInput ? protocoloInput.value.trim() : '';
+                // Fallback para DOM se state não tiver valores
+                if (!qtdEditavel) {
+                    const qtdInput = document.getElementById(`qtd-edit-${idx}`);
+                    qtdEditavel = qtdInput ? parseFloat(qtdInput.value || 0) : 0;
+                }
+                if (!expedicao) {
+                    const dataExpedicaoInput = document.getElementById(`dt-exped-${idx}`);
+                    expedicao = dataExpedicaoInput ? dataExpedicaoInput.value : '';
+                }
+                if (!agendamento) {
+                    const agendamentoInput = document.getElementById(`dt-agend-${idx}`);
+                    agendamento = agendamentoInput ? agendamentoInput.value : '';
+                }
+                if (!protocolo) {
+                    const protocoloInput = document.getElementById(`protocolo-${idx}`);
+                    protocolo = protocoloInput ? protocoloInput.value.trim() : '';
+                }
 
                 // ✅ VERIFICADORES: qtd_editavel > 0 E expedicao preenchida
                 if (qtdEditavel > 0 && expedicao) {
@@ -2107,8 +2158,16 @@
                 throw new Error(resultado.error || 'Erro ao gerar separação');
             }
 
-            // ❌ REMOVIDO: Modal de sucesso (não necessário)
-            // mostrarMensagem('Sucesso', `Separação gerada...`, 'success');
+            // 🔧 CORREÇÃO: Log detalhado para debug
+            console.log(`📦 Enviados ${produtosDoPedido.length} produtos, criados ${resultado.qtd_itens} separação(ões)`);
+
+            // 🔧 CORREÇÃO: Mostrar alerta se houve itens rejeitados
+            if (resultado.itens_rejeitados && resultado.itens_rejeitados.length > 0) {
+                console.warn('⚠️ Itens rejeitados:', resultado.itens_rejeitados);
+                mostrarToast('Atenção',
+                    `${resultado.itens_rejeitados.length} item(s) não foram criados. Verifique o console para detalhes.`,
+                    'warning', 5000);
+            }
 
             // ✅ ATUALIZAÇÃO LOCAL SEM RELOAD
             if (resultado.separacoes && resultado.separacoes.length > 0) {
@@ -2123,8 +2182,16 @@
                 });
 
                 // Zerar campos editáveis dos pedidos
+                // 🔧 CORREÇÃO: Limpar também os campos no state.dados
                 state.dados.forEach((item, index) => {
                     if (item.tipo === 'pedido' && item.num_pedido === numPedido) {
+                        // Limpar state.dados
+                        item.qtd_editavel = 0;
+                        item.expedicao_editavel = '';
+                        item.agendamento_editavel = '';
+                        item.protocolo_editavel = '';
+
+                        // Limpar DOM se existir
                         const qtdInput = document.getElementById(`qtd-edit-${index}`);
                         const dtExpedInput = document.getElementById(`dt-exped-${index}`);
                         if (qtdInput) qtdInput.value = 0;
@@ -2396,8 +2463,16 @@
                 });
 
                 // Zerar campos editáveis dos pedidos
+                // 🔧 CORREÇÃO: Limpar também os campos no state.dados
                 state.dados.forEach((item, index) => {
                     if (item.tipo === 'pedido' && item.num_pedido === numPedido) {
+                        // Limpar state.dados
+                        item.qtd_editavel = 0;
+                        item.expedicao_editavel = '';
+                        item.agendamento_editavel = '';
+                        item.protocolo_editavel = '';
+
+                        // Limpar DOM se existir
                         const qtdInput = document.getElementById(`qtd-edit-${index}`);
                         const dtExpedInput = document.getElementById(`dt-exped-${index}`);
                         if (qtdInput) qtdInput.value = 0;
