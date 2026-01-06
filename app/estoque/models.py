@@ -153,19 +153,19 @@ class MovimentacaoEstoque(db.Model):
 
     @classmethod
     def saldo_pallet_por_destinatario(cls, cnpj_destinatario):
-        """Calcula o saldo de pallets em um destinatario (saidas nao baixadas)"""
+        """Calcula o saldo de pallets em um destinatario (SAIDA e REMESSA nao baixadas)"""
         from sqlalchemy import func
         return db.session.query(func.coalesce(func.sum(cls.qtd_movimentacao), 0)).filter(
             cls.cnpj_destinatario == cnpj_destinatario,
             cls.local_movimentacao == 'PALLET',
-            cls.tipo_movimentacao == 'SAIDA',
+            cls.tipo_movimentacao.in_(['SAIDA', 'REMESSA']),  # Inclui REMESSA
             cls.baixado == False,
             cls.ativo == True
         ).scalar() or 0
 
     @classmethod
     def listar_saldos_pallet_pendentes(cls):
-        """Lista todos os destinatarios com saldo de pallet pendente"""
+        """Lista todos os destinatarios com saldo de pallet pendente (SAIDA e REMESSA)"""
         from sqlalchemy import func
         return db.session.query(
             cls.tipo_destinatario,
@@ -174,7 +174,7 @@ class MovimentacaoEstoque(db.Model):
             func.sum(cls.qtd_movimentacao).label('saldo')
         ).filter(
             cls.local_movimentacao == 'PALLET',
-            cls.tipo_movimentacao == 'SAIDA',
+            cls.tipo_movimentacao.in_(['SAIDA', 'REMESSA']),  # Inclui REMESSA
             cls.baixado == False,
             cls.ativo == True
         ).group_by(

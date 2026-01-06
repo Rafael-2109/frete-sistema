@@ -197,11 +197,33 @@ def listar_movimentos():
         page=page, per_page=50, error_out=False
     )
 
+    # Buscar informacoes de vales para cada NF de remessa
+    # Retorna: {nf: {'count': N, 'qtd_total': X, 'qtd_pendente': Y, 'qtd_resolvido': Z}}
+    vales_por_nf = {}
+    nfs_remessa = [m.numero_nf for m in movimentos.items if m.numero_nf and m.tipo_movimentacao == 'REMESSA']
+    if nfs_remessa:
+        vales = ValePallet.query.filter(
+            ValePallet.nf_pallet.in_(nfs_remessa),
+            ValePallet.ativo == True
+        ).all()
+
+        for vale in vales:
+            nf = vale.nf_pallet
+            if nf not in vales_por_nf:
+                vales_por_nf[nf] = {'count': 0, 'qtd_total': 0, 'qtd_pendente': 0, 'qtd_resolvido': 0}
+            vales_por_nf[nf]['count'] += 1
+            vales_por_nf[nf]['qtd_total'] += vale.quantidade or 0
+            if vale.resolvido:
+                vales_por_nf[nf]['qtd_resolvido'] += vale.quantidade or 0
+            else:
+                vales_por_nf[nf]['qtd_pendente'] += vale.quantidade or 0
+
     return render_template('pallet/movimentos.html',
                            movimentos=movimentos,
                            filtro_tipo=filtro_tipo,
                            filtro_baixado=filtro_baixado,
-                           filtro_destinatario=filtro_destinatario)
+                           filtro_destinatario=filtro_destinatario,
+                           vales_por_nf=vales_por_nf)
 
 
 @pallet_bp.route('/registrar-saida', methods=['GET', 'POST'])
@@ -851,6 +873,110 @@ def sincronizar_odoo():
             return redirect(url_for('pallet.sincronizar_odoo'))
 
     return render_template('pallet/sincronizar.html')
+
+
+# ========== SUBSTITUICAO DE NF ==========
+
+@pallet_bp.route('/substituicao', methods=['GET'])
+@login_required
+def listar_substituicoes():
+    """Lista remessas disponiveis para substituicao"""
+    # Buscar remessas pendentes de transportadoras
+    remessas = MovimentacaoEstoque.query.filter(
+        MovimentacaoEstoque.local_movimentacao == 'PALLET',
+        MovimentacaoEstoque.tipo_movimentacao == 'REMESSA',
+        MovimentacaoEstoque.tipo_destinatario == 'TRANSPORTADORA',
+        MovimentacaoEstoque.baixado == False,
+        MovimentacaoEstoque.ativo == True
+    ).order_by(MovimentacaoEstoque.data_movimentacao.desc()).all()
+
+    return render_template('pallet/substituicao_lista.html', remessas=remessas)
+
+
+@pallet_bp.route('/substituicao/<int:remessa_id>', methods=['GET', 'POST'])
+@login_required
+def registrar_substituicao(remessa_id):
+    """
+    Registra uma substituicao de NF de pallet.
+
+    Substituicao: NF emitida para transportadora, mas cliente precisa de NF especifica.
+    A nova NF do cliente "consome" parte da NF da transportadora.
+    A responsabilidade PERMANECE com a transportadora.
+    """
+    remessa_origem = MovimentacaoEstoque.query.get_or_404(remessa_id)
+
+    # Validar que e uma remessa de transportadora pendente
+    if remessa_origem.tipo_movimentacao != 'REMESSA' or remessa_origem.local_movimentacao != 'PALLET':
+        flash('Este movimento nao e uma remessa de pallet!', 'warning')
+        return redirect(url_for('pallet.listar_substituicoes'))
+
+    if remessa_origem.tipo_destinatario != 'TRANSPORTADORA':
+        flash('Substituicao so se aplica a remessas para transportadora!', 'warning')
+        return redirect(url_for('pallet.listar_substituicoes'))
+
+    if remessa_origem.baixado:
+        flash('Esta remessa ja foi baixada!', 'warning')
+        return redirect(url_for('pallet.listar_substituicoes'))
+
+    if request.method == 'POST':
+        try:
+            quantidade = int(request.form.get('quantidade', 0))
+
+            # Validar quantidade
+            if quantidade <= 0:
+                flash('Quantidade deve ser maior que zero!', 'warning')
+                return redirect(url_for('pallet.registrar_substituicao', remessa_id=remessa_id))
+
+            if quantidade > remessa_origem.qtd_movimentacao:
+                flash(f'Quantidade nao pode exceder {int(remessa_origem.qtd_movimentacao)} da remessa original!', 'warning')
+                return redirect(url_for('pallet.registrar_substituicao', remessa_id=remessa_id))
+
+            # Criar nova remessa para o CLIENTE
+            # nf_remessa_origem = NF original da transportadora
+            # cnpj_responsavel = CNPJ da transportadora (mantem responsabilidade)
+            nova_remessa = MovimentacaoEstoque(
+                cod_produto=COD_PRODUTO_PALLET,
+                nome_produto=NOME_PRODUTO_PALLET,
+                data_movimentacao=date.today(),
+                tipo_movimentacao='REMESSA',
+                local_movimentacao='PALLET',
+                qtd_movimentacao=quantidade,
+                tipo_destinatario='CLIENTE',
+                cnpj_destinatario=request.form.get('cnpj_cliente', '').replace('.', '').replace('-', '').replace('/', ''),
+                nome_destinatario=request.form.get('nome_cliente'),
+                numero_nf=request.form.get('numero_nf'),
+                # Campos de substituicao
+                nf_remessa_origem=remessa_origem.numero_nf,
+                cnpj_responsavel=remessa_origem.cnpj_destinatario,  # Transportadora continua responsavel
+                nome_responsavel=remessa_origem.nome_destinatario,
+                codigo_embarque=remessa_origem.codigo_embarque,
+                observacao=f'Substituicao da NF {remessa_origem.numero_nf} (Transp: {remessa_origem.nome_destinatario})',
+                tipo_origem='SUBSTITUICAO',
+                baixado=False,
+                criado_por=current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
+            )
+            db.session.add(nova_remessa)
+
+            # Se quantidade da substituicao = quantidade da remessa original, baixar a original
+            if quantidade >= remessa_origem.qtd_movimentacao:
+                remessa_origem.baixado = True
+                remessa_origem.baixado_em = datetime.utcnow()
+                remessa_origem.baixado_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
+                remessa_origem.observacao = (remessa_origem.observacao or '') + f'\n[SUBSTITUICAO TOTAL] NF cliente: {request.form.get("numero_nf")}'
+            else:
+                # Baixa parcial - ajustar quantidade pendente
+                remessa_origem.observacao = (remessa_origem.observacao or '') + f'\n[SUBSTITUICAO PARCIAL] {quantidade} pallets -> NF cliente: {request.form.get("numero_nf")}'
+
+            db.session.commit()
+
+            flash(f'Substituicao registrada! NF {request.form.get("numero_nf")} para cliente vinculada a NF {remessa_origem.numero_nf} da transportadora.', 'success')
+            return redirect(url_for('pallet.listar_movimentos'))
+
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Erro ao registrar substituicao: {str(e)}', 'danger')
+
+    return render_template('pallet/substituicao.html', remessa=remessa_origem)
 
 
 @pallet_bp.route('/vincular-venda/<int:movimento_id>', methods=['GET', 'POST'])

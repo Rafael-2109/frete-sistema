@@ -170,13 +170,18 @@
                         </div>
                     </div>
 
-                    <!-- 🔄 BOTÃO SINCRONIZAR PEDIDO -->
+                    <!-- 🔄 BOTÕES DE AÇÃO -->
                     <div class="row mb-4">
                         <div class="col-12 text-center">
-                            <a href="{{ url_for('sync_integrada.listar_pedidos_para_sincronizar') }}" class="btn btn-primary btn-lg">
+                            <a href="{{ url_for('sync_integrada.listar_pedidos_para_sincronizar') }}" class="btn btn-primary btn-lg mr-3">
                                 <i class="fas fa-sync-alt"></i>
                                 <strong>SINCRONIZAR PEDIDO</strong>
                                 <small class="d-block mt-1">Sincronizar pedidos individuais</small>
+                            </a>
+                            <a href="{{ url_for('sync_integrada.fallback_dashboard') }}" class="btn btn-warning btn-lg">
+                                <i class="fas fa-download"></i>
+                                <strong>IMPORTAR DO ODOO</strong>
+                                <small class="d-block mt-1">2o Fallback - Importar pedidos/NFs</small>
                             </a>
                         </div>
                     </div>

@@ -44,6 +44,20 @@
         </div>
     </div>
 
+    <!-- Acoes adicionais -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="btn-group" role="group">
+                <a href="{{ url_for('pallet.listar_substituicoes') }}" class="btn btn-outline-info">
+                    <i class="fas fa-exchange-alt"></i> Substituicao de NF
+                </a>
+                <a href="{{ url_for('pallet.listar_movimentos') }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-list"></i> Todos os Movimentos
+                </a>
+            </div>
+        </div>
+    </div>
+
     <!-- ALERTAS DE PRAZO -->
     {% if remessas_vencidas or remessas_prestes_vencer or vendas_pendentes_vinculo or vales_vencidos %}
     <div class="row mb-4">
@@ -54,7 +68,8 @@
                 <div class="card-header bg-danger text-white">
                     <h6 class="mb-0">
                         <i class="fas fa-exclamation-triangle"></i>
-                        Remessas Vencidas (> {{ prazo_dias }} dias)
+                        Remessas Vencidas
+                        <small class="opacity-75">(7d SP/RED, 30d outros)</small>
                         <span class="badge bg-light text-danger">{{ remessas_vencidas|length }}</span>
                     </h6>
                 </div>

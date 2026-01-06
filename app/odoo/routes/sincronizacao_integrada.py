@@ -367,3 +367,203 @@ def sincronizar_pedido_individual(num_pedido):
         logger.error(f"❌ Erro ao sincronizar pedido {num_pedido}: {e}")
         flash(f"❌ Erro ao sincronizar pedido: {str(e)}", 'error')
         return redirect(url_for('sync_integrada.dashboard'))
+
+
+# ============================================================================
+# ROTAS: IMPORTAÇÃO FALLBACK (2º FALLBACK)
+# ============================================================================
+
+@sync_integrada_bp.route('/fallback')
+@login_required
+def fallback_dashboard():
+    """
+    Dashboard de importação fallback
+
+    Permite importar pedidos e NFs do Odoo que não foram
+    capturados pela sincronização automática.
+    """
+    try:
+        logger.info("📥 Carregando dashboard de importação fallback...")
+        return render_template('odoo/sync_integrada/fallback.html')
+
+    except Exception as e:
+        logger.error(f"❌ Erro no dashboard fallback: {e}")
+        flash(f"❌ Erro ao carregar dashboard: {str(e)}", 'error')
+        return redirect(url_for('sync_integrada.dashboard'))
+
+
+@sync_integrada_bp.route('/fallback/importar-pedido', methods=['POST'])
+@login_required
+def importar_pedido_fallback():
+    """
+    Importa um pedido específico do Odoo (2º fallback)
+
+    Funciona mesmo se o pedido NÃO existir no sistema local.
+    Útil para pedidos com tipos não filtrados (ex: venda-industrializacao)
+    """
+    try:
+        from app.odoo.services.importacao_fallback_service import ImportacaoFallbackService
+
+        num_pedido = request.form.get('num_pedido', '').strip().upper()
+
+        if not num_pedido:
+            flash("❌ Número do pedido é obrigatório", 'error')
+            return redirect(url_for('sync_integrada.fallback_dashboard'))
+
+        logger.info(f"📥 Importação fallback do pedido: {num_pedido}")
+
+        service = ImportacaoFallbackService()
+        resultado = service.importar_pedido_por_numero(num_pedido)
+
+        if resultado.get('sucesso'):
+            dados = resultado.get('dados_odoo', {})
+            tempo = resultado.get('tempo_execucao', 0)
+
+            flash(f"✅ Pedido {num_pedido} importado com sucesso ({tempo:.2f}s)", 'success')
+
+            if dados:
+                flash(f"📦 Cliente: {dados.get('cliente', ['', 'N/A'])[1] if isinstance(dados.get('cliente'), list) else 'N/A'}", 'info')
+                flash(f"📝 Tipo: {dados.get('tipo_pedido', 'N/A')}", 'info')
+                flash(f"💰 Valor: R$ {dados.get('valor_total', 0):,.2f}", 'info')
+        else:
+            flash(f"❌ {resultado.get('mensagem', 'Erro ao importar pedido')}", 'error')
+
+        return redirect(url_for('sync_integrada.fallback_dashboard'))
+
+    except Exception as e:
+        logger.error(f"❌ Erro na importação fallback: {e}")
+        flash(f"❌ Erro ao importar pedido: {str(e)}", 'error')
+        return redirect(url_for('sync_integrada.fallback_dashboard'))
+
+
+@sync_integrada_bp.route('/fallback/importar-pedidos-por-data', methods=['POST'])
+@login_required
+def importar_pedidos_por_data_fallback():
+    """
+    Importa pedidos do Odoo por data de criação (2º fallback)
+    """
+    try:
+        from app.odoo.services.importacao_fallback_service import ImportacaoFallbackService
+
+        data_inicio = request.form.get('data_inicio', '').strip()
+        data_fim = request.form.get('data_fim', '').strip() or None
+
+        if not data_inicio:
+            flash("❌ Data inicial é obrigatória", 'error')
+            return redirect(url_for('sync_integrada.fallback_dashboard'))
+
+        logger.info(f"📥 Importação fallback por data: {data_inicio} a {data_fim}")
+
+        service = ImportacaoFallbackService()
+        resultado = service.importar_pedidos_por_data(data_inicio, data_fim)
+
+        if resultado.get('sucesso'):
+            total = resultado.get('total_encontrados', 0)
+            tempo = resultado.get('tempo_execucao', 0)
+
+            if total > 0:
+                flash(f"✅ {total} pedidos encontrados e importados ({tempo:.2f}s)", 'success')
+
+                pedidos = resultado.get('pedidos_encontrados', [])
+                if pedidos and len(pedidos) <= 10:
+                    flash(f"📦 Pedidos: {', '.join(pedidos)}", 'info')
+                elif pedidos:
+                    flash(f"📦 Primeiros 10: {', '.join(pedidos[:10])}...", 'info')
+            else:
+                flash(f"ℹ️ Nenhum pedido encontrado no período", 'info')
+        else:
+            flash(f"❌ {resultado.get('mensagem', 'Erro ao importar pedidos')}", 'error')
+
+        return redirect(url_for('sync_integrada.fallback_dashboard'))
+
+    except Exception as e:
+        logger.error(f"❌ Erro na importação fallback por data: {e}")
+        flash(f"❌ Erro ao importar pedidos: {str(e)}", 'error')
+        return redirect(url_for('sync_integrada.fallback_dashboard'))
+
+
+@sync_integrada_bp.route('/fallback/importar-faturamento', methods=['POST'])
+@login_required
+def importar_faturamento_fallback():
+    """
+    Importa uma NF específica do Odoo (fallback de faturamento)
+    """
+    try:
+        from app.odoo.services.importacao_fallback_service import ImportacaoFallbackService
+
+        numero_nf = request.form.get('numero_nf', '').strip()
+
+        if not numero_nf:
+            flash("❌ Número da NF é obrigatório", 'error')
+            return redirect(url_for('sync_integrada.fallback_dashboard'))
+
+        logger.info(f"📥 Importação fallback da NF: {numero_nf}")
+
+        service = ImportacaoFallbackService()
+        resultado = service.importar_faturamento_por_nf(numero_nf)
+
+        if resultado.get('sucesso'):
+            itens = resultado.get('itens_importados', 0)
+            tempo = resultado.get('tempo_execucao', 0)
+            dados = resultado.get('dados_nf', {})
+
+            if itens > 0:
+                flash(f"✅ NF {numero_nf} importada: {itens} itens ({tempo:.2f}s)", 'success')
+            else:
+                flash(f"ℹ️ NF {numero_nf} já existe no sistema ou não tem itens", 'info')
+
+            if dados:
+                flash(f"📝 Origem: {dados.get('origem', 'N/A')}", 'info')
+        else:
+            flash(f"❌ {resultado.get('mensagem', 'Erro ao importar NF')}", 'error')
+
+        return redirect(url_for('sync_integrada.fallback_dashboard'))
+
+    except Exception as e:
+        logger.error(f"❌ Erro na importação fallback da NF: {e}")
+        flash(f"❌ Erro ao importar NF: {str(e)}", 'error')
+        return redirect(url_for('sync_integrada.fallback_dashboard'))
+
+
+@sync_integrada_bp.route('/fallback/importar-faturamento-por-periodo', methods=['POST'])
+@login_required
+def importar_faturamento_por_periodo_fallback():
+    """
+    Importa NFs do Odoo por período (fallback de faturamento)
+    """
+    try:
+        from app.odoo.services.importacao_fallback_service import ImportacaoFallbackService
+
+        data_inicio = request.form.get('data_inicio', '').strip()
+        data_fim = request.form.get('data_fim', '').strip() or None
+
+        if not data_inicio:
+            flash("❌ Data inicial é obrigatória", 'error')
+            return redirect(url_for('sync_integrada.fallback_dashboard'))
+
+        logger.info(f"📥 Importação fallback de faturamento: {data_inicio} a {data_fim}")
+
+        service = ImportacaoFallbackService()
+        resultado = service.importar_faturamento_por_periodo(data_inicio, data_fim)
+
+        if resultado.get('sucesso'):
+            total = resultado.get('total_encontradas', 0)
+            importadas = resultado.get('total_importadas', 0)
+            erros = resultado.get('total_erros', 0)
+            tempo = resultado.get('tempo_execucao', 0)
+
+            if total > 0:
+                flash(f"✅ {importadas}/{total} NFs importadas ({tempo:.2f}s)", 'success')
+                if erros > 0:
+                    flash(f"⚠️ {erros} NFs com erro", 'warning')
+            else:
+                flash(f"ℹ️ Nenhuma NF encontrada no período", 'info')
+        else:
+            flash(f"❌ {resultado.get('mensagem', 'Erro ao importar faturamento')}", 'error')
+
+        return redirect(url_for('sync_integrada.fallback_dashboard'))
+
+    except Exception as e:
+        logger.error(f"❌ Erro na importação fallback de faturamento: {e}")
+        flash(f"❌ Erro ao importar faturamento: {str(e)}", 'error')
+        return redirect(url_for('sync_integrada.fallback_dashboard'))

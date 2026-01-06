@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-10">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-exchange-alt"></i>
+                        Registrar Substituicao de NF
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <!-- Dados da remessa original -->
+                    <div class="alert alert-warning mb-4">
+                        <h6><i class="fas fa-truck"></i> NF Original (Transportadora)</h6>
+                        <div class="row">
+                            <div class="col-md-3">
+                                <strong>NF:</strong> {{ remessa.numero_nf or '-' }}
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Quantidade:</strong> {{ remessa.qtd_movimentacao|int }} pallets
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Data:</strong> {{ remessa.data_movimentacao.strftime('%d/%m/%Y') if remessa.data_movimentacao else '-' }}
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Transportadora:</strong><br>
+                                <small>{{ remessa.nome_destinatario or remessa.cnpj_destinatario or '-' }}</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                        <h5 class="mb-3"><i class="fas fa-user text-primary"></i> Dados da NF do Cliente</h5>
+                        <p class="text-muted">Informe os dados da NF que sera emitida para o cliente:</p>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Numero da NF (Cliente) <span class="text-danger">*</span></label>
+                                <input type="text" name="numero_nf" class="form-control" required
+                                       placeholder="Numero da NF emitida para o cliente">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Quantidade de Pallets <span class="text-danger">*</span></label>
+                                <input type="number" name="quantidade" class="form-control" required
+                                       min="1" max="{{ remessa.qtd_movimentacao|int }}"
+                                       value="{{ remessa.qtd_movimentacao|int }}"
+                                       placeholder="Max: {{ remessa.qtd_movimentacao|int }}">
+                                <small class="text-muted">Maximo: {{ remessa.qtd_movimentacao|int }} (quantidade da NF original)</small>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">CNPJ do Cliente <span class="text-danger">*</span></label>
+                                <input type="text" name="cnpj_cliente" class="form-control" required
+                                       placeholder="00.000.000/0000-00">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Nome do Cliente</label>
+                                <input type="text" name="nome_cliente" class="form-control"
+                                       placeholder="Razao Social do cliente">
+                            </div>
+                        </div>
+
+                        <div class="alert alert-info mb-4">
+                            <i class="fas fa-info-circle"></i>
+                            <strong>Importante:</strong> A responsabilidade pelo retorno dos pallets permanece com a
+                            transportadora <strong>{{ remessa.nome_destinatario or remessa.cnpj_destinatario }}</strong>.
+                            A nova NF do cliente apenas "consome" a quantidade da NF original.
+                        </div>
+
+                        <hr>
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('pallet.listar_substituicoes') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Cancelar
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-exchange-alt"></i> Registrar Substituicao
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -122,6 +122,35 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Funcao para atualizar visual dos botoes de tipo
+    function atualizarBotoesTipo() {
+        const labelCliente = document.querySelector('label[for="tipoCliente"]');
+        const labelTransp = document.querySelector('label[for="tipoTransportadora"]');
+        const radioCliente = document.getElementById('tipoCliente');
+        const radioTransp = document.getElementById('tipoTransportadora');
+
+        // Reset classes
+        labelCliente.classList.remove('btn-secondary', 'btn-outline-secondary');
+        labelTransp.classList.remove('btn-info', 'btn-outline-info');
+
+        // Aplicar classe baseado no estado
+        if (radioCliente.checked) {
+            labelCliente.classList.add('btn-secondary');
+            labelTransp.classList.add('btn-outline-info');
+        } else {
+            labelCliente.classList.add('btn-outline-secondary');
+            labelTransp.classList.add('btn-info');
+        }
+    }
+
+    // Atualizar ao carregar
+    atualizarBotoesTipo();
+
+    // Atualizar ao clicar nos radios
+    document.querySelectorAll('input[name="tipo_destinatario"]').forEach(radio => {
+        radio.addEventListener('change', atualizarBotoesTipo);
+    });
+
     // Preencher formulario ao clicar em saldo pendente
     document.querySelectorAll('.saldo-item').forEach(item => {
         item.addEventListener('click', function(e) {
@@ -135,6 +164,9 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 document.getElementById('tipoCliente').checked = true;
             }
+
+            // Atualizar visual dos botoes
+            atualizarBotoesTipo();
 
             // Highlight
             document.querySelectorAll('.saldo-item').forEach(s => s.classList.remove('active'));

@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-exchange-alt text-info"></i> Substituicao de NF de Pallet</h2>
+        <a href="{{ url_for('pallet.index') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar ao Dashboard
+        </a>
+    </div>
+
+    <!-- Explicacao -->
+    <div class="alert alert-info mb-4">
+        <h6><i class="fas fa-info-circle"></i> O que e Substituicao?</h6>
+        <p class="mb-2">
+            Quando uma NF de pallet foi emitida para a <strong>transportadora</strong>, mas um cliente especifico
+            precisa de NF propria para dar entrada no sistema dele.
+        </p>
+        <ul class="mb-0">
+            <li>A nova NF do cliente "consome" parte (ou toda) a NF da transportadora</li>
+            <li>A <strong>responsabilidade pelo retorno permanece com a transportadora</strong></li>
+            <li>Nao duplica o saldo devedor</li>
+        </ul>
+    </div>
+
+    <!-- Lista de remessas disponiveis -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-truck me-2"></i>Remessas de Transportadora Disponiveis</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>NF Remessa</th>
+                            <th>Data</th>
+                            <th>Transportadora</th>
+                            <th class="text-center">Qtd Pallets</th>
+                            <th>Embarque</th>
+                            <th class="text-center">Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for rem in remessas %}
+                        <tr>
+                            <td><strong>{{ rem.numero_nf or '-' }}</strong></td>
+                            <td>{{ rem.data_movimentacao.strftime('%d/%m/%Y') if rem.data_movimentacao else '-' }}</td>
+                            <td>
+                                <span class="badge bg-info mb-1">TRANSPORTADORA</span><br>
+                                <small>{{ rem.cnpj_destinatario }}</small><br>
+                                {{ rem.nome_destinatario or '-' }}
+                            </td>
+                            <td class="text-center fw-bold">{{ rem.qtd_movimentacao|int }}</td>
+                            <td>
+                                {% if rem.codigo_embarque %}
+                                    <a href="{{ url_for('embarques.visualizar_embarque', id=rem.codigo_embarque) }}" target="_blank">
+                                        #{{ rem.codigo_embarque }}
+                                    </a>
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <a href="{{ url_for('pallet.registrar_substituicao', remessa_id=rem.id) }}"
+                                   class="btn btn-sm btn-primary" title="Registrar Substituicao">
+                                    <i class="fas fa-exchange-alt"></i> Substituir
+                                </a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted py-4">
+                                <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
+                                Nenhuma remessa de transportadora pendente disponivel para substituicao
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

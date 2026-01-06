@@ -28,8 +28,11 @@
                     <label class="form-label">Tipo Movimento</label>
                     <select name="tipo" class="form-select">
                         <option value="">Todos</option>
-                        <option value="SAIDA" {{ 'selected' if filtro_tipo == 'SAIDA' }}>Saida</option>
-                        <option value="RETORNO" {{ 'selected' if filtro_tipo == 'RETORNO' }}>Retorno</option>
+                        <option value="REMESSA" {{ 'selected' if filtro_tipo == 'REMESSA' }}>Remessa</option>
+                        <option value="SAIDA" {{ 'selected' if filtro_tipo == 'SAIDA' }}>Saida (Venda)</option>
+                        <option value="ENTRADA" {{ 'selected' if filtro_tipo == 'ENTRADA' }}>Entrada (Retorno)</option>
+                        <option value="DEVOLUCAO" {{ 'selected' if filtro_tipo == 'DEVOLUCAO' }}>Devolucao</option>
+                        <option value="RECUSA" {{ 'selected' if filtro_tipo == 'RECUSA' }}>Recusa</option>
                     </select>
                 </div>
                 <div class="col-md-3">
@@ -84,9 +87,22 @@
                             <td>{{ mov.id }}</td>
                             <td>{{ mov.criado_em.strftime('%d/%m/%Y %H:%M') }}</td>
                             <td>
-                                <span class="badge bg-{{ 'danger' if mov.tipo_movimentacao == 'SAIDA' else 'success' }}">
-                                    {{ mov.tipo_movimentacao }}
-                                </span>
+                                {% if mov.tipo_movimentacao == 'REMESSA' %}
+                                    <span class="badge bg-warning text-dark">REMESSA</span>
+                                {% elif mov.tipo_movimentacao == 'SAIDA' %}
+                                    <span class="badge bg-danger">SAIDA</span>
+                                {% elif mov.tipo_movimentacao == 'ENTRADA' %}
+                                    <span class="badge bg-success">ENTRADA</span>
+                                {% elif mov.tipo_movimentacao == 'DEVOLUCAO' %}
+                                    <span class="badge bg-info">DEVOLUCAO</span>
+                                {% elif mov.tipo_movimentacao == 'RECUSA' %}
+                                    <span class="badge bg-dark">RECUSA</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ mov.tipo_movimentacao }}</span>
+                                {% endif %}
+                                {% if mov.nf_remessa_origem %}
+                                    <br><small class="text-muted">Subst. de {{ mov.nf_remessa_origem }}</small>
+                                {% endif %}
                             </td>
                             <td>
                                 <span class="badge bg-{{ 'info' if mov.tipo_destinatario == 'TRANSPORTADORA' else 'secondary' }} mb-1">
@@ -94,11 +110,40 @@
                                 </span><br>
                                 <small>{{ mov.cnpj_destinatario }}</small><br>
                                 {{ mov.nome_destinatario or '-' }}
+                                {% if mov.cnpj_responsavel and mov.cnpj_responsavel != mov.cnpj_destinatario %}
+                                    <br><small class="text-info"><i class="fas fa-truck"></i> Resp: {{ mov.nome_responsavel or mov.cnpj_responsavel }}</small>
+                                {% endif %}
                             </td>
-                            <td>{{ mov.numero_nf or '-' }}</td>
-                            <td class="text-end fw-bold">{{ mov.qtd_movimentacao|int }}</td>
                             <td>
-                                {% if mov.tipo_movimentacao == 'SAIDA' %}
+                                {{ mov.numero_nf or '-' }}
+                                {% if mov.tipo_movimentacao == 'REMESSA' and mov.numero_nf and vales_por_nf.get(mov.numero_nf) %}
+                                    {% set vale_info = vales_por_nf[mov.numero_nf] %}
+                                    <br>
+                                    <span class="badge bg-{{ 'success' if vale_info.qtd_total >= mov.qtd_movimentacao else 'info' }}" title="{{ vale_info.count }} vale(s): {{ vale_info.qtd_pendente }} pendente, {{ vale_info.qtd_resolvido }} resolvido">
+                                        <i class="fas fa-ticket-alt"></i> {{ vale_info.count }} vale(s)
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end fw-bold">
+                                {{ mov.qtd_movimentacao|int }}
+                                {% if mov.tipo_movimentacao == 'REMESSA' and mov.numero_nf and vales_por_nf.get(mov.numero_nf) %}
+                                    {% set vale_info = vales_por_nf[mov.numero_nf] %}
+                                    {% set cobertura = vale_info.qtd_total %}
+                                    {% set pendente = mov.qtd_movimentacao - cobertura %}
+                                    {% if cobertura > 0 %}
+                                        <br>
+                                        <small class="text-{{ 'success' if pendente <= 0 else 'warning' }}">
+                                            {% if pendente <= 0 %}
+                                                <i class="fas fa-check-circle"></i> Coberto
+                                            {% else %}
+                                                <i class="fas fa-exclamation-circle"></i> {{ pendente|int }} s/ vale
+                                            {% endif %}
+                                        </small>
+                                    {% endif %}
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if mov.tipo_movimentacao in ['SAIDA', 'REMESSA'] %}
                                     {% if mov.baixado %}
                                         <span class="badge bg-success">Baixado</span>
                                         {% if mov.baixado_em %}
@@ -107,6 +152,8 @@
                                     {% else %}
                                         <span class="badge bg-warning text-dark">Pendente</span>
                                     {% endif %}
+                                {% elif mov.tipo_movimentacao in ['ENTRADA', 'DEVOLUCAO', 'RECUSA'] %}
+                                    <span class="badge bg-success">Resolvido</span>
                                 {% else %}
                                     <span class="badge bg-secondary">-</span>
                                 {% endif %}
@@ -121,11 +168,29 @@
                                 {% endif %}
                             </td>
                             <td class="text-center">
-                                {% if mov.tipo_movimentacao == 'SAIDA' and not mov.baixado %}
-                                <a href="{{ url_for('pallet.baixar_movimento', movimento_id=mov.id) }}"
-                                   class="btn btn-sm btn-outline-success" title="Baixar">
-                                    <i class="fas fa-check"></i>
-                                </a>
+                                {% if mov.tipo_movimentacao == 'REMESSA' and not mov.baixado %}
+                                    <div class="btn-group-vertical btn-group-sm">
+                                        <a href="{{ url_for('pallet.criar_vale') }}?nf={{ mov.numero_nf }}"
+                                           class="btn btn-outline-primary btn-sm" title="Criar Vale">
+                                            <i class="fas fa-ticket-alt"></i>
+                                        </a>
+                                        {% if mov.tipo_destinatario == 'TRANSPORTADORA' %}
+                                        <a href="{{ url_for('pallet.registrar_substituicao', remessa_id=mov.id) }}"
+                                           class="btn btn-outline-info btn-sm" title="Substituir">
+                                            <i class="fas fa-exchange-alt"></i>
+                                        </a>
+                                        {% endif %}
+                                    </div>
+                                {% elif mov.tipo_movimentacao == 'SAIDA' and not mov.baixado %}
+                                    <a href="{{ url_for('pallet.vincular_venda', movimento_id=mov.id) }}"
+                                       class="btn btn-sm btn-outline-primary" title="Vincular a Remessa">
+                                        <i class="fas fa-link"></i>
+                                    </a>
+                                {% elif mov.tipo_movimentacao == 'SAIDA' and not mov.movimento_baixado_id %}
+                                    <a href="{{ url_for('pallet.vincular_venda', movimento_id=mov.id) }}"
+                                       class="btn btn-sm btn-outline-warning" title="Vincular a Remessa">
+                                        <i class="fas fa-link"></i>
+                                    </a>
                                 {% endif %}
                             </td>
                         </tr>

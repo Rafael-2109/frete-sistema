@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+
+{% block title %}Importacao Fallback - Odoo{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-warning text-dark">
+                    <h4 class="mb-0">
+                        <i class="fas fa-download"></i> Importacao Fallback do Odoo
+                        <span class="badge bg-dark text-warning ml-2">2o FALLBACK</span>
+                    </h4>
+                </div>
+                <div class="card-body">
+
+                    <div class="alert alert-info">
+                        <h5 class="alert-heading">
+                            <i class="fas fa-info-circle"></i> Quando Usar?
+                        </h5>
+                        <p class="mb-2">
+                            Use esta tela quando a sincronizacao automatica nao importou um pedido ou NF do Odoo.
+                        </p>
+                        <p class="mb-0">
+                            <strong>Casos comuns:</strong>
+                        </p>
+                        <ul class="mb-0">
+                            <li>Pedido com tipo nao filtrado (ex: <code>venda-industrializacao</code>)</li>
+                            <li>Pedido criado fora da janela de sincronizacao</li>
+                            <li>NF nao capturada pela sincronizacao automatica</li>
+                        </ul>
+                    </div>
+
+                    <div class="row">
+                        <!-- IMPORTAR PEDIDO POR NUMERO -->
+                        <div class="col-md-6 mb-4">
+                            <div class="card h-100 border-primary">
+                                <div class="card-header bg-primary text-white">
+                                    <h5 class="mb-0">
+                                        <i class="fas fa-shopping-cart"></i> Importar Pedido por Numero
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <p class="text-muted">
+                                        Importe um pedido especifico do Odoo informando o numero.
+                                    </p>
+                                    <form method="POST" action="{{ url_for('sync_integrada.importar_pedido_fallback') }}">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <div class="form-group">
+                                            <label for="num_pedido">Numero do Pedido</label>
+                                            <input type="text" class="form-control" id="num_pedido" name="num_pedido"
+                                                   placeholder="Ex: VFB2500432, VCD123456" required>
+                                            <small class="form-text text-muted">
+                                                Prefixos validos: VCD, VFB, VSC
+                                            </small>
+                                        </div>
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="fas fa-download"></i> Importar Pedido
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- IMPORTAR PEDIDOS POR DATA -->
+                        <div class="col-md-6 mb-4">
+                            <div class="card h-100 border-info">
+                                <div class="card-header bg-info text-white">
+                                    <h5 class="mb-0">
+                                        <i class="fas fa-calendar-alt"></i> Importar Pedidos por Data
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <p class="text-muted">
+                                        Importe todos os pedidos criados em um periodo.
+                                    </p>
+                                    <form method="POST" action="{{ url_for('sync_integrada.importar_pedidos_por_data_fallback') }}">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <div class="row">
+                                            <div class="col-6">
+                                                <div class="form-group">
+                                                    <label for="data_inicio_pedido">Data Inicial</label>
+                                                    <input type="date" class="form-control" id="data_inicio_pedido"
+                                                           name="data_inicio" required>
+                                                </div>
+                                            </div>
+                                            <div class="col-6">
+                                                <div class="form-group">
+                                                    <label for="data_fim_pedido">Data Final</label>
+                                                    <input type="date" class="form-control" id="data_fim_pedido"
+                                                           name="data_fim">
+                                                    <small class="form-text text-muted">Opcional (default: hoje)</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <button type="submit" class="btn btn-info">
+                                            <i class="fas fa-download"></i> Importar Pedidos
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- IMPORTAR NF POR NUMERO -->
+                        <div class="col-md-6 mb-4">
+                            <div class="card h-100 border-success">
+                                <div class="card-header bg-success text-white">
+                                    <h5 class="mb-0">
+                                        <i class="fas fa-file-invoice"></i> Importar NF por Numero
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <p class="text-muted">
+                                        Importe uma nota fiscal especifica do Odoo.
+                                    </p>
+                                    <form method="POST" action="{{ url_for('sync_integrada.importar_faturamento_fallback') }}">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <div class="form-group">
+                                            <label for="numero_nf">Numero da NF</label>
+                                            <input type="text" class="form-control" id="numero_nf" name="numero_nf"
+                                                   placeholder="Ex: 123456" required>
+                                        </div>
+                                        <button type="submit" class="btn btn-success">
+                                            <i class="fas fa-download"></i> Importar NF
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- IMPORTAR NFs POR PERIODO -->
+                        <div class="col-md-6 mb-4">
+                            <div class="card h-100 border-secondary">
+                                <div class="card-header bg-secondary text-white">
+                                    <h5 class="mb-0">
+                                        <i class="fas fa-calendar-check"></i> Importar NFs por Periodo
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <p class="text-muted">
+                                        Importe todas as NFs emitidas em um periodo.
+                                    </p>
+                                    <form method="POST" action="{{ url_for('sync_integrada.importar_faturamento_por_periodo_fallback') }}">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <div class="row">
+                                            <div class="col-6">
+                                                <div class="form-group">
+                                                    <label for="data_inicio_nf">Data Inicial</label>
+                                                    <input type="date" class="form-control" id="data_inicio_nf"
+                                                           name="data_inicio" required>
+                                                </div>
+                                            </div>
+                                            <div class="col-6">
+                                                <div class="form-group">
+                                                    <label for="data_fim_nf">Data Final</label>
+                                                    <input type="date" class="form-control" id="data_fim_nf"
+                                                           name="data_fim">
+                                                    <small class="form-text text-muted">Opcional (default: hoje)</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <button type="submit" class="btn btn-secondary">
+                                            <i class="fas fa-download"></i> Importar NFs
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <div class="text-center">
+                        <a href="{{ url_for('sync_integrada.dashboard') }}" class="btn btn-outline-primary">
+                            <i class="fas fa-arrow-left"></i> Voltar para Sincronizacao Integrada
+                        </a>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

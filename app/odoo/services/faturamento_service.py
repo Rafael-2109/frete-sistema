@@ -1293,10 +1293,12 @@ class FaturamentoService:
                     '|',
                     '|',
                     '|',
+                    '|',
                     ('move_id.l10n_br_tipo_pedido', '=', 'venda'),
                     ('move_id.l10n_br_tipo_pedido', '=', 'bonificacao'),
                     ('move_id.l10n_br_tipo_pedido', '=', 'industrializacao'),
-                    ('move_id.l10n_br_tipo_pedido', '=', 'exportacao')
+                    ('move_id.l10n_br_tipo_pedido', '=', 'exportacao'),
+                    ('move_id.l10n_br_tipo_pedido', '=', 'venda-industrializacao')
                 ])
 
                 horas_status = minutos_status / 60
@@ -1342,20 +1344,24 @@ class FaturamentoService:
                     '|',  # Operador OR em domain Odoo
                     '|',
                     '|',
+                    '|',
                     ('move_id.l10n_br_tipo_pedido', '=', 'venda'),
                     ('move_id.l10n_br_tipo_pedido', '=', 'bonificacao'),
                     ('move_id.l10n_br_tipo_pedido', '=', 'industrializacao'),
-                    ('move_id.l10n_br_tipo_pedido', '=', 'exportacao')
+                    ('move_id.l10n_br_tipo_pedido', '=', 'exportacao'),
+                    ('move_id.l10n_br_tipo_pedido', '=', 'venda-industrializacao')
                 ])
             else:
                 domain.extend([
                     '|',  # Operador OR em domain Odoo
                     '|',
                     '|',
+                    '|',
                     ('move_id.l10n_br_tipo_pedido', '=', 'venda'),
                     ('move_id.l10n_br_tipo_pedido', '=', 'bonificacao'),
                     ('move_id.l10n_br_tipo_pedido', '=', 'industrializacao'),
-                    ('move_id.l10n_br_tipo_pedido', '=', 'exportacao')
+                    ('move_id.l10n_br_tipo_pedido', '=', 'exportacao'),
+                    ('move_id.l10n_br_tipo_pedido', '=', 'venda-industrializacao')
                 ])
             
             campos_basicos = [
@@ -1749,10 +1755,12 @@ class FaturamentoService:
                     '|',
                     '|',
                     '|',
+                    '|',
                     ('l10n_br_tipo_pedido', '=', 'venda'),
                     ('l10n_br_tipo_pedido', '=', 'bonificacao'),
                     ('l10n_br_tipo_pedido', '=', 'industrializacao'),
-                    ('l10n_br_tipo_pedido', '=', 'exportacao')
+                    ('l10n_br_tipo_pedido', '=', 'exportacao'),
+                    ('l10n_br_tipo_pedido', '=', 'venda-industrializacao')
                 ],
                 ['id', 'l10n_br_numero_nota_fiscal', 'state', 'date', 'partner_id'],
                 limit=1000  # Limitar para evitar timeout
