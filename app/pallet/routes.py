@@ -351,6 +351,47 @@ def baixar_movimento(movimento_id):
                            retornos_disponiveis=retornos_disponiveis)
 
 
+@pallet_bp.route('/desfazer-baixa/<int:movimento_id>', methods=['POST'])
+@login_required
+def desfazer_baixa(movimento_id):
+    """Desfaz a baixa de um movimento de pallet"""
+    movimento = MovimentacaoEstoque.query.get_or_404(movimento_id)
+
+    if movimento.local_movimentacao != 'PALLET':
+        flash('Este movimento nao e de pallet!', 'warning')
+        return redirect(url_for('pallet.listar_movimentos'))
+
+    if not movimento.baixado:
+        flash('Este movimento nao esta baixado!', 'warning')
+        return redirect(url_for('pallet.listar_movimentos'))
+
+    try:
+        # Registrar quem e quando desfez
+        usuario = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
+        obs_desfazer = f'\n[BAIXA DESFEITA em {datetime.utcnow().strftime("%d/%m/%Y %H:%M")} por {usuario}]'
+
+        # Guardar info anterior na observacao
+        if movimento.baixado_em:
+            obs_desfazer += f' (estava baixado desde {movimento.baixado_em.strftime("%d/%m/%Y")} por {movimento.baixado_por})'
+
+        movimento.observacao = (movimento.observacao or '') + obs_desfazer
+
+        # Limpar campos de baixa
+        movimento.baixado = False
+        movimento.baixado_em = None
+        movimento.baixado_por = None
+        movimento.movimento_baixado_id = None
+
+        db.session.commit()
+        flash(f'Baixa do movimento #{movimento.id} desfeita com sucesso!', 'success')
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao desfazer baixa: {str(e)}', 'danger')
+
+    return redirect(url_for('pallet.listar_movimentos'))
+
+
 # ========== APIs ==========
 
 @pallet_bp.route('/api/saldo/<cnpj>')

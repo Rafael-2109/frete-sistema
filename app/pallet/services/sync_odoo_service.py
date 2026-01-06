@@ -253,14 +253,19 @@ class PalletSyncService:
                     move_data = linha.get('move_id', [])
                     move_id = move_data[0] if isinstance(move_data, (list, tuple)) else move_data
 
-                    # Buscar numero da NF
+                    # Buscar numero da NF e tipo
                     nf_data = self.odoo.search_read(
                         'account.move',
                         [('id', '=', move_id)],
-                        ['l10n_br_numero_nota_fiscal', 'invoice_date', 'partner_id']
+                        ['l10n_br_numero_nota_fiscal', 'invoice_date', 'partner_id', 'l10n_br_tipo_pedido']
                     )
 
                     if not nf_data:
+                        continue
+
+                    # IMPORTANTE: Pular NFs de vasilhame - essas ja sao importadas como REMESSA
+                    # Evita duplicidade: mesma NF aparecendo como REMESSA e SAIDA
+                    if nf_data[0].get('l10n_br_tipo_pedido') == 'vasilhame':
                         continue
 
                     numero_nf = str(nf_data[0].get('l10n_br_numero_nota_fiscal', ''))

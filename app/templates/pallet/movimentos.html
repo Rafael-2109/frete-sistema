@@ -186,11 +186,22 @@
                                        class="btn btn-sm btn-outline-primary" title="Vincular a Remessa">
                                         <i class="fas fa-link"></i>
                                     </a>
-                                {% elif mov.tipo_movimentacao == 'SAIDA' and not mov.movimento_baixado_id %}
+                                {% elif mov.tipo_movimentacao == 'SAIDA' and mov.baixado and not mov.movimento_baixado_id %}
                                     <a href="{{ url_for('pallet.vincular_venda', movimento_id=mov.id) }}"
                                        class="btn btn-sm btn-outline-warning" title="Vincular a Remessa">
                                         <i class="fas fa-link"></i>
                                     </a>
+                                {% endif %}
+                                {# Botao para desfazer baixa - disponivel para REMESSA e SAIDA baixados #}
+                                {% if mov.tipo_movimentacao in ['REMESSA', 'SAIDA'] and mov.baixado %}
+                                    <form action="{{ url_for('pallet.desfazer_baixa', movimento_id=mov.id) }}"
+                                          method="POST" class="d-inline"
+                                          onsubmit="return confirm('Deseja realmente desfazer a baixa deste movimento?');">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Desfazer Baixa">
+                                            <i class="fas fa-undo"></i>
+                                        </button>
+                                    </form>
                                 {% endif %}
                             </td>
                         </tr>
