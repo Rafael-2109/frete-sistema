@@ -829,41 +829,66 @@ class AjusteSincronizacaoService:
         resultado: Dict,
     ):
         """
-        Gera alerta quando separação COTADA é alterada.
+        Gera alertas quando separação COTADA é alterada.
+        Cria um alerta por produto alterado usando o método criar_alerta().
         """
         try:
-            # Criar descrição detalhada da alteração
-            descricao = f"Separação COTADA alterada - Tipo: {tipo_alteracao}\n"
+            alertas_criados = 0
 
-            # Comparar itens
+            # Comparar itens existentes
             for cod_produto, dados_antigos in itens_antigos.items():
                 item_novo = next((i for i in itens_novos if i["cod_produto"] == cod_produto), None)
+                qtd_antiga = dados_antigos["qtd"]
+
                 if item_novo:
                     qtd_nova = float(item_novo["qtd_saldo_produto_pedido"])
-                    qtd_antiga = dados_antigos["qtd"]
                     if abs(qtd_nova - qtd_antiga) > 0.01:
-                        descricao += f"- {cod_produto}: {qtd_antiga} → {qtd_nova}\n"
+                        # Determinar tipo de alteração por produto
+                        tipo_prod = "AUMENTO" if qtd_nova > qtd_antiga else "REDUCAO"
+                        AlertaSeparacaoCotada.criar_alerta(
+                            separacao_lote_id=lote_id,
+                            num_pedido=num_pedido,
+                            cod_produto=cod_produto,
+                            tipo_alteracao=tipo_prod,
+                            qtd_anterior=qtd_antiga,
+                            qtd_nova=qtd_nova,
+                            tipo_separacao=tipo_alteracao
+                        )
+                        alertas_criados += 1
                 else:
-                    descricao += f"- {cod_produto}: REMOVIDO (era {dados_antigos['qtd']})\n"
+                    # Produto foi removido
+                    AlertaSeparacaoCotada.criar_alerta(
+                        separacao_lote_id=lote_id,
+                        num_pedido=num_pedido,
+                        cod_produto=cod_produto,
+                        tipo_alteracao="REMOCAO",
+                        qtd_anterior=qtd_antiga,
+                        qtd_nova=0,
+                        tipo_separacao=tipo_alteracao
+                    )
+                    alertas_criados += 1
 
-            # Verificar novos itens
+            # Verificar novos itens (adições)
             for item_novo in itens_novos:
-                if item_novo["cod_produto"] not in itens_antigos:
-                    descricao += f"- {item_novo['cod_produto']}: NOVO ({item_novo['qtd_saldo_produto_pedido']})\n"
+                cod_produto = item_novo["cod_produto"]
+                if cod_produto not in itens_antigos:
+                    qtd_nova = float(item_novo["qtd_saldo_produto_pedido"])
+                    AlertaSeparacaoCotada.criar_alerta(
+                        separacao_lote_id=lote_id,
+                        num_pedido=num_pedido,
+                        cod_produto=cod_produto,
+                        tipo_alteracao="ADICAO",
+                        qtd_anterior=0,
+                        qtd_nova=qtd_nova,
+                        tipo_separacao=tipo_alteracao
+                    )
+                    alertas_criados += 1
 
-            # Criar alerta
-            alerta = AlertaSeparacaoCotada(
-                separacao_lote_id=lote_id,
-                num_pedido=num_pedido,
-                observacao=descricao,
-            )
-            db.session.add(alerta)
-
-            resultado["alertas"].append(
-                {"tipo": "COTADO_ALTERADO", "lote_id": lote_id, "num_pedido": num_pedido, "observacao": descricao}
-            )
-
-            logger.warning(f"🚨 ALERTA GERADO: Separação COTADA {lote_id} foi alterada")
+            if alertas_criados > 0:
+                resultado["alertas"].append(
+                    {"tipo": "COTADO_ALTERADO", "lote_id": lote_id, "num_pedido": num_pedido, "qtd_alertas": alertas_criados}
+                )
+                logger.warning(f"🚨 ALERTA GERADO: Separação COTADA {lote_id} - {alertas_criados} produto(s) alterado(s)")
 
         except Exception as e:
             logger.error(f"Erro ao gerar alerta: {e}")

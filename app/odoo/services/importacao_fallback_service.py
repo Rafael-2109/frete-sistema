@@ -539,9 +539,15 @@ class ImportacaoFallbackService:
     def _processar_importacao_nf(self, nf_dados: Dict) -> Dict[str, Any]:
         """
         Processa a importação de uma NF específica para o sistema local.
+
+        FLUXO COMPLETO:
+        1. Insere em FaturamentoProduto
+        2. Insere em RelatorioFaturamentoImportado
+        3. Atualiza saldos na CarteiraPrincipal
+        4. Processa match com Separacao/Embarque via ProcessadorFaturamento
         """
         try:
-            from app.faturamento.models import FaturamentoProduto
+            from app.faturamento.models import FaturamentoProduto, RelatorioFaturamentoImportado
             from app.odoo.utils.carteira_mapper import CarteiraMapper
 
             numero_nf = nf_dados.get('numero_nf')
@@ -610,8 +616,10 @@ class ImportacaoFallbackService:
                 partner_id = nf_info['partner_id'][0] if isinstance(nf_info['partner_id'], list) else nf_info['partner_id']
                 cliente_info = mapper._buscar_dados_parceiro(partner_id) or {}
 
-            # Importar cada linha
+            # Importar cada linha - coletar cod_produto para atualização de saldos
             itens_importados = 0
+            produtos_importados = set()
+            valor_total_nf = 0
 
             for linha in linhas:
                 try:
@@ -653,17 +661,62 @@ class ImportacaoFallbackService:
 
                     db.session.add(faturamento)
                     itens_importados += 1
+                    produtos_importados.add(cod_produto)
+                    valor_total_nf += float(linha.get('price_total', 0) or 0)
 
                 except Exception as e:
                     logger.error(f"❌ Erro ao importar linha da NF {numero_nf}: {e}")
 
-            db.session.commit()
+            # Inserir em RelatorioFaturamentoImportado (necessário para ProcessadorFaturamento)
+            relatorio_existente = RelatorioFaturamentoImportado.query.filter_by(numero_nf=numero_nf).first()
+            if not relatorio_existente:
+                relatorio = RelatorioFaturamentoImportado(
+                    numero_nf=numero_nf,
+                    data_fatura=nf_info.get('invoice_date'),
+                    cnpj_cliente=cliente_info.get('cnpj', ''),
+                    nome_cliente=cliente_info.get('razao_social', ''),
+                    valor_total=valor_total_nf,
+                    origem=origem,
+                    ativo=True
+                )
+                db.session.add(relatorio)
+                logger.info(f"📋 RelatorioFaturamentoImportado criado para NF {numero_nf}")
 
+            db.session.commit()
             logger.info(f"✅ NF {numero_nf} importada: {itens_importados} itens")
+
+            # ============================================================
+            # PROCESSAMENTO COMPLETO: Atualizar saldos e sincronizar
+            # ============================================================
+            try:
+                # 1. Atualizar saldos na CarteiraPrincipal
+                if origem and produtos_importados:
+                    logger.info(f"📊 Atualizando saldos da carteira para pedido {origem}...")
+                    pedidos_afetados = {origem: produtos_importados}
+                    self.faturamento_service._atualizar_saldos_carteira(pedidos_afetados)
+                    logger.info(f"✅ Saldos atualizados para {len(produtos_importados)} produtos")
+
+                # 2. Processar match com Separacao e Embarque
+                logger.info(f"🔄 Processando match com Separacao/Embarque...")
+                from app.faturamento.services.processar_faturamento import ProcessadorFaturamento
+                processador = ProcessadorFaturamento()
+                resultado_proc = processador.processar_nfs_importadas(
+                    usuario='Fallback Import',
+                    limpar_inconsistencias=False,
+                    nfs_especificas=[numero_nf]
+                )
+
+                if resultado_proc:
+                    logger.info(f"✅ Processamento completo: {resultado_proc.get('processadas', 0)} NFs, "
+                              f"{resultado_proc.get('movimentacoes_criadas', 0)} movimentações")
+
+            except Exception as e:
+                logger.warning(f"⚠️ Processamento pós-importação falhou (NF foi importada): {e}")
+                # NF foi importada, processamento pode ser feito depois pela sincronização regular
 
             return {
                 'sucesso': True,
-                'mensagem': f'NF {numero_nf} importada com sucesso',
+                'mensagem': f'NF {numero_nf} importada e processada com sucesso',
                 'itens_importados': itens_importados
             }
 

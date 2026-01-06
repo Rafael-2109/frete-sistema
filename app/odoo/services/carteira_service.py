@@ -1767,8 +1767,15 @@ class CarteiraService:
             
             # 🚀 OTIMIZAÇÃO: Buscar TODOS os dados em apenas 3 queries!
             
-            # OTIMIZAÇÃO: Em modo incremental, carregar apenas pedidos que serão afetados
-            if modo_incremental:
+            # OTIMIZAÇÃO: Filtrar por pedidos_especificos ou modo incremental
+            if pedidos_especificos:
+                # Modo fallback/específico: carregar apenas os pedidos solicitados
+                logger.info(f"   ⚡ Modo específico: carregando apenas {len(pedidos_especificos)} pedidos...")
+                todos_itens = CarteiraPrincipal.query.filter(
+                    CarteiraPrincipal.num_pedido.in_(pedidos_especificos)
+                ).all()
+                logger.info(f"   ✅ {len(todos_itens)} itens carregados (apenas pedidos específicos)")
+            elif modo_incremental:
                 # Primeiro precisamos saber quais pedidos serão afetados
                 # Mas ainda não temos os dados do Odoo aqui, então faremos isso depois
                 logger.info("   ⚡ Modo incremental: otimização de carga será aplicada após buscar dados do Odoo")
@@ -1778,43 +1785,57 @@ class CarteiraService:
                 logger.info("   📦 Carregando carteira atual...")
                 todos_itens = CarteiraPrincipal.query.all()
                 logger.info(f"   ✅ {len(todos_itens)} itens carregados")
-            
-            # Query 2: Buscar TODOS os faturamentos de uma vez
-            logger.info("   📦 Carregando todos os faturamentos...")
-            
+
+            # Query 2: Buscar faturamentos (filtrado se pedidos_especificos)
+            if pedidos_especificos:
+                logger.info(f"   📦 Carregando faturamentos para {len(pedidos_especificos)} pedidos...")
+            else:
+                logger.info("   📦 Carregando todos os faturamentos...")
+
             @retry_on_ssl_error(max_retries=3)
             def buscar_todos_faturamentos():
-                return db.session.query(
+                query = db.session.query(
                     FaturamentoProduto.origem,
                     FaturamentoProduto.cod_produto,
                     func.sum(FaturamentoProduto.qtd_produto_faturado).label('qtd_faturada')
                 ).filter(
                     FaturamentoProduto.status_nf != 'Cancelado'
-                ).group_by(
+                )
+                # Filtrar por pedidos específicos se fornecido
+                if pedidos_especificos:
+                    query = query.filter(FaturamentoProduto.origem.in_(pedidos_especificos))
+                return query.group_by(
                     FaturamentoProduto.origem,
                     FaturamentoProduto.cod_produto
                 ).all()
-            
+
             faturamentos = buscar_todos_faturamentos()
             faturamentos_dict = {(f.origem, f.cod_produto): float(f.qtd_faturada or 0) for f in faturamentos}
             logger.info(f"   ✅ {len(faturamentos_dict)} faturamentos carregados")
-            
-            # Query 3: Buscar TODAS as separações não sincronizadas de uma vez
-            logger.info("   📦 Carregando todas as separações não sincronizadas...")
-            
+
+            # Query 3: Buscar separações não sincronizadas (filtrado se pedidos_especificos)
+            if pedidos_especificos:
+                logger.info(f"   📦 Carregando separações para {len(pedidos_especificos)} pedidos...")
+            else:
+                logger.info("   📦 Carregando todas as separações não sincronizadas...")
+
             @retry_on_ssl_error(max_retries=3)
             def buscar_todas_separacoes():
-                return db.session.query(
+                query = db.session.query(
                     Separacao.num_pedido,
                     Separacao.cod_produto,
                     func.sum(Separacao.qtd_saldo).label('qtd_em_separacao')
                 ).filter(
                     Separacao.sincronizado_nf == False
-                ).group_by(
+                )
+                # Filtrar por pedidos específicos se fornecido
+                if pedidos_especificos:
+                    query = query.filter(Separacao.num_pedido.in_(pedidos_especificos))
+                return query.group_by(
                     Separacao.num_pedido,
                     Separacao.cod_produto
                 ).all()
-            
+
             separacoes = buscar_todas_separacoes()
             separacoes_dict = {(s.num_pedido, s.cod_produto): float(s.qtd_em_separacao or 0) for s in separacoes}
             logger.info(f"   ✅ {len(separacoes_dict)} separações carregadas")
