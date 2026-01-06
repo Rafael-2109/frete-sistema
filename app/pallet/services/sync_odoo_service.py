@@ -19,6 +19,13 @@ NOME_PRODUTO_PALLET = 'PALLET'
 # Prazo de cobranca agora e calculado dinamicamente em app/pallet/utils.py
 # SP/RED = 7 dias, outros = 30 dias
 
+# CNPJs intercompany (Nacom e La Famiglia) - NFs para esses destinos nao sao controladas
+# Usa prefixo (raiz do CNPJ - 8 primeiros digitos) para pegar todas as filiais
+CNPJS_INTERCOMPANY_PREFIXOS = [
+    '61724241',  # Nacom Goya (matriz e filiais)
+    '18467441',  # La Famiglia
+]
+
 
 class PalletSyncService:
     """Servico para sincronizar movimentacoes de pallet do Odoo"""
@@ -139,6 +146,12 @@ class PalletSyncService:
                     # Match por raiz do CNPJ (8 primeiros digitos)
                     from app.pallet.utils import buscar_tipo_destinatario
                     tipo_destinatario, _, _ = buscar_tipo_destinatario(cnpj_destinatario)
+
+                    # Pular NFs intercompany (Nacom/La Famiglia) - nao controla pallet interno
+                    prefixo_cnpj = cnpj_destinatario[:8] if cnpj_destinatario else ''
+                    if prefixo_cnpj in CNPJS_INTERCOMPANY_PREFIXOS:
+                        logger.debug(f"   ⏭️ NF {numero_nf} ignorada (intercompany: {partner_nome})")
+                        continue
 
                     # Data da NF
                     data_nf = nf.get('invoice_date')
