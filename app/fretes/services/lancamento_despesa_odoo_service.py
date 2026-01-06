@@ -367,10 +367,23 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
             if despesa.status != 'VINCULADO_CTE':
                 raise ValueError(f"Status '{despesa.status}' não permite lançamento. Esperado: VINCULADO_CTE")
 
+            # 🔧 CORREÇÃO 05/01/2026: Extrair dados da despesa ANTES das operações longas
+            # Isso previne o erro "Instance <DespesaExtra> is not bound to a Session"
+            # que ocorre quando a ETAPA 6 demora muito (30+ segundos) e a sessão expira
+            despesa_fatura_id = despesa.fatura_frete_id
+            despesa_numero_fatura = despesa.fatura_frete.numero_fatura if despesa.fatura_frete else None
+            despesa_cte_id = despesa.despesa_cte_id
+            despesa_vencimento = despesa.vencimento_despesa
+            current_app.logger.debug(
+                f"📦 Dados extraídos da despesa #{despesa_id}: "
+                f"fatura_id={despesa_fatura_id}, numero_fatura={despesa_numero_fatura}, "
+                f"cte_id={despesa_cte_id}"
+            )
+
             # Buscar CTe
-            cte = ConhecimentoTransporte.query.get(despesa.despesa_cte_id)
+            cte = ConhecimentoTransporte.query.get(despesa_cte_id)
             if not cte:
-                raise ValueError(f"CTe #{despesa.despesa_cte_id} não encontrado")
+                raise ValueError(f"CTe #{despesa_cte_id} não encontrado")
 
             cte_chave = cte.chave_acesso
             cte_id = cte.id
@@ -379,8 +392,9 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
             current_app.logger.info(f"Chave CTe: {cte_chave}")
 
             # Usar vencimento da despesa se não informado
+            # 🔧 CORREÇÃO 05/01/2026: Usar variável local extraída no início
             if not data_vencimento:
-                data_vencimento = despesa.vencimento_despesa
+                data_vencimento = despesa_vencimento
 
             if not data_vencimento:
                 raise ValueError("Data de vencimento não informada e despesa não possui vencimento")
@@ -539,11 +553,12 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
                 dados_dfe = {'l10n_br_data_entrada': data_entrada}
 
                 # ✅ ADICIONAR payment_reference com número da fatura (se houver)
-                if despesa.fatura_frete_id and despesa.fatura_frete:
-                    referencia_fatura = f"FATURA-{despesa.fatura_frete.numero_fatura}"
+                # 🔧 CORREÇÃO 05/01/2026: Usar variáveis locais extraídas no início
+                if despesa_fatura_id and despesa_numero_fatura:
+                    referencia_fatura = f"FATURA-{despesa_numero_fatura}"
                     dados_dfe['payment_reference'] = referencia_fatura
                     current_app.logger.info(
-                        f"🔗 Adicionando fatura {despesa.fatura_frete.numero_fatura} ao DFe {dfe_id}"
+                        f"🔗 Adicionando fatura {despesa_numero_fatura} ao DFe {dfe_id}"
                     )
                 else:
                     dados_dfe['payment_reference'] = f'DESPESA-{despesa_id}'
@@ -765,11 +780,12 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
                 }
 
                 # ✅ ADICIONAR partner_ref com número da fatura (se houver)
-                if despesa.fatura_frete_id and despesa.fatura_frete:
-                    referencia_fatura = f"FATURA-{despesa.fatura_frete.numero_fatura}"
+                # 🔧 CORREÇÃO 05/01/2026: Usar variáveis locais extraídas no início
+                if despesa_fatura_id and despesa_numero_fatura:
+                    referencia_fatura = f"FATURA-{despesa_numero_fatura}"
                     dados_po['partner_ref'] = referencia_fatura
                     current_app.logger.info(
-                        f"🔗 Adicionando fatura {despesa.fatura_frete.numero_fatura} ao PO {po_id} "
+                        f"🔗 Adicionando fatura {despesa_numero_fatura} ao PO {po_id} "
                         f"(partner_ref: '{referencia_fatura}')"
                     )
 
@@ -1162,11 +1178,12 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
                 }
 
                 # ✅ ADICIONAR payment_reference com número da fatura (se houver)
-                if despesa.fatura_frete_id and despesa.fatura_frete:
-                    referencia_fatura = f"FATURA-{despesa.fatura_frete.numero_fatura}"
+                # 🔧 CORREÇÃO 05/01/2026: Usar variáveis locais extraídas no início
+                if despesa_fatura_id and despesa_numero_fatura:
+                    referencia_fatura = f"FATURA-{despesa_numero_fatura}"
                     dados_invoice['payment_reference'] = referencia_fatura
                     current_app.logger.info(
-                        f"🔗 Adicionando fatura {despesa.fatura_frete.numero_fatura} à Invoice {invoice_id}"
+                        f"🔗 Adicionando fatura {despesa_numero_fatura} à Invoice {invoice_id}"
                     )
                 else:
                     dados_invoice['payment_reference'] = f'DESPESA-{despesa_id}'
@@ -1284,31 +1301,53 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
             # ========================================
             # ETAPA 16: Atualizar despesa local
             # ========================================
-            despesa.odoo_dfe_id = dfe_id
-            despesa.odoo_purchase_order_id = po_id
-            despesa.odoo_invoice_id = invoice_id
-            despesa.lancado_odoo_em = agora_brasil()
-            despesa.lancado_odoo_por = self.usuario_nome
-            despesa.status = 'LANCADO_ODOO'
+            try:
+                # 🔧 CORREÇÃO 05/01/2026: Re-buscar despesa com sessão NOVA
+                # A sessão original pode ter expirado durante as operações longas no Odoo
+                # (especialmente na ETAPA 6 que pode demorar 30+ segundos)
 
-            db.session.commit()
+                # ✅ Garantir sessão limpa antes de re-buscar
+                try:
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
 
-            self._registrar_auditoria_despesa(
-                despesa_extra_id=despesa_id,
-                cte_id=cte_id,
-                chave_cte=cte_chave,
-                etapa=16,
-                etapa_descricao="Atualizar despesa local e finalizar",
-                modelo_odoo='despesas_extras',
-                acao='write',
-                status='SUCESSO',
-                mensagem=f"Despesa #{despesa_id} atualizada com IDs Odoo",
-                campos_alterados=['odoo_dfe_id', 'odoo_purchase_order_id', 'odoo_invoice_id', 'lancado_odoo_em', 'lancado_odoo_por', 'status'],
-                dfe_id=dfe_id,
-                purchase_order_id=po_id,
-                invoice_id=invoice_id
-            )
-            resultado['etapas_concluidas'] = 16
+                current_app.logger.info(f"🔄 Re-buscando despesa #{despesa_id} para atualização final...")
+                despesa = db.session.get(DespesaExtra, despesa_id)  # ✅ Usar db.session.get() (SQLAlchemy 2.0+)
+                if not despesa:
+                    raise ValueError(f"Despesa Extra ID {despesa_id} não encontrada na ETAPA 16")
+
+                despesa.odoo_dfe_id = dfe_id
+                despesa.odoo_purchase_order_id = po_id
+                despesa.odoo_invoice_id = invoice_id
+                despesa.lancado_odoo_em = agora_brasil()
+                despesa.lancado_odoo_por = self.usuario_nome
+                despesa.status = 'LANCADO_ODOO'
+
+                db.session.commit()
+
+                self._registrar_auditoria_despesa(
+                    despesa_extra_id=despesa_id,
+                    cte_id=cte_id,
+                    chave_cte=cte_chave,
+                    etapa=16,
+                    etapa_descricao="Atualizar despesa local e finalizar",
+                    modelo_odoo='despesas_extras',
+                    acao='write',
+                    status='SUCESSO',
+                    mensagem=f"Despesa #{despesa_id} atualizada com IDs Odoo",
+                    campos_alterados=['odoo_dfe_id', 'odoo_purchase_order_id', 'odoo_invoice_id', 'lancado_odoo_em', 'lancado_odoo_por', 'status'],
+                    dfe_id=dfe_id,
+                    purchase_order_id=po_id,
+                    invoice_id=invoice_id
+                )
+                resultado['etapas_concluidas'] = 16
+
+            except Exception as e:
+                db.session.rollback()
+                current_app.logger.error(f"Erro ao atualizar despesa: {e}")
+                resultado['erro'] = f"Erro ao atualizar despesa: {e}"
+                resultado['mensagem'] = f"Lançamento concluído no Odoo, mas erro ao atualizar sistema local: {e}"
 
             # SUCESSO!
             tempo_total = time.time() - inicio_total

@@ -188,13 +188,58 @@ class FileStorage:
                 current_app.logger.error(f"Erro ao gerar URL local para {file_path}: {str(e)}")
                 return None
     
+    def get_download_url(self, file_path, filename=None):
+        """
+        Gera URL para DOWNLOAD forçado de arquivo (Content-Disposition: attachment)
+
+        Args:
+            file_path: Caminho do arquivo retornado por save_file()
+            filename: Nome do arquivo para download (opcional)
+
+        Returns:
+            str: URL para download do arquivo
+        """
+        if not file_path:
+            return None
+
+        if self.use_s3 and not file_path.startswith('uploads/'):
+            try:
+                if file_path.startswith('s3://'):
+                    bucket_name = file_path.split('/')[2]
+                    object_key = '/'.join(file_path.split('/')[3:])
+                else:
+                    bucket_name = self.bucket_name
+                    object_key = file_path
+
+                # Nome do arquivo para download
+                if not filename:
+                    filename = object_key.split('/')[-1]
+
+                # Gera URL assinada COM Content-Disposition para forçar download
+                url = self.s3_client.generate_presigned_url(
+                    'get_object',
+                    Params={
+                        'Bucket': bucket_name,
+                        'Key': object_key,
+                        'ResponseContentDisposition': f'attachment; filename="{filename}"'
+                    },
+                    ExpiresIn=3600
+                )
+                return url
+            except ClientError as e:
+                current_app.logger.error(f"Erro ao gerar URL download S3 para {file_path}: {str(e)}")
+                return None
+        else:
+            # Para arquivos locais, retorna None (deve usar send_file)
+            return None
+
     def delete_file(self, file_path):
         """
         Remove arquivo do storage
-        
+
         Args:
             file_path: Caminho do arquivo retornado por save_file()
-        
+
         Returns:
             bool: True se removido com sucesso
         """
