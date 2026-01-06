@@ -76,6 +76,14 @@ class MovimentacaoEstoque(db.Model):
     baixado_por = db.Column(db.String(100), nullable=True)
     movimento_baixado_id = db.Column(db.Integer, db.ForeignKey('movimentacao_estoque.id', ondelete='SET NULL'), nullable=True)
 
+    # Campos para substituicao de NF (quando NF cliente consome parte de NF transportadora)
+    # nf_remessa_origem: NF original da transportadora que foi substituida
+    nf_remessa_origem = db.Column(db.String(20), nullable=True, index=True)
+    # cnpj_responsavel: CNPJ de quem e responsavel pelo retorno (pode ser diferente do destinatario)
+    # Em substituicoes, destinatario pode ser CLIENTE mas responsavel continua TRANSPORTADORA
+    cnpj_responsavel = db.Column(db.String(20), nullable=True, index=True)
+    nome_responsavel = db.Column(db.String(255), nullable=True)
+
     # Auditoria
     criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
     atualizado_em = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil, nullable=False)
@@ -98,6 +106,8 @@ class MovimentacaoEstoque(db.Model):
         db.Index('idx_movimentacao_cnpj_destinatario', 'cnpj_destinatario'),
         db.Index('idx_movimentacao_tipo_destinatario', 'tipo_destinatario'),
         db.Index('idx_movimentacao_baixado', 'baixado'),
+        db.Index('idx_movimentacao_nf_remessa_origem', 'nf_remessa_origem'),
+        db.Index('idx_movimentacao_cnpj_responsavel', 'cnpj_responsavel'),
     )
 
     def __repr__(self):
@@ -132,7 +142,11 @@ class MovimentacaoEstoque(db.Model):
             'baixado': self.baixado,
             'baixado_em': self.baixado_em.strftime('%d/%m/%Y %H:%M') if self.baixado_em else None,
             'baixado_por': self.baixado_por,
-            'movimento_baixado_id': self.movimento_baixado_id
+            'movimento_baixado_id': self.movimento_baixado_id,
+            # Campos de substituicao
+            'nf_remessa_origem': self.nf_remessa_origem,
+            'cnpj_responsavel': self.cnpj_responsavel,
+            'nome_responsavel': self.nome_responsavel
         }
 
     # ========== MÉTODOS PARA PALLET EM TERCEIROS ==========

@@ -19,27 +19,39 @@
                             <i class="fas fa-file-alt text-primary"></i> Dados do Vale
                         </h5>
                         <div class="row mb-4">
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 <label class="form-label">NF de Pallet *</label>
                                 <input type="text" name="nf_pallet" class="form-control"
                                        value="{{ vale.nf_pallet if vale else '' }}" required>
                                 <small class="text-muted">Numero da NF de remessa de pallet</small>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Tipo do Vale *</label>
+                                <select name="tipo_vale" class="form-select" required>
+                                    <option value="CANHOTO_ASSINADO" {{ 'selected' if not vale or vale.tipo_vale == 'CANHOTO_ASSINADO' }}>
+                                        Canhoto Assinado
+                                    </option>
+                                    <option value="VALE_PALLET" {{ 'selected' if vale and vale.tipo_vale == 'VALE_PALLET' }}>
+                                        Vale Pallet
+                                    </option>
+                                </select>
+                                <small class="text-muted">Tipo do documento de direito</small>
                             </div>
                             <div class="col-md-2">
                                 <label class="form-label">Quantidade *</label>
                                 <input type="number" name="quantidade" class="form-control"
                                        value="{{ vale.quantidade if vale else '' }}" required min="1">
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <label class="form-label">Data Emissao *</label>
                                 <input type="date" name="data_emissao" class="form-control" id="data_emissao"
                                        value="{{ vale.data_emissao.strftime('%Y-%m-%d') if vale and vale.data_emissao else '' }}" required>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <label class="form-label">Data Validade</label>
                                 <input type="date" name="data_validade" class="form-control" id="data_validade"
                                        value="{{ vale.data_validade.strftime('%Y-%m-%d') if vale and vale.data_validade else '' }}">
-                                <small class="text-muted">Padrao: {{ prazo_dias }} dias apos emissao</small>
+                                <small class="text-muted">Padrao: {{ prazo_dias }}d</small>
                             </div>
                         </div>
 

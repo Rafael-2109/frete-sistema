@@ -1,5 +1,5 @@
 from .emissao_nf_pallet import emitir_nf_pallet, EMPRESA_CONFIG, PRODUTO_PALLET
-from .sync_odoo_service import PalletSyncService, COD_PRODUTO_PALLET, NOME_PRODUTO_PALLET, PRAZO_COBRANCA_DIAS
+from .sync_odoo_service import PalletSyncService, COD_PRODUTO_PALLET, NOME_PRODUTO_PALLET
 
 __all__ = [
     'emitir_nf_pallet',
@@ -7,6 +7,5 @@ __all__ = [
     'PRODUTO_PALLET',
     'PalletSyncService',
     'COD_PRODUTO_PALLET',
-    'NOME_PRODUTO_PALLET',
-    'PRAZO_COBRANCA_DIAS'
+    'NOME_PRODUTO_PALLET'
 ]

@@ -2,7 +2,7 @@
 {% block content %}
 <div class="container mt-4">
     <div class="row justify-content-center">
-        <div class="col-md-8">
+        <div class="col-md-10">
             <div class="card">
                 <div class="card-header">
                     <h4 class="mb-0">
@@ -16,24 +16,46 @@
                     </p>
 
                     <div class="row mb-4">
-                        <div class="col-md-6">
-                            <div class="card h-100">
+                        <div class="col-md-3">
+                            <div class="card h-100 border-warning">
                                 <div class="card-body">
                                     <h6><i class="fas fa-truck-loading text-warning"></i> Remessas</h6>
                                     <small class="text-muted">
-                                        NFs com l10n_br_tipo_pedido = 'vasilhame'<br>
-                                        Cria tipo_movimentacao = 'REMESSA'
+                                        NFs tipo 'vasilhame'<br>
+                                        tipo_movimentacao = 'REMESSA'
                                     </small>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="card h-100">
+                        <div class="col-md-3">
+                            <div class="card h-100 border-success">
                                 <div class="card-body">
                                     <h6><i class="fas fa-dollar-sign text-success"></i> Vendas</h6>
                                     <small class="text-muted">
-                                        NFs com produto cod = '208000012'<br>
-                                        Cria tipo_movimentacao = 'SAIDA'
+                                        Produto PALLET<br>
+                                        tipo_movimentacao = 'SAIDA'
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card h-100 border-info">
+                                <div class="card-body">
+                                    <h6><i class="fas fa-undo text-info"></i> Devolucoes</h6>
+                                    <small class="text-muted">
+                                        NFs de reembolso<br>
+                                        tipo_movimentacao = 'DEVOLUCAO'
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card h-100 border-danger">
+                                <div class="card-body">
+                                    <h6><i class="fas fa-times-circle text-danger"></i> Recusas</h6>
+                                    <small class="text-muted">
+                                        NFs canceladas<br>
+                                        status_nf = 'CANCELADO'
                                     </small>
                                 </div>
                             </div>
@@ -47,9 +69,11 @@
                             <div class="col-md-6">
                                 <label class="form-label">Tipo de Sincronizacao</label>
                                 <select name="tipo" class="form-select">
-                                    <option value="tudo" selected>Tudo (Remessas + Vendas)</option>
+                                    <option value="tudo" selected>Tudo (Remessas + Vendas + Devolucoes + Recusas)</option>
                                     <option value="remessas">Apenas Remessas</option>
                                     <option value="vendas">Apenas Vendas</option>
+                                    <option value="devolucoes">Apenas Devolucoes</option>
+                                    <option value="recusas">Apenas Recusas/Cancelamentos</option>
                                 </select>
                             </div>
                             <div class="col-md-6">
@@ -62,6 +86,7 @@
                         <div class="alert alert-info">
                             <i class="fas fa-info-circle"></i>
                             <strong>Nota:</strong> A sincronizacao nao duplica registros. NFs ja importadas serao ignoradas.
+                            Devolucoes e recusas baixam automaticamente as remessas correspondentes.
                         </div>
 
                         <hr>

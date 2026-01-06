@@ -1403,8 +1403,27 @@ class AIResolverService:
                         pass
 
                 if resultado.sugestao_principal:
-                    # Extrair qtd por caixa do nome do nosso produto
-                    qtd_por_caixa = self._extrair_qtd_caixa(resultado.sugestao_principal.nome_interno or '')
+                    # Buscar produto no CadastroPalletizacao para garantir dados corretos
+                    from app.producao.models import CadastroPalletizacao
+                    produto = None
+                    try:
+                        produto = CadastroPalletizacao.query.filter_by(
+                            cod_produto=resultado.sugestao_principal.codigo_interno
+                        ).first()
+                    except Exception as e:
+                        logger.warning(f"[AI_RESOLVER] Erro ao buscar produto: {e}")
+
+                    # Extrair qtd por caixa do nome do produto (prioriza CadastroPalletizacao)
+                    nome_para_extracao = ''
+                    if produto and produto.nome_produto:
+                        nome_para_extracao = produto.nome_produto
+                    elif resultado.sugestao_principal.nome_interno:
+                        nome_para_extracao = resultado.sugestao_principal.nome_interno
+
+                    qtd_por_caixa = self._extrair_qtd_caixa(nome_para_extracao)
+
+                    if qtd_por_caixa:
+                        logger.info(f"[AI_RESOLVER] Qtd por caixa extraida: {qtd_por_caixa} de '{nome_para_extracao}'")
 
                     # Calcular conversao se unidade for UNIDADE
                     qtd_convertida_caixas = None
@@ -1417,10 +1436,6 @@ class AIResolverService:
                     # Calcular peso: quantidade_convertida * peso_bruto do produto
                     peso_calculado = None
                     try:
-                        from app.producao.models import CadastroPalletizacao
-                        produto = CadastroPalletizacao.query.filter_by(
-                            cod_produto=resultado.sugestao_principal.codigo_interno
-                        ).first()
                         if produto and produto.peso_bruto:
                             # Usar qtd_convertida (caixas) se disponivel, senao quantidade original
                             qtd_para_peso = qtd_convertida_caixas if qtd_convertida_caixas else float(linha.quantidade or 0)
@@ -1530,14 +1545,25 @@ class AIResolverService:
         try:
             from app.utils.timezone import agora_brasil
 
-            # Verificar se ja existe
+            # Verificar se ja existe (inclui inativos para evitar violacao de constraint)
             existente = DeParaProdutoCliente.query.filter_by(
                 prefixo_cnpj=prefixo_cnpj[:8],
                 codigo_cliente=codigo_cliente
             ).first()
 
             if existente:
-                return  # Ja existe, nao sobrescrever
+                if existente.ativo:
+                    return  # Ja existe ativo, nao sobrescrever
+                else:
+                    # Registro inativo - reativar e atualizar
+                    existente.nosso_codigo = nosso_codigo
+                    existente.descricao_nosso = descricao_nosso
+                    existente.descricao_cliente = descricao_cliente
+                    existente.ativo = True
+                    existente.atualizado_em = agora_brasil()
+                    existente.atualizado_por = 'AIResolverService'
+                    logger.info(f"[AI_RESOLVER] De-Para reativado: {codigo_cliente} -> {nosso_codigo}")
+                    return
 
             depara = DeParaProdutoCliente(
                 prefixo_cnpj=prefixo_cnpj[:8],

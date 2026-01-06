@@ -32,6 +32,11 @@ class ValePallet(db.Model):
     cnpj_cliente = db.Column(db.String(20), nullable=True, index=True)
     nome_cliente = db.Column(db.String(255), nullable=True)
 
+    # Tipo do vale
+    # VALE_PALLET = Vale pallet emitido pelo cliente
+    # CANHOTO_ASSINADO = Canhoto da NF assinado pelo cliente
+    tipo_vale = db.Column(db.String(20), default='CANHOTO_ASSINADO')
+
     # Posse e rastreamento
     # TRANSPORTADORA = Transportadora tem o vale, deve entregar
     # NACOM = Nossa empresa tem o vale, deve resolver

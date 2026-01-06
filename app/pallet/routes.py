@@ -510,6 +510,63 @@ def listar_vales():
                            filtro_cliente=filtro_cliente)
 
 
+def baixar_nf_remessa_automaticamente(numero_nf: str, usuario: str) -> dict:
+    """
+    Verifica se a NF de remessa deve ser baixada com base nos vales vinculados.
+
+    Regra: Se a soma das quantidades dos vales ativos >= quantidade da remessa,
+    marca a remessa como baixada.
+
+    Args:
+        numero_nf: Numero da NF de remessa
+        usuario: Nome do usuario que esta realizando a operacao
+
+    Returns:
+        dict com status da operacao
+    """
+    if not numero_nf:
+        return {'baixada': False, 'motivo': 'NF nao informada'}
+
+    # Buscar a NF de remessa
+    remessa = MovimentacaoEstoque.query.filter(
+        MovimentacaoEstoque.numero_nf == numero_nf,
+        MovimentacaoEstoque.tipo_movimentacao == 'REMESSA',
+        MovimentacaoEstoque.local_movimentacao == 'PALLET',
+        MovimentacaoEstoque.ativo == True
+    ).first()
+
+    if not remessa:
+        return {'baixada': False, 'motivo': 'NF de remessa nao encontrada'}
+
+    if remessa.baixado:
+        return {'baixada': True, 'motivo': 'NF ja estava baixada'}
+
+    # Somar quantidade de todos os vales ativos vinculados a esta NF
+    total_vales = db.session.query(
+        func.coalesce(func.sum(ValePallet.quantidade), 0)
+    ).filter(
+        ValePallet.nf_pallet == numero_nf,
+        ValePallet.ativo == True
+    ).scalar() or 0
+
+    # Se soma dos vales >= quantidade da remessa, baixar
+    if total_vales >= remessa.qtd_movimentacao:
+        remessa.baixado = True
+        remessa.baixado_em = datetime.utcnow()
+        remessa.baixado_por = usuario
+        remessa.observacao = (remessa.observacao or '') + f'\n[BAIXA AUTOMATICA] Vales totalizam {total_vales} pallets'
+        return {
+            'baixada': True,
+            'motivo': f'NF baixada automaticamente (vales: {total_vales}, remessa: {int(remessa.qtd_movimentacao)})'
+        }
+
+    return {
+        'baixada': False,
+        'motivo': f'Vales ({total_vales}) ainda nao cobrem remessa ({int(remessa.qtd_movimentacao)})',
+        'pendente': int(remessa.qtd_movimentacao) - int(total_vales)
+    }
+
+
 @pallet_bp.route('/vales/novo', methods=['GET', 'POST'])
 @login_required
 def criar_vale():
@@ -525,11 +582,15 @@ def criar_vale():
             else:
                 data_validade = data_emissao + timedelta(days=PRAZO_COBRANCA_OUTROS)
 
+            # Obter tipo_vale do formulario (novo campo)
+            tipo_vale = request.form.get('tipo_vale', 'CANHOTO_ASSINADO')
+
             vale = ValePallet(
                 nf_pallet=request.form.get('nf_pallet'),
                 data_emissao=data_emissao,
                 data_validade=data_validade,
                 quantidade=int(request.form.get('quantidade', 0)),
+                tipo_vale=tipo_vale,
                 cnpj_cliente=request.form.get('cnpj_cliente', '').replace('.', '').replace('-', '').replace('/', ''),
                 nome_cliente=request.form.get('nome_cliente'),
                 cnpj_transportadora=request.form.get('cnpj_transportadora', '').replace('.', '').replace('-', '').replace('/', ''),
@@ -543,8 +604,22 @@ def criar_vale():
                 criado_por=current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
             )
             db.session.add(vale)
+            db.session.flush()  # Obter ID do vale antes do commit
+
+            # Baixar automaticamente a NF de remessa se aplicavel
+            usuario = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
+            resultado_baixa = baixar_nf_remessa_automaticamente(vale.nf_pallet, usuario)
+
             db.session.commit()
-            flash(f'Vale pallet #{vale.id} criado com sucesso!', 'success')
+
+            # Montar mensagem de sucesso
+            msg = f'Vale pallet #{vale.id} criado com sucesso!'
+            if resultado_baixa.get('baixada'):
+                msg += f' {resultado_baixa.get("motivo")}'
+            elif resultado_baixa.get('pendente'):
+                msg += f' (Faltam {resultado_baixa.get("pendente")} pallets para baixar a NF)'
+
+            flash(msg, 'success')
             return redirect(url_for('pallet.listar_vales'))
         except Exception as e:
             db.session.rollback()
@@ -577,6 +652,7 @@ def editar_vale(vale_id):
             if data_validade_str:
                 vale.data_validade = datetime.strptime(data_validade_str, '%Y-%m-%d').date()
             vale.quantidade = int(request.form.get('quantidade', 0))
+            vale.tipo_vale = request.form.get('tipo_vale', 'CANHOTO_ASSINADO')
             vale.cnpj_cliente = request.form.get('cnpj_cliente', '').replace('.', '').replace('-', '').replace('/', '')
             vale.nome_cliente = request.form.get('nome_cliente')
             vale.cnpj_transportadora = request.form.get('cnpj_transportadora', '').replace('.', '').replace('-', '').replace('/', '')
@@ -734,13 +810,13 @@ def sincronizar_odoo():
     """Sincroniza movimentacoes de pallet com Odoo"""
     if request.method == 'POST':
         try:
-            from app.odoo.client import get_odoo_client
+            from app.odoo.utils.connection import get_odoo_connection
             from app.pallet.services import PalletSyncService
 
             dias = int(request.form.get('dias', 30))
             tipo_sync = request.form.get('tipo', 'tudo')
 
-            odoo = get_odoo_client()
+            odoo = get_odoo_connection()
             service = PalletSyncService(odoo)
 
             if tipo_sync == 'remessas':
@@ -749,9 +825,24 @@ def sincronizar_odoo():
             elif tipo_sync == 'vendas':
                 resumo = service.sincronizar_vendas_pallet(dias)
                 flash(f'Vendas sincronizadas: {resumo.get("novos", 0)} novas', 'success')
+            elif tipo_sync == 'devolucoes':
+                resumo = service.sincronizar_devolucoes(dias)
+                msg = f'Devolucoes sincronizadas: {resumo.get("novos", 0)} novas'
+                if resumo.get('baixas_realizadas', 0) > 0:
+                    msg += f', {resumo.get("baixas_realizadas")} baixas automaticas'
+                flash(msg, 'success')
+            elif tipo_sync == 'recusas':
+                resumo = service.sincronizar_recusas(dias)
+                msg = f'Recusas sincronizadas: {resumo.get("novos", 0)} novas'
+                if resumo.get('baixas_realizadas', 0) > 0:
+                    msg += f', {resumo.get("baixas_realizadas")} baixas automaticas'
+                flash(msg, 'success')
             else:
                 resumo = service.sincronizar_tudo(dias)
-                flash(f'Sincronizacao completa: {resumo.get("total_novos", 0)} novos registros', 'success')
+                msg = f'Sincronizacao completa: {resumo.get("total_novos", 0)} novos registros'
+                if resumo.get('total_baixas', 0) > 0:
+                    msg += f', {resumo.get("total_baixas")} baixas automaticas'
+                flash(msg, 'success')
 
             return redirect(url_for('pallet.listar_movimentos'))
 

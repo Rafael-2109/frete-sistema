@@ -123,11 +123,23 @@ def api_resolver_produto():
             except Exception:
                 pass
 
-        # Calcular conversao para sugestao principal
-        def calcular_conversao(nome_produto):
-            qtd_por_caixa = service._extrair_qtd_caixa(nome_produto or '')
+        # Calcular conversao para sugestao principal (busca nome no CadastroPalletizacao)
+        def calcular_conversao(codigo_interno, nome_fallback):
+            from app.producao.models import CadastroPalletizacao
+
+            # Priorizar nome do CadastroPalletizacao
+            nome_para_extracao = nome_fallback or ''
+            try:
+                produto = CadastroPalletizacao.query.filter_by(
+                    cod_produto=codigo_interno
+                ).first()
+                if produto and produto.nome_produto:
+                    nome_para_extracao = produto.nome_produto
+            except Exception:
+                pass
+
+            qtd_por_caixa = service._extrair_qtd_caixa(nome_para_extracao)
             qtd_convertida = None
-            valor_convertido = None
             if tipo_unidade == 'UNIDADE' and qtd_por_caixa and quantidade:
                 qtd_convertida = round(float(quantidade) / qtd_por_caixa, 2)
             return {
@@ -138,7 +150,10 @@ def api_resolver_produto():
         # Preparar resposta da sugestao principal
         sugestao_principal_response = None
         if resultado.sugestao_principal:
-            conv = calcular_conversao(resultado.sugestao_principal.nome_interno)
+            conv = calcular_conversao(
+                resultado.sugestao_principal.codigo_interno,
+                resultado.sugestao_principal.nome_interno
+            )
             sugestao_principal_response = {
                 'codigo': resultado.sugestao_principal.codigo_interno,
                 'nome': resultado.sugestao_principal.nome_interno,
@@ -151,7 +166,7 @@ def api_resolver_produto():
         # Preparar outras sugestoes com conversao
         outras_sugestoes_response = []
         for s in resultado.outras_sugestoes:
-            conv = calcular_conversao(s.nome_interno)
+            conv = calcular_conversao(s.codigo_interno, s.nome_interno)
             outras_sugestoes_response.append({
                 'codigo': s.codigo_interno,
                 'nome': s.nome_interno,
@@ -657,21 +672,39 @@ def api_criar_depara():
                 }), 400
 
         prefixo = data['prefixo_cnpj'][:8]
+        usuario = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
 
-        # Verificar duplicata
+        # Verificar duplicata (inclui inativos para evitar violacao de constraint)
         existente = DeParaProdutoCliente.query.filter_by(
             prefixo_cnpj=prefixo,
-            codigo_cliente=data['codigo_cliente'],
-            ativo=True
+            codigo_cliente=data['codigo_cliente']
         ).first()
 
         if existente:
-            return jsonify({
-                'sucesso': False,
-                'erro': 'De-Para ja existe para este prefixo/codigo'
-            }), 400
+            if existente.ativo:
+                return jsonify({
+                    'sucesso': False,
+                    'erro': 'De-Para ja existe para este prefixo/codigo'
+                }), 400
+            else:
+                # Registro inativo - reativar e atualizar
+                existente.descricao_cliente = data.get('descricao_cliente')
+                existente.nosso_codigo = data['nosso_codigo']
+                existente.descricao_nosso = data.get('descricao_nosso')
+                existente.fator_conversao = data.get('fator_conversao', 1.0)
+                existente.unidade_medida_cliente = data.get('unidade_medida_cliente')
+                existente.unidade_medida_nosso = data.get('unidade_medida_nosso')
+                existente.nome_grupo = data.get('nome_grupo')
+                existente.ativo = True
+                existente.atualizado_em = agora_brasil()
+                existente.atualizado_por = usuario
+                db.session.commit()
 
-        usuario = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
+                return jsonify({
+                    'sucesso': True,
+                    'depara': existente.to_dict(),
+                    'mensagem': 'Registro inativo reativado e atualizado'
+                })
 
         depara = DeParaProdutoCliente(
             prefixo_cnpj=prefixo,
@@ -1101,22 +1134,31 @@ def api_importar_depara():
                 ).first()
                 descricao_nosso = produto.nome_produto if produto else None
 
-                # Verificar se ja existe
+                # Verificar se ja existe (inclui inativos para evitar violacao de constraint)
                 existente = DeParaProdutoCliente.query.filter_by(
                     prefixo_cnpj=prefixo_cnpj,
-                    codigo_cliente=codigo_cliente,
-                    ativo=True
+                    codigo_cliente=codigo_cliente
                 ).first()
 
                 if existente:
-                    if atualizar_existentes:
+                    if existente.ativo:
+                        # Registro ativo - atualizar se permitido
+                        if atualizar_existentes:
+                            existente.nosso_codigo = nosso_codigo
+                            existente.descricao_nosso = descricao_nosso
+                            existente.atualizado_em = agora_brasil()
+                            existente.atualizado_por = usuario
+                            atualizados += 1
+                        else:
+                            ignorados += 1
+                    else:
+                        # Registro inativo - reativar e atualizar
                         existente.nosso_codigo = nosso_codigo
                         existente.descricao_nosso = descricao_nosso
+                        existente.ativo = True
                         existente.atualizado_em = agora_brasil()
                         existente.atualizado_por = usuario
                         atualizados += 1
-                    else:
-                        ignorados += 1
                 else:
                     novo = DeParaProdutoCliente(
                         prefixo_cnpj=prefixo_cnpj,

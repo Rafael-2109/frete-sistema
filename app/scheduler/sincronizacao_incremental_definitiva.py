@@ -44,6 +44,7 @@ JANELA_CONTAS_RECEBER = int(os.environ.get('JANELA_CONTAS_RECEBER', 120))  # ✅
 JANELA_BAIXAS = int(os.environ.get('JANELA_BAIXAS', 120))  # ✅ 120 minutos para Baixas/Reconciliações
 JANELA_CONTAS_PAGAR = int(os.environ.get('JANELA_CONTAS_PAGAR', 120))  # ✅ 120 minutos para Contas a Pagar
 JANELA_NFDS = int(os.environ.get('JANELA_NFDS', 120))  # ✅ 120 minutos para NFDs de Devolução
+JANELA_PALLET = int(os.environ.get('JANELA_PALLET', 5760))  # ✅ 5760 minutos (96h) para Pallets - mesmo que faturamento
 MAX_RETRIES = 3
 RETRY_DELAY = 5
 
@@ -59,6 +60,7 @@ contas_receber_service = None  # ✅ Service de Contas a Receber
 baixas_service = None  # ✅ Service de Baixas/Reconciliações
 contas_pagar_service = None  # ✅ Service de Contas a Pagar
 nfd_service = None  # ✅ Service de NFDs de Devolução
+pallet_service = None  # ✅ Service de Pallets
 
 
 def inicializar_services():
@@ -67,7 +69,7 @@ def inicializar_services():
     Isso evita problemas de SSL e contexto que ocorrem quando
     instanciados dentro do app.app_context()
     """
-    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service
+    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service
 
     try:
         # IMPORTANTE: Importar e instanciar FORA do contexto
@@ -82,6 +84,7 @@ def inicializar_services():
         from app.financeiro.services.sincronizacao_baixas_service import SincronizacaoBaixasService  # ✅ Service de Baixas
         from app.financeiro.services.sincronizacao_contas_pagar_service import SincronizacaoContasAPagarService  # ✅ Service de Contas a Pagar
         from app.devolucao.services.nfd_service import NFDService  # ✅ Service de NFDs de Devolução
+        from app.pallet.services.sync_odoo_service import PalletSyncService  # ✅ Service de Pallets
 
         logger.info("🔧 Inicializando services FORA do contexto...")
         faturamento_service = FaturamentoService()
@@ -95,6 +98,7 @@ def inicializar_services():
         baixas_service = SincronizacaoBaixasService()  # ✅ Instanciar service de Baixas
         contas_pagar_service = SincronizacaoContasAPagarService()  # ✅ Instanciar service de Contas a Pagar
         nfd_service = NFDService()  # ✅ Instanciar service de NFDs de Devolução
+        pallet_service = PalletSyncService()  # ✅ Instanciar service de Pallets
         logger.info("✅ Services inicializados com sucesso")
 
         return True
@@ -109,7 +113,7 @@ def executar_sincronizacao():
     Executa sincronização usando services já instanciados
     Similar ao que funciona em SincronizacaoIntegradaService
     """
-    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service
+    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service
 
     logger.info("=" * 60)
     logger.info(f"🔄 SINCRONIZAÇÃO DEFINITIVA - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -127,10 +131,11 @@ def executar_sincronizacao():
     logger.info(f"   - Baixas: janela={JANELA_BAIXAS}min")  # ✅ Adicionar Baixas ao log
     logger.info(f"   - Contas a Pagar: janela={JANELA_CONTAS_PAGAR}min")  # ✅ Adicionar Contas a Pagar ao log
     logger.info(f"   - NFDs Devolução: janela={JANELA_NFDS}min")  # ✅ Adicionar NFDs ao log
+    logger.info(f"   - Pallets: janela={JANELA_PALLET}min (96h)")  # ✅ Adicionar Pallets ao log
     logger.info("=" * 60)
 
     # Verificar se services estão inicializados
-    if not all([faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service]):
+    if not all([faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service]):
         logger.warning("⚠️ Services não inicializados, tentando inicializar...")
         if not inicializar_services():
             logger.error("❌ Falha ao inicializar services")
@@ -852,6 +857,69 @@ def executar_sincronizacao():
                 else:
                     break
 
+        # Limpar sessão entre services
+        try:
+            db.session.remove()
+            db.engine.dispose()
+            logger.info("♻️ Reconexão antes dos Pallets")
+        except Exception as e:
+            pass
+
+        # 1️⃣2️⃣ PALLETS - com retry
+        sucesso_pallets = False
+        for tentativa in range(1, MAX_RETRIES + 1):
+            try:
+                logger.info(f"📦 Sincronizando Pallets (tentativa {tentativa}/{MAX_RETRIES})...")
+                logger.info(f"   Janela: {JANELA_PALLET} minutos (96h)")
+
+                # Converter minutos em dias para o service
+                dias_retroativos = JANELA_PALLET // 1440  # 1440 minutos = 1 dia
+                if dias_retroativos < 1:
+                    dias_retroativos = 1
+
+                # Usar service já instanciado
+                resultado_pallets = pallet_service.sincronizar_tudo(dias_retroativos=dias_retroativos)
+
+                if resultado_pallets.get("total_novos", 0) >= 0:
+                    sucesso_pallets = True
+                    logger.info("✅ Pallets sincronizados com sucesso!")
+                    logger.info(f"   - Remessas novas: {resultado_pallets.get('remessas', {}).get('novos', 0)}")
+                    logger.info(f"   - Vendas novas: {resultado_pallets.get('vendas', {}).get('novos', 0)}")
+                    logger.info(f"   - Devoluções novas: {resultado_pallets.get('devolucoes', {}).get('novos', 0)}")
+                    logger.info(f"   - Recusas novas: {resultado_pallets.get('recusas', {}).get('novos', 0)}")
+                    logger.info(f"   - Total novos: {resultado_pallets.get('total_novos', 0)}")
+                    logger.info(f"   - Total baixas: {resultado_pallets.get('total_baixas', 0)}")
+
+                    db.session.commit()
+                    break
+                else:
+                    erro = resultado_pallets.get('erro', 'Erro desconhecido')
+                    logger.error(f"❌ Erro Pallets: {erro}")
+
+                    if tentativa < MAX_RETRIES:
+                        logger.info(f"🔄 Aguardando {RETRY_DELAY}s antes de tentar novamente...")
+                        sleep(RETRY_DELAY)
+                        # Reinicializar service
+                        from app.pallet.services.sync_odoo_service import PalletSyncService
+                        pallet_service = PalletSyncService()
+                    else:
+                        break
+
+            except Exception as e:
+                logger.error(f"❌ Erro ao sincronizar Pallets: {e}")
+                if tentativa < MAX_RETRIES and ("SSL" in str(e) or "connection" in str(e).lower()):
+                    logger.info(f"🔄 Tentando reconectar ({tentativa}/{MAX_RETRIES})...")
+                    sleep(RETRY_DELAY)
+                    try:
+                        db.session.rollback()
+                        db.session.remove()
+                        from app.pallet.services.sync_odoo_service import PalletSyncService
+                        pallet_service = PalletSyncService()
+                    except Exception as e:
+                        pass
+                else:
+                    break
+
         # Limpar conexões ao final
         try:
             db.session.remove()
@@ -861,12 +929,12 @@ def executar_sincronizacao():
 
         # Resumo final
         logger.info("=" * 60)
-        total_sucesso = sum([sucesso_faturamento, sucesso_carteira, sucesso_verificacao, sucesso_requisicoes, sucesso_pedidos, sucesso_alocacoes, sucesso_entradas, sucesso_ctes, sucesso_contas_receber, sucesso_baixas, sucesso_contas_pagar, sucesso_nfds])
+        total_sucesso = sum([sucesso_faturamento, sucesso_carteira, sucesso_verificacao, sucesso_requisicoes, sucesso_pedidos, sucesso_alocacoes, sucesso_entradas, sucesso_ctes, sucesso_contas_receber, sucesso_baixas, sucesso_contas_pagar, sucesso_nfds, sucesso_pallets])
 
-        if total_sucesso == 12:
+        if total_sucesso == 13:
             logger.info("✅ SINCRONIZAÇÃO COMPLETA COM SUCESSO!")
-        elif total_sucesso >= 10:
-            logger.info(f"⚠️ Sincronização parcial - {total_sucesso}/12 módulos OK")
+        elif total_sucesso >= 11:
+            logger.info(f"⚠️ Sincronização parcial - {total_sucesso}/13 módulos OK")
             if not sucesso_faturamento:
                 logger.info("   ❌ Faturamento: FALHOU")
             if not sucesso_carteira:
@@ -891,8 +959,10 @@ def executar_sincronizacao():
                 logger.info("   ❌ Contas a Pagar: FALHOU")
             if not sucesso_nfds:
                 logger.info("   ❌ NFDs Devolução: FALHOU")
+            if not sucesso_pallets:
+                logger.info("   ❌ Pallets: FALHOU")
         else:
-            logger.error(f"❌ Sincronização com falhas graves - apenas {total_sucesso}/12 módulos OK")
+            logger.error(f"❌ Sincronização com falhas graves - apenas {total_sucesso}/13 módulos OK")
         logger.info("=" * 60)
 
 
