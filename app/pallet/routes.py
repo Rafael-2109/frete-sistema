@@ -12,6 +12,7 @@ from app.pallet.utils import (
     calcular_prazo_cobranca, PRAZO_COBRANCA_SP_RED, PRAZO_COBRANCA_OUTROS
 )
 from sqlalchemy import func, or_
+from sqlalchemy.orm import joinedload
 
 pallet_bp = Blueprint('pallet', __name__, url_prefix='/pallet')
 
@@ -218,12 +219,29 @@ def listar_movimentos():
             else:
                 vales_por_nf[nf]['qtd_pendente'] += vale.quantidade or 0
 
+    # Buscar transportadoras dos embarques associados
+    # Retorna: {embarque_id: {'nome': X, 'cnpj': Y}}
+    transportadoras_por_embarque = {}
+    embarque_ids = [m.codigo_embarque for m in movimentos.items if m.codigo_embarque]
+    if embarque_ids:
+        embarques = Embarque.query.options(
+            joinedload(Embarque.transportadora)
+        ).filter(Embarque.id.in_(embarque_ids)).all()
+
+        for emb in embarques:
+            if emb.transportadora:
+                transportadoras_por_embarque[emb.id] = {
+                    'nome': emb.transportadora.razao_social,
+                    'cnpj': emb.transportadora.cnpj
+                }
+
     return render_template('pallet/movimentos.html',
                            movimentos=movimentos,
                            filtro_tipo=filtro_tipo,
                            filtro_baixado=filtro_baixado,
                            filtro_destinatario=filtro_destinatario,
-                           vales_por_nf=vales_por_nf)
+                           vales_por_nf=vales_por_nf,
+                           transportadoras_por_embarque=transportadoras_por_embarque)
 
 
 @pallet_bp.route('/registrar-saida', methods=['GET', 'POST'])

@@ -112,6 +112,8 @@
                                 {{ mov.nome_destinatario or '-' }}
                                 {% if mov.cnpj_responsavel and mov.cnpj_responsavel != mov.cnpj_destinatario %}
                                     <br><small class="text-info"><i class="fas fa-truck"></i> Resp: {{ mov.nome_responsavel or mov.cnpj_responsavel }}</small>
+                                {% elif mov.codigo_embarque and transportadoras_por_embarque.get(mov.codigo_embarque) %}
+                                    <br><small class="text-info"><i class="fas fa-truck"></i> Transp: {{ transportadoras_por_embarque[mov.codigo_embarque].nome }}</small>
                                 {% endif %}
                             </td>
                             <td>
