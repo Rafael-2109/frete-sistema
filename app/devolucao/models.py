@@ -1120,7 +1120,7 @@ class DeParaProdutoCliente(db.Model):
     # =========================================================================
     # MAPEAMENTO DE CODIGOS
     # =========================================================================
-    codigo_cliente = db.Column(db.String(50), nullable=False, index=True)
+    codigo_cliente = db.Column(db.String(255), nullable=False, index=True)
     descricao_cliente = db.Column(db.String(255), nullable=True)
 
     nosso_codigo = db.Column(db.String(50), nullable=False, index=True)

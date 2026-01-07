@@ -1053,6 +1053,9 @@ def api_importar_depara():
         - prefixo_cnpj (pode ser formatado ou inteiro)
         - nosso_codigo
 
+    Colunas opcionais:
+        - fator_conversao (default: 1.0)
+
     Returns:
         JSON com resultado da importacao
     """
@@ -1117,6 +1120,16 @@ def api_importar_depara():
                 prefixo_cnpj = normalizar_cnpj_para_prefixo(row['prefixo_cnpj'])
                 nosso_codigo = str(row['nosso_codigo']).strip()
 
+                # Ler fator_conversao (opcional)
+                fator_conversao = 1.0
+                if 'fator_conversao' in df.columns:
+                    valor_fator = row.get('fator_conversao')
+                    if pd.notna(valor_fator):
+                        try:
+                            fator_conversao = float(valor_fator)
+                        except (ValueError, TypeError):
+                            pass  # Manter default 1.0
+
                 # Validar campos
                 if not codigo_cliente or codigo_cliente == 'nan':
                     erros.append(f'Linha {linha_num}: codigo_cliente vazio')
@@ -1146,6 +1159,7 @@ def api_importar_depara():
                         if atualizar_existentes:
                             existente.nosso_codigo = nosso_codigo
                             existente.descricao_nosso = descricao_nosso
+                            existente.fator_conversao = fator_conversao
                             existente.atualizado_em = agora_brasil()
                             existente.atualizado_por = usuario
                             atualizados += 1
@@ -1155,6 +1169,7 @@ def api_importar_depara():
                         # Registro inativo - reativar e atualizar
                         existente.nosso_codigo = nosso_codigo
                         existente.descricao_nosso = descricao_nosso
+                        existente.fator_conversao = fator_conversao
                         existente.ativo = True
                         existente.atualizado_em = agora_brasil()
                         existente.atualizado_por = usuario
@@ -1165,7 +1180,7 @@ def api_importar_depara():
                         codigo_cliente=codigo_cliente,
                         nosso_codigo=nosso_codigo,
                         descricao_nosso=descricao_nosso,
-                        fator_conversao=1.0,
+                        fator_conversao=fator_conversao,
                         ativo=True,
                         criado_por=usuario
                     )
