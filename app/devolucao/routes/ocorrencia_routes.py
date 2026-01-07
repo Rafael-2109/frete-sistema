@@ -24,6 +24,9 @@ from datetime import datetime, timedelta
 # Blueprint
 ocorrencia_bp = Blueprint('devolucao_ocorrencia', __name__, url_prefix='/ocorrencias')
 
+# CNPJs a excluir da listagem (La Famiglia e Nacom Goya - empresas internas)
+CNPJS_EXCLUIDOS = ['18467441', '61724241']
+
 
 # =============================================================================
 # Dashboard de Ocorrencias
@@ -52,14 +55,26 @@ def index():
     data_inicio = request.args.get('data_inicio', '')
     data_fim = request.args.get('data_fim', '')
 
-    # Query base
-    query = db.session.query(OcorrenciaDevolucao).join(
+    # Query base - busca ocorrências com data de entrega do monitoramento
+    query = db.session.query(
+        OcorrenciaDevolucao,
+        EntregaMonitorada.data_hora_entrega_realizada.label('data_entrega_monitoramento')
+    ).join(
         NFDevolucao, OcorrenciaDevolucao.nf_devolucao_id == NFDevolucao.id
     ).outerjoin(
-        EntregaMonitorada, NFDevolucao.entrega_monitorada_id == EntregaMonitorada.id
+        EntregaMonitorada, EntregaMonitorada.numero_nf == NFDevolucao.numero_nf_venda
     ).filter(
         OcorrenciaDevolucao.ativo == True
     )
+
+    # Excluir CNPJs de empresas internas (La Famiglia e Nacom Goya)
+    for cnpj_prefixo in CNPJS_EXCLUIDOS:
+        query = query.filter(
+            db.or_(
+                NFDevolucao.cnpj_emitente.is_(None),
+                ~NFDevolucao.cnpj_emitente.like(f'{cnpj_prefixo}%')
+            )
+        )
 
     # Aplicar filtros
     if status:
@@ -104,7 +119,13 @@ def index():
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
-    ocorrencias = pagination.items
+
+    # Processar tuplas (OcorrenciaDevolucao, data_entrega_monitoramento)
+    ocorrencias = []
+    for item in pagination.items:
+        oc, data_entrega = item
+        oc.data_entrega_monitoramento = data_entrega
+        ocorrencias.append(oc)
 
     # Estatisticas
     stats = {

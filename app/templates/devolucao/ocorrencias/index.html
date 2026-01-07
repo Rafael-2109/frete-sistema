@@ -179,7 +179,7 @@
                             <th>Valor</th>
                             <th>Status</th>
                             <th>Docs</th>
-                            <th>Abertura</th>
+                            <th>Devolucao</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -226,13 +226,11 @@
                                     <span class="badge bg-{{ 'success' if resolvidas == total_linhas and total_linhas > 0 else 'warning' if resolvidas > 0 else 'secondary' }} me-2">
                                         {{ resolvidas }}/{{ total_linhas }}
                                     </span>
-                                    {% if total_linhas > 0 %}
                                     <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1"
                                             onclick="abrirModalProdutos({{ oc.nf_devolucao.id }}, '{{ oc.numero_ocorrencia }}')"
                                             title="Ver produtos">
                                         <i class="bi bi-box-seam"></i>
                                     </button>
-                                    {% endif %}
                                 </div>
                                 {% else %}
                                 -
@@ -277,9 +275,19 @@
                                 {% endif %}
                             </td>
                             <td>
-                                <small>{{ oc.data_abertura.strftime('%d/%m/%Y') }}</small>
+                                {% if oc.nf_devolucao and oc.nf_devolucao.data_registro %}
+                                <small>{{ oc.nf_devolucao.data_registro.strftime('%d/%m/%Y') }}</small>
                                 <br>
-                                <small class="text-muted">{{ oc.data_abertura.strftime('%H:%M') }}</small>
+                                <small class="text-muted">{{ oc.nf_devolucao.data_registro.strftime('%H:%M') }}</small>
+                                {% else %}
+                                <small class="text-muted">-</small>
+                                {% endif %}
+                                {% if oc.data_entrega_monitoramento %}
+                                <br>
+                                <small class="text-success" title="Data de entrega da NF de venda">
+                                    <i class="bi bi-truck"></i> {{ oc.data_entrega_monitoramento.strftime('%d/%m/%Y') }}
+                                </small>
+                                {% endif %}
                             </td>
                             <td>
                                 <div class="btn-group btn-group-sm">

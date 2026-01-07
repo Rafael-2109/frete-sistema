@@ -46,6 +46,9 @@ from app.utils.timezone import agora_utc, agora_brasil
 
 logger = logging.getLogger(__name__)
 
+# CNPJs a excluir da importação (La Famiglia e Nacom Goya - empresas internas)
+CNPJS_EXCLUIDOS = {'18467441', '61724241'}
+
 
 class NFDService:
     """
@@ -372,6 +375,13 @@ class NFDService:
         chave_acesso = nfd_data.get('protnfe_infnfe_chnfe')
         numero_nfd = nfd_data.get('nfe_infnfe_ide_nnf')
         cnpj_emitente = self._limpar_cnpj(nfd_data.get('nfe_infnfe_emit_cnpj'))
+
+        # Verificar se CNPJ deve ser excluído (empresas internas)
+        cnpj_prefixo = cnpj_emitente[:8] if cnpj_emitente else None
+        if cnpj_prefixo in CNPJS_EXCLUIDOS:
+            logger.info(f"   ⚠️ NFD ignorada - CNPJ excluído: {cnpj_emitente} ({cnpj_prefixo})")
+            estatisticas['ignorada_cnpj'] = True
+            return estatisticas
 
         # 1. Verificar se já existe por chave de acesso ou dfe_id
         nfd_existente = None
