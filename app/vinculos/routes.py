@@ -14,8 +14,25 @@ from app.utils.importacao.utils_importacao import salvar_temp, limpar_temp
 from app.utils.importacao.importar_vinculos_web import validar_vinculos
 import io
 import openpyxl
+import math
 from datetime import datetime
 from flask import jsonify
+
+
+def _safe_int_or_none(valor):
+    """Converte valor para int ou None, tratando nan/NaN."""
+    if valor is None:
+        return None
+    if isinstance(valor, float):
+        if math.isnan(valor):
+            return None
+        return int(valor)
+    if isinstance(valor, str) and valor.lower() in ('nan', 'none', ''):
+        return None
+    try:
+        return int(valor)
+    except (ValueError, TypeError):
+        return None
 
 vinculos_bp = Blueprint('vinculos', __name__, url_prefix='/vinculos')
 
@@ -93,7 +110,7 @@ def confirmar_importacao_vinculos():
             codigo_ibge=linha['codigo_ibge'],
             uf=uf_value,
             nome_tabela=linha['nome_tabela'].upper(),  # ✅ NORMALIZADO PARA MAIÚSCULA
-            lead_time=linha['lead_time']
+            lead_time=_safe_int_or_none(linha['lead_time'])  # Trata nan/NaN do pandas
         )
         db.session.add(novo)
         total_importados += 1

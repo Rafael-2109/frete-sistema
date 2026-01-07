@@ -1,8 +1,24 @@
 import pandas as pd
+import math
 from app.localidades.models import Cidade
 from app.transportadoras.models import Transportadora
 from app.vinculos.models import CidadeAtendida
 from app import db
+
+
+def _limpar_lead_time(valor):
+    """Converte lead_time para int ou None, tratando nan/NaN do pandas."""
+    if valor is None:
+        return None
+    if isinstance(valor, float) and math.isnan(valor):
+        return None
+    if pd.isna(valor):
+        return None
+    try:
+        return int(valor)
+    except (ValueError, TypeError):
+        return None
+
 
 def validar_vinculos(caminho):
     df = pd.read_excel(caminho)
@@ -18,7 +34,7 @@ def validar_vinculos(caminho):
         uf = str(row['UF']).strip()
         codigo_ibge = str(row['CODIGO IBGE']).strip()
         nome_tabela = str(row['TABELA']).strip().upper()  # ✅ NORMALIZADO PARA MAIÚSCULA
-        lead_time = row.get('LEAD TIME', None)
+        lead_time = _limpar_lead_time(row.get('LEAD TIME', None))
 
         transportadora = Transportadora.query.filter(
             Transportadora.razao_social.ilike(transportadora_nome)
