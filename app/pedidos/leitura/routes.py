@@ -38,7 +38,15 @@ def allowed_file(filename):
 
 
 def serialize_data(data):
-    """Converte Decimal e outros tipos para JSON serializável"""
+    """Converte Decimal e outros tipos para JSON serializável, sanitizando NaN"""
+    import math
+
+    # Trata NaN e Infinito primeiro (valores inválidos em JSON)
+    if isinstance(data, float):
+        if math.isnan(data) or math.isinf(data):
+            return None
+        return data
+
     if isinstance(data, list):
         return [serialize_data(item) for item in data]
     elif isinstance(data, dict):
@@ -47,6 +55,16 @@ def serialize_data(data):
         return float(data)
     elif hasattr(data, 'isoformat'):  # datetime, date
         return data.isoformat()
+
+    # Trata numpy/pandas NaN (pode vir como np.nan ou pd.NA)
+    try:
+        import pandas as pd
+        import numpy as np
+        if pd.isna(data) or (isinstance(data, (np.floating, np.integer)) and np.isnan(data)):
+            return None
+    except (ImportError, TypeError, ValueError):
+        pass
+
     return data
 
 
@@ -180,7 +198,7 @@ def upload():
                     'por_filial': validacoes_filiais
                 }
 
-            # Identifica itens sem De-Para
+            # Identifica itens sem De-Para (produtos)
             itens_sem_depara = []
             for filial in summary.get('por_filial', []):
                 for produto in filial.get('produtos', []):
@@ -193,8 +211,32 @@ def upload():
                             'valor_unitario': produto.get('valor_unitario')
                         })
 
+            # Identifica filiais sem De-Para (lojas sem CNPJ cadastrado)
+            # Isso acontece quando a loja não tem De-Para no FilialDeParaSendas
+            filiais_sem_depara = []
+            for filial in summary.get('por_filial', []):
+                cnpj = filial.get('cnpj')
+                numero_loja = filial.get('numero_loja', '')
+                nome_cliente = filial.get('nome_cliente', '')
+
+                # Se CNPJ é None/vazio, a filial não tem De-Para cadastrado
+                if not cnpj:
+                    # Busca o primeiro produto para pegar mais informações
+                    produtos = filial.get('produtos', [])
+                    nome_loja_pdf = ''
+                    if produtos:
+                        nome_loja_pdf = produtos[0].get('nome_loja_pdf', '')
+
+                    filiais_sem_depara.append({
+                        'numero_loja': numero_loja,
+                        'nome_loja_pdf': nome_loja_pdf or nome_cliente,
+                        'quantidade_itens': filial.get('itens', 0),
+                        'valor_total': filial.get('valor', 0)
+                    })
+
             # Determina se pode inserir no Odoo
-            pode_inserir = len(itens_sem_depara) == 0
+            # Bloqueia se houver itens sem De-Para OU filiais sem De-Para
+            pode_inserir = len(itens_sem_depara) == 0 and len(filiais_sem_depara) == 0
 
             # Cria registro temporário no banco (substitui session)
             usuario = current_user.username if hasattr(current_user, 'username') else str(current_user.id)
@@ -240,6 +282,7 @@ def upload():
                 'validacao_precos': validacao_precos,
                 'tem_divergencia': tem_divergencia,
                 'itens_sem_depara': itens_sem_depara,
+                'filiais_sem_depara': filiais_sem_depara,  # Filiais que precisam de cadastro
                 'pode_inserir': pode_inserir,
                 's3_path': s3_path,
                 'warnings': result.get('warnings', []),
@@ -1941,3 +1984,169 @@ def api_reprocessar_imposto(job_id):
             'success': False,
             'error': str(e)
         }), 500
+
+
+# ============================================================================
+# ROTAS API PARA CADASTRO INLINE DE FILIAIS DE-PARA
+# ============================================================================
+
+@bp.route('/api/filiais-depara/cadastrar', methods=['POST'])
+@login_required
+def api_cadastrar_filial_depara():
+    """
+    Cadastra uma filial De-Para inline durante a importação do PDF.
+    Recebe: numero_loja, nome_loja, cnpj, cidade, uf
+    """
+    from app.portal.sendas.models import FilialDeParaSendas
+
+    try:
+        data = request.get_json()
+
+        # Converte para string antes de strip() (numero_loja pode vir como int)
+        numero_loja = str(data.get('numero_loja', '')).strip()
+        nome_loja = str(data.get('nome_loja', '')).strip()
+        cnpj = str(data.get('cnpj', '')).strip()
+        cidade = str(data.get('cidade', '')).strip()
+        uf = str(data.get('uf', '')).strip().upper()
+
+        if not numero_loja:
+            return jsonify({'success': False, 'error': 'Número da loja é obrigatório'}), 400
+
+        if not cnpj:
+            return jsonify({'success': False, 'error': 'CNPJ é obrigatório'}), 400
+
+        # Formatar CNPJ se necessário
+        if '.' not in cnpj and '/' not in cnpj and '-' not in cnpj:
+            cnpj = FilialDeParaSendas.formatar_cnpj(cnpj)
+
+        # Verifica se já existe mapeamento para esta filial
+        existente = FilialDeParaSendas.query.filter_by(numero=numero_loja).first()
+        if existente:
+            return jsonify({
+                'success': False,
+                'error': f'Já existe mapeamento para a loja {numero_loja}'
+            }), 400
+
+        # Verifica se CNPJ já está sendo usado
+        cnpj_existente = FilialDeParaSendas.query.filter_by(cnpj=cnpj).first()
+        if cnpj_existente:
+            return jsonify({
+                'success': False,
+                'error': f'CNPJ já está associado à loja {cnpj_existente.numero}'
+            }), 400
+
+        # Cria código da filial no formato esperado
+        codigo_filial = f"{numero_loja} {nome_loja}".strip()
+
+        filial = FilialDeParaSendas(
+            cnpj=cnpj,
+            filial=codigo_filial,
+            numero=numero_loja,
+            nome_filial=nome_loja,
+            cidade=cidade,
+            uf=uf,
+            ativo=True,
+            criado_por=current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
+        )
+
+        db.session.add(filial)
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': f'Filial {numero_loja} cadastrada com sucesso',
+            'filial': {
+                'id': filial.id,
+                'numero': filial.numero,
+                'cnpj': filial.cnpj,
+                'nome_filial': filial.nome_filial,
+                'cidade': filial.cidade,
+                'uf': filial.uf
+            }
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/clientes/buscar', methods=['GET'])
+@login_required
+def api_buscar_clientes():
+    """
+    Busca clientes por CNPJ ou razão social para autocomplete.
+    Parâmetro: q (query de busca)
+    """
+    from app.carteira.models import CarteiraPrincipal
+
+    try:
+        query = request.args.get('q', '').strip()
+
+        if len(query) < 3:
+            return jsonify({'success': True, 'clientes': []})
+
+        # Busca por CNPJ ou razão social
+        clientes = db.session.query(
+            CarteiraPrincipal.cnpj_cpf,
+            CarteiraPrincipal.raz_social_red,
+            CarteiraPrincipal.municipio,
+            CarteiraPrincipal.estado
+        ).filter(
+            db.or_(
+                CarteiraPrincipal.cnpj_cpf.ilike(f'%{query}%'),
+                CarteiraPrincipal.raz_social_red.ilike(f'%{query}%'),
+                CarteiraPrincipal.raz_social.ilike(f'%{query}%')
+            )
+        ).distinct().limit(20).all()
+
+        resultado = []
+        for c in clientes:
+            resultado.append({
+                'cnpj': c.cnpj_cpf,
+                'razao_social': c.raz_social_red or '',
+                'cidade': c.municipio or '',
+                'uf': c.estado or ''
+            })
+
+        return jsonify({'success': True, 'clientes': resultado})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/cliente/por-cnpj/<cnpj>', methods=['GET'])
+@login_required
+def api_cliente_por_cnpj(cnpj):
+    """
+    Busca dados de um cliente específico por CNPJ.
+    """
+    from app.carteira.models import CarteiraPrincipal
+
+    try:
+        # Limpa o CNPJ
+        cnpj_limpo = ''.join(filter(str.isdigit, cnpj))
+
+        cliente = CarteiraPrincipal.query.filter(
+            CarteiraPrincipal.cnpj_cpf == cnpj_limpo
+        ).first()
+
+        if cliente:
+            return jsonify({
+                'success': True,
+                'found': True,
+                'cliente': {
+                    'cnpj': cliente.cnpj_cpf,
+                    'razao_social': cliente.raz_social_red or cliente.raz_social,
+                    'cidade': cliente.municipio or cliente.nome_cidade,
+                    'uf': cliente.estado or cliente.cod_uf
+                }
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'found': False,
+                'message': 'Cliente não encontrado'
+            })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500

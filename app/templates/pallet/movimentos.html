@@ -18,12 +18,16 @@
 
     <!-- Filtros -->
     <div class="card mb-4">
-        <div class="card-header">
+        <div class="card-header d-flex justify-content-between align-items-center">
             <h5 class="mb-0"><i class="fas fa-filter"></i> Filtros</h5>
+            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#filtrosAvancados">
+                <i class="fas fa-cog"></i> Avancados
+            </button>
         </div>
         <div class="card-body">
             <form method="GET" class="row g-3">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <!-- Filtros basicos -->
                 <div class="col-md-3">
                     <label class="form-label">Tipo Movimento</label>
                     <select name="tipo" class="form-select">
@@ -59,6 +63,33 @@
                         <i class="fas fa-eraser"></i> Limpar
                     </a>
                 </div>
+
+                <!-- Filtros avancados (collapse) -->
+                <div class="col-12 collapse {{ 'show' if filtro_nf_pallet or filtro_data_de or filtro_data_ate or filtro_transportadora }}" id="filtrosAvancados">
+                    <hr class="my-3">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label">NF Pallet</label>
+                            <input type="text" name="nf_pallet" class="form-control" placeholder="Numero da NF"
+                                   value="{{ filtro_nf_pallet or '' }}">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Data Emissao (De)</label>
+                            <input type="date" name="data_de" class="form-control"
+                                   value="{{ filtro_data_de or '' }}">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Data Emissao (Ate)</label>
+                            <input type="date" name="data_ate" class="form-control"
+                                   value="{{ filtro_data_ate or '' }}">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Transportadora</label>
+                            <input type="text" name="transportadora" class="form-control" placeholder="Nome ou CNPJ"
+                                   value="{{ filtro_transportadora or '' }}">
+                        </div>
+                    </div>
+                </div>
             </form>
         </div>
     </div>
@@ -85,7 +116,23 @@
                         {% for mov in movimentos.items %}
                         <tr>
                             <td>{{ mov.id }}</td>
-                            <td>{{ mov.criado_em.strftime('%d/%m/%Y %H:%M') }}</td>
+                            <td>
+                                {{ mov.data_movimentacao.strftime('%d/%m/%Y') if mov.data_movimentacao else '-' }}
+                                {% if mov.tipo_movimentacao == 'REMESSA' and not mov.baixado and mov.data_vencimento %}
+                                    <br>
+                                    {% if mov.dias_ate_vencimento < 0 %}
+                                        <span class="badge bg-danger" title="Vencido ha {{ (-mov.dias_ate_vencimento)|int }} dia(s)">
+                                            <i class="fas fa-exclamation-triangle"></i> VENCIDO
+                                        </span>
+                                    {% elif mov.dias_ate_vencimento <= 5 %}
+                                        <span class="badge bg-warning text-dark" title="Vence em {{ mov.dias_ate_vencimento|int }} dia(s)">
+                                            <i class="fas fa-clock"></i> {{ mov.data_vencimento.strftime('%d/%m') }}
+                                        </span>
+                                    {% else %}
+                                        <small class="text-muted">Venc: {{ mov.data_vencimento.strftime('%d/%m') }}</small>
+                                    {% endif %}
+                                {% endif %}
+                            </td>
                             <td>
                                 {% if mov.tipo_movimentacao == 'REMESSA' %}
                                     <span class="badge bg-warning text-dark">REMESSA</span>
@@ -128,19 +175,33 @@
                             </td>
                             <td class="text-end fw-bold">
                                 {{ mov.qtd_movimentacao|int }}
-                                {% if mov.tipo_movimentacao == 'REMESSA' and mov.numero_nf and vales_por_nf.get(mov.numero_nf) %}
-                                    {% set vale_info = vales_por_nf[mov.numero_nf] %}
-                                    {% set cobertura = vale_info.qtd_total %}
-                                    {% set pendente = mov.qtd_movimentacao - cobertura %}
-                                    {% if cobertura > 0 %}
+                                {% if mov.tipo_movimentacao == 'REMESSA' %}
+                                    {# Saldo fiscal: qtd_abatida por devolucoes #}
+                                    {% if mov.qtd_abatida and mov.qtd_abatida > 0 %}
+                                        {% set saldo_fiscal = mov.qtd_movimentacao - mov.qtd_abatida %}
                                         <br>
-                                        <small class="text-{{ 'success' if pendente <= 0 else 'warning' }}">
-                                            {% if pendente <= 0 %}
-                                                <i class="fas fa-check-circle"></i> Coberto
-                                            {% else %}
-                                                <i class="fas fa-exclamation-circle"></i> {{ pendente|int }} s/ vale
+                                        <small class="text-{{ 'success' if saldo_fiscal <= 0 else 'info' }}" title="Abatido por devolucoes">
+                                            <i class="fas fa-receipt"></i> {{ mov.qtd_abatida|int }} dev.
+                                            {% if saldo_fiscal <= 0 %}
+                                                <span class="badge bg-success">QUITADO</span>
                                             {% endif %}
                                         </small>
+                                    {% endif %}
+                                    {# Cobertura por vales #}
+                                    {% if mov.numero_nf and vales_por_nf.get(mov.numero_nf) %}
+                                        {% set vale_info = vales_por_nf[mov.numero_nf] %}
+                                        {% set cobertura = vale_info.qtd_total %}
+                                        {% set pendente = mov.qtd_movimentacao - cobertura %}
+                                        {% if cobertura > 0 %}
+                                            <br>
+                                            <small class="text-{{ 'success' if pendente <= 0 else 'warning' }}">
+                                                {% if pendente <= 0 %}
+                                                    <i class="fas fa-check-circle"></i> Coberto
+                                                {% else %}
+                                                    <i class="fas fa-exclamation-circle"></i> {{ pendente|int }} s/ vale
+                                                {% endif %}
+                                            </small>
+                                        {% endif %}
                                     {% endif %}
                                 {% endif %}
                             </td>
@@ -227,7 +288,7 @@
                 <ul class="pagination justify-content-center mb-0">
                     {% if movimentos.has_prev %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('pallet.listar_movimentos', page=movimentos.prev_num, tipo=filtro_tipo, baixado=filtro_baixado, destinatario=filtro_destinatario) }}">
+                        <a class="page-link" href="{{ url_for('pallet.listar_movimentos', page=movimentos.prev_num, tipo=filtro_tipo, baixado=filtro_baixado, destinatario=filtro_destinatario, nf_pallet=filtro_nf_pallet, data_de=filtro_data_de, data_ate=filtro_data_ate, transportadora=filtro_transportadora) }}">
                             <i class="fas fa-chevron-left"></i>
                         </a>
                     </li>
@@ -236,7 +297,7 @@
                     {% for page_num in movimentos.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                         {% if page_num %}
                             <li class="page-item {{ 'active' if page_num == movimentos.page }}">
-                                <a class="page-link" href="{{ url_for('pallet.listar_movimentos', page=page_num, tipo=filtro_tipo, baixado=filtro_baixado, destinatario=filtro_destinatario) }}">
+                                <a class="page-link" href="{{ url_for('pallet.listar_movimentos', page=page_num, tipo=filtro_tipo, baixado=filtro_baixado, destinatario=filtro_destinatario, nf_pallet=filtro_nf_pallet, data_de=filtro_data_de, data_ate=filtro_data_ate, transportadora=filtro_transportadora) }}">
                                     {{ page_num }}
                                 </a>
                             </li>
@@ -247,7 +308,7 @@
 
                     {% if movimentos.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('pallet.listar_movimentos', page=movimentos.next_num, tipo=filtro_tipo, baixado=filtro_baixado, destinatario=filtro_destinatario) }}">
+                        <a class="page-link" href="{{ url_for('pallet.listar_movimentos', page=movimentos.next_num, tipo=filtro_tipo, baixado=filtro_baixado, destinatario=filtro_destinatario, nf_pallet=filtro_nf_pallet, data_de=filtro_data_de, data_ate=filtro_data_ate, transportadora=filtro_transportadora) }}">
                             <i class="fas fa-chevron-right"></i>
                         </a>
                     </li>

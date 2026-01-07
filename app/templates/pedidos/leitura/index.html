@@ -83,13 +83,55 @@
                 </div>
             </div>
 
-            <!-- Alerta de Itens sem De-Para -->
+            <!-- Alerta de Itens sem De-Para (Produtos) -->
             <div id="alertaDepara" class="alert alert-warning mt-4" style="display: none;">
                 <h5><i class="fas fa-exclamation-triangle"></i> Itens sem De-Para</h5>
                 <p>Existem itens que nao possuem mapeamento De-Para. Complete o cadastro antes de inserir no Odoo.</p>
                 <button class="btn btn-warning" onclick="abrirModalDepara()">
                     <i class="fas fa-link"></i> Cadastrar De-Para
                 </button>
+            </div>
+
+            <!-- Alerta de Filiais sem De-Para (CNPJ) - Cadastro Inline -->
+            <div id="alertaFiliaisDepara" class="alert alert-danger mt-4" style="display: none;">
+                <h5><i class="fas fa-store-slash"></i> Filiais sem Cadastro</h5>
+                <p class="mb-2">
+                    As seguintes lojas nao possuem De-Para de filial cadastrado.
+                    <strong>Cadastre os CNPJs abaixo para prosseguir com a importacao.</strong>
+                </p>
+                <div class="table-responsive mb-3">
+                    <table class="table table-sm table-bordered bg-white">
+                        <thead class="table-danger">
+                            <tr>
+                                <th style="width: 80px;">Num. Loja</th>
+                                <th style="width: 200px;">Nome da Loja</th>
+                                <th style="width: 280px;">CNPJ</th>
+                                <th style="width: 150px;">Cidade</th>
+                                <th style="width: 60px;">UF</th>
+                                <th style="width: 60px;">Itens</th>
+                                <th style="width: 100px;">Valor</th>
+                                <th style="width: 80px;">Acao</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyFiliaisSemDepara">
+                            <!-- Preenchido dinamicamente -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-success" id="btnSalvarTodasFiliais" disabled>
+                        <i class="fas fa-save"></i> Salvar Todas e Reprocessar
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="reprocessarDados()">
+                        <i class="fas fa-sync"></i> Apenas Reprocessar
+                    </button>
+                    <a href="{{ url_for('portal.sendas_depara.index_filiais') }}" class="btn btn-outline-danger" target="_blank">
+                        <i class="fas fa-external-link-alt"></i> Abrir Cadastro Completo
+                    </a>
+                </div>
+                <small class="text-muted mt-2 d-block">
+                    <i class="fas fa-info-circle"></i> Digite pelo menos 3 caracteres no campo CNPJ para buscar clientes cadastrados.
+                </small>
             </div>
 
             <!-- Alerta de Divergencia de Precos -->
@@ -384,7 +426,7 @@ $(document).ready(function() {
         submitBtn.html('<i class="fas fa-spinner fa-spin"></i> Processando...').prop('disabled', true);
 
         // Limpa resultados anteriores
-        $('#resultArea, #errorArea, #warningArea, #identificacaoCard, #alertaDepara, #alertaDivergencia, #secaoDivergenciasAgregadas').hide();
+        $('#resultArea, #errorArea, #warningArea, #identificacaoCard, #alertaDepara, #alertaFiliaisDepara, #alertaDivergencia, #secaoDivergenciasAgregadas').hide();
 
         $.ajax({
             url: '{{ url_for("leitura_pedidos.upload") }}',
@@ -435,10 +477,16 @@ $(document).ready(function() {
             $('#identificacaoCard').show();
         }
 
-        // Mostra alerta de De-Para se necessario
+        // Mostra alerta de De-Para de produtos se necessario
         if (response.itens_sem_depara && response.itens_sem_depara.length > 0) {
             $('#alertaDepara').show();
             populateDeParaModal(response.itens_sem_depara, response.identificacao?.rede || 'ATACADAO');
+        }
+
+        // Mostra alerta de filiais sem De-Para (CNPJ) se necessario
+        if (response.filiais_sem_depara && response.filiais_sem_depara.length > 0) {
+            $('#alertaFiliaisDepara').show();
+            populateFiliaisSemDepara(response.filiais_sem_depara);
         }
 
         // Mostra alerta de divergencia se necessario
@@ -685,6 +733,312 @@ $(document).ready(function() {
 
         return cardHtml;
     }
+
+    // Armazena filiais para cadastro inline
+    var filiaisPendentes = [];
+
+    // Popula tabela de filiais sem De-Para com inputs para cadastro inline
+    function populateFiliaisSemDepara(filiais) {
+        const tbody = $('#tbodyFiliaisSemDepara');
+        tbody.empty();
+        filiaisPendentes = filiais || [];
+
+        if (!filiais || filiais.length === 0) {
+            tbody.append('<tr><td colspan="8" class="text-center">Nenhuma filial sem cadastro</td></tr>');
+            $('#btnSalvarTodasFiliais').prop('disabled', true);
+            return;
+        }
+
+        filiais.forEach(function(filial, index) {
+            const row = $(`
+                <tr data-index="${index}" data-numero-loja="${filial.numero_loja || ''}" data-nome-loja="${filial.nome_loja_pdf || ''}">
+                    <td><strong>${filial.numero_loja || '-'}</strong></td>
+                    <td>${filial.nome_loja_pdf || '-'}</td>
+                    <td style="position: relative;">
+                        <div class="position-relative">
+                            <input type="text" class="form-control form-control-sm cnpj-input"
+                                id="cnpj_${index}"
+                                placeholder="Digite CNPJ ou razao social..."
+                                autocomplete="off">
+                            <div class="cnpj-dropdown" id="dropdown_${index}" style="display: none; max-height: 250px; overflow-y: auto;"></div>
+                        </div>
+                    </td>
+                    <td>
+                        <input type="text" class="form-control form-control-sm cidade-input"
+                            id="cidade_${index}" placeholder="Cidade">
+                    </td>
+                    <td>
+                        <input type="text" class="form-control form-control-sm uf-input"
+                            id="uf_${index}" placeholder="UF" maxlength="2" style="text-transform: uppercase;">
+                    </td>
+                    <td class="text-center">${filial.quantidade_itens || 0}</td>
+                    <td class="text-end">R$ ${formatMoney(filial.valor_total || 0)}</td>
+                    <td>
+                        <button class="btn btn-sm btn-success btn-salvar-filial" data-index="${index}" title="Salvar esta filial">
+                            <i class="fas fa-save"></i>
+                        </button>
+                        <span class="badge bg-success d-none status-salvo" id="status_${index}">
+                            <i class="fas fa-check"></i>
+                        </span>
+                    </td>
+                </tr>
+            `);
+            tbody.append(row);
+        });
+
+        // Configura busca de CNPJ com debounce
+        let searchTimeout = null;
+        $('.cnpj-input').on('input', function() {
+            const input = $(this);
+            const index = input.attr('id').split('_')[1];
+            const query = input.val().trim();
+            const dropdown = $(`#dropdown_${index}`);
+
+            clearTimeout(searchTimeout);
+
+            if (query.length < 3) {
+                dropdown.hide().empty();
+                return;
+            }
+
+            searchTimeout = setTimeout(function() {
+                buscarClientes(query, index);
+            }, 300);
+        });
+
+        // Fecha dropdown ao clicar fora
+        $(document).on('click', function(e) {
+            if (!$(e.target).closest('.position-relative').length) {
+                $('.cnpj-dropdown').hide();
+            }
+        });
+
+        // Evento para salvar filial individual
+        $('.btn-salvar-filial').on('click', function() {
+            const index = $(this).data('index');
+            salvarFilialDepara(index);
+        });
+
+        // Atualiza estado do botao "Salvar Todas"
+        atualizarBotaoSalvarTodas();
+    }
+
+    // Busca clientes por CNPJ ou razao social
+    function buscarClientes(query, index) {
+        $.ajax({
+            url: '{{ url_for("leitura_pedidos.api_buscar_clientes") }}',
+            type: 'GET',
+            data: { q: query },
+            success: function(response) {
+                const dropdown = $(`#dropdown_${index}`);
+                dropdown.empty();
+
+                if (response.success && response.clientes.length > 0) {
+                    response.clientes.forEach(function(cliente) {
+                        const item = $(`
+                            <a class="dropdown-item" href="#"
+                                data-cnpj="${cliente.cnpj}"
+                                data-cidade="${cliente.cidade || ''}"
+                                data-uf="${cliente.uf || ''}">
+                                <strong>${formatarCnpj(cliente.cnpj)}</strong><br>
+                                <small class="text-muted">${cliente.razao_social} - ${cliente.cidade || ''}/${cliente.uf || ''}</small>
+                            </a>
+                        `);
+                        item.on('click', function(e) {
+                            e.preventDefault();
+                            $(`#cnpj_${index}`).val($(this).data('cnpj'));
+                            $(`#cidade_${index}`).val($(this).data('cidade'));
+                            $(`#uf_${index}`).val($(this).data('uf'));
+                            dropdown.hide();
+                            atualizarBotaoSalvarTodas();
+                        });
+                        dropdown.append(item);
+                    });
+                    dropdown.show();
+                } else {
+                    dropdown.append('<span class="dropdown-item text-muted">Nenhum cliente encontrado</span>');
+                    dropdown.show();
+                }
+            },
+            error: function() {
+                console.error('Erro ao buscar clientes');
+            }
+        });
+    }
+
+    // Formata CNPJ para exibicao
+    function formatarCnpj(cnpj) {
+        if (!cnpj) return '-';
+        cnpj = cnpj.toString().replace(/\D/g, '');
+        if (cnpj.length === 14) {
+            return cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+        }
+        return cnpj;
+    }
+
+    // Salva uma filial De-Para
+    function salvarFilialDepara(index) {
+        const row = $(`tr[data-index="${index}"]`);
+        const numeroLoja = row.data('numero-loja');
+        const nomeLoja = row.data('nome-loja');
+        const cnpj = $(`#cnpj_${index}`).val().trim();
+        const cidade = $(`#cidade_${index}`).val().trim();
+        const uf = $(`#uf_${index}`).val().trim().toUpperCase();
+
+        if (!cnpj) {
+            if (typeof toastr !== 'undefined') {
+                toastr.warning('Informe o CNPJ para a loja ' + numeroLoja);
+            } else {
+                alert('Informe o CNPJ para a loja ' + numeroLoja);
+            }
+            return;
+        }
+
+        const btn = row.find('.btn-salvar-filial');
+        btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+
+        $.ajax({
+            url: '{{ url_for("leitura_pedidos.api_cadastrar_filial_depara") }}',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                numero_loja: numeroLoja,
+                nome_loja: nomeLoja,
+                cnpj: cnpj,
+                cidade: cidade,
+                uf: uf
+            }),
+            success: function(response) {
+                if (response.success) {
+                    // Remove a linha da tabela com animacao
+                    row.fadeOut(300, function() {
+                        $(this).remove();
+
+                        // Verifica se ainda ha filiais pendentes
+                        const filiaisRestantes = $('#tbodyFiliaisSemDepara tr').length;
+                        if (filiaisRestantes === 0) {
+                            // Esconde o alerta e mostra mensagem de sucesso
+                            $('#alertaFiliaisDepara').fadeOut(300);
+                            if (typeof toastr !== 'undefined') {
+                                toastr.info('Todas as filiais foram cadastradas! Clique em "Processar PDF" para reprocessar.');
+                            }
+                        }
+                    });
+
+                    if (typeof toastr !== 'undefined') {
+                        toastr.success(response.message);
+                    }
+                } else {
+                    btn.prop('disabled', false).html('<i class="fas fa-save"></i>');
+                    if (typeof toastr !== 'undefined') {
+                        toastr.error(response.error || 'Erro ao cadastrar filial');
+                    } else {
+                        alert(response.error || 'Erro ao cadastrar filial');
+                    }
+                }
+            },
+            error: function(xhr) {
+                btn.prop('disabled', false).html('<i class="fas fa-save"></i>');
+                const msg = xhr.responseJSON?.error || 'Erro ao cadastrar filial';
+                if (typeof toastr !== 'undefined') {
+                    toastr.error(msg);
+                } else {
+                    alert(msg);
+                }
+            }
+        });
+    }
+
+    // Atualiza o estado do botao "Salvar Todas"
+    function atualizarBotaoSalvarTodas() {
+        const filiasPreenchidas = $('#tbodyFiliaisSemDepara tr').filter(function() {
+            const cnpj = $(this).find('.cnpj-input').val();
+            return cnpj && cnpj.trim().length > 0 && !$(this).hasClass('table-success');
+        }).length;
+
+        const totalPendentes = $('#tbodyFiliaisSemDepara tr:not(.table-success)').length;
+
+        if (filiasPreenchidas > 0 && filiasPreenchidas === totalPendentes) {
+            $('#btnSalvarTodasFiliais').prop('disabled', false);
+        } else {
+            $('#btnSalvarTodasFiliais').prop('disabled', true);
+        }
+    }
+
+    // Salva todas as filiais de uma vez
+    $('#btnSalvarTodasFiliais').on('click', function() {
+        const btn = $(this);
+        btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Salvando...');
+
+        const rows = $('#tbodyFiliaisSemDepara tr:not(.table-success)');
+        let salvos = 0;
+        let erros = 0;
+        const total = rows.length;
+
+        rows.each(function() {
+            const index = $(this).data('index');
+            const numeroLoja = $(this).data('numero-loja');
+            const nomeLoja = $(this).data('nome-loja');
+            const cnpj = $(`#cnpj_${index}`).val().trim();
+            const cidade = $(`#cidade_${index}`).val().trim();
+            const uf = $(`#uf_${index}`).val().trim().toUpperCase();
+
+            if (!cnpj) {
+                erros++;
+                verificarConclusao();
+                return;
+            }
+
+            $.ajax({
+                url: '{{ url_for("leitura_pedidos.api_cadastrar_filial_depara") }}',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    numero_loja: numeroLoja,
+                    nome_loja: nomeLoja,
+                    cnpj: cnpj,
+                    cidade: cidade,
+                    uf: uf
+                }),
+                success: function(response) {
+                    if (response.success) {
+                        salvos++;
+                        // Remove a linha com animacao
+                        $(`tr[data-index="${index}"]`).fadeOut(300, function() {
+                            $(this).remove();
+                        });
+                    } else {
+                        erros++;
+                    }
+                    verificarConclusao();
+                },
+                error: function() {
+                    erros++;
+                    verificarConclusao();
+                }
+            });
+        });
+
+        function verificarConclusao() {
+            if (salvos + erros === total) {
+                if (erros === 0) {
+                    btn.html('<i class="fas fa-check"></i> Todas Salvas!');
+                    // Esconde o alerta apos um breve delay para a animacao das linhas
+                    setTimeout(function() {
+                        $('#alertaFiliaisDepara').fadeOut(300);
+                    }, 500);
+                    if (typeof toastr !== 'undefined') {
+                        toastr.success('Todas as filiais foram cadastradas! Clique em "Processar PDF" para reprocessar.');
+                    }
+                } else {
+                    btn.prop('disabled', false).html('<i class="fas fa-save"></i> Salvar Todas e Reprocessar');
+                    if (typeof toastr !== 'undefined') {
+                        toastr.warning(`${salvos} salvas, ${erros} com erro`);
+                    }
+                }
+            }
+        }
+    });
 
     function populateDeParaModal(itens, rede) {
         const tbody = $('#deparaBody');

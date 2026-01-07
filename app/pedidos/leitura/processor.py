@@ -200,11 +200,19 @@ class PedidoProcessor:
             if 'cnpj_filial' in df:
                 summary['por_filial'] = []
                 for cnpj in df['cnpj_filial'].unique():
-                    filial_df = df[df['cnpj_filial'] == cnpj]
+                    # Sanitiza CNPJ - se for NaN, converte para None
+                    if pd.isna(cnpj):
+                        cnpj = None
+                        # Filtra itens sem CNPJ
+                        filial_df = df[df['cnpj_filial'].isna()]
+                    else:
+                        filial_df = df[df['cnpj_filial'] == cnpj]
 
                     # Pega os dados do primeiro item
                     if not filial_df.empty:
                         primeiro_item = filial_df.iloc[0].to_dict()
+                        # Sanitiza valores NaN no primeiro_item também
+                        primeiro_item = {k: (None if pd.isna(v) else v) for k, v in primeiro_item.items()}
                     else:
                         primeiro_item = {}
 

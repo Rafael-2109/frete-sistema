@@ -86,8 +86,10 @@ def calcular_prazo_remessa(remessa) -> int:
 @pallet_bp.route('/')
 @login_required
 def index():
-    """Dashboard de gestao de pallet"""
-    # Estatisticas gerais - incluindo REMESSA
+    """Dashboard de gestao de pallet - 3 abas: NF Remessa / Vale Pallet / Retornos"""
+    hoje = date.today()
+
+    # ====== ESTATISTICAS GERAIS ======
     total_em_terceiros = db.session.query(
         func.coalesce(func.sum(MovimentacaoEstoque.qtd_movimentacao), 0)
     ).filter(
@@ -100,17 +102,8 @@ def index():
     # Saldos por destinatario
     saldos = MovimentacaoEstoque.listar_saldos_pallet_pendentes()
 
-    # Ultimos movimentos
-    ultimos_movimentos = MovimentacaoEstoque.query.filter(
-        MovimentacaoEstoque.local_movimentacao == 'PALLET',
-        MovimentacaoEstoque.ativo == True
-    ).order_by(MovimentacaoEstoque.criado_em.desc()).limit(10).all()
-
-    # ====== ALERTAS DE PRAZO DIFERENCIADO ======
-    # Regras: SP/RED = 7 dias, Outros = 30 dias
-    hoje = date.today()
-
-    # Buscar todas as remessas pendentes e calcular prazo individualmente
+    # ====== ABA 1: NF REMESSA ======
+    # Todas as remessas pendentes com prazo calculado
     todas_remessas_pendentes = MovimentacaoEstoque.query.filter(
         MovimentacaoEstoque.local_movimentacao == 'PALLET',
         MovimentacaoEstoque.tipo_movimentacao == 'REMESSA',
@@ -120,23 +113,24 @@ def index():
 
     remessas_vencidas = []
     remessas_prestes_vencer = []
+    remessas_ok = []
 
     for remessa in todas_remessas_pendentes:
         prazo_dias = calcular_prazo_remessa(remessa)
         data_vencimento = remessa.data_movimentacao + timedelta(days=prazo_dias)
         dias_ate_vencimento = (data_vencimento - hoje).days
 
-        # Adicionar prazo calculado como atributo para uso no template
+        # Adicionar prazo calculado como atributo
         remessa.prazo_dias = prazo_dias
         remessa.data_vencimento = data_vencimento
         remessa.dias_ate_vencimento = dias_ate_vencimento
 
         if dias_ate_vencimento < 0:
-            # Vencida
             remessas_vencidas.append(remessa)
         elif dias_ate_vencimento <= 5:
-            # Prestes a vencer (5 dias antes do prazo)
             remessas_prestes_vencer.append(remessa)
+        else:
+            remessas_ok.append(remessa)
 
     # Vendas pendentes de vinculo (SAIDA sem movimento_baixado_id)
     vendas_pendentes_vinculo = MovimentacaoEstoque.query.filter(
@@ -146,29 +140,106 @@ def index():
         MovimentacaoEstoque.ativo == True
     ).order_by(MovimentacaoEstoque.data_movimentacao.desc()).all()
 
-    # Vale pallets pendentes
-    vales_pendentes = ValePallet.query.filter(
+    # Stats da aba NF Remessa
+    stats_remessa = {
+        'total_pendentes': len(todas_remessas_pendentes),
+        'vencidas': len(remessas_vencidas),
+        'prestes_vencer': len(remessas_prestes_vencer),
+        'ok': len(remessas_ok),
+        'vendas_sem_vinculo': len(vendas_pendentes_vinculo)
+    }
+
+    # ====== ABA 2: VALE PALLET ======
+    # Vales ativos ordenados por urgencia
+    vales_lista = ValePallet.query.filter(
         ValePallet.ativo == True,
         ValePallet.resolvido == False
-    ).count()
+    ).order_by(ValePallet.data_validade.asc()).limit(50).all()
 
-    vales_vencidos = ValePallet.query.filter(
-        ValePallet.ativo == True,
-        ValePallet.resolvido == False,
-        ValePallet.data_validade < hoje
-    ).count()
+    # Stats da aba Vale Pallet
+    stats_vales = {
+        'total': ValePallet.query.filter(ValePallet.ativo == True, ValePallet.resolvido == False).count(),
+        'pendentes': ValePallet.query.filter(
+            ValePallet.ativo == True,
+            ValePallet.resolvido == False,
+            ValePallet.recebido == False
+        ).count(),
+        'recebidos': ValePallet.query.filter(
+            ValePallet.ativo == True,
+            ValePallet.recebido == True,
+            ValePallet.resolvido == False
+        ).count(),
+        'vencidos': ValePallet.query.filter(
+            ValePallet.ativo == True,
+            ValePallet.resolvido == False,
+            ValePallet.data_validade < hoje
+        ).count(),
+        'a_vencer': ValePallet.query.filter(
+            ValePallet.ativo == True,
+            ValePallet.resolvido == False,
+            ValePallet.data_validade >= hoje,
+            ValePallet.data_validade <= hoje + timedelta(days=5)
+        ).count()
+    }
+
+    # ====== ABA 3: RETORNOS/DEVOLUCOES ======
+    # Movimentos de entrada (retorno, devolucao, recusa)
+    retornos_devolucoes = MovimentacaoEstoque.query.filter(
+        MovimentacaoEstoque.local_movimentacao == 'PALLET',
+        MovimentacaoEstoque.tipo_movimentacao.in_(['ENTRADA', 'DEVOLUCAO', 'RECUSA']),
+        MovimentacaoEstoque.ativo == True
+    ).order_by(MovimentacaoEstoque.data_movimentacao.desc()).limit(50).all()
+
+    # Stats da aba Retornos
+    inicio_mes = hoje.replace(day=1)
+    stats_retornos = {
+        'entradas_mes': MovimentacaoEstoque.query.filter(
+            MovimentacaoEstoque.local_movimentacao == 'PALLET',
+            MovimentacaoEstoque.tipo_movimentacao == 'ENTRADA',
+            MovimentacaoEstoque.data_movimentacao >= inicio_mes,
+            MovimentacaoEstoque.ativo == True
+        ).count(),
+        'devolucoes_mes': MovimentacaoEstoque.query.filter(
+            MovimentacaoEstoque.local_movimentacao == 'PALLET',
+            MovimentacaoEstoque.tipo_movimentacao == 'DEVOLUCAO',
+            MovimentacaoEstoque.data_movimentacao >= inicio_mes,
+            MovimentacaoEstoque.ativo == True
+        ).count(),
+        'recusas_mes': MovimentacaoEstoque.query.filter(
+            MovimentacaoEstoque.local_movimentacao == 'PALLET',
+            MovimentacaoEstoque.tipo_movimentacao == 'RECUSA',
+            MovimentacaoEstoque.data_movimentacao >= inicio_mes,
+            MovimentacaoEstoque.ativo == True
+        ).count(),
+        'total_retornado_mes': db.session.query(
+            func.coalesce(func.sum(MovimentacaoEstoque.qtd_movimentacao), 0)
+        ).filter(
+            MovimentacaoEstoque.local_movimentacao == 'PALLET',
+            MovimentacaoEstoque.tipo_movimentacao.in_(['ENTRADA', 'DEVOLUCAO', 'RECUSA']),
+            MovimentacaoEstoque.data_movimentacao >= inicio_mes,
+            MovimentacaoEstoque.ativo == True
+        ).scalar() or 0
+    }
 
     return render_template('pallet/index.html',
+                           # Gerais
                            total_em_terceiros=int(total_em_terceiros),
                            saldos=saldos,
-                           ultimos_movimentos=ultimos_movimentos,
+                           prazo_sp_red=PRAZO_COBRANCA_SP_RED,
+                           prazo_outros=PRAZO_COBRANCA_OUTROS,
+                           # Aba NF Remessa
+                           todas_remessas_pendentes=todas_remessas_pendentes,
                            remessas_vencidas=remessas_vencidas,
                            remessas_prestes_vencer=remessas_prestes_vencer,
+                           remessas_ok=remessas_ok,
                            vendas_pendentes_vinculo=vendas_pendentes_vinculo,
-                           vales_pendentes=vales_pendentes,
-                           vales_vencidos=vales_vencidos,
-                           prazo_sp_red=PRAZO_COBRANCA_SP_RED,
-                           prazo_outros=PRAZO_COBRANCA_OUTROS)
+                           stats_remessa=stats_remessa,
+                           # Aba Vale Pallet
+                           vales_lista=vales_lista,
+                           stats_vales=stats_vales,
+                           # Aba Retornos
+                           retornos_devolucoes=retornos_devolucoes,
+                           stats_retornos=stats_retornos)
 
 
 @pallet_bp.route('/movimentos')
@@ -179,6 +250,11 @@ def listar_movimentos():
     filtro_tipo = request.args.get('tipo', '')
     filtro_baixado = request.args.get('baixado', '')
     filtro_destinatario = request.args.get('destinatario', '')
+    # Novos filtros avancados
+    filtro_nf_pallet = request.args.get('nf_pallet', '').strip()
+    filtro_data_de = request.args.get('data_de', '')
+    filtro_data_ate = request.args.get('data_ate', '')
+    filtro_transportadora = request.args.get('transportadora', '').strip()
 
     query = MovimentacaoEstoque.query.filter(
         MovimentacaoEstoque.local_movimentacao == 'PALLET',
@@ -193,6 +269,36 @@ def listar_movimentos():
         query = query.filter(MovimentacaoEstoque.baixado == False)
     if filtro_destinatario:
         query = query.filter(MovimentacaoEstoque.tipo_destinatario == filtro_destinatario)
+
+    # Filtros avancados
+    if filtro_nf_pallet:
+        query = query.filter(MovimentacaoEstoque.numero_nf.ilike(f'%{filtro_nf_pallet}%'))
+
+    if filtro_data_de:
+        try:
+            data_de = datetime.strptime(filtro_data_de, '%Y-%m-%d').date()
+            query = query.filter(MovimentacaoEstoque.data_movimentacao >= data_de)
+        except ValueError:
+            pass
+
+    if filtro_data_ate:
+        try:
+            data_ate = datetime.strptime(filtro_data_ate, '%Y-%m-%d').date()
+            query = query.filter(MovimentacaoEstoque.data_movimentacao <= data_ate)
+        except ValueError:
+            pass
+
+    if filtro_transportadora:
+        # Buscar por CNPJ responsavel ou nome da transportadora
+        cnpj_limpo = filtro_transportadora.replace('.', '').replace('-', '').replace('/', '')
+        query = query.filter(
+            or_(
+                MovimentacaoEstoque.cnpj_responsavel.ilike(f'%{cnpj_limpo}%'),
+                MovimentacaoEstoque.nome_responsavel.ilike(f'%{filtro_transportadora}%'),
+                MovimentacaoEstoque.cnpj_destinatario.ilike(f'%{cnpj_limpo}%'),
+                MovimentacaoEstoque.nome_destinatario.ilike(f'%{filtro_transportadora}%')
+            )
+        )
 
     movimentos = query.order_by(MovimentacaoEstoque.criado_em.desc()).paginate(
         page=page, per_page=50, error_out=False
@@ -235,11 +341,26 @@ def listar_movimentos():
                     'cnpj': emb.transportadora.cnpj
                 }
 
+    # Calcular prazo de vencimento para cada REMESSA pendente
+    hoje = date.today()
+    for mov in movimentos.items:
+        if mov.tipo_movimentacao == 'REMESSA' and not mov.baixado and mov.data_movimentacao:
+            prazo_dias = calcular_prazo_remessa(mov)
+            mov.data_vencimento = mov.data_movimentacao + timedelta(days=prazo_dias)
+            mov.dias_ate_vencimento = (mov.data_vencimento - hoje).days
+        else:
+            mov.data_vencimento = None
+            mov.dias_ate_vencimento = None
+
     return render_template('pallet/movimentos.html',
                            movimentos=movimentos,
                            filtro_tipo=filtro_tipo,
                            filtro_baixado=filtro_baixado,
                            filtro_destinatario=filtro_destinatario,
+                           filtro_nf_pallet=filtro_nf_pallet,
+                           filtro_data_de=filtro_data_de,
+                           filtro_data_ate=filtro_data_ate,
+                           filtro_transportadora=filtro_transportadora,
                            vales_por_nf=vales_por_nf,
                            transportadoras_por_embarque=transportadoras_por_embarque)
 
@@ -382,6 +503,17 @@ def desfazer_baixa(movimento_id):
     if not movimento.baixado:
         flash('Este movimento nao esta baixado!', 'warning')
         return redirect(url_for('pallet.listar_movimentos'))
+
+    # Bloquear desfazer baixa se houver vales vinculados (REMESSA)
+    if movimento.tipo_movimentacao == 'REMESSA' and movimento.numero_nf:
+        vales_vinculados = ValePallet.query.filter(
+            ValePallet.nf_pallet == movimento.numero_nf,
+            ValePallet.ativo == True
+        ).count()
+        if vales_vinculados > 0:
+            flash(f'Nao e possivel desfazer a baixa: existem {vales_vinculados} vale(s) vinculado(s) a esta NF! '
+                  f'Para desfazer, primeiro exclua ou desvincule os vales.', 'danger')
+            return redirect(url_for('pallet.listar_movimentos'))
 
     try:
         # Registrar quem e quando desfez

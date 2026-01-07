@@ -281,6 +281,37 @@ class PedidoImportacaoTemp(db.Model):
         """
         from datetime import timedelta
         import uuid
+        import math
+
+        def sanitize_value(val):
+            """Remove NaN/Infinito de valores para JSON válido"""
+            if val is None:
+                return None
+            if isinstance(val, float):
+                if math.isnan(val) or math.isinf(val):
+                    return None
+            # Trata numpy/pandas NaN
+            try:
+                import pandas as pd
+                import numpy as np
+                if pd.isna(val):
+                    return None
+                if isinstance(val, (np.floating, np.integer)):
+                    if np.isnan(val):
+                        return None
+                    return float(val)
+            except (ImportError, TypeError, ValueError):
+                pass
+            return val
+
+        def sanitize_dict(d):
+            """Sanitiza recursivamente um dict ou lista"""
+            if isinstance(d, dict):
+                return {k: sanitize_dict(v) for k, v in d.items()}
+            elif isinstance(d, list):
+                return [sanitize_dict(item) for item in d]
+            else:
+                return sanitize_value(d)
 
         # Gera chave única
         chave = f"imp_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
@@ -377,6 +408,7 @@ class PedidoImportacaoTemp(db.Model):
                     'quantidade_total': filial.get('quantidade', 0)
                 })
 
+        # Sanitiza todos os campos JSON para remover NaN/Infinito
         registro = cls(
             chave_importacao=chave,
             status='PROCESSADO',
@@ -386,12 +418,12 @@ class PedidoImportacaoTemp(db.Model):
             numero_pedido_cliente=numero_pedido_cliente,
             arquivo_pdf_s3=dados.get('s3_path'),
             filename_original=dados.get('filename'),
-            dados_brutos=dados_brutos,
-            identificacao=identificacao,
-            summary=summary,
-            validacao_precos=validacao_precos,
-            itens_sem_depara=dados.get('itens_sem_depara', []),
-            dados_filiais=dados_filiais,
+            dados_brutos=sanitize_dict(dados_brutos),
+            identificacao=sanitize_dict(identificacao),
+            summary=sanitize_dict(summary),
+            validacao_precos=sanitize_dict(validacao_precos),
+            itens_sem_depara=sanitize_dict(dados.get('itens_sem_depara', [])),
+            dados_filiais=sanitize_dict(dados_filiais),
             tem_divergencia=dados.get('tem_divergencia', False),
             pode_inserir=dados.get('pode_inserir', False),
             usuario=usuario,

@@ -76,6 +76,10 @@ class MovimentacaoEstoque(db.Model):
     baixado_por = db.Column(db.String(100), nullable=True)
     movimento_baixado_id = db.Column(db.Integer, db.ForeignKey('movimentacao_estoque.id', ondelete='SET NULL'), nullable=True)
 
+    # Saldo fiscal para controle de devolucoes (PALLET)
+    # Quantidade ja devolvida/abatida da NF de remessa
+    qtd_abatida = db.Column(db.Numeric(15, 3), default=0, nullable=True)
+
     # Campos para substituicao de NF (quando NF cliente consome parte de NF transportadora)
     # nf_remessa_origem: NF original da transportadora que foi substituida
     nf_remessa_origem = db.Column(db.String(20), nullable=True, index=True)
@@ -143,6 +147,7 @@ class MovimentacaoEstoque(db.Model):
             'baixado_em': self.baixado_em.strftime('%d/%m/%Y %H:%M') if self.baixado_em else None,
             'baixado_por': self.baixado_por,
             'movimento_baixado_id': self.movimento_baixado_id,
+            'qtd_abatida': float(self.qtd_abatida) if self.qtd_abatida else 0,
             # Campos de substituicao
             'nf_remessa_origem': self.nf_remessa_origem,
             'cnpj_responsavel': self.cnpj_responsavel,
