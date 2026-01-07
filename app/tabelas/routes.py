@@ -253,12 +253,21 @@ def importar_tabela_frete():
                     flash(f"Tipo carga inválido '{tipo_carga}' (linha {index+2})", "danger") # type: ignore
                     continue
 
-                # Função para limpar valores nan/vazios
+                # Função para limpar valores nan/vazios e converter formato brasileiro
                 def limpar_valor(valor):
                     if pd.isna(valor) or str(valor).lower() in ['nan', 'none', '', 'null']:
                         return 0
                     try:
-                        return float(valor)
+                        # Se já é número, retorna direto
+                        if isinstance(valor, (int, float)):
+                            return float(valor)
+                        # Converte string - suporta formato brasileiro (1.234,56) e internacional (1234.56)
+                        str_valor = str(valor).strip()
+                        # Detecta formato brasileiro: tem vírgula como decimal
+                        if ',' in str_valor:
+                            # Remove pontos de milhar e troca vírgula por ponto
+                            str_valor = str_valor.replace('.', '').replace(',', '.')
+                        return float(str_valor)
                     except (ValueError, TypeError):
                         return 0
 
@@ -840,14 +849,15 @@ def gerar_template_frete():
                 flash('Transportadora não encontrada', 'error')
                 return render_template('tabelas/gerar_template_frete.html', form=form)
             
-            # Cria DataFrame com as colunas necessárias
+            # Cria DataFrame com as colunas necessárias (igual à exportação)
             colunas = [
                 'ATIVO', 'CÓD. TRANSP', 'ORIGEM', 'DESTINO', 'NOME TABELA',
-                'CARGA', 'FRETE', 'INC.', 'VALOR', 'PESO', 'FRETE PESO', 
-                'FRETE VALOR', 'GRIS', 'GRIS MINIMO', 'ADV', 'ADV MINIMO', 'RCA SEGURO FLUVIAL %',
-                'DESPACHO / CTE / TAS', 'CTE', 'TAS', 'PEDAGIO FRAÇÃO 100 KGS'
+                'CARGA', 'FRETE', 'INC.', 'VALOR', 'PESO', 'FRETE PESO',
+                'FRETE VALOR', 'GRIS', 'GRIS MINIMO', 'ADV', 'ADV MINIMO',
+                'RCA SEGURO FLUVIAL %', 'DESPACHO / CTE / TAS', 'CTE', 'TAS',
+                'PEDAGIO FRAÇÃO 100 KGS', 'ICMS PROPRIO'
             ]
-            
+
             # Cria dados pré-preenchidos
             dados = []
             for i in range(form.quantidade_linhas.data):
@@ -872,7 +882,8 @@ def gerar_template_frete():
                     'DESPACHO / CTE / TAS': 0,
                     'CTE': 0,
                     'TAS': 0,
-                    'PEDAGIO FRAÇÃO 100 KGS': 0
+                    'PEDAGIO FRAÇÃO 100 KGS': 0,
+                    'ICMS PROPRIO': 0
                 }
                 dados.append(linha)
             
@@ -1043,39 +1054,67 @@ def exportar_tabelas():
         
         # Busca todas as tabelas (sem paginação para exportação)
         tabelas = query.all()
-        
-        # Cria DataFrame para exportação
+
+        # =====================================================================
+        # FORMATO PADRONIZADO - IGUAL AO TEMPLATE DE IMPORTAÇÃO
+        # Colunas idênticas às usadas em gerar_template_frete e importar_tabela_frete
+        # Valores em formato brasileiro para compatibilidade
+        # =====================================================================
+
+        # Função para formatar percentuais (dividir por 100 pois importação multiplica)
+        def formatar_percentual_br(valor):
+            if valor is None or valor == 0:
+                return '0'
+            # Divide por 100 pois está armazenado como percentual (ex: 12.5 = 12.5%)
+            # e a importação multiplica por 100
+            valor_decimal = valor / 100
+            return formatar_valor_brasileiro(valor_decimal, 4)
+
+        # Função para formatar valores monetários
+        def formatar_valor_br(valor, decimais=2):
+            if valor is None or valor == 0:
+                return '0'
+            return formatar_valor_brasileiro(valor, decimais)
+
+        # Colunas no formato do template de importação
+        colunas = [
+            'ATIVO', 'CÓD. TRANSP', 'ORIGEM', 'DESTINO', 'NOME TABELA',
+            'CARGA', 'FRETE', 'INC.', 'VALOR', 'PESO', 'FRETE PESO',
+            'FRETE VALOR', 'GRIS', 'GRIS MINIMO', 'ADV', 'ADV MINIMO',
+            'RCA SEGURO FLUVIAL %', 'DESPACHO / CTE / TAS', 'CTE', 'TAS',
+            'PEDAGIO FRAÇÃO 100 KGS', 'ICMS PROPRIO'
+        ]
+
+        # Cria DataFrame para exportação no formato do template
         dados = []
         for tabela in tabelas:
             dados.append({
-                'Transportadora': tabela.transportadora.razao_social,
-                'CNPJ': tabela.transportadora.cnpj,
-                'UF Origem': tabela.uf_origem,
-                'UF Destino': tabela.uf_destino,
-                'Nome Tabela': tabela.nome_tabela,
-                'Tipo Carga': tabela.tipo_carga,
-                'Modalidade': tabela.modalidade,
-                'Frete Mín. Valor (R$)': formatar_valor_brasileiro(tabela.frete_minimo_valor),
-                'Frete Mín. Peso (kg)': formatar_valor_brasileiro(tabela.frete_minimo_peso),
-                'Valor/kg (R$)': formatar_valor_brasileiro(tabela.valor_kg, 4),
-                '% Sobre Valor': formatar_valor_brasileiro(tabela.percentual_valor),
-                '% GRIS': formatar_valor_brasileiro(tabela.percentual_gris),
-                'GRIS Mín. (R$)': formatar_valor_brasileiro(tabela.gris_minimo) if tabela.gris_minimo else '',
-                '% ADV': formatar_valor_brasileiro(tabela.percentual_adv),
-                'ADV Mín. (R$)': formatar_valor_brasileiro(tabela.adv_minimo) if tabela.adv_minimo else '',
-                '% RCA': formatar_valor_brasileiro(tabela.percentual_rca),
-                'Despacho (R$)': formatar_valor_brasileiro(tabela.valor_despacho),
-                'CTE (R$)': formatar_valor_brasileiro(tabela.valor_cte),
-                'TAS (R$)': formatar_valor_brasileiro(tabela.valor_tas),
-                'Pedágio/100kg (R$)': formatar_valor_brasileiro(tabela.pedagio_por_100kg),
-                'ICMS Incluso': 'Sim' if tabela.icms_incluso else 'Não',
-                '% ICMS Próprio': formatar_valor_brasileiro(tabela.icms_proprio) if tabela.icms_proprio else '',
-                'Criado Por': tabela.criado_por,
-                'Criado Em': tabela.criado_em.strftime('%d/%m/%Y %H:%M') if tabela.criado_em else ''
+                'ATIVO': 'A',
+                'CÓD. TRANSP': tabela.transportadora.cnpj,
+                'ORIGEM': tabela.uf_origem,
+                'DESTINO': tabela.uf_destino,
+                'NOME TABELA': tabela.nome_tabela,
+                'CARGA': tabela.tipo_carga,
+                'FRETE': tabela.modalidade,
+                'INC.': 'S' if tabela.icms_incluso else 'N',
+                'VALOR': formatar_valor_br(tabela.frete_minimo_valor),
+                'PESO': formatar_valor_br(tabela.frete_minimo_peso),
+                'FRETE PESO': formatar_valor_br(tabela.valor_kg, 6),
+                'FRETE VALOR': formatar_percentual_br(tabela.percentual_valor),
+                'GRIS': formatar_percentual_br(tabela.percentual_gris),
+                'GRIS MINIMO': formatar_valor_br(tabela.gris_minimo),
+                'ADV': formatar_percentual_br(tabela.percentual_adv),
+                'ADV MINIMO': formatar_valor_br(tabela.adv_minimo),
+                'RCA SEGURO FLUVIAL %': formatar_percentual_br(tabela.percentual_rca),
+                'DESPACHO / CTE / TAS': formatar_valor_br(tabela.valor_despacho),
+                'CTE': formatar_valor_br(tabela.valor_cte),
+                'TAS': formatar_valor_br(tabela.valor_tas),
+                'PEDAGIO FRAÇÃO 100 KGS': formatar_valor_br(tabela.pedagio_por_100kg),
+                'ICMS PROPRIO': formatar_percentual_br(tabela.icms_proprio)
             })
-        
-        # Cria DataFrame
-        df = pd.DataFrame(dados)
+
+        # Cria DataFrame com colunas na ordem correta
+        df = pd.DataFrame(dados, columns=colunas)
         
         # Cria arquivo Excel em memória
         output = io.BytesIO()
@@ -1093,27 +1132,26 @@ def exportar_tabelas():
                     try:
                         if len(str(cell.value)) > max_length:
                             max_length = len(str(cell.value))
-                    except:
+                    except (TypeError, AttributeError):
                         pass
                 adjusted_width = min(max_length + 2, 50)
                 worksheet.column_dimensions[column_letter].width = adjusted_width
-            
+
             # Congela primeira linha (cabeçalho)
             worksheet.freeze_panes = 'A2'
-        
+
         output.seek(0)
-        
+
         # Nome do arquivo com data/hora
-        from datetime import datetime
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         nome_arquivo = f"tabelas_frete_{timestamp}.xlsx"
-        
+
         # Cria resposta para download
         response = make_response(output.getvalue())
         response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         response.headers['Content-Disposition'] = f'attachment; filename="{nome_arquivo}"'
-        
-        flash(f'✅ Exportação concluída! {len(tabelas)} tabelas exportadas.', 'success')
+
+        flash(f'✅ Exportação concluída! {len(tabelas)} tabelas exportadas (formato compatível com importação).', 'success')
         return response
         
     except Exception as e:
