@@ -474,9 +474,12 @@
                                         <option value="">Carregando...</option>
                                     </select>
                                 </div>
-                                <div class="col-md-1 mb-3 d-flex align-items-end">
-                                    <button type="button" class="btn btn-outline-info btn-sm w-100" onclick="estimarFreteRetorno()" id="btn-estimar-retorno" disabled title="Selecione uma transportadora">
+                                <div class="col-md-2 mb-3 d-flex align-items-end gap-1">
+                                    <button type="button" class="btn btn-outline-info btn-sm" onclick="estimarFreteRetorno()" id="btn-estimar-retorno" disabled title="Selecione uma transportadora">
                                         <i class="bi bi-calculator"></i> Estimar
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm d-none" onclick="abrirModalDetalhesFrete()" id="btn-ver-detalhes" title="Ver detalhes do calculo">
+                                        <i class="bi bi-list-ul"></i>
                                     </button>
                                 </div>
                                 <div class="col-md-2 mb-3">
@@ -1237,6 +1240,81 @@
                     <span class="spinner-border spinner-border-sm d-none" id="spinner-salvar-prod"></span>
                     Confirmar
                 </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Detalhes do Calculo de Frete -->
+<div class="modal fade" id="modal-detalhes-frete" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-calculator me-2"></i>Detalhamento do Calculo de Frete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <small class="text-muted">
+                        <strong>Transportadora:</strong> <span id="det-transportadora">-</span><br>
+                        <strong>Tabela:</strong> <span id="det-tabela">-</span><br>
+                        <strong>Rota:</strong> <span id="det-rota">-</span>
+                    </small>
+                </div>
+                <table class="table table-sm table-bordered mb-0">
+                    <tbody>
+                        <tr>
+                            <td>Frete Peso</td>
+                            <td class="text-end" id="det-frete-peso">-</td>
+                        </tr>
+                        <tr>
+                            <td>GRIS</td>
+                            <td class="text-end" id="det-gris">-</td>
+                        </tr>
+                        <tr>
+                            <td>ADV</td>
+                            <td class="text-end" id="det-adv">-</td>
+                        </tr>
+                        <tr>
+                            <td>RCA</td>
+                            <td class="text-end" id="det-rca">-</td>
+                        </tr>
+                        <tr>
+                            <td>Pedagio</td>
+                            <td class="text-end" id="det-pedagio">-</td>
+                        </tr>
+                        <tr>
+                            <td>TAS</td>
+                            <td class="text-end" id="det-tas">-</td>
+                        </tr>
+                        <tr>
+                            <td>Despacho</td>
+                            <td class="text-end" id="det-despacho">-</td>
+                        </tr>
+                        <tr>
+                            <td>CTe</td>
+                            <td class="text-end" id="det-cte">-</td>
+                        </tr>
+                        <tr class="table-secondary">
+                            <td><strong>Subtotal</strong></td>
+                            <td class="text-end" id="det-subtotal"><strong>-</strong></td>
+                        </tr>
+                        <tr>
+                            <td>ICMS (<span id="det-icms-perc">0</span>%)</td>
+                            <td class="text-end" id="det-icms">-</td>
+                        </tr>
+                        <tr class="table-primary">
+                            <td><strong>TOTAL</strong></td>
+                            <td class="text-end" id="det-total"><strong>-</strong></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <small class="text-muted d-none" id="det-frete-minimo">
+                    <i class="bi bi-info-circle"></i> Frete minimo aplicado
+                </small>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
             </div>
         </div>
     </div>

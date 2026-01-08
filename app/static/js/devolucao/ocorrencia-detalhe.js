@@ -273,10 +273,14 @@ async function calcularPesoAuto() {
 // =========================================================================
 // Estimar Frete de Retorno (50%)
 // =========================================================================
+// Variavel global para armazenar detalhes do frete estimado
+let dadosFreteEstimado = null;
+
 async function estimarFreteRetorno() {
     const transportadoraId = document.getElementById('transportadora_id').value;
     const ufOrigem = document.getElementById('uf_origem').value;
     const btnEstimar = document.getElementById('btn-estimar-retorno');
+    const btnVerDetalhes = document.getElementById('btn-ver-detalhes');
     const infoEstimativa = document.getElementById('info-estimativa');
     const valorCotado = document.getElementById('valor_cotado');
     const pesoKg = document.getElementById('peso_kg');
@@ -321,19 +325,39 @@ async function estimarFreteRetorno() {
             infoEstimativa.classList.remove('d-none');
             infoEstimativa.classList.add('text-success');
 
-            alert(`Estimativa de Frete de Retorno (50%):\n\n` +
+            // Armazenar dados para o modal de detalhes
+            dadosFreteEstimado = {
+                transportadora: result.transportadora,
+                tabela: result.tabela,
+                rota: result.rota,
+                peso_kg: result.peso_kg,
+                valor_nf: result.valor_nf,
+                valor_estimado: result.valor_estimado,
+                percentual_nf: result.percentual_nf,
+                valor_por_kg: result.valor_por_kg,
+                componentes: result.componentes
+            };
+
+            // Exibir botao de ver detalhes
+            if (btnVerDetalhes && result.componentes) {
+                btnVerDetalhes.classList.remove('d-none');
+            }
+
+            alert(`Estimativa de Frete de Retorno:\n\n` +
                   `Transportadora: ${result.transportadora}\n` +
                   `Tabela: ${result.tabela}\n` +
                   `Rota: ${result.rota}\n\n` +
                   `Peso: ${result.peso_kg.toFixed(3)} kg\n` +
                   `Valor NF: R$ ${result.valor_nf.toFixed(2)}\n\n` +
-                  `Frete Integral: R$ ${result.valor_integral.toFixed(2)}\n` +
-                  `Frete Retorno (${result.desconto}): R$ ${result.valor_estimado.toFixed(2)}\n\n` +
+                  `Frete Estimado: R$ ${result.valor_estimado.toFixed(2)}\n\n` +
                   `% sobre NF: ${result.percentual_nf.toFixed(2)}%\n` +
-                  `R$/kg: R$ ${result.valor_por_kg.toFixed(2)}`);
+                  `R$/kg: R$ ${result.valor_por_kg.toFixed(2)}\n\n` +
+                  `Clique em "Ver detalhes" para breakdown completo.`);
         } else {
             alert(result.erro || 'Erro ao estimar frete');
             infoEstimativa.classList.add('d-none');
+            if (btnVerDetalhes) btnVerDetalhes.classList.add('d-none');
+            dadosFreteEstimado = null;
         }
     } catch (error) {
         console.error('Erro:', error);
@@ -342,6 +366,56 @@ async function estimarFreteRetorno() {
         btnEstimar.innerHTML = textoOriginal;
         btnEstimar.disabled = false;
     }
+}
+
+// Funcao para abrir modal de detalhes do frete
+function abrirModalDetalhesFrete() {
+    if (!dadosFreteEstimado || !dadosFreteEstimado.componentes) {
+        alert('Nenhuma estimativa disponivel. Clique em "Estimar" primeiro.');
+        return;
+    }
+
+    const c = dadosFreteEstimado.componentes;
+    const formatarMoeda = (valor) => {
+        const num = parseFloat(valor) || 0;
+        return 'R$ ' + num.toFixed(2);
+    };
+
+    // Preencher informacoes gerais
+    document.getElementById('det-transportadora').textContent = dadosFreteEstimado.transportadora;
+    document.getElementById('det-tabela').textContent = dadosFreteEstimado.tabela;
+    document.getElementById('det-rota').textContent = dadosFreteEstimado.rota;
+
+    // Preencher componentes
+    document.getElementById('det-frete-peso').textContent = formatarMoeda(c.frete_peso);
+    document.getElementById('det-gris').textContent = formatarMoeda(c.gris);
+    document.getElementById('det-adv').textContent = formatarMoeda(c.adv);
+    document.getElementById('det-rca').textContent = formatarMoeda(c.rca);
+    document.getElementById('det-pedagio').textContent = formatarMoeda(c.pedagio);
+    document.getElementById('det-tas').textContent = formatarMoeda(c.tas);
+    document.getElementById('det-despacho').textContent = formatarMoeda(c.despacho);
+    document.getElementById('det-cte').textContent = formatarMoeda(c.cte);
+    document.getElementById('det-subtotal').innerHTML = '<strong>' + formatarMoeda(c.subtotal) + '</strong>';
+
+    // ICMS
+    const icmsPerc = c.icms_percentual || 0;
+    document.getElementById('det-icms-perc').textContent = icmsPerc.toFixed(1);
+    const icmsValor = (c.total || 0) - (c.subtotal || 0);
+    document.getElementById('det-icms').textContent = formatarMoeda(icmsValor > 0 ? icmsValor : 0);
+
+    document.getElementById('det-total').innerHTML = '<strong>' + formatarMoeda(c.total) + '</strong>';
+
+    // Indicador de frete minimo
+    const infoFreteMinimo = document.getElementById('det-frete-minimo');
+    if (c.frete_minimo_aplicado) {
+        infoFreteMinimo.classList.remove('d-none');
+    } else {
+        infoFreteMinimo.classList.add('d-none');
+    }
+
+    // Abrir modal
+    const modal = new bootstrap.Modal(document.getElementById('modal-detalhes-frete'));
+    modal.show();
 }
 
 // =========================================================================

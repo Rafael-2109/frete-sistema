@@ -616,6 +616,48 @@ class AIResolverService:
             return int(match.group(1))
         return None
 
+    def _normalizar_unidade_deterministico(self, unidade: str) -> str:
+        """
+        Normaliza unidade de medida SEM usar Haiku - regras deterministicas.
+
+        Baseado na analise de 1892 linhas de NFD no sistema:
+        - CAIXA: CX, CXA, BOX, FD, FARDO, PCT, PACOTE, TAMBOR
+        - UNIDADE: UN, UNI, PC, PECA, BD, BALDE, BLD, SC, SACO, PT, POTE, BL, BA, SH, SACHE
+        - PESO: KG, GR, G, GRAM, QUILO, TON
+
+        Args:
+            unidade: Unidade original do cliente (ex: CXA1, UN, UND9, BD1)
+
+        Returns:
+            Tipo normalizado: CAIXA, UNIDADE, PESO ou OUTRO
+        """
+        if not unidade:
+            return 'OUTRO'
+
+        unidade_upper = unidade.upper().strip()
+
+        # CAIXA (verificar primeiro - mais especifico)
+        if any(u in unidade_upper for u in ['CX', 'CAIXA', 'BOX', 'FD', 'FARDO', 'PCT', 'PACOTE', 'TAMBOR']):
+            return 'CAIXA'
+
+        # UNIDADE (ordem importa - verificar padroes mais especificos primeiro)
+        # Inclui: UN, UNI, UNID, UND, PC, BD, BLD, BALDE, SC, SACO, PT, POTE, BL, BA, SH
+        if any(u in unidade_upper for u in ['UN', 'UNI', 'PC', 'PECA', 'PÇ', 'BD', 'BALDE', 'BLD',
+                                             'SC', 'SACO', 'PT', 'POTE', 'BL', 'BA', 'SH', 'SACHE']):
+            return 'UNIDADE'
+
+        # PESO
+        if any(u in unidade_upper for u in ['KG', 'GR', 'GRAM', 'QUILO', 'TON']):
+            return 'PESO'
+
+        # Casos especiais - unidade de 1 caractere
+        if unidade_upper == 'U':
+            return 'UNIDADE'
+        if unidade_upper == 'G':
+            return 'PESO'
+
+        return 'OUTRO'
+
     def _extrair_gramatura(self, nome_produto: str) -> Optional[str]:
         """
         Extrai a gramatura da embalagem primaria do nome do produto.
@@ -1354,11 +1396,11 @@ class AIResolverService:
 
             prefixo_cnpj = nfd.prefixo_cnpj_emitente or ''
 
-            # Buscar linhas pendentes
+            # Buscar linhas pendentes (ORDER BY garante consistencia entre execucoes)
             linhas = NFDevolucaoLinha.query.filter_by(
                 nf_devolucao_id=nfd_id,
                 produto_resolvido=False
-            ).all()
+            ).order_by(NFDevolucaoLinha.id).all()
 
             resultados = {
                 'sucesso': True,
@@ -1393,16 +1435,10 @@ class AIResolverService:
                     'status': 'NAO_IDENTIFICADO'
                 }
 
-                # Normalizar unidade para contexto
-                tipo_unidade = None
-                if linha.unidade_medida:
-                    try:
-                        result_unidade = self.normalizar_unidade(linha.unidade_medida)
-                        tipo_unidade = result_unidade.tipo
-                        linha_info['tipo_unidade'] = tipo_unidade
-                        linha_info['fator_conversao'] = result_unidade.fator_conversao
-                    except Exception:
-                        pass
+                # Normalizar unidade (funcao deterministica - sem chamada Haiku)
+                # Isso garante consistencia entre execucoes e elimina rate limiting
+                tipo_unidade = self._normalizar_unidade_deterministico(linha.unidade_medida)
+                linha_info['tipo_unidade'] = tipo_unidade
 
                 if resultado.sugestao_principal:
                     # Buscar produto no CadastroPalletizacao para garantir dados corretos
@@ -1434,6 +1470,20 @@ class AIResolverService:
                         qtd_convertida_caixas = float(linha.quantidade) / qtd_por_caixa
                         if linha.valor_unitario:
                             valor_convertido = float(linha.valor_unitario) * qtd_por_caixa
+                        logger.info(f"[AI_RESOLVER] Conversao realizada: {linha.quantidade} UN / {qtd_por_caixa} = {qtd_convertida_caixas:.2f} CX")
+                    else:
+                        # LOG para debug quando nao converte
+                        logger.warning(
+                            f"[AI_RESOLVER] Conversao NAO realizada para linha {linha.id}: "
+                            f"tipo_unidade={tipo_unidade}, qtd_por_caixa={qtd_por_caixa}, "
+                            f"quantidade={linha.quantidade}, nome='{nome_para_extracao[:50]}'"
+                        )
+                        # FALLBACK: Se quantidade >= qtd_por_caixa e qtd_por_caixa existe, provavelmente e unidade
+                        if qtd_por_caixa and linha.quantidade and float(linha.quantidade) >= qtd_por_caixa:
+                            qtd_convertida_caixas = float(linha.quantidade) / qtd_por_caixa
+                            if linha.valor_unitario:
+                                valor_convertido = float(linha.valor_unitario) * qtd_por_caixa
+                            logger.info(f"[AI_RESOLVER] Conversao via FALLBACK: {linha.quantidade} / {qtd_por_caixa} = {qtd_convertida_caixas:.2f} CX")
 
                     # Calcular peso: quantidade_convertida * peso_bruto do produto
                     peso_calculado = None

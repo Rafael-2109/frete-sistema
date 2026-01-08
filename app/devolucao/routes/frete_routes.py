@@ -931,7 +931,9 @@ def calcular_peso_devolucao(ocorrencia_id: int):
 @login_required
 def estimar_frete_retorno(ocorrencia_id: int):
     """
-    Estima frete de retorno usando tabela da transportadora
+    Estima frete de retorno usando tabela da transportadora.
+
+    IMPORTANTE: Todos os produtos devem estar resolvidos antes de estimar.
 
     POST /devolucao/frete/api/{ocorrencia_id}/estimar-retorno
     Body:
@@ -941,11 +943,10 @@ def estimar_frete_retorno(ocorrencia_id: int):
     }
 
     Retorna:
-    - valor_estimado: 50% do frete calculado
-    - valor_integral: frete sem desconto
+    - valor_estimado: frete calculado
     - percentual_nf: % do frete em relacao ao valor da NF
     - valor_por_kg: R$/kg da estimativa
-    - detalhes: componentes do calculo
+    - componentes: breakdown detalhado do calculo (frete_peso, gris, adv, etc)
     """
     from app.tabelas.models import TabelaFrete
     from app.utils.calculadora_frete import CalculadoraFrete
@@ -975,6 +976,19 @@ def estimar_frete_retorno(ocorrencia_id: int):
         if not nfd:
             return jsonify({'sucesso': False, 'erro': 'NFD nao encontrada'}), 404
 
+        # VALIDACAO: Verificar se todos os produtos estao resolvidos
+        linhas_pendentes = NFDevolucaoLinha.query.filter_by(
+            nf_devolucao_id=nfd.id,
+            produto_resolvido=False
+        ).count()
+
+        if linhas_pendentes > 0:
+            return jsonify({
+                'sucesso': False,
+                'erro': f'Existem {linhas_pendentes} produto(s) nao resolvido(s). Resolva todos os produtos antes de estimar o frete.',
+                'produtos_pendentes': linhas_pendentes
+            }), 400
+
         # Buscar tabela de frete (origem -> SP)
         tabela = TabelaFrete.query.filter_by(
             transportadora_id=transportadora_id,
@@ -996,18 +1010,24 @@ def estimar_frete_retorno(ocorrencia_id: int):
                 'erro': f'Tabela de frete nao encontrada para {uf_origem} -> SP'
             }), 404
 
-        # Calcular peso via endpoint existente
+        # Calcular peso total das linhas
         linhas = NFDevolucaoLinha.query.filter_by(nf_devolucao_id=nfd.id).all()
         peso_total = Decimal('0')
         valor_total = Decimal('0')
 
         for linha in linhas:
-            codigo = linha.codigo_produto_interno or linha.codigo_produto_cliente
-            if codigo:
-                cadastro = CadastroPalletizacao.query.filter_by(cod_produto=codigo).first()
-                if cadastro and cadastro.peso_bruto:
-                    quantidade = Decimal(str(linha.quantidade or 0))
-                    peso_total += quantidade * Decimal(str(cadastro.peso_bruto))
+            # PRIORIDADE 1: Peso ja calculado e persistido na linha
+            if linha.peso_bruto:
+                peso_total += Decimal(str(linha.peso_bruto))
+            else:
+                # PRIORIDADE 2: Calcular usando quantidade_convertida ou quantidade
+                codigo = linha.codigo_produto_interno or linha.codigo_produto_cliente
+                if codigo:
+                    cadastro = CadastroPalletizacao.query.filter_by(cod_produto=codigo).first()
+                    if cadastro and cadastro.peso_bruto:
+                        # Usar quantidade_convertida (caixas) se disponivel, senao quantidade original
+                        quantidade = Decimal(str(linha.quantidade_convertida or linha.quantidade or 0))
+                        peso_total += quantidade * Decimal(str(cadastro.peso_bruto))
 
             if linha.valor_total:
                 valor_total += Decimal(str(linha.valor_total))
@@ -1060,17 +1080,15 @@ def estimar_frete_retorno(ocorrencia_id: int):
         )
 
         frete_integral = resultado.get('valor_com_icms', 0)
-        frete_estimado = frete_integral * 0.5  # 50% do frete
+        detalhes = resultado.get('detalhes', {})
 
-        # Calcular metricas
-        percentual_nf = (frete_estimado / float(valor_total) * 100) if valor_total > 0 else 0
-        valor_por_kg = (frete_estimado / float(peso_total)) if peso_total > 0 else 0
+        # Calcular metricas usando 100% do frete
+        percentual_nf = (frete_integral / float(valor_total) * 100) if valor_total > 0 else 0
+        valor_por_kg = (frete_integral / float(peso_total)) if peso_total > 0 else 0
 
         return jsonify({
             'sucesso': True,
-            'valor_estimado': round(frete_estimado, 2),
-            'valor_integral': round(frete_integral, 2),
-            'desconto': '50%',
+            'valor_estimado': round(frete_integral, 2),
             'peso_kg': round(float(peso_total), 3),
             'valor_nf': round(float(valor_total), 2),
             'percentual_nf': round(percentual_nf, 2),
@@ -1078,7 +1096,20 @@ def estimar_frete_retorno(ocorrencia_id: int):
             'transportadora': transportadora.razao_social,
             'tabela': tabela.nome_tabela,
             'rota': f'{uf_origem} -> SP',
-            'detalhes': resultado.get('detalhes', {})
+            'componentes': {
+                'frete_peso': detalhes.get('frete_base', 0),
+                'gris': detalhes.get('gris', 0),
+                'adv': detalhes.get('adv', 0),
+                'rca': detalhes.get('rca', 0),
+                'pedagio': detalhes.get('pedagio', 0),
+                'tas': detalhes.get('valor_tas', 0),
+                'despacho': detalhes.get('valor_despacho', 0),
+                'cte': detalhes.get('valor_cte', 0),
+                'subtotal': detalhes.get('frete_liquido_antes_minimo', 0),
+                'frete_minimo_aplicado': detalhes.get('frete_minimo_aplicado', False),
+                'icms_percentual': resultado.get('icms_aplicado', 0),
+                'total': frete_integral
+            }
         })
 
     except Exception as e:

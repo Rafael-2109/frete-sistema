@@ -262,10 +262,15 @@ def visualizar_embarque(id):
                             flash(f"⚠️ {erro}", "warning")
                     except Exception as e:
                         pass
-                
+
+                # ✅ FLUSH: Persistir mudanças em EmbarqueItem ANTES das sincronizações
+                # Isso garante que as queries feitas pelas funções de sincronização
+                # leiam os valores atualizados do banco, não os antigos
+                db.session.flush()
+
                 # ✅ NOVA LÓGICA: Remove apenas itens que foram realmente removidos do formulário
                 # (não implementado por enquanto - manter todos os itens existentes)
-                
+
                 # ✅ CORREÇÃO CRÍTICA: ANTES do commit, execute todas as operações em uma única transação
                 messages_sync = []
                 messages_validacao = []
@@ -438,16 +443,10 @@ def visualizar_embarque(id):
             # Se não há itens, adicionar um vazio
             form.itens.append_entry()
         
-        # ✅ TENTATIVA: Forçar IDs após append_entry usando process() 
-        try:
-            # Processa os dados do request para popular os campos corretamente
-            for i, it in enumerate(embarque.itens):
-                if i < len(form.itens.entries):
-                    entry = form.itens.entries[i]
-                    if hasattr(entry, 'id') and hasattr(entry.id, 'process'):
-                        entry.id.process(formdata=None, data=str(it.id))
-        except Exception as e:
-            pass
+        # ✅ CORREÇÃO: Setar IDs diretamente após append_entry
+        for i, it in enumerate(embarque.itens):
+            if i < len(form.itens.entries):
+                form.itens.entries[i].form.id.data = str(it.id)
 
         # ✅ READONLY: UF e cidade são StringField readonly, não precisam mais de choices
 
@@ -811,17 +810,10 @@ def editar_embarque(id):
         for i in range(len(embarque.itens), qtd_itens):
             form.itens.append_entry()
         
-        # ✅ TENTATIVA: Forçar IDs após append_entry usando process() 
-        try:
-            for i, it in enumerate(embarque.itens):
-                if i < len(form.itens.entries):
-                    entry = form.itens.entries[i]
-                    if hasattr(entry, 'id') and hasattr(entry.id, 'process'):
-                        entry.id.process(formdata=None, data=str(it.id))
-        except Exception as e:
-            pass
-
-
+        # ✅ CORREÇÃO: Setar IDs diretamente após append_entry
+        for i, it in enumerate(embarque.itens):
+            if i < len(form.itens.entries):
+                form.itens.entries[i].form.id.data = str(it.id)
 
         return render_template('embarques/visualizar_embarque.html', embarque=embarque, form=form)
 
@@ -1636,11 +1628,11 @@ def sincronizar_nf_embarque_pedido_completa(embarque_id):
                         separacao_lote_id=item.separacao_lote_id
                     ).update({'numero_nf': None})
                     itens_removidos += 1
-        
-        # Salvar todas as alterações
-        db.session.commit()
-        
-        # ✅ VERIFICAÇÃO PÓS-COMMIT: Confirma se as alterações foram persistidas
+
+        # ✅ REMOVIDO: Não faz commit aqui - deixa para o chamador
+        # O flush já foi feito antes, e o commit final é na rota principal
+
+        # ✅ VERIFICAÇÃO PÓS-SYNC: Confirma se as alterações estão preparadas
         if itens_cancelados > 0:
             print(f"[SYNC] 🔍 Verificação pós-commit - Confirmando alterações nos pedidos:")
             for item in embarque.itens:
@@ -1680,9 +1672,9 @@ def sincronizar_nf_embarque_pedido_completa(embarque_id):
             print(f"[SYNC] Embarque #{embarque.numero}: {resultado_msg}")
         
         return True, resultado_msg
-            
+
     except Exception as e:
-        db.session.rollback()
+        # ✅ NÃO faz rollback aqui - deixa para o chamador gerenciar a transação
         error_msg = f"Erro na sincronização: {str(e)}"
         print(f"[SYNC] ❌ {error_msg}")
         return False, error_msg
