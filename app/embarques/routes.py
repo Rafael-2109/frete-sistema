@@ -2570,3 +2570,143 @@ def api_sincronizar_totais(embarque_id):
             'success': False,
             'error': str(e)
         }), 500
+
+
+@embarques_bp.route('/api/gerar-solicitacao-coleta/<int:embarque_id>', methods=['GET'])
+@login_required
+@require_embarques()
+def api_gerar_solicitacao_coleta(embarque_id):
+    """
+    📋 API: Gera texto padronizado para solicitação de coleta à transportadora
+
+    PARÂMETROS:
+        - embarque_id: ID do embarque
+        - com_endereco: (query param) Se 'true', inclui endereço de entrega na tabela
+
+    RETORNO:
+        JSON com texto formatado para copiar
+    """
+    import math
+    from app.carteira.models import CarteiraPrincipal
+
+    try:
+        # Verificar parâmetro com_endereco
+        com_endereco = request.args.get('com_endereco', 'false').lower() == 'true'
+
+        # Buscar embarque
+        embarque = Embarque.query.get(embarque_id)
+        if not embarque:
+            return jsonify({
+                'success': False,
+                'error': f'Embarque {embarque_id} não encontrado'
+            }), 404
+
+        # Buscar itens ativos do embarque
+        itens_ativos = [item for item in embarque.itens if item.status == 'ativo']
+
+        if not itens_ativos:
+            return jsonify({
+                'success': False,
+                'error': 'Embarque não possui itens ativos'
+            }), 400
+
+        # Formatar data prevista
+        data_coleta = ''
+        if embarque.data_prevista_embarque:
+            data_coleta = embarque.data_prevista_embarque.strftime('%d/%m/%Y')
+        else:
+            data_coleta = '(Data não definida)'
+
+        # Calcular totais
+        peso_total = embarque.peso_total or sum(item.peso or 0 for item in itens_ativos)
+        valor_total = embarque.valor_total or sum(item.valor or 0 for item in itens_ativos)
+        pallet_total = embarque.pallet_total or sum(item.pallets or 0 for item in itens_ativos)
+
+        # Arredondar pallets para cima
+        pallets_arredondado = math.ceil(pallet_total) if pallet_total else 0
+
+        # Montar cabeçalho da solicitação
+        texto = f"""Segue solicitação de coleta conforme dados abaixo:
+
+Data da coleta: {data_coleta}
+
+Embarque: #{embarque.numero}
+
+Quantidade de pallets: {pallets_arredondado}
+
+Peso: {peso_total:,.0f} kg
+
+Valor da carga: R$ {valor_total:,.2f}
+
+Endereço de coleta:
+
+Rua Victorio Marchezine, nº 61 – Santana de Parnaíba/SP
+
+Horário de coleta:
+
+Segunda a quinta-feira: das 07h às 16h30
+
+Sexta-feira: das 07h às 15h30
+
+ATENÇÃO:
+
+Caso ocorra qualquer contratempo que possa ultrapassar os horários informados, é imprescindível entrar em contato conosco antes do envio do veículo. Coletas realizadas fora do horário somente serão permitidas mediante autorização prévia.
+
+Observações importantes:
+
+Apresentar a ordem de coleta na portaria (Embarque #{embarque.numero}).
+
+Sempre que possível, enviar os pallets para troca no ato da coleta. Na ausência da troca, será emitida nota de cobrança, ficando o retorno pendente.
+
+"""
+
+        # Montar tabela de pedidos
+        if com_endereco:
+            texto += "Pedidos:\nPedido | Cliente | Valor | Peso | UF | Cidade | Bairro | Rua | Nº\n"
+            texto += "-" * 120 + "\n"
+        else:
+            texto += "Pedidos:\nPedido | Cliente | Valor | Peso\n"
+            texto += "-" * 60 + "\n"
+
+        # Buscar dados complementares da CarteiraPrincipal para cada pedido
+        for item in itens_ativos:
+            pedido_num = item.pedido
+            cliente = item.cliente or ''
+            valor_item = item.valor or 0
+            peso_item = item.peso or 0
+
+            if com_endereco:
+                # Buscar dados de endereço da CarteiraPrincipal
+                carteira = CarteiraPrincipal.query.filter_by(num_pedido=pedido_num).first()
+
+                if carteira:
+                    uf = carteira.cod_uf or item.uf_destino or ''
+                    cidade = carteira.nome_cidade or item.cidade_destino or ''
+                    bairro = carteira.bairro_endereco_ent or ''
+                    rua = carteira.rua_endereco_ent or ''
+                    numero = carteira.endereco_ent or ''
+                else:
+                    # Fallback para dados do EmbarqueItem
+                    uf = item.uf_destino or ''
+                    cidade = item.cidade_destino or ''
+                    bairro = ''
+                    rua = ''
+                    numero = ''
+
+                texto += f"{pedido_num} | {cliente[:30]} | R$ {valor_item:,.2f} | {peso_item:,.0f} kg | {uf} | {cidade} | {bairro} | {rua} | {numero}\n"
+            else:
+                texto += f"{pedido_num} | {cliente[:40]} | R$ {valor_item:,.2f} | {peso_item:,.0f} kg\n"
+
+        return jsonify({
+            'success': True,
+            'texto': texto,
+            'embarque_numero': embarque.numero,
+            'com_endereco': com_endereco
+        }), 200
+
+    except Exception as e:
+        logger.error(f"[API] Erro ao gerar solicitação de coleta para embarque {embarque_id}: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500

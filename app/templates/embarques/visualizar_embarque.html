@@ -839,7 +839,7 @@
       
       <!-- Botão Imprimir Completo -->
       {% if embarque.data_prevista_embarque %}
-        <a href="{{ url_for('embarques.imprimir_embarque_completo', embarque_id=embarque.id) }}" 
+        <a href="{{ url_for('embarques.imprimir_embarque_completo', embarque_id=embarque.id) }}"
            class="btn btn-success" target="_blank" id="btn-imprimir-completo">
           <i class="fas fa-print"></i> Imprimir Completo
         </a>
@@ -848,7 +848,21 @@
           <i class="fas fa-print"></i> Imprimir Completo
         </button>
       {% endif %}
-      
+
+      <!-- Botões Solicitar Coleta -->
+      <div class="btn-group" role="group">
+        <button type="button" class="btn btn-outline-primary"
+                onclick="solicitarColeta({{ embarque.id }}, false)"
+                title="Copiar texto de solicitação de coleta (sem endereço)">
+          <i class="fas fa-truck"></i> Solicitar Coleta
+        </button>
+        <button type="button" class="btn btn-outline-primary"
+                onclick="solicitarColeta({{ embarque.id }}, true)"
+                title="Copiar texto de solicitação de coleta (com endereço de entrega)">
+          <i class="fas fa-map-marker-alt"></i> c/ Endereço
+        </button>
+      </div>
+
       <!-- Registro de Impressão -->
       <div id="registro-impressao" class="mt-2" style="display: none;">
         <small class="text-muted">
@@ -1150,6 +1164,115 @@ function salvarConfirmacaoAgendamento() {
         btnSalvar.disabled = false;
         btnSalvar.innerHTML = textoOriginal;
     });
+}
+
+/**
+ * 📋 Função para gerar e copiar texto de solicitação de coleta
+ * @param {number} embarqueId - ID do embarque
+ * @param {boolean} comEndereco - Se true, inclui endereço de entrega na tabela
+ */
+function solicitarColeta(embarqueId, comEndereco) {
+    // Mostrar loading no botão clicado
+    const botoes = document.querySelectorAll('.btn-group button[onclick^="solicitarColeta"]');
+    botoes.forEach(btn => {
+        btn.disabled = true;
+    });
+
+    // Chamar API
+    const url = `/embarques/api/gerar-solicitacao-coleta/${embarqueId}?com_endereco=${comEndereco}`;
+
+    fetch(url, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        // Reabilitar botões
+        botoes.forEach(btn => {
+            btn.disabled = false;
+        });
+
+        if (data.success) {
+            // Copiar texto para área de transferência
+            navigator.clipboard.writeText(data.texto)
+                .then(() => {
+                    // Feedback visual de sucesso
+                    const tipoColeta = comEndereco ? 'com endereço' : 'sem endereço';
+                    alert(`✅ Solicitação de coleta (${tipoColeta}) copiada para a área de transferência!\n\nEmbarque #${data.embarque_numero}`);
+                })
+                .catch(err => {
+                    // Fallback: mostrar texto em modal para cópia manual
+                    console.error('Erro ao copiar:', err);
+                    mostrarTextoParaCopia(data.texto);
+                });
+        } else {
+            alert(`❌ Erro: ${data.error}`);
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('❌ Erro ao gerar solicitação de coleta');
+        botoes.forEach(btn => {
+            btn.disabled = false;
+        });
+    });
+}
+
+/**
+ * Fallback: mostra texto em textarea para cópia manual
+ */
+function mostrarTextoParaCopia(texto) {
+    // Criar modal dinamicamente
+    const modalHtml = `
+        <div class="modal fade" id="modalCopiaManual" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header bg-info text-white">
+                        <h6 class="modal-title">
+                            <i class="fas fa-copy"></i> Copie o texto abaixo
+                        </h6>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <textarea id="textoCopiaManual" class="form-control" rows="15" readonly style="font-family: monospace; font-size: 12px;">${texto}</textarea>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-primary" onclick="copiarTextoManual()">
+                            <i class="fas fa-copy"></i> Copiar
+                        </button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Remover modal anterior se existir
+    const modalExistente = document.getElementById('modalCopiaManual');
+    if (modalExistente) {
+        modalExistente.remove();
+    }
+
+    // Adicionar novo modal
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    // Mostrar modal
+    const modal = new bootstrap.Modal(document.getElementById('modalCopiaManual'));
+    modal.show();
+
+    // Selecionar texto automaticamente
+    setTimeout(() => {
+        document.getElementById('textoCopiaManual').select();
+    }, 300);
+}
+
+function copiarTextoManual() {
+    const textarea = document.getElementById('textoCopiaManual');
+    textarea.select();
+    document.execCommand('copy');
+    alert('✅ Texto copiado!');
 }
 </script>
 
