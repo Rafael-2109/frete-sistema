@@ -673,7 +673,7 @@
                                         </td>
                                         <td id="prod-qtd-{{ linha.id }}">
                                             {% if linha.quantidade_convertida %}
-                                            <span class="badge bg-success">{{ "%.2f"|format(linha.quantidade_convertida|float) }} cx</span>
+                                            <span class="badge bg-success">{{ "%.3f"|format(linha.quantidade_convertida|float) }} cx</span>
                                             {% else %}
                                             <span class="text-muted">-</span>
                                             {% endif %}

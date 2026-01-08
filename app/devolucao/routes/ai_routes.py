@@ -127,7 +127,7 @@ def api_resolver_produto():
             qtd_por_caixa = service._extrair_qtd_caixa(nome_para_extracao)
             qtd_convertida = None
             if tipo_unidade == 'UNIDADE' and qtd_por_caixa and quantidade:
-                qtd_convertida = round(float(quantidade) / qtd_por_caixa, 2)
+                qtd_convertida = round(float(quantidade) / qtd_por_caixa, 3)
             return {
                 'qtd_por_caixa': qtd_por_caixa,
                 'qtd_convertida_caixas': qtd_convertida

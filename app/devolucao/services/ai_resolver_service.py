@@ -348,15 +348,18 @@ EXEMPLOS:
 - "COG FAT VD 100G CB" -> ["COGUMELO", "FAT", "100"]
 - "PALMITO PUPUNHA INTEIRO 300G" -> ["PALMITO", "PUPUNHA", "300", "INTEIR"]
 - "AZ VF POUCH 500G MEZZANI" -> ["AZEITONA", "FATIA", "500", "POUCH", "MEZZANI"]
+- "AZEITONA VERDE CAMPO BELO 1,010KG COM CAROCO" -> ["AZEITONA", "INTEIR", "1,01", "CAMPO BELO"]
+- "CHAMPIGNON CAMPO BELO 1,010KG FATIADO" -> ["COGUMELO", "FATIA", "1,01", "CAMPO BELO"]
 
 REGRAS:
-1. SEMPRE inclua a materia-prima expandida (AZ->AZEITONA, COG->COGUMELO, PALM->PALMITO)
-2. Inclua gramatura como numero apenas (180G -> "180")
-3. Inclua estado do produto parcial (RECHEA, FATIA, INTEIR, PICAD)
-4. Inclua embalagem se relevante (VD, POUCH, BD, LATA)
-5. Inclua marca se presente (CAMPO BELO, MEZZANI, BENASSI)
-6. Gere 3-5 termos mais importantes
-7. Ordene por importancia (materia-prima primeiro)
+1. SEMPRE inclua a materia-prima expandida (AZ->AZEITONA, COG->COGUMELO, PALM->PALMITO, CHAMPIGNON->COGUMELO)
+2. GRAMATURA E CRITICA: Inclua gramatura exata (180G->"180", 1,010KG->"1,01", 2KG->"2")
+3. Inclua estado do produto parcial (RECHEA, FATIA, INTEIR, PICAD, SEM CAROCO)
+4. "COM CAROCO" = INTEIRA (a azeitona inteira tem caroco)
+5. Inclua embalagem se relevante (VD, POUCH, BD, LATA)
+6. Inclua marca se presente (CAMPO BELO, MEZZANI, BENASSI)
+7. Gere 3-5 termos mais importantes
+8. Ordene por importancia (materia-prima primeiro, GRAMATURA segundo)
 
 RESPONDA EM JSON:
 {{
@@ -687,6 +690,16 @@ class AIResolverService:
         match = re.search(r'(\d+(?:,\d+)?)\s*(G|GR|KG|ML|L)\b', nome)
         if match:
             num = match.group(1).replace(',', '.')
+            # Normalizar: remover zeros a direita (1.010 -> 1.01, 2.0 -> 2)
+            try:
+                num_float = float(num)
+                # Formatar sem zeros desnecessarios
+                if num_float == int(num_float):
+                    num = str(int(num_float))
+                else:
+                    num = f"{num_float:g}"  # Remove trailing zeros
+            except ValueError:
+                pass
             unid = match.group(2)
             if unid == 'GR':
                 unid = 'G'
@@ -1065,6 +1078,253 @@ class AIResolverService:
             logger.error(f"[AI_RESOLVER] Erro ao buscar De-Para grupo empresarial: {e}")
             return None
 
+    def _buscar_depara_lote(
+        self,
+        codigos_clientes: List[str],
+        prefixo_cnpj: str
+    ) -> Dict[str, Dict]:
+        """
+        Busca De-Para em LOTE para multiplos codigos de uma vez.
+
+        Otimizacao: 1 query para N produtos ao inves de N queries.
+        NOTA: Fator de conversao sera calculado deterministicamente pela unidade.
+
+        Args:
+            codigos_clientes: Lista de codigos do cliente
+            prefixo_cnpj: Prefixo CNPJ (8 digitos)
+
+        Returns:
+            Dict mapeando codigo_cliente -> resultado De-Para
+        """
+        resultado = {}
+
+        if not codigos_clientes:
+            return resultado
+
+        try:
+            from app.portal.utils.grupo_empresarial import GrupoEmpresarial
+            from app.portal.atacadao.models import ProdutoDeParaAtacadao
+            from app.portal.sendas.models import ProdutoDeParaSendas
+
+            # =========================================================
+            # FASE 1: Busca em lote no De-Para de grupo (Atacadao/Sendas)
+            # =========================================================
+            grupo = GrupoEmpresarial.identificar_grupo(prefixo_cnpj)
+
+            if grupo == 'atacadao':
+                # Preparar lista de codigos para busca (com e sem prefixo AR)
+                codigos_busca = []
+                mapa_original = {}  # codigo_busca -> codigo_original
+
+                for cod in codigos_clientes:
+                    cod_str = str(cod).strip()
+                    codigos_busca.append(cod_str)
+                    mapa_original[cod_str] = cod
+
+                    # Adicionar versao sem AR/padding
+                    if cod_str.upper().startswith('AR'):
+                        cod_limpo = cod_str[2:].lstrip('0')
+                        if cod_limpo:
+                            codigos_busca.append(cod_limpo)
+                            mapa_original[cod_limpo] = cod
+
+                # Busca em lote com IN
+                deparas = ProdutoDeParaAtacadao.query.filter(
+                    ProdutoDeParaAtacadao.ativo == True,
+                    ProdutoDeParaAtacadao.codigo_atacadao.in_(codigos_busca)
+                ).all()
+
+                for depara in deparas:
+                    cod_original = mapa_original.get(depara.codigo_atacadao)
+                    if cod_original and cod_original not in resultado:
+                        resultado[cod_original] = {
+                            'nosso_codigo': depara.codigo_nosso,
+                            'descricao_nosso': depara.descricao_nosso,
+                            'grupo': 'atacadao',
+                            'metodo': 'DEPARA_GRUPO'
+                        }
+
+                logger.info(f"[AI_RESOLVER] De-Para Atacadao em lote: {len(resultado)}/{len(codigos_clientes)} encontrados")
+
+            elif grupo == 'assai':
+                # Busca em lote para Sendas/Assai
+                deparas = ProdutoDeParaSendas.query.filter(
+                    ProdutoDeParaSendas.ativo == True,
+                    ProdutoDeParaSendas.codigo_sendas.in_([str(c) for c in codigos_clientes])
+                ).all()
+
+                for depara in deparas:
+                    resultado[depara.codigo_sendas] = {
+                        'nosso_codigo': depara.codigo_nosso,
+                        'descricao_nosso': depara.descricao_nosso,
+                        'grupo': 'assai',
+                        'metodo': 'DEPARA_GRUPO'
+                    }
+
+                logger.info(f"[AI_RESOLVER] De-Para Assai em lote: {len(resultado)}/{len(codigos_clientes)} encontrados")
+
+            # =========================================================
+            # FASE 2: Busca em lote no De-Para generico (para os que faltam)
+            # =========================================================
+            codigos_faltantes = [c for c in codigos_clientes if c not in resultado]
+
+            if codigos_faltantes:
+                deparas_genericos = DeParaProdutoCliente.query.filter(
+                    DeParaProdutoCliente.prefixo_cnpj == prefixo_cnpj[:8],
+                    DeParaProdutoCliente.codigo_cliente.in_(codigos_faltantes),
+                    DeParaProdutoCliente.ativo == True
+                ).all()
+
+                for depara in deparas_genericos:
+                    resultado[depara.codigo_cliente] = {
+                        'nosso_codigo': depara.nosso_codigo,
+                        'descricao_nosso': depara.descricao_nosso,
+                        'unidade_medida_cliente': depara.unidade_medida_cliente,
+                        'unidade_medida_nosso': depara.unidade_medida_nosso,
+                        'metodo': 'DEPARA'
+                    }
+
+                logger.info(f"[AI_RESOLVER] De-Para generico em lote: +{len(deparas_genericos)} encontrados")
+
+            logger.info(f"[AI_RESOLVER] Total De-Para em lote: {len(resultado)}/{len(codigos_clientes)}")
+            return resultado
+
+        except Exception as e:
+            logger.error(f"[AI_RESOLVER] Erro na busca De-Para em lote: {e}")
+            return resultado
+
+    async def _resolver_produto_async(
+        self,
+        codigo_cliente: str,
+        descricao_cliente: str,
+        prefixo_cnpj: str,
+        unidade_cliente: str = None,
+        quantidade: float = None,
+        semaforo: 'asyncio.Semaphore' = None
+    ):
+        """
+        Versao async de resolver_produto para processamento paralelo.
+
+        Args:
+            semaforo: Semaforo para controlar concorrencia (evita rate limiting)
+        """
+        import asyncio
+
+        if semaforo:
+            async with semaforo:
+                # Executar em thread pool para nao bloquear
+                loop = asyncio.get_event_loop()
+                return await loop.run_in_executor(
+                    None,
+                    lambda: self.resolver_produto(
+                        codigo_cliente=codigo_cliente,
+                        descricao_cliente=descricao_cliente,
+                        prefixo_cnpj=prefixo_cnpj,
+                        unidade_cliente=unidade_cliente,
+                        quantidade=quantidade
+                    )
+                )
+        else:
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(
+                None,
+                lambda: self.resolver_produto(
+                    codigo_cliente=codigo_cliente,
+                    descricao_cliente=descricao_cliente,
+                    prefixo_cnpj=prefixo_cnpj,
+                    unidade_cliente=unidade_cliente,
+                    quantidade=quantidade
+                )
+            )
+
+    def _resolver_produtos_paralelo(
+        self,
+        linhas_pendentes: List[Dict],
+        prefixo_cnpj: str,
+        max_concurrent: int = 3
+    ) -> Dict[int, 'ResultadoResolucaoProduto']:
+        """
+        Resolve multiplos produtos em PARALELO usando ThreadPoolExecutor.
+
+        Args:
+            linhas_pendentes: Lista de dicts com linha_id, codigo, descricao, etc.
+            prefixo_cnpj: Prefixo CNPJ
+            max_concurrent: Maximo de chamadas Haiku simultaneas (evita rate limit)
+
+        Returns:
+            Dict mapeando linha_id -> ResultadoResolucaoProduto
+        """
+        import concurrent.futures
+        from flask import current_app
+
+        if not linhas_pendentes:
+            return {}
+
+        resultados = {}
+
+        # Capturar o app context para passar para as threads
+        app = current_app._get_current_object()
+
+        def resolver_com_contexto(linha_dict):
+            """Resolve produto dentro do contexto Flask."""
+            with app.app_context():
+                try:
+                    resultado = self.resolver_produto(
+                        codigo_cliente=linha_dict['codigo'],
+                        descricao_cliente=linha_dict['descricao'],
+                        prefixo_cnpj=prefixo_cnpj,
+                        unidade_cliente=linha_dict.get('unidade'),
+                        quantidade=linha_dict.get('quantidade')
+                    )
+                    return (linha_dict['linha_id'], resultado)
+                except Exception as e:
+                    logger.error(f"[AI_RESOLVER] Erro ao resolver linha {linha_dict['linha_id']}: {e}")
+                    return (linha_dict['linha_id'], ResultadoResolucaoProduto(
+                        sucesso=False,
+                        confianca=0.0,
+                        sugestao_principal=None,
+                        outras_sugestoes=[],
+                        requer_confirmacao=True,
+                        mensagem=f'Erro: {str(e)}',
+                        metodo_resolucao='ERRO'
+                    ))
+
+        try:
+            # Usar ThreadPoolExecutor com max_workers = max_concurrent
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_concurrent) as executor:
+                # Submeter todas as tarefas
+                futures = [executor.submit(resolver_com_contexto, linha) for linha in linhas_pendentes]
+
+                # Coletar resultados
+                for future in concurrent.futures.as_completed(futures, timeout=120):
+                    try:
+                        linha_id, resultado = future.result()
+                        resultados[linha_id] = resultado
+                    except Exception as e:
+                        logger.error(f"[AI_RESOLVER] Erro ao obter resultado: {e}")
+
+            logger.info(f"[AI_RESOLVER] Processamento paralelo concluido: {len(resultados)}/{len(linhas_pendentes)}")
+            return resultados
+
+        except Exception as e:
+            logger.error(f"[AI_RESOLVER] Erro no processamento paralelo: {e}")
+            # Fallback: processar sequencialmente
+            for linha in linhas_pendentes:
+                if linha['linha_id'] in resultados:
+                    continue  # Ja processado
+                try:
+                    resultado = self.resolver_produto(
+                        codigo_cliente=linha['codigo'],
+                        descricao_cliente=linha['descricao'],
+                        prefixo_cnpj=prefixo_cnpj,
+                        unidade_cliente=linha.get('unidade'),
+                        quantidade=linha.get('quantidade')
+                    )
+                    resultados[linha['linha_id']] = resultado
+                except Exception as e2:
+                    logger.error(f"[AI_RESOLVER] Erro fallback linha {linha['linha_id']}: {e2}")
+            return resultados
+
     def _formatar_candidatos_amplo(self, candidatos: List[Dict]) -> str:
         """
         HAIKU POWER MODE: Formata candidatos com informacoes completas.
@@ -1380,6 +1640,8 @@ class AIResolverService:
         """
         Resolve todas as linhas pendentes de uma NFD.
 
+        OTIMIZADO: Usa busca em lote para De-Para e processamento paralelo para Haiku.
+
         Args:
             nfd_id: ID da NFDevolucao
             auto_gravar_depara: Se True, grava De-Para para confianca > 90%
@@ -1387,9 +1649,13 @@ class AIResolverService:
         Returns:
             Dict com estatisticas e resultados
         """
+        import asyncio
+        import time
         from app.devolucao.models import NFDevolucao
+        from app.producao.models import CadastroPalletizacao
 
         try:
+            tempo_inicio = time.time()
             nfd = NFDevolucao.query.get(nfd_id)
             if not nfd:
                 return {'sucesso': False, 'erro': 'NFD nao encontrada'}
@@ -1402,6 +1668,18 @@ class AIResolverService:
                 produto_resolvido=False
             ).order_by(NFDevolucaoLinha.id).all()
 
+            if not linhas:
+                return {
+                    'sucesso': True,
+                    'nfd_id': nfd_id,
+                    'total_linhas': 0,
+                    'resolvidas_auto': 0,
+                    'requerem_confirmacao': 0,
+                    'nao_identificadas': 0,
+                    'linhas': [],
+                    'tempo_processamento': 0
+                }
+
             resultados = {
                 'sucesso': True,
                 'nfd_id': nfd_id,
@@ -1412,167 +1690,150 @@ class AIResolverService:
                 'linhas': []
             }
 
+            # ===================================================================
+            # FASE 1: Busca De-Para em LOTE (1 query para N produtos)
+            # ===================================================================
+            logger.info(f"[AI_RESOLVER] FASE 1: Buscando De-Para em lote para {len(linhas)} linhas...")
+            tempo_fase1 = time.time()
+
+            # Coletar codigos das linhas para busca em lote
+            codigos_clientes = [linha.codigo_produto_cliente or '' for linha in linhas]
+
+            # Busca em lote nas tabelas De-Para (retorna dict codigo -> resultado)
+            depara_resultados = self._buscar_depara_lote(codigos_clientes, prefixo_cnpj)
+
+            logger.info(f"[AI_RESOLVER] FASE 1 concluida em {time.time() - tempo_fase1:.2f}s - "
+                       f"{len(depara_resultados)} encontrados via De-Para")
+
+            # ===================================================================
+            # FASE 2: Separar linhas (com De-Para vs precisa Haiku)
+            # ===================================================================
+            logger.info(f"[AI_RESOLVER] FASE 2: Separando linhas...")
+
+            linhas_com_depara = []      # (linha, nosso_codigo, descricao_nosso, metodo)
+            linhas_para_haiku = []      # linhas que precisam de Haiku
+
             for linha in linhas:
-                # Passar unidade e quantidade para melhor contexto
-                resultado = self.resolver_produto(
-                    codigo_cliente=linha.codigo_produto_cliente or '',
-                    descricao_cliente=linha.descricao_produto_cliente or '',
-                    prefixo_cnpj=prefixo_cnpj,
-                    unidade_cliente=linha.unidade_medida,
-                    quantidade=float(linha.quantidade) if linha.quantidade else None
+                codigo = linha.codigo_produto_cliente or ''
+                depara = depara_resultados.get(codigo)
+
+                if depara:
+                    linhas_com_depara.append((
+                        linha,
+                        depara['nosso_codigo'],
+                        depara['descricao_nosso'],
+                        depara['metodo']
+                    ))
+                else:
+                    linhas_para_haiku.append(linha)
+
+            logger.info(f"[AI_RESOLVER] FASE 2: {len(linhas_com_depara)} via De-Para, "
+                       f"{len(linhas_para_haiku)} precisam Haiku")
+
+            # ===================================================================
+            # FASE 3: Processar Haiku em PARALELO (se necessario)
+            # ===================================================================
+            haiku_resultados = {}
+            if linhas_para_haiku:
+                logger.info(f"[AI_RESOLVER] FASE 3: Processando {len(linhas_para_haiku)} linhas via Haiku paralelo...")
+                tempo_fase3 = time.time()
+
+                # Converter NFDevolucaoLinha para dicts (formato esperado por _resolver_produtos_paralelo)
+                linhas_dicts = []
+                for linha in linhas_para_haiku:
+                    linhas_dicts.append({
+                        'linha_id': linha.id,
+                        'codigo': linha.codigo_produto_cliente or '',
+                        'descricao': linha.descricao_produto_cliente or '',
+                        'unidade': linha.unidade_medida,
+                        'quantidade': float(linha.quantidade) if linha.quantidade else None
+                    })
+
+                # Chamar processamento paralelo
+                haiku_resultados = self._resolver_produtos_paralelo(linhas_dicts, prefixo_cnpj)
+
+                logger.info(f"[AI_RESOLVER] FASE 3 concluida em {time.time() - tempo_fase3:.2f}s")
+
+            # ===================================================================
+            # FASE 4: Processar resultados (De-Para + Haiku)
+            # ===================================================================
+            logger.info(f"[AI_RESOLVER] FASE 4: Processando resultados...")
+
+            # 4.1 Processar linhas com De-Para (confianca 100%)
+            for linha, nosso_codigo, descricao_nosso, metodo in linhas_com_depara:
+                linha_info = self._processar_resultado_linha(
+                    linha=linha,
+                    codigo_interno=nosso_codigo,
+                    nome_interno=descricao_nosso,
+                    confianca=1.0,
+                    metodo_resolucao=metodo,
+                    justificativa=f"De-Para {metodo}",
+                    outras_sugestoes=[],
+                    auto_gravar_depara=False,  # Ja existe no De-Para
+                    prefixo_cnpj=prefixo_cnpj
                 )
 
-                linha_info = {
-                    'linha_id': linha.id,
-                    'codigo_cliente': linha.codigo_produto_cliente,
-                    'descricao_cliente': linha.descricao_produto_cliente,
-                    'unidade_cliente': linha.unidade_medida,
-                    'quantidade': float(linha.quantidade) if linha.quantidade else None,
-                    'confianca': resultado.confianca,
-                    'metodo_resolucao': resultado.metodo_resolucao,
-                    'sugestao': None,
-                    'outras_sugestoes': [],
-                    'status': 'NAO_IDENTIFICADO'
-                }
-
-                # Normalizar unidade (funcao deterministica - sem chamada Haiku)
-                # Isso garante consistencia entre execucoes e elimina rate limiting
-                tipo_unidade = self._normalizar_unidade_deterministico(linha.unidade_medida)
-                linha_info['tipo_unidade'] = tipo_unidade
-
-                if resultado.sugestao_principal:
-                    # Buscar produto no CadastroPalletizacao para garantir dados corretos
-                    from app.producao.models import CadastroPalletizacao
-                    produto = None
-                    try:
-                        produto = CadastroPalletizacao.query.filter_by(
-                            cod_produto=resultado.sugestao_principal.codigo_interno
-                        ).first()
-                    except Exception as e:
-                        logger.warning(f"[AI_RESOLVER] Erro ao buscar produto: {e}")
-
-                    # Extrair qtd por caixa do nome do produto (prioriza CadastroPalletizacao)
-                    nome_para_extracao = ''
-                    if produto and produto.nome_produto:
-                        nome_para_extracao = produto.nome_produto
-                    elif resultado.sugestao_principal.nome_interno:
-                        nome_para_extracao = resultado.sugestao_principal.nome_interno
-
-                    qtd_por_caixa = self._extrair_qtd_caixa(nome_para_extracao)
-
-                    if qtd_por_caixa:
-                        logger.info(f"[AI_RESOLVER] Qtd por caixa extraida: {qtd_por_caixa} de '{nome_para_extracao}'")
-
-                    # Calcular conversao se unidade for UNIDADE
-                    qtd_convertida_caixas = None
-                    valor_convertido = None
-                    if tipo_unidade == 'UNIDADE' and qtd_por_caixa and linha.quantidade:
-                        qtd_convertida_caixas = float(linha.quantidade) / qtd_por_caixa
-                        if linha.valor_unitario:
-                            valor_convertido = float(linha.valor_unitario) * qtd_por_caixa
-                        logger.info(f"[AI_RESOLVER] Conversao realizada: {linha.quantidade} UN / {qtd_por_caixa} = {qtd_convertida_caixas:.2f} CX")
-                    else:
-                        # LOG para debug quando nao converte
-                        logger.warning(
-                            f"[AI_RESOLVER] Conversao NAO realizada para linha {linha.id}: "
-                            f"tipo_unidade={tipo_unidade}, qtd_por_caixa={qtd_por_caixa}, "
-                            f"quantidade={linha.quantidade}, nome='{nome_para_extracao[:50]}'"
-                        )
-                        # FALLBACK: Se quantidade >= qtd_por_caixa e qtd_por_caixa existe, provavelmente e unidade
-                        if qtd_por_caixa and linha.quantidade and float(linha.quantidade) >= qtd_por_caixa:
-                            qtd_convertida_caixas = float(linha.quantidade) / qtd_por_caixa
-                            if linha.valor_unitario:
-                                valor_convertido = float(linha.valor_unitario) * qtd_por_caixa
-                            logger.info(f"[AI_RESOLVER] Conversao via FALLBACK: {linha.quantidade} / {qtd_por_caixa} = {qtd_convertida_caixas:.2f} CX")
-
-                    # Calcular peso: quantidade_convertida * peso_bruto do produto
-                    peso_calculado = None
-                    try:
-                        if produto and produto.peso_bruto:
-                            # Usar qtd_convertida (caixas) se disponivel, senao quantidade original
-                            qtd_para_peso = qtd_convertida_caixas if qtd_convertida_caixas else float(linha.quantidade or 0)
-                            peso_calculado = round(qtd_para_peso * float(produto.peso_bruto), 2)
-                    except Exception as e:
-                        logger.warning(f"[AI_RESOLVER] Erro ao calcular peso: {e}")
-
-                    linha_info['sugestao'] = {
-                        'codigo': resultado.sugestao_principal.codigo_interno,
-                        'nome': resultado.sugestao_principal.nome_interno,
-                        'justificativa': resultado.sugestao_principal.justificativa,
-                        'qtd_por_caixa': qtd_por_caixa,
-                        'qtd_convertida_caixas': round(qtd_convertida_caixas, 2) if qtd_convertida_caixas else None,
-                        'valor_convertido_caixa': round(valor_convertido, 2) if valor_convertido else None,
-                        'peso_calculado': peso_calculado
-                    }
-
-                    if resultado.confianca >= 0.9:
-                        linha_info['status'] = 'AUTO_RESOLVIDO'
-                        resultados['resolvidas_auto'] += 1
-
-                        # SOMENTE gravar automaticamente se auto_gravar_depara=True
-                        if auto_gravar_depara:
-                            # Gravar na linha
-                            linha.codigo_produto_interno = resultado.sugestao_principal.codigo_interno
-                            linha.descricao_produto_interno = resultado.sugestao_principal.nome_interno
-                            linha.produto_resolvido = True
-                            linha.metodo_resolucao = 'HAIKU'
-                            linha.confianca_resolucao = resultado.confianca
-
-                            # Gravar De-Para
-                            if prefixo_cnpj:
-                                self._gravar_depara(
-                                    prefixo_cnpj=prefixo_cnpj,
-                                    codigo_cliente=linha.codigo_produto_cliente,
-                                    descricao_cliente=linha.descricao_produto_cliente,
-                                    nosso_codigo=resultado.sugestao_principal.codigo_interno,
-                                    descricao_nosso=resultado.sugestao_principal.nome_interno
-                                )
-                    else:
-                        linha_info['status'] = 'REQUER_CONFIRMACAO'
-                        resultados['requerem_confirmacao'] += 1
-
-                    # Outras sugestoes (com info de conversao e peso)
-                    for outra in resultado.outras_sugestoes:
-                        qtd_caixa_outra = self._extrair_qtd_caixa(outra.nome_interno or '')
-                        qtd_conv_outra = None
-                        valor_conv_outra = None
-                        peso_outra = None
-                        if tipo_unidade == 'UNIDADE' and qtd_caixa_outra and linha.quantidade:
-                            qtd_conv_outra = round(float(linha.quantidade) / qtd_caixa_outra, 2)
-                            if linha.valor_unitario:
-                                valor_conv_outra = round(float(linha.valor_unitario) * qtd_caixa_outra, 2)
-
-                        # Calcular peso para outras sugestoes
-                        try:
-                            from app.producao.models import CadastroPalletizacao
-                            prod_outra = CadastroPalletizacao.query.filter_by(
-                                cod_produto=outra.codigo_interno
-                            ).first()
-                            if prod_outra and prod_outra.peso_bruto:
-                                qtd_peso_outra = qtd_conv_outra if qtd_conv_outra else float(linha.quantidade or 0)
-                                peso_outra = round(qtd_peso_outra * float(prod_outra.peso_bruto), 2)
-                        except Exception:
-                            pass
-
-                        linha_info['outras_sugestoes'].append({
-                            'codigo': outra.codigo_interno,
-                            'nome': outra.nome_interno,
-                            'confianca': outra.confianca,
-                            'qtd_por_caixa': qtd_caixa_outra,
-                            'qtd_convertida_caixas': qtd_conv_outra,
-                            'valor_convertido_caixa': valor_conv_outra,
-                            'peso_calculado': peso_outra
-                        })
-
+                if linha_info['status'] == 'AUTO_RESOLVIDO':
+                    resultados['resolvidas_auto'] += 1
+                elif linha_info['status'] == 'REQUER_CONFIRMACAO':
+                    resultados['requerem_confirmacao'] += 1
                 else:
                     resultados['nao_identificadas'] += 1
 
                 resultados['linhas'].append(linha_info)
 
+            # 4.2 Processar linhas com Haiku
+            for linha in linhas_para_haiku:
+                resultado = haiku_resultados.get(linha.id)
+
+                if resultado and resultado.sugestao_principal:
+                    linha_info = self._processar_resultado_linha(
+                        linha=linha,
+                        codigo_interno=resultado.sugestao_principal.codigo_interno,
+                        nome_interno=resultado.sugestao_principal.nome_interno,
+                        confianca=resultado.confianca,
+                        metodo_resolucao=resultado.metodo_resolucao,
+                        justificativa=resultado.sugestao_principal.justificativa,
+                        outras_sugestoes=resultado.outras_sugestoes,
+                        auto_gravar_depara=auto_gravar_depara,
+                        prefixo_cnpj=prefixo_cnpj
+                    )
+                else:
+                    # Nao identificado
+                    tipo_unidade = self._normalizar_unidade_deterministico(linha.unidade_medida)
+                    linha_info = {
+                        'linha_id': linha.id,
+                        'codigo_cliente': linha.codigo_produto_cliente,
+                        'descricao_cliente': linha.descricao_produto_cliente,
+                        'unidade_cliente': linha.unidade_medida,
+                        'quantidade': float(linha.quantidade) if linha.quantidade else None,
+                        'confianca': 0.0,
+                        'metodo_resolucao': 'NAO_ENCONTRADO',
+                        'tipo_unidade': tipo_unidade,
+                        'sugestao': None,
+                        'outras_sugestoes': [],
+                        'status': 'NAO_IDENTIFICADO'
+                    }
+
+                if linha_info['status'] == 'AUTO_RESOLVIDO':
+                    resultados['resolvidas_auto'] += 1
+                elif linha_info['status'] == 'REQUER_CONFIRMACAO':
+                    resultados['requerem_confirmacao'] += 1
+                else:
+                    resultados['nao_identificadas'] += 1
+
+                resultados['linhas'].append(linha_info)
+
+            # Ordenar resultados pela ordem original das linhas
+            resultados['linhas'].sort(key=lambda x: x['linha_id'])
+
             db.session.commit()
 
+            tempo_total = time.time() - tempo_inicio
+            resultados['tempo_processamento'] = round(tempo_total, 2)
+
             logger.info(
-                f"[AI_RESOLVER] NFD {nfd_id} resolvida: "
+                f"[AI_RESOLVER] NFD {nfd_id} resolvida em {tempo_total:.2f}s: "
                 f"{resultados['resolvidas_auto']} auto, "
                 f"{resultados['requerem_confirmacao']} pendentes, "
                 f"{resultados['nao_identificadas']} nao identificadas"
@@ -1583,7 +1844,158 @@ class AIResolverService:
         except Exception as e:
             db.session.rollback()
             logger.error(f"[AI_RESOLVER] Erro ao resolver linhas NFD: {e}")
+            import traceback
+            traceback.print_exc()
             return {'sucesso': False, 'erro': str(e)}
+
+    def _processar_resultado_linha(
+        self,
+        linha: NFDevolucaoLinha,
+        codigo_interno: str,
+        nome_interno: str,
+        confianca: float,
+        metodo_resolucao: str,
+        justificativa: str,
+        outras_sugestoes: List,
+        auto_gravar_depara: bool,
+        prefixo_cnpj: str
+    ) -> Dict[str, Any]:
+        """
+        Processa resultado de resolucao para uma linha (seja De-Para ou Haiku).
+
+        Calcula conversao de unidade, peso, e monta estrutura de retorno.
+        """
+        from app.producao.models import CadastroPalletizacao
+
+        # Normalizar unidade (funcao deterministica)
+        tipo_unidade = self._normalizar_unidade_deterministico(linha.unidade_medida)
+
+        linha_info = {
+            'linha_id': linha.id,
+            'codigo_cliente': linha.codigo_produto_cliente,
+            'descricao_cliente': linha.descricao_produto_cliente,
+            'unidade_cliente': linha.unidade_medida,
+            'quantidade': float(linha.quantidade) if linha.quantidade else None,
+            'confianca': confianca,
+            'metodo_resolucao': metodo_resolucao,
+            'tipo_unidade': tipo_unidade,
+            'sugestao': None,
+            'outras_sugestoes': [],
+            'status': 'NAO_IDENTIFICADO'
+        }
+
+        if not codigo_interno:
+            return linha_info
+
+        # Buscar produto no CadastroPalletizacao
+        produto = None
+        try:
+            produto = CadastroPalletizacao.query.filter_by(
+                cod_produto=codigo_interno
+            ).first()
+        except Exception as e:
+            logger.warning(f"[AI_RESOLVER] Erro ao buscar produto: {e}")
+
+        # Extrair qtd por caixa do nome do produto
+        nome_para_extracao = ''
+        if produto and produto.nome_produto:
+            nome_para_extracao = produto.nome_produto
+        elif nome_interno:
+            nome_para_extracao = nome_interno
+
+        qtd_por_caixa = self._extrair_qtd_caixa(nome_para_extracao)
+
+        # Calcular conversao se unidade for UNIDADE
+        qtd_convertida_caixas = None
+        valor_convertido = None
+        if tipo_unidade == 'UNIDADE' and qtd_por_caixa and linha.quantidade:
+            qtd_convertida_caixas = float(linha.quantidade) / qtd_por_caixa
+            if linha.valor_unitario:
+                valor_convertido = float(linha.valor_unitario) * qtd_por_caixa
+            logger.info(f"[AI_RESOLVER] Conversao: {linha.quantidade} UN / {qtd_por_caixa} = {qtd_convertida_caixas:.2f} CX")
+        else:
+            # FALLBACK: Se quantidade >= qtd_por_caixa, provavelmente e unidade
+            if qtd_por_caixa and linha.quantidade and float(linha.quantidade) >= qtd_por_caixa:
+                qtd_convertida_caixas = float(linha.quantidade) / qtd_por_caixa
+                if linha.valor_unitario:
+                    valor_convertido = float(linha.valor_unitario) * qtd_por_caixa
+                logger.info(f"[AI_RESOLVER] Conversao FALLBACK: {linha.quantidade} / {qtd_por_caixa} = {qtd_convertida_caixas:.2f} CX")
+
+        # Calcular peso
+        peso_calculado = None
+        try:
+            if produto and produto.peso_bruto:
+                qtd_para_peso = qtd_convertida_caixas if qtd_convertida_caixas else float(linha.quantidade or 0)
+                peso_calculado = round(qtd_para_peso * float(produto.peso_bruto), 2)
+        except Exception as e:
+            logger.warning(f"[AI_RESOLVER] Erro ao calcular peso: {e}")
+
+        linha_info['sugestao'] = {
+            'codigo': codigo_interno,
+            'nome': nome_interno,
+            'justificativa': justificativa,
+            'qtd_por_caixa': qtd_por_caixa,
+            'qtd_convertida_caixas': round(qtd_convertida_caixas, 3) if qtd_convertida_caixas else None,
+            'valor_convertido_caixa': round(valor_convertido, 2) if valor_convertido else None,
+            'peso_calculado': peso_calculado
+        }
+
+        if confianca >= 0.9:
+            linha_info['status'] = 'AUTO_RESOLVIDO'
+
+            # SOMENTE gravar automaticamente se auto_gravar_depara=True
+            if auto_gravar_depara:
+                linha.codigo_produto_interno = codigo_interno
+                linha.descricao_produto_interno = nome_interno
+                linha.produto_resolvido = True
+                linha.metodo_resolucao = metodo_resolucao
+                linha.confianca_resolucao = confianca
+
+                if prefixo_cnpj:
+                    self._gravar_depara(
+                        prefixo_cnpj=prefixo_cnpj,
+                        codigo_cliente=linha.codigo_produto_cliente,
+                        descricao_cliente=linha.descricao_produto_cliente,
+                        nosso_codigo=codigo_interno,
+                        descricao_nosso=nome_interno
+                    )
+        else:
+            linha_info['status'] = 'REQUER_CONFIRMACAO'
+
+        # Outras sugestoes
+        for outra in outras_sugestoes:
+            qtd_caixa_outra = self._extrair_qtd_caixa(outra.nome_interno or '')
+            qtd_conv_outra = None
+            valor_conv_outra = None
+            peso_outra = None
+
+            if tipo_unidade == 'UNIDADE' and qtd_caixa_outra and linha.quantidade:
+                qtd_conv_outra = round(float(linha.quantidade) / qtd_caixa_outra, 3)
+                if linha.valor_unitario:
+                    valor_conv_outra = round(float(linha.valor_unitario) * qtd_caixa_outra, 2)
+
+            # Calcular peso para outras sugestoes
+            try:
+                prod_outra = CadastroPalletizacao.query.filter_by(
+                    cod_produto=outra.codigo_interno
+                ).first()
+                if prod_outra and prod_outra.peso_bruto:
+                    qtd_peso_outra = qtd_conv_outra if qtd_conv_outra else float(linha.quantidade or 0)
+                    peso_outra = round(qtd_peso_outra * float(prod_outra.peso_bruto), 2)
+            except Exception:
+                pass
+
+            linha_info['outras_sugestoes'].append({
+                'codigo': outra.codigo_interno,
+                'nome': outra.nome_interno,
+                'confianca': outra.confianca,
+                'qtd_por_caixa': qtd_caixa_outra,
+                'qtd_convertida_caixas': qtd_conv_outra,
+                'valor_convertido_caixa': valor_conv_outra,
+                'peso_calculado': peso_outra
+            })
+
+        return linha_info
 
     def _gravar_depara(
         self,

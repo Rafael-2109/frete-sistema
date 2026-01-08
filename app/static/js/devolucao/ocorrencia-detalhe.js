@@ -1453,7 +1453,7 @@ async function salvarProduto() {
 
                 if (data.quantidade_convertida) {
                     document.getElementById(`prod-qtd-${linhaId}`).innerHTML = `
-                        <span class="badge bg-success">${data.quantidade_convertida.toFixed(2)} cx</span>
+                        <span class="badge bg-success">${data.quantidade_convertida.toFixed(3)} cx</span>
                     `;
                 }
 
@@ -1551,7 +1551,7 @@ async function resolverTodosComIA() {
                         const qtdConv = r.sugestao.qtd_convertida_caixas;
                         conversaoHtml = `<small class="text-info">÷ ${fator}</small>`;
                         if (qtdConv) {
-                            conversaoHtml += `<br><strong class="text-success">${parseFloat(qtdConv).toFixed(2)} cx</strong>`;
+                            conversaoHtml += `<br><strong class="text-success">${parseFloat(qtdConv).toFixed(3)} cx</strong>`;
                         }
                     }
 
@@ -1718,7 +1718,7 @@ function atualizarLinhaProdutoNaTabela(linhaId, codigo, descricao, qtdConvertida
         if (qtdConvertida) {
             const qtdEl = document.getElementById(`prod-qtd-${linhaId}`);
             if (qtdEl) {
-                qtdEl.innerHTML = `<span class="badge bg-success">${parseFloat(qtdConvertida).toFixed(2)} cx</span>`;
+                qtdEl.innerHTML = `<span class="badge bg-success">${parseFloat(qtdConvertida).toFixed(3)} cx</span>`;
             }
         }
 
