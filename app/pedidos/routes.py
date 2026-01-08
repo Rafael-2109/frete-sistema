@@ -1181,6 +1181,62 @@ def salvar_obs_separacao(lote_id):
             'message': f'Erro ao salvar observações: {str(e)}'
         }), 500
 
+
+@pedidos_bp.route('/imprimir_separacao/<string:lote_id>')
+@login_required
+def imprimir_separacao(lote_id):
+    """
+    Imprime separacao para pedidos com pagamento antecipado.
+    Nao requer embarque, usa transportadora fixa 'PAGAMENTO ANTECIPADO'.
+    """
+    try:
+        itens_separacao = Separacao.query.filter_by(
+            separacao_lote_id=lote_id
+        ).all()
+
+        if not itens_separacao:
+            flash('Separacao nao encontrada.', 'danger')
+            return redirect(url_for('pedidos.lista_pedidos'))
+
+        # Marcar como impressa
+        for item in itens_separacao:
+            item.separacao_impressa = True
+            item.separacao_impressa_em = datetime.now()
+            item.separacao_impressa_por = current_user.nome if hasattr(current_user, 'nome') and current_user.nome else current_user.email
+
+        db.session.commit()
+
+        # Agregar dados para resumo
+        resumo_separacao = {
+            'lote_id': lote_id,
+            'num_pedido': itens_separacao[0].num_pedido,
+            'data_pedido': itens_separacao[0].data_pedido,
+            'cliente': itens_separacao[0].raz_social_red,
+            'cnpj_cpf': itens_separacao[0].cnpj_cpf,
+            'cidade_destino': itens_separacao[0].nome_cidade,
+            'uf_destino': itens_separacao[0].cod_uf,
+            'total_produtos': len(itens_separacao),
+            'peso_total': sum(item.peso or 0 for item in itens_separacao),
+            'valor_total': sum(item.valor_saldo or 0 for item in itens_separacao),
+            'pallet_total': sum(item.pallet or 0 for item in itens_separacao),
+            'qtd_total': sum(item.qtd_saldo or 0 for item in itens_separacao),
+        }
+
+        return render_template(
+            'pedidos/imprimir_separacao_antecipado.html',
+            itens_separacao=itens_separacao,
+            resumo_separacao=resumo_separacao,
+            data_impressao=datetime.now(),
+            current_user=current_user
+        )
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"[ERRO IMPRIMIR SEPARACAO ANTECIPADO] {str(e)}")
+        flash(f'Erro ao imprimir separacao: {str(e)}', 'danger')
+        return redirect(url_for('pedidos.lista_pedidos'))
+
+
 @pedidos_bp.route('/excluir/<string:lote_id>', methods=['POST'])
 @login_required
 def excluir_pedido(lote_id):

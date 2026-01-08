@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Separação - Lote {{ resumo_separacao.lote_id }} - Pagamento Antecipado</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 1cm;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            line-height: 1.4;
+            color: #000;
+            background: white;
+            margin: 0;
+            padding: 0;
+        }
+
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #000;
+            padding-bottom: 2px;
+            margin-bottom: 6px;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .header h2 {
+            margin: 5px 0 0 0;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .info-section {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            padding: 4px;
+        }
+
+        .info-left, .info-right {
+            flex: 1;
+        }
+
+        .info-right {
+            margin-left: 20px;
+        }
+
+        .info-row {
+            margin-bottom: 2px;
+        }
+
+        .info-label {
+            font-weight: bold;
+            display: inline-block;
+            width: 120px;
+        }
+
+        .totals-box {
+            background-color: #f8f9fa;
+            border: 1px solid #ddd;
+            padding: 4px;
+            margin-bottom: 8px;
+        }
+
+        .totals-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+
+        .products-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+        }
+
+        .products-table th,
+        .products-table td {
+            border: 1px solid #000;
+            padding: 2px 2px 2px 8px;
+            text-align: left;
+            font-size: 8px;
+        }
+
+        .products-table th {
+            background-color: #f0f0f0;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        .text-bold { font-weight: bold; }
+
+        .footer {
+            margin-top: 20px;
+            border-top: 1px solid #ddd;
+            padding-top: 4px;
+            font-size: 10px;
+            color: #666;
+        }
+
+        /* Para evitar quebra de página no meio dos produtos */
+        .products-table tr {
+            page-break-inside: avoid;
+        }
+
+        .badge-antecipado {
+            background-color: #ffc107;
+            color: #000;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 10px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Cabeçalho -->
+    <div class="header">
+        <h1>SEPARACAO - PAGAMENTO ANTECIPADO</h1>
+        <h2>Pedido {{ resumo_separacao.num_pedido }}</h2>
+    </div>
+
+    <!-- Totalizadores em 1 linha -->
+    <div class="totals-box">
+        <div style="text-align: center; font-size: 12px; font-weight: bold;">
+            <span style="color: #666; margin-right: 15px;">TOTALIZADORES:</span>
+            Qtd: {{ "%.0f"|format(resumo_separacao.qtd_total) }}
+            <span style="margin: 0 10px;">|</span>
+            Valor: R$ {{ "%.2f"|format(resumo_separacao.valor_total) }}
+            <span style="margin: 0 10px;">|</span>
+            Pallets: {{ "%.2f"|format(resumo_separacao.pallet_total) }}
+            <span style="margin: 0 10px;">|</span>
+            Peso: {{ "%.0f"|format(resumo_separacao.peso_total) }} kg
+        </div>
+    </div>
+
+    <!-- Informacoes Gerais (otimizado) -->
+    <div class="info-section">
+        <div class="info-left">
+            <div class="info-row">
+                <span class="info-label">Data Pedido:</span>
+                {{ resumo_separacao.data_pedido | formatar_data_segura if resumo_separacao.data_pedido else 'N/A' }}
+            </div>
+            <div class="info-row">
+                <span class="info-label">Pedido:</span>
+                <span class="text-bold">{{ resumo_separacao.num_pedido }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Cliente:</span>
+                {{ resumo_separacao.cliente }}
+            </div>
+            <div class="info-row">
+                <span class="info-label">CNPJ/CPF:</span>
+                {{ resumo_separacao.cnpj_cpf }}
+            </div>
+            <div class="info-row">
+                <span class="info-label">Destino:</span>
+                {{ resumo_separacao.cidade_destino }}/{{ resumo_separacao.uf_destino }}
+            </div>
+        </div>
+        <div class="info-right">
+            <div class="info-row">
+                <span class="info-label">Data Expedicao:</span>
+                {{ itens_separacao[0].expedicao | formatar_data_segura if itens_separacao[0].expedicao else 'N/A' }}
+            </div>
+            <div class="info-row">
+                <span class="info-label">Data Agendamento:</span>
+                {{ itens_separacao[0].agendamento | formatar_data_segura if itens_separacao[0].agendamento else 'N/A' }}
+            </div>
+            <div class="info-row">
+                <span class="info-label">Protocolo:</span>
+                {% set protocolo = itens_separacao[0].protocolo or 'N/A' %}
+                {% if protocolo != 'N/A' and '.0' in protocolo|string %}
+                  {{ protocolo|string|replace('.0', '') }}
+                {% else %}
+                  {{ protocolo }}
+                {% endif %}
+            </div>
+            <div class="info-row">
+                <span class="info-label">Transportadora:</span>
+                <span class="badge-antecipado">PAGAMENTO ANTECIPADO</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Rota:</span>
+                {% if itens_separacao[0].rota %}
+                  {{ itens_separacao[0].rota }}{% if itens_separacao[0].sub_rota %} / {{ itens_separacao[0].sub_rota }}{% endif %}
+                {% else %}
+                  N/A
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Observacoes em destaque -->
+    {% if itens_separacao[0].observ_ped_1 %}
+    <div style="border: 2px solid #ffc107; background-color: #fff3cd; padding: 4px; margin-bottom: 10px;">
+        <h3 style="margin: 0 0 2px 0; font-size: 14px; color: #856404;">OBSERVACOES:</h3>
+        <div style="font-weight: bold; line-height: 1.6; min-height: 30px;">
+            {{ itens_separacao[0].observ_ped_1 }}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Tabela de Produtos (ordem das colunas alterada) -->
+    <h3 style="margin: 2px 0 2px 0; font-size: 14px;">PRODUTOS SEPARADOS</h3>
+    <table class="products-table">
+        <thead>
+            <tr>
+                <th style="width: 10%;">Codigo</th>
+                <th style="width: 50%;">Produto</th>
+                <th style="width: 10%;">Qtd</th>
+                <th style="width: 10%;">Valor</th>
+                <th style="width: 10%;">Pallets</th>
+                <th style="width: 10%;">Peso</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in itens_separacao %}
+            <tr>
+                <td class="text-center">{{ item.cod_produto }}</td>
+                <td>{{ item.nome_produto }}</td>
+                <td class="text-right">{{ "%.0f"|format(item.qtd_saldo or 0) }}</td>
+                <td class="text-right">{{ "%.2f"|format(item.valor_saldo or 0) }}</td>
+                <td class="text-right">{{ "%.2f"|format(item.pallet or 0) }}</td>
+                <td class="text-right">{{ "%.0f"|format(item.peso or 0) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Secao de Separacao e Conferencia -->
+    <div style="margin-top: 10px; border: 1px solid #ddd; padding: 10px;">
+        <div style="display: flex; justify-content: space-between;">
+            <div style="width: 48%;">
+                <h4 style="font-size: 11px; margin: 10px 0 10px 0;">SEPARACAO</h4>
+                <div style="font-size: 10px;">
+                    <strong>Nome:</strong> _________________________<br><br>
+                    <strong>Hora Envio:</strong> ___________ <strong>Hora Retorno:</strong> ___________
+                </div>
+            </div>
+            <div style="width: 48%;">
+                <h4 style="font-size: 11px; margin: 10px 0 10px 0;">CONFERENCIA</h4>
+                <div style="font-size: 10px;">
+                    <strong>Nome:</strong> _________________________<br><br>
+                    <strong>Horario:</strong> ___________
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rodape -->
+    <div class="footer">
+        <div style="display: flex; justify-content: space-between;">
+            <span>Sistema de Frete - Separacao Pagamento Antecipado</span>
+            <span>
+                Impresso em: {{ data_impressao | formatar_data_hora_brasil }}
+                {% if current_user and current_user.is_authenticated %}
+                  | Impresso por: {{ current_user.nome or current_user.email or 'Usuario' }}
+                {% else %}
+                  | Impresso por: Sistema
+                {% endif %}
+            </span>
+        </div>
+    </div>
+
+    <!-- Script para impressao automatica -->
+    <script>
+        window.onload = function() {
+            window.print();
+        }
+    </script>
+</body>
+</html>

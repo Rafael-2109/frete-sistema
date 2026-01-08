@@ -13,7 +13,8 @@
       "Bash(xargs -I {} sh -c 'echo \"\"\"\"$(grep -co ''''style=\"\"\"\"[^\"\"\"\"]*\"\"\"\"'''' {}) {}\"\"\"\"')",
       "Bash(xargs:*)",
       "Skill(gerindo-expedicao)",
-      "Skill(gerindo-expedicao:*)"
+      "Skill(gerindo-expedicao:*)",
+      "Bash(xargs -I {} bash -c \"echo ''=== {} ==='' && grep -n ''@.*route.*imprimir\\\\|@.*route.*print\\\\|@.*route.*separacao'' {} 2>/dev/null | head -5\")"
     ],
     "deny": []
   },
