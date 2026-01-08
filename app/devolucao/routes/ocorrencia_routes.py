@@ -54,6 +54,8 @@ def index():
     busca = request.args.get('busca', '').strip()
     data_inicio = request.args.get('data_inicio', '')
     data_fim = request.args.get('data_fim', '')
+    cnpj = request.args.get('cnpj', '').strip()
+    transportadora = request.args.get('transportadora', '').strip()
 
     # Query base - busca ocorrências com data de entrega do monitoramento
     query = db.session.query(
@@ -112,8 +114,28 @@ def index():
         except ValueError:
             pass
 
-    # Ordenar por mais recente
-    query = query.order_by(OcorrenciaDevolucao.data_abertura.desc())
+    # Filtro por CNPJ do emitente (cliente)
+    if cnpj:
+        # Remove caracteres nao numericos
+        cnpj_limpo = ''.join(filter(str.isdigit, cnpj))
+        if cnpj_limpo:
+            query = query.filter(NFDevolucao.cnpj_emitente.like(f'%{cnpj_limpo}%'))
+
+    # Filtro por transportadora (via EntregaMonitorada das NFs referenciadas)
+    if transportadora:
+        # Buscar ocorrencias que tenham NF referenciada com essa transportadora
+        subquery_nfs_ref = db.session.query(
+            NFDevolucaoNFReferenciada.nf_devolucao_id
+        ).join(
+            EntregaMonitorada, EntregaMonitorada.numero_nf == NFDevolucaoNFReferenciada.numero_nf
+        ).filter(
+            EntregaMonitorada.transportadora.ilike(f'%{transportadora}%')
+        ).distinct()
+
+        query = query.filter(NFDevolucao.id.in_(subquery_nfs_ref))
+
+    # Ordenar pela data de emissao da NFD (data da devolucao)
+    query = query.order_by(NFDevolucao.data_emissao.desc().nullslast())
 
     # Paginacao
     page = request.args.get('page', 1, type=int)
@@ -160,6 +182,18 @@ def index():
         'resolvidas': OcorrenciaDevolucao.query.filter_by(ativo=True, status='RESOLVIDA').count(),
     }
 
+    # Buscar transportadoras unicas para o filtro
+    transportadoras_query = db.session.query(
+        EntregaMonitorada.transportadora
+    ).join(
+        NFDevolucaoNFReferenciada, NFDevolucaoNFReferenciada.numero_nf == EntregaMonitorada.numero_nf
+    ).filter(
+        EntregaMonitorada.transportadora.isnot(None),
+        EntregaMonitorada.transportadora != ''
+    ).distinct().order_by(EntregaMonitorada.transportadora).all()
+
+    lista_transportadoras = [t[0] for t in transportadoras_query if t[0]]
+
     return render_template(
         'devolucao/ocorrencias/index.html',
         ocorrencias=ocorrencias,
@@ -172,12 +206,15 @@ def index():
             'responsavel': responsavel,
             'busca': busca,
             'data_inicio': data_inicio,
-            'data_fim': data_fim
+            'data_fim': data_fim,
+            'cnpj': cnpj,
+            'transportadora': transportadora
         },
         opcoes_status=OcorrenciaDevolucao.STATUS_OCORRENCIA,
         opcoes_destino=OcorrenciaDevolucao.DESTINOS,
         opcoes_categoria=OcorrenciaDevolucao.CATEGORIAS,
-        opcoes_responsavel=OcorrenciaDevolucao.RESPONSAVEIS
+        opcoes_responsavel=OcorrenciaDevolucao.RESPONSAVEIS,
+        lista_transportadoras=lista_transportadoras
     )
 
 

@@ -147,13 +147,30 @@
                     </div>
                 </div>
                 <div class="row mt-2">
-                    <div class="col-md-6">
+                    <div class="col-md-2">
+                        <label class="form-label">CNPJ Cliente</label>
+                        <input type="text" name="cnpj" class="form-control form-control-sm"
+                               placeholder="CNPJ ou parte..."
+                               value="{{ filtros.cnpj }}">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Transportadora</label>
+                        <select name="transportadora" class="form-select form-select-sm">
+                            <option value="">Todas</option>
+                            {% for transp in lista_transportadoras %}
+                            <option value="{{ transp }}" {% if filtros.transportadora == transp %}selected{% endif %}>
+                                {{ transp[:30] }}{% if transp|length > 30 %}...{% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
                         <label class="form-label">Busca</label>
                         <input type="text" name="busca" class="form-control form-control-sm"
                                placeholder="Numero ocorrencia, NFD ou cliente..."
                                value="{{ filtros.busca }}">
                     </div>
-                    <div class="col-md-6 d-flex align-items-end">
+                    <div class="col-md-4 d-flex align-items-end">
                         <button type="submit" class="btn btn-primary btn-sm me-2">Filtrar</button>
                         <a href="{{ url_for('devolucao.devolucao_ocorrencia.index') }}" class="btn btn-outline-secondary btn-sm">
                             Limpar
@@ -222,6 +239,9 @@
                                 {{ oc.nf_devolucao.entrega_monitorada.cliente[:25] }}{% if oc.nf_devolucao.entrega_monitorada.cliente|length > 25 %}...{% endif %}
                                 {% else %}
                                 -
+                                {% endif %}
+                                {% if oc.nf_devolucao and (oc.nf_devolucao.uf_emitente or oc.nf_devolucao.municipio_emitente) %}
+                                <br><small class="text-secondary"><i class="bi bi-geo-alt"></i> {{ oc.nf_devolucao.uf_emitente or '' }}{% if oc.nf_devolucao.uf_emitente and oc.nf_devolucao.municipio_emitente %} - {% endif %}{{ oc.nf_devolucao.municipio_emitente[:15] if oc.nf_devolucao.municipio_emitente else '' }}{% if oc.nf_devolucao.municipio_emitente and oc.nf_devolucao.municipio_emitente|length > 15 %}...{% endif %}</small>
                                 {% endif %}
                                 {% set transportadoras = oc.dados_entregas|selectattr('transportadora')|map(attribute='transportadora')|unique|list %}
                                 {% if transportadoras %}
@@ -365,7 +385,7 @@
             {% else %}
             <div class="text-center py-5">
                 <p class="text-muted mb-0">Nenhuma ocorrencia encontrada</p>
-                {% if filtros.busca or filtros.status or filtros.destino or filtros.categoria %}
+                {% if filtros.busca or filtros.status or filtros.destino or filtros.categoria or filtros.cnpj or filtros.transportadora %}
                 <a href="{{ url_for('devolucao.devolucao_ocorrencia.index') }}" class="btn btn-link">
                     Limpar filtros
                 </a>
@@ -458,11 +478,42 @@
         <div class="toast-body" id="toastMensagem"></div>
     </div>
 </div>
+
+<!-- Overlay de Loading (bloqueia tela durante sincronizacao) -->
+<div id="loadingOverlay" class="d-none position-fixed top-0 start-0 w-100 h-100"
+     style="background: rgba(0,0,0,0.7); z-index: 9999;">
+    <div class="d-flex flex-column justify-content-center align-items-center h-100 text-white">
+        <div class="spinner-border spinner-border-lg mb-3" style="width: 4rem; height: 4rem;" role="status">
+            <span class="visually-hidden">Carregando...</span>
+        </div>
+        <h4 id="loadingTitulo">Sincronizando com Odoo...</h4>
+        <p id="loadingMensagem" class="text-center opacity-75">Aguarde, este processo pode demorar alguns minutos.<br>Nao feche ou atualize a pagina.</p>
+        <div class="progress mt-3" style="width: 300px; height: 8px;">
+            <div id="loadingProgress" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width: 100%"></div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
 const API_SINC = '/devolucao/vinculacao/api';
+
+// =========================================================================
+// FUNCOES DE LOADING OVERLAY (bloqueia tela durante sincronizacao)
+// =========================================================================
+function mostrarLoading(titulo, mensagem) {
+    document.getElementById('loadingTitulo').textContent = titulo || 'Sincronizando...';
+    document.getElementById('loadingMensagem').innerHTML = mensagem || 'Aguarde, este processo pode demorar alguns minutos.<br>Nao feche ou atualize a pagina.';
+    document.getElementById('loadingOverlay').classList.remove('d-none');
+    // Prevenir scroll
+    document.body.style.overflow = 'hidden';
+}
+
+function esconderLoading() {
+    document.getElementById('loadingOverlay').classList.add('d-none');
+    document.body.style.overflow = '';
+}
 
 function mostrarToast(titulo, mensagem, sucesso = true) {
     const toast = document.getElementById('toastSinc');
@@ -477,9 +528,12 @@ function mostrarToast(titulo, mensagem, sucesso = true) {
     new bootstrap.Toast(toast).show();
 }
 
+// =========================================================================
+// FUNCOES DE SINCRONIZACAO (com loading overlay)
+// =========================================================================
 async function sincronizarRapido() {
     try {
-        mostrarToast('Sincronizando...', 'Buscando NFDs dos ultimos 60 minutos...', true);
+        mostrarLoading('Sincronizando NFDs', 'Buscando NFDs dos ultimos 60 minutos...<br>Aguarde, nao feche a pagina.');
 
         const response = await fetch(`${API_SINC}/sincronizar/incremental`, {
             method: 'POST',
@@ -487,6 +541,7 @@ async function sincronizarRapido() {
         });
 
         const data = await response.json();
+        esconderLoading();
 
         if (data.sucesso) {
             let msg = `<strong>Sucesso!</strong><br>`;
@@ -503,13 +558,14 @@ async function sincronizarRapido() {
             mostrarToast('Erro', data.erro || 'Erro na sincronizacao', false);
         }
     } catch (error) {
+        esconderLoading();
         mostrarToast('Erro', error.message, false);
     }
 }
 
 async function sincronizarDias(dias) {
     try {
-        mostrarToast('Sincronizando...', `Buscando NFDs dos ultimos ${dias} dias...`, true);
+        mostrarLoading('Sincronizando NFDs', `Buscando NFDs dos ultimos ${dias} dias...<br>Este processo pode demorar alguns minutos.<br><strong>Nao feche ou atualize a pagina.</strong>`);
 
         const response = await fetch(`${API_SINC}/sincronizar`, {
             method: 'POST',
@@ -518,6 +574,7 @@ async function sincronizarDias(dias) {
         });
 
         const data = await response.json();
+        esconderLoading();
 
         if (data.sucesso) {
             let msg = `<strong>Sucesso!</strong><br>`;
@@ -525,6 +582,9 @@ async function sincronizarDias(dias) {
             msg += `Novas: ${data.nfds_novas}<br>`;
             msg += `Orfas: ${data.nfds_orfas}<br>`;
             msg += `Ocorrencias criadas: ${data.ocorrencias_criadas}`;
+            if (data.erros && data.erros > 0) {
+                msg += `<br><span class="text-warning">Erros: ${data.erros}</span>`;
+            }
             mostrarToast('Sincronizacao Concluida', msg, true);
 
             if (data.nfds_novas > 0 || data.ocorrencias_criadas > 0) {
@@ -534,6 +594,7 @@ async function sincronizarDias(dias) {
             mostrarToast('Erro', data.erro || 'Erro na sincronizacao', false);
         }
     } catch (error) {
+        esconderLoading();
         mostrarToast('Erro', error.message, false);
     }
 }
@@ -549,7 +610,7 @@ async function sincronizarPeriodo() {
 
     try {
         bootstrap.Modal.getInstance(document.getElementById('modalSincPeriodo')).hide();
-        mostrarToast('Sincronizando...', `Buscando NFDs de ${dataInicio} ate ${dataFim}...`, true);
+        mostrarLoading('Sincronizando NFDs', `Buscando NFDs de ${dataInicio} ate ${dataFim}...<br>Este processo pode demorar varios minutos.<br><strong>Nao feche ou atualize a pagina.</strong>`);
 
         const response = await fetch(`${API_SINC}/sincronizar`, {
             method: 'POST',
@@ -561,6 +622,7 @@ async function sincronizarPeriodo() {
         });
 
         const data = await response.json();
+        esconderLoading();
 
         if (data.sucesso) {
             let msg = `<strong>Sucesso!</strong><br>`;
@@ -568,6 +630,9 @@ async function sincronizarPeriodo() {
             msg += `Novas: ${data.nfds_novas}<br>`;
             msg += `Orfas: ${data.nfds_orfas}<br>`;
             msg += `Ocorrencias criadas: ${data.ocorrencias_criadas}`;
+            if (data.erros && data.erros > 0) {
+                msg += `<br><span class="text-warning">Erros: ${data.erros}</span>`;
+            }
             mostrarToast('Sincronizacao Concluida', msg, true);
 
             if (data.nfds_novas > 0 || data.ocorrencias_criadas > 0) {
@@ -577,6 +642,7 @@ async function sincronizarPeriodo() {
             mostrarToast('Erro', data.erro || 'Erro na sincronizacao', false);
         }
     } catch (error) {
+        esconderLoading();
         mostrarToast('Erro', error.message, false);
     }
 }

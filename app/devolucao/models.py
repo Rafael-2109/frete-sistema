@@ -260,9 +260,10 @@ class NFDevolucaoLinha(db.Model):
 
     # =========================================================================
     # CODIGO DO PRODUTO (do cliente - original da NFD)
+    # Nota: Alguns clientes enviam lote/validade concatenado no codigo
     # =========================================================================
-    codigo_produto_cliente = db.Column(db.String(50), nullable=True, index=True)
-    descricao_produto_cliente = db.Column(db.String(255), nullable=True)
+    codigo_produto_cliente = db.Column(db.String(255), nullable=True, index=True)
+    descricao_produto_cliente = db.Column(db.Text, nullable=True)
 
     # =========================================================================
     # CODIGO INTERNO (resolvido via De-Para ou Haiku)

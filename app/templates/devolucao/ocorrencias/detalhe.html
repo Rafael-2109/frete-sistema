@@ -1024,15 +1024,28 @@
                 <div id="resolver-resultado" class="d-none">
                     <!-- Resumo -->
                     <div class="alert alert-info mb-3" id="resolver-resumo"></div>
+                    <!-- Opcoes -->
+                    <div class="mb-2 d-flex justify-content-between align-items-center">
+                        <div>
+                            <input type="checkbox" id="resolver-selecionar-todos" class="form-check-input me-1" onchange="toggleSelecionarTodosResolver()">
+                            <label for="resolver-selecionar-todos" class="form-check-label small">Selecionar todos</label>
+                        </div>
+                        <div>
+                            <input type="checkbox" id="resolver-gravar-depara" class="form-check-input me-1" checked>
+                            <label for="resolver-gravar-depara" class="form-check-label small">Gravar De-Para</label>
+                        </div>
+                    </div>
                     <!-- Tabela de resultados -->
                     <div class="table-responsive" style="max-height: 60vh; overflow-y: auto;">
                         <table class="table table-sm table-hover mb-0">
                             <thead class="table-light sticky-top">
                                 <tr>
+                                    <th style="width: 30px;"></th>
                                     <th>Produto Cliente</th>
                                     <th>Nosso Produto</th>
-                                    <th>Confiança</th>
-                                    <th>Método</th>
+                                    <th class="text-center">Qtd NFD</th>
+                                    <th class="text-center">Conversao</th>
+                                    <th class="text-center">Confianca</th>
                                     <th>Status</th>
                                 </tr>
                             </thead>
@@ -1040,11 +1053,17 @@
                         </table>
                     </div>
                 </div>
+                <!-- Aplicando -->
+                <div id="resolver-aplicando" class="d-none text-center py-5">
+                    <div class="spinner-border text-success" style="width: 3rem; height: 3rem;"></div>
+                    <p class="mt-3">Aplicando resolucoes...</p>
+                    <p class="text-muted small" id="resolver-aplicando-progresso">0/0</p>
+                </div>
             </div>
-            <div class="modal-footer" id="resolver-footer" class="d-none">
+            <div class="modal-footer d-none" id="resolver-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
-                <button type="button" class="btn btn-primary" onclick="location.reload()">
-                    <i class="bi bi-arrow-clockwise"></i> Atualizar Página
+                <button type="button" class="btn btn-success" id="btn-aplicar-resolucoes" onclick="aplicarResolucoesSelecionadas()">
+                    <i class="bi bi-check-circle"></i> Aplicar Selecionadas (<span id="count-selecionadas">0</span>)
                 </button>
             </div>
         </div>
@@ -2733,10 +2752,14 @@ document.addEventListener('click', function(e) {
 // RESOLVER TODOS COM IA
 // =========================================================================
 
+// Armazena resultados para aplicar depois
+let resultadosResolverTodos = [];
+
 async function resolverTodosComIA() {
     const modal = new bootstrap.Modal(document.getElementById('modal-resolver-todos'));
     const loading = document.getElementById('resolver-loading');
     const resultado = document.getElementById('resolver-resultado');
+    const aplicando = document.getElementById('resolver-aplicando');
     const footer = document.getElementById('resolver-footer');
     const resumo = document.getElementById('resolver-resumo');
     const tbody = document.getElementById('resolver-tbody');
@@ -2744,8 +2767,12 @@ async function resolverTodosComIA() {
     // Reset estado
     loading.classList.remove('d-none');
     resultado.classList.add('d-none');
+    aplicando.classList.add('d-none');
     footer.classList.add('d-none');
     tbody.innerHTML = '';
+    resultadosResolverTodos = [];
+    document.getElementById('resolver-selecionar-todos').checked = false;
+    atualizarContadorSelecionadas();
 
     modal.show();
 
@@ -2763,49 +2790,80 @@ async function resolverTodosComIA() {
         footer.classList.remove('d-none');
 
         if (data.sucesso) {
+            // Armazenar resultados
+            resultadosResolverTodos = data.linhas || [];
+
             // Resumo
-            const stats = data.estatisticas || {};
             resumo.innerHTML = `
-                <strong>Resolução concluída!</strong><br>
-                Total: ${stats.total_linhas || 0} linhas |
-                <span class="text-success">Resolvidas: ${stats.resolvidas || 0}</span> |
-                <span class="text-warning">Pendentes: ${stats.pendentes || 0}</span> |
-                <span class="text-danger">Erros: ${stats.erros || 0}</span>
+                <strong>Sugestoes encontradas!</strong> Selecione as linhas que deseja aplicar.<br>
+                Total: ${data.total_linhas || 0} linhas |
+                <span class="text-success">Auto (>=90%): ${data.resolvidas_auto || 0}</span> |
+                <span class="text-warning">Confirmar: ${data.requerem_confirmacao || 0}</span> |
+                <span class="text-danger">Nao identificadas: ${data.nao_identificadas || 0}</span>
             `;
 
-            // Tabela de resultados
-            const resultados = data.resultados || [];
-            if (resultados.length > 0) {
-                resultados.forEach(r => {
-                    const confiancaClass = (r.confianca || 0) >= 0.9 ? 'text-success' :
-                                          (r.confianca || 0) >= 0.5 ? 'text-warning' : 'text-danger';
-                    const statusClass = r.sucesso ? 'bg-success' : r.ja_resolvido ? 'bg-secondary' : 'bg-danger';
-                    const statusText = r.sucesso ? 'Resolvido' : r.ja_resolvido ? 'Já resolvido' : 'Erro';
+            // Tabela de resultados com checkbox
+            if (resultadosResolverTodos.length > 0) {
+                resultadosResolverTodos.forEach((r, index) => {
+                    const confianca = r.confianca || 0;
+                    const confiancaClass = confianca >= 0.9 ? 'text-success' :
+                                          confianca >= 0.5 ? 'text-warning' : 'text-danger';
+                    const temSugestao = r.sugestao && r.sugestao.codigo;
+                    const statusClass = r.status === 'AUTO_RESOLVIDO' ? 'bg-success' :
+                                        r.status === 'REQUER_CONFIRMACAO' ? 'bg-warning' : 'bg-secondary';
+                    const statusText = r.status === 'AUTO_RESOLVIDO' ? 'Auto (>=90%)' :
+                                       r.status === 'REQUER_CONFIRMACAO' ? 'Confirmar' : 'Nao identificado';
+
+                    // Checkbox habilitado apenas se tem sugestao
+                    const checkboxHtml = temSugestao ?
+                        `<input type="checkbox" class="form-check-input resolver-checkbox" data-index="${index}" onchange="atualizarContadorSelecionadas()" ${confianca >= 0.9 ? 'checked' : ''}>` :
+                        `<span class="text-muted">-</span>`;
+
+                    // Quantidade e unidade da NFD
+                    const qtdNfd = r.quantidade ? parseFloat(r.quantidade).toFixed(2) : '-';
+                    const unidade = r.unidade_cliente || '';
+
+                    // Conversao (se houver)
+                    let conversaoHtml = '-';
+                    if (temSugestao && r.sugestao.qtd_por_caixa) {
+                        const fator = r.sugestao.qtd_por_caixa;
+                        const qtdConv = r.sugestao.qtd_convertida_caixas;
+                        conversaoHtml = `<small class="text-info">÷ ${fator}</small>`;
+                        if (qtdConv) {
+                            conversaoHtml += `<br><strong class="text-success">${parseFloat(qtdConv).toFixed(2)} cx</strong>`;
+                        }
+                    }
 
                     tbody.innerHTML += `
-                        <tr>
+                        <tr id="resolver-row-${index}" class="${temSugestao && confianca >= 0.9 ? 'table-success' : ''}">
+                            <td class="text-center">${checkboxHtml}</td>
                             <td>
                                 <code>${r.codigo_cliente || '-'}</code>
-                                <br><small class="text-muted">${r.descricao_cliente || '-'}</small>
+                                <br><small class="text-muted">${(r.descricao_cliente || '-').substring(0, 50)}</small>
                             </td>
                             <td>
-                                ${r.codigo_interno ? `<strong class="text-primary">${r.codigo_interno}</strong>` : '-'}
-                                ${r.descricao_interna ? `<br><small class="text-muted">${r.descricao_interna}</small>` : ''}
+                                ${temSugestao ? `<strong class="text-primary">${r.sugestao.codigo}</strong>` : '-'}
+                                ${temSugestao ? `<br><small class="text-muted">${(r.sugestao.nome || '').substring(0, 50)}</small>` : ''}
                             </td>
-                            <td class="${confiancaClass}">
-                                ${r.confianca ? (r.confianca * 100).toFixed(0) + '%' : '-'}
+                            <td class="text-center">
+                                <strong>${qtdNfd}</strong>
+                                ${unidade ? `<br><small class="text-muted">${unidade}</small>` : ''}
+                            </td>
+                            <td class="text-center">
+                                ${conversaoHtml}
+                            </td>
+                            <td class="text-center ${confiancaClass}">
+                                ${confianca ? (confianca * 100).toFixed(0) + '%' : '-'}
                             </td>
                             <td>
-                                <small>${r.metodo || '-'}</small>
-                            </td>
-                            <td>
-                                <span class="badge ${statusClass}">${statusText}</span>
+                                <span class="badge ${statusClass}" id="resolver-status-${index}">${statusText}</span>
                             </td>
                         </tr>
                     `;
                 });
+                atualizarContadorSelecionadas();
             } else {
-                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Nenhuma linha para processar</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Nenhuma linha pendente para processar</td></tr>';
             }
         } else {
             resumo.innerHTML = `<span class="text-danger"><strong>Erro:</strong> ${data.erro || 'Erro ao processar'}</span>`;
@@ -2817,9 +2875,152 @@ async function resolverTodosComIA() {
         loading.classList.add('d-none');
         resultado.classList.remove('d-none');
         footer.classList.remove('d-none');
-        resumo.innerHTML = `<span class="text-danger"><strong>Erro de conexão:</strong> ${error.message}</span>`;
+        resumo.innerHTML = `<span class="text-danger"><strong>Erro de conexao:</strong> ${error.message}</span>`;
         resumo.classList.remove('alert-info');
         resumo.classList.add('alert-danger');
+    }
+}
+
+function toggleSelecionarTodosResolver() {
+    const checked = document.getElementById('resolver-selecionar-todos').checked;
+    document.querySelectorAll('.resolver-checkbox').forEach(cb => {
+        cb.checked = checked;
+    });
+    atualizarContadorSelecionadas();
+}
+
+function atualizarContadorSelecionadas() {
+    const count = document.querySelectorAll('.resolver-checkbox:checked').length;
+    document.getElementById('count-selecionadas').textContent = count;
+    document.getElementById('btn-aplicar-resolucoes').disabled = count === 0;
+}
+
+async function aplicarResolucoesSelecionadas() {
+    const checkboxes = document.querySelectorAll('.resolver-checkbox:checked');
+    if (checkboxes.length === 0) {
+        alert('Selecione ao menos uma linha para aplicar');
+        return;
+    }
+
+    const gravarDepara = document.getElementById('resolver-gravar-depara').checked;
+    const resultado = document.getElementById('resolver-resultado');
+    const aplicando = document.getElementById('resolver-aplicando');
+    const footer = document.getElementById('resolver-footer');
+    const progresso = document.getElementById('resolver-aplicando-progresso');
+
+    // Ocultar resultado e mostrar progresso
+    resultado.classList.add('d-none');
+    footer.classList.add('d-none');
+    aplicando.classList.remove('d-none');
+
+    let aplicadas = 0;
+    let erros = 0;
+    const total = checkboxes.length;
+
+    for (const cb of checkboxes) {
+        const index = parseInt(cb.dataset.index);
+        const r = resultadosResolverTodos[index];
+
+        if (!r || !r.sugestao || !r.sugestao.codigo) continue;
+
+        progresso.textContent = `${aplicadas + erros + 1}/${total}`;
+
+        try {
+            const response = await fetch(`/devolucao/ai/api/linha/${r.linha_id}/confirmar`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    codigo_interno: r.sugestao.codigo,
+                    descricao_interno: r.sugestao.nome || '',
+                    gravar_depara: gravarDepara,
+                    qtd_por_caixa: r.sugestao.qtd_por_caixa || null,
+                    quantidade_convertida: r.sugestao.qtd_convertida_caixas || null
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.sucesso) {
+                aplicadas++;
+                // Atualizar status na tabela do modal
+                const statusEl = document.getElementById(`resolver-status-${index}`);
+                if (statusEl) {
+                    statusEl.className = 'badge bg-success';
+                    statusEl.textContent = 'Aplicado';
+                }
+                // Atualizar linha na tabela principal
+                atualizarLinhaProdutoNaTabela(r.linha_id, r.sugestao.codigo, r.sugestao.nome, data.quantidade_convertida, data.peso_bruto);
+            } else {
+                erros++;
+                const statusEl = document.getElementById(`resolver-status-${index}`);
+                if (statusEl) {
+                    statusEl.className = 'badge bg-danger';
+                    statusEl.textContent = 'Erro';
+                }
+            }
+        } catch (error) {
+            console.error(`Erro ao aplicar linha ${r.linha_id}:`, error);
+            erros++;
+        }
+    }
+
+    // Mostrar resultado final
+    aplicando.classList.add('d-none');
+    resultado.classList.remove('d-none');
+    footer.classList.remove('d-none');
+
+    const resumo = document.getElementById('resolver-resumo');
+    resumo.className = erros === 0 ? 'alert alert-success mb-3' : 'alert alert-warning mb-3';
+    resumo.innerHTML = `
+        <strong>Aplicacao concluida!</strong><br>
+        <span class="text-success">Aplicadas: ${aplicadas}</span> |
+        <span class="text-danger">Erros: ${erros}</span>
+    `;
+
+    // Desmarcar checkboxes aplicados
+    checkboxes.forEach(cb => {
+        cb.checked = false;
+        cb.disabled = true;
+    });
+    atualizarContadorSelecionadas();
+}
+
+function atualizarLinhaProdutoNaTabela(linhaId, codigo, descricao, qtdConvertida, peso) {
+    // Atualiza a linha na tabela principal de produtos (fora do modal)
+    const row = document.getElementById(`prod-linha-${linhaId}`);
+    if (row) {
+        row.classList.add('table-success');
+
+        // Nosso codigo
+        const nossoEl = document.getElementById(`prod-nosso-${linhaId}`);
+        if (nossoEl) {
+            nossoEl.innerHTML = `
+                <strong class="text-primary">${codigo}</strong>
+                <br><small class="text-muted">${descricao || ''}</small>
+            `;
+        }
+
+        // Qtd convertida
+        if (qtdConvertida) {
+            const qtdEl = document.getElementById(`prod-qtd-${linhaId}`);
+            if (qtdEl) {
+                qtdEl.innerHTML = `<span class="badge bg-success">${parseFloat(qtdConvertida).toFixed(2)} cx</span>`;
+            }
+        }
+
+        // Peso
+        if (peso) {
+            const pesoEl = document.getElementById(`prod-peso-${linhaId}`);
+            if (pesoEl) {
+                pesoEl.innerHTML = `<span class="badge bg-info">${parseFloat(peso).toFixed(2)} kg</span>`;
+            }
+        }
+
+        // Status
+        const statusEl = document.getElementById(`prod-status-${linhaId}`);
+        if (statusEl) {
+            statusEl.innerHTML = `<span class="badge bg-success">Resolvido</span>`;
+        }
     }
 }
 </script>
