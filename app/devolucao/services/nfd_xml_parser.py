@@ -176,6 +176,37 @@ class NFDXMLParser:
         """Verifica se a NF é de devolução (finalidade = 4)"""
         return self.get_finalidade() == '4'
 
+    def get_data_emissao(self):
+        """
+        Extrai data de emissão (dhEmi) do XML
+
+        Formato esperado: 2025-10-22T16:49:56-04:00
+
+        Returns:
+            Datetime da emissão ou None
+        """
+        from datetime import datetime
+
+        dhEmi = self._get_tag_text('dhEmi')
+        if dhEmi:
+            try:
+                # Remove timezone offset para parsing
+                # Ex: 2025-10-22T16:49:56-04:00 -> 2025-10-22T16:49:56
+                dhEmi_limpo = dhEmi
+                if '+' in dhEmi:
+                    dhEmi_limpo = dhEmi.split('+')[0]
+                elif dhEmi.count('-') > 2:
+                    # Formato com offset negativo: 2025-10-22T16:49:56-04:00
+                    partes = dhEmi.rsplit('-', 1)
+                    if ':' in partes[-1]:  # É timezone, não parte da data
+                        dhEmi_limpo = partes[0]
+
+                return datetime.fromisoformat(dhEmi_limpo)
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao parsear dhEmi '{dhEmi}': {e}")
+                return None
+        return None
+
     def get_nfs_referenciadas(self) -> List[Dict]:
         """
         Extrai todas as NFs de venda referenciadas na NFD

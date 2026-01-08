@@ -201,7 +201,13 @@
                             <td>
                                 {% if oc.nf_devolucao %}
                                 <strong>{{ oc.nf_devolucao.numero_nfd }}</strong>
-                                {% if oc.nf_devolucao.numero_nf_venda %}
+                                {% if oc.nfs_referenciadas %}
+                                <br>
+                                <small class="text-muted" data-bs-toggle="tooltip" data-bs-html="true"
+                                       title="{% for d in oc.dados_entregas %}NF: {{ d.numero_nf }} | {{ d.transportadora or '-' }} | {{ d.data_entrega.strftime('%d/%m') if d.data_entrega else '-' }}<br>{% endfor %}">
+                                    Ref: NF {% for nf in oc.nfs_referenciadas[:3] %}{{ nf.numero_nf }}{% if not loop.last %}, {% endif %}{% endfor %}{% if oc.nfs_referenciadas|length > 3 %} + {{ oc.nfs_referenciadas|length - 3 }} mais{% endif %}
+                                </small>
+                                {% elif oc.nf_devolucao.numero_nf_venda %}
                                 <br><small class="text-muted">Ref: NF {{ oc.nf_devolucao.numero_nf_venda }}</small>
                                 {% endif %}
                                 {% else %}
@@ -211,11 +217,18 @@
                             <td>
                                 {% if oc.nf_devolucao and oc.nf_devolucao.nome_emitente %}
                                 {{ oc.nf_devolucao.nome_emitente[:25] }}{% if oc.nf_devolucao.nome_emitente|length > 25 %}...{% endif %}
-                                <br><small class="text-muted">{{ oc.nf_devolucao.cnpj_emitente[:14] if oc.nf_devolucao.cnpj_emitente else '' }}</small>
+                                <br><small class="text-muted">{{ oc.nf_devolucao.cnpj_emitente|formatar_cnpj if oc.nf_devolucao.cnpj_emitente else '' }}</small>
                                 {% elif oc.nf_devolucao and oc.nf_devolucao.entrega_monitorada %}
                                 {{ oc.nf_devolucao.entrega_monitorada.cliente[:25] }}{% if oc.nf_devolucao.entrega_monitorada.cliente|length > 25 %}...{% endif %}
                                 {% else %}
                                 -
+                                {% endif %}
+                                {% set transportadoras = oc.dados_entregas|selectattr('transportadora')|map(attribute='transportadora')|unique|list %}
+                                {% if transportadoras %}
+                                <br><small class="text-info" data-bs-toggle="tooltip" data-bs-html="true"
+                                       title="{% for d in oc.dados_entregas if d.transportadora %}{{ d.numero_nf }}: {{ d.transportadora }}<br>{% endfor %}">
+                                    <i class="bi bi-truck"></i> {{ transportadoras[0][:18] }}{% if transportadoras[0]|length > 18 %}...{% endif %}{% if transportadoras|length > 1 %} + {{ transportadoras|length - 1 }}{% endif %}
+                                </small>
                                 {% endif %}
                             </td>
                             <td>
@@ -275,17 +288,28 @@
                                 {% endif %}
                             </td>
                             <td>
-                                {% if oc.nf_devolucao and oc.nf_devolucao.data_registro %}
-                                <small>{{ oc.nf_devolucao.data_registro.strftime('%d/%m/%Y') }}</small>
-                                <br>
-                                <small class="text-muted">{{ oc.nf_devolucao.data_registro.strftime('%H:%M') }}</small>
+                                {% if oc.nf_devolucao and oc.nf_devolucao.data_emissao %}
+                                <small data-bs-toggle="tooltip" title="{{ oc.nf_devolucao.data_emissao.strftime('%H:%M') if oc.nf_devolucao.data_emissao.hour is defined else '' }}">
+                                    {{ oc.nf_devolucao.data_emissao.strftime('%d/%m/%Y') }}
+                                </small>
+                                {% elif oc.nf_devolucao and oc.nf_devolucao.data_registro %}
+                                <small data-bs-toggle="tooltip" title="{{ oc.nf_devolucao.data_registro.strftime('%H:%M') }}">
+                                    {{ oc.nf_devolucao.data_registro.strftime('%d/%m/%Y') }}
+                                </small>
                                 {% else %}
                                 <small class="text-muted">-</small>
                                 {% endif %}
-                                {% if oc.data_entrega_monitoramento %}
+                                {% set datas_entrega = oc.dados_entregas|selectattr('data_entrega')|map(attribute='data_entrega')|list|sort %}
+                                {% if datas_entrega %}
                                 <br>
-                                <small class="text-success" title="Data de entrega da NF de venda">
-                                    <i class="bi bi-truck"></i> {{ oc.data_entrega_monitoramento.strftime('%d/%m/%Y') }}
+                                <small class="text-success" data-bs-toggle="tooltip" data-bs-html="true"
+                                       title="{% for d in oc.dados_entregas if d.data_entrega %}NF {{ d.numero_nf }}: {{ d.data_entrega.strftime('%d/%m/%Y') }}<br>{% endfor %}">
+                                    Ent: {{ datas_entrega[0].strftime('%d/%m/%Y') }}{% if datas_entrega|length > 1 and datas_entrega[0].date() != datas_entrega[-1].date() %} - {{ datas_entrega[-1].strftime('%d/%m/%Y') }}{% endif %}
+                                </small>
+                                {% elif oc.data_entrega_monitoramento %}
+                                <br>
+                                <small class="text-success">
+                                    Ent: {{ oc.data_entrega_monitoramento.strftime('%d/%m/%Y') }}
                                 </small>
                                 {% endif %}
                             </td>
@@ -295,16 +319,6 @@
                                        class="btn btn-outline-primary" title="Ver detalhes">
                                         Ver
                                     </a>
-                                    {% if oc.nf_devolucao %}
-                                    {% set total_linhas = oc.nf_devolucao.linhas.count() %}
-                                    {% set resolvidas = oc.nf_devolucao.linhas.filter_by(produto_resolvido=True).count() %}
-                                    {% if resolvidas < total_linhas and total_linhas > 0 %}
-                                    <a href="{{ url_for('devolucao.devolucao_ai.pagina_resolver_nfd', nfd_id=oc.nf_devolucao.id) }}"
-                                       class="btn btn-outline-info">
-                                        Produtos
-                                    </a>
-                                    {% endif %}
-                                    {% endif %}
                                 </div>
                             </td>
                         </tr>
@@ -428,9 +442,6 @@
                 <div id="erro-produtos" class="alert alert-danger d-none"></div>
             </div>
             <div class="modal-footer">
-                <a id="btn-resolver-produtos" href="#" class="btn btn-info">
-                    Resolver Produtos
-                </a>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
             </div>
         </div>
@@ -570,7 +581,7 @@ async function sincronizarPeriodo() {
     }
 }
 
-// Preencher data atual no modal
+// Preencher data atual no modal e inicializar tooltips
 document.addEventListener('DOMContentLoaded', function() {
     const hoje = new Date().toISOString().split('T')[0];
     const mesPassado = new Date();
@@ -578,6 +589,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     document.getElementById('sinc-data-inicio').value = mesPassado.toISOString().split('T')[0];
     document.getElementById('sinc-data-fim').value = hoje;
+
+    // Inicializar tooltips do Bootstrap
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
 });
 </script>
 {% endblock %}

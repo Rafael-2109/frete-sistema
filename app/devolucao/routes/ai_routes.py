@@ -19,6 +19,7 @@ from app.devolucao.models import (
     NFDevolucao,
     NFDevolucaoLinha,
     DeParaProdutoCliente,
+    OcorrenciaDevolucao,
 )
 from app.monitoramento.models import EntregaMonitorada
 from app import db
@@ -42,21 +43,6 @@ def pagina_depara():
     Pagina de gerenciamento De-Para com sugestoes do Haiku.
     """
     return render_template('devolucao/depara/index.html')
-
-
-@ai_bp.route('/resolver/<int:nfd_id>')
-@login_required
-def pagina_resolver_nfd(nfd_id: int):
-    """
-    Pagina para resolver produtos de uma NFD especifica.
-    """
-    nfd = NFDevolucao.query.get_or_404(nfd_id)
-    linhas = NFDevolucaoLinha.query.filter_by(nf_devolucao_id=nfd_id).all()
-    return render_template(
-        'devolucao/depara/resolver_nfd.html',
-        nfd=nfd,
-        linhas=linhas
-    )
 
 
 # =============================================================================

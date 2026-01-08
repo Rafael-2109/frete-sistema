@@ -120,11 +120,36 @@ def index():
     per_page = request.args.get('per_page', 20, type=int)
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
 
-    # Processar tuplas (OcorrenciaDevolucao, data_entrega_monitoramento)
+    # Processar tuplas e adicionar dados de NFs referenciadas
     ocorrencias = []
     for item in pagination.items:
         oc, data_entrega = item
         oc.data_entrega_monitoramento = data_entrega
+
+        if oc.nf_devolucao:
+            # Buscar NFs referenciadas
+            nfs_ref = NFDevolucaoNFReferenciada.query.filter_by(
+                nf_devolucao_id=oc.nf_devolucao.id
+            ).all()
+
+            # Buscar dados de entrega para cada NF
+            dados_entregas = []
+            for ref in nfs_ref:
+                entrega = EntregaMonitorada.query.filter_by(
+                    numero_nf=ref.numero_nf
+                ).first()
+                dados_entregas.append({
+                    'numero_nf': ref.numero_nf,
+                    'transportadora': entrega.transportadora if entrega else None,
+                    'data_entrega': entrega.data_hora_entrega_realizada if entrega else None
+                })
+
+            oc.nfs_referenciadas = nfs_ref
+            oc.dados_entregas = dados_entregas
+        else:
+            oc.nfs_referenciadas = []
+            oc.dados_entregas = []
+
         ocorrencias.append(oc)
 
     # Estatisticas
@@ -166,6 +191,25 @@ def detalhe(ocorrencia_id):
     nfd = ocorrencia.nf_devolucao
     entrega = nfd.entrega_monitorada if nfd else None
 
+    # Extrair motivo automaticamente se não foi extraído pela IA ainda
+    # Verifica se tem info_complementar e se confianca_motivo é None (não foi processado pela IA)
+    if nfd and nfd.info_complementar and nfd.confianca_motivo is None:
+        try:
+            from app.devolucao.services import get_ai_resolver
+            ai_service = get_ai_resolver()
+            # O método correto é extrair_observacao() que analisa texto e extrai motivo
+            resultado = ai_service.extrair_observacao(nfd.info_complementar)
+            if resultado and resultado.descricao_motivo:
+                nfd.descricao_motivo = resultado.descricao_motivo
+                nfd.confianca_motivo = resultado.confianca
+                if resultado.motivo_sugerido:
+                    nfd.motivo = resultado.motivo_sugerido
+                db.session.commit()
+        except Exception as e:
+            # Log silencioso - não interrompe a página
+            import logging
+            logging.getLogger(__name__).warning(f"Erro ao extrair motivo automaticamente: {e}")
+
     # Linhas da NFD (se importada do Odoo)
     linhas = NFDevolucaoLinha.query.filter_by(
         nf_devolucao_id=nfd.id
@@ -173,6 +217,7 @@ def detalhe(ocorrencia_id):
 
     # NFs de venda referenciadas (pode ser N NFs)
     nfs_referenciadas = []
+    transportadoras_set = set()  # Para coletar transportadoras únicas
     if nfd:
         refs = NFDevolucaoNFReferenciada.query.filter_by(
             nf_devolucao_id=nfd.id
@@ -189,6 +234,10 @@ def detalhe(ocorrencia_id):
                     numero_nf=ref.numero_nf
                 ).first()
 
+            # Coletar transportadora
+            if entrega_ref and entrega_ref.transportadora:
+                transportadoras_set.add(entrega_ref.transportadora)
+
             nfs_referenciadas.append({
                 'id': ref.id,
                 'numero_nf': ref.numero_nf,
@@ -196,8 +245,13 @@ def detalhe(ocorrencia_id):
                 'chave_nf': ref.chave_nf,
                 'origem': ref.origem,
                 'entrega_id': entrega_ref.id if entrega_ref else None,
-                'cliente': entrega_ref.cliente if entrega_ref else None
+                'cliente': entrega_ref.cliente if entrega_ref else None,
+                'transportadora': entrega_ref.transportadora if entrega_ref else None,
+                'data_entrega': entrega_ref.data_hora_entrega_realizada if entrega_ref else None
             })
+
+    # Lista de transportadoras únicas
+    transportadoras = list(transportadoras_set)
 
     # Fretes de retorno
     fretes = FreteDevolucao.query.filter_by(
@@ -224,6 +278,7 @@ def detalhe(ocorrencia_id):
         entrega=entrega,
         linhas=linhas,
         nfs_referenciadas=nfs_referenciadas,
+        transportadoras=transportadoras,
         fretes=fretes,
         descartes=descartes,
         anexos=anexos,
@@ -775,6 +830,139 @@ def download_pdf(nfd_id):
 
     except Exception as e:
         current_app.logger.error(f"Erro ao baixar PDF da NFD {nfd_id}: {str(e)}")
+        return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+
+# =============================================================================
+# API Comparar Produtos NFD com NFs de Venda
+# =============================================================================
+
+@ocorrencia_bp.route('/api/<int:ocorrencia_id>/comparar-nf-venda')
+@login_required
+def api_comparar_nf_venda(ocorrencia_id):
+    """
+    Compara produtos da NFD com os produtos das NFs de venda referenciadas.
+
+    Retorna:
+    - produtos: Lista com qtd_vendida, qtd_devolvida, preco_venda, preco_devolvido
+    - nfs_nao_encontradas: NFs referenciadas que não estão no sistema
+    """
+    try:
+        from app.faturamento.models import FaturamentoProduto
+
+        ocorrencia = OcorrenciaDevolucao.query.get_or_404(ocorrencia_id)
+        nfd = ocorrencia.nf_devolucao
+
+        if not nfd:
+            return jsonify({'sucesso': False, 'erro': 'NFD não encontrada'})
+
+        # Buscar NFs de venda referenciadas
+        nfs_ref = NFDevolucaoNFReferenciada.query.filter_by(
+            nf_devolucao_id=nfd.id
+        ).all()
+
+        if not nfs_ref:
+            return jsonify({
+                'sucesso': True,
+                'produtos': [],
+                'nfs_nao_encontradas': [],
+                'mensagem': 'Nenhuma NF de venda referenciada'
+            })
+
+        # Coletar números das NFs
+        numeros_nf_ref = [ref.numero_nf for ref in nfs_ref if ref.numero_nf]
+
+        # Buscar produtos nas NFs de venda (FaturamentoProduto)
+        produtos_venda = {}
+        nfs_encontradas = set()
+        nfs_nao_encontradas = []
+
+        for num_nf in numeros_nf_ref:
+            # Buscar na tabela de faturamento
+            produtos_nf = FaturamentoProduto.query.filter_by(
+                numero_nf=str(num_nf)
+            ).all()
+
+            if produtos_nf:
+                nfs_encontradas.add(num_nf)
+                for prod in produtos_nf:
+                    codigo = prod.cod_produto
+                    if codigo not in produtos_venda:
+                        produtos_venda[codigo] = {
+                            'codigo': codigo,
+                            'descricao': prod.nome_produto,
+                            'qtd_vendida': 0,
+                            'preco_venda': float(prod.preco_produto_faturado) if prod.preco_produto_faturado else 0
+                        }
+                    produtos_venda[codigo]['qtd_vendida'] += float(prod.qtd_produto_faturado or 0)
+            else:
+                if num_nf not in nfs_encontradas:
+                    nfs_nao_encontradas.append(str(num_nf))
+
+        # Buscar produtos devolvidos (linhas da NFD)
+        from app.devolucao.models import NFDevolucaoLinha
+        linhas_nfd = NFDevolucaoLinha.query.filter_by(
+            nf_devolucao_id=nfd.id
+        ).all()
+
+        # Mapear produtos devolvidos
+        produtos_devolvidos = {}
+        for linha in linhas_nfd:
+            # Usar codigo interno se resolvido, senão codigo do cliente
+            codigo = linha.codigo_produto_interno or linha.codigo_produto_cliente
+            if not codigo:
+                continue
+
+            if codigo not in produtos_devolvidos:
+                produtos_devolvidos[codigo] = {
+                    'codigo': codigo,
+                    'descricao': linha.descricao_produto_interno or linha.descricao_produto_cliente,
+                    'qtd_devolvida': 0,
+                    'preco_devolvido': 0
+                }
+
+            # Usar quantidade convertida se disponível
+            qtd = float(linha.quantidade_convertida or linha.quantidade or 0)
+            produtos_devolvidos[codigo]['qtd_devolvida'] += qtd
+
+            # Calcular preço devolvido (valor unitário convertido)
+            if linha.valor_unitario and linha.qtd_por_caixa:
+                preco_conv = float(linha.valor_unitario) * float(linha.qtd_por_caixa)
+                produtos_devolvidos[codigo]['preco_devolvido'] = preco_conv
+            elif linha.valor_unitario:
+                produtos_devolvidos[codigo]['preco_devolvido'] = float(linha.valor_unitario)
+
+        # Combinar vendas e devoluções
+        todos_codigos = set(produtos_venda.keys()) | set(produtos_devolvidos.keys())
+        resultado = []
+
+        for codigo in todos_codigos:
+            venda = produtos_venda.get(codigo, {})
+            devol = produtos_devolvidos.get(codigo, {})
+
+            resultado.append({
+                'codigo': codigo,
+                'descricao': venda.get('descricao') or devol.get('descricao', '-'),
+                'qtd_vendida': venda.get('qtd_vendida', 0),
+                'qtd_devolvida': devol.get('qtd_devolvida', 0),
+                'preco_venda': venda.get('preco_venda', 0),
+                'preco_devolvido': devol.get('preco_devolvido', 0)
+            })
+
+        # Ordenar por código
+        resultado.sort(key=lambda x: x['codigo'])
+
+        return jsonify({
+            'sucesso': True,
+            'produtos': resultado,
+            'nfs_nao_encontradas': list(set(nfs_nao_encontradas)),
+            'total_nfs_ref': len(numeros_nf_ref),
+            'total_nfs_encontradas': len(nfs_encontradas)
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({'sucesso': False, 'erro': str(e)}), 500
 
 

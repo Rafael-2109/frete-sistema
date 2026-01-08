@@ -286,12 +286,14 @@ EXTRAIA:
 
 2. MOTIVO DA DEVOLUCAO (categorize):
    - AVARIA: Produto danificado, quebrado, amassado, vazando, estourado
+   - QUALIDADE: Problema de qualidade, sem condições de comercialização
    - VENCIDO: Produto vencido, proximo vencimento, data curta
    - FALTA: Faltou mercadoria, quantidade menor que pedido
    - SOBRA: Sobrou mercadoria, quantidade maior que pedido
    - PRODUTO_ERRADO: Produto diferente do pedido, item trocado
    - PEDIDO_CANCELADO: Cliente cancelou pedido
    - CLIENTE_RECUSOU: Cliente recusou entrega, nao quis receber
+   - COMERCIAL: Acordo comercial com o cliente, problema na negociação, desconto, etc.
    - PROBLEMA_FISCAL: SOMENTE quando ha ERRO na nota fiscal (CFOP errado, NCM errado, tributacao incorreta, nota rejeitada, cancelamento de nota). ATENCAO: Mencao de tributos como ICMS/IPI/PIS/COFINS na descricao NAO significa problema fiscal - sao apenas dados informativos da NF.
    - OUTROS: Nao se encaixa nos anteriores
 
@@ -300,7 +302,7 @@ EXTRAIA:
 RESPONDA EM JSON:
 {{
     "numeros_nf_venda": ["123456", "123457"],
-    "motivo_sugerido": "AVARIA|VENCIDO|FALTA|...",
+    "motivo_sugerido": "AVARIA|QUALIDADE|VENCIDO|FALTA|...",
     "descricao_motivo": "Resumo do motivo",
     "confianca": 0.0 a 1.0
 }}

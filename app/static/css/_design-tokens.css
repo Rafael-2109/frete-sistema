@@ -27,6 +27,7 @@
     /* ═══════════════════════════════════════════════════════════════════════
        ACCENT: Amarelo Ambar (UNICA cor de destaque)
        ═══════════════════════════════════════════════════════════════════════ */
+    --amber-28: hsl(45 100% 28%);
     --amber-40: hsl(45 100% 40%);
     --amber-50: hsl(45 100% 50%);
     --amber-55: hsl(45 95% 55%);
@@ -159,7 +160,7 @@
     --bs-secondary: hsl(0 0% 50%);
     --bs-info: hsl(0 0% 50%);
     --bs-info-rgb: 128, 128, 128;
-    --bs-link-color: var(--amber-40);
+    --bs-link-color: var(--amber-28);
 
     /* Semânticas light mode */
     --semantic-success-subtle: hsl(145 40% 90%);
@@ -535,6 +536,10 @@ body {
 .text-secondary { color: var(--text-muted) !important; }
 .text-dark { color: var(--text) !important; }
 .text-body { color: var(--text) !important; }
+
+/* text-primary mais escuro no light mode para melhor contraste */
+[data-bs-theme="light"] .text-primary,
+[data-theme="light"] .text-primary { color: var(--amber-28) !important; }
 
 /* Links */
 a { color: var(--bs-link-color); }

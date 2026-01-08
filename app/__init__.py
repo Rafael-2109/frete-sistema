@@ -539,6 +539,22 @@ def create_app(config_name=None):
     app.jinja_env.filters["pallet_br"] = formatar_pallet_brasileiro
     app.jinja_env.filters["qtd_br"] = formatar_quantidade_brasileira  # ✅ NOVO: Quantidade com 2 casas decimais
 
+    # ✅ NOVO: Filtro para formatar CNPJ
+    def formatar_cnpj(cnpj):
+        """Formata CNPJ para XX.XXX.XXX/XXXX-XX"""
+        if not cnpj:
+            return '-'
+        # Remove caracteres não numéricos
+        cnpj_limpo = ''.join(c for c in str(cnpj) if c.isdigit())
+        if len(cnpj_limpo) == 14:
+            return f"{cnpj_limpo[:2]}.{cnpj_limpo[2:5]}.{cnpj_limpo[5:8]}/{cnpj_limpo[8:12]}-{cnpj_limpo[12:14]}"
+        elif len(cnpj_limpo) == 11:  # CPF
+            return f"{cnpj_limpo[:3]}.{cnpj_limpo[3:6]}.{cnpj_limpo[6:9]}-{cnpj_limpo[9:11]}"
+        return cnpj  # Retorna original se não for CNPJ/CPF válido
+
+    app.jinja_env.filters["cnpj_br"] = formatar_cnpj
+    app.jinja_env.filters["formatar_cnpj"] = formatar_cnpj
+
     # ✅ CARTEIRA: Filtros específicos da carteira
     from app.carteira.utils.formatters import formatar_moeda, formatar_peso, formatar_pallet
 

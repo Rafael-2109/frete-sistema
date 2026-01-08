@@ -65,6 +65,7 @@ class NFDevolucao(db.Model):
     ]
     motivo = db.Column(db.String(50), nullable=False)
     descricao_motivo = db.Column(db.Text, nullable=True)
+    confianca_motivo = db.Column(db.Numeric(5, 4), nullable=True)  # 0.0000 a 1.0000 - Confiança da extração IA
 
     # Referencia da NF de venda
     numero_nf_venda = db.Column(db.String(20), nullable=True, index=True)
@@ -217,6 +218,7 @@ class NFDevolucao(db.Model):
             'motivo': self.motivo,
             'motivo_descricao': self.motivo_descricao,
             'descricao_motivo': self.descricao_motivo,
+            'confianca_motivo': float(self.confianca_motivo) if self.confianca_motivo else None,
             'numero_nf_venda': self.numero_nf_venda,
             'valor_total': float(self.valor_total) if self.valor_total else None,
             'cnpj_emitente': self.cnpj_emitente,

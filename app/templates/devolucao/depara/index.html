@@ -6,7 +6,7 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h2>De-Para de Produtos</h2>
-            <p class="text-muted mb-0">Mapeamento de codigos de produtos por cliente (Claude Haiku 4.5)</p>
+            <p class="text-muted mb-0">Mapeamento de codigos de produtos por cliente com IA</p>
         </div>
         <div>
             <button class="btn btn-outline-success me-2" data-bs-toggle="modal" data-bs-target="#modalImportarDePara">
@@ -34,7 +34,7 @@
         <div class="col-md-3">
             <div class="card border-left-info">
                 <div class="card-body">
-                    <h6 class="text-muted text-uppercase small">Auto (Haiku)</h6>
+                    <h6 class="text-muted text-uppercase small">Auto (IA)</h6>
                     <h2 class="mb-0" id="stat-haiku">-</h2>
                 </div>
             </div>
@@ -128,7 +128,7 @@
     <!-- Teste de Resolucao -->
     <div class="card mt-4">
         <div class="card-header">
-            <h6 class="mb-0">Testar Resolucao com Haiku</h6>
+            <h6 class="mb-0">Testar Resolucao com IA</h6>
         </div>
         <div class="card-body">
             <div class="row">
@@ -149,7 +149,7 @@
                 </div>
                 <div class="col-md-2 d-flex align-items-end">
                     <button class="btn btn-info btn-sm w-100" onclick="testarResolucao()">
-                        Resolver com Haiku
+                        Resolver com IA
                     </button>
                 </div>
             </div>
@@ -402,7 +402,7 @@ async function testarResolucao() {
     const resultadoDiv = document.getElementById('resultado-teste');
     const conteudoDiv = document.getElementById('resultado-conteudo');
 
-    conteudoDiv.innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm"></div> Consultando Haiku...</div>';
+    conteudoDiv.innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm"></div> Consultando IA...</div>';
     resultadoDiv.style.display = 'block';
 
     try {
@@ -463,7 +463,7 @@ async function testarResolucao() {
         }
     } catch (error) {
         console.error('Erro:', error);
-        conteudoDiv.innerHTML = `<div class="alert alert-danger">Erro ao consultar Haiku</div>`;
+        conteudoDiv.innerHTML = `<div class="alert alert-danger">Erro ao consultar IA</div>`;
     }
 }
 

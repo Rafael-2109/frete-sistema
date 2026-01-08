@@ -836,10 +836,14 @@ class NFDService:
             if info_complementar:
                 nfd.info_complementar = info_complementar
                 logger.info(f"   📝 Info complementar extraída: {info_complementar[:100]}...")
-                return True
-            else:
-                logger.info("   ℹ️ Sem informações complementares no XML")
-                return False
+
+            # Extrair data de emissão do XML (mais confiável que Odoo)
+            data_emissao_xml = parser.get_data_emissao()
+            if data_emissao_xml:
+                nfd.data_emissao = data_emissao_xml.date() if hasattr(data_emissao_xml, 'date') else data_emissao_xml
+                logger.info(f"   📅 Data emissão extraída do XML: {nfd.data_emissao}")
+
+            return info_complementar is not None or data_emissao_xml is not None
 
         except Exception as e:
             logger.error(f"   ❌ Erro ao extrair info complementar: {e}")
