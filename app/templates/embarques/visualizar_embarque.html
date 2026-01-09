@@ -563,7 +563,8 @@
               {% set item_form = form.itens[loop_index] %}
               {% set item = embarque.itens[loop_index] if loop_index < embarque.itens|length else none %}
               <tr class="item-form{% if item and item.status == 'cancelado' %} table-danger{% endif %}"{% if item and item.status == 'cancelado' %} style="opacity: 0.6; text-decoration: line-through;"{% endif %}>
-                {{ item_form.id }}
+                {# ✅ CORREÇÃO: Renderizar ID diretamente do objeto item, não do WTForms #}
+                <input type="hidden" name="itens-{{ loop_index }}-id" value="{{ item.id if item else '' }}">
                 <td title="{{ item.cliente if item else '' }}">
                   {{ item_form.cliente(style="border: none; background: transparent;" if item else "form-control") }}
                 </td>

@@ -22,7 +22,7 @@
     </nav>
 
     <!-- ⚠️ AVISO: CTe já vinculado via FK -->
-    {% if frete.conhecimentos_transporte and frete.conhecimentos_transporte|length > 0 %}
+    {% if frete.conhecimentos_transporte|list|length > 0 %}
     <div class="alert alert-success alert-dismissible fade show" role="alert">
         <h5 class="alert-heading">
             <i class="fas fa-link"></i> CTe Vinculado ao Frete
@@ -240,7 +240,7 @@
                             <div class="col-md-6">
                                 <div class="form-group">
                                     {{ form.valor_cte.label(class="form-label font-weight-bold text-info") }}
-                                    {% if frete.conhecimentos_transporte and frete.conhecimentos_transporte|length > 0 %}
+                                    {% if frete.conhecimentos_transporte|list|length > 0 %}
                                     <span class="badge bg-success ms-2">
                                         <i class="fas fa-lock"></i> Bloqueado - CTe Vinculado
                                     </span>
@@ -249,10 +249,10 @@
                                         <div class="input-group-prepend">
                                             <span class="input-group-text">R$</span>
                                         </div>
-                                        {{ form.valor_cte(class="form-control", id="valor_cte", readonly=(frete.conhecimentos_transporte and frete.conhecimentos_transporte|length > 0)) }}
+                                        {{ form.valor_cte(class="form-control", id="valor_cte", readonly=(frete.conhecimentos_transporte|list|length > 0)) }}
                                     </div>
                                     <small class="text-muted">
-                                        {% if frete.conhecimentos_transporte and frete.conhecimentos_transporte|length > 0 %}
+                                        {% if frete.conhecimentos_transporte|list|length > 0 %}
                                         <i class="fas fa-info-circle"></i> Campo bloqueado pois há CTe vinculado. O valor vem do CTe automaticamente.
                                         {% else %}
                                         {{ form.valor_cte.description }}
