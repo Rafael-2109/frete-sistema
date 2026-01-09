@@ -1042,12 +1042,14 @@ def listar_entregas():
         # ✅ ADICIONAR INCOTERM E MODALIDADE
         entrega.incoterm = faturamento.incoterm if faturamento else None
 
-        # ✅ BUSCAR observ_ped_1 da CarteiraPrincipal
+        # ✅ BUSCAR observ_ped_1 e pedido_cliente da CarteiraPrincipal
         if entrega.num_pedido:
             carteira_item = CarteiraPrincipal.query.filter_by(num_pedido=entrega.num_pedido).first()
             entrega.observ_ped_1 = carteira_item.observ_ped_1 if carteira_item else None
+            entrega.pedido_cliente = carteira_item.pedido_cliente if carteira_item else None
         else:
             entrega.observ_ped_1 = None
+            entrega.pedido_cliente = None
 
         # ✅ VERIFICAR SE NF ESTÁ CANCELADA (FaturamentoProduto)
         faturamento_produto = FaturamentoProduto.query.filter_by(numero_nf=entrega.numero_nf).first()
@@ -2514,7 +2516,7 @@ def api_get_entrega_dados(entrega_id):
     Retorna dados completos de uma entrega incluindo separacao_lote_id
     """
     entrega = EntregaMonitorada.query.get_or_404(entrega_id)
-    
+
     return jsonify({
         'id': entrega.id,
         'numero_nf': entrega.numero_nf,
@@ -2527,3 +2529,126 @@ def api_get_entrega_dados(entrega_id):
         'transportadora': entrega.transportadora,
         'vendedor': entrega.vendedor
     })
+
+
+# ============================================================================
+# 📄 DOWNLOAD PDF/XML DE NF DO ODOO
+# ============================================================================
+
+@monitoramento_bp.route('/nf/<numero_nf>/pdf')
+@login_required
+def download_nf_pdf(numero_nf):
+    """
+    Faz download do PDF (DANFE) da NF direto do Odoo.
+    Busca o account.move pelo número da NF e retorna o PDF em base64 decodificado.
+    Campo Odoo: l10n_br_pdf_aut_nfe (DANFE NF-e)
+    """
+    import base64
+    from io import BytesIO
+
+    try:
+        from app.odoo.utils.connection import get_odoo_connection
+
+        connection = get_odoo_connection()
+        if not connection.authenticate():
+            flash('Erro ao conectar com Odoo', 'danger')
+            return redirect(request.referrer or url_for('monitoramento.listar_entregas'))
+
+        # Buscar a NF no Odoo pelo número
+        # O campo l10n_br_numero_nota_fiscal contém o número da NF
+        nfs = connection.search_read(
+            'account.move',
+            [
+                ('l10n_br_numero_nota_fiscal', '=', numero_nf),
+                ('move_type', '=', 'out_invoice')  # Apenas NF de venda
+            ],
+            ['id', 'name', 'l10n_br_pdf_aut_nfe']
+        )
+
+        if not nfs:
+            flash(f'NF {numero_nf} não encontrada no Odoo', 'warning')
+            return redirect(request.referrer or url_for('monitoramento.listar_entregas'))
+
+        nf = nfs[0]
+        pdf_base64 = nf.get('l10n_br_pdf_aut_nfe')
+
+        if not pdf_base64:
+            flash(f'DANFE da NF {numero_nf} não disponível no Odoo', 'warning')
+            return redirect(request.referrer or url_for('monitoramento.listar_entregas'))
+
+        # Decodificar o PDF
+        pdf_bytes = base64.b64decode(pdf_base64)
+
+        # Nome do arquivo
+        filename = f'DANFE_NF_{numero_nf}.pdf'
+
+        return send_file(
+            BytesIO(pdf_bytes),
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=filename
+        )
+
+    except Exception as e:
+        current_app.logger.error(f"Erro ao baixar PDF da NF {numero_nf}: {e}")
+        flash(f'Erro ao baixar PDF: {str(e)}', 'danger')
+        return redirect(request.referrer or url_for('monitoramento.listar_entregas'))
+
+
+@monitoramento_bp.route('/nf/<numero_nf>/xml')
+@login_required
+def download_nf_xml(numero_nf):
+    """
+    Faz download do XML da NF direto do Odoo.
+    Busca o account.move pelo número da NF e retorna o XML em base64 decodificado.
+    Campo Odoo: l10n_br_xml_aut_nfe (XML NF-e)
+    """
+    import base64
+    from io import BytesIO
+
+    try:
+        from app.odoo.utils.connection import get_odoo_connection
+
+        connection = get_odoo_connection()
+        if not connection.authenticate():
+            flash('Erro ao conectar com Odoo', 'danger')
+            return redirect(request.referrer or url_for('monitoramento.listar_entregas'))
+
+        # Buscar a NF no Odoo pelo número
+        nfs = connection.search_read(
+            'account.move',
+            [
+                ('l10n_br_numero_nota_fiscal', '=', numero_nf),
+                ('move_type', '=', 'out_invoice')  # Apenas NF de venda
+            ],
+            ['id', 'name', 'l10n_br_xml_aut_nfe']
+        )
+
+        if not nfs:
+            flash(f'NF {numero_nf} não encontrada no Odoo', 'warning')
+            return redirect(request.referrer or url_for('monitoramento.listar_entregas'))
+
+        nf = nfs[0]
+        xml_base64 = nf.get('l10n_br_xml_aut_nfe')
+
+        if not xml_base64:
+            flash(f'XML da NF {numero_nf} não disponível no Odoo', 'warning')
+            return redirect(request.referrer or url_for('monitoramento.listar_entregas'))
+
+        # Decodificar o XML
+        xml_bytes = base64.b64decode(xml_base64)
+
+        # Nome do arquivo
+        filename = f'XML_NF_{numero_nf}.xml'
+
+        return send_file(
+            BytesIO(xml_bytes),
+            mimetype='application/xml',
+            as_attachment=True,
+            download_name=filename
+        )
+
+    except Exception as e:
+        current_app.logger.error(f"Erro ao baixar XML da NF {numero_nf}: {e}")
+        flash(f'Erro ao baixar XML: {str(e)}', 'danger')
+        return redirect(request.referrer or url_for('monitoramento.listar_entregas'))

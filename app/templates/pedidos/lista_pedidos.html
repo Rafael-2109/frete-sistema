@@ -674,6 +674,9 @@
                 </td>
                 
                 <td>
+                  {% if p.pedido_cliente %}
+                    <small class="text-muted" title="Pedido do Cliente">PC: {{ p.pedido_cliente }}</small><br>
+                  {% endif %}
                   <strong>{{ p.num_pedido }}</strong>
                   {% if p.data_pedido %}
                     <br><small class="text-muted"><i class="fas fa-calendar-plus"></i> {{ p.data_pedido|formatar_data("%d/%m/%Y") }}</small>
