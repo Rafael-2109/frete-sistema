@@ -54,7 +54,7 @@ RESPOSTA (max 200 chars, texto direto):
 
 NAO invente informacoes."""
 
-POST_HOOK_PROMPT = """Voce eh um agente de memoria para um sistema de logistica. Analise a conversa e identifique informacoes VALIOSAS para salvar.
+POST_HOOK_PROMPT = """Voce eh um agente de memoria para logistica. Analise a conversa e SALVE informacoes uteis.
 
 <conversa>
 USUARIO: {prompt}
@@ -65,45 +65,54 @@ ASSISTENTE: {response}
 {memories}
 </memorias_existentes>
 
-TIPOS DE INFORMACAO A CAPTAR:
+SALVAR SEMPRE (prioridade alta):
 
-1. TERMOS E SINONIMOS
-   - Abreviacoes: "VCD", "PO", "NF", "CT-e"
-   - Vocabulario especifico: como usuario se refere a entidades
-   - Exemplo: "pedido dele" = pedido_cliente
+1. COMANDOS EXPLICITOS DO USUARIO
+   - "lembre que...", "anote que...", "guarde isso..."
+   - "prefiro...", "gosto de...", "nao gosto de..."
+   - "sempre faco...", "nunca faco..."
+   → Salvar EXATAMENTE o que o usuario pediu
 
-2. REGRAS DE NEGOCIO
-   - Politicas: "FOB sempre manda completo"
-   - Prioridades: "Atacadao 183 sempre por ultimo"
-   - Restricoes: "cliente X nao aceita parcial"
+2. CORRECOES E FEEDBACK
+   - Usuario corrige o agente: "nao eh assim", "errado", "na verdade..."
+   - Usuario expressa frustacao: "ja falei", "de novo?"
+   - Usuario elogia formato: "assim que eu gosto", "perfeito"
+   → Salvar a correcao ou preferencia
 
-3. PADROES DE TRABALHO
-   - Sequencias: "sempre verifico estoque antes de separar"
-   - Preferencias: "comeco pelo maior volume"
-   - Rotinas: "analiso Atacadao primeiro"
+3. PREFERENCIAS DE COMUNICACAO
+   - "seja mais direto", "mais detalhes", "resumido"
+   - "sem emoji", "pode usar emoji"
+   - "formato de tabela", "lista simples"
+   → Salvar preferencia de estilo
 
-4. CORRECOES
-   - Campos: "esse campo se chama X, nao Y"
-   - Processos: "aqui fazemos assim, nao assado"
-   - Terminologia: "chamamos de X, nao de Y"
+4. REGRAS DE NEGOCIO MENCIONADAS
+   - Qualquer regra especifica: "cliente X sempre...", "produto Y nunca..."
+   - Prioridades: "primeiro faz X, depois Y"
+   - Restricoes: "nao pode...", "obrigatorio..."
 
-5. FATOS DO USUARIO
-   - Cargo e responsabilidades
+5. PADROES DE TRABALHO
+   - Rotinas: "toda segunda eu...", "antes de embarcar sempre..."
+   - Sequencias preferidas de consulta
+   - Clientes/produtos que acompanha frequentemente
+
+6. FATOS SOBRE O USUARIO
+   - Cargo, responsabilidades, equipe
    - Clientes que gerencia
-   - Produtos que acompanha
+   - Area de atuacao
 
-NAO SALVAR:
-- Dados temporarios ("pedido 12345 de hoje")
-- Informacoes ja existentes nas memorias
-- Obviedades sem valor agregado
+NAO SALVAR (baixa prioridade):
+- Numeros de pedidos especificos temporarios
+- Informacao IDENTICA ja existente nas memorias
+
+IMPORTANTE: Na duvida, SALVE. Eh melhor ter informacao extra do que perder algo util.
 
 RESPOSTA (JSON estrito):
-{{"action": "save", "type": "termo|regra|padrao|correcao|fato", "category": "sinonimos|negocio|workflow|dominio|usuario", "content": "descricao clara e concisa", "tags": ["tag1", "tag2"]}}
+{{"action": "save", "type": "comando|correcao|preferencia|regra|padrao|fato", "category": "explicito|comunicacao|negocio|workflow|usuario", "content": "descricao clara e concisa", "tags": ["tag1", "tag2"]}}
 
-OU se nada relevante:
+OU se REALMENTE nada relevante:
 {{"action": "none"}}
 
-RESPONDA APENAS O JSON."""
+JSON APENAS:"""
 
 
 class MemoryAgent:
@@ -154,7 +163,11 @@ class MemoryAgent:
         return "\n\n".join(memories_text) if memories_text else "(nenhuma memoria salva)"
 
     def _save_memory_sync(self, user_id: int, path: str, content: str) -> bool:
-        """Salva memoria no banco."""
+        """
+        Salva memoria no banco (APPEND se arquivo existir).
+
+        Acumula memorias no mesmo arquivo para manter historico.
+        """
         from ..models import AgentMemory
         from app import db
 
@@ -165,7 +178,10 @@ class MemoryAgent:
                 existing = AgentMemory.get_by_path(user_id, path)
 
                 if existing:
-                    existing.content = content
+                    # APPEND: Adiciona nova memoria ao conteudo existente
+                    old_content = existing.content or ""
+                    # Separa memorias com linha em branco
+                    existing.content = f"{old_content}\n\n{content}".strip()
                 else:
                     AgentMemory.create_file(user_id, path, content)
 
@@ -288,13 +304,17 @@ class MemoryAgent:
                 if content:
                     # Define path baseado na categoria
                     path_map = {
-                        "sinonimos": "/memories/learned/termos.xml",
+                        # Novas categorias (mais agressivas)
+                        "explicito": "/memories/learned/explicito.xml",
+                        "comunicacao": "/memories/preferences.xml",
                         "negocio": "/memories/learned/regras.xml",
                         "workflow": "/memories/learned/patterns.xml",
-                        "dominio": "/memories/corrections/dominio.xml",
                         "usuario": "/memories/context/usuario.xml",
+                        # Categorias legadas (compatibilidade)
+                        "sinonimos": "/memories/learned/termos.xml",
+                        "dominio": "/memories/corrections/dominio.xml",
                     }
-                    path = path_map.get(category, f"/memories/learned/auto_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xml")
+                    path = path_map.get(category, "/memories/learned/auto.xml")
 
                     # Monta conteudo estruturado
                     tags_str = ", ".join(tags) if tags else ""

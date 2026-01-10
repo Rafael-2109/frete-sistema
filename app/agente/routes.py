@@ -389,7 +389,16 @@ def _stream_chat_response(
                             )
 
                             if post_result.get('action') == 'saved':
-                                logger.info(f"[AGENTE] MEMORIA: Salvo {post_result.get('type')} em {post_result.get('path')}")
+                                memory_type = post_result.get('type', 'info')
+                                memory_category = post_result.get('category', '')
+                                logger.info(f"[AGENTE] MEMORIA: Salvo {memory_type} em {post_result.get('path')}")
+
+                                # FEAT-031: Feedback visual discreto para o frontend
+                                event_queue.put(_sse_event('memory_saved', {
+                                    'type': memory_type,
+                                    'category': memory_category,
+                                    'message': _get_memory_feedback_message(memory_type, memory_category),
+                                }))
 
                         except Exception as hook_error:
                             logger.warning(f"[AGENTE] POST-HOOK falhou: {hook_error}")
@@ -506,6 +515,43 @@ def _stream_chat_response(
 def _sse_event(event_type: str, data: dict) -> str:
     """Formata evento SSE."""
     return f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+def _get_memory_feedback_message(memory_type: str, category: str) -> str:
+    """
+    FEAT-031: Gera mensagem de feedback amigável quando memória é salva.
+
+    Args:
+        memory_type: Tipo da memória (comando, correcao, preferencia, regra, padrao, fato)
+        category: Categoria (explicito, comunicacao, negocio, workflow, usuario)
+
+    Returns:
+        Mensagem amigável para exibir ao usuário
+    """
+    # Mensagens baseadas no tipo
+    type_messages = {
+        'comando': '💾 Anotado!',
+        'correcao': '💾 Correção anotada',
+        'preferencia': '💾 Preferência salva',
+        'regra': '💾 Regra registrada',
+        'padrao': '💾 Padrão aprendido',
+        'fato': '💾 Informação salva',
+    }
+
+    # Fallback por categoria se tipo não mapeado
+    category_messages = {
+        'explicito': '💾 Anotado!',
+        'comunicacao': '💾 Preferência salva',
+        'negocio': '💾 Regra registrada',
+        'workflow': '💾 Padrão aprendido',
+        'usuario': '💾 Informação salva',
+    }
+
+    message = type_messages.get(memory_type)
+    if not message:
+        message = category_messages.get(category, '💾 Lembrei disso')
+
+    return message
 
 
 def _save_messages_to_db(

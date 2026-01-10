@@ -88,23 +88,31 @@ class ConferenciaFaturaForm(FlaskForm):
 
 class DespesaExtraForm(FlaskForm):
     """Formulário SIMPLIFICADO para despesas extras - SEM documento e vencimento (só depois da fatura)"""
-    tipo_despesa = SelectField('Tipo de Despesa', 
+    tipo_despesa = SelectField('Tipo de Despesa',
                               choices=[(t, t) for t in DespesaExtra.TIPOS_DESPESA],
                               validators=[DataRequired()])
-    
+
     setor_responsavel = SelectField('Setor Responsável',
                                    choices=[(s, s) for s in DespesaExtra.SETORES_RESPONSAVEIS],
                                    validators=[DataRequired()])
-    
+
     motivo_despesa = SelectField('Motivo da Despesa',
                                 choices=[(m, m) for m in DespesaExtra.MOTIVOS_DESPESA],
                                 validators=[DataRequired()])
-    
+
     # ✅ REMOVIDO: Documento só será preenchido APÓS vincular fatura
     # ✅ REMOVIDO: Vencimento só será conhecido APÓS vincular fatura
-    
-    # Valores
-    valor_despesa = FloatField('Valor da Despesa', validators=[DataRequired(), NumberRange(min=0)])
+
+    # Valores - StringField para aceitar formato brasileiro (vírgula como decimal)
+    valor_despesa = StringField('Valor da Despesa', validators=[DataRequired()],
+                               description='Use vírgula como separador decimal (ex: 1.234,56)')
+
+    def validate_valor_despesa(self, field):
+        """Valida valor da despesa em formato brasileiro"""
+        if field.data:
+            is_valid, error_msg = validar_valor_brasileiro(field.data)
+            if not is_valid:
+                raise ValidationError(error_msg)
     
     # Anexos de emails
     emails_anexados = MultipleFileField('Anexar Emails (.msg)', 
@@ -118,18 +126,18 @@ class DespesaExtraForm(FlaskForm):
 
 class DespesaExtraCompletoForm(FlaskForm):
     """Formulário COMPLETO para despesas extras - usado apenas quando já há fatura"""
-    tipo_despesa = SelectField('Tipo de Despesa', 
+    tipo_despesa = SelectField('Tipo de Despesa',
                               choices=[(t, t) for t in DespesaExtra.TIPOS_DESPESA],
                               validators=[DataRequired()])
-    
+
     setor_responsavel = SelectField('Setor Responsável',
                                    choices=[(s, s) for s in DespesaExtra.SETORES_RESPONSAVEIS],
                                    validators=[DataRequired()])
-    
+
     motivo_despesa = SelectField('Motivo da Despesa',
                                 choices=[(m, m) for m in DespesaExtra.MOTIVOS_DESPESA],
                                 validators=[DataRequired()])
-    
+
     # Documento (só aparece quando há fatura)
     tipo_documento = SelectField('Tipo do Documento',
         choices=[
@@ -139,16 +147,24 @@ class DespesaExtraCompletoForm(FlaskForm):
             ('OUTROS', 'Outros')
         ],
         validators=[DataRequired()])
-    
+
     numero_documento = StringField('Número do Documento', validators=[DataRequired(), Length(max=50)])
-    
-    # Valores
-    valor_despesa = FloatField('Valor da Despesa', validators=[DataRequired(), NumberRange(min=0)])
+
+    # Valores - StringField para aceitar formato brasileiro (vírgula como decimal)
+    valor_despesa = StringField('Valor da Despesa', validators=[DataRequired()],
+                               description='Use vírgula como separador decimal (ex: 1.234,56)')
     vencimento_despesa = DateField('Vencimento da Despesa', validators=[Optional()])
-    
+
     observacoes = TextAreaField('Observações')
-    
+
     submit = SubmitField('Adicionar Despesa')
+
+    def validate_valor_despesa(self, field):
+        """Valida valor da despesa em formato brasileiro"""
+        if field.data:
+            is_valid, error_msg = validar_valor_brasileiro(field.data)
+            if not is_valid:
+                raise ValidationError(error_msg)
 
 class AprovacaoFreteForm(FlaskForm):
     """Formulário para aprovação de frete"""

@@ -93,7 +93,7 @@
                                         <div class="input-group-prepend">
                                             <span class="input-group-text">R$</span>
                                         </div>
-                                        {{ form.valor_despesa(class="form-control") }}
+                                        {{ form.valor_despesa(class="form-control valor-monetario", placeholder="0,00") }}
                                     </div>
                                     {% if form.valor_despesa.errors %}
                                         {% for error in form.valor_despesa.errors %}
@@ -192,4 +192,43 @@
         </div>
     </div>
 </div>
-{% endblock %} 
+
+<script>
+    /**
+     * Máscara de entrada para valores monetários em formato brasileiro
+     */
+    document.querySelectorAll('.valor-monetario').forEach(function(input) {
+        input.addEventListener('blur', function(e) {
+            let value = e.target.value.trim();
+            if (!value) return;
+
+            value = value.replace(/[^\d.,]/g, '');
+            let numero;
+
+            if (value.includes(',')) {
+                numero = parseFloat(value.replace(/\./g, '').replace(',', '.'));
+            } else if (value.includes('.')) {
+                const partes = value.split('.');
+                if (partes[partes.length - 1].length <= 2) {
+                    numero = parseFloat(value);
+                } else {
+                    numero = parseFloat(value.replace(/\./g, ''));
+                }
+            } else {
+                numero = parseFloat(value);
+            }
+
+            if (!isNaN(numero)) {
+                e.target.value = numero.toLocaleString('pt-BR', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                });
+            }
+        });
+
+        input.addEventListener('input', function(e) {
+            e.target.value = e.target.value.replace(/[^\d.,]/g, '');
+        });
+    });
+</script>
+{% endblock %}

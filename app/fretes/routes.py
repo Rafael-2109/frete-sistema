@@ -1920,10 +1920,10 @@ def aprovar_conferencia_fatura(fatura_id):
         db.session.commit()
 
         flash(
-            f"✅ Fatura {fatura.numero_fatura} conferida com sucesso! Valor atualizado para R$ {valor_final_float:.2f}",
+            f"✅ Fatura {fatura.numero_fatura} conferida com sucesso! Valor atualizado para R$ {valor_final_float:.2f}. Agora você pode lançar no Odoo.",
             "success",
         )
-        return redirect(url_for("fretes.listar_faturas"))
+        return redirect(url_for("fretes.visualizar_fatura", fatura_id=fatura_id))
 
     except Exception as e:
         db.session.rollback()
@@ -2448,7 +2448,7 @@ def criar_despesa_extra_frete(frete_id):
             motivo_despesa=form.motivo_despesa.data,
             tipo_documento="PENDENTE_DOCUMENTO",  # Será definido ao vincular fatura
             numero_documento="PENDENTE_FATURA",  # OBRIGATÓRIO: FATURA PRIMEIRO, DOCUMENTO DEPOIS
-            valor_despesa=form.valor_despesa.data,
+            valor_despesa=converter_valor_brasileiro(form.valor_despesa.data),
             vencimento_despesa=None,
             observacoes=form.observacoes.data,
             criado_por=current_user.nome,
@@ -2721,7 +2721,7 @@ def nova_despesa_extra(frete_id):
             # ✅ CORRIGIDO: NÃO vincula automaticamente à fatura
             tipo_documento="PENDENTE_DOCUMENTO",  # Será definido ao vincular fatura MANUALMENTE
             numero_documento="PENDENTE_FATURA",  # ✅ PENDENTE até vinculação manual
-            valor_despesa=form.valor_despesa.data,
+            valor_despesa=converter_valor_brasileiro(form.valor_despesa.data),
             vencimento_despesa=None,  # Será definido ao vincular fatura
             observacoes=form.observacoes.data,  # ✅ SEM referência automática à fatura
             criado_por=current_user.nome,

@@ -180,7 +180,7 @@
                                     <strong>#{{ lanc.frete.id }}</strong>
                                 </a>
                                 {% if lanc.frete.fatura_frete %}
-                                <br><small><i class="fas fa-file-invoice text-primary"></i> {{ lanc.frete.fatura_frete.numero_fatura }}</small>
+                                <br><small><a href="{{ url_for('fretes.visualizar_fatura', fatura_id=lanc.frete.fatura_frete.id) }}" class="text-decoration-none" title="Ver fatura"><i class="fas fa-file-invoice text-primary"></i> {{ lanc.frete.fatura_frete.numero_fatura }}</a></small>
                                 {% endif %}
                                 {% if lanc.frete.numeros_nfs %}
                                 <br><small class="text-muted" title="{{ lanc.frete.numeros_nfs }}"><i class="fas fa-receipt"></i> NFs: {{ lanc.frete.numeros_nfs[:20] }}{% if lanc.frete.numeros_nfs|length > 20 %}...{% endif %}</small>

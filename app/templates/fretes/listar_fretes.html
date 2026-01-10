@@ -245,7 +245,7 @@
                             </td>
                             <td>
                                 {% if frete.fatura_frete %}
-                                <a href="{{ url_for('fretes.listar_faturas') }}"
+                                <a href="{{ url_for('fretes.visualizar_fatura', fatura_id=frete.fatura_frete.id) }}"
                                     title="Ver fatura {{ frete.fatura_frete.numero_fatura }}">
                                     {{ frete.fatura_frete.numero_fatura[:15] }}
                                 </a>

@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required, current_user
 from datetime import datetime, date, timedelta
 from app import db
+from app.utils.valores_brasileiros import converter_valor_brasileiro
 from app.estoque.models import MovimentacaoEstoque
 from app.embarques.models import Embarque, EmbarqueItem
 from app.transportadoras.models import Transportadora
@@ -942,7 +943,7 @@ def enviar_resolucao(vale_id):
             vale.cnpj_resolucao = request.form.get('cnpj_resolucao', '').replace('.', '').replace('-', '').replace('/', '')
             valor = request.form.get('valor_resolucao')
             if valor:
-                vale.valor_resolucao = float(valor.replace(',', '.'))
+                vale.valor_resolucao = converter_valor_brasileiro(valor)
             vale.enviado_coleta = True
             vale.enviado_coleta_em = datetime.utcnow()
             vale.enviado_coleta_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
@@ -974,7 +975,7 @@ def resolver_vale(vale_id):
             vale.nf_resolucao = request.form.get('nf_resolucao')
             valor = request.form.get('valor_resolucao')
             if valor:
-                vale.valor_resolucao = float(valor.replace(',', '.'))
+                vale.valor_resolucao = converter_valor_brasileiro(valor)
             vale.resolvido = True
             vale.resolvido_em = datetime.utcnow()
             vale.resolvido_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)

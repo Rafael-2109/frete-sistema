@@ -139,7 +139,7 @@ def index():
 
     # Paginacao
     page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 20, type=int)
+    per_page = request.args.get('per_page', 150, type=int)
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
 
     # Processar tuplas e adicionar dados de NFs referenciadas

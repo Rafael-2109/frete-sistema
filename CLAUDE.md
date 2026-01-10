@@ -255,7 +255,7 @@ tags_pedido = db.Column(db.Text, nullable=True)  # JSON: [{"name": "VIP", "color
 
 ## Separacao (app/separacao/models.py)
 
-**Tabela**: `separacoes`
+**Tabela**: `separacao`
 **Uso**: Unica fonte da verdade para projetar as saidas de estoque atraves de sincronizado_nf=False
 
 ### REGRA CRITICA: sincronizado_nf
@@ -379,11 +379,6 @@ item.agendamento_status         # ERRO - nao existe
 # Para buscar itens na carteira:
 items = Separacao.query.filter_by(
     sincronizado_nf=False  # CORRETO - Criterio principal
-).all()
-
-# Separacao TEM status proprio:
-items = Separacao.query.filter_by(
-    status='PREVISAO'  # CORRETO - Para pre-separacoes
 ).all()
 
 # NAO fazer JOIN desnecessario com Pedido VIEW

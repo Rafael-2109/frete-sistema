@@ -199,9 +199,9 @@
                         
                         {% if frete.fatura_frete %}
                         <div class="alert alert-info">
-                            <i class="fas fa-file-invoice"></i> 
-                            <strong>Fatura Vinculada:</strong> 
-                            {{ frete.fatura_frete.numero_fatura }} 
+                            <i class="fas fa-file-invoice"></i>
+                            <strong>Fatura Vinculada:</strong>
+                            <a href="{{ url_for('fretes.visualizar_fatura', fatura_id=frete.fatura_frete.id) }}" class="text-decoration-none">{{ frete.fatura_frete.numero_fatura }}</a>
                             ({{ frete.fatura_frete.transportadora.razao_social }})
                             <br>
                             <small>Vencimento da fatura: {{ frete.fatura_frete.vencimento | formatar_data_segura if frete.fatura_frete.vencimento else 'Não informado' }}</small>

@@ -70,9 +70,9 @@
                                 <div class="input-group-prepend">
                                     <span class="input-group-text">R$</span>
                                 </div>
-                                <input type="text" class="form-control" id="valor_total_fatura"
-                                    name="valor_total_fatura" value="{{ '%.2f'|format(fatura.valor_total_fatura) }}"
-                                    required>
+                                <input type="text" class="form-control valor-monetario" id="valor_total_fatura"
+                                    name="valor_total_fatura" value="{{ (fatura.valor_total_fatura)|moeda_carteira|replace('R$ ', '') }}"
+                                    required placeholder="0,00">
                             </div>
                         </div>
                     </div>
@@ -228,10 +228,58 @@
 </div>
 
 <script>
-    // Formatação do valor monetário
-    document.getElementById('valor_total_fatura').addEventListener('input', function (e) {
-        let value = e.target.value.replace(/[^\d,]/g, '');
-        e.target.value = value;
+    /**
+     * Máscara de entrada para valores monetários em formato brasileiro
+     * Aceita: 1.234,56 ou 1234,56 ou 1234.56
+     * Formata para: 1.234,56
+     */
+    document.querySelectorAll('.valor-monetario').forEach(function(input) {
+        input.addEventListener('blur', function(e) {
+            let value = e.target.value.trim();
+            if (!value) return;
+
+            // Remove tudo exceto dígitos, vírgula e ponto
+            value = value.replace(/[^\d.,]/g, '');
+
+            // Detecta se está usando ponto como decimal (formato americano)
+            // Se tem ponto e vírgula, assume que ponto é milhar e vírgula é decimal
+            // Se só tem ponto, verifica posição (últimos 3 chars = decimal)
+            let numero;
+
+            if (value.includes(',')) {
+                // Formato brasileiro: remove pontos (milhares) e troca vírgula por ponto
+                numero = parseFloat(value.replace(/\./g, '').replace(',', '.'));
+            } else if (value.includes('.')) {
+                // Pode ser formato americano ou brasileiro sem decimais
+                const partes = value.split('.');
+                if (partes[partes.length - 1].length <= 2) {
+                    // Último segmento tem 1-2 dígitos = é decimal
+                    numero = parseFloat(value);
+                } else {
+                    // Último segmento tem 3+ dígitos = é milhar (sem decimais)
+                    numero = parseFloat(value.replace(/\./g, ''));
+                }
+            } else {
+                // Só dígitos
+                numero = parseFloat(value);
+            }
+
+            if (!isNaN(numero)) {
+                // Formata para padrão brasileiro: 1.234,56
+                e.target.value = numero.toLocaleString('pt-BR', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                });
+            }
+        });
+
+        // Permite apenas caracteres válidos durante digitação
+        input.addEventListener('input', function(e) {
+            let value = e.target.value;
+            // Remove caracteres inválidos mas mantém ponto, vírgula e dígitos
+            value = value.replace(/[^\d.,]/g, '');
+            e.target.value = value;
+        });
     });
 </script>
 {% endblock %}

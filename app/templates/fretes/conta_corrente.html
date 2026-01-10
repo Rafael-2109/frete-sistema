@@ -123,7 +123,7 @@
                                             {% if mov.frete and mov.frete.numero_cte %}
                                                 CTe {{ mov.frete.numero_cte }}
                                                 {% if mov.frete.fatura_frete and mov.frete.fatura_frete.numero_fatura %}
-                                                    - Fatura {{ mov.frete.fatura_frete.numero_fatura }}
+                                                    - <a href="{{ url_for('fretes.visualizar_fatura', fatura_id=mov.frete.fatura_frete.id) }}" class="text-decoration-none" title="Ver fatura">Fatura {{ mov.frete.fatura_frete.numero_fatura }}</a>
                                                 {% endif %}
                                             {% else %}
                                                 Frete {{ mov.frete_id }}
