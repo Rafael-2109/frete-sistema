@@ -30,7 +30,7 @@ class DespesaCteService:
     @staticmethod
     def buscar_ctes_sugestao(despesa_id: int) -> Dict[str, Any]:
         """
-        Busca CTes Complementares candidatos para vincular à despesa extra.
+        Busca CTes (Normais e Complementares) candidatos para vincular à despesa extra.
         Retorna sugestões organizadas por prioridade.
 
         Args:
@@ -40,17 +40,21 @@ class DespesaCteService:
             Dict com:
                 - despesa: DespesaExtra
                 - frete: Frete relacionado
-                - sugestoes_prioridade_1: CTes via cte_complementa_id
-                - sugestoes_prioridade_2: CTes via NFs em comum
-                - sugestoes_prioridade_3: CTes via CNPJ
+                - sugestoes_prioridade_0: CTe Normal vinculado ao frete (NOVO!)
+                - sugestoes_prioridade_1: CTes Complementares via cte_complementa_id
+                - sugestoes_prioridade_2: CTes Complementares via NFs em comum
+                - sugestoes_prioridade_3: CTes Complementares via CNPJ
+                - sugestoes_prioridade_4: CTes Normais via NFs em comum (NOVO!)
                 - erro: Mensagem de erro se houver
         """
         resultado = {
             'despesa': None,
             'frete': None,
+            'sugestoes_prioridade_0': [],  # CTe Normal do frete
             'sugestoes_prioridade_1': [],
             'sugestoes_prioridade_2': [],
             'sugestoes_prioridade_3': [],
+            'sugestoes_prioridade_4': [],  # CTes Normais via NFs
             'erro': None
         }
 
@@ -76,6 +80,15 @@ class DespesaCteService:
                 DespesaExtra.despesa_cte_id.isnot(None)
             ).all()
             ids_excluir = [c[0] for c in ctes_ja_vinculados]
+
+            # =============================================================
+            # PRIORIDADE 0: CTe Normal já vinculado ao Frete (NOVO!)
+            # =============================================================
+            if frete.frete_cte_id:
+                cte_frete = ConhecimentoTransporte.query.get(frete.frete_cte_id)
+                if cte_frete and cte_frete.id not in ids_excluir:
+                    resultado['sugestoes_prioridade_0'] = [cte_frete]
+                    logger.info(f"Prioridade 0: CTe do frete encontrado (#{cte_frete.id})")
 
             # =============================================================
             # PRIORIDADE 1: CTe Complementar que referencia CTe do Frete
@@ -143,13 +156,49 @@ class DespesaCteService:
                             ConhecimentoTransporte.id.notin_(ids_excluir) if ids_excluir else True,
                             # Excluir os já listados nas prioridades anteriores
                             ConhecimentoTransporte.id.notin_(
+                                [c.id for c in resultado['sugestoes_prioridade_0']] +
                                 [c.id for c in resultado['sugestoes_prioridade_1']] +
                                 [c.id for c in resultado['sugestoes_prioridade_2']]
-                            ) if resultado['sugestoes_prioridade_1'] or resultado['sugestoes_prioridade_2'] else True
+                            ) if resultado['sugestoes_prioridade_0'] or resultado['sugestoes_prioridade_1'] or resultado['sugestoes_prioridade_2'] else True
                         )
                     ).all()
                     resultado['sugestoes_prioridade_3'] = ctes_prioridade_3
                     logger.info(f"Prioridade 3: {len(ctes_prioridade_3)} CTes encontrados")
+
+            # =============================================================
+            # PRIORIDADE 4: CTes Normais via NFs em comum (NOVO!)
+            # =============================================================
+            if frete.numeros_nfs:
+                nfs_frete = set(nf.strip() for nf in frete.numeros_nfs.split(',') if nf.strip())
+
+                # IDs já listados nas prioridades anteriores
+                ids_ja_listados = (
+                    [c.id for c in resultado['sugestoes_prioridade_0']] +
+                    [c.id for c in resultado['sugestoes_prioridade_1']] +
+                    [c.id for c in resultado['sugestoes_prioridade_2']] +
+                    [c.id for c in resultado['sugestoes_prioridade_3']]
+                )
+
+                # Buscar CTes Normais com NFs em comum
+                ctes_normais = ConhecimentoTransporte.query.filter(
+                    and_(
+                        ConhecimentoTransporte.tipo_cte == '0',  # Normal
+                        ConhecimentoTransporte.numeros_nfs.isnot(None),
+                        ConhecimentoTransporte.id.notin_(ids_excluir) if ids_excluir else True,
+                        ConhecimentoTransporte.id.notin_(ids_ja_listados) if ids_ja_listados else True
+                    )
+                ).all()
+
+                # Filtrar os que têm NFs em comum
+                ctes_prioridade_4 = []
+                for cte in ctes_normais:
+                    if cte.numeros_nfs:
+                        nfs_cte = set(nf.strip() for nf in cte.numeros_nfs.split(',') if nf.strip())
+                        if nfs_frete.intersection(nfs_cte):
+                            ctes_prioridade_4.append(cte)
+
+                resultado['sugestoes_prioridade_4'] = ctes_prioridade_4
+                logger.info(f"Prioridade 4: {len(ctes_prioridade_4)} CTes Normais encontrados")
 
             return resultado
 
@@ -180,9 +229,8 @@ class DespesaCteService:
             if not cte:
                 return False, f'CTe #{cte_id} não encontrado'
 
-            # Validar se é CTe Complementar
-            if cte.tipo_cte != '1':
-                return False, f'CTe #{cte_id} não é do tipo Complementar (tipo={cte.tipo_cte})'
+            # REMOVIDO: Validação que exigia tipo_cte=='1' (Complementar)
+            # Agora aceita CTe Normal (tipo='0') e Complementar (tipo='1')
 
             # Validar se CTe já está vinculado a outra despesa
             despesa_existente = DespesaExtra.query.filter(

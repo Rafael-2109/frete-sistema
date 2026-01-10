@@ -7,7 +7,7 @@
     <div class="row">
         <div class="col-12">
             <h1 class="h3 mb-4">
-                <i class="fas fa-link"></i> Vincular CTe Complementar
+                <i class="fas fa-link"></i> Vincular CTe
                 <small class="text-muted">Despesa #{{ despesa.id }}</small>
             </h1>
         </div>
@@ -88,6 +88,44 @@
 
         <!-- Sugestões de CTe -->
         <div class="col-md-8">
+            <!-- Prioridade 0: CTe Normal do Frete -->
+            {% if sugestoes_prioridade_0 %}
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-star"></i> CTe do Frete (Recomendado)
+                        <span class="badge bg-light text-dark">{{ sugestoes_prioridade_0|length }}</span>
+                    </h5>
+                    <small>CTe Normal já vinculado ao frete desta despesa</small>
+                </div>
+                <div class="card-body">
+                    {% for cte in sugestoes_prioridade_0 %}
+                    <form method="POST" class="mb-3">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="cte_id" value="{{ cte.id }}">
+                        <div class="d-flex justify-content-between align-items-center p-3 border rounded bg-light">
+                            <div>
+                                <h6 class="mb-1">
+                                    CTe {{ cte.numero_cte }}/{{ cte.serie_cte }}
+                                    <span class="badge bg-primary">Normal</span>
+                                </h6>
+                                <small class="text-muted">{{ cte.chave_acesso }}</small><br>
+                                <small><strong>Emitente:</strong> {{ cte.nome_emitente }}</small><br>
+                                <small><strong>Valor:</strong> {{ (cte.valor_total or 0)|moeda_carteira }}</small>
+                                {% if cte.data_emissao %}
+                                <small> | <strong>Emissão:</strong> {{ cte.data_emissao.strftime('%d/%m/%Y') }}</small>
+                                {% endif %}
+                            </div>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-link"></i> Vincular
+                            </button>
+                        </div>
+                    </form>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
             <!-- Prioridade 1 -->
             {% if sugestoes_prioridade_1 %}
             <div class="card mb-4">
@@ -196,12 +234,50 @@
             </div>
             {% endif %}
 
+            <!-- Prioridade 4: CTes Normais via NFs em comum -->
+            {% if sugestoes_prioridade_4 %}
+            <div class="card mb-4">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-file-alt"></i> CTes Normais com NFs em Comum
+                        <span class="badge bg-light text-dark">{{ sugestoes_prioridade_4|length }}</span>
+                    </h5>
+                    <small>CTes Normais que referenciam NFs em comum com o frete</small>
+                </div>
+                <div class="card-body">
+                    {% for cte in sugestoes_prioridade_4 %}
+                    <form method="POST" class="mb-3">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="cte_id" value="{{ cte.id }}">
+                        <div class="d-flex justify-content-between align-items-center p-3 border rounded">
+                            <div>
+                                <h6 class="mb-1">
+                                    CTe {{ cte.numero_cte }}/{{ cte.serie_cte }}
+                                    <span class="badge bg-secondary">Normal</span>
+                                </h6>
+                                <small class="text-muted">{{ cte.chave_acesso }}</small><br>
+                                <small><strong>Emitente:</strong> {{ cte.nome_emitente }}</small><br>
+                                <small><strong>Valor:</strong> {{ (cte.valor_total or 0)|moeda_carteira }}</small>
+                                {% if cte.data_emissao %}
+                                <small> | <strong>Emissão:</strong> {{ cte.data_emissao.strftime('%d/%m/%Y') }}</small>
+                                {% endif %}
+                            </div>
+                            <button type="submit" class="btn btn-secondary">
+                                <i class="fas fa-link"></i> Vincular
+                            </button>
+                        </div>
+                    </form>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
             <!-- Nenhuma sugestão -->
-            {% if not sugestoes_prioridade_1 and not sugestoes_prioridade_2 and not sugestoes_prioridade_3 %}
+            {% if not sugestoes_prioridade_0 and not sugestoes_prioridade_1 and not sugestoes_prioridade_2 and not sugestoes_prioridade_3 and not sugestoes_prioridade_4 %}
             <div class="alert alert-warning">
-                <h5><i class="fas fa-exclamation-triangle"></i> Nenhum CTe Complementar Encontrado</h5>
+                <h5><i class="fas fa-exclamation-triangle"></i> Nenhum CTe Encontrado</h5>
                 <p class="mb-0">
-                    Não foram encontrados CTes Complementares compatíveis com esta despesa.
+                    Não foram encontrados CTes compatíveis com esta despesa.
                     Verifique se o CTe foi importado do Odoo ou aguarde a sincronização.
                 </p>
             </div>

@@ -4547,9 +4547,11 @@ def vincular_cte_despesa(despesa_id):
         "fretes/vincular_cte_despesa.html",
         despesa=despesa,
         frete=resultado["frete"],
+        sugestoes_prioridade_0=resultado.get("sugestoes_prioridade_0", []),  # CTe Normal do frete
         sugestoes_prioridade_1=resultado["sugestoes_prioridade_1"],
         sugestoes_prioridade_2=resultado["sugestoes_prioridade_2"],
         sugestoes_prioridade_3=resultado["sugestoes_prioridade_3"],
+        sugestoes_prioridade_4=resultado.get("sugestoes_prioridade_4", []),  # CTes Normais via NFs
     )
 
 
