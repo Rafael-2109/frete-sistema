@@ -479,3 +479,164 @@ def api_estatisticas():
             'sucesso': False,
             'erro': str(e)
         }), 500
+
+
+# =============================================================================
+# APIs DE SINCRONIZACAO - REVERSOES E MONITORAMENTO
+# =============================================================================
+
+@vinculacao_bp.route('/api/sincronizar-reversoes', methods=['POST'])
+@login_required
+def api_sincronizar_reversoes():
+    """
+    Importa NFs de venda revertidas do Odoo
+
+    POST /devolucao/vinculacao/api/sincronizar-reversoes
+    Body (opcional):
+    {
+        "dias": 30,
+        "limite": 100
+    }
+
+    Busca Notas de Credito (out_refund) com reversed_entry_id
+    e cria NFDevolucao com tipo_documento='NF' e status_odoo='Revertida'
+    """
+    try:
+        from app.devolucao.services import get_reversao_service
+
+        data = request.get_json() or {}
+
+        dias = data.get('dias', 30)
+        limite = data.get('limite')
+
+        service = get_reversao_service()
+        resultado = service.importar_reversoes(dias=dias, limite=limite)
+
+        return jsonify(resultado)
+
+    except Exception as e:
+        return jsonify({
+            'sucesso': False,
+            'erro': str(e)
+        }), 500
+
+
+@vinculacao_bp.route('/api/sincronizar-monitoramento', methods=['POST'])
+@login_required
+def api_sincronizar_monitoramento():
+    """
+    Cria devolucoes a partir do status do monitoramento
+
+    POST /devolucao/vinculacao/api/sincronizar-monitoramento
+
+    Busca entregas com status_finalizacao em:
+    - Cancelada
+    - Devolvida
+    - Troca de NF
+
+    E cria NFDevolucao com tipo_documento='NF' se nao existir
+    """
+    try:
+        from app.devolucao.services import get_monitoramento_sync_service
+
+        service = get_monitoramento_sync_service()
+        resultado = service.sincronizar_monitoramento()
+
+        return jsonify(resultado)
+
+    except Exception as e:
+        return jsonify({
+            'sucesso': False,
+            'erro': str(e)
+        }), 500
+
+
+@vinculacao_bp.route('/api/sincronizar-completo', methods=['POST'])
+@login_required
+def api_sincronizar_completo():
+    """
+    Executa sincronizacao completa: NFD + Reversoes + Monitoramento
+
+    POST /devolucao/vinculacao/api/sincronizar-completo
+    Body (opcional):
+    {
+        "dias_nfd": 30,
+        "dias_reversoes": 30,
+        "limite_nfd": null,
+        "limite_reversoes": null
+    }
+
+    Ordem de execucao:
+    1. Importar NFDs do Odoo (finnfe=4)
+    2. Importar Reversoes do Odoo (out_refund)
+    3. Sincronizar com Monitoramento
+
+    Retorna estatisticas de cada etapa.
+    """
+    try:
+        from app.devolucao.services import (
+            get_nfd_service,
+            get_reversao_service,
+            get_monitoramento_sync_service
+        )
+
+        data = request.get_json() or {}
+
+        dias_nfd = data.get('dias_nfd', 30)
+        dias_reversoes = data.get('dias_reversoes', 30)
+        limite_nfd = data.get('limite_nfd')
+        limite_reversoes = data.get('limite_reversoes')
+
+        resultados = {
+            'sucesso': True,
+            'etapas': {}
+        }
+
+        # 1. NFDs do Odoo (finnfe=4)
+        try:
+            nfd_service = get_nfd_service()
+            resultados['etapas']['nfd'] = nfd_service.importar_nfds(
+                dias_retroativos=dias_nfd,
+                limite=limite_nfd
+            )
+        except Exception as e:
+            resultados['etapas']['nfd'] = {'sucesso': False, 'erro': str(e)}
+
+        # 2. Reversoes do Odoo (out_refund)
+        try:
+            reversao_service = get_reversao_service()
+            resultados['etapas']['reversoes'] = reversao_service.importar_reversoes(
+                dias=dias_reversoes,
+                limite=limite_reversoes
+            )
+        except Exception as e:
+            resultados['etapas']['reversoes'] = {'sucesso': False, 'erro': str(e)}
+
+        # 3. Monitoramento
+        try:
+            monit_service = get_monitoramento_sync_service()
+            resultados['etapas']['monitoramento'] = monit_service.sincronizar_monitoramento()
+        except Exception as e:
+            resultados['etapas']['monitoramento'] = {'sucesso': False, 'erro': str(e)}
+
+        # Resumo
+        resultados['resumo'] = {
+            'nfds_criadas': (
+                resultados['etapas'].get('nfd', {}).get('nfds_criadas', 0) +
+                resultados['etapas'].get('reversoes', {}).get('nfds_criadas', 0) +
+                resultados['etapas'].get('monitoramento', {}).get('nfds_criadas', 0)
+            ),
+            'ocorrencias_criadas': (
+                resultados['etapas'].get('nfd', {}).get('ocorrencias_criadas', 0) +
+                resultados['etapas'].get('reversoes', {}).get('ocorrencias_criadas', 0) +
+                resultados['etapas'].get('monitoramento', {}).get('ocorrencias_criadas', 0)
+            )
+        }
+
+        return jsonify(resultados)
+
+    except Exception as e:
+        return jsonify({
+            'sucesso': False,
+            'erro': str(e)
+        }), 500

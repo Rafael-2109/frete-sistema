@@ -142,6 +142,37 @@ class NFDevolucao(db.Model):
     origem_registro = db.Column(db.String(20), default='MONITORAMENTO', nullable=False, index=True)
 
     # =========================================================================
+    # TIPO DE DOCUMENTO E STATUS (NFD vs NF de Venda revertida)
+    # =========================================================================
+    # Tipo: NFD (Nota Fiscal de Devolução emitida pelo cliente)
+    #       NF (NF de Venda nossa que foi revertida/cancelada)
+    TIPOS_DOCUMENTO = [
+        ('NFD', 'Nota Fiscal de Devolução'),
+        ('NF', 'NF de Venda Revertida/Cancelada'),
+    ]
+    tipo_documento = db.Column(db.String(10), default='NFD', nullable=False, index=True)
+
+    # Status no Odoo (para NFs revertidas/canceladas)
+    STATUS_ODOO_CHOICES = [
+        ('Devolução', 'Devolução (NFD)'),
+        ('Revertida', 'NF Revertida'),
+        ('Cancelada', 'NF Cancelada'),
+    ]
+    status_odoo = db.Column(db.String(30), nullable=True)
+
+    # Status no Monitoramento (espelhado do status_finalizacao)
+    STATUS_MONITORAMENTO_CHOICES = [
+        ('Cancelada', 'Cancelada'),
+        ('Devolvida', 'Devolvida'),
+        ('Troca de NF', 'Troca de NF'),
+    ]
+    status_monitoramento = db.Column(db.String(30), nullable=True)
+
+    # IDs do Odoo para NFs de venda revertidas
+    odoo_nf_venda_id = db.Column(db.Integer, nullable=True, index=True)  # ID da NF original (account.move)
+    odoo_nota_credito_id = db.Column(db.Integer, nullable=True, index=True)  # ID da NC (out_refund)
+
+    # =========================================================================
     # AUDITORIA
     # =========================================================================
     criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
@@ -167,6 +198,9 @@ class NFDevolucao(db.Model):
         db.Index('idx_nfd_data_registro', 'data_registro'),
         db.Index('idx_nfd_nf_venda', 'numero_nf_venda'),
         db.Index('idx_nfd_odoo_dfe', 'odoo_dfe_id'),
+        db.Index('idx_nfd_tipo_documento', 'tipo_documento'),
+        db.Index('idx_nfd_odoo_nf_venda', 'odoo_nf_venda_id'),
+        db.Index('idx_nfd_status_odoo_monit', 'status_odoo', 'status_monitoramento'),
     )
 
     def __repr__(self):
@@ -206,6 +240,41 @@ class NFDevolucao(db.Model):
         """Verifica se tem PDF armazenado"""
         return bool(self.nfd_pdf_path)
 
+    @property
+    def numero_com_prefixo(self):
+        """Retorna número com prefixo: NFD 12345 ou NF 12345"""
+        prefixo = self.tipo_documento or 'NFD'
+        numero = self.numero_nfd or self.numero_nf_venda or '?'
+        return f"{prefixo} {numero}"
+
+    @property
+    def status_exibicao(self):
+        """Retorna: 'Revertida | Devolvida' ou '- | Cancelada'"""
+        odoo = self.status_odoo or '-'
+        monit = self.status_monitoramento or '-'
+        return f"{odoo} | {monit}"
+
+    @property
+    def tipo_documento_descricao(self):
+        """Retorna descrição do tipo de documento"""
+        tipos_map = dict(self.TIPOS_DOCUMENTO)
+        return tipos_map.get(self.tipo_documento, self.tipo_documento)
+
+    @property
+    def status_entrada_odoo(self):
+        """Retorna status de entrada: 'Entrada OK' ou 'Pendente'"""
+        if self.data_entrada:
+            return 'Entrada OK'
+        return 'Pendente'
+
+    @property
+    def numero_com_status_entrada(self):
+        """Retorna: 'NFD - 12345 - Entrada OK' ou 'NFD - 12345 - Pendente'"""
+        prefixo = self.tipo_documento or 'NFD'
+        numero = self.numero_nfd or self.numero_nf_venda or '?'
+        status = self.status_entrada_odoo
+        return f"{prefixo} - {numero} - {status}"
+
     def to_dict(self):
         """Serializa para JSON"""
         return {
@@ -230,6 +299,19 @@ class NFDevolucao(db.Model):
             'tem_dfe_vinculado': self.tem_dfe_vinculado,
             'tem_xml': self.tem_xml,
             'tem_pdf': self.tem_pdf,
+            # Novos campos de tipo e status
+            'tipo_documento': self.tipo_documento,
+            'tipo_documento_descricao': self.tipo_documento_descricao,
+            'numero_com_prefixo': self.numero_com_prefixo,
+            'status_odoo': self.status_odoo,
+            'status_monitoramento': self.status_monitoramento,
+            'status_exibicao': self.status_exibicao,
+            'odoo_nf_venda_id': self.odoo_nf_venda_id,
+            'odoo_nota_credito_id': self.odoo_nota_credito_id,
+            # Status de entrada da NFD
+            'data_entrada': self.data_entrada.isoformat() if self.data_entrada else None,
+            'status_entrada_odoo': self.status_entrada_odoo,
+            'numero_com_status_entrada': self.numero_com_status_entrada,
             'criado_em': self.criado_em.isoformat() if self.criado_em else None,
             'criado_por': self.criado_por,
         }

@@ -516,6 +516,17 @@ class NFDService:
         nfd.odoo_status_codigo = nfd_data.get('l10n_br_status')
         nfd.odoo_status_descricao = self._get_status_descricao(nfd_data.get('l10n_br_status'))
 
+        # NOVOS CAMPOS: tipo_documento e status_odoo
+        # NFD (finnfe=4) sempre é "Devolução"
+        nfd.tipo_documento = 'NFD'
+        nfd.status_odoo = 'Devolução'
+
+        # Sincronizar status_monitoramento se houver entrega vinculada
+        if nfd.entrega_monitorada:
+            status_monit = nfd.entrega_monitorada.status_finalizacao
+            if status_monit in ('Cancelada', 'Devolvida', 'Troca de NF'):
+                nfd.status_monitoramento = status_monit
+
         # Dados fiscais (Odoo sobrescreve)
         nfd.chave_nfd = nfd_data.get('protnfe_infnfe_chnfe')
         nfd.numero_nfd = nfd_data.get('nfe_infnfe_ide_nnf') or nfd.numero_nfd
@@ -569,6 +580,12 @@ class NFDService:
             odoo_name=nfd_data.get('name'),
             odoo_status_codigo=nfd_data.get('l10n_br_status'),
             odoo_status_descricao=self._get_status_descricao(nfd_data.get('l10n_br_status')),
+
+            # NOVOS CAMPOS: tipo_documento e status
+            # NFD (finnfe=4) sempre é tipo 'NFD' com status_odoo='Devolução'
+            tipo_documento='NFD',
+            status_odoo='Devolução',
+            status_monitoramento=None,  # Órfã não tem vinculação com monitoramento
 
             # Dados fiscais
             chave_nfd=nfd_data.get('protnfe_infnfe_chnfe'),
@@ -735,6 +752,11 @@ class NFDService:
                     if not nfd.entrega_monitorada_id and entrega_id:
                         nfd.entrega_monitorada_id = entrega_id
                         logger.info(f"   🔗 NFD vinculada à entrega ID {entrega_id}")
+
+                        # Sincronizar status_monitoramento com a entrega
+                        if entrega and entrega.status_finalizacao in ('Cancelada', 'Devolvida', 'Troca de NF'):
+                            nfd.status_monitoramento = entrega.status_finalizacao
+                            logger.info(f"   📊 status_monitoramento sincronizado: {entrega.status_finalizacao}")
 
             logger.info(f"   📄 {count} NFs referenciadas criadas")
             return count
@@ -1012,6 +1034,11 @@ class NFDService:
             nfd.atualizado_em = agora_brasil()
             nfd.atualizado_por = usuario
 
+            # Sincronizar status_monitoramento com a entrega
+            if entrega.status_finalizacao in ('Cancelada', 'Devolvida', 'Troca de NF'):
+                nfd.status_monitoramento = entrega.status_finalizacao
+                logger.info(f"📊 status_monitoramento sincronizado: {entrega.status_finalizacao}")
+
             # MARCAR teve_devolucao = True na entrega
             if not entrega.teve_devolucao:
                 entrega.teve_devolucao = True
@@ -1138,15 +1165,25 @@ class NFDService:
 
     @staticmethod
     def _get_status_descricao(status_codigo):
-        """Retorna descrição do status do Odoo"""
+        """Retorna descrição do status do DFE no Odoo
+
+        Status do fluxo de entrada de NFD:
+        - 01: Rascunho - NFD recebida, não processada
+        - 02: Sincronizado - NFD sincronizada
+        - 03: Ciência/Confirmado - NFD manifestada
+        - 04: PO - Pedido de Compra criado, PENDENTE entrada física
+        - 05: Rateio - Rateio de custos
+        - 06: Concluído - ENTRADA FÍSICA REALIZADA
+        - 07: Rejeitado - NFD rejeitada
+        """
         STATUS_MAP = {
-            '01': 'Uso Autorizado',
-            '02': 'Uso Denegado',
-            '03': 'Uso Rejeitado',
-            '04': 'Cancelado',
-            '05': 'Inutilizado',
-            '06': 'Ciência da Operação',
-            '07': 'Confirmação da Operação',
+            '01': 'Rascunho',
+            '02': 'Sincronizado',
+            '03': 'Ciência/Confirmado',
+            '04': 'PO',
+            '05': 'Rateio',
+            '06': 'Concluído',
+            '07': 'Rejeitado',
         }
         return STATUS_MAP.get(status_codigo, f'Status {status_codigo}')
 

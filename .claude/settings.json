@@ -17,14 +17,14 @@
       "Bash(pwd)",
       "Bash(ls:*)",
       "Bash(python3:*)",
-      "WebFetch(platform.claude.com)",
-      "WebFetch(docs.anthropic.com)",
-      "WebFetch(code.claude.com)"
+      "WebFetch(domain:platform.claude.com)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "WebFetch(domain:code.claude.com)"
     ],
     "deny": [
       "Bash(rm -rf /)",
-      "Bash(curl:* | bash)",
-      "Bash(wget:* | sh)",
+      "Bash(curl * | bash)",
+      "Bash(wget * | sh)",
       "Bash(eval:*)"
     ]
   },
