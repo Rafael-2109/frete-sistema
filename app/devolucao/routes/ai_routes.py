@@ -590,14 +590,19 @@ def api_confirmar_resolucao(linha_id: int):
 @login_required
 def api_listar_depara():
     """
-    Lista De-Para cadastrados.
+    Lista De-Para cadastrados com paginacao.
 
-    GET /devolucao/ai/api/depara?prefixo_cnpj=93209760
+    GET /devolucao/ai/api/depara?prefixo_cnpj=93209760&page=1&per_page=50
     """
     try:
         prefixo_cnpj = request.args.get('prefixo_cnpj')
         codigo_cliente = request.args.get('codigo_cliente')
         nosso_codigo = request.args.get('nosso_codigo')
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)
+
+        # Limitar per_page maximo
+        per_page = min(per_page, 100)
 
         query = DeParaProdutoCliente.query.filter_by(ativo=True)
 
@@ -612,12 +617,19 @@ def api_listar_depara():
                 DeParaProdutoCliente.nosso_codigo.ilike(f'%{nosso_codigo}%')
             )
 
-        items = query.order_by(DeParaProdutoCliente.prefixo_cnpj).limit(100).all()
+        # Paginacao
+        query = query.order_by(DeParaProdutoCliente.prefixo_cnpj, DeParaProdutoCliente.codigo_cliente)
+        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
 
         return jsonify({
             'sucesso': True,
-            'total': len(items),
-            'depara': [item.to_dict() for item in items]
+            'total': pagination.total,
+            'page': pagination.page,
+            'per_page': pagination.per_page,
+            'total_pages': pagination.pages,
+            'has_next': pagination.has_next,
+            'has_prev': pagination.has_prev,
+            'depara': [item.to_dict() for item in pagination.items]
         })
 
     except Exception as e:

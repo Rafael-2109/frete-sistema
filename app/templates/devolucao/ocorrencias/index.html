@@ -154,7 +154,7 @@
                                value="{{ filtros.cnpj }}">
                     </div>
                     <div class="col-md-2">
-                        <label class="form-label">Transportadora</label>
+                        <label class="form-label">Transp. Entrega</label>
                         <select name="transportadora" class="form-select form-select-sm">
                             <option value="">Todas</option>
                             {% for transp in lista_transportadoras %}
@@ -164,13 +164,29 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-2">
+                        <label class="form-label">Transp. Retorno</label>
+                        <select name="transportadora_retorno" class="form-select form-select-sm">
+                            <option value="">Todas</option>
+                            {% for transp in lista_transportadoras_retorno %}
+                            <option value="{{ transp }}" {% if filtros.transportadora_retorno == transp %}selected{% endif %}>
+                                {{ transp[:25] }}{% if transp|length > 25 %}...{% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Prev. Retorno</label>
+                        <input type="date" name="data_retorno" class="form-control form-control-sm"
+                               value="{{ filtros.data_retorno }}">
+                    </div>
+                    <div class="col-md-2">
                         <label class="form-label">Busca</label>
                         <input type="text" name="busca" class="form-control form-control-sm"
-                               placeholder="Numero ocorrencia, NFD ou cliente..."
+                               placeholder="OC, NFD, cliente..."
                                value="{{ filtros.busca }}">
                     </div>
-                    <div class="col-md-4 d-flex align-items-end">
+                    <div class="col-md-2 d-flex align-items-end">
                         <button type="submit" class="btn btn-primary btn-sm me-2">Filtrar</button>
                         <a href="{{ url_for('devolucao.devolucao_ocorrencia.index') }}" class="btn btn-outline-secondary btn-sm">
                             Limpar
@@ -192,16 +208,15 @@
                             <th>Ocorrencia</th>
                             <th>NFD</th>
                             <th>Cliente</th>
-                            <th>Transporte</th>
+                            <th>Transp. Retorno</th>
                             <th>Valor</th>
-                            <th>Status</th>
                             <th>Devolucao</th>
-                            <th></th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for oc in ocorrencias %}
                         <tr>
+                            <!-- Coluna 1: Ocorrencia -->
                             <td>
                                 <a href="{{ url_for('devolucao.devolucao_ocorrencia.detalhe', ocorrencia_id=oc.id) }}"
                                    class="fw-bold text-decoration-none">
@@ -214,6 +229,7 @@
                                 </span>
                                 {% endif %}
                             </td>
+                            <!-- Coluna 2: NFD + NFs Ref + Transportadora NF venda -->
                             <td>
                                 {% if oc.nf_devolucao %}
                                 <strong>{{ oc.nf_devolucao.numero_nfd }}</strong>
@@ -226,34 +242,56 @@
                                 {% elif oc.nf_devolucao.numero_nf_venda %}
                                 <br><small class="text-muted">Ref: NF {{ oc.nf_devolucao.numero_nf_venda }}</small>
                                 {% endif %}
+                                {# Linha 3: Transportadora NF venda #}
+                                {% set transportadoras = oc.dados_entregas|selectattr('transportadora')|map(attribute='transportadora')|unique|list %}
+                                {% if transportadoras %}
+                                <br>
+                                <small class="text-info" data-bs-toggle="tooltip" data-bs-html="true"
+                                       title="{% for d in oc.dados_entregas if d.transportadora %}{{ d.numero_nf }}: {{ d.transportadora }}<br>{% endfor %}">
+                                    <i class="bi bi-truck"></i> {{ transportadoras[0][:18] }}{% if transportadoras[0]|length > 18 %}...{% endif %}{% if transportadoras|length > 1 %} + {{ transportadoras|length - 1 }}{% endif %}
+                                </small>
+                                {% endif %}
                                 {% else %}
                                 -
                                 {% endif %}
                             </td>
+                            <!-- Coluna 3: Cliente + CNPJ + UF-Cidade -->
                             <td>
                                 {% if oc.nf_devolucao and oc.nf_devolucao.nome_emitente %}
                                 {{ oc.nf_devolucao.nome_emitente[:25] }}{% if oc.nf_devolucao.nome_emitente|length > 25 %}...{% endif %}
                                 <br><small class="text-muted">{{ oc.nf_devolucao.cnpj_emitente|formatar_cnpj if oc.nf_devolucao.cnpj_emitente else '' }}</small>
+                                {# Linha 3: UF-Cidade #}
+                                {% if oc.nf_devolucao.uf_emitente or oc.nf_devolucao.municipio_emitente %}
+                                <br><small class="text-secondary"><i class="bi bi-geo-alt"></i> {{ oc.nf_devolucao.uf_emitente or '' }}{% if oc.nf_devolucao.uf_emitente and oc.nf_devolucao.municipio_emitente %}-{% endif %}{{ oc.nf_devolucao.municipio_emitente[:15] if oc.nf_devolucao.municipio_emitente else '' }}{% if oc.nf_devolucao.municipio_emitente and oc.nf_devolucao.municipio_emitente|length > 15 %}...{% endif %}</small>
+                                {% endif %}
                                 {% elif oc.nf_devolucao and oc.nf_devolucao.entrega_monitorada %}
                                 {{ oc.nf_devolucao.entrega_monitorada.cliente[:25] }}{% if oc.nf_devolucao.entrega_monitorada.cliente|length > 25 %}...{% endif %}
                                 {% else %}
                                 -
                                 {% endif %}
                             </td>
+                            <!-- Coluna 4: Transp. Retorno + Entrega Prevista + % Descartado -->
                             <td>
-                                {% set transportadoras = oc.dados_entregas|selectattr('transportadora')|map(attribute='transportadora')|unique|list %}
-                                {% if transportadoras %}
-                                <small class="text-info" data-bs-toggle="tooltip" data-bs-html="true"
-                                       title="{% for d in oc.dados_entregas if d.transportadora %}{{ d.numero_nf }}: {{ d.transportadora }}<br>{% endfor %}">
-                                    <i class="bi bi-truck"></i> {{ transportadoras[0][:18] }}{% if transportadoras[0]|length > 18 %}...{% endif %}{% if transportadoras|length > 1 %} + {{ transportadoras|length - 1 }}{% endif %}
+                                {% if oc.frete_retorno %}
+                                <small class="text-primary" data-bs-toggle="tooltip" title="{{ oc.frete_retorno.transportadora_nome }}">
+                                    <i class="bi bi-truck"></i> {{ oc.frete_retorno.transportadora_nome[:18] }}{% if oc.frete_retorno.transportadora_nome|length > 18 %}...{% endif %}
                                 </small>
-                                {% else %}
+                                {% if oc.frete_retorno.data_coleta_prevista %}
+                                <br><small class="text-muted">
+                                    Prev: {{ oc.frete_retorno.data_coleta_prevista.strftime('%d/%m') }}
+                                </small>
+                                {% endif %}
+                                {% endif %}
+                                {% if oc.percentual_descarte %}
+                                <br><small class="text-danger">
+                                    {{ "%.1f"|format(oc.percentual_descarte) }}% Descartado
+                                </small>
+                                {% endif %}
+                                {% if not oc.frete_retorno and not oc.percentual_descarte %}
                                 <small class="text-muted">-</small>
                                 {% endif %}
-                                {% if oc.nf_devolucao and (oc.nf_devolucao.uf_emitente or oc.nf_devolucao.municipio_emitente) %}
-                                <br><small class="text-secondary"><i class="bi bi-geo-alt"></i> {{ oc.nf_devolucao.uf_emitente or '' }}{% if oc.nf_devolucao.uf_emitente and oc.nf_devolucao.municipio_emitente %}-{% endif %}{{ oc.nf_devolucao.municipio_emitente[:15] if oc.nf_devolucao.municipio_emitente else '' }}{% if oc.nf_devolucao.municipio_emitente and oc.nf_devolucao.municipio_emitente|length > 15 %}...{% endif %}</small>
-                                {% endif %}
                             </td>
+                            <!-- Coluna 5: Valor + #/# prod + Status -->
                             <td>
                                 {% if oc.nf_devolucao and oc.nf_devolucao.valor_total %}
                                 <strong>R$ {{ "%.2f"|format(oc.nf_devolucao.valor_total|float) }}</strong>
@@ -270,46 +308,21 @@
                                         <i class="bi bi-box-seam"></i>
                                     </button>
                                 </div>
-                                {% else %}
-                                -
-                                {% endif %}
-                            </td>
-                            <td>
+                                {# Linha 3: Status #}
                                 <span class="badge bg-{{ 'warning' if oc.status == 'ABERTA' else 'info' if oc.status == 'EM_ANALISE' else 'success' }}">
                                     {{ 'Pendente' if oc.status in ['ABERTA', 'EM_ANALISE'] else 'Resolvida' }}
                                 </span>
                                 {% if oc.destino and oc.destino != 'INDEFINIDO' %}
-                                <br><small class="text-muted">{{ oc.destino }}</small>
+                                <small class="text-muted ms-1">{{ oc.destino }}</small>
                                 {% endif %}
-                            </td>
-                            <td>
-                                {% if oc.nf_devolucao and oc.nf_devolucao.data_emissao %}
-                                <small data-bs-toggle="tooltip" title="{{ oc.nf_devolucao.data_emissao.strftime('%H:%M') if oc.nf_devolucao.data_emissao.hour is defined else '' }}">
-                                    {{ oc.nf_devolucao.data_emissao.strftime('%d/%m/%Y') }}
-                                </small>
-                                {% elif oc.nf_devolucao and oc.nf_devolucao.data_registro %}
-                                <small data-bs-toggle="tooltip" title="{{ oc.nf_devolucao.data_registro.strftime('%H:%M') }}">
-                                    {{ oc.nf_devolucao.data_registro.strftime('%d/%m/%Y') }}
-                                </small>
                                 {% else %}
-                                <small class="text-muted">-</small>
-                                {% endif %}
-                                {% set datas_entrega = oc.dados_entregas|selectattr('data_entrega')|map(attribute='data_entrega')|list|sort %}
-                                {% if datas_entrega %}
-                                <br>
-                                <small class="text-success" data-bs-toggle="tooltip" data-bs-html="true"
-                                       title="{% for d in oc.dados_entregas if d.data_entrega %}NF {{ d.numero_nf }}: {{ d.data_entrega.strftime('%d/%m/%Y') }}<br>{% endfor %}">
-                                    Ent: {{ datas_entrega[0].strftime('%d/%m/%Y') }}{% if datas_entrega|length > 1 and datas_entrega[0].date() != datas_entrega[-1].date() %} - {{ datas_entrega[-1].strftime('%d/%m/%Y') }}{% endif %}
-                                </small>
-                                {% elif oc.data_entrega_monitoramento %}
-                                <br>
-                                <small class="text-success">
-                                    Ent: {{ oc.data_entrega_monitoramento.strftime('%d/%m/%Y') }}
-                                </small>
+                                -
                                 {% endif %}
                             </td>
+                            <!-- Coluna 6: Botoes + Data NFD + Data Entrega -->
                             <td>
-                                <div class="btn-group btn-group-sm">
+                                {# Linha 1: Botoes #}
+                                <div class="btn-group btn-group-sm mb-1">
                                     <a href="{{ url_for('devolucao.devolucao_ocorrencia.detalhe', ocorrencia_id=oc.id) }}"
                                        class="btn btn-outline-primary" title="Ver detalhes">
                                         Ver
@@ -329,6 +342,33 @@
                                     {% endif %}
                                     {% endif %}
                                 </div>
+                                {# Linha 2: Data NFD #}
+                                <br>
+                                {% if oc.nf_devolucao and oc.nf_devolucao.data_emissao %}
+                                <small data-bs-toggle="tooltip" title="{{ oc.nf_devolucao.data_emissao.strftime('%H:%M') if oc.nf_devolucao.data_emissao.hour is defined else '' }}">
+                                    {{ oc.nf_devolucao.data_emissao.strftime('%d/%m/%Y') }}
+                                </small>
+                                {% elif oc.nf_devolucao and oc.nf_devolucao.data_registro %}
+                                <small data-bs-toggle="tooltip" title="{{ oc.nf_devolucao.data_registro.strftime('%H:%M') }}">
+                                    {{ oc.nf_devolucao.data_registro.strftime('%d/%m/%Y') }}
+                                </small>
+                                {% else %}
+                                <small class="text-muted">-</small>
+                                {% endif %}
+                                {# Linha 3: Data Entrega #}
+                                {% set datas_entrega = oc.dados_entregas|selectattr('data_entrega')|map(attribute='data_entrega')|list|sort %}
+                                {% if datas_entrega %}
+                                <br>
+                                <small class="text-success" data-bs-toggle="tooltip" data-bs-html="true"
+                                       title="{% for d in oc.dados_entregas if d.data_entrega %}NF {{ d.numero_nf }}: {{ d.data_entrega.strftime('%d/%m/%Y') }}<br>{% endfor %}">
+                                    Ent: {{ datas_entrega[0].strftime('%d/%m/%Y') }}{% if datas_entrega|length > 1 and datas_entrega[0].date() != datas_entrega[-1].date() %} - {{ datas_entrega[-1].strftime('%d/%m/%Y') }}{% endif %}
+                                </small>
+                                {% elif oc.data_entrega_monitoramento %}
+                                <br>
+                                <small class="text-success">
+                                    Ent: {{ oc.data_entrega_monitoramento.strftime('%d/%m/%Y') }}
+                                </small>
+                                {% endif %}
                             </td>
                         </tr>
                         {% endfor %}

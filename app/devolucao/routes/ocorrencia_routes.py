@@ -56,6 +56,8 @@ def index():
     data_fim = request.args.get('data_fim', '')
     cnpj = request.args.get('cnpj', '').strip()
     transportadora = request.args.get('transportadora', '').strip()
+    transportadora_retorno = request.args.get('transportadora_retorno', '').strip()
+    data_retorno = request.args.get('data_retorno', '')
 
     # Query base - busca ocorrências com data de entrega do monitoramento
     query = db.session.query(
@@ -134,6 +136,32 @@ def index():
 
         query = query.filter(NFDevolucao.id.in_(subquery_nfs_ref))
 
+    # Filtro por transportadora de frete retorno
+    if transportadora_retorno:
+        subquery_frete_retorno = db.session.query(
+            FreteDevolucao.ocorrencia_devolucao_id
+        ).filter(
+            FreteDevolucao.ativo == True,
+            FreteDevolucao.transportadora_nome.ilike(f'%{transportadora_retorno}%')
+        ).distinct()
+
+        query = query.filter(OcorrenciaDevolucao.id.in_(subquery_frete_retorno))
+
+    # Filtro por data prevista de retorno
+    if data_retorno:
+        try:
+            dt_retorno = datetime.strptime(data_retorno, '%Y-%m-%d').date()
+            subquery_data_retorno = db.session.query(
+                FreteDevolucao.ocorrencia_devolucao_id
+            ).filter(
+                FreteDevolucao.ativo == True,
+                FreteDevolucao.data_coleta_prevista == dt_retorno
+            ).distinct()
+
+            query = query.filter(OcorrenciaDevolucao.id.in_(subquery_data_retorno))
+        except ValueError:
+            pass
+
     # Ordenar pela data de emissao da NFD (data da devolucao)
     query = query.order_by(NFDevolucao.data_emissao.desc().nullslast())
 
@@ -172,6 +200,28 @@ def index():
             oc.nfs_referenciadas = []
             oc.dados_entregas = []
 
+        # Buscar Frete Retorno (último frete ativo)
+        frete_retorno = FreteDevolucao.query.filter_by(
+            ocorrencia_devolucao_id=oc.id,
+            ativo=True
+        ).order_by(FreteDevolucao.data_cotacao.desc()).first()
+
+        # Buscar Descarte (se houver)
+        descarte = DescarteDevolucao.query.filter_by(
+            ocorrencia_devolucao_id=oc.id,
+            ativo=True
+        ).first()
+
+        # Calcular % descartado (valor_mercadoria / valor_total NFD)
+        valor_nfd = float(oc.nf_devolucao.valor_total) if oc.nf_devolucao and oc.nf_devolucao.valor_total else 0
+        valor_descarte = float(descarte.valor_mercadoria) if descarte and descarte.valor_mercadoria else 0
+        percentual_descarte = (valor_descarte / valor_nfd * 100) if valor_nfd > 0 and valor_descarte > 0 else None
+
+        # Atribuir ao objeto
+        oc.frete_retorno = frete_retorno
+        oc.descarte = descarte
+        oc.percentual_descarte = percentual_descarte
+
         ocorrencias.append(oc)
 
     # Estatisticas
@@ -182,7 +232,7 @@ def index():
         'resolvidas': OcorrenciaDevolucao.query.filter_by(ativo=True, status='RESOLVIDA').count(),
     }
 
-    # Buscar transportadoras unicas para o filtro
+    # Buscar transportadoras unicas para o filtro (entrega)
     transportadoras_query = db.session.query(
         EntregaMonitorada.transportadora
     ).join(
@@ -193,6 +243,17 @@ def index():
     ).distinct().order_by(EntregaMonitorada.transportadora).all()
 
     lista_transportadoras = [t[0] for t in transportadoras_query if t[0]]
+
+    # Buscar transportadoras unicas de frete retorno para o filtro
+    transportadoras_retorno_query = db.session.query(
+        FreteDevolucao.transportadora_nome
+    ).filter(
+        FreteDevolucao.ativo == True,
+        FreteDevolucao.transportadora_nome.isnot(None),
+        FreteDevolucao.transportadora_nome != ''
+    ).distinct().order_by(FreteDevolucao.transportadora_nome).all()
+
+    lista_transportadoras_retorno = [t[0] for t in transportadoras_retorno_query if t[0]]
 
     return render_template(
         'devolucao/ocorrencias/index.html',
@@ -208,13 +269,16 @@ def index():
             'data_inicio': data_inicio,
             'data_fim': data_fim,
             'cnpj': cnpj,
-            'transportadora': transportadora
+            'transportadora': transportadora,
+            'transportadora_retorno': transportadora_retorno,
+            'data_retorno': data_retorno
         },
         opcoes_status=OcorrenciaDevolucao.STATUS_OCORRENCIA,
         opcoes_destino=OcorrenciaDevolucao.DESTINOS,
         opcoes_categoria=OcorrenciaDevolucao.CATEGORIAS,
         opcoes_responsavel=OcorrenciaDevolucao.RESPONSAVEIS,
-        lista_transportadoras=lista_transportadoras
+        lista_transportadoras=lista_transportadoras,
+        lista_transportadoras_retorno=lista_transportadoras_retorno
     )
 
 

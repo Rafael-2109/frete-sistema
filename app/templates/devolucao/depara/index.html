@@ -80,7 +80,7 @@
                            placeholder="Buscar...">
                 </div>
                 <div class="col-md-3 d-flex align-items-end">
-                    <button class="btn btn-primary btn-sm me-2" onclick="buscarDePara()">
+                    <button class="btn btn-primary btn-sm me-2" onclick="buscarDePara(1)">
                         Buscar
                     </button>
                     <button class="btn btn-outline-secondary btn-sm" onclick="limparFiltros()">
@@ -95,7 +95,14 @@
     <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
             <h6 class="mb-0">Mapeamentos Cadastrados</h6>
-            <span class="badge bg-secondary" id="count-resultados">0 registros</span>
+            <div class="d-flex align-items-center gap-3">
+                <select id="per-page" class="form-select form-select-sm" style="width: auto;" onchange="buscarDePara(1)">
+                    <option value="25">25 por página</option>
+                    <option value="50" selected>50 por página</option>
+                    <option value="100">100 por página</option>
+                </select>
+                <span class="badge bg-secondary" id="count-resultados">0 registros</span>
+            </div>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -122,6 +129,16 @@
                     </tbody>
                 </table>
             </div>
+        </div>
+        <!-- Paginacao -->
+        <div class="card-footer d-flex justify-content-between align-items-center" id="paginacao-container" style="display: none !important;">
+            <div class="text-muted small" id="paginacao-info">
+                Mostrando 0-0 de 0 registros
+            </div>
+            <nav>
+                <ul class="pagination pagination-sm mb-0" id="paginacao-nav">
+                </ul>
+            </nav>
         </div>
     </div>
 
@@ -299,12 +316,14 @@
 {% block scripts %}
 <script>
 const API_BASE = '/devolucao/ai/api';
+let paginaAtual = 1;
+let totalPaginas = 1;
 
 // Carregar estatisticas e registros ao iniciar
 document.addEventListener('DOMContentLoaded', function() {
     carregarEstatisticas();
     // Carregar todos os De-Para automaticamente
-    buscarDePara();
+    buscarDePara(1);
 });
 
 async function carregarEstatisticas() {
@@ -323,22 +342,27 @@ async function carregarEstatisticas() {
     }
 }
 
-async function buscarDePara() {
+async function buscarDePara(page = 1) {
     const prefixo = document.getElementById('filtro-prefixo').value;
     const codigoCliente = document.getElementById('filtro-codigo-cliente').value;
     const nossoCodigo = document.getElementById('filtro-nosso-codigo').value;
+    const perPage = document.getElementById('per-page').value;
 
-    let url = `${API_BASE}/depara?`;
-    if (prefixo) url += `prefixo_cnpj=${prefixo}&`;
-    if (codigoCliente) url += `codigo_cliente=${codigoCliente}&`;
-    if (nossoCodigo) url += `nosso_codigo=${nossoCodigo}&`;
+    let url = `${API_BASE}/depara?page=${page}&per_page=${perPage}`;
+    if (prefixo) url += `&prefixo_cnpj=${prefixo}`;
+    if (codigoCliente) url += `&codigo_cliente=${codigoCliente}`;
+    if (nossoCodigo) url += `&nosso_codigo=${nossoCodigo}`;
 
     try {
         const response = await fetch(url);
         const data = await response.json();
 
         if (data.sucesso) {
+            paginaAtual = data.page;
+            totalPaginas = data.total_pages;
+
             renderizarTabela(data.depara);
+            renderizarPaginacao(data);
             document.getElementById('count-resultados').textContent = `${data.total} registros`;
         } else {
             alert('Erro: ' + data.erro);
@@ -347,6 +371,83 @@ async function buscarDePara() {
         console.error('Erro ao buscar:', error);
         alert('Erro ao buscar De-Para');
     }
+}
+
+function renderizarPaginacao(data) {
+    const container = document.getElementById('paginacao-container');
+    const infoEl = document.getElementById('paginacao-info');
+    const navEl = document.getElementById('paginacao-nav');
+
+    if (data.total === 0) {
+        container.style.display = 'none';
+        return;
+    }
+
+    container.style.display = 'flex';
+
+    // Info de registros
+    const inicio = (data.page - 1) * data.per_page + 1;
+    const fim = Math.min(data.page * data.per_page, data.total);
+    infoEl.textContent = `Mostrando ${inicio}-${fim} de ${data.total} registros`;
+
+    // Botoes de paginacao
+    let html = '';
+
+    // Botao Anterior
+    html += `
+        <li class="page-item ${!data.has_prev ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="irParaPagina(${data.page - 1}); return false;">
+                <i class="bi bi-chevron-left"></i>
+            </a>
+        </li>
+    `;
+
+    // Numeros das paginas
+    const maxPaginas = 5;
+    let inicio_pag = Math.max(1, data.page - Math.floor(maxPaginas / 2));
+    let fim_pag = Math.min(data.total_pages, inicio_pag + maxPaginas - 1);
+
+    if (fim_pag - inicio_pag < maxPaginas - 1) {
+        inicio_pag = Math.max(1, fim_pag - maxPaginas + 1);
+    }
+
+    if (inicio_pag > 1) {
+        html += `<li class="page-item"><a class="page-link" href="#" onclick="irParaPagina(1); return false;">1</a></li>`;
+        if (inicio_pag > 2) {
+            html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        }
+    }
+
+    for (let i = inicio_pag; i <= fim_pag; i++) {
+        html += `
+            <li class="page-item ${i === data.page ? 'active' : ''}">
+                <a class="page-link" href="#" onclick="irParaPagina(${i}); return false;">${i}</a>
+            </li>
+        `;
+    }
+
+    if (fim_pag < data.total_pages) {
+        if (fim_pag < data.total_pages - 1) {
+            html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        }
+        html += `<li class="page-item"><a class="page-link" href="#" onclick="irParaPagina(${data.total_pages}); return false;">${data.total_pages}</a></li>`;
+    }
+
+    // Botao Proximo
+    html += `
+        <li class="page-item ${!data.has_next ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="irParaPagina(${data.page + 1}); return false;">
+                <i class="bi bi-chevron-right"></i>
+            </a>
+        </li>
+    `;
+
+    navEl.innerHTML = html;
+}
+
+function irParaPagina(page) {
+    if (page < 1 || page > totalPaginas) return;
+    buscarDePara(page);
 }
 
 function renderizarTabela(items) {
@@ -385,8 +486,8 @@ function limparFiltros() {
     document.getElementById('filtro-prefixo').value = '';
     document.getElementById('filtro-codigo-cliente').value = '';
     document.getElementById('filtro-nosso-codigo').value = '';
-    // Recarregar todos os registros
-    buscarDePara();
+    // Recarregar todos os registros (volta para pagina 1)
+    buscarDePara(1);
 }
 
 async function testarResolucao() {
