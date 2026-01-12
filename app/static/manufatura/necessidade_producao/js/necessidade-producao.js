@@ -99,6 +99,13 @@ function mudarTamanhoFonte(tamanho) {
 
     // Salva preferência
     localStorage.setItem('necessidade_tamanho_fonte', tamanho);
+
+    // Recalcular posições sticky após mudança de tamanho (com delay para CSS ser aplicado)
+    setTimeout(() => {
+        if (typeof recalcularPosicoesSticky === 'function') {
+            recalcularPosicoesSticky();
+        }
+    }, 50);
 }
 
 // ============================================================
@@ -471,46 +478,46 @@ function renderizarTabela(dados) {
             </td>
 
             <!-- 3. Linha de Produção -->
-            <td class="text-center col-producao">${item.linha_producao || '-'}</td>
+            <td class="text-center col-producao sticky-col-producao">${item.linha_producao || '-'}</td>
 
             <!-- 4. Marca -->
-            <td class="text-center col-marca">${item.categoria_produto || '-'}</td>
+            <td class="text-center col-marca sticky-col-marca">${item.categoria_produto || '-'}</td>
 
             <!-- 5. Embalagem -->
-            <td class="text-center col-embalagem">${item.tipo_embalagem || '-'}</td>
+            <td class="text-center col-embalagem sticky-col-embalagem">${item.tipo_embalagem || '-'}</td>
 
             <!-- 6. MP -->
-            <td class="text-center col-mp">${item.tipo_materia_prima || '-'}</td>
+            <td class="text-center col-mp sticky-col-mp">${item.tipo_materia_prima || '-'}</td>
 
             <!-- 7. Estoque -->
-            <td class="text-end col-estoque">${formatarNumero(item.estoque_atual)}</td>
+            <td class="text-end col-estoque sticky-col-estoque">${formatarNumero(item.estoque_atual)}</td>
 
             <!-- 8. Previsão Vendas -->
-            <td class="text-end col-previsao">${formatarNumero(item.previsao_vendas)}</td>
+            <td class="text-end col-previsao sticky-col-previsao">${formatarNumero(item.previsao_vendas)}</td>
 
             <!-- 9. Pedidos Inseridos -->
-            <td class="text-end col-pedidos">${formatarNumero(item.pedidos_inseridos)}</td>
+            <td class="text-end col-pedidos sticky-col-pedidos">${formatarNumero(item.pedidos_inseridos)}</td>
 
             <!-- 10. Saldo Demanda (NOVO) -->
-            <td class="text-end col-saldo-demanda ${classeSaldoDemanda}">${formatarNumero(item.saldo_demanda)}</td>
+            <td class="text-end col-saldo-demanda sticky-col-saldo-demanda ${classeSaldoDemanda}">${formatarNumero(item.saldo_demanda)}</td>
 
             <!-- 11. Carteira Pedidos -->
-            <td class="text-end col-carteira">${formatarNumero(item.carteira_pedidos)}</td>
+            <td class="text-end col-carteira sticky-col-carteira">${formatarNumero(item.carteira_pedidos)}</td>
 
             <!-- 12. Ruptura Carteira (NOVO) -->
-            <td class="text-end col-ruptura ${classeRuptura}">${formatarNumero(item.ruptura_carteira)}</td>
+            <td class="text-end col-ruptura sticky-col-ruptura ${classeRuptura}">${formatarNumero(item.ruptura_carteira)}</td>
 
             <!-- 13. Carteira S/ Data (NOVO) -->
-            <td class="text-end col-carteira-sem-data">${formatarNumero(item.carteira_sem_data)}</td>
+            <td class="text-end col-carteira-sem-data sticky-col-carteira-sem-data">${formatarNumero(item.carteira_sem_data)}</td>
 
             <!-- 14. Saldo Vendas Acumulada -->
-            <td class="text-end col-saldo"><strong>${formatarNumero(item.saldo_vendas)}</strong></td>
+            <td class="text-end col-saldo sticky-col-saldo"><strong>${formatarNumero(item.saldo_vendas)}</strong></td>
 
             <!-- 15. Programação Produção -->
-            <td class="text-end col-programacao">${formatarNumero(item.programacao_producao)}</td>
+            <td class="text-end col-programacao sticky-col-programacao">${formatarNumero(item.programacao_producao)}</td>
 
             <!-- 16. Necessidade C/ Previsão -->
-            <td class="text-end col-necessidade ${item.necessidade_producao > 0 ? 'numero-positivo' : 'numero-zero'}"><strong>${formatarNumero(item.necessidade_producao)}</strong></td>`;
+            <td class="text-end col-necessidade sticky-col-necessidade ${item.necessidade_producao > 0 ? 'numero-positivo' : 'numero-zero'}"><strong>${formatarNumero(item.necessidade_producao)}</strong></td>`;
 
         for (let i = 0; i <= 60; i++) {
             const dia = item.projecao[i];
@@ -562,6 +569,77 @@ function aplicarVisibilidadeColunas() {
     // Projeção D0-D60
     const mostrar = $('#col-projecao').is(':checked');
     for (let i = 0; i <= 60; i++) $('.col-projecao-d' + i).toggle(mostrar);
+
+    // Recalcular posições sticky após mudança de visibilidade
+    recalcularPosicoesSticky();
+}
+
+/**
+ * Recalcula as posições `left` das colunas sticky baseado nas colunas visíveis
+ */
+function recalcularPosicoesSticky() {
+    // Obter larguras das variáveis CSS computadas
+    const root = document.documentElement;
+    const style = getComputedStyle(root);
+
+    // Obter tamanho atual baseado na classe do HTML
+    let tamanhoFonte = 'very-small';
+    if (root.classList.contains('size-small')) tamanhoFonte = 'small';
+    else if (root.classList.contains('size-medium')) tamanhoFonte = 'medium';
+    else if (root.classList.contains('size-large')) tamanhoFonte = 'large';
+
+    // Larguras por tamanho de fonte (valores do CSS)
+    const larguras = {
+        'very-small': { codigo: 45, produto: 250, dados: 52 },
+        'small': { codigo: 60, produto: 350, dados: 75 },
+        'medium': { codigo: 80, produto: 450, dados: 90 },
+        'large': { codigo: 90, produto: 550, dados: 120 }
+    };
+
+    const widthCodigo = larguras[tamanhoFonte].codigo;
+    const widthProduto = larguras[tamanhoFonte].produto;
+    const widthDados = larguras[tamanhoFonte].dados;
+
+    // Definir ordem das colunas sticky e seus seletores de visibilidade
+    const colunasSticky = [
+        { classe: 'sticky-col-codigo', visivel: true, largura: widthCodigo },
+        { classe: 'sticky-col-produto', visivel: true, largura: widthProduto },
+        { classe: 'sticky-col-producao', checkId: 'col-producao', largura: widthDados },
+        { classe: 'sticky-col-marca', checkId: 'col-marca', largura: widthDados },
+        { classe: 'sticky-col-embalagem', checkId: 'col-embalagem', largura: widthDados },
+        { classe: 'sticky-col-mp', checkId: 'col-mp', largura: widthDados },
+        { classe: 'sticky-col-estoque', checkId: 'col-estoque', largura: widthDados },
+        { classe: 'sticky-col-previsao', checkId: 'col-previsao', largura: widthDados },
+        { classe: 'sticky-col-pedidos', checkId: 'col-pedidos', largura: widthDados },
+        { classe: 'sticky-col-saldo-demanda', checkId: 'col-saldo-demanda', largura: widthDados },
+        { classe: 'sticky-col-carteira', checkId: 'col-carteira', largura: widthDados },
+        { classe: 'sticky-col-ruptura', checkId: 'col-ruptura', largura: widthDados },
+        { classe: 'sticky-col-carteira-sem-data', checkId: 'col-carteira-sem-data', largura: widthDados },
+        { classe: 'sticky-col-saldo', checkId: 'col-saldo', largura: widthDados },
+        { classe: 'sticky-col-programacao', checkId: 'col-programacao', largura: widthDados },
+        { classe: 'sticky-col-necessidade', checkId: 'col-necessidade', largura: widthDados }
+    ];
+
+    // Calcular posição acumulada
+    let posicaoAtual = 0;
+
+    colunasSticky.forEach(col => {
+        // Verificar se coluna está visível
+        const estaVisivel = col.visivel === true || (col.checkId && $(`#${col.checkId}`).is(':checked'));
+
+        if (estaVisivel) {
+            // Aplicar posição left às células com esta classe
+            // Usar setProperty com 'important' para sobrescrever o !important do CSS
+            document.querySelectorAll(`.${col.classe}`).forEach(el => {
+                el.style.setProperty('left', `${posicaoAtual}px`, 'important');
+            });
+
+            // Avançar posição para próxima coluna
+            posicaoAtual += col.largura;
+        }
+    });
+
+    console.log(`[STICKY] Posições recalculadas (${tamanhoFonte}). Última posição: ${posicaoAtual}px`);
 }
 
 function selecionarTodasColunas() {

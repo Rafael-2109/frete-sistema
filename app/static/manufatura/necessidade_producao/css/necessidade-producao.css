@@ -363,31 +363,64 @@
 }
 
 /* ==================================================
-   COLUNAS STICKY (TRAVADAS) - CÓDIGO E PRODUTO
+   COLUNAS STICKY (TRAVADAS) - ATÉ NECESSIDADE DE PRODUÇÃO
    ================================================== */
 
+/* Variáveis para cálculo de posições sticky */
+:root {
+    /* Posições calculadas para colunas sticky */
+    --sticky-pos-codigo: 0px;
+    --sticky-pos-produto: var(--width-codigo);
+    --sticky-pos-producao: calc(var(--width-codigo) + var(--width-produto));
+    --sticky-pos-marca: calc(var(--width-codigo) + var(--width-produto) + var(--width-dados));
+    --sticky-pos-embalagem: calc(var(--width-codigo) + var(--width-produto) + var(--width-dados) * 2);
+    --sticky-pos-mp: calc(var(--width-codigo) + var(--width-produto) + var(--width-dados) * 3);
+    --sticky-pos-estoque: calc(var(--width-codigo) + var(--width-produto) + var(--width-dados) * 4);
+    --sticky-pos-previsao: calc(var(--width-codigo) + var(--width-produto) + var(--width-dados) * 5);
+    --sticky-pos-pedidos: calc(var(--width-codigo) + var(--width-produto) + var(--width-dados) * 6);
+    --sticky-pos-saldo-demanda: calc(var(--width-codigo) + var(--width-produto) + var(--width-dados) * 7);
+    --sticky-pos-carteira: calc(var(--width-codigo) + var(--width-produto) + var(--width-dados) * 8);
+    --sticky-pos-ruptura: calc(var(--width-codigo) + var(--width-produto) + var(--width-dados) * 9);
+    --sticky-pos-carteira-sem-data: calc(var(--width-codigo) + var(--width-produto) + var(--width-dados) * 10);
+    --sticky-pos-saldo: calc(var(--width-codigo) + var(--width-produto) + var(--width-dados) * 11);
+    --sticky-pos-programacao: calc(var(--width-codigo) + var(--width-produto) + var(--width-dados) * 12);
+    --sticky-pos-necessidade: calc(var(--width-codigo) + var(--width-produto) + var(--width-dados) * 13);
+}
+
+/* Estilos base para todas as colunas sticky */
+.table-container table.table.table-necessidade th.sticky-col,
+.table-container table.table.table-necessidade td.sticky-col {
+    position: sticky !important;
+    background-color: var(--np-sticky-bg) !important;
+    z-index: 100 !important;
+}
+
+.table-container table.table.table-necessidade thead th.sticky-col {
+    background-color: var(--np-sticky-header-bg) !important;
+    z-index: 200 !important;
+}
+
+/* 1. CÓDIGO */
 .table-container table.table.table-necessidade th.sticky-col-codigo,
 .table-container table.table.table-necessidade td.sticky-col-codigo {
     position: sticky !important;
-    left: 0px !important;
+    left: var(--sticky-pos-codigo) !important;
     background-color: var(--np-sticky-bg) !important;
     z-index: 100 !important;
-    border-right: 3px solid var(--np-border-strong) !important;
     font-weight: 700 !important;
     min-width: var(--width-codigo) !important;
     max-width: var(--width-codigo) !important;
     width: var(--width-codigo) !important;
     font-size: var(--font-codigo) !important;
-    box-shadow: 2px 0 5px rgba(0,0,0,0.1) !important;
 }
 
+/* 2. PRODUTO */
 .table-container table.table.table-necessidade th.sticky-col-produto,
 .table-container table.table.table-necessidade td.sticky-col-produto {
     position: sticky !important;
-    left: var(--width-codigo) !important;
+    left: var(--sticky-pos-produto) !important;
     background-color: var(--np-sticky-bg) !important;
     z-index: 100 !important;
-    border-right: 3px solid var(--np-border-strong) !important;
     min-width: var(--width-produto) !important;
     max-width: var(--width-produto) !important;
     width: var(--width-produto) !important;
@@ -395,13 +428,193 @@
     word-wrap: break-word !important;
     overflow: visible !important;
     font-size: var(--font-produto) !important;
-    box-shadow: 2px 0 5px rgba(0,0,0,0.1) !important;
 }
 
+/* 3. LINHA DE PRODUÇÃO */
+.table-container table.table.table-necessidade th.sticky-col-producao,
+.table-container table.table.table-necessidade td.sticky-col-producao {
+    position: sticky !important;
+    left: var(--sticky-pos-producao) !important;
+    background-color: var(--np-sticky-bg) !important;
+    z-index: 100 !important;
+}
+
+/* 4. MARCA */
+.table-container table.table.table-necessidade th.sticky-col-marca,
+.table-container table.table.table-necessidade td.sticky-col-marca {
+    position: sticky !important;
+    left: var(--sticky-pos-marca) !important;
+    background-color: var(--np-sticky-bg) !important;
+    z-index: 100 !important;
+}
+
+/* 5. EMBALAGEM */
+.table-container table.table.table-necessidade th.sticky-col-embalagem,
+.table-container table.table.table-necessidade td.sticky-col-embalagem {
+    position: sticky !important;
+    left: var(--sticky-pos-embalagem) !important;
+    background-color: var(--np-sticky-bg) !important;
+    z-index: 100 !important;
+}
+
+/* 6. MP */
+.table-container table.table.table-necessidade th.sticky-col-mp,
+.table-container table.table.table-necessidade td.sticky-col-mp {
+    position: sticky !important;
+    left: var(--sticky-pos-mp) !important;
+    background-color: var(--np-sticky-bg) !important;
+    z-index: 100 !important;
+}
+
+/* 7. ESTOQUE */
+.table-container table.table.table-necessidade th.sticky-col-estoque,
+.table-container table.table.table-necessidade td.sticky-col-estoque {
+    position: sticky !important;
+    left: var(--sticky-pos-estoque) !important;
+    background-color: var(--np-sticky-bg) !important;
+    z-index: 100 !important;
+}
+
+/* 8. PREVISÃO */
+.table-container table.table.table-necessidade th.sticky-col-previsao,
+.table-container table.table.table-necessidade td.sticky-col-previsao {
+    position: sticky !important;
+    left: var(--sticky-pos-previsao) !important;
+    background-color: var(--np-sticky-bg) !important;
+    z-index: 100 !important;
+}
+
+/* 9. PEDIDOS */
+.table-container table.table.table-necessidade th.sticky-col-pedidos,
+.table-container table.table.table-necessidade td.sticky-col-pedidos {
+    position: sticky !important;
+    left: var(--sticky-pos-pedidos) !important;
+    background-color: var(--np-sticky-bg) !important;
+    z-index: 100 !important;
+}
+
+/* 10. SALDO DEMANDA */
+.table-container table.table.table-necessidade th.sticky-col-saldo-demanda,
+.table-container table.table.table-necessidade td.sticky-col-saldo-demanda {
+    position: sticky !important;
+    left: var(--sticky-pos-saldo-demanda) !important;
+    background-color: var(--np-sticky-bg) !important;
+    z-index: 100 !important;
+}
+
+/* 11. CARTEIRA */
+.table-container table.table.table-necessidade th.sticky-col-carteira,
+.table-container table.table.table-necessidade td.sticky-col-carteira {
+    position: sticky !important;
+    left: var(--sticky-pos-carteira) !important;
+    background-color: var(--np-sticky-bg) !important;
+    z-index: 100 !important;
+}
+
+/* 12. RUPTURA */
+.table-container table.table.table-necessidade th.sticky-col-ruptura,
+.table-container table.table.table-necessidade td.sticky-col-ruptura {
+    position: sticky !important;
+    left: var(--sticky-pos-ruptura) !important;
+    background-color: var(--np-sticky-bg) !important;
+    z-index: 100 !important;
+}
+
+/* 13. CARTEIRA SEM DATA */
+.table-container table.table.table-necessidade th.sticky-col-carteira-sem-data,
+.table-container table.table.table-necessidade td.sticky-col-carteira-sem-data {
+    position: sticky !important;
+    left: var(--sticky-pos-carteira-sem-data) !important;
+    background-color: var(--np-sticky-bg) !important;
+    z-index: 100 !important;
+}
+
+/* 14. SALDO */
+.table-container table.table.table-necessidade th.sticky-col-saldo,
+.table-container table.table.table-necessidade td.sticky-col-saldo {
+    position: sticky !important;
+    left: var(--sticky-pos-saldo) !important;
+    background-color: var(--np-sticky-bg) !important;
+    z-index: 100 !important;
+}
+
+/* 15. PROGRAMAÇÃO */
+.table-container table.table.table-necessidade th.sticky-col-programacao,
+.table-container table.table.table-necessidade td.sticky-col-programacao {
+    position: sticky !important;
+    left: var(--sticky-pos-programacao) !important;
+    background-color: var(--np-sticky-bg) !important;
+    z-index: 100 !important;
+}
+
+/* 16. NECESSIDADE (última coluna sticky - com borda e sombra) */
+.table-container table.table.table-necessidade th.sticky-col-necessidade,
+.table-container table.table.table-necessidade td.sticky-col-necessidade {
+    position: sticky !important;
+    left: var(--sticky-pos-necessidade) !important;
+    background-color: var(--np-sticky-bg) !important;
+    z-index: 100 !important;
+    border-right: 3px solid var(--np-border-strong) !important;
+    box-shadow: 2px 0 5px rgba(0,0,0,0.15) !important;
+}
+
+/* Headers das colunas sticky - z-index maior */
 .table-container table.table.table-necessidade thead th.sticky-col-codigo,
-.table-container table.table.table-necessidade thead th.sticky-col-produto {
+.table-container table.table.table-necessidade thead th.sticky-col-produto,
+.table-container table.table.table-necessidade thead th.sticky-col-producao,
+.table-container table.table.table-necessidade thead th.sticky-col-marca,
+.table-container table.table.table-necessidade thead th.sticky-col-embalagem,
+.table-container table.table.table-necessidade thead th.sticky-col-mp,
+.table-container table.table.table-necessidade thead th.sticky-col-estoque,
+.table-container table.table.table-necessidade thead th.sticky-col-previsao,
+.table-container table.table.table-necessidade thead th.sticky-col-pedidos,
+.table-container table.table.table-necessidade thead th.sticky-col-saldo-demanda,
+.table-container table.table.table-necessidade thead th.sticky-col-carteira,
+.table-container table.table.table-necessidade thead th.sticky-col-ruptura,
+.table-container table.table.table-necessidade thead th.sticky-col-carteira-sem-data,
+.table-container table.table.table-necessidade thead th.sticky-col-saldo,
+.table-container table.table.table-necessidade thead th.sticky-col-programacao,
+.table-container table.table.table-necessidade thead th.sticky-col-necessidade {
     background-color: var(--np-sticky-header-bg) !important;
     z-index: 200 !important;
+}
+
+/* Manter cores de fundo dos grupos nas colunas sticky */
+.table-container table.table.table-necessidade td.sticky-col-previsao,
+.table-container table.table.table-necessidade td.sticky-col-pedidos,
+.table-container table.table.table-necessidade td.sticky-col-saldo-demanda {
+    background-color: color-mix(in srgb, var(--np-sticky-bg) 85%, var(--np-primary) 15%) !important;
+}
+
+.table-container table.table.table-necessidade td.sticky-col-carteira,
+.table-container table.table.table-necessidade td.sticky-col-ruptura,
+.table-container table.table.table-necessidade td.sticky-col-carteira-sem-data {
+    background-color: color-mix(in srgb, var(--np-sticky-bg) 85%, var(--np-warning) 15%) !important;
+}
+
+.table-container table.table.table-necessidade td.sticky-col-saldo,
+.table-container table.table.table-necessidade td.sticky-col-programacao,
+.table-container table.table.table-necessidade td.sticky-col-necessidade {
+    background-color: color-mix(in srgb, var(--np-sticky-bg) 92%, var(--np-text-secondary) 8%) !important;
+}
+
+/* Headers sticky com cores de grupo */
+.table-container table.table.table-necessidade thead th.sticky-col-previsao,
+.table-container table.table.table-necessidade thead th.sticky-col-pedidos,
+.table-container table.table.table-necessidade thead th.sticky-col-saldo-demanda {
+    background-color: color-mix(in srgb, var(--np-sticky-header-bg) 85%, var(--np-primary) 15%) !important;
+}
+
+.table-container table.table.table-necessidade thead th.sticky-col-carteira,
+.table-container table.table.table-necessidade thead th.sticky-col-ruptura,
+.table-container table.table.table-necessidade thead th.sticky-col-carteira-sem-data {
+    background-color: color-mix(in srgb, var(--np-sticky-header-bg) 85%, var(--np-warning) 15%) !important;
+}
+
+.table-container table.table.table-necessidade thead th.sticky-col-saldo,
+.table-container table.table.table-necessidade thead th.sticky-col-programacao,
+.table-container table.table.table-necessidade thead th.sticky-col-necessidade {
+    background-color: color-mix(in srgb, var(--np-sticky-header-bg) 92%, var(--np-text-secondary) 8%) !important;
 }
 
 /* ==================================================
