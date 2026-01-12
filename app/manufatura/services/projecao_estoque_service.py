@@ -25,6 +25,7 @@ from app.manufatura.models import (
 )
 from app.producao.models import ProgramacaoProducao, CadastroPalletizacao
 from app.estoque.services.estoque_simples import ServicoEstoqueSimples
+from app.estoque.models import UnificacaoCodigos
 
 
 class ServicoProjecaoEstoque:
@@ -310,10 +311,14 @@ class ServicoProjecaoEstoque:
         """
         entradas = []
 
+        # ✅ CORREÇÃO: Obter códigos unificados para considerar todos relacionados
+        codigos_unificados = UnificacaoCodigos.get_todos_codigos_relacionados(cod_produto)
+
         # PARTE 1: Pedidos de Compras - SALDO NÃO RECEBIDO
         # Considera apenas: status != 'cancel', 'done' E saldo > 0
+        # ✅ CORREÇÃO: Usar .in_() para buscar todos os códigos unificados
         pedidos = PedidoCompras.query.filter(
-            PedidoCompras.cod_produto == cod_produto,
+            PedidoCompras.cod_produto.in_(codigos_unificados),
             PedidoCompras.importado_odoo == True,
             PedidoCompras.data_pedido_previsao.isnot(None),
             PedidoCompras.data_pedido_previsao.between(data_inicio, data_fim),
@@ -336,8 +341,9 @@ class ServicoProjecaoEstoque:
 
         # PARTE 2: Requisições de Compras - SALDO NÃO ALOCADO
         # Considera apenas: status ativo E não rejeitadas E saldo > 0
+        # ✅ CORREÇÃO: Usar .in_() para buscar todos os códigos unificados
         requisicoes = RequisicaoCompras.query.filter(
-            RequisicaoCompras.cod_produto == cod_produto,
+            RequisicaoCompras.cod_produto.in_(codigos_unificados),
             RequisicaoCompras.importado_odoo == True,
             RequisicaoCompras.data_necessidade.isnot(None),
             RequisicaoCompras.data_necessidade.between(data_inicio, data_fim),
@@ -467,9 +473,13 @@ class ServicoProjecaoEstoque:
         """
         saidas = []
 
+        # ✅ CORREÇÃO: Obter códigos unificados para considerar todos relacionados
+        codigos_unificados = UnificacaoCodigos.get_todos_codigos_relacionados(cod_produto_componente)
+
         # Buscar quais produtos CONSOMEM este componente DIRETAMENTE
+        # ✅ CORREÇÃO: Usar .in_() para buscar todos os códigos unificados
         boms = ListaMateriais.query.filter(
-            ListaMateriais.cod_produto_componente == cod_produto_componente,
+            ListaMateriais.cod_produto_componente.in_(codigos_unificados),
             ListaMateriais.status == 'ativo'
         ).all()
 
@@ -741,9 +751,13 @@ class ServicoProjecaoEstoque:
 
         consumo_total = 0.0
 
+        # ✅ CORREÇÃO: Obter códigos unificados para considerar todos relacionados
+        codigos_unificados = UnificacaoCodigos.get_todos_codigos_relacionados(cod_produto_componente)
+
         # PARTE 1: Consumo via BOM (se for componente de outros produtos)
+        # ✅ CORREÇÃO: Usar .in_() para buscar todos os códigos unificados
         boms = ListaMateriais.query.filter(
-            ListaMateriais.cod_produto_componente == cod_produto_componente,
+            ListaMateriais.cod_produto_componente.in_(codigos_unificados),
             ListaMateriais.status == 'ativo'
         ).all()
 
@@ -752,12 +766,16 @@ class ServicoProjecaoEstoque:
             cod_produto_pai = bom.cod_produto_produzido
             qtd_utilizada = float(bom.qtd_utilizada)
 
+            # ✅ CORREÇÃO: Obter códigos unificados do produto PAI
+            codigos_pai = UnificacaoCodigos.get_todos_codigos_relacionados(cod_produto_pai)
+
             # Calcular necessidade de produção do produto PAI
             # Saldo Carteira (apenas itens com saldo > 0)
+            # ✅ CORREÇÃO: Usar .in_() para buscar todos os códigos unificados do PAI
             saldo_carteira = db.session.query(
                 func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido)
             ).filter(
-                CarteiraPrincipal.cod_produto == cod_produto_pai,
+                CarteiraPrincipal.cod_produto.in_(codigos_pai),
                 CarteiraPrincipal.qtd_saldo_produto_pedido > 0  # ✅ Filtrar apenas saldo positivo
             ).scalar() or 0.0
 
@@ -778,10 +796,11 @@ class ServicoProjecaoEstoque:
 
         if produto and produto.produto_vendido:
             # Saldo da carteira do próprio produto (revenda direta)
+            # ✅ CORREÇÃO: Usar .in_() para buscar todos os códigos unificados próprios
             saldo_carteira_proprio = db.session.query(
                 func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido)
             ).filter(
-                CarteiraPrincipal.cod_produto == cod_produto_componente,
+                CarteiraPrincipal.cod_produto.in_(codigos_unificados),
                 CarteiraPrincipal.qtd_saldo_produto_pedido > 0  # ✅ Filtrar apenas saldo positivo
             ).scalar() or 0.0
 
@@ -806,9 +825,13 @@ class ServicoProjecaoEstoque:
         consumo_total = 0.0
         cache_estoque = {}  # Cache temporário para este cálculo
 
+        # ✅ CORREÇÃO: Obter códigos unificados para considerar todos relacionados
+        codigos_unificados = UnificacaoCodigos.get_todos_codigos_relacionados(cod_produto_componente)
+
         # Buscar quais produtos CONSOMEM este componente DIRETAMENTE
+        # ✅ CORREÇÃO: Usar .in_() para buscar todos os códigos unificados
         boms = ListaMateriais.query.filter(
-            ListaMateriais.cod_produto_componente == cod_produto_componente,
+            ListaMateriais.cod_produto_componente.in_(codigos_unificados),
             ListaMateriais.status == 'ativo'
         ).all()
 
