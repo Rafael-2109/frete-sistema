@@ -49,13 +49,35 @@ def importar_transportadoras(caminho_arquivo):
                 'cidade': str(row['Cidade']).strip(),
                 'uf': str(row['UF']).strip().upper(),
                 'optante': row['OPTANTE'],
-                'condicao_pgto': row.get('Condição de pgto', None)
+                'condicao_pgto': row.get('Condição de pgto', None) if not pd.isna(row.get('Condição de pgto', None)) else None
             }
 
             # Adiciona campo nao_aceita_nf_pallet se a coluna existir
             # Inverte a lógica: Aceita NF Pallet = SIM → nao_aceita_nf_pallet = False
             if '_aceita_nf_pallet' in row:
                 dados['nao_aceita_nf_pallet'] = not row['_aceita_nf_pallet']
+
+            # Campos financeiros (opcionais)
+            campos_financeiros = {
+                'Banco': 'banco',
+                'Agência': 'agencia',
+                'Conta': 'conta',
+                'PIX': 'pix',
+                'CPF/CNPJ Favorecido': 'cpf_cnpj_favorecido',
+                'Obs. Financeira': 'obs_financ'
+            }
+
+            for col_excel, campo_db in campos_financeiros.items():
+                if col_excel in df.columns and not pd.isna(row.get(col_excel)):
+                    dados[campo_db] = str(row[col_excel]).strip()
+
+            # Campo Tipo Conta com mapeamento
+            if 'Tipo Conta' in df.columns and not pd.isna(row.get('Tipo Conta')):
+                tipo_conta_valor = str(row['Tipo Conta']).strip().lower()
+                if 'corrente' in tipo_conta_valor:
+                    dados['tipo_conta'] = 'corrente'
+                elif 'poupan' in tipo_conta_valor:
+                    dados['tipo_conta'] = 'poupanca'
             
             if transportadora_existente:
                 # Atualiza os dados da transportadora existente

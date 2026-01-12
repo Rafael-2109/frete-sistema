@@ -22,7 +22,7 @@ from app.fretes.forms import LancamentoFreteirosForm
 from app import db
 
 # 🔒 Importar decoradores de permissão
-from app.utils.auth_decorators import require_financeiro
+from app.utils.auth_decorators import require_financeiro, require_profiles
 from app.embarques.models import Embarque, EmbarqueItem
 from app.faturamento.models import RelatorioFaturamentoImportado
 from app.fretes.models import (
@@ -5537,3 +5537,202 @@ def api_auditoria_detalhes(chave_cte):
             ],
         }
     )
+
+
+@fretes_bp.route("/faturas/exportar-fechamento-freteiros")
+@login_required
+@require_profiles('administrador', 'gerente_financeiro', 'financeiro', 'logistica')
+def exportar_fechamento_freteiros():
+    """
+    Exporta fechamento de freteiros com 2 abas:
+    - Aba "Detalhamento": Dados individuais de cada frete/despesa
+    - Aba "Resumo": Totais por transportadora com dados bancários
+
+    Filtros via query string: transportadora_id, data_criacao_de, data_criacao_ate
+    """
+    from io import BytesIO
+    import pandas as pd
+    from flask import make_response
+    import locale
+
+    # Função para formatar valores no padrão brasileiro
+    def formatar_valor_br(valor):
+        """Formata valor com milhar (.) e decimal (,) com 2 casas"""
+        if valor is None or valor == 0:
+            return "0,00"
+        # Formata com 2 casas decimais e substitui separadores
+        valor_str = f"{valor:,.2f}"
+        # Troca . por # temporariamente, depois , por . e # por ,
+        valor_str = valor_str.replace(",", "#").replace(".", ",").replace("#", ".")
+        return valor_str
+
+    # Capturar filtros
+    transportadora_id = request.args.get("transportadora_id", "")
+    data_criacao_de = request.args.get("data_criacao_de", "")
+    data_criacao_ate = request.args.get("data_criacao_ate", "")
+
+    # Montar query base - apenas transportadoras que são freteiros
+    query = FaturaFrete.query.join(Transportadora).filter(
+        Transportadora.freteiro == True
+    )
+
+    # Aplicar filtros
+    if transportadora_id:
+        try:
+            query = query.filter(FaturaFrete.transportadora_id == int(transportadora_id))
+        except (ValueError, TypeError):
+            pass
+
+    # Filtro por data de CRIAÇÃO da fatura
+    if data_criacao_de:
+        try:
+            data_de = datetime.strptime(data_criacao_de, "%Y-%m-%d")
+            query = query.filter(FaturaFrete.criado_em >= data_de)
+        except ValueError:
+            pass
+
+    if data_criacao_ate:
+        try:
+            data_ate = datetime.strptime(data_criacao_ate, "%Y-%m-%d")
+            # Adiciona 1 dia para incluir todo o dia final
+            data_ate = data_ate.replace(hour=23, minute=59, second=59)
+            query = query.filter(FaturaFrete.criado_em <= data_ate)
+        except ValueError:
+            pass
+
+    # Executar query
+    faturas = query.order_by(desc(FaturaFrete.criado_em)).all()
+
+    if not faturas:
+        flash("Nenhuma fatura de freteiro encontrada com os filtros selecionados.", "warning")
+        return redirect(url_for("fretes.listar_faturas"))
+
+    # ========== ABA 1: DETALHAMENTO ==========
+    dados_detalhamento = []
+
+    for fatura in faturas:
+        transportadora = fatura.transportadora
+
+        # Processar FRETES da fatura
+        for frete in fatura.fretes:
+            dados_detalhamento.append({
+                "CNPJ Transportadora": transportadora.cnpj if transportadora else "",
+                "Transportadora": transportadora.razao_social if transportadora else "",
+                "Tipo": "Frete",
+                "Fatura": fatura.numero_fatura,
+                "CTE": frete.numero_cte or "",
+                "NFs": frete.numeros_nfs or "",
+                "Cliente": frete.nome_cliente or "",
+                "Valor NFs": formatar_valor_br(float(frete.valor_total_nfs or 0)),
+                "Peso NFs": formatar_valor_br(float(frete.peso_total or 0)),
+                "Valor Frete/Despesa": formatar_valor_br(float(frete.valor_cte or frete.valor_cotado or 0)),
+            })
+
+        # Processar DESPESAS EXTRAS da fatura
+        for despesa in fatura.todas_despesas_extras():
+            # Buscar dados do frete vinculado à despesa
+            frete_despesa = despesa.frete if despesa.frete else None
+            nfs_despesa = frete_despesa.numeros_nfs if frete_despesa else ""
+            cliente_despesa = frete_despesa.nome_cliente if frete_despesa else ""
+            valor_nfs_despesa = float(frete_despesa.valor_total_nfs or 0) if frete_despesa else 0
+            peso_nfs_despesa = float(frete_despesa.peso_total or 0) if frete_despesa else 0
+
+            dados_detalhamento.append({
+                "CNPJ Transportadora": transportadora.cnpj if transportadora else "",
+                "Transportadora": transportadora.razao_social if transportadora else "",
+                "Tipo": despesa.tipo_despesa or "Despesa Extra",
+                "Fatura": fatura.numero_fatura,
+                "CTE": despesa.numero_documento or "",
+                "NFs": nfs_despesa,
+                "Cliente": cliente_despesa,
+                "Valor NFs": formatar_valor_br(valor_nfs_despesa),
+                "Peso NFs": formatar_valor_br(peso_nfs_despesa),
+                "Valor Frete/Despesa": formatar_valor_br(float(despesa.valor_despesa or 0)),
+            })
+
+    df_detalhamento = pd.DataFrame(dados_detalhamento)
+
+    # ========== ABA 2: RESUMO POR TRANSPORTADORA ==========
+    # Agrupar valores por transportadora
+    resumo_transportadoras = {}
+    transportadoras_info = {}
+
+    for fatura in faturas:
+        transportadora = fatura.transportadora
+        if not transportadora:
+            continue
+
+        transp_id = transportadora.id
+
+        # Armazenar informações da transportadora
+        if transp_id not in transportadoras_info:
+            transportadoras_info[transp_id] = transportadora
+            resumo_transportadoras[transp_id] = 0
+
+        # Somar fretes
+        for frete in fatura.fretes:
+            resumo_transportadoras[transp_id] += float(frete.valor_cte or frete.valor_cotado or 0)
+
+        # Somar despesas extras
+        for despesa in fatura.todas_despesas_extras():
+            resumo_transportadoras[transp_id] += float(despesa.valor_despesa or 0)
+
+    # Montar dados do resumo
+    dados_resumo = []
+    for transp_id, valor_total in resumo_transportadoras.items():
+        t = transportadoras_info[transp_id]
+
+        # Formatar tipo de conta
+        tipo_conta_formatado = ""
+        if t.tipo_conta:
+            tipo_conta_formatado = t.tipo_conta.replace("corrente", "Corrente").replace("poupanca", "Poupança")
+
+        dados_resumo.append({
+            "CNPJ": t.cnpj or "",
+            "Transportadora": t.razao_social or "",
+            "Banco": t.banco or "",
+            "Agência": t.agencia or "",
+            "Conta": t.conta or "",
+            "Tipo Conta": tipo_conta_formatado,
+            "PIX": t.pix or "",
+            "CPF/CNPJ Favorecido": t.cpf_cnpj_favorecido or "",
+            "Obs. Financeira": t.obs_financ or "",
+            "Valor Total": formatar_valor_br(valor_total),
+        })
+
+    df_resumo = pd.DataFrame(dados_resumo)
+
+    # Ordenar resumo por transportadora (alfabético)
+    if not df_resumo.empty:
+        df_resumo = df_resumo.sort_values("Transportadora", ascending=True)
+
+    # ========== GERAR EXCEL ==========
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        # Aba 1: Detalhamento
+        if not df_detalhamento.empty:
+            df_detalhamento.to_excel(writer, index=False, sheet_name="Detalhamento")
+            # Ajustar larguras
+            worksheet = writer.sheets["Detalhamento"]
+            for idx, col in enumerate(df_detalhamento.columns):
+                max_length = max(df_detalhamento[col].astype(str).map(len).max(), len(col)) + 2
+                col_letter = chr(65 + idx) if idx < 26 else "A" + chr(65 + idx - 26)
+                worksheet.column_dimensions[col_letter].width = min(max_length, 50)
+
+        # Aba 2: Resumo
+        if not df_resumo.empty:
+            df_resumo.to_excel(writer, index=False, sheet_name="Resumo por Transportadora")
+            worksheet = writer.sheets["Resumo por Transportadora"]
+            for idx, col in enumerate(df_resumo.columns):
+                max_length = max(df_resumo[col].astype(str).map(len).max(), len(col)) + 2
+                col_letter = chr(65 + idx) if idx < 26 else "A" + chr(65 + idx - 26)
+                worksheet.column_dimensions[col_letter].width = min(max_length, 50)
+
+    output.seek(0)
+
+    # Criar resposta
+    response = make_response(output.read())
+    response.headers["Content-Type"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    response.headers["Content-Disposition"] = f"attachment; filename=fechamento_freteiros_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+
+    return response

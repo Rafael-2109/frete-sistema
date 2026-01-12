@@ -20,7 +20,7 @@ Cenários de Movimentação:
 
 Executar:
     source .venv/bin/activate
-    python scripts/migrations/backfill_nfs_revertidas.py [--dias 365] [--dry-run]
+    python scripts/migrations/backfill_nfs_revertidas.py --dias 365 --dry-run
 
 Autor: Sistema de Fretes
 Data: 11/01/2026

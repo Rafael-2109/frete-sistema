@@ -212,7 +212,8 @@
                     </div>
                 </div>
                 <button type="submit" class="btn btn-primary">Cadastrar</button>
-                <a href="{{ url_for('transportadoras.importar') }}" class="btn btn-success">Importar Transportadoras</a>
+                <a href="{{ url_for('transportadoras.importar') }}" class="btn btn-success"><i class="fas fa-file-import"></i> Importar</a>
+                <a href="{{ url_for('transportadoras.exportar_transportadoras') }}" class="btn btn-info"><i class="fas fa-file-export"></i> Exportar Excel</a>
             </form>
         </div>
     </div>
@@ -580,6 +581,62 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Dados Financeiros -->
+                    <hr>
+                    <h6 class="text-primary mb-3"><i class="fas fa-university"></i> Dados Financeiros</h6>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Banco</label>
+                                <input type="text" class="form-control" id="edit_banco" name="banco" placeholder="Ex: Itaú, Bradesco, BB...">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Agência</label>
+                                <input type="text" class="form-control" id="edit_agencia" name="agencia" placeholder="0000">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Conta</label>
+                                <input type="text" class="form-control" id="edit_conta" name="conta" placeholder="00000-0">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Tipo da Conta</label>
+                                <select class="form-control" id="edit_tipo_conta" name="tipo_conta">
+                                    <option value="">Selecione...</option>
+                                    <option value="corrente">Corrente</option>
+                                    <option value="poupanca">Poupança</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">PIX</label>
+                                <input type="text" class="form-control" id="edit_pix" name="pix" placeholder="Chave PIX">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">CPF/CNPJ Favorecido</label>
+                                <input type="text" class="form-control" id="edit_cpf_cnpj_favorecido" name="cpf_cnpj_favorecido" placeholder="00.000.000/0000-00">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="mb-3">
+                                <label class="form-label">Observações Financeiras</label>
+                                <textarea class="form-control" id="edit_obs_financ" name="obs_financ" rows="2" placeholder="Informações adicionais sobre pagamento..."></textarea>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -700,6 +757,15 @@ function editarTransportadora(id) {
                 document.getElementById('edit_condicao_pgto').value = data.transportadora.condicao_pgto || '';
                 document.getElementById('edit_ativo').checked = ativo;
                 document.getElementById('edit_nao_aceita_nf_pallet').checked = nao_aceita_nf_pallet;
+
+                // Campos financeiros
+                document.getElementById('edit_banco').value = data.transportadora.banco || '';
+                document.getElementById('edit_agencia').value = data.transportadora.agencia || '';
+                document.getElementById('edit_conta').value = data.transportadora.conta || '';
+                document.getElementById('edit_tipo_conta').value = data.transportadora.tipo_conta || '';
+                document.getElementById('edit_pix').value = data.transportadora.pix || '';
+                document.getElementById('edit_cpf_cnpj_favorecido').value = data.transportadora.cpf_cnpj_favorecido || '';
+                document.getElementById('edit_obs_financ').value = data.transportadora.obs_financ || '';
 
                 // Abre o modal
                 new bootstrap.Modal(document.getElementById('modalEditarTransportadora')).show();

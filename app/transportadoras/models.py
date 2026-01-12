@@ -31,5 +31,14 @@ class Transportadora(db.Model):
     # Controle de NF de Pallet
     nao_aceita_nf_pallet = db.Column(db.Boolean, default=False, nullable=False)  # Transportadora não aceita NF de pallet
 
+    # ===== CAMPOS FINANCEIROS =====
+    banco = db.Column(db.String(100), nullable=True)
+    agencia = db.Column(db.String(20), nullable=True)
+    conta = db.Column(db.String(30), nullable=True)
+    tipo_conta = db.Column(db.String(20), nullable=True)  # 'corrente' ou 'poupanca'
+    pix = db.Column(db.String(100), nullable=True)
+    cpf_cnpj_favorecido = db.Column(db.String(20), nullable=True)
+    obs_financ = db.Column(db.Text, nullable=True)
+
     def __repr__(self):
         return f'<Transportadora {self.razao_social}>'

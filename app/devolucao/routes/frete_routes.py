@@ -830,9 +830,15 @@ def imprimir_termo_descarte(descarte_id: int):
 @login_required
 def calcular_peso_devolucao(ocorrencia_id: int):
     """
-    Calcula peso total da devolucao baseado nos produtos e CadastroPalletizacao
+    Calcula peso total da devolucao baseado nos produtos.
 
     GET /devolucao/frete/api/{ocorrencia_id}/calcular-peso
+
+    Para NFD (tipo_documento='NFD'):
+        - Usa NFDevolucaoLinha + CadastroPalletizacao
+
+    Para NF Revertida (tipo_documento='NF'):
+        - Usa FaturamentoProduto (peso_total já está no registro)
 
     Retorna:
     - peso_total: soma de (qtd * peso_bruto) de cada linha
@@ -854,7 +860,47 @@ def calcular_peso_devolucao(ocorrencia_id: int):
                 'erro': 'NFD nao encontrada para esta ocorrencia'
             }), 404
 
-        # Buscar linhas da NFD
+        peso_total = Decimal('0')
+        detalhes = []
+
+        # ========= NF REVERTIDA: Usar FaturamentoProduto =========
+        if nfd.tipo_documento == 'NF' and nfd.numero_nf_venda:
+            from app.faturamento.models import FaturamentoProduto
+
+            produtos = FaturamentoProduto.query.filter_by(
+                numero_nf=str(nfd.numero_nf_venda)
+            ).all()
+
+            if not produtos:
+                return jsonify({
+                    'sucesso': True,
+                    'peso_total': 0,
+                    'detalhes': [],
+                    'mensagem': 'Nenhum produto encontrado para esta NF de Venda'
+                })
+
+            for prod in produtos:
+                peso_prod = Decimal(str(prod.peso_total or 0))
+                peso_total += peso_prod
+
+                detalhes.append({
+                    'codigo': prod.cod_produto,
+                    'descricao': prod.nome_produto,
+                    'quantidade': float(prod.qtd_produto_faturado or 0),
+                    'peso_unitario': float(prod.peso_unitario_produto or 0),
+                    'peso_total': float(peso_prod),
+                    'cadastro_encontrado': True,  # Já é dado do sistema
+                    'fonte': 'FaturamentoProduto'
+                })
+
+            return jsonify({
+                'sucesso': True,
+                'peso_total': float(peso_total),
+                'detalhes': detalhes,
+                'mensagem': f'Peso calculado (NF Venda): {float(peso_total):.3f} kg'
+            })
+
+        # ========= NFD: Usar NFDevolucaoLinha + CadastroPalletizacao =========
         linhas = NFDevolucaoLinha.query.filter_by(
             nf_devolucao_id=nfd.id
         ).all()
@@ -866,9 +912,6 @@ def calcular_peso_devolucao(ocorrencia_id: int):
                 'detalhes': [],
                 'mensagem': 'Nenhuma linha de produto na NFD'
             })
-
-        peso_total = Decimal('0')
-        detalhes = []
 
         for linha in linhas:
             # Usar codigo interno resolvido ou codigo do cliente

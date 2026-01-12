@@ -88,6 +88,9 @@
             <a href="{{ url_for('fretes.exportar_faturas') }}" class="btn btn-primary">
                 <i class="fas fa-file-excel"></i> Exportar Faturas
             </a>
+            <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#modalFechamentoFreteiros" title="Exportar fechamento de freteiros com dados bancários">
+                <i class="fas fa-truck"></i> Fechamento Freteiros
+            </button>
             <a href="{{ url_for('fretes.index') }}" class="btn btn-secondary">
                 <i class="fas fa-arrow-left"></i> Dashboard
             </a>
@@ -277,4 +280,71 @@
         </div>
     </div>
 </div>
+
+<!-- Modal Fechamento Freteiros -->
+<div class="modal fade" id="modalFechamentoFreteiros" tabindex="-1" aria-labelledby="modalFechamentoFreteirosLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title" id="modalFechamentoFreteirosLabel">
+                    <i class="fas fa-truck"></i> Exportar Fechamento de Freteiros
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="formFechamentoFreteiros" method="GET" action="{{ url_for('fretes.exportar_fechamento_freteiros') }}">
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        Selecione o período de <strong>criação das faturas</strong> para exportar o fechamento dos freteiros.
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="data_criacao_de" class="form-label">Data Criação - De</label>
+                                <input type="date" class="form-control" id="data_criacao_de" name="data_criacao_de" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="data_criacao_ate" class="form-label">Data Criação - Até</label>
+                                <input type="date" class="form-control" id="data_criacao_ate" name="data_criacao_ate" required>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="transportadora_freteiro_id" class="form-label">Transportadora (opcional)</label>
+                        <select class="form-control" id="transportadora_freteiro_id" name="transportadora_id">
+                            <option value="">Todos os freteiros</option>
+                            {% for t in form.transportadora_id.choices[1:] %}
+                            <option value="{{ t[0] }}">{{ t[1] }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times"></i> Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-warning">
+                        <i class="fas fa-file-excel"></i> Exportar Excel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// Preencher datas padrão no modal (mês atual)
+document.addEventListener('DOMContentLoaded', function() {
+    const hoje = new Date();
+    const primeiroDia = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    const ultimoDia = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+
+    document.getElementById('data_criacao_de').value = primeiroDia.toISOString().split('T')[0];
+    document.getElementById('data_criacao_ate').value = ultimoDia.toISOString().split('T')[0];
+});
+</script>
 {% endblock %}

@@ -1,4 +1,4 @@
-from flask import render_template, redirect, url_for, flash, request, session, jsonify
+from flask import render_template, redirect, url_for, flash, request, session, jsonify, make_response
 from flask_login import login_required
 from app import db
 from app.transportadoras.forms import TransportadoraForm, ImportarTransportadorasForm
@@ -7,7 +7,10 @@ from app.transportadoras import transportadoras_bp
 from app.utils.importacao.importar_transportadoras import importar_transportadoras
 from app.utils.importacao.utils_importacao import salvar_temp
 from sqlalchemy.exc import IntegrityError
+from io import BytesIO
+from datetime import datetime
 import traceback
+import pandas as pd
 
 @transportadoras_bp.route('/', methods=['GET', 'POST'])
 @login_required
@@ -125,7 +128,15 @@ def dados_transportadora(id):
                 'freteiro': freteiro_valor,
                 'condicao_pgto': transportadora.condicao_pgto or '',
                 'ativo': transportadora.ativo if hasattr(transportadora, 'ativo') else True,
-                'nao_aceita_nf_pallet': nao_aceita_nf_pallet_valor
+                'nao_aceita_nf_pallet': nao_aceita_nf_pallet_valor,
+                # Campos financeiros
+                'banco': transportadora.banco or '',
+                'agencia': transportadora.agencia or '',
+                'conta': transportadora.conta or '',
+                'tipo_conta': transportadora.tipo_conta or '',
+                'pix': transportadora.pix or '',
+                'cpf_cnpj_favorecido': transportadora.cpf_cnpj_favorecido or '',
+                'obs_financ': transportadora.obs_financ or ''
             }
         })
     except Exception as e:
@@ -166,7 +177,16 @@ def editar_transportadora_ajax(id):
         transportadora.ativo = request.form.get('ativo') == 'on'
         # Campo NF de pallet - checkbox envia 'on' quando marcado
         transportadora.nao_aceita_nf_pallet = request.form.get('nao_aceita_nf_pallet') == 'on'
-        
+
+        # Campos financeiros
+        transportadora.banco = request.form.get('banco', '').strip() or None
+        transportadora.agencia = request.form.get('agencia', '').strip() or None
+        transportadora.conta = request.form.get('conta', '').strip() or None
+        transportadora.tipo_conta = request.form.get('tipo_conta', '').strip() or None
+        transportadora.pix = request.form.get('pix', '').strip() or None
+        transportadora.cpf_cnpj_favorecido = request.form.get('cpf_cnpj_favorecido', '').strip() or None
+        transportadora.obs_financ = request.form.get('obs_financ', '').strip() or None
+
         # TODO: Adicionar campos de auditoria no futuro
         # transportadora.alterado_por = current_user.nome
         # transportadora.alterado_em = datetime.utcnow()
@@ -248,3 +268,64 @@ def salvar_config_frete(id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'message': f'Erro ao salvar configuração: {str(e)}'})
+
+
+@transportadoras_bp.route('/exportar')
+@login_required
+def exportar_transportadoras():
+    """Exporta todas as transportadoras para Excel"""
+    try:
+        transportadoras = Transportadora.query.order_by(Transportadora.razao_social.asc()).all()
+
+        # Prepara os dados para o DataFrame
+        dados = []
+        for t in transportadoras:
+            dados.append({
+                'CNPJ': t.cnpj or '',
+                'Razão Social': t.razao_social or '',
+                'Cidade': t.cidade or '',
+                'UF': t.uf or '',
+                'Optante Simples': 'Sim' if t.optante else 'Não',
+                'Freteiro': 'Sim' if t.freteiro else 'Não',
+                'Aceita NF Pallet': 'Não' if t.nao_aceita_nf_pallet else 'Sim',
+                'Condição de Pagamento': t.condicao_pgto or '',
+                'Status': 'Ativo' if t.ativo else 'Inativo',
+                # Campos financeiros
+                'Banco': t.banco or '',
+                'Agência': t.agencia or '',
+                'Conta': t.conta or '',
+                'Tipo Conta': t.tipo_conta.replace('corrente', 'Corrente').replace('poupanca', 'Poupança') if t.tipo_conta else '',
+                'PIX': t.pix or '',
+                'CPF/CNPJ Favorecido': t.cpf_cnpj_favorecido or '',
+                'Obs. Financeira': t.obs_financ or ''
+            })
+
+        # Cria o DataFrame
+        df = pd.DataFrame(dados)
+
+        # Cria o arquivo Excel em memória
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Transportadoras')
+
+            # Ajusta a largura das colunas
+            worksheet = writer.sheets['Transportadoras']
+            for idx, col in enumerate(df.columns):
+                max_length = max(
+                    df[col].astype(str).map(len).max(),
+                    len(col)
+                ) + 2
+                worksheet.column_dimensions[chr(65 + idx) if idx < 26 else 'A' + chr(65 + idx - 26)].width = min(max_length, 50)
+
+        output.seek(0)
+
+        # Cria a resposta com o arquivo
+        response = make_response(output.read())
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        response.headers['Content-Disposition'] = f'attachment; filename=transportadoras_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+
+        return response
+
+    except Exception as e:
+        flash(f'Erro ao exportar transportadoras: {str(e)}', 'danger')
+        return redirect(url_for('transportadoras.cadastrar_transportadora'))

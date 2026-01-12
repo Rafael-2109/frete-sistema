@@ -316,6 +316,15 @@ def detalhe(ocorrencia_id):
         nf_devolucao_id=nfd.id
     ).all() if nfd else []
 
+    # Para NFs revertidas (tipo_documento='NF'), buscar produtos de FaturamentoProduto
+    # Esses produtos já são NOSSOS códigos, não precisam de resolução
+    produtos_faturamento = []
+    if nfd and nfd.tipo_documento == 'NF' and nfd.numero_nf_venda:
+        from app.faturamento.models import FaturamentoProduto
+        produtos_faturamento = FaturamentoProduto.query.filter_by(
+            numero_nf=str(nfd.numero_nf_venda)
+        ).all()
+
     # NFs de venda referenciadas (pode ser N NFs)
     nfs_referenciadas = []
     transportadoras_set = set()  # Para coletar transportadoras únicas
@@ -378,6 +387,7 @@ def detalhe(ocorrencia_id):
         nfd=nfd,
         entrega=entrega,
         linhas=linhas,
+        produtos_faturamento=produtos_faturamento,  # Produtos de NF revertida
         nfs_referenciadas=nfs_referenciadas,
         transportadoras=transportadoras,
         fretes=fretes,
