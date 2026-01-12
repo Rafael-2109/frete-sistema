@@ -910,3 +910,110 @@ def api_excluir_programacao(id):
         import logging
         logging.error(f"[PROGRAMACAO DELETE] Erro: {str(e)}", exc_info=True)
         return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+
+# ============================================================
+# IMPRESSÃO DE PROGRAMAÇÃO DE PRODUÇÃO
+# ============================================================
+
+@recursos_bp.route('/imprimir-programacao')
+@login_required
+def imprimir_programacao():
+    """
+    Renderiza template de impressão da programação de produção
+    Filtros: linha_producao, data_inicio, data_fim
+    Formato: Paisagem (landscape)
+    """
+    try:
+        from app.producao.models import ProgramacaoProducao
+        from datetime import date, timedelta
+        from collections import defaultdict
+
+        # Parâmetros de filtro
+        linha_producao = request.args.get('linha_producao', '').strip()
+        data_inicio_str = request.args.get('data_inicio')
+        data_fim_str = request.args.get('data_fim')
+
+        # Validar datas
+        if not data_inicio_str or not data_fim_str:
+            hoje = date.today()
+            data_inicio = hoje
+            data_fim = hoje + timedelta(days=7)
+        else:
+            data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d').date()
+            data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date()
+
+        # Query base
+        query = ProgramacaoProducao.query.filter(
+            ProgramacaoProducao.data_programacao >= data_inicio,
+            ProgramacaoProducao.data_programacao <= data_fim
+        )
+
+        # Filtro por linha de produção
+        if linha_producao:
+            query = query.filter(ProgramacaoProducao.linha_producao == linha_producao)
+
+        # Ordenar por linha, data e produto
+        programacoes = query.order_by(
+            ProgramacaoProducao.linha_producao,
+            ProgramacaoProducao.data_programacao,
+            ProgramacaoProducao.nome_produto
+        ).all()
+
+        # Agrupar por linha de produção
+        programacoes_por_linha = defaultdict(list)
+        for prog in programacoes:
+            programacoes_por_linha[prog.linha_producao or 'SEM LINHA'].append(prog)
+
+        # Calcular totais por linha
+        totais_por_linha = {}
+        for linha, progs in programacoes_por_linha.items():
+            totais_por_linha[linha] = {
+                'qtd_total': sum(p.qtd_programada for p in progs),
+                'qtd_itens': len(progs)
+            }
+
+        # Buscar todas as linhas disponíveis para o select
+        linhas_disponiveis = db.session.query(
+            RecursosProducao.linha_producao
+        ).filter(
+            RecursosProducao.disponivel == True
+        ).distinct().order_by(RecursosProducao.linha_producao).all()
+        linhas_disponiveis = [l[0] for l in linhas_disponiveis if l[0]]
+
+        return render_template(
+            'manufatura/programacao_linhas_print.html',
+            programacoes_por_linha=dict(programacoes_por_linha),
+            totais_por_linha=totais_por_linha,
+            linhas_disponiveis=linhas_disponiveis,
+            linha_selecionada=linha_producao,
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            total_geral=sum(t['qtd_total'] for t in totais_por_linha.values()),
+            total_itens=len(programacoes),
+            data_impressao=datetime.now()
+        )
+
+    except Exception as e:
+        import logging
+        logging.error(f"[IMPRESSAO PROGRAMACAO] Erro: {str(e)}", exc_info=True)
+        return f"Erro ao gerar impressão: {str(e)}", 500
+
+
+@recursos_bp.route('/api/linhas-disponiveis')
+@login_required
+def api_linhas_disponiveis():
+    """API para listar linhas de produção disponíveis para o filtro de impressão"""
+    try:
+        linhas = db.session.query(
+            RecursosProducao.linha_producao
+        ).filter(
+            RecursosProducao.disponivel == True
+        ).distinct().order_by(RecursosProducao.linha_producao).all()
+
+        return jsonify({
+            'success': True,
+            'linhas': [l[0] for l in linhas if l[0]]
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500

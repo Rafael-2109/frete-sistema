@@ -54,6 +54,11 @@
                 <i class="fas fa-plus me-1"></i>Adicionar Programação
             </button>
 
+            <!-- Botão Imprimir -->
+            <button id="btn-imprimir-programacao" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modalImprimirProgramacao">
+                <i class="fas fa-print me-1"></i>Imprimir
+            </button>
+
             <span class="mx-1 text-muted">|</span>
 
             <!-- ✅ TOGGLE C/ HISTÓRICO -->
@@ -164,6 +169,58 @@
 
 <!-- Incluir modais de pedidos (contém modalDetalhesSeparacao) -->
 {% include 'manufatura/necessidade_producao/modals/_modal-pedidos.html' %}
+
+<!-- Modal Imprimir Programação -->
+<div class="modal fade" id="modalImprimirProgramacao" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-secondary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-print me-2"></i>Imprimir Programação de Produção
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="form-imprimir-programacao">
+                    <!-- Linha de Produção -->
+                    <div class="mb-3">
+                        <label for="print-linha-producao" class="form-label">Linha de Produção</label>
+                        <select id="print-linha-producao" class="form-select">
+                            <option value="">Todas as linhas</option>
+                        </select>
+                        <small class="text-muted">Deixe em branco para imprimir todas as linhas</small>
+                    </div>
+
+                    <!-- Range de Datas -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="print-data-inicio" class="form-label">Data Inicial <span class="text-danger">*</span></label>
+                            <input type="date" id="print-data-inicio" class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="print-data-fim" class="form-label">Data Final <span class="text-danger">*</span></label>
+                            <input type="date" id="print-data-fim" class="form-control" required>
+                        </div>
+                    </div>
+
+                    <!-- Info -->
+                    <div class="alert alert-info mb-0">
+                        <i class="fas fa-info-circle me-2"></i>
+                        A impressão será gerada em formato <strong>paisagem (landscape)</strong> para melhor visualização.
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-1"></i>Cancelar
+                </button>
+                <button type="button" id="btn-abrir-impressao" class="btn btn-primary">
+                    <i class="fas fa-external-link-alt me-1"></i>Abrir Impressão
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- ✅ NOVO: Modal Adicionar Programação -->
 <div class="modal fade" id="modalAdicionarProgramacao" tabindex="-1">
@@ -311,6 +368,74 @@ $(document).ready(function() {
 
     // Carregar automaticamente
     carregarProgramacaoLinhas();
+
+    // ============================================================
+    // MODAL DE IMPRESSÃO
+    // ============================================================
+
+    // Carregar linhas disponíveis quando o modal abrir
+    $('#modalImprimirProgramacao').on('show.bs.modal', async function() {
+        try {
+            // Definir datas padrão (mês selecionado na tela)
+            const mes = parseInt($('#filtro-mes').val());
+            const ano = parseInt($('#filtro-ano').val());
+
+            // Primeiro dia do mês
+            const dataInicio = new Date(ano, mes - 1, 1);
+            // Último dia do mês
+            const dataFim = new Date(ano, mes, 0);
+
+            $('#print-data-inicio').val(dataInicio.toISOString().split('T')[0]);
+            $('#print-data-fim').val(dataFim.toISOString().split('T')[0]);
+
+            // Carregar linhas de produção
+            const response = await fetch('/manufatura/recursos/api/linhas-disponiveis');
+            const data = await response.json();
+
+            if (data.success && data.linhas) {
+                const select = $('#print-linha-producao');
+                select.html('<option value="">Todas as linhas</option>');
+
+                data.linhas.forEach(linha => {
+                    select.append($('<option></option>').val(linha).text(linha));
+                });
+            }
+        } catch (error) {
+            console.error('[MODAL IMPRESSAO] Erro ao carregar linhas:', error);
+        }
+    });
+
+    // Botão de abrir impressão
+    $('#btn-abrir-impressao').on('click', function() {
+        const linha = $('#print-linha-producao').val();
+        const dataInicio = $('#print-data-inicio').val();
+        const dataFim = $('#print-data-fim').val();
+
+        // Validar datas
+        if (!dataInicio || !dataFim) {
+            alert('Por favor, preencha as datas inicial e final.');
+            return;
+        }
+
+        if (dataInicio > dataFim) {
+            alert('A data inicial não pode ser maior que a data final.');
+            return;
+        }
+
+        // Montar URL
+        const params = new URLSearchParams();
+        if (linha) params.append('linha_producao', linha);
+        params.append('data_inicio', dataInicio);
+        params.append('data_fim', dataFim);
+
+        const url = '/manufatura/recursos/imprimir-programacao?' + params.toString();
+
+        // Abrir em nova aba
+        window.open(url, '_blank');
+
+        // Fechar modal
+        bootstrap.Modal.getInstance(document.getElementById('modalImprimirProgramacao')).hide();
+    });
 });
 
 async function carregarProgramacaoLinhas() {

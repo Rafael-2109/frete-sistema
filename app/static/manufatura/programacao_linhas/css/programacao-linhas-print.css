@@ -1,0 +1,418 @@
+/* ============================================================
+   PROGRAMACAO DE PRODUCAO - CSS PARA IMPRESSAO
+   Formato: Paisagem (Landscape)
+   ============================================================ */
+
+/* Variaveis */
+:root {
+    --print-primary: #198754;
+    --print-secondary: #6c757d;
+    --print-border: #dee2e6;
+    --print-header-bg: #f8f9fa;
+}
+
+/* ============================================================
+   CONFIGURACAO DE PAGINA - PAISAGEM
+   ============================================================ */
+@page {
+    size: A4 landscape;
+    margin: 10mm 15mm;
+}
+
+@media print {
+    body {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        font-size: 9pt;
+    }
+
+    .no-print {
+        display: none !important;
+    }
+
+    .print-container {
+        padding: 0;
+    }
+
+    .linha-section {
+        page-break-inside: avoid;
+        break-inside: avoid;
+    }
+
+    .print-table {
+        font-size: 8pt;
+    }
+
+    .print-header {
+        margin-bottom: 10px;
+    }
+
+    .resumo-final {
+        page-break-before: always;
+    }
+}
+
+/* ============================================================
+   BARRA DE CONTROLES (Apenas na tela)
+   ============================================================ */
+.controls-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: #fff;
+    border-bottom: 2px solid var(--print-primary);
+    padding: 10px 20px;
+    z-index: 1000;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.controls-bar .form-label {
+    font-size: 0.85rem;
+    color: #495057;
+}
+
+/* ============================================================
+   CONTAINER PRINCIPAL
+   ============================================================ */
+.print-container {
+    padding: 70px 20px 20px 20px;
+    max-width: 100%;
+    margin: 0 auto;
+}
+
+@media print {
+    .print-container {
+        padding: 0;
+    }
+}
+
+/* ============================================================
+   CABECALHO DA IMPRESSAO
+   ============================================================ */
+.print-header {
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid var(--print-primary);
+}
+
+.header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 15px;
+}
+
+.header-left {
+    flex: 1;
+}
+
+.print-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--print-primary);
+    margin: 0 0 5px 0;
+}
+
+.header-subtitle {
+    margin-top: 5px;
+}
+
+.header-right {
+    text-align: right;
+}
+
+.header-info {
+    font-size: 0.85rem;
+    color: #495057;
+}
+
+.info-item {
+    margin-bottom: 3px;
+}
+
+.header-summary {
+    display: flex;
+    gap: 30px;
+    background: var(--print-header-bg);
+    padding: 10px 20px;
+    border-radius: 8px;
+}
+
+.summary-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.summary-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--print-primary);
+}
+
+.summary-label {
+    font-size: 0.75rem;
+    color: var(--print-secondary);
+    text-transform: uppercase;
+}
+
+/* ============================================================
+   SECOES POR LINHA DE PRODUCAO
+   ============================================================ */
+.linha-section {
+    margin-bottom: 25px;
+    border: 1px solid var(--print-border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.linha-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--print-primary);
+    color: white;
+    padding: 10px 15px;
+}
+
+.linha-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.linha-totais {
+    display: flex;
+    gap: 10px;
+}
+
+/* ============================================================
+   TABELA DE PROGRAMACAO
+   ============================================================ */
+.print-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.print-table thead {
+    background: #e9ecef;
+}
+
+.print-table th {
+    padding: 8px 10px;
+    font-weight: 600;
+    text-align: left;
+    border-bottom: 2px solid var(--print-border);
+    color: #495057;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+}
+
+.print-table td {
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--print-border);
+    vertical-align: middle;
+}
+
+.print-table tbody tr:nth-child(even) {
+    background: #f8f9fa;
+}
+
+.print-table tbody tr:hover {
+    background: #e9ecef;
+}
+
+/* Celulas especificas */
+.code-cell {
+    font-family: monospace;
+    font-weight: 600;
+    color: #0d6efd;
+}
+
+.product-name {
+    max-width: 250px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.qty-cell {
+    font-weight: 600;
+    color: var(--print-primary);
+}
+
+.obs-cell {
+    font-size: 0.8rem;
+    color: #6c757d;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Linhas de subtotal e total */
+.subtotal-row {
+    background: #fff3cd !important;
+}
+
+.subtotal-row td {
+    border-top: 1px dashed #ffc107;
+    font-size: 0.8rem;
+}
+
+.total-row {
+    background: #d1e7dd !important;
+}
+
+.total-row td {
+    border-top: 2px solid var(--print-primary);
+    font-size: 0.9rem;
+}
+
+/* ============================================================
+   RESUMO FINAL
+   ============================================================ */
+.resumo-final {
+    margin-top: 30px;
+    padding: 20px;
+    background: var(--print-header-bg);
+    border-radius: 8px;
+    border: 1px solid var(--print-border);
+}
+
+.resumo-final h4 {
+    color: var(--print-primary);
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--print-border);
+}
+
+.resumo-table {
+    width: 100%;
+    max-width: 600px;
+    border-collapse: collapse;
+}
+
+.resumo-table th,
+.resumo-table td {
+    padding: 10px 15px;
+    border-bottom: 1px solid var(--print-border);
+}
+
+.resumo-table thead th {
+    background: #e9ecef;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.8rem;
+}
+
+.resumo-table .total-row {
+    background: #d1e7dd;
+}
+
+.resumo-table .total-row td {
+    border-top: 2px solid var(--print-primary);
+}
+
+/* ============================================================
+   MENSAGEM SEM DADOS
+   ============================================================ */
+.no-data {
+    text-align: center;
+    padding: 50px 20px;
+    color: var(--print-secondary);
+    font-size: 1.1rem;
+    background: var(--print-header-bg);
+    border-radius: 8px;
+    border: 1px dashed var(--print-border);
+}
+
+/* ============================================================
+   RODAPE DA IMPRESSAO
+   ============================================================ */
+.print-footer {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 30px;
+    padding-top: 15px;
+    border-top: 1px solid var(--print-border);
+    font-size: 0.8rem;
+    color: var(--print-secondary);
+}
+
+@media print {
+    .print-footer {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        padding: 10px 15mm;
+    }
+}
+
+/* ============================================================
+   RESPONSIVO (Para visualizacao na tela)
+   ============================================================ */
+@media screen and (max-width: 1200px) {
+    .controls-bar .form-select,
+    .controls-bar .form-control {
+        width: auto !important;
+        min-width: 120px;
+    }
+
+    .header-content {
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    .header-right {
+        text-align: left;
+    }
+}
+
+@media screen and (max-width: 768px) {
+    .controls-bar {
+        position: relative;
+    }
+
+    .print-container {
+        padding: 20px 10px;
+    }
+
+    .header-summary {
+        flex-wrap: wrap;
+        gap: 15px;
+    }
+
+    .print-table {
+        font-size: 0.75rem;
+    }
+
+    .product-name {
+        max-width: 150px;
+    }
+
+    .obs-cell {
+        max-width: 100px;
+    }
+}
+
+/* ============================================================
+   BADGES CUSTOMIZADOS
+   ============================================================ */
+.badge.bg-info {
+    background-color: #0dcaf0 !important;
+}
+
+.badge.bg-success {
+    background-color: #198754 !important;
+}
+
+.badge.bg-primary {
+    background-color: #0d6efd !important;
+}
+
+.badge.bg-secondary {
+    background-color: #6c757d !important;
+}
