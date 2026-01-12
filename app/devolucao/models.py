@@ -262,8 +262,15 @@ class NFDevolucao(db.Model):
 
     @property
     def status_entrada_odoo(self):
-        """Retorna status de entrada: 'Entrada OK' ou 'Pendente'"""
-        if self.data_entrada:
+        """Retorna status de entrada baseado no status do DFE no Odoo
+
+        Status '06' = 'Concluído' = Entrada física realizada
+        Qualquer outro status = Pendente de entrada
+
+        IMPORTANTE: data_entrada é 'Data de Lançamento', preenchida ANTES
+        da entrada física. O gatilho correto é l10n_br_status == '06'.
+        """
+        if self.odoo_status_codigo == '06':
             return 'Entrada OK'
         return 'Pendente'
 

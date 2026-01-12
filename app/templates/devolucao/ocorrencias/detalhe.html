@@ -21,53 +21,43 @@
         <div class="card-header py-2">
             <div class="d-flex justify-content-between align-items-center">
                 <div class="d-flex align-items-center gap-2 flex-wrap">
-                    <h6 class="mb-0">Dados da NFD</h6>
+                    {# Formato unificado: NF|NFD - ##### - Status #}
+                    {% set tipo_doc = nfd.tipo_documento or 'NFD' %}
+                    {% set numero = nfd.numero_nfd or nfd.numero_nf_venda or '?' %}
 
-                    {# Tipo de documento e Status Odoo | Monitoramento #}
-                    <small class="text-muted">|</small>
-                    <span class="badge bg-{{ 'primary' if nfd.tipo_documento == 'NFD' else 'secondary' }}">
-                        {{ nfd.tipo_documento or 'NFD' }}
-                    </span>
-
-                    {# Status Odoo #}
-                    {% if nfd.tipo_documento == 'NFD' %}
-                        <span class="badge bg-info" title="NFD importada do Odoo (finnfe=4)">Devol. parcial</span>
-                    {% elif nfd.status_odoo == 'Revertida' %}
-                        <span class="badge bg-danger" title="NF revertida no Odoo">{{ nfd.status_odoo }}</span>
-                    {% elif nfd.status_odoo == 'Cancelada' %}
-                        <span class="badge bg-warning text-dark" title="NF cancelada no Odoo">{{ nfd.status_odoo }}</span>
-                    {% elif nfd.status_odoo %}
-                        <span class="badge bg-secondary">{{ nfd.status_odoo }}</span>
-                    {% else %}
-                        <span class="badge bg-light text-muted border" title="Status Odoo nao sincronizado">-</span>
-                    {% endif %}
-
-                    <span class="text-muted">|</span>
-
-                    {# Status Monitoramento #}
-                    {% if nfd.status_monitoramento == 'Devolvida' %}
-                        <span class="badge bg-danger" title="Status monitoramento">{{ nfd.status_monitoramento }}</span>
-                    {% elif nfd.status_monitoramento == 'Cancelada' %}
-                        <span class="badge bg-warning text-dark" title="Status monitoramento">{{ nfd.status_monitoramento }}</span>
-                    {% elif nfd.status_monitoramento == 'Troca de NF' %}
-                        <span class="badge bg-info" title="Status monitoramento">{{ nfd.status_monitoramento }}</span>
-                    {% elif nfd.status_monitoramento %}
-                        <span class="badge bg-secondary">{{ nfd.status_monitoramento }}</span>
-                    {% else %}
-                        <span class="badge bg-light text-muted border" title="Status monitoramento nao vinculado">-</span>
-                    {% endif %}
-
-                    {# Status de Entrada (apenas para NFD) #}
-                    {% if nfd.tipo_documento == 'NFD' %}
-                        <small class="text-muted">|</small>
-                        {% if nfd.data_entrada %}
-                            <span class="badge bg-success" title="Data entrada: {{ nfd.data_entrada.strftime('%d/%m/%Y') }}">
-                                Entrada OK
-                            </span>
+                    <h6 class="mb-0">
+                        <span class="text-{{ 'primary' if tipo_doc == 'NFD' else 'secondary' }}">{{ tipo_doc }}</span>
+                        <span class="text-muted">-</span>
+                        {{ numero }}
+                        <span class="text-muted">-</span>
+                        {# Status baseado no tipo de documento #}
+                        {% if tipo_doc == 'NFD' %}
+                            {% if nfd.odoo_status_codigo == '06' %}
+                                <span class="badge bg-success" title="Status Odoo: {{ nfd.odoo_status_descricao or 'Concluído' }}{% if nfd.data_entrada %} | Entrada: {{ nfd.data_entrada.strftime('%d/%m/%Y') }}{% endif %}">Entrada OK</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark" title="Status Odoo: {{ nfd.odoo_status_descricao or 'Pendente' }} | Aguardando entrada física">Pendente</span>
+                            {% endif %}
                         {% else %}
-                            <span class="badge bg-warning text-dark" title="NFD ainda não deu entrada no Odoo">
-                                Pendente
-                            </span>
+                            {# NF de venda - verificar se foi revertida #}
+                            {% if nfd.status_odoo == 'Revertida' %}
+                                <span class="badge bg-danger" title="NF revertida no Odoo">Reversão</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark" title="Pendente de reversão">Pendente</span>
+                            {% endif %}
+                        {% endif %}
+                    </h6>
+
+                    {# Status Monitoramento (se houver) #}
+                    {% if nfd.status_monitoramento %}
+                        <small class="text-muted">|</small>
+                        {% if nfd.status_monitoramento == 'Devolvida' %}
+                            <span class="badge bg-danger badge-sm" title="Status monitoramento">{{ nfd.status_monitoramento }}</span>
+                        {% elif nfd.status_monitoramento == 'Cancelada' %}
+                            <span class="badge bg-warning text-dark badge-sm" title="Status monitoramento">{{ nfd.status_monitoramento }}</span>
+                        {% elif nfd.status_monitoramento == 'Troca de NF' %}
+                            <span class="badge bg-info badge-sm" title="Status monitoramento">{{ nfd.status_monitoramento }}</span>
+                        {% else %}
+                            <span class="badge bg-secondary badge-sm">{{ nfd.status_monitoramento }}</span>
                         {% endif %}
                     {% endif %}
 

@@ -69,7 +69,12 @@ class FaturamentoProduto(db.Model):
         
     # Status
     status_nf = db.Column(db.String(20), nullable=False, default='Provisório')  # Lançado, Cancelado, Provisório
-    
+
+    # Campos de Reversão (NF revertida via Nota de Crédito no Odoo)
+    revertida = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    nota_credito_id = db.Column(db.Integer, nullable=True)  # ID do out_refund no Odoo
+    data_reversao = db.Column(db.DateTime, nullable=True)
+
     # Auditoria
     created_at = db.Column(db.DateTime, default=agora_brasil, nullable=False)
     updated_at = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil, nullable=False)
@@ -106,5 +111,9 @@ class FaturamentoProduto(db.Model):
             'valor_produto_faturado': float(self.valor_produto_faturado) if self.valor_produto_faturado else 0,
             'vendedor': self.vendedor,
             'equipe_vendas': self.equipe_vendas,
-            'incoterm': self.incoterm
+            'incoterm': self.incoterm,
+            # Campos de reversão
+            'revertida': self.revertida,
+            'nota_credito_id': self.nota_credito_id,
+            'data_reversao': self.data_reversao.strftime('%d/%m/%Y %H:%M') if self.data_reversao else None
         }

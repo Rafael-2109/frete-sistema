@@ -233,20 +233,36 @@ class FaturamentoService:
     def _processar_cancelamento_nf(self, numero_nf: str) -> bool:
         """
         Processa o cancelamento de uma NF de forma atômica
-        
+
+        IMPORTANTE: Este método é para NFs CANCELADAS (state='cancel' no Odoo).
+        NFs REVERTIDAS (com Nota de Crédito) são processadas pelo ReversaoService
+        e NÃO devem passar por aqui.
+
         Args:
             numero_nf: Número da NF a ser cancelada
-            
+
         Returns:
             bool: True se processamento foi bem sucedido
         """
         try:
             logger = logging.getLogger(__name__)
             logger.info(f"🔄 Processando cancelamento da NF {numero_nf}")
-            
+
             from app.estoque.models import MovimentacaoEstoque
             from app.separacao.models import Separacao
-            
+
+            # SALVAGUARDA: Verificar se NF já foi revertida (não deve ser "cancelada")
+            # NFs revertidas são tratadas pelo ReversaoService com lógica diferente
+            fat_revertida = FaturamentoProduto.query.filter_by(
+                numero_nf=numero_nf,
+                revertida=True
+            ).first()
+
+            if fat_revertida:
+                logger.warning(f"⚠️ NF {numero_nf} já foi REVERTIDA via Nota de Crédito. "
+                             f"Cancelamento ignorado (usar ReversaoService para reversões).")
+                return False
+
             # 1. Atualizar FaturamentoProduto - IMPORTANTE!
             faturamentos_atualizados = db.session.query(FaturamentoProduto).filter(
                 FaturamentoProduto.numero_nf == numero_nf,

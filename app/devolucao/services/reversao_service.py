@@ -33,6 +33,8 @@ from typing import Dict, List, Optional
 from app import db
 from app.devolucao.models import NFDevolucao, OcorrenciaDevolucao
 from app.monitoramento.models import EntregaMonitorada
+from app.faturamento.models import FaturamentoProduto
+from app.estoque.models import MovimentacaoEstoque
 from app.odoo.utils.connection import get_odoo_connection
 from app.utils.timezone import agora_utc, agora_brasil
 
@@ -90,6 +92,9 @@ class ReversaoService:
             'nfds_atualizadas': 0,
             'vinculadas_monitoramento': 0,
             'ocorrencias_criadas': 0,
+            # Novas metricas de estoque/faturamento
+            'faturamento_marcados': 0,
+            'movimentacoes_criadas': 0,
             'erros': []
         }
 
@@ -127,6 +132,9 @@ class ReversaoService:
                         resultado['vinculadas_monitoramento'] += 1
                     if estatisticas.get('ocorrencia_criada'):
                         resultado['ocorrencias_criadas'] += 1
+                    # Novas metricas de estoque/faturamento
+                    resultado['faturamento_marcados'] += estatisticas.get('faturamento_marcados', 0)
+                    resultado['movimentacoes_criadas'] += estatisticas.get('movimentacoes_criadas', 0)
 
                     # Commit apos cada NC processada
                     db.session.commit()
@@ -145,6 +153,8 @@ class ReversaoService:
             logger.info(f"   NFDs atualizadas: {resultado['nfds_atualizadas']}")
             logger.info(f"   Vinculadas ao monitoramento: {resultado['vinculadas_monitoramento']}")
             logger.info(f"   Ocorrencias criadas: {resultado['ocorrencias_criadas']}")
+            logger.info(f"   Faturamentos marcados: {resultado['faturamento_marcados']}")
+            logger.info(f"   Movimentacoes estoque criadas: {resultado['movimentacoes_criadas']}")
             logger.info(f"   Erros: {len(resultado['erros'])}")
             logger.info("=" * 80)
 
@@ -310,6 +320,19 @@ class ReversaoService:
                 entrega.status_finalizacao = 'Devolvida'
                 logger.info(f"   Entrega {entrega.numero_nf} status_finalizacao='Devolvida'")
 
+        # 5. Processar reversao de estoque e faturamento
+        if numero_nf:
+            nc_id = nc_data.get('id')
+            nc_name = nc_data.get('name', f'NC-{nc_id}')
+            resultado_estoque = self.processar_reversao_estoque(
+                numero_nf=str(numero_nf),
+                nota_credito_id=nc_id,
+                nota_credito_name=nc_name
+            )
+            if resultado_estoque.get('sucesso'):
+                estatisticas['faturamento_marcados'] = resultado_estoque.get('faturamento_marcados', 0)
+                estatisticas['movimentacoes_criadas'] = resultado_estoque.get('movimentacoes_criadas', 0)
+
         return estatisticas
 
     def _buscar_nf_original(self, nf_id: int) -> Optional[Dict]:
@@ -368,11 +391,12 @@ class ReversaoService:
                 'res.partner',
                 'search_read',
                 [[('id', '=', p_id)]],
-                {'fields': ['vat', 'l10n_br_cnpj_cpf'], 'limit': 1}
+                {'fields': ['vat', 'l10n_br_cnpj'], 'limit': 1}
             )
 
             if parceiro:
-                cnpj = parceiro[0].get('l10n_br_cnpj_cpf') or parceiro[0].get('vat')
+                # Campo correto em res.partner: l10n_br_cnpj (CNPJ) ou vat (fallback)
+                cnpj = parceiro[0].get('l10n_br_cnpj') or parceiro[0].get('vat')
                 if cnpj:
                     return self._limpar_cnpj(cnpj)
 
@@ -543,6 +567,116 @@ class ReversaoService:
         db.session.flush()
 
         return ocorrencia
+
+    # =========================================================================
+    # PROCESSAMENTO DE ESTOQUE E FATURAMENTO
+    # =========================================================================
+
+    def processar_reversao_estoque(
+        self,
+        numero_nf: str,
+        nota_credito_id: int,
+        nota_credito_name: str
+    ) -> Dict:
+        """
+        Processa reversao de NF no estoque e faturamento.
+
+        NOVA LOGICA (nao desfaz, apenas adiciona):
+        1. FaturamentoProduto -> marca revertida=True (MANTEM status_nf='Lancado')
+        2. MovimentacaoEstoque -> CRIA entrada tipo REVERSAO (quantidade volta ao estoque)
+        3. Separacao -> NAO ALTERA (mantem sincronizado_nf=True)
+        4. EmbarqueItem -> NAO ALTERA (mantem numero_nf)
+
+        Args:
+            numero_nf: Numero da NF que foi revertida
+            nota_credito_id: ID do out_refund no Odoo
+            nota_credito_name: Nome/Numero da Nota de Credito
+
+        Returns:
+            Dict com estatisticas do processamento
+        """
+        resultado = {
+            'sucesso': False,
+            'faturamento_marcados': 0,
+            'movimentacoes_criadas': 0,
+            'erros': []
+        }
+
+        try:
+            logger.info(f"   Processando reversao de estoque para NF {numero_nf}")
+
+            # 1. Buscar itens de faturamento da NF
+            itens_fat = FaturamentoProduto.query.filter_by(
+                numero_nf=str(numero_nf)
+            ).all()
+
+            if not itens_fat:
+                logger.warning(f"   Nenhum item de faturamento encontrado para NF {numero_nf}")
+                resultado['sucesso'] = True
+                return resultado
+
+            logger.info(f"   Encontrados {len(itens_fat)} itens de faturamento")
+
+            # 2. Processar cada item
+            for item in itens_fat:
+                # Verificar se ja foi marcado como revertida
+                if item.revertida:
+                    logger.info(f"   Item {item.cod_produto} ja estava marcado como revertido")
+                    continue
+
+                # 2.1. Marcar FaturamentoProduto como revertida
+                item.revertida = True
+                item.nota_credito_id = nota_credito_id
+                item.data_reversao = agora_brasil()
+                # NAO altera status_nf - continua 'Lancado'
+                resultado['faturamento_marcados'] += 1
+
+                logger.info(f"   FaturamentoProduto {item.id} ({item.cod_produto}) marcado como revertida")
+
+                # 2.2. Criar MovimentacaoEstoque de ENTRADA (reversao)
+                # Verificar se ja existe movimentacao de reversao para este item
+                mov_existente = MovimentacaoEstoque.query.filter_by(
+                    numero_nf=str(numero_nf),
+                    cod_produto=item.cod_produto,
+                    local_movimentacao='REVERSAO',
+                    ativo=True
+                ).first()
+
+                if mov_existente:
+                    logger.info(f"   Movimentacao de reversao ja existe para {item.cod_produto}")
+                    continue
+
+                # Criar movimentacao de entrada (quantidade positiva = volta ao estoque)
+                mov = MovimentacaoEstoque(
+                    cod_produto=item.cod_produto,
+                    nome_produto=item.nome_produto,
+                    data_movimentacao=datetime.now().date(),
+                    tipo_movimentacao='ENTRADA',        # E uma entrada de estoque
+                    local_movimentacao='REVERSAO',      # Origem: reversao de NF
+                    qtd_movimentacao=item.qtd_produto_faturado,  # Positivo (volta ao estoque)
+                    numero_nf=str(numero_nf),           # NF que foi revertida
+                    status_nf='REVERTIDA',              # Status especifico
+                    tipo_origem='ODOO',
+                    observacao=f'Reversao NF {numero_nf} via NC {nota_credito_name}',
+                    criado_em=agora_brasil(),
+                    criado_por='Sistema Odoo - Reversao'
+                )
+                db.session.add(mov)
+                resultado['movimentacoes_criadas'] += 1
+
+                logger.info(f"   MovimentacaoEstoque criada: {item.cod_produto} +{item.qtd_produto_faturado}")
+
+            resultado['sucesso'] = True
+            logger.info(f"   Reversao de estoque concluida: {resultado['faturamento_marcados']} itens marcados, {resultado['movimentacoes_criadas']} movimentacoes criadas")
+
+            return resultado
+
+        except Exception as e:
+            erro_msg = f"Erro ao processar reversao de estoque para NF {numero_nf}: {str(e)}"
+            logger.error(erro_msg)
+            resultado['erros'].append(erro_msg)
+            resultado['sucesso'] = False
+            return resultado
 
     # =========================================================================
     # UTILITARIOS
