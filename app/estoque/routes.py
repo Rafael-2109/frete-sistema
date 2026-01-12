@@ -236,58 +236,116 @@ def index():
 @estoque_bp.route('/movimentacoes')
 @login_required
 def listar_movimentacoes():
-    """Lista movimentações de estoque"""
+    """Lista movimentações de estoque com filtros avançados"""
     # Filtros
     cod_produto = request.args.get('cod_produto', '')
+    nome_produto = request.args.get('nome_produto', '')
+    numero_nf = request.args.get('numero_nf', '')
     tipo_movimentacao = request.args.get('tipo_movimentacao', '')
-    observacao_filtro = request.args.get('observacao', '')  # NOVO: Filtro de observações
-    
+    tipo_origem = request.args.get('tipo_origem', '')
+    status_nf = request.args.get('status_nf', '')
+    local_movimentacao = request.args.get('local_movimentacao', '')
+    data_inicio = request.args.get('data_inicio', '')
+    data_fim = request.args.get('data_fim', '')
+    observacao_filtro = request.args.get('observacao', '')
+
     # Paginação
     try:
         page = int(request.args.get('page', 1))
     except (ValueError, TypeError):
         page = 1
-    per_page = 200  # 200 itens por página conforme solicitado
-    
+    per_page = 200  # 200 itens por página
+
     try:
         inspector = inspect(db.engine)
-        
+
         if inspector.has_table('movimentacao_estoque'):
             # Query base
             query = MovimentacaoEstoque.query
-            
+
             # Aplicar filtros
             if cod_produto:
                 query = query.filter(MovimentacaoEstoque.cod_produto.ilike(f'%{cod_produto}%'))
+            if nome_produto:
+                query = query.filter(MovimentacaoEstoque.nome_produto.ilike(f'%{nome_produto}%'))
+            if numero_nf:
+                query = query.filter(MovimentacaoEstoque.numero_nf.ilike(f'%{numero_nf}%'))
             if tipo_movimentacao:
                 query = query.filter(MovimentacaoEstoque.tipo_movimentacao == tipo_movimentacao)
-            # NOVO: Filtro de observações com ILIKE
+            if tipo_origem:
+                query = query.filter(MovimentacaoEstoque.tipo_origem == tipo_origem)
+            if status_nf:
+                query = query.filter(MovimentacaoEstoque.status_nf == status_nf)
+            if local_movimentacao:
+                query = query.filter(MovimentacaoEstoque.local_movimentacao == local_movimentacao)
+            if data_inicio:
+                from datetime import datetime
+                try:
+                    dt_inicio = datetime.strptime(data_inicio, '%Y-%m-%d').date()
+                    query = query.filter(MovimentacaoEstoque.data_movimentacao >= dt_inicio)
+                except ValueError:
+                    pass
+            if data_fim:
+                from datetime import datetime
+                try:
+                    dt_fim = datetime.strptime(data_fim, '%Y-%m-%d').date()
+                    query = query.filter(MovimentacaoEstoque.data_movimentacao <= dt_fim)
+                except ValueError:
+                    pass
             if observacao_filtro:
                 query = query.filter(MovimentacaoEstoque.observacao.ilike(f'%{observacao_filtro}%'))
-            
+
             # Ordenação e paginação
             movimentacoes = query.order_by(MovimentacaoEstoque.data_movimentacao.desc()).paginate(
                 page=page, per_page=per_page, error_out=False
             )
-            
-            # 🔧 CARREGAR TIPOS DOS DADOS REAIS para o dropdown
+
+            # Carregar valores únicos para os dropdowns
             tipos_disponiveis = sorted(set(
-                m.tipo_movimentacao for m in MovimentacaoEstoque.query.all() 
+                m.tipo_movimentacao for m in MovimentacaoEstoque.query.with_entities(MovimentacaoEstoque.tipo_movimentacao).distinct().all()
                 if m.tipo_movimentacao
+            ))
+            origens_disponiveis = sorted(set(
+                m.tipo_origem for m in MovimentacaoEstoque.query.with_entities(MovimentacaoEstoque.tipo_origem).distinct().all()
+                if m.tipo_origem
+            ))
+            status_disponiveis = sorted(set(
+                m.status_nf for m in MovimentacaoEstoque.query.with_entities(MovimentacaoEstoque.status_nf).distinct().all()
+                if m.status_nf
+            ))
+            locais_disponiveis = sorted(set(
+                m.local_movimentacao for m in MovimentacaoEstoque.query.with_entities(MovimentacaoEstoque.local_movimentacao).distinct().all()
+                if m.local_movimentacao
             ))
         else:
             movimentacoes = None
             tipos_disponiveis = []
+            origens_disponiveis = []
+            status_disponiveis = []
+            locais_disponiveis = []
     except Exception:
         movimentacoes = None
         tipos_disponiveis = []
-    
+        origens_disponiveis = []
+        status_disponiveis = []
+        locais_disponiveis = []
+
     return render_template('estoque/listar_movimentacoes.html',
                          movimentacoes=movimentacoes,
                          cod_produto=cod_produto,
+                         nome_produto=nome_produto,
+                         numero_nf=numero_nf,
                          tipo_movimentacao=tipo_movimentacao,
-                         observacao_filtro=observacao_filtro,  # NOVO: Passar filtro de observações
-                         tipos_disponiveis=tipos_disponiveis)
+                         tipo_origem=tipo_origem,
+                         status_nf=status_nf,
+                         local_movimentacao=local_movimentacao,
+                         data_inicio=data_inicio,
+                         data_fim=data_fim,
+                         observacao_filtro=observacao_filtro,
+                         tipos_disponiveis=tipos_disponiveis,
+                         origens_disponiveis=origens_disponiveis,
+                         status_disponiveis=status_disponiveis,
+                         locais_disponiveis=locais_disponiveis)
 
 @estoque_bp.route('/api/estatisticas')
 @login_required
@@ -1603,11 +1661,52 @@ def baixar_modelo_movimentacoes():
 @estoque_bp.route('/movimentacoes/exportar-dados')
 @login_required
 def exportar_dados_movimentacoes():
-    """Exporta dados de movimentações para Excel"""
-    try:        
-        # Buscar movimentações
-        movimentacoes = MovimentacaoEstoque.query.order_by(MovimentacaoEstoque.data_movimentacao.desc()).all()
-        
+    """Exporta dados de movimentações para Excel com filtros"""
+    try:
+        # Capturar filtros da requisição
+        cod_produto = request.args.get('cod_produto', '')
+        nome_produto = request.args.get('nome_produto', '')
+        numero_nf = request.args.get('numero_nf', '')
+        tipo_movimentacao = request.args.get('tipo_movimentacao', '')
+        tipo_origem = request.args.get('tipo_origem', '')
+        status_nf = request.args.get('status_nf', '')
+        local_movimentacao = request.args.get('local_movimentacao', '')
+        data_inicio = request.args.get('data_inicio', '')
+        data_fim = request.args.get('data_fim', '')
+
+        # Construir query com filtros
+        query = MovimentacaoEstoque.query
+
+        if cod_produto:
+            query = query.filter(MovimentacaoEstoque.cod_produto.ilike(f'%{cod_produto}%'))
+        if nome_produto:
+            query = query.filter(MovimentacaoEstoque.nome_produto.ilike(f'%{nome_produto}%'))
+        if numero_nf:
+            query = query.filter(MovimentacaoEstoque.numero_nf.ilike(f'%{numero_nf}%'))
+        if tipo_movimentacao:
+            query = query.filter(MovimentacaoEstoque.tipo_movimentacao == tipo_movimentacao)
+        if tipo_origem:
+            query = query.filter(MovimentacaoEstoque.tipo_origem == tipo_origem)
+        if status_nf:
+            query = query.filter(MovimentacaoEstoque.status_nf == status_nf)
+        if local_movimentacao:
+            query = query.filter(MovimentacaoEstoque.local_movimentacao == local_movimentacao)
+        if data_inicio:
+            try:
+                dt_inicio = datetime.strptime(data_inicio, '%Y-%m-%d').date()
+                query = query.filter(MovimentacaoEstoque.data_movimentacao >= dt_inicio)
+            except ValueError:
+                pass
+        if data_fim:
+            try:
+                dt_fim = datetime.strptime(data_fim, '%Y-%m-%d').date()
+                query = query.filter(MovimentacaoEstoque.data_movimentacao <= dt_fim)
+            except ValueError:
+                pass
+
+        # Buscar movimentações filtradas
+        movimentacoes = query.order_by(MovimentacaoEstoque.data_movimentacao.desc()).all()
+
         # Converter para dicionário
         dados = []
         for mov in movimentacoes:
@@ -1638,32 +1737,54 @@ def exportar_dados_movimentacoes():
                 'atualizado_por': mov.atualizado_por,
                 'ativo': mov.ativo
             })
-        
+
         df = pd.DataFrame(dados)
-        
+
         # Criar Excel em memória
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df.to_excel(writer, index=False, sheet_name='Movimentações')
-            
-            # Adicionar resumo
-            resumo = pd.DataFrame({
-                'Estatísticas': [
-                    f'Total de movimentações: {len(dados)}',
-                    f'Exportado em: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}',
-                    f'Sistema de Fretes'
-                ]
-            })
+
+            # Adicionar resumo com filtros aplicados
+            filtros_aplicados = []
+            if data_inicio:
+                filtros_aplicados.append(f'Data início: {data_inicio}')
+            if data_fim:
+                filtros_aplicados.append(f'Data fim: {data_fim}')
+            if cod_produto:
+                filtros_aplicados.append(f'Código: {cod_produto}')
+            if nome_produto:
+                filtros_aplicados.append(f'Nome: {nome_produto}')
+            if numero_nf:
+                filtros_aplicados.append(f'NF: {numero_nf}')
+            if tipo_movimentacao:
+                filtros_aplicados.append(f'Tipo: {tipo_movimentacao}')
+            if tipo_origem:
+                filtros_aplicados.append(f'Origem: {tipo_origem}')
+            if status_nf:
+                filtros_aplicados.append(f'Status NF: {status_nf}')
+            if local_movimentacao:
+                filtros_aplicados.append(f'Local: {local_movimentacao}')
+
+            resumo_data = [
+                f'Total de movimentações: {len(dados)}',
+                f'Exportado em: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}',
+                f'Sistema de Fretes',
+                '',
+                'Filtros aplicados:',
+            ] + (filtros_aplicados if filtros_aplicados else ['Nenhum filtro aplicado'])
+
+            resumo = pd.DataFrame({'Estatísticas': resumo_data})
             resumo.to_excel(writer, index=False, sheet_name='Resumo')
-        
+
         output.seek(0)
-        
+
         response = make_response(output.read())
         response.headers['Content-Disposition'] = f'attachment; filename=movimentacoes_estoque_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
         response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        
+
         return response
-        
+
     except Exception as e:
         logger.error(f"Erro ao exportar dados: {str(e)}")
         flash(f'Erro ao exportar dados: {str(e)}', 'error')

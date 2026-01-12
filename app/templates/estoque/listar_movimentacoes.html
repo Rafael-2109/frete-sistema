@@ -21,47 +21,102 @@
                     <h5 class="mb-0"><i class="fas fa-filter"></i> Filtros</h5>
                 </div>
                 <div class="card-body">
-                    <form method="GET" action="{{ url_for('estoque.listar_movimentacoes') }}" class="row">
+                    <form method="GET" action="{{ url_for('estoque.listar_movimentacoes') }}" id="formFiltros">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                        <div class="col-md-3">
-                            <label for="cod_produto" class="form-label">Código do Produto</label>
-                            <input type="text" class="form-control" id="cod_produto" name="cod_produto" 
-                                   value="{{ cod_produto }}" placeholder="Digite o código">
+                        <!-- Linha 1: Produto e Tipo -->
+                        <div class="row mb-3">
+                            <div class="col-md-2">
+                                <label for="cod_produto" class="form-label">Código</label>
+                                <input type="text" class="form-control form-control-sm" id="cod_produto" name="cod_produto"
+                                       value="{{ cod_produto }}" placeholder="Código...">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="nome_produto" class="form-label">Nome do Produto</label>
+                                <input type="text" class="form-control form-control-sm" id="nome_produto" name="nome_produto"
+                                       value="{{ nome_produto }}" placeholder="Nome...">
+                            </div>
+                            <div class="col-md-2">
+                                <label for="numero_nf" class="form-label">Número NF</label>
+                                <input type="text" class="form-control form-control-sm" id="numero_nf" name="numero_nf"
+                                       value="{{ numero_nf }}" placeholder="NF...">
+                            </div>
+                            <div class="col-md-2">
+                                <label for="tipo_movimentacao" class="form-label">Tipo</label>
+                                <select class="form-select form-select-sm" id="tipo_movimentacao" name="tipo_movimentacao">
+                                    <option value="">Todos</option>
+                                    {% for tipo in tipos_disponiveis %}
+                                    <option value="{{ tipo }}" {% if tipo == tipo_movimentacao %}selected{% endif %}>
+                                        {{ tipo }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label for="tipo_origem" class="form-label">Origem</label>
+                                <select class="form-select form-select-sm" id="tipo_origem" name="tipo_origem">
+                                    <option value="">Todas</option>
+                                    {% for origem in origens_disponiveis %}
+                                    <option value="{{ origem }}" {% if origem == tipo_origem %}selected{% endif %}>
+                                        {{ origem }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-1">
+                                <label for="status_nf" class="form-label">Status</label>
+                                <select class="form-select form-select-sm" id="status_nf" name="status_nf">
+                                    <option value="">Todos</option>
+                                    {% for status in status_disponiveis %}
+                                    <option value="{{ status }}" {% if status == status_nf %}selected{% endif %}>
+                                        {{ status }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
                         </div>
-                        <div class="col-md-3">
-                            <label for="tipo_movimentacao" class="form-label">Tipo de Movimentação</label>
-                            <select class="form-select" id="tipo_movimentacao" name="tipo_movimentacao">
-                                <option value="">Todos os tipos</option>
-                                {% for tipo in tipos_disponiveis %}
-                                <option value="{{ tipo }}" {% if tipo == tipo_movimentacao %}selected{% endif %}>
-                                    {{ tipo }}
-                                </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-md-3">
-                            <label for="observacao" class="form-label">Observações (NF, etc)</label>
-                            <input type="text" class="form-control" id="observacao" name="observacao" 
-                                   value="{{ observacao_filtro }}" placeholder="Digite NF ou observação">
-                        </div>
-                        <div class="col-md-3 d-flex align-items-end">
-                            <button type="submit" class="btn btn-primary me-2">
-                                <i class="fas fa-search"></i> Pesquisar
-                            </button>
-                            <a href="{{ url_for('estoque.listar_movimentacoes') }}" class="btn btn-secondary">
-                                <i class="fas fa-times"></i> Limpar
-                            </a>
+                        <!-- Linha 2: Datas e Ações -->
+                        <div class="row">
+                            <div class="col-md-2">
+                                <label for="data_inicio" class="form-label">Data Início</label>
+                                <input type="date" class="form-control form-control-sm" id="data_inicio" name="data_inicio"
+                                       value="{{ data_inicio }}">
+                            </div>
+                            <div class="col-md-2">
+                                <label for="data_fim" class="form-label">Data Fim</label>
+                                <input type="date" class="form-control form-control-sm" id="data_fim" name="data_fim"
+                                       value="{{ data_fim }}">
+                            </div>
+                            <div class="col-md-2">
+                                <label for="local_movimentacao" class="form-label">Local</label>
+                                <select class="form-select form-select-sm" id="local_movimentacao" name="local_movimentacao">
+                                    <option value="">Todos</option>
+                                    {% for local in locais_disponiveis %}
+                                    <option value="{{ local }}" {% if local == local_movimentacao %}selected{% endif %}>
+                                        {{ local }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="observacao" class="form-label">Observações</label>
+                                <input type="text" class="form-control form-control-sm" id="observacao" name="observacao"
+                                       value="{{ observacao_filtro }}" placeholder="Observação...">
+                            </div>
+                            <div class="col-md-3 d-flex align-items-end gap-2">
+                                <button type="submit" class="btn btn-primary btn-sm">
+                                    <i class="fas fa-search"></i> Pesquisar
+                                </button>
+                                <a href="{{ url_for('estoque.listar_movimentacoes') }}" class="btn btn-secondary btn-sm">
+                                    <i class="fas fa-times"></i> Limpar
+                                </a>
+                                {% if movimentacoes and movimentacoes.items %}
+                                <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#modalExportar">
+                                    <i class="fas fa-file-export"></i> Exportar
+                                </button>
+                                {% endif %}
+                            </div>
                         </div>
                     </form>
-                    <div class="row mt-3">
-                        <div class="col-md-12 d-flex justify-content-end">
-                            {% if movimentacoes and movimentacoes.items %}
-                            <a href="{{ url_for('estoque.exportar_dados_movimentacoes') }}" class="btn btn-warning">
-                                <i class="fas fa-file-export"></i> Exportar
-                            </a>
-                            {% endif %}
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -101,55 +156,104 @@
                 <div class="card-body">
                     {% if movimentacoes and movimentacoes.items %}
                     <div class="table-responsive">
-                        <table class="table table-striped table-hover">
+                        <table class="table table-striped table-hover table-sm" style="font-size: 0.85rem;">
                             <thead class="table-dark">
                                 <tr>
-                                    <th>ID</th>
-                                    <th>Data</th>
-                                    <th>Tipo</th>
-                                    <th>Código</th>
-                                    <th>Produto</th>
-                                    <th>Quantidade</th>
-                                    <th>Local</th>
-                                    <th>Observações</th>
-                                    <th>Criado por</th>
-                                    <th>Ações</th>
+                                    <th style="width: 50px;">ID</th>
+                                    <th style="width: 85px;">Data</th>
+                                    <th style="width: 100px;">Tipo<br><small class="fw-normal">Origem</small></th>
+                                    <th>Produto<br><small class="fw-normal">Código</small></th>
+                                    <th style="width: 100px;">Quantidade</th>
+                                    <th style="width: 110px;">NF<br><small class="fw-normal">Status</small></th>
+                                    <th style="width: 120px;">Local<br><small class="fw-normal">Lote/Pedido</small></th>
+                                    <th>Observações<br><small class="fw-normal">Criado por</small></th>
+                                    <th style="width: 80px;">Ações</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for mov in movimentacoes.items %}
                                 <tr id="row-{{ mov.id }}">
-                                    <td>{{ mov.id }}</td>
+                                    <td class="text-muted">{{ mov.id }}</td>
                                     <td>{{ mov.data_movimentacao.strftime('%d/%m/%Y') if mov.data_movimentacao else '-' }}</td>
                                     <td>
-                                        <span class="fw-bold 
-                                            {% if 'ENTRADA' in mov.tipo_movimentacao or 'PRODUÇÃO' in mov.tipo_movimentacao %}text-success
-                                            {% elif 'SAÍDA' in mov.tipo_movimentacao or 'AVARIA' in mov.tipo_movimentacao %}text-danger
-                                            {% else %}text-primary{% endif %}">
-                                            {{ mov.tipo_movimentacao }}
-                                        </span>
+                                        <div class="d-flex flex-column">
+                                            <span class="fw-bold
+                                                {% if 'ENTRADA' in mov.tipo_movimentacao or 'PRODUÇÃO' in mov.tipo_movimentacao or 'PRODUCAO' in mov.tipo_movimentacao %}text-success
+                                                {% elif 'SAÍDA' in mov.tipo_movimentacao or 'SAIDA' in mov.tipo_movimentacao or 'AVARIA' in mov.tipo_movimentacao %}text-danger
+                                                {% else %}text-primary{% endif %}">
+                                                {{ mov.tipo_movimentacao }}
+                                            </span>
+                                            <small class="text-muted">
+                                                {% if mov.tipo_origem %}
+                                                    <span class="badge bg-secondary">{{ mov.tipo_origem }}</span>
+                                                {% else %}
+                                                    -
+                                                {% endif %}
+                                            </small>
+                                        </div>
                                     </td>
-                                    <td class="fw-bold text-dark">{{ mov.cod_produto }}</td>
-                                    <td class="fw-bold text-dark">{{ mov.nome_produto }}</td>
                                     <td>
-                                        <span class="fw-bold 
+                                        <div class="d-flex flex-column">
+                                            <span class="fw-bold text-dark" title="{{ mov.nome_produto }}">
+                                                {{ mov.nome_produto[:35] }}{% if mov.nome_produto|length > 35 %}...{% endif %}
+                                            </span>
+                                            <small class="text-primary fw-bold">{{ mov.cod_produto }}</small>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="fw-bold
                                             {% if mov.qtd_movimentacao > 0 %}text-success
                                             {% else %}text-danger{% endif %}">
                                             {{ mov.qtd_movimentacao|valor_br }}
                                         </span>
                                     </td>
-                                    <td class="fw-bold text-dark">{{ mov.local_movimentacao or '-' }}</td>
-                                    <td title="{{ mov.observacao or '' }}">
-                                        {% if mov.observacao %}
-                                            {{ mov.observacao[:50] }}{% if mov.observacao|length > 50 %}...{% endif %}
-                                        {% else %}
-                                            -
-                                        {% endif %}
+                                    <td>
+                                        <div class="d-flex flex-column">
+                                            <span class="{% if mov.numero_nf %}fw-bold text-info{% else %}text-muted{% endif %}">
+                                                {{ mov.numero_nf or '-' }}
+                                            </span>
+                                            <small>
+                                                {% if mov.status_nf == 'FATURADO' %}
+                                                    <span class="badge bg-success">FATURADO</span>
+                                                {% elif mov.status_nf == 'CANCELADO' %}
+                                                    <span class="badge bg-danger">CANCELADO</span>
+                                                {% elif mov.status_nf %}
+                                                    <span class="badge bg-secondary">{{ mov.status_nf }}</span>
+                                                {% else %}
+                                                    -
+                                                {% endif %}
+                                            </small>
+                                        </div>
                                     </td>
-                                    <td>{{ mov.created_by or '-' }}</td>
+                                    <td>
+                                        <div class="d-flex flex-column">
+                                            <span class="text-dark">{{ mov.local_movimentacao or '-' }}</span>
+                                            <small class="text-muted">
+                                                {% if mov.separacao_lote_id %}
+                                                    L: {{ mov.separacao_lote_id[:10] }}...
+                                                {% elif mov.num_pedido %}
+                                                    P: {{ mov.num_pedido }}
+                                                {% else %}
+                                                    -
+                                                {% endif %}
+                                            </small>
+                                        </div>
+                                    </td>
+                                    <td title="{{ mov.observacao or '' }}">
+                                        <div class="d-flex flex-column">
+                                            <span>
+                                                {% if mov.observacao %}
+                                                    {{ mov.observacao[:40] }}{% if mov.observacao|length > 40 %}...{% endif %}
+                                                {% else %}
+                                                    -
+                                                {% endif %}
+                                            </span>
+                                            <small class="text-muted">{{ mov.criado_por or '-' }}</small>
+                                        </div>
+                                    </td>
                                     <td>
                                         <div class="btn-group btn-group-sm" role="group">
-                                            <a href="javascript:void(0)" 
+                                            <a href="javascript:void(0)"
                                                onclick="editarMovimentacao({{ mov.id }})"
                                                class="btn btn-outline-primary btn-sm" title="Editar">
                                                 <i class="fas fa-edit"></i>
@@ -259,32 +363,32 @@
                     <div class="row">
                         <!-- Código do Produto com Dropdown -->
                         <div class="col-md-6 mb-3">
-                            <label for="cod_produto" class="form-label">Código ou Nome do Produto <span class="text-danger">*</span></label>
+                            <label for="modal_cod_produto" class="form-label">Código ou Nome do Produto <span class="text-danger">*</span></label>
                             <div class="position-relative">
-                                <input type="text" class="form-control" id="cod_produto" name="cod_produto" 
+                                <input type="text" class="form-control" id="modal_cod_produto" name="cod_produto"
                                        placeholder="Digite código ou nome do produto..." required autocomplete="off">
                                 <div class="invalid-feedback">Campo obrigatório</div>
-                                
+
                                 <!-- Dropdown de Sugestões -->
-                                <div id="dropdown-sugestoes" class="dropdown-suggestions" style="display: none;">
+                                <div id="modal_dropdown_sugestoes" class="dropdown-suggestions" style="display: none;">
                                     <!-- Sugestões serão inseridas aqui via JavaScript -->
                                 </div>
                             </div>
                         </div>
-                        
+
                         <!-- Nome do Produto (Auto-preenchido) -->
                         <div class="col-md-6 mb-3">
-                            <label for="nome_produto" class="form-label">Nome do Produto</label>
-                            <input type="text" class="form-control" id="nome_produto" name="nome_produto" readonly>
+                            <label for="modal_nome_produto" class="form-label">Nome do Produto</label>
+                            <input type="text" class="form-control" id="modal_nome_produto" name="nome_produto" readonly>
                             <small class="text-muted">Selecionado automaticamente</small>
                         </div>
                     </div>
-                    
+
                     <div class="row">
                         <!-- Tipo de Movimentação -->
                         <div class="col-md-6 mb-3">
-                            <label for="tipo_movimentacao" class="form-label">Tipo de Movimentação <span class="text-danger">*</span></label>
-                            <select class="form-select" id="tipo_movimentacao" name="tipo_movimentacao" required>
+                            <label for="modal_tipo_movimentacao" class="form-label">Tipo de Movimentação <span class="text-danger">*</span></label>
+                            <select class="form-select" id="modal_tipo_movimentacao" name="tipo_movimentacao" required>
                                 <option value="">Selecione...</option>
                                 <option value="AJUSTE">Ajuste</option>
                                 <option value="AVARIA">Avaria</option>
@@ -292,44 +396,44 @@
                                 <option value="TRANSFERENCIA">Transferência</option>
                             </select>
                         </div>
-                        
+
                         <!-- Quantidade -->
                         <div class="col-md-6 mb-3">
-                            <label for="quantidade" class="form-label">Quantidade <span class="text-danger">*</span></label>
+                            <label for="modal_quantidade" class="form-label">Quantidade <span class="text-danger">*</span></label>
                             <div class="input-group">
-                                <input type="number" class="form-control" id="quantidade" name="quantidade" step="0.01" required>
+                                <input type="number" class="form-control" id="modal_quantidade" name="quantidade" step="0.01" required>
                             </div>
-                            <small class="text-muted" id="avaria-hint" style="display:none;">
+                            <small class="text-muted" id="modal_avaria_hint" style="display:none;">
                                 <i class="fas fa-info-circle"></i> Avarias são automaticamente negativas
                             </small>
                         </div>
                     </div>
-                    
+
                     <div class="row">
                         <!-- Data da Movimentação -->
                         <div class="col-md-6 mb-3">
-                            <label for="data_movimentacao" class="form-label">Data da Movimentação <span class="text-danger">*</span></label>
-                            <input type="date" class="form-control" id="data_movimentacao" name="data_movimentacao" required>
+                            <label for="modal_data_movimentacao" class="form-label">Data da Movimentação <span class="text-danger">*</span></label>
+                            <input type="date" class="form-control" id="modal_data_movimentacao" name="data_movimentacao" required>
                         </div>
-                        
+
                         <!-- Local -->
                         <div class="col-md-6 mb-3">
-                            <label for="local_movimentacao" class="form-label">Local</label>
-                            <input type="text" class="form-control" id="local_movimentacao" name="local_movimentacao" value="ESTOQUE PRINCIPAL">
+                            <label for="modal_local_movimentacao" class="form-label">Local</label>
+                            <input type="text" class="form-control" id="modal_local_movimentacao" name="local_movimentacao" value="ESTOQUE PRINCIPAL">
                         </div>
                     </div>
-                    
+
                     <div class="row">
                         <!-- Documento de Origem -->
                         <div class="col-md-6 mb-3">
-                            <label for="documento_origem" class="form-label">Documento de Origem</label>
-                            <input type="text" class="form-control" id="documento_origem" name="documento_origem" placeholder="Ex: NF 123456, Ajuste 001">
+                            <label for="modal_documento_origem" class="form-label">Documento de Origem</label>
+                            <input type="text" class="form-control" id="modal_documento_origem" name="documento_origem" placeholder="Ex: NF 123456, Ajuste 001">
                         </div>
-                        
+
                         <!-- Observações -->
                         <div class="col-md-6 mb-3">
-                            <label for="observacoes" class="form-label">Observações</label>
-                            <textarea class="form-control" id="observacoes" name="observacoes" rows="2" placeholder="Detalhes da movimentação..."></textarea>
+                            <label for="modal_observacao" class="form-label">Observações</label>
+                            <textarea class="form-control" id="modal_observacao" name="observacao" rows="2" placeholder="Detalhes da movimentação..."></textarea>
                         </div>
                     </div>
                 </div>
@@ -580,8 +684,123 @@
     </div>
 </div>
 
+<!-- Modal de Exportação com Filtros -->
+<div class="modal fade" id="modalExportar" tabindex="-1" aria-labelledby="modalExportarLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title" id="modalExportarLabel">
+                    <i class="fas fa-file-export"></i> Exportar Movimentações para Excel
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="formExportar" method="GET" action="{{ url_for('estoque.exportar_dados_movimentacoes') }}">
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> Selecione os filtros para limitar a exportação.
+                        <strong>Período é obrigatório</strong> para evitar arquivos muito grandes.
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="export_data_inicio" class="form-label">Data Início <span class="text-danger">*</span></label>
+                            <input type="date" class="form-control" id="export_data_inicio" name="data_inicio" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="export_data_fim" class="form-label">Data Fim <span class="text-danger">*</span></label>
+                            <input type="date" class="form-control" id="export_data_fim" name="data_fim" required>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="export_cod_produto" class="form-label">Código do Produto</label>
+                            <input type="text" class="form-control" id="export_cod_produto" name="cod_produto" placeholder="Opcional">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="export_nome_produto" class="form-label">Nome do Produto</label>
+                            <input type="text" class="form-control" id="export_nome_produto" name="nome_produto" placeholder="Opcional">
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label for="export_tipo_movimentacao" class="form-label">Tipo de Movimentação</label>
+                            <select class="form-select" id="export_tipo_movimentacao" name="tipo_movimentacao">
+                                <option value="">Todos</option>
+                                {% for tipo in tipos_disponiveis %}
+                                <option value="{{ tipo }}">{{ tipo }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="export_tipo_origem" class="form-label">Origem</label>
+                            <select class="form-select" id="export_tipo_origem" name="tipo_origem">
+                                <option value="">Todas</option>
+                                {% for origem in origens_disponiveis %}
+                                <option value="{{ origem }}">{{ origem }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="export_status_nf" class="form-label">Status NF</label>
+                            <select class="form-select" id="export_status_nf" name="status_nf">
+                                <option value="">Todos</option>
+                                {% for status in status_disponiveis %}
+                                <option value="{{ status }}">{{ status }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="export_numero_nf" class="form-label">Número NF</label>
+                            <input type="text" class="form-control" id="export_numero_nf" name="numero_nf" placeholder="Opcional">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="export_local_movimentacao" class="form-label">Local</label>
+                            <select class="form-select" id="export_local_movimentacao" name="local_movimentacao">
+                                <option value="">Todos</option>
+                                {% for local in locais_disponiveis %}
+                                <option value="{{ local }}">{{ local }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times"></i> Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-warning">
+                        <i class="fas fa-file-excel"></i> Exportar Excel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
+// Inicializar datas do modal de exportação com período padrão (últimos 30 dias)
+document.addEventListener('DOMContentLoaded', function() {
+    const hoje = new Date();
+    const trintaDiasAtras = new Date(hoje);
+    trintaDiasAtras.setDate(hoje.getDate() - 30);
+
+    const exportDataFim = document.getElementById('export_data_fim');
+    const exportDataInicio = document.getElementById('export_data_inicio');
+
+    if (exportDataFim) {
+        exportDataFim.value = hoje.toISOString().split('T')[0];
+    }
+    if (exportDataInicio) {
+        exportDataInicio.value = trintaDiasAtras.toISOString().split('T')[0];
+    }
+});
+
 function confirmarExclusao(id, codProduto, tipoMovimentacao) {
     // Verificar se SweetAlert2 está disponível
     if (typeof Swal !== 'undefined') {
@@ -731,40 +950,43 @@ function updateRowCount() {
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // 1. Definir data de hoje como padrão
-    const dataInput = document.getElementById('data_movimentacao');
+    // 1. Definir data de hoje como padrão no MODAL
+    const modalDataInput = document.getElementById('modal_data_movimentacao');
     const hoje = new Date().toISOString().split('T')[0];
-    dataInput.value = hoje;
-    
-    // 2. Sistema de busca com dropdown de sugestões
-    const codProdutoInput = document.getElementById('cod_produto');
-    const nomeProdutoInput = document.getElementById('nome_produto');
-    const dropdownSugestoes = document.getElementById('dropdown-sugestoes');
-    
+    if (modalDataInput) {
+        modalDataInput.value = hoje;
+    }
+
+    // 2. Sistema de busca com dropdown de sugestões (MODAL)
+    const modalCodProdutoInput = document.getElementById('modal_cod_produto');
+    const modalNomeProdutoInput = document.getElementById('modal_nome_produto');
+    const modalDropdownSugestoes = document.getElementById('modal_dropdown_sugestoes');
+
     let timeoutBusca;
-    let produtoSelecionado = false;
-    
-    codProdutoInput.addEventListener('input', function() {
-        clearTimeout(timeoutBusca);
-        const termo = this.value.trim();
-        
-        if (termo.length >= 2) {
-            timeoutBusca = setTimeout(() => {
-                buscarProdutos(termo);
-            }, 300);
-        } else {
-            ocultarDropdown();
-            limparProdutoSelecionado();
-        }
-    });
-    
+
+    if (modalCodProdutoInput) {
+        modalCodProdutoInput.addEventListener('input', function() {
+            clearTimeout(timeoutBusca);
+            const termo = this.value.trim();
+
+            if (termo.length >= 2) {
+                timeoutBusca = setTimeout(() => {
+                    buscarProdutos(termo);
+                }, 300);
+            } else {
+                ocultarDropdown();
+                limparProdutoSelecionado();
+            }
+        });
+    }
+
     // Ocultar dropdown ao clicar fora
     document.addEventListener('click', function(e) {
-        if (!e.target.closest('.position-relative')) {
+        if (!e.target.closest('#modalNovaMovimentacao .position-relative')) {
             ocultarDropdown();
         }
     });
-    
+
     function buscarProdutos(termo) {
         fetch(`/estoque/api/buscar-produto/${encodeURIComponent(termo)}`)
             .then(response => response.json())
@@ -780,7 +1002,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 ocultarDropdown();
             });
     }
-    
+
     function mostrarSugestoes(sugestoes) {
         let html = '';
         sugestoes.forEach(produto => {
@@ -790,137 +1012,145 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             `;
         });
-        
-        dropdownSugestoes.innerHTML = html;
-        dropdownSugestoes.style.display = 'block';
-        
+
+        modalDropdownSugestoes.innerHTML = html;
+        modalDropdownSugestoes.style.display = 'block';
+
         // Adicionar eventos de clique nas sugestões
-        dropdownSugestoes.querySelectorAll('.suggestion-item').forEach(item => {
+        modalDropdownSugestoes.querySelectorAll('.suggestion-item').forEach(item => {
             item.addEventListener('click', function() {
                 selecionarProduto(this.dataset.codigo, this.dataset.nome);
             });
         });
     }
-    
+
     function mostrarSemResultados() {
-        dropdownSugestoes.innerHTML = '<div class="no-suggestions">Nenhum produto encontrado</div>';
-        dropdownSugestoes.style.display = 'block';
+        modalDropdownSugestoes.innerHTML = '<div class="no-suggestions">Nenhum produto encontrado</div>';
+        modalDropdownSugestoes.style.display = 'block';
     }
-    
+
     function selecionarProduto(codigo, nome) {
-        codProdutoInput.value = codigo;
-        nomeProdutoInput.value = nome;
-        produtoSelecionado = true;
-        
+        modalCodProdutoInput.value = codigo;
+        modalNomeProdutoInput.value = nome;
+
         // Feedback visual
-        codProdutoInput.classList.remove('is-invalid');
-        codProdutoInput.classList.add('is-valid');
-        
+        modalCodProdutoInput.classList.remove('is-invalid');
+        modalCodProdutoInput.classList.add('is-valid');
+
         ocultarDropdown();
     }
-    
+
     function ocultarDropdown() {
-        dropdownSugestoes.style.display = 'none';
+        if (modalDropdownSugestoes) {
+            modalDropdownSugestoes.style.display = 'none';
+        }
     }
-    
+
     function limparProdutoSelecionado() {
-        if (!produtoSelecionado) {
-            nomeProdutoInput.value = '';
-            codProdutoInput.classList.remove('is-valid', 'is-invalid');
+        if (modalNomeProdutoInput) {
+            modalNomeProdutoInput.value = '';
+        }
+        if (modalCodProdutoInput) {
+            modalCodProdutoInput.classList.remove('is-valid', 'is-invalid');
         }
         produtoSelecionado = false;
     }
     
-    // 3. Quantidade negativa automática para Avaria
-    const tipoSelect = document.getElementById('tipo_movimentacao');
-    const quantidadeInput = document.getElementById('quantidade');
-    const avariaHint = document.getElementById('avaria-hint');
-    
-    tipoSelect.addEventListener('change', function() {
-        if (this.value === 'AVARIA') {
-            avariaHint.style.display = 'block';
-            // Se quantidade for positiva, tornar negativa
-            if (quantidadeInput.value && parseFloat(quantidadeInput.value) > 0) {
-                quantidadeInput.value = -Math.abs(parseFloat(quantidadeInput.value));
-            }
-        } else {
-            avariaHint.style.display = 'none';
-        }
-    });
-    
-    quantidadeInput.addEventListener('input', function() {
-        if (tipoSelect.value === 'AVARIA' && this.value && parseFloat(this.value) > 0) {
-            this.value = -Math.abs(parseFloat(this.value));
-        }
-    });
-    
-    // 4. Manipular envio do formulário
-    const form = document.getElementById('formNovaMovimentacao');
-    form.addEventListener('submit', function(e) {
-        e.preventDefault();
-        
-        // Validar se produto foi selecionado
-        if (!codProdutoInput.value.trim()) {
-            codProdutoInput.classList.add('is-invalid');
-            Swal.fire({
-                icon: 'error',
-                title: 'Erro!',
-                text: 'Selecione um produto válido'
-            });
-            return;
-        }
-        
-        const formData = new FormData(this);
-        
-        fetch(this.action, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': formData.get('csrf_token')
-            },
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Sucesso - manter campos preenchidos mas limpar produto e quantidade
-                codProdutoInput.value = '';
-                nomeProdutoInput.value = '';
-                quantidadeInput.value = '';
-                produtoSelecionado = false;
-                
-                // Remover classes de validação
-                codProdutoInput.classList.remove('is-valid', 'is-invalid');
-                
-                // Mostrar mensagem de sucesso
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Sucesso!',
-                    text: data.message || 'Movimentação registrada com sucesso!',
-                    timer: 2000,
-                    showConfirmButton: false
-                });
-                
-                // Recarregar a tabela
-                setTimeout(() => {
-                    window.location.reload();
-                }, 2000);
+    // 3. Quantidade negativa automática para Avaria (MODAL)
+    const modalTipoSelect = document.getElementById('modal_tipo_movimentacao');
+    const modalQuantidadeInput = document.getElementById('modal_quantidade');
+    const modalAvariaHint = document.getElementById('modal_avaria_hint');
+
+    if (modalTipoSelect) {
+        modalTipoSelect.addEventListener('change', function() {
+            if (this.value === 'AVARIA') {
+                if (modalAvariaHint) modalAvariaHint.style.display = 'block';
+                // Se quantidade for positiva, tornar negativa
+                if (modalQuantidadeInput && modalQuantidadeInput.value && parseFloat(modalQuantidadeInput.value) > 0) {
+                    modalQuantidadeInput.value = -Math.abs(parseFloat(modalQuantidadeInput.value));
+                }
             } else {
+                if (modalAvariaHint) modalAvariaHint.style.display = 'none';
+            }
+        });
+    }
+
+    if (modalQuantidadeInput && modalTipoSelect) {
+        modalQuantidadeInput.addEventListener('input', function() {
+            if (modalTipoSelect.value === 'AVARIA' && this.value && parseFloat(this.value) > 0) {
+                this.value = -Math.abs(parseFloat(this.value));
+            }
+        });
+    }
+
+    // 4. Manipular envio do formulário (MODAL)
+    const form = document.getElementById('formNovaMovimentacao');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            // Validar se produto foi preenchido
+            if (!modalCodProdutoInput || !modalCodProdutoInput.value.trim()) {
+                if (modalCodProdutoInput) modalCodProdutoInput.classList.add('is-invalid');
                 Swal.fire({
                     icon: 'error',
                     title: 'Erro!',
-                    text: data.message || 'Erro ao salvar movimentação'
+                    text: 'Informe um código de produto válido'
                 });
+                return;
             }
-        })
-        .catch(error => {
-            console.error('Erro:', error);
-            Swal.fire({
-                icon: 'error',
-                title: 'Erro!',
-                text: 'Erro de comunicação com o servidor'
+
+            const formData = new FormData(this);
+
+            fetch(this.action, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': formData.get('csrf_token')
+                },
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Sucesso - limpar campos do modal
+                    if (modalCodProdutoInput) modalCodProdutoInput.value = '';
+                    if (modalNomeProdutoInput) modalNomeProdutoInput.value = '';
+                    if (modalQuantidadeInput) modalQuantidadeInput.value = '';
+
+                    // Remover classes de validação
+                    if (modalCodProdutoInput) modalCodProdutoInput.classList.remove('is-valid', 'is-invalid');
+
+                    // Mostrar mensagem de sucesso
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Sucesso!',
+                        text: data.message || 'Movimentação registrada com sucesso!',
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+
+                    // Recarregar a tabela
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Erro!',
+                        text: data.message || 'Erro ao salvar movimentação'
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erro!',
+                    text: 'Erro de comunicação com o servidor'
+                });
             });
         });
-    });
+    }
 });
 
 // ========================================

@@ -591,9 +591,9 @@ def processar_importacao_programacao():
                 novo_produto.created_by = current_user.nome
                 
                 # 🔧 CAMPOS ESPECÍFICOS CONFORME EXCEL
-                novo_produto.linha_producao = str(row.get('SEÇÃO / MÁQUINA', '')).strip()
-                novo_produto.cliente_produto = str(row.get('CLIENTE', '')).strip()
-                novo_produto.observacao_pcp = str(row.get('OP', '')).strip() if row.get('OP') != 'nan' else ''
+                novo_produto.linha_producao = str(row.get('SEÇÃO / MÁQUINA', '')).strip() if pd.notna(row.get('SEÇÃO / MÁQUINA')) else ''
+                novo_produto.cliente_produto = str(row.get('CLIENTE', '')).strip() if pd.notna(row.get('CLIENTE')) else ''
+                novo_produto.observacao_pcp = str(row.get('OP', '')).strip() if pd.notna(row.get('OP')) else ''
                 
                 db.session.add(novo_produto)
                 produtos_importados += 1
@@ -953,24 +953,41 @@ def processar_edicao_palletizacao(id):
         flash(f'❌ Erro ao atualizar palletização: {str(e)}', 'error')
         return redirect(url_for('producao.editar_palletizacao', id=id))
 
-@producao_bp.route('/palletizacao/excluir/<int:id>')
+@producao_bp.route('/palletizacao/excluir/<int:id>', methods=['GET', 'DELETE'])
 @login_required
 def excluir_palletizacao(id):
     """Excluir palletização (soft delete)"""
     try:
         palletizacao = CadastroPalletizacao.query.get_or_404(id)
-        
+        cod_produto = palletizacao.cod_produto
+
         # Soft delete - marcar como inativo
         palletizacao.ativo = False
         palletizacao.updated_by = current_user.nome
-        
+
         db.session.commit()
-        
-        flash(f'✅ Palletização do produto {palletizacao.cod_produto} excluída com sucesso!', 'success')
+
+        # Se for requisição AJAX (DELETE), retornar JSON
+        if request.method == 'DELETE' or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({
+                'sucesso': True,
+                'mensagem': f'Produto {cod_produto} excluído com sucesso!'
+            })
+
+        # Caso contrário, redirecionar (compatibilidade com GET)
+        flash(f'✅ Palletização do produto {cod_produto} excluída com sucesso!', 'success')
         return redirect(url_for('producao.listar_palletizacao'))
-        
+
     except Exception as e:
         db.session.rollback()
+
+        # Se for requisição AJAX, retornar JSON
+        if request.method == 'DELETE' or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({
+                'sucesso': False,
+                'erro': f'Erro ao excluir: {str(e)}'
+            }), 500
+
         flash(f'❌ Erro ao excluir palletização: {str(e)}', 'error')
         return redirect(url_for('producao.listar_palletizacao'))
 

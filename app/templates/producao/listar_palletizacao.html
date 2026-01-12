@@ -257,29 +257,38 @@
                                             {% endif %}
                                         </td>
                                         <td class="text-center">
-                                            <button class="btn btn-sm btn-primary btn-editar"
-                                                    data-id="{{ item.id }}"
-                                                    data-cod="{{ item.cod_produto }}"
-                                                    data-nome="{{ item.nome_produto }}"
-                                                    data-pallet="{{ item.palletizacao }}"
-                                                    data-peso="{{ item.peso_bruto }}"
-                                                    data-altura="{{ item.altura_cm or 0 }}"
-                                                    data-largura="{{ item.largura_cm or 0 }}"
-                                                    data-comp="{{ item.comprimento_cm or 0 }}"
-                                                    data-categoria="{{ item.categoria_produto or '' }}"
-                                                    data-subcat="{{ item.subcategoria or '' }}"
-                                                    data-materia="{{ item.tipo_materia_prima or '' }}"
-                                                    data-embalagem="{{ item.tipo_embalagem or '' }}"
-                                                    data-linha="{{ item.linha_producao or '' }}"
-                                                    data-comprado="{{ 'true' if item.produto_comprado else 'false' }}"
-                                                    data-produzido="{{ 'true' if item.produto_produzido else 'false' }}"
-                                                    data-vendido="{{ 'true' if item.produto_vendido else 'false' }}"
-                                                    data-disparo="{{ item.disparo_producao or '' }}"
-                                                    data-leadtime="{{ item.lead_time_mto or '' }}"
-                                                    data-custo="{{ item.custo_produto or '' }}"
-                                                    title="Editar">
-                                                <i class="fas fa-edit"></i>
-                                            </button>
+                                            <div class="btn-group btn-group-sm" role="group">
+                                                <button class="btn btn-sm btn-primary btn-editar"
+                                                        data-id="{{ item.id }}"
+                                                        data-cod="{{ item.cod_produto }}"
+                                                        data-nome="{{ item.nome_produto }}"
+                                                        data-pallet="{{ item.palletizacao }}"
+                                                        data-peso="{{ item.peso_bruto }}"
+                                                        data-altura="{{ item.altura_cm or 0 }}"
+                                                        data-largura="{{ item.largura_cm or 0 }}"
+                                                        data-comp="{{ item.comprimento_cm or 0 }}"
+                                                        data-categoria="{{ item.categoria_produto or '' }}"
+                                                        data-subcat="{{ item.subcategoria or '' }}"
+                                                        data-materia="{{ item.tipo_materia_prima or '' }}"
+                                                        data-embalagem="{{ item.tipo_embalagem or '' }}"
+                                                        data-linha="{{ item.linha_producao or '' }}"
+                                                        data-comprado="{{ 'true' if item.produto_comprado else 'false' }}"
+                                                        data-produzido="{{ 'true' if item.produto_produzido else 'false' }}"
+                                                        data-vendido="{{ 'true' if item.produto_vendido else 'false' }}"
+                                                        data-disparo="{{ item.disparo_producao or '' }}"
+                                                        data-leadtime="{{ item.lead_time_mto or '' }}"
+                                                        data-custo="{{ item.custo_produto or '' }}"
+                                                        title="Editar">
+                                                    <i class="fas fa-edit"></i>
+                                                </button>
+                                                <button class="btn btn-sm btn-danger btn-excluir"
+                                                        data-id="{{ item.id }}"
+                                                        data-cod="{{ item.cod_produto }}"
+                                                        data-nome="{{ item.nome_produto }}"
+                                                        title="Excluir">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                     {% endfor %}
@@ -589,5 +598,94 @@ document.getElementById('btn-salvar-edicao').addEventListener('click', function(
         alert('Erro ao atualizar produto');
     });
 });
+
+// ============================================
+// CONTROLE DE EXCLUSÃO
+// ============================================
+
+// Adicionar eventos de exclusão
+document.querySelectorAll('.btn-excluir').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const id = this.dataset.id;
+        const cod = this.dataset.cod;
+        const nome = this.dataset.nome;
+
+        // Usar SweetAlert2 se disponível, senão confirm nativo
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: 'Confirmar Exclusão',
+                html: `<p>Deseja excluir o produto?</p>
+                       <p><strong>${cod}</strong> - ${nome}</p>
+                       <small class="text-muted">Esta ação pode ser revertida (soft delete)</small>`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: '<i class="fas fa-trash"></i> Sim, excluir!',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    excluirPalletizacao(id, cod);
+                }
+            });
+        } else {
+            if (confirm(`Deseja excluir o produto ${cod} - ${nome}?`)) {
+                excluirPalletizacao(id, cod);
+            }
+        }
+    });
+});
+
+function excluirPalletizacao(id, cod) {
+    fetch(`/producao/palletizacao/excluir/${id}`, {
+        method: 'DELETE',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.sucesso) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Excluído!',
+                    text: data.mensagem || `Produto ${cod} excluído com sucesso!`,
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => {
+                    location.reload();
+                });
+            } else {
+                alert(data.mensagem || `Produto ${cod} excluído com sucesso!`);
+                location.reload();
+            }
+        } else {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erro!',
+                    text: data.erro || 'Erro ao excluir produto'
+                });
+            } else {
+                alert(data.erro || 'Erro ao excluir produto');
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: 'Erro!',
+                text: 'Erro de comunicação com o servidor'
+            });
+        } else {
+            alert('Erro de comunicação com o servidor');
+        }
+    });
+}
 </script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 {% endblock %} 

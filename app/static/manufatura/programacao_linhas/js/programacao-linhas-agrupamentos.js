@@ -522,7 +522,7 @@ function renderizarItemProgramacao(prog, mostrarLinha = false, mostrarData = fal
                     <input type="text" class="form-control form-control-sm input-edit-obs"
                            value="${obsValue}"
                            onblur="salvarEdicaoCampo(${progId}, 'observacao_pcp', this.value)"
-                           placeholder="Obs..."
+                           placeholder="observação PCP"
                            style="width: 120px;" title="Observação PCP">
 
                     <!-- Input de Data (editável) -->
@@ -628,7 +628,7 @@ function renderizarItemPorProduto(prog) {
                     <input type="text" class="form-control form-control-sm input-edit-obs"
                            value="${obsValue}"
                            onblur="salvarEdicaoCampo(${progId}, 'observacao_pcp', this.value)"
-                           placeholder="Obs..."
+                           placeholder="observação PCP"
                            style="width: 120px;" title="Observação PCP">
 
                     <!-- Input de Data (editável) -->
