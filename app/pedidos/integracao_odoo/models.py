@@ -322,20 +322,31 @@ class PedidoImportacaoTemp(db.Model):
         validacao_precos = dados.get('validacao_precos', {})
 
         # Extrai numero_pedido_cliente dos dados brutos
-        # - Atacadão: cada filial pode ter seu próprio número (N pedidos por PDF)
-        # - Assaí: 1 número de pedido para todo o PDF (N filiais)
+        # - Atacadão: cada filial tem seu próprio "Numero:" (N pedidos por PDF)
+        # - Assaí: 1 "Pedido:" para todo o PDF (N filiais compartilham)
         dados_brutos = dados.get('data', [])
+        rede = identificacao.get('rede', '').upper()
 
         # Para o registro geral, pega do primeiro item
         numero_pedido_cliente = None
         if dados_brutos and len(dados_brutos) > 0:
             primeiro_item = dados_brutos[0]
-            numero_pedido_cliente = (
-                primeiro_item.get('numero_pedido') or
-                primeiro_item.get('pedido_edi') or
-                primeiro_item.get('proposta') or
-                primeiro_item.get('numero_comprador')
-            )
+            if rede == 'ATACADAO':
+                # Atacadão: prioriza "Numero:" (numero_comprador) - único por filial
+                numero_pedido_cliente = (
+                    primeiro_item.get('numero_comprador') or
+                    primeiro_item.get('pedido_edi') or
+                    primeiro_item.get('numero_pedido') or
+                    primeiro_item.get('proposta')
+                )
+            else:
+                # Assaí/Sendas: prioriza "Pedido:" (numero_pedido) - mesmo para todas
+                numero_pedido_cliente = (
+                    primeiro_item.get('numero_pedido') or
+                    primeiro_item.get('pedido_edi') or
+                    primeiro_item.get('proposta') or
+                    primeiro_item.get('numero_comprador')
+                )
 
         # Prepara dados_filiais com estrutura para edição
         dados_filiais = []
@@ -354,20 +365,30 @@ class PedidoImportacaoTemp(db.Model):
                             break
 
                 # Busca numero_pedido_cliente específico desta filial
-                # - Atacadão: cada filial tem SEU próprio número (N pedidos por PDF)
-                # - Assaí: todas as filiais compartilham o mesmo número (1 pedido por PDF)
+                # - Atacadão: cada filial tem SEU próprio "Numero:" (N pedidos por PDF)
+                # - Assaí: todas as filiais compartilham o mesmo "Pedido:" (1 pedido por PDF)
                 numero_pedido_filial = None
                 for item in dados_brutos:
                     # Tenta diferentes campos de CNPJ que podem existir nos dados
                     cnpj_item = item.get('cnpj_filial') or item.get('cnpj') or item.get('cnpj_cpf')
                     if cnpj_item == cnpj:
-                        # Tenta todos os campos possíveis de número de pedido
-                        numero_pedido_filial = (
-                            item.get('numero_pedido') or      # Assaí e Atacadão Pedido
-                            item.get('pedido_edi') or         # Atacadão Pedido
-                            item.get('proposta') or           # Atacadão Proposta
-                            item.get('numero_comprador')      # Fallback
-                        )
+                        # Prioridade baseada na rede
+                        if rede == 'ATACADAO':
+                            # Atacadão: prioriza "Numero:" (numero_comprador) - único por filial
+                            numero_pedido_filial = (
+                                item.get('numero_comprador') or   # Campo "Numero: 322506"
+                                item.get('pedido_edi') or
+                                item.get('numero_pedido') or
+                                item.get('proposta')
+                            )
+                        else:
+                            # Assaí/Sendas: prioriza "Pedido:" (numero_pedido)
+                            numero_pedido_filial = (
+                                item.get('numero_pedido') or
+                                item.get('pedido_edi') or
+                                item.get('proposta') or
+                                item.get('numero_comprador')
+                            )
                         if numero_pedido_filial:
                             break
 

@@ -233,13 +233,29 @@ class PedidoProcessor:
                     sem_depara_filial = filial_df['nosso_codigo'].isna().sum() if 'nosso_codigo' in filial_df.columns else 0
 
                     # Busca número do pedido (Atacadão: por filial, Assaí: mesmo para todas)
-                    numero_pedido = (
-                        primeiro_item.get('numero_pedido') or      # Assaí e Atacadão Pedido
-                        primeiro_item.get('pedido_edi') or         # Atacadão Pedido
-                        primeiro_item.get('proposta') or           # Atacadão Proposta
-                        primeiro_item.get('numero_comprador') or   # Fallback
-                        ''
-                    )
+                    # IMPORTANTE: Para Atacadão, o campo "Numero:" (numero_comprador) é o
+                    # número do pedido do cliente, diferente por filial.
+                    # Para Assaí, o campo "Pedido:" (numero_pedido) é o mesmo para todas as filiais.
+                    rede = self.identificacao.rede.upper() if self.identificacao else ''
+
+                    if rede == 'ATACADAO':
+                        # Atacadão: prioriza "Numero:" (numero_comprador) - único por filial
+                        numero_pedido = (
+                            primeiro_item.get('numero_comprador') or   # Campo "Numero: 322506"
+                            primeiro_item.get('pedido_edi') or         # Fallback: Pedido EDI
+                            primeiro_item.get('numero_pedido') or      # Fallback
+                            primeiro_item.get('proposta') or           # Atacadão Proposta
+                            ''
+                        )
+                    else:
+                        # Assaí/Sendas: usa "Pedido:" (numero_pedido) - mesmo para todas
+                        numero_pedido = (
+                            primeiro_item.get('numero_pedido') or      # Campo "Pedido: 21046597"
+                            primeiro_item.get('pedido_edi') or         # Fallback
+                            primeiro_item.get('proposta') or           # Fallback
+                            primeiro_item.get('numero_comprador') or   # Fallback
+                            ''
+                        )
 
                     filial_info = {
                         'cnpj': cnpj,

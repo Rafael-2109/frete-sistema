@@ -51,25 +51,78 @@ class AtacadaoPedidoExtractor(PDFExtractor):
 
     def _split_por_filial(self, text: str) -> List[str]:
         """
-        Divide o texto em seções por Local de Entrega
-        O PDF pode ter múltiplas filiais, cada uma começa com "Local de Entrega:"
+        Divide o texto em seções por filial.
+
+        IMPORTANTE: Cada filial tem um "Numero:" diferente que identifica o pedido do cliente.
+        O header (incluindo Numero:) está ANTES do "Local de Entrega:", então precisamos
+        recuar o início de cada seção para capturar o header completo.
+
+        Estrutura do PDF por filial:
+            P E D I D O  D E  C O M P R A
+            ATACADAO S.A.                    ← Marca início do bloco
+            ...
+            Pedido EDI..: 111322506
+            Numero: 322506                   ← NÚMERO DO PEDIDO DO CLIENTE (único por filial)
+            ...
+            Local de Entrega: 75315333/0183-18
+            ...produtos...
         """
-        # Padrão para encontrar Local de Entrega
-        # Local de Entrega: 93209765/0599-44 SP Cep: 15014-050
-        pattern = r'Local\s+de\s+Entrega:'
+        # Primeiro, encontra os "Local de Entrega:" para identificar as filiais
+        local_pattern = r'Local\s+de\s+Entrega:'
+        local_matches = list(re.finditer(local_pattern, text, re.IGNORECASE))
 
-        # Encontra todas as posições
-        matches = list(re.finditer(pattern, text, re.IGNORECASE))
-
-        if not matches:
+        if not local_matches:
             return [text]
 
+        # Para cada "Local de Entrega:", recua até encontrar o início do bloco
+        # O início é marcado por "P E D I D O" ou "ATACADAO S.A."
+        header_pattern = r'P\s*E\s*D\s*I\s*D\s*O\s+D\s*E\s+C\s*O\s*M\s*P\s*R\s*A'
+
         sections = []
-        for i, match in enumerate(matches):
-            start = match.start()
-            # Pega até o próximo Local de Entrega ou fim do texto
-            end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
-            sections.append(text[start:end])
+        seen_cnpjs = set()  # Para evitar duplicatas (mesmo CNPJ em páginas consecutivas)
+
+        for i, local_match in enumerate(local_matches):
+            # Extrai o CNPJ do Local de Entrega para identificar filial única
+            cnpj_search = text[local_match.end():local_match.end() + 30]
+            cnpj_match = re.search(r'(\d{8}/\d{4}-\d{2})', cnpj_search)
+
+            if cnpj_match:
+                cnpj = cnpj_match.group(1)
+                if cnpj in seen_cnpjs:
+                    # Já processamos esta filial, pular (continuação de página anterior)
+                    continue
+                seen_cnpjs.add(cnpj)
+
+            # Recua para encontrar o início do bloco (header "P E D I D O")
+            # Busca para trás a partir do "Local de Entrega:"
+            search_start = local_matches[i - 1].end() if i > 0 else 0
+            search_text = text[search_start:local_match.start()]
+
+            # Encontra o último "P E D I D O" antes deste "Local de Entrega:"
+            header_matches = list(re.finditer(header_pattern, search_text, re.IGNORECASE))
+
+            if header_matches:
+                # Usa a posição do último header encontrado
+                block_start = search_start + header_matches[-1].start()
+            else:
+                # Fallback: usa a posição do "Local de Entrega:" anterior ou início
+                block_start = search_start
+
+            # Define o fim do bloco
+            # Procura o próximo bloco (próximo "P E D I D O" após este "Local de Entrega:")
+            remaining_text = text[local_match.end():]
+            next_header = re.search(header_pattern, remaining_text, re.IGNORECASE)
+
+            if next_header:
+                block_end = local_match.end() + next_header.start()
+            else:
+                block_end = len(text)
+
+            sections.append(text[block_start:block_end])
+
+        # Se não encontrou nenhuma seção válida, retorna texto completo
+        if not sections:
+            return [text]
 
         return sections
 
