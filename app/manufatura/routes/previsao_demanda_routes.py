@@ -5,6 +5,7 @@ from flask import render_template, jsonify, request
 from flask_login import login_required, current_user
 from app import db
 from app.manufatura.models import PrevisaoDemanda, GrupoEmpresarial, HistoricoPedidos
+from app.manufatura.services.demanda_service import extrair_prefixo_cnpj
 from app.producao.models import CadastroPalletizacao
 from datetime import datetime
 from sqlalchemy import func
@@ -250,7 +251,7 @@ def register_previsao_demanda_routes(bp):
                         for prefixo_tuple in todos_prefixos:
                             prefixo = prefixo_tuple[0]
                             query = query.filter(
-                                func.substr(HistoricoPedidos.cnpj_cliente, 1, 8) != prefixo
+                                extrair_prefixo_cnpj(HistoricoPedidos.cnpj_cliente) != prefixo
                             )
                 else:
                     # Busca prefixos do grupo específico
@@ -265,7 +266,7 @@ def register_previsao_demanda_routes(bp):
                         cnpj_filters = []
                         for prefixo in prefixos:
                             cnpj_filters.append(
-                                func.substr(HistoricoPedidos.cnpj_cliente, 1, 8) == prefixo
+                                extrair_prefixo_cnpj(HistoricoPedidos.cnpj_cliente) == prefixo
                             )
                         if cnpj_filters:
                             query = query.filter(or_(*cnpj_filters))
@@ -434,13 +435,36 @@ def register_previsao_demanda_routes(bp):
             # Ler Excel
             df = pd.read_excel(arquivo)
 
+            # Mapeamento de colunas: aceita formato exportado (amigável) ou técnico
+            mapeamento_colunas = {
+                # Formato exportado → formato técnico
+                'Código Produto': 'cod_produto',
+                'Nome Produto': 'nome_produto',
+                'Mês': 'mes',
+                'Ano': 'ano',
+                'Grupo': 'grupo',
+                'Qtd Prevista': 'qtd_prevista',
+                'Disparo': 'disparo',
+                'Média 3 Meses': 'media_3_meses',
+                'Média 6 Meses': 'media_6_meses',
+                'Mês Anterior': 'mes_anterior',
+                'Ano Anterior': 'ano_anterior',
+                'Demanda Ativa (Carteira)': 'demanda_ativa',
+                'Demanda Realizada': 'demanda_realizada'
+            }
+
+            # Renomeia colunas se estiverem no formato exportado
+            df.rename(columns=mapeamento_colunas, inplace=True)
+
             # Validar colunas obrigatórias
             colunas_obrigatorias = ['cod_produto', 'mes', 'ano', 'qtd_prevista', 'disparo']
             colunas_faltando = [c for c in colunas_obrigatorias if c not in df.columns]
 
             if colunas_faltando:
                 return jsonify({
-                    'erro': f'Colunas obrigatórias faltando: {", ".join(colunas_faltando)}'
+                    'erro': f'Colunas obrigatórias faltando: {", ".join(colunas_faltando)}. '
+                            f'Aceitos: formato exportado (Código Produto, Mês, Ano, Qtd Prevista, Disparo) '
+                            f'ou técnico (cod_produto, mes, ano, qtd_prevista, disparo)'
                 }), 400
 
             # Processar linhas (UPSERT)
@@ -563,7 +587,7 @@ def register_previsao_demanda_routes(bp):
                         for prefixo_tuple in todos_prefixos:
                             prefixo = prefixo_tuple[0]
                             query = query.filter(
-                                func.substr(HistoricoPedidos.cnpj_cliente, 1, 8) != prefixo
+                                extrair_prefixo_cnpj(HistoricoPedidos.cnpj_cliente) != prefixo
                             )
                 else:
                     # Busca prefixos do grupo específico
@@ -578,7 +602,7 @@ def register_previsao_demanda_routes(bp):
                         cnpj_filters = []
                         for prefixo in prefixos:
                             cnpj_filters.append(
-                                func.substr(HistoricoPedidos.cnpj_cliente, 1, 8) == prefixo
+                                extrair_prefixo_cnpj(HistoricoPedidos.cnpj_cliente) == prefixo
                             )
                         if cnpj_filters:
                             query = query.filter(or_(*cnpj_filters))

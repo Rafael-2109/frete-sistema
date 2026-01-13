@@ -1,0 +1,341 @@
+/* ============================================================
+   MACRO PROJECAO DE COMPONENTES
+   Utiliza variaveis centralizadas de _design-tokens.css
+   ============================================================ */
+
+/* ========== CONTAINER PRINCIPAL ========== */
+.macro-container {
+    padding: 1rem;
+}
+
+/* ========== FILTROS ========== */
+.filters-card {
+    background: var(--bs-gray-100, #f8f9fa);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 10px;
+    padding: 1rem 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.search-wrapper {
+    position: relative;
+}
+
+.search-wrapper i {
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--bs-secondary-color);
+}
+
+.search-input {
+    border-radius: 20px;
+    padding-left: 2.5rem;
+    border: 1px solid var(--bs-border-color);
+    background: #ffffff;
+    color: var(--bs-body-color);
+}
+
+.search-input:focus {
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.25);
+    background: #ffffff;
+}
+
+/* ========== TABLE CONTAINER ========== */
+.table-container {
+    background: var(--bs-card-bg, var(--bs-body-bg));
+    border: 1px solid var(--bs-border-color);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.table-responsive {
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
+}
+
+/* ========== TABLE MACRO ========== */
+.table-macro {
+    width: 100%;
+    font-size: 0.85rem;
+    margin: 0;
+    border-collapse: collapse;
+}
+
+.table-macro thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+/* Cabecalho principal - OPACO sem transparencia */
+.table-macro thead tr:first-child th {
+    background: #1a237e;
+    color: #ffffff;
+    font-weight: 600;
+    text-align: center;
+    padding: 0.6rem;
+    border: none;
+}
+
+/* Sub-cabecalho - OPACO */
+.table-macro thead tr:nth-child(2) th {
+    background: #e9ecef;
+    color: var(--bs-body-color);
+    font-weight: 500;
+    text-align: center;
+    padding: 0.4rem;
+    font-size: 0.8rem;
+    border: 1px solid var(--bs-border-color);
+}
+
+/* Grupos de colunas no cabecalho - cores SOLIDAS */
+.table-macro thead tr:first-child th.grupo-ruptura {
+    background: #b45309;
+}
+
+.table-macro thead tr:first-child th.grupo-mes-atual {
+    background: #0d6efd;
+}
+
+.table-macro thead tr:first-child th.grupo-mes-proximo {
+    background: #6f42c1;
+}
+
+/* Sub-cabecalho grupos - cores SOLIDAS */
+.table-macro thead tr:nth-child(2) th.grupo-ruptura {
+    background: #fff3cd;
+}
+
+.table-macro thead tr:nth-child(2) th.grupo-mes-atual {
+    background: #cfe2ff;
+}
+
+.table-macro thead tr:nth-child(2) th.grupo-mes-proximo {
+    background: #e2d9f3;
+}
+
+.table-macro tbody tr {
+    transition: background-color 0.15s ease;
+}
+
+.table-macro tbody tr:hover {
+    background: var(--bs-tertiary-bg);
+}
+
+.table-macro td {
+    padding: 0.4rem 0.6rem;
+    border: 1px solid var(--bs-border-color);
+    vertical-align: middle;
+    color: var(--bs-body-color);
+}
+
+.table-macro td.codigo {
+    font-family: 'Fira Code', 'Consolas', monospace;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.table-macro td.produto {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.table-macro td.numero {
+    text-align: right;
+    font-family: 'Fira Code', 'Consolas', monospace;
+}
+
+/* ========== GRUPOS DE COLUNAS NO BODY ========== */
+.table-macro tbody td.grupo-ruptura {
+    background-color: rgba(255, 193, 7, 0.08);
+}
+
+.table-macro tbody td.grupo-mes-atual {
+    background-color: rgba(13, 110, 253, 0.08);
+}
+
+.table-macro tbody td.grupo-mes-proximo {
+    background-color: rgba(111, 66, 193, 0.08);
+}
+
+/* ========== SALDO INDICATORS ========== */
+.saldo-negativo {
+    background-color: rgba(220, 53, 69, 0.15) !important;
+    color: var(--bs-danger);
+    font-weight: 600;
+}
+
+.saldo-positivo {
+    background-color: rgba(25, 135, 84, 0.15) !important;
+    color: var(--bs-success);
+}
+
+.saldo-neutro {
+    color: var(--bs-secondary-color);
+}
+
+/* ========== BADGE UNIFICADO ========== */
+.badge-unificado {
+    font-size: 0.6rem;
+    background: var(--bs-warning);
+    color: white;
+    padding: 2px 5px;
+    border-radius: 4px;
+    margin-left: 4px;
+    cursor: help;
+}
+
+/* ========== LOADING OVERLAY ========== */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--bs-body-bg);
+    opacity: 0.95;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+}
+
+.loading-spinner {
+    text-align: center;
+    color: var(--bs-body-color);
+}
+
+.loading-spinner i {
+    font-size: 3rem;
+    color: var(--bs-primary);
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* ========== BUTTONS ========== */
+.btn-export {
+    background: var(--bs-success);
+    color: white;
+    border: none;
+    padding: 0.4rem 0.8rem;
+    border-radius: 6px;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.btn-export:hover {
+    background: var(--bs-success);
+    filter: brightness(0.9);
+    color: white;
+}
+
+/* ========== RESPONSIVE ========== */
+@media (max-width: 768px) {
+    .table-responsive {
+        max-height: calc(100vh - 300px);
+    }
+}
+
+/* ========== DARK MODE OVERRIDES ========== */
+[data-bs-theme="dark"] .filters-card,
+[data-theme="dark"] .filters-card {
+    background: var(--bs-gray-800, #343a40);
+}
+
+[data-bs-theme="dark"] .search-input,
+[data-theme="dark"] .search-input {
+    background: var(--bs-gray-900, #212529);
+    color: var(--bs-body-color);
+}
+
+[data-bs-theme="dark"] .search-input:focus,
+[data-theme="dark"] .search-input:focus {
+    background: var(--bs-gray-900, #212529);
+}
+
+/* Cabecalho dark mode - OPACO */
+[data-bs-theme="dark"] .table-macro thead tr:first-child th,
+[data-theme="dark"] .table-macro thead tr:first-child th {
+    background: #0d1b3e;
+}
+
+[data-bs-theme="dark"] .table-macro thead tr:first-child th.grupo-ruptura,
+[data-theme="dark"] .table-macro thead tr:first-child th.grupo-ruptura {
+    background: #92400e;
+}
+
+[data-bs-theme="dark"] .table-macro thead tr:first-child th.grupo-mes-atual,
+[data-theme="dark"] .table-macro thead tr:first-child th.grupo-mes-atual {
+    background: #1e40af;
+}
+
+[data-bs-theme="dark"] .table-macro thead tr:first-child th.grupo-mes-proximo,
+[data-theme="dark"] .table-macro thead tr:first-child th.grupo-mes-proximo {
+    background: #5b21b6;
+}
+
+[data-bs-theme="dark"] .table-macro thead tr:nth-child(2) th,
+[data-theme="dark"] .table-macro thead tr:nth-child(2) th {
+    background: var(--bs-gray-800, #343a40);
+}
+
+[data-bs-theme="dark"] .table-macro thead tr:nth-child(2) th.grupo-ruptura,
+[data-theme="dark"] .table-macro thead tr:nth-child(2) th.grupo-ruptura {
+    background: #451a03;
+}
+
+[data-bs-theme="dark"] .table-macro thead tr:nth-child(2) th.grupo-mes-atual,
+[data-theme="dark"] .table-macro thead tr:nth-child(2) th.grupo-mes-atual {
+    background: #172554;
+}
+
+[data-bs-theme="dark"] .table-macro thead tr:nth-child(2) th.grupo-mes-proximo,
+[data-theme="dark"] .table-macro thead tr:nth-child(2) th.grupo-mes-proximo {
+    background: #2e1065;
+}
+
+[data-bs-theme="dark"] .table-macro tbody td.grupo-ruptura,
+[data-theme="dark"] .table-macro tbody td.grupo-ruptura {
+    background-color: rgba(255, 193, 7, 0.12);
+}
+
+[data-bs-theme="dark"] .table-macro tbody td.grupo-mes-atual,
+[data-theme="dark"] .table-macro tbody td.grupo-mes-atual {
+    background-color: rgba(13, 110, 253, 0.12);
+}
+
+[data-bs-theme="dark"] .table-macro tbody td.grupo-mes-proximo,
+[data-theme="dark"] .table-macro tbody td.grupo-mes-proximo {
+    background-color: rgba(111, 66, 193, 0.12);
+}
+
+[data-bs-theme="dark"] .saldo-negativo,
+[data-theme="dark"] .saldo-negativo {
+    background-color: rgba(220, 53, 69, 0.25) !important;
+    color: #f8d7da;
+}
+
+[data-bs-theme="dark"] .saldo-positivo,
+[data-theme="dark"] .saldo-positivo {
+    background-color: rgba(25, 135, 84, 0.25) !important;
+    color: #d1e7dd;
+}
+
+[data-bs-theme="dark"] .table-macro tbody tr:hover,
+[data-theme="dark"] .table-macro tbody tr:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+[data-bs-theme="dark"] .loading-overlay,
+[data-theme="dark"] .loading-overlay {
+    background: rgba(0, 0, 0, 0.9);
+}

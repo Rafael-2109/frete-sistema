@@ -17,6 +17,31 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
+def extrair_prefixo_cnpj(campo_cnpj):
+    """
+    Extrai os 8 primeiros dígitos do CNPJ, removendo formatação.
+
+    CNPJs podem estar formatados como '00.063.960/0015-04' ou apenas '00063960001504'.
+    Esta função remove pontos, traços e barras antes de extrair o prefixo.
+
+    Args:
+        campo_cnpj: Campo SQLAlchemy do CNPJ
+
+    Returns:
+        Expressão SQLAlchemy com os 8 primeiros dígitos numéricos
+    """
+    # Remove formatação: pontos, traços e barras
+    cnpj_limpo = func.replace(
+        func.replace(
+            func.replace(campo_cnpj, '.', ''),
+            '-', ''
+        ),
+        '/', ''
+    )
+    # Extrai os 8 primeiros dígitos
+    return func.substr(cnpj_limpo, 1, 8)
+
 # Data de corte: antes desta data = Odoo, depois = CarteiraPrincipal
 DATA_CORTE = date(2025, 7, 1)
 
@@ -57,7 +82,7 @@ class DemandaService:
                     for prefixo_tuple in todos_prefixos:
                         prefixo = prefixo_tuple[0]
                         query = query.filter(
-                            func.substr(FaturamentoProduto.cnpj_cliente, 1, 8) != prefixo
+                            extrair_prefixo_cnpj(FaturamentoProduto.cnpj_cliente) != prefixo
                         )
             else:
                 # Busca prefixos do grupo específico
@@ -73,7 +98,7 @@ class DemandaService:
                     cnpj_filters = []
                     for prefixo in prefixos:
                         cnpj_filters.append(
-                            func.substr(FaturamentoProduto.cnpj_cliente, 1, 8) == prefixo
+                            extrair_prefixo_cnpj(FaturamentoProduto.cnpj_cliente) == prefixo
                         )
                     if cnpj_filters:
                         query = query.filter(or_(*cnpj_filters))
@@ -128,7 +153,7 @@ class DemandaService:
                     for prefixo_tuple in todos_prefixos:
                         prefixo = prefixo_tuple[0]
                         query = query.filter(
-                            func.substr(CarteiraPrincipal.cnpj_cpf, 1, 8) != prefixo
+                            extrair_prefixo_cnpj(CarteiraPrincipal.cnpj_cpf) != prefixo
                         )
             else:
                 # Busca prefixos do grupo específico
@@ -144,7 +169,7 @@ class DemandaService:
                     cnpj_filters = []
                     for prefixo in prefixos:
                         cnpj_filters.append(
-                            func.substr(CarteiraPrincipal.cnpj_cpf, 1, 8) == prefixo
+                            extrair_prefixo_cnpj(CarteiraPrincipal.cnpj_cpf) == prefixo
                         )
                     if cnpj_filters:
                         query = query.filter(or_(*cnpj_filters))
@@ -342,7 +367,7 @@ class DemandaService:
                     cnpj_filters = []
                     for prefixo in prefixos:
                         cnpj_filters.append(
-                            func.substr(HistoricoPedidos.cnpj_cliente, 1, 8) == prefixo
+                            extrair_prefixo_cnpj(HistoricoPedidos.cnpj_cliente) == prefixo
                         )
                     if cnpj_filters:
                         query_historico = query_historico.filter(or_(*cnpj_filters))
@@ -356,7 +381,7 @@ class DemandaService:
                     for prefixo_tuple in todos_prefixos:
                         prefixo = prefixo_tuple[0]
                         query_historico = query_historico.filter(
-                            func.substr(HistoricoPedidos.cnpj_cliente, 1, 8) != prefixo
+                            extrair_prefixo_cnpj(HistoricoPedidos.cnpj_cliente) != prefixo
                         )
 
             resultado_historico = query_historico.scalar() or 0
@@ -389,7 +414,7 @@ class DemandaService:
                     cnpj_filters = []
                     for prefixo in prefixos:
                         cnpj_filters.append(
-                            func.substr(CarteiraPrincipal.cnpj_cpf, 1, 8) == prefixo
+                            extrair_prefixo_cnpj(CarteiraPrincipal.cnpj_cpf) == prefixo
                         )
                     if cnpj_filters:
                         query_carteira = query_carteira.filter(or_(*cnpj_filters))
@@ -403,7 +428,7 @@ class DemandaService:
                     for prefixo_tuple in todos_prefixos:
                         prefixo = prefixo_tuple[0]
                         query_carteira = query_carteira.filter(
-                            func.substr(CarteiraPrincipal.cnpj_cpf, 1, 8) != prefixo
+                            extrair_prefixo_cnpj(CarteiraPrincipal.cnpj_cpf) != prefixo
                         )
 
             resultado_carteira = query_carteira.scalar() or 0
@@ -455,7 +480,7 @@ class DemandaService:
                     cnpj_filters = []
                     for prefixo in prefixos:
                         cnpj_filters.append(
-                            func.substr(HistoricoPedidos.cnpj_cliente, 1, 8) == prefixo
+                            extrair_prefixo_cnpj(HistoricoPedidos.cnpj_cliente) == prefixo
                         )
                     if cnpj_filters:
                         query = query.filter(or_(*cnpj_filters))
@@ -469,7 +494,7 @@ class DemandaService:
                     for prefixo_tuple in todos_prefixos:
                         prefixo = prefixo_tuple[0]
                         query = query.filter(
-                            func.substr(HistoricoPedidos.cnpj_cliente, 1, 8) != prefixo
+                            extrair_prefixo_cnpj(HistoricoPedidos.cnpj_cliente) != prefixo
                         )
 
             total = float(query.scalar() or 0)
@@ -496,7 +521,7 @@ class DemandaService:
                     cnpj_filters = []
                     for prefixo in prefixos:
                         cnpj_filters.append(
-                            func.substr(CarteiraPrincipal.cnpj_cpf, 1, 8) == prefixo
+                            extrair_prefixo_cnpj(CarteiraPrincipal.cnpj_cpf) == prefixo
                         )
                     if cnpj_filters:
                         query = query.filter(or_(*cnpj_filters))
@@ -510,7 +535,7 @@ class DemandaService:
                     for prefixo_tuple in todos_prefixos:
                         prefixo = prefixo_tuple[0]
                         query = query.filter(
-                            func.substr(CarteiraPrincipal.cnpj_cpf, 1, 8) != prefixo
+                            extrair_prefixo_cnpj(CarteiraPrincipal.cnpj_cpf) != prefixo
                         )
 
             total = float(query.scalar() or 0)
@@ -551,7 +576,7 @@ class DemandaService:
                     cnpj_filters = []
                     for prefixo in prefixos:
                         cnpj_filters.append(
-                            func.substr(HistoricoPedidos.cnpj_cliente, 1, 8) == prefixo
+                            extrair_prefixo_cnpj(HistoricoPedidos.cnpj_cliente) == prefixo
                         )
                     if cnpj_filters:
                         query = query.filter(or_(*cnpj_filters))
@@ -565,7 +590,7 @@ class DemandaService:
                     for prefixo_tuple in todos_prefixos:
                         prefixo = prefixo_tuple[0]
                         query = query.filter(
-                            func.substr(HistoricoPedidos.cnpj_cliente, 1, 8) != prefixo
+                            extrair_prefixo_cnpj(HistoricoPedidos.cnpj_cliente) != prefixo
                         )
 
             total = float(query.scalar() or 0)
@@ -592,7 +617,7 @@ class DemandaService:
                     cnpj_filters = []
                     for prefixo in prefixos:
                         cnpj_filters.append(
-                            func.substr(CarteiraPrincipal.cnpj_cpf, 1, 8) == prefixo
+                            extrair_prefixo_cnpj(CarteiraPrincipal.cnpj_cpf) == prefixo
                         )
                     if cnpj_filters:
                         query = query.filter(or_(*cnpj_filters))
@@ -606,7 +631,7 @@ class DemandaService:
                     for prefixo_tuple in todos_prefixos:
                         prefixo = prefixo_tuple[0]
                         query = query.filter(
-                            func.substr(CarteiraPrincipal.cnpj_cpf, 1, 8) != prefixo
+                            extrair_prefixo_cnpj(CarteiraPrincipal.cnpj_cpf) != prefixo
                         )
 
             total = float(query.scalar() or 0)

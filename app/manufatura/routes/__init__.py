@@ -10,6 +10,7 @@ from app.manufatura.routes.requisicao_compras_routes import register_requisicao_
 from app.manufatura.routes.analise_producao_routes import register_analise_producao_routes
 from app.manufatura.routes.pedidos_compras_routes import pedidos_compras_bp
 from app.manufatura.routes.projecao_estoque_routes import projecao_estoque_bp
+from app.manufatura.routes.macro_projecao_routes import macro_projecao_bp
 
 
 def register_routes(bp):
@@ -27,3 +28,4 @@ def register_blueprints(app):
     """Registra blueprints independentes"""
     app.register_blueprint(pedidos_compras_bp)
     app.register_blueprint(projecao_estoque_bp)
+    app.register_blueprint(macro_projecao_bp)
