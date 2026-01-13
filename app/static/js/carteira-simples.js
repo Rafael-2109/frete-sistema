@@ -370,6 +370,23 @@
         console.log(`📊 Índices construídos: ${state.indices.porProduto.size} produtos únicos`);
     }
 
+    /**
+     * 🆕 Atualiza índice porProduto para um novo item adicionado em state.dados.
+     * Chamado após state.dados.push() para manter índices sincronizados.
+     *
+     * @param {Number} index - Índice do item recém-adicionado em state.dados
+     */
+    function atualizarIndiceProduto(index) {
+        const item = state.dados[index];
+        if (!item) return;
+
+        const cod = item.cod_produto;
+        if (!state.indices.porProduto.has(cod)) {
+            state.indices.porProduto.set(cod, []);
+        }
+        state.indices.porProduto.get(cod).push(index);
+    }
+
     // ==============================================
     // 🚀 DEBOUNCE AGRUPADO POR PRODUTO (OTIMIZAÇÃO)
     // ==============================================
@@ -2174,6 +2191,8 @@
                 // Adicionar separações em state.dados
                 resultado.separacoes.forEach(sep => {
                     state.dados.push(sep);
+                    // ✅ FIX: Atualizar índice para incluir nova separação
+                    atualizarIndiceProduto(state.dados.length - 1);
                 });
 
                 // Atualizar qtd_saldo dos pedidos correspondentes
@@ -2454,6 +2473,8 @@
                     } else {
                         // Adicionar nova
                         state.dados.push(sepNova);
+                        // ✅ FIX: Atualizar índice para incluir nova separação
+                        atualizarIndiceProduto(state.dados.length - 1);
                     }
                 });
 

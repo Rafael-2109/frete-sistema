@@ -731,14 +731,13 @@ def api_separacoes_estoque():
             estoque_atual = estoque_final
             dia_atual += timedelta(days=1)
 
-        # ✅ BUSCAR PEDIDOS (Separacao com sincronizado_nf=False no período)
+        # ✅ BUSCAR PEDIDOS (Separacao com sincronizado_nf=False - TODOS, sem filtro de data)
         from app.carteira.models import CarteiraPrincipal
 
-        # ✅ CORRIGIDO: Buscar separações detalhadas usando códigos relacionados
+        # ✅ CORRIGIDO: Buscar TODAS as separações não sincronizadas do produto (sem filtro de data)
+        # O filtro de data é aplicado apenas para projeção de estoque, não para lista de pedidos
         separacoes_detalhadas = Separacao.query.filter(
             Separacao.cod_produto.in_(codigos_relacionados),
-            Separacao.expedicao >= data_inicio,
-            Separacao.expedicao <= data_fim,
             Separacao.sincronizado_nf == False
         ).order_by(Separacao.expedicao, Separacao.num_pedido).all()
 
