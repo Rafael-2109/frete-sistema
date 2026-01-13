@@ -51,80 +51,53 @@ class AtacadaoPedidoExtractor(PDFExtractor):
 
     def _split_por_filial(self, text: str) -> List[str]:
         """
-        Divide o texto em seções por filial.
+        Divide o texto em seções por filial usando a paginação "PG: X".
 
-        IMPORTANTE: Cada filial tem um "Numero:" diferente que identifica o pedido do cliente.
-        O header (incluindo Numero:) está ANTES do "Local de Entrega:", então precisamos
-        recuar o início de cada seção para capturar o header completo.
+        IMPORTANTE: O PDF do Atacadão usa paginação por filial:
+        - Quando "PG: 1" aparece, é o início de uma nova filial
+        - Uma filial pode ter múltiplas páginas (PG: 1, PG: 2, PG: 3...)
+        - Quando PG volta para 1, é uma nova filial
 
-        Estrutura do PDF por filial:
-            P E D I D O  D E  C O M P R A
-            ATACADAO S.A.                    ← Marca início do bloco
-            ...
-            Pedido EDI..: 111322506
-            Numero: 322506                   ← NÚMERO DO PEDIDO DO CLIENTE (único por filial)
-            ...
-            Local de Entrega: 75315333/0183-18
-            ...produtos...
+        Estrutura do PDF:
+            [PG: 1] Filial JACAREI - Numero: 322506 - página 1 de 3
+            [PG: 2] Filial JACAREI - continuação
+            [PG: 3] Filial JACAREI - continuação
+            [PG: 1] Filial SAO PAULO - Numero: 322507 - página 1 de 1
+            [PG: 1] Filial RIBEIRAO PRETO - Numero: 322508 - página 1 de 1
         """
-        # Primeiro, encontra os "Local de Entrega:" para identificar as filiais
-        local_pattern = r'Local\s+de\s+Entrega:'
-        local_matches = list(re.finditer(local_pattern, text, re.IGNORECASE))
+        # Encontra todas as ocorrências de "PG: X" (paginação)
+        # Padrão: "PG: 1", "PG: 2", etc.
+        pg_pattern = r'PG:\s*(\d+)'
+        pg_matches = list(re.finditer(pg_pattern, text, re.IGNORECASE))
 
-        if not local_matches:
+        if not pg_matches:
+            # Fallback: se não encontrar paginação, retorna texto completo
             return [text]
 
-        # Para cada "Local de Entrega:", recua até encontrar o início do bloco
-        # O início é marcado por "P E D I D O" ou "ATACADAO S.A."
-        header_pattern = r'P\s*E\s*D\s*I\s*D\s*O\s+D\s*E\s+C\s*O\s*M\s*P\s*R\s*A'
+        # Encontra onde cada "PG: 1" aparece (início de nova filial)
+        pg1_positions = []
+        for match in pg_matches:
+            page_num = int(match.group(1))
+            if page_num == 1:
+                pg1_positions.append(match.start())
 
+        if not pg1_positions:
+            return [text]
+
+        # Cria seções baseadas nas posições de "PG: 1"
         sections = []
-        seen_cnpjs = set()  # Para evitar duplicatas (mesmo CNPJ em páginas consecutivas)
-
-        for i, local_match in enumerate(local_matches):
-            # Extrai o CNPJ do Local de Entrega para identificar filial única
-            cnpj_search = text[local_match.end():local_match.end() + 30]
-            cnpj_match = re.search(r'(\d{8}/\d{4}-\d{2})', cnpj_search)
-
-            if cnpj_match:
-                cnpj = cnpj_match.group(1)
-                if cnpj in seen_cnpjs:
-                    # Já processamos esta filial, pular (continuação de página anterior)
-                    continue
-                seen_cnpjs.add(cnpj)
-
-            # Recua para encontrar o início do bloco (header "P E D I D O")
-            # Busca para trás a partir do "Local de Entrega:"
-            search_start = local_matches[i - 1].end() if i > 0 else 0
-            search_text = text[search_start:local_match.start()]
-
-            # Encontra o último "P E D I D O" antes deste "Local de Entrega:"
-            header_matches = list(re.finditer(header_pattern, search_text, re.IGNORECASE))
-
-            if header_matches:
-                # Usa a posição do último header encontrado
-                block_start = search_start + header_matches[-1].start()
+        for i, start_pos in enumerate(pg1_positions):
+            # O fim é o início da próxima "PG: 1" ou o fim do texto
+            if i + 1 < len(pg1_positions):
+                end_pos = pg1_positions[i + 1]
             else:
-                # Fallback: usa a posição do "Local de Entrega:" anterior ou início
-                block_start = search_start
+                end_pos = len(text)
 
-            # Define o fim do bloco
-            # Procura o próximo bloco (próximo "P E D I D O" após este "Local de Entrega:")
-            remaining_text = text[local_match.end():]
-            next_header = re.search(header_pattern, remaining_text, re.IGNORECASE)
+            section = text[start_pos:end_pos]
+            if section.strip():
+                sections.append(section)
 
-            if next_header:
-                block_end = local_match.end() + next_header.start()
-            else:
-                block_end = len(text)
-
-            sections.append(text[block_start:block_end])
-
-        # Se não encontrou nenhuma seção válida, retorna texto completo
-        if not sections:
-            return [text]
-
-        return sections
+        return sections if sections else [text]
 
     def _extract_filial_data(self, text: str) -> List[Dict[str, Any]]:
         """Extrai dados de uma filial específica"""
