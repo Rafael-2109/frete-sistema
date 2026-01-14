@@ -23,6 +23,10 @@ api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
 from app.api.odoo import odoo_bp
 api_bp.register_blueprint(odoo_bp)
 
+# Registrar blueprint do relatório fiscal IBS/CBS
+from app.api.odoo.routes_relatorio_fiscal import relatorio_fiscal_bp
+api_bp.register_blueprint(relatorio_fiscal_bp)
+
 # ============================================================================
 # ENDPOINTS DA API MCP
 # ============================================================================
