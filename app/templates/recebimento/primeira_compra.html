@@ -1,6 +1,12 @@
 {% extends 'base.html' %}
 
 {% block content %}
+<style>
+    /* Cores alternadas para agrupamento por NF */
+    .bg-light-blue { background-color: #e7f1ff !important; }
+    .bg-light-gray { background-color: #f8f9fa !important; }
+    .nf-separator td { box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+</style>
 <div class="container-fluid mt-4">
     <!-- Header -->
     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -102,7 +108,7 @@
                 <table class="table table-bordered table-hover align-middle mb-0" id="tabelaPrimeiraCompra">
                     <thead class="table-light">
                         <tr>
-                            <th style="width: 80px;">DFE</th>
+                            <th style="width: 100px;">NF</th>
                             <th>Produto</th>
                             <th>Fornecedor</th>
                             <th class="text-end" style="width: 100px;">Qtd</th>
@@ -115,13 +121,26 @@
                         </tr>
                     </thead>
                     <tbody>
+                        {% set ns = namespace(last_dfe_id='', color_idx=0, is_first=true) %}
                         {% for item in paginacao.items %}
-                        <tr data-item-id="{{ item.id }}">
+                        {% if item.odoo_dfe_id != ns.last_dfe_id %}
+                            {% if not ns.is_first %}
+                            <!-- Linha separadora entre NFs -->
+                            <tr class="nf-separator"><td colspan="10" style="height: 8px; background: linear-gradient(to bottom, #dee2e6, #f8f9fa); padding: 0; border: none;"></td></tr>
+                            {% endif %}
+                            {% set ns.color_idx = (ns.color_idx + 1) % 2 %}
+                            {% set ns.last_dfe_id = item.odoo_dfe_id %}
+                            {% set ns.is_first = false %}
+                        {% endif %}
+                        <tr data-item-id="{{ item.id }}" class="{{ 'bg-light-blue' if ns.color_idx == 0 else 'bg-light-gray' }}" style="border-left: 5px solid {{ '#0d6efd' if ns.color_idx == 0 else '#adb5bd' }};">
                             <td>
-                                <a href="javascript:void(0)" onclick="abrirModalDetalhes({{ item.id }})"
-                                   class="text-primary fw-bold" title="Ver detalhes completos">
-                                    {{ item.odoo_dfe_id }}
+                                <a href="{{ url_for('validacao_fiscal.obter_pdf_nf', dfe_id=item.odoo_dfe_id) }}"
+                                   target="_blank" class="text-primary fw-bold" title="Ver PDF da NF">
+                                    <i class="fas fa-file-pdf text-danger me-1"></i>{{ item.numero_nf or item.odoo_dfe_id }}
                                 </a>
+                                {% if item.serie_nf %}
+                                <br><small class="text-muted">Série: {{ item.serie_nf }}</small>
+                                {% endif %}
                             </td>
                             <td>
                                 <strong>{{ item.cod_produto }}</strong>
@@ -129,7 +148,15 @@
                             </td>
                             <td>
                                 <span title="{{ item.razao_fornecedor }}">{{ item.razao_fornecedor }}</span>
-                                <br><small class="text-muted">{{ item.cnpj_fornecedor|formatar_cnpj }}</small>
+                                <br><small class="text-muted">{{ item.cnpj_fornecedor|formatar_cnpj }} -
+                                    {% if item.regime_tributario == '1' or item.regime_tributario == '2' %}
+                                    <span class="badge bg-info">Simples</span>
+                                    {% elif item.regime_tributario == '3' %}
+                                    <span class="badge bg-secondary">Regime Normal</span>
+                                    {% else %}
+                                    <span class="text-muted">N/I</span>
+                                    {% endif %}
+                                </small>
                             </td>
                             <td class="text-end">
                                 {% if item.quantidade %}
@@ -378,62 +405,48 @@
         return n.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
     };
 
-    // Renderizar detalhes do item
+    const formatarRegime = (crt) => {
+        if (!crt) return '<span class="badge bg-light text-dark ms-1">N/I</span>';
+        if (crt === '1' || crt === '2') return '<span class="badge bg-info ms-1">Simples</span>';
+        if (crt === '3') return '<span class="badge bg-warning text-dark ms-1">Regime Normal</span>';
+        return '<span class="badge bg-light text-dark ms-1">CRT ' + crt + '</span>';
+    };
+
+    // Renderizar detalhes do item - FOCADO EM DECISAO
     function renderizarDetalhes(item) {
         const totalImpostos = (parseFloat(item.valor_icms || 0) + parseFloat(item.valor_icms_st || 0) + parseFloat(item.valor_ipi || 0));
 
         return `
-            <!-- Cabecalho -->
+            <!-- SECAO 1: O QUE VOCE ESTA VALIDANDO (Contexto Rapido) -->
             <div class="row mb-3">
                 <div class="col-12">
-                    <div class="alert ${item.status === 'pendente' ? 'alert-warning' : item.status === 'validado' ? 'alert-success' : 'alert-danger'} mb-0">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <strong><i class="fas fa-file-invoice me-2"></i>DFE #${item.odoo_dfe_id}</strong>
-                            </div>
-                            <span class="badge ${item.status === 'pendente' ? 'bg-warning text-dark' : item.status === 'validado' ? 'bg-success' : 'bg-danger'} fs-6">
-                                ${item.status.toUpperCase()}
-                            </span>
+                    <div class="card border-warning">
+                        <div class="card-header py-2 bg-warning text-dark d-flex justify-content-between align-items-center">
+                            <strong><i class="fas fa-question-circle me-2"></i>O QUE VOCE ESTA VALIDANDO</strong>
+                            <a href="/api/recebimento/dfe/${item.odoo_dfe_id}/pdf" target="_blank"
+                               class="btn btn-sm btn-danger" title="Abrir PDF da NF">
+                                <i class="fas fa-file-pdf me-1"></i>Ver DANFE
+                            </a>
                         </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Produto e Fornecedor -->
-            <div class="row mb-3">
-                <div class="col-md-6">
-                    <div class="card h-100 border-primary">
-                        <div class="card-header py-2 bg-primary text-white">
-                            <strong><i class="fas fa-box me-2"></i>Produto</strong>
-                        </div>
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-4">
-                                    <small class="text-muted d-block">Codigo</small>
-                                    <code class="fs-5">${item.cod_produto}</code>
+                        <div class="card-body py-2">
+                            <div class="row align-items-center">
+                                <div class="col-md-3 border-end">
+                                    <small class="text-muted d-block">NF</small>
+                                    <strong class="fs-5">${item.numero_nf || item.odoo_dfe_id}</strong>
+                                    ${item.serie_nf ? '<small class="text-muted"> (Série ' + item.serie_nf + ')</small>' : ''}
                                 </div>
-                                <div class="col-8">
-                                    <small class="text-muted d-block">Nome Completo</small>
-                                    <strong>${item.nome_produto || '-'}</strong>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="card h-100 border-info">
-                        <div class="card-header py-2 bg-info text-white">
-                            <strong><i class="fas fa-building me-2"></i>Fornecedor</strong>
-                        </div>
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-5">
-                                    <small class="text-muted d-block">CNPJ</small>
-                                    <strong>${formatarCnpj(item.cnpj_fornecedor)}</strong>
-                                </div>
-                                <div class="col-7">
-                                    <small class="text-muted d-block">Razao Social</small>
+                                <div class="col-md-5 border-end">
+                                    <small class="text-muted d-block">Fornecedor</small>
                                     <strong>${item.razao_fornecedor || '-'}</strong>
+                                    <small class="d-block">${formatarCnpj(item.cnpj_fornecedor)}
+                                        <span class="badge bg-secondary ms-1">${item.uf_fornecedor || '-'}</span>
+                                        ${formatarRegime(item.regime_tributario)}
+                                    </small>
+                                </div>
+                                <div class="col-md-4">
+                                    <small class="text-muted d-block">Produto</small>
+                                    <code class="fs-5">${item.cod_produto}</code>
+                                    <small class="d-block text-muted">${item.nome_produto || ''}</small>
                                 </div>
                             </div>
                         </div>
@@ -441,31 +454,61 @@
                 </div>
             </div>
 
-            <!-- Quantidade e Valores -->
+            <!-- SECAO 2: DADOS FISCAIS A VALIDAR (Foco da Decisao) -->
             <div class="row mb-3">
                 <div class="col-12">
-                    <div class="card border-success">
-                        <div class="card-header py-2 bg-success text-white">
-                            <strong><i class="fas fa-calculator me-2"></i>Quantidade e Valores</strong>
+                    <div class="card border-primary">
+                        <div class="card-header py-2 bg-primary text-white">
+                            <strong><i class="fas fa-check-circle me-2"></i>DADOS FISCAIS A VALIDAR</strong>
+                            <small class="d-block">Estes dados serao salvos como baseline para proximas compras deste produto/fornecedor</small>
                         </div>
                         <div class="card-body">
+                            <!-- Linha 1: NCM, CFOP, CST -->
+                            <div class="row text-center mb-3">
+                                <div class="col-md-4">
+                                    <div class="border rounded p-2 bg-light">
+                                        <small class="text-muted d-block fw-bold">NCM</small>
+                                        <code class="fs-3 text-primary">${item.ncm || '-'}</code>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="border rounded p-2 bg-light">
+                                        <small class="text-muted d-block fw-bold">CFOP</small>
+                                        <code class="fs-3 text-primary">${item.cfop || '-'}</code>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="border rounded p-2 bg-light">
+                                        <small class="text-muted d-block fw-bold">CST ICMS</small>
+                                        <code class="fs-3 text-primary">${item.cst_icms || '-'}</code>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Linha 2: Aliquotas -->
                             <div class="row text-center">
-                                <div class="col-md-3 border-end">
-                                    <small class="text-muted d-block">Quantidade</small>
-                                    <span class="h4 text-primary">${formatarValor(item.quantidade, 4)}</span>
-                                    <span class="text-muted">${item.unidade_medida || 'UN'}</span>
-                                </div>
-                                <div class="col-md-3 border-end">
-                                    <small class="text-muted d-block">Valor Unitario</small>
-                                    <span class="h4">R$ ${formatarValor(item.valor_unitario, 4)}</span>
-                                </div>
-                                <div class="col-md-3 border-end">
-                                    <small class="text-muted d-block">Valor Total Produto</small>
-                                    <span class="h4 text-success fw-bold">R$ ${formatarValor(item.valor_total)}</span>
+                                <div class="col-md-3">
+                                    <div class="border rounded p-2">
+                                        <small class="text-muted d-block">ICMS</small>
+                                        <span class="badge bg-primary fs-4">${formatarValor(item.aliquota_icms)}%</span>
+                                    </div>
                                 </div>
                                 <div class="col-md-3">
-                                    <small class="text-muted d-block">Total Impostos</small>
-                                    <span class="h4 text-danger fw-bold">R$ ${formatarValor(totalImpostos)}</span>
+                                    <div class="border rounded p-2">
+                                        <small class="text-muted d-block">ICMS ST</small>
+                                        <span class="badge bg-secondary fs-4">${formatarValor(item.aliquota_icms_st)}%</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="border rounded p-2">
+                                        <small class="text-muted d-block">IPI</small>
+                                        <span class="badge bg-info fs-4">${formatarValor(item.aliquota_ipi)}%</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="border rounded p-2">
+                                        <small class="text-muted d-block">PIS/COFINS</small>
+                                        <span class="badge bg-secondary fs-6">${formatarValor(item.aliquota_pis)}% / ${formatarValor(item.aliquota_cofins)}%</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -473,146 +516,106 @@
                 </div>
             </div>
 
-            <!-- Dados Fiscais Basicos -->
+            <!-- SECAO 3: HISTORICO (Contexto para Decisao) -->
             <div class="row mb-3">
                 <div class="col-12">
                     <div class="card">
-                        <div class="card-header py-2 bg-light">
-                            <strong><i class="fas fa-file-alt me-2"></i>Dados Fiscais</strong>
+                        <div class="card-header py-2 bg-light d-flex justify-content-between align-items-center">
+                            <strong><i class="fas fa-history me-2"></i>HISTORICO DO PRODUTO</strong>
+                            <button type="button" class="btn btn-sm btn-outline-primary"
+                                    onclick="buscarHistorico('${item.cod_produto}')" id="btnBuscarHistorico">
+                                <i class="fas fa-search"></i> Buscar Historico
+                            </button>
                         </div>
-                        <div class="card-body">
-                            <div class="row text-center">
-                                <div class="col-md-4">
-                                    <small class="text-muted d-block">NCM</small>
-                                    <code class="fs-4">${item.ncm || '-'}</code>
-                                </div>
-                                <div class="col-md-4">
-                                    <small class="text-muted d-block">CFOP</small>
-                                    <code class="fs-4">${item.cfop || '-'}</code>
-                                </div>
-                                <div class="col-md-4">
-                                    <small class="text-muted d-block">CST ICMS</small>
-                                    <code class="fs-4">${item.cst_icms || '-'}</code>
-                                </div>
+                        <div class="card-body py-2" id="historicoContainer">
+                            <div class="alert alert-info mb-0">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>Primeira compra deste produto com este fornecedor.</strong>
+                                Clique em "Buscar Historico" para ver se existe perfil fiscal deste produto com outros fornecedores.
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- ICMS e ICMS ST -->
-            <div class="row mb-3">
-                <div class="col-md-6">
-                    <div class="card h-100">
-                        <div class="card-header py-2 bg-light">
-                            <strong><i class="fas fa-percent me-2"></i>ICMS</strong>
-                        </div>
-                        <div class="card-body">
+            <!-- SECAO 4: VALORES DA NF (Informativo) - Colapsavel -->
+            <div class="accordion" id="accordionDetalhes">
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed py-2" type="button" data-bs-toggle="collapse" data-bs-target="#collapseValores">
+                            <i class="fas fa-calculator me-2"></i>Valores da NF (Detalhes)
+                        </button>
+                    </h2>
+                    <div id="collapseValores" class="accordion-collapse collapse" data-bs-parent="#accordionDetalhes">
+                        <div class="accordion-body">
                             <div class="row text-center">
-                                <div class="col-4">
-                                    <small class="text-muted d-block">Aliquota</small>
-                                    <span class="badge bg-primary fs-5">${formatarValor(item.aliquota_icms)}%</span>
+                                <div class="col-md-3 border-end">
+                                    <small class="text-muted d-block">Quantidade</small>
+                                    <span class="h5">${formatarValor(item.quantidade, 4)} ${item.unidade_medida || 'UN'}</span>
                                 </div>
-                                <div class="col-4">
-                                    <small class="text-muted d-block">Base Calculo</small>
-                                    <strong>R$ ${formatarValor(item.bc_icms)}</strong>
+                                <div class="col-md-3 border-end">
+                                    <small class="text-muted d-block">Valor Unitario</small>
+                                    <span class="h5">R$ ${formatarValor(item.valor_unitario, 4)}</span>
                                 </div>
-                                <div class="col-4">
-                                    <small class="text-muted d-block">Valor</small>
-                                    <strong class="text-danger fs-5">R$ ${formatarValor(item.valor_icms)}</strong>
+                                <div class="col-md-3 border-end">
+                                    <small class="text-muted d-block">Valor Total</small>
+                                    <span class="h5 text-success fw-bold">R$ ${formatarValor(item.valor_total)}</span>
                                 </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="card h-100">
-                        <div class="card-header py-2 bg-light">
-                            <strong><i class="fas fa-percent me-2"></i>ICMS ST (Substituicao Tributaria)</strong>
-                        </div>
-                        <div class="card-body">
-                            <div class="row text-center">
-                                <div class="col-4">
-                                    <small class="text-muted d-block">Aliquota</small>
-                                    <span class="badge bg-secondary fs-5">${formatarValor(item.aliquota_icms_st)}%</span>
-                                </div>
-                                <div class="col-4">
-                                    <small class="text-muted d-block">Base Calculo</small>
-                                    <strong>R$ ${formatarValor(item.bc_icms_st)}</strong>
-                                </div>
-                                <div class="col-4">
-                                    <small class="text-muted d-block">Valor</small>
-                                    <strong class="text-danger fs-5">R$ ${formatarValor(item.valor_icms_st)}</strong>
+                                <div class="col-md-3">
+                                    <small class="text-muted d-block">Total Impostos</small>
+                                    <span class="h5 text-danger fw-bold">R$ ${formatarValor(totalImpostos)}</span>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- IPI, PIS, COFINS -->
-            <div class="row">
-                <div class="col-md-4">
-                    <div class="card h-100">
-                        <div class="card-header py-2 bg-light">
-                            <strong>IPI</strong>
-                        </div>
-                        <div class="card-body text-center">
-                            <div class="row">
-                                <div class="col-6">
-                                    <small class="text-muted d-block">Aliquota</small>
-                                    <span class="badge bg-info fs-5">${formatarValor(item.aliquota_ipi)}%</span>
-                                </div>
-                                <div class="col-6">
-                                    <small class="text-muted d-block">Valor</small>
-                                    <strong class="text-danger fs-5">R$ ${formatarValor(item.valor_ipi)}</strong>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="card h-100">
-                        <div class="card-header py-2 bg-light">
-                            <strong>PIS</strong>
-                        </div>
-                        <div class="card-body text-center">
-                            <div class="row">
-                                <div class="col-4">
-                                    <small class="text-muted d-block">CST</small>
-                                    <code>${item.cst_pis || '-'}</code>
-                                </div>
-                                <div class="col-4">
-                                    <small class="text-muted d-block">Aliq</small>
-                                    <span class="badge bg-secondary">${formatarValor(item.aliquota_pis)}%</span>
-                                </div>
-                                <div class="col-4">
-                                    <small class="text-muted d-block">BC</small>
-                                    <small>R$ ${formatarValor(item.bc_pis)}</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="card h-100">
-                        <div class="card-header py-2 bg-light">
-                            <strong>COFINS</strong>
-                        </div>
-                        <div class="card-body text-center">
-                            <div class="row">
-                                <div class="col-4">
-                                    <small class="text-muted d-block">CST</small>
-                                    <code>${item.cst_cofins || '-'}</code>
-                                </div>
-                                <div class="col-4">
-                                    <small class="text-muted d-block">Aliq</small>
-                                    <span class="badge bg-secondary">${formatarValor(item.aliquota_cofins)}%</span>
-                                </div>
-                                <div class="col-4">
-                                    <small class="text-muted d-block">BC</small>
-                                    <small>R$ ${formatarValor(item.bc_cofins)}</small>
-                                </div>
+                            <hr>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-bordered mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Imposto</th>
+                                            <th>CST</th>
+                                            <th class="text-center">Alíquota</th>
+                                            <th class="text-end">Base Cálculo</th>
+                                            <th class="text-end">Valor</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <th>ICMS</th>
+                                            <td><code>${item.cst_icms || '-'}</code></td>
+                                            <td class="text-center"><span class="badge bg-primary">${formatarValor(item.aliquota_icms)}%</span></td>
+                                            <td class="text-end">R$ ${formatarValor(item.bc_icms)}</td>
+                                            <td class="text-end text-danger fw-bold">R$ ${formatarValor(item.valor_icms)}</td>
+                                        </tr>
+                                        <tr>
+                                            <th>ICMS ST</th>
+                                            <td>-</td>
+                                            <td class="text-center"><span class="badge bg-secondary">${formatarValor(item.aliquota_icms_st)}%</span></td>
+                                            <td class="text-end">R$ ${formatarValor(item.bc_icms_st)}</td>
+                                            <td class="text-end text-danger fw-bold">R$ ${formatarValor(item.valor_icms_st)}</td>
+                                        </tr>
+                                        <tr>
+                                            <th>IPI</th>
+                                            <td>-</td>
+                                            <td class="text-center"><span class="badge bg-info">${formatarValor(item.aliquota_ipi)}%</span></td>
+                                            <td class="text-end">-</td>
+                                            <td class="text-end text-danger fw-bold">R$ ${formatarValor(item.valor_ipi)}</td>
+                                        </tr>
+                                        <tr>
+                                            <th>PIS</th>
+                                            <td><code>${item.cst_pis || '-'}</code></td>
+                                            <td class="text-center"><span class="badge bg-secondary">${formatarValor(item.aliquota_pis)}%</span></td>
+                                            <td class="text-end">R$ ${formatarValor(item.bc_pis)}</td>
+                                            <td class="text-end text-danger fw-bold">R$ ${formatarValor(item.valor_pis || 0)}</td>
+                                        </tr>
+                                        <tr>
+                                            <th>COFINS</th>
+                                            <td><code>${item.cst_cofins || '-'}</code></td>
+                                            <td class="text-center"><span class="badge bg-secondary">${formatarValor(item.aliquota_cofins)}%</span></td>
+                                            <td class="text-end">R$ ${formatarValor(item.bc_cofins)}</td>
+                                            <td class="text-end text-danger fw-bold">R$ ${formatarValor(item.valor_cofins || 0)}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
@@ -620,29 +623,88 @@
             </div>
 
             ${item.observacao ? `
-            <div class="row mt-3">
-                <div class="col-12">
-                    <div class="alert alert-info mb-0">
-                        <strong><i class="fas fa-comment me-2"></i>Observacao:</strong> ${item.observacao}
-                    </div>
-                </div>
+            <div class="alert alert-info mt-3 mb-0">
+                <strong><i class="fas fa-comment me-2"></i>Observacao:</strong> ${item.observacao}
             </div>
             ` : ''}
 
             ${item.validado_por ? `
-            <div class="row mt-3">
-                <div class="col-12">
-                    <div class="alert alert-secondary mb-0">
-                        <small>
-                            <i class="fas fa-user me-1"></i> ${item.status === 'validado' ? 'Validado' : 'Rejeitado'} por
-                            <strong>${item.validado_por}</strong>
-                            ${item.validado_em ? ' em ' + new Date(item.validado_em).toLocaleString('pt-BR') : ''}
-                        </small>
-                    </div>
-                </div>
+            <div class="alert alert-secondary mt-3 mb-0">
+                <small>
+                    <i class="fas fa-user me-1"></i> ${item.status === 'validado' ? 'Validado' : 'Rejeitado'} por
+                    <strong>${item.validado_por}</strong>
+                    ${item.validado_em ? ' em ' + new Date(item.validado_em).toLocaleString('pt-BR') : ''}
+                </small>
             </div>
             ` : ''}
         `;
+    }
+
+    // Buscar historico do produto (perfis fiscais existentes)
+    window.buscarHistorico = function(codProduto) {
+        const container = document.getElementById('historicoContainer');
+        const btn = document.getElementById('btnBuscarHistorico');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Buscando...';
+
+        fetch(`/api/recebimento/perfis-fiscais?cod_produto=${encodeURIComponent(codProduto)}`)
+            .then(r => r.json())
+            .then(data => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-search"></i> Buscar Historico';
+
+                if (data.itens && data.itens.length > 0) {
+                    let html = `
+                        <div class="alert alert-warning mb-2">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Encontrados ${data.itens.length} perfil(is) fiscal(is) deste produto com outros fornecedores:</strong>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Fornecedor</th>
+                                        <th>NCM</th>
+                                        <th>CFOP</th>
+                                        <th>ICMS</th>
+                                        <th>IPI</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                    `;
+                    data.itens.forEach(p => {
+                        const cfops = p.cfop_esperados ? JSON.parse(p.cfop_esperados).join(', ') : '-';
+                        html += `
+                            <tr>
+                                <td>${formatarCnpj(p.cnpj_fornecedor)}</td>
+                                <td><code>${p.ncm_esperado || '-'}</code></td>
+                                <td><code>${cfops}</code></td>
+                                <td>${p.aliquota_icms_esperada || '-'}%</td>
+                                <td>${p.aliquota_ipi_esperada || '-'}%</td>
+                            </tr>
+                        `;
+                    });
+                    html += '</tbody></table></div>';
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = `
+                        <div class="alert alert-success mb-0">
+                            <i class="fas fa-check-circle me-2"></i>
+                            <strong>Nenhum perfil fiscal encontrado para este produto.</strong>
+                            Este e realmente o primeiro cadastro fiscal deste produto no sistema.
+                        </div>
+                    `;
+                }
+            })
+            .catch(err => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-search"></i> Buscar Historico';
+                container.innerHTML = `
+                    <div class="alert alert-danger mb-0">
+                        <i class="fas fa-times-circle me-2"></i> Erro ao buscar historico: ${err.message}
+                    </div>
+                `;
+            });
     }
 
     // Validar item rapidamente

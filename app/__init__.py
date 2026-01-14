@@ -555,6 +555,22 @@ def create_app(config_name=None):
     app.jinja_env.filters["cnpj_br"] = formatar_cnpj
     app.jinja_env.filters["formatar_cnpj"] = formatar_cnpj
 
+    # ✅ NOVO: Filtro para regime tributário (CRT)
+    def formatar_regime_tributario(crt):
+        """Formata CRT para texto legível"""
+        if not crt:
+            return 'Não informado'
+        crt_str = str(crt)
+        if crt_str == '1':
+            return 'Simples Nacional'
+        elif crt_str == '2':
+            return 'Simples Nacional (excesso sublimite)'
+        elif crt_str == '3':
+            return 'Regime Normal'
+        return f'CRT {crt}'
+
+    app.jinja_env.filters["regime_tributario"] = formatar_regime_tributario
+
     # ✅ CARTEIRA: Filtros específicos da carteira
     from app.carteira.utils.formatters import formatar_moeda, formatar_peso, formatar_pallet
 

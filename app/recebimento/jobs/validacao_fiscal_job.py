@@ -29,6 +29,13 @@ logger = logging.getLogger(__name__)
 # Configuracoes
 JANELA_MINUTOS = 120  # Buscar DFEs das ultimas 2 horas
 
+# CNPJs do grupo a serem ignorados (empresas proprias - Nacom, Goya)
+# Formato: prefixo do CNPJ (8 primeiros digitos)
+CNPJS_IGNORAR = [
+    '61724241',  # Nacom
+    '18467441',  # Goya
+]
+
 
 class ValidacaoFiscalJob:
     """
@@ -154,10 +161,12 @@ class ValidacaoFiscalJob:
         # Buscar DFEs de compra no Odoo
         # l10n_br_status = '04' significa processado/concluido
         # nfe_infnfe_ide_finnfe != '4' exclui devolucoes (4 = devolucao de mercadoria)
+        # is_cte = False exclui CTe (Conhecimento de Transporte)
         filtro = [
             ['l10n_br_tipo_pedido', '=', 'compra'],
             ['l10n_br_status', '=', '04'],
             ['nfe_infnfe_ide_finnfe', '!=', '4'],  # Excluir devolucoes
+            ['is_cte', '=', False],  # Apenas NF-e (excluir CTe)
             ['write_date', '>=', data_limite_str]
         ]
 
@@ -179,6 +188,26 @@ class ValidacaoFiscalJob:
 
         if not dfes_odoo:
             return []
+
+        # Filtrar CNPJs do grupo (empresas proprias - Nacom, Goya)
+        # Isso e feito localmente pois Odoo nao suporta NOT LIKE facilmente
+        dfes_filtrados = []
+        for dfe in dfes_odoo:
+            cnpj = dfe.get('nfe_infnfe_emit_cnpj', '')
+            cnpj_limpo = ''.join(c for c in cnpj if c.isdigit())
+
+            # Verificar se o CNPJ pertence a alguma empresa do grupo
+            cnpj_ignorar = False
+            for prefixo in CNPJS_IGNORAR:
+                if cnpj_limpo.startswith(prefixo):
+                    cnpj_ignorar = True
+                    logger.debug(f"DFE {dfe.get('id')} ignorado: CNPJ {cnpj_limpo} pertence ao grupo")
+                    break
+
+            if not cnpj_ignorar:
+                dfes_filtrados.append(dfe)
+
+        dfes_odoo = dfes_filtrados
 
         # Filtrar os que ainda nao foram validados ou estao pendentes
         dfe_ids = [d['id'] for d in dfes_odoo]

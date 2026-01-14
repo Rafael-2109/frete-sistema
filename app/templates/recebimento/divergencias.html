@@ -1,6 +1,12 @@
 {% extends 'base.html' %}
 
 {% block content %}
+<style>
+    /* Cores alternadas para agrupamento por NF */
+    .bg-light-blue { background-color: #e7f1ff !important; }
+    .bg-light-gray { background-color: #f8f9fa !important; }
+    .nf-separator td { box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+</style>
 <div class="container-fluid mt-4">
     <!-- Header -->
     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -116,33 +122,90 @@
                 <table class="table table-bordered table-hover align-middle mb-0">
                     <thead class="table-light">
                         <tr>
-                            <th style="width: 80px;">DFE</th>
+                            <th style="width: 110px;">NF</th>
                             <th>Fornecedor</th>
                             <th>Produto</th>
                             <th>Campo</th>
-                            <th>Esperado</th>
-                            <th>Encontrado</th>
-                            <th style="width: 100px;">Status</th>
-                            <th style="width: 150px;">Acoes</th>
+                            <th style="width: 120px;" class="text-center">Esperado</th>
+                            <th style="width: 120px;" class="text-center">Encontrado</th>
+                            <th style="width: 80px;" class="text-center">Diff</th>
+                            <th style="width: 90px;">Status</th>
+                            <th style="width: 100px;">Acoes</th>
                         </tr>
                     </thead>
                     <tbody>
+                        {% set ns = namespace(last_dfe_id='', color_idx=0, is_first=true) %}
                         {% for item in paginacao.items %}
-                        <tr>
-                            <td>{{ item.odoo_dfe_id }}</td>
+                        {% if item.odoo_dfe_id != ns.last_dfe_id %}
+                            {% if not ns.is_first %}
+                            <!-- Linha separadora entre NFs -->
+                            <tr class="nf-separator"><td colspan="9" style="height: 8px; background: linear-gradient(to bottom, #dee2e6, #f8f9fa); padding: 0; border: none;"></td></tr>
+                            {% endif %}
+                            {% set ns.color_idx = (ns.color_idx + 1) % 2 %}
+                            {% set ns.last_dfe_id = item.odoo_dfe_id %}
+                            {% set ns.is_first = false %}
+                        {% endif %}
+                        <tr class="{{ 'bg-light-blue' if ns.color_idx == 0 else 'bg-light-gray' }}" style="border-left: 5px solid {{ '#0d6efd' if ns.color_idx == 0 else '#adb5bd' }};">
                             <td>
-                                <span class="d-block fw-bold" title="{{ item.razao_fornecedor }}">{{ item.razao_fornecedor or '-' }}</span>
-                                <small class="text-muted">{{ item.cnpj_fornecedor|formatar_cnpj }}</small>
+                                {% if item.numero_nf %}
+                                <a href="{{ url_for('validacao_fiscal.obter_pdf_nf', dfe_id=item.odoo_dfe_id) }}"
+                                   target="_blank" class="text-decoration-none fw-bold"
+                                   title="Ver DANFE - Clique para abrir PDF">
+                                    <i class="fas fa-file-pdf text-danger me-1"></i>{{ item.numero_nf }}
+                                </a>
+                                {% if item.serie_nf %}
+                                <small class="text-muted d-block">Série {{ item.serie_nf }}</small>
+                                {% endif %}
+                                {% else %}
+                                <span class="text-muted">DFE {{ item.odoo_dfe_id }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="d-block fw-bold" title="{{ item.razao_fornecedor }}">
+                                    {{ item.razao_fornecedor[:30] + '...' if item.razao_fornecedor and item.razao_fornecedor|length > 30 else item.razao_fornecedor or '-' }}
+                                </span>
+                                <small class="text-muted">
+                                    {{ item.cnpj_fornecedor|formatar_cnpj }}
+                                    {% if item.uf_fornecedor %}
+                                    <span class="badge bg-light text-dark ms-1">{{ item.uf_fornecedor }}</span>
+                                    {% endif %}
+                                    {% if item.regime_tributario == '1' or item.regime_tributario == '2' %}
+                                    <span class="badge bg-info">Simples</span>
+                                    {% elif item.regime_tributario == '3' %}
+                                    <span class="badge bg-secondary">Regime Normal</span>
+                                    {% endif %}
+                                </small>
                             </td>
                             <td>
                                 <span class="d-block fw-bold">{{ item.cod_produto }}</span>
-                                <small class="text-muted" title="{{ item.nome_produto }}">{{ item.nome_produto or '-' }}</small>
+                                <small class="text-muted" title="{{ item.nome_produto }}">
+                                    {{ item.nome_produto[:25] + '...' if item.nome_produto and item.nome_produto|length > 25 else item.nome_produto or '-' }}
+                                </small>
                             </td>
                             <td>
                                 <span class="badge bg-secondary">{{ item.campo_label or item.campo }}</span>
                             </td>
-                            <td><code class="text-success">{{ item.valor_esperado }}</code></td>
-                            <td><code class="text-danger">{{ item.valor_encontrado }}</code></td>
+                            <td class="text-center"><code class="text-success fs-6">{{ item.valor_esperado }}</code></td>
+                            <td class="text-center"><code class="text-danger fs-6">{{ item.valor_encontrado }}</code></td>
+                            <td class="text-center">
+                                {% if item.diferenca_percentual %}
+                                    {% if item.diferenca_percentual|float > 10 %}
+                                    <span class="badge bg-danger" title="Diferenca alta: {{ item.diferenca_percentual }}%">
+                                        <i class="fas fa-exclamation-triangle me-1"></i>{{ item.diferenca_percentual|round(1) }}%
+                                    </span>
+                                    {% elif item.diferenca_percentual|float > 5 %}
+                                    <span class="badge bg-warning text-dark" title="Diferenca moderada: {{ item.diferenca_percentual }}%">
+                                        <i class="fas fa-exclamation me-1"></i>{{ item.diferenca_percentual|round(1) }}%
+                                    </span>
+                                    {% else %}
+                                    <span class="badge bg-info" title="Diferenca baixa: {{ item.diferenca_percentual }}%">
+                                        {{ item.diferenca_percentual|round(1) }}%
+                                    </span>
+                                    {% endif %}
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
                             <td>
                                 {% if item.status == 'pendente' %}
                                 <span class="badge bg-warning text-dark">Pendente</span>
@@ -158,13 +221,13 @@
                                 {% if item.status == 'pendente' %}
                                 <div class="btn-group btn-group-sm">
                                     <button type="button" class="btn btn-success"
-                                            onclick="abrirModalAprovar({{ item.id }}, '{{ item.campo_label }}', '{{ item.valor_encontrado }}')"
-                                            title="Aprovar">
+                                            onclick="abrirModalAprovar({{ item.to_dict()|tojson|safe }})"
+                                            title="Aprovar divergencia">
                                         <i class="fas fa-check"></i>
                                     </button>
                                     <button type="button" class="btn btn-danger"
-                                            onclick="abrirModalRejeitar({{ item.id }})"
-                                            title="Rejeitar">
+                                            onclick="abrirModalRejeitar({{ item.to_dict()|tojson|safe }})"
+                                            title="Rejeitar divergencia">
                                         <i class="fas fa-times"></i>
                                     </button>
                                 </div>
@@ -231,27 +294,86 @@
 
 <!-- Modal Aprovar -->
 <div class="modal fade" id="modalAprovar" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
-                <h5 class="modal-title"><i class="fas fa-check me-2"></i>Aprovar Divergencia</h5>
+                <h5 class="modal-title">
+                    <i class="fas fa-check me-2"></i>Aprovar Divergencia
+                    <span id="aprovar-nf-header" class="ms-2 badge bg-light text-dark"></span>
+                </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <input type="hidden" id="aprovar-id">
 
-                <div class="alert alert-info">
-                    <strong>Divergencia:</strong> <span id="aprovar-campo"></span><br>
-                    <strong>Novo valor:</strong> <code id="aprovar-valor"></code>
+                <!-- Contexto da Divergencia -->
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <div class="card bg-light">
+                            <div class="card-body py-2">
+                                <h6 class="card-subtitle mb-1 text-muted">Fornecedor</h6>
+                                <span id="aprovar-fornecedor" class="fw-bold"></span>
+                                <small id="aprovar-cnpj" class="d-block text-muted"></small>
+                                <small id="aprovar-uf" class="badge bg-secondary"></small>
+                                <small id="aprovar-regime" class="badge"></small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card bg-light">
+                            <div class="card-body py-2">
+                                <h6 class="card-subtitle mb-1 text-muted">Produto</h6>
+                                <span id="aprovar-produto-cod" class="fw-bold"></span>
+                                <small id="aprovar-produto-nome" class="d-block text-muted"></small>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="mb-3">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="aprovar-atualizar">
-                        <label class="form-check-label" for="aprovar-atualizar">
-                            <strong>Atualizar perfil fiscal</strong><br>
-                            <small class="text-muted">Usar este valor como novo baseline para proximas NFs</small>
-                        </label>
+                <!-- Divergencia Identificada -->
+                <div class="alert alert-warning mb-3">
+                    <div class="row align-items-center">
+                        <div class="col">
+                            <strong>Campo:</strong> <span id="aprovar-campo" class="badge bg-secondary"></span>
+                        </div>
+                        <div class="col text-center">
+                            <small class="text-muted d-block">Esperado</small>
+                            <code id="aprovar-esperado" class="text-success fs-5"></code>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-arrow-right text-muted"></i>
+                        </div>
+                        <div class="col text-center">
+                            <small class="text-muted d-block">Encontrado</small>
+                            <code id="aprovar-encontrado" class="text-danger fs-5"></code>
+                        </div>
+                        <div class="col text-center">
+                            <small class="text-muted d-block">Diferenca</small>
+                            <span id="aprovar-diff" class="badge"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Decisao -->
+                <div class="card border-primary mb-3">
+                    <div class="card-header bg-primary text-white py-2">
+                        <i class="fas fa-question-circle me-2"></i>O que fazer com esta divergencia?
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="radio" name="aprovar-acao" id="aprovar-manter" value="manter" checked>
+                            <label class="form-check-label" for="aprovar-manter">
+                                <strong>Aprovar e manter baseline atual</strong><br>
+                                <small class="text-muted">O valor encontrado e aceito apenas para esta NF. Proximas NFs continuarao comparando com o baseline antigo.</small>
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="aprovar-acao" id="aprovar-atualizar" value="atualizar">
+                            <label class="form-check-label" for="aprovar-atualizar">
+                                <strong>Aprovar e atualizar baseline</strong><br>
+                                <small class="text-muted">O valor encontrado sera o novo baseline. Proximas NFs deste produto/fornecedor usarao este valor como referencia.</small>
+                            </label>
+                        </div>
                     </div>
                 </div>
 
@@ -259,8 +381,8 @@
                     <label for="aprovar-justificativa" class="form-label">
                         Justificativa <span class="text-danger">*</span>
                     </label>
-                    <textarea class="form-control" id="aprovar-justificativa" rows="3"
-                              placeholder="Informe o motivo da aprovacao..." required></textarea>
+                    <textarea class="form-control" id="aprovar-justificativa" rows="2"
+                              placeholder="Ex: Fornecedor alterou regime tributario, validado com contador..." required></textarea>
                 </div>
 
                 <div id="aprovar-feedback" class="alert d-none"></div>
@@ -269,7 +391,7 @@
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                 <button type="button" class="btn btn-success" onclick="submeterAprovacao()">
                     <span class="spinner-border spinner-border-sm d-none" id="aprovar-spinner"></span>
-                    <i class="fas fa-check me-1"></i> Aprovar
+                    <i class="fas fa-check me-1"></i> Aprovar Divergencia
                 </button>
             </div>
         </div>
@@ -281,23 +403,57 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header bg-danger text-white">
-                <h5 class="modal-title"><i class="fas fa-times me-2"></i>Rejeitar Divergencia</h5>
+                <h5 class="modal-title">
+                    <i class="fas fa-times me-2"></i>Rejeitar Divergencia
+                    <span id="rejeitar-nf-header" class="ms-2 badge bg-light text-dark"></span>
+                </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <input type="hidden" id="rejeitar-id">
 
-                <div class="alert alert-warning">
+                <!-- Resumo da Divergencia -->
+                <div class="card bg-light mb-3">
+                    <div class="card-body py-2">
+                        <div class="row">
+                            <div class="col-6">
+                                <small class="text-muted">Fornecedor</small>
+                                <div id="rejeitar-fornecedor" class="fw-bold"></div>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted">Produto</small>
+                                <div id="rejeitar-produto" class="fw-bold"></div>
+                            </div>
+                        </div>
+                        <hr class="my-2">
+                        <div class="row">
+                            <div class="col-4">
+                                <small class="text-muted">Campo</small>
+                                <div><span id="rejeitar-campo" class="badge bg-secondary"></span></div>
+                            </div>
+                            <div class="col-4">
+                                <small class="text-muted">Esperado</small>
+                                <div><code id="rejeitar-esperado" class="text-success"></code></div>
+                            </div>
+                            <div class="col-4">
+                                <small class="text-muted">Encontrado</small>
+                                <div><code id="rejeitar-encontrado" class="text-danger"></code></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="alert alert-danger">
                     <i class="fas fa-exclamation-triangle me-2"></i>
-                    Ao rejeitar, a NF sera bloqueada e devera ser devolvida ao fornecedor.
+                    <strong>Atencao:</strong> Ao rejeitar, a NF sera bloqueada e devera ser devolvida ao fornecedor ou ter carta de correcao emitida.
                 </div>
 
                 <div class="mb-3">
                     <label for="rejeitar-justificativa" class="form-label">
                         Justificativa <span class="text-danger">*</span>
                     </label>
-                    <textarea class="form-control" id="rejeitar-justificativa" rows="3"
-                              placeholder="Informe o motivo da rejeicao..." required></textarea>
+                    <textarea class="form-control" id="rejeitar-justificativa" rows="2"
+                              placeholder="Ex: NCM incorreto, solicitar carta de correcao ao fornecedor..." required></textarea>
                 </div>
 
                 <div id="rejeitar-feedback" class="alert d-none"></div>
@@ -306,7 +462,7 @@
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                 <button type="button" class="btn btn-danger" onclick="submeterRejeicao()">
                     <span class="spinner-border spinner-border-sm d-none" id="rejeitar-spinner"></span>
-                    <i class="fas fa-times me-1"></i> Rejeitar
+                    <i class="fas fa-times me-1"></i> Rejeitar NF
                 </button>
             </div>
         </div>
@@ -322,35 +478,117 @@
     // Modal instances
     let modalAprovar = null;
     let modalRejeitar = null;
+    let itemAtual = null;
 
     document.addEventListener('DOMContentLoaded', function() {
         modalAprovar = new bootstrap.Modal(document.getElementById('modalAprovar'));
         modalRejeitar = new bootstrap.Modal(document.getElementById('modalRejeitar'));
     });
 
+    // Formatar CNPJ
+    function formatarCNPJ(cnpj) {
+        if (!cnpj) return '-';
+        cnpj = cnpj.replace(/\D/g, '');
+        if (cnpj.length === 14) {
+            return cnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+        }
+        return cnpj;
+    }
+
     // Abrir modal de aprovacao
-    window.abrirModalAprovar = function(id, campo, valor) {
-        document.getElementById('aprovar-id').value = id;
-        document.getElementById('aprovar-campo').textContent = campo;
-        document.getElementById('aprovar-valor').textContent = valor;
-        document.getElementById('aprovar-atualizar').checked = false;
+    window.abrirModalAprovar = function(item) {
+        itemAtual = item;
+        document.getElementById('aprovar-id').value = item.id;
+
+        // Header
+        document.getElementById('aprovar-nf-header').textContent = item.numero_nf ? `NF ${item.numero_nf}` : `DFE ${item.odoo_dfe_id}`;
+
+        // Fornecedor
+        document.getElementById('aprovar-fornecedor').textContent = item.razao_fornecedor || '-';
+        document.getElementById('aprovar-cnpj').textContent = formatarCNPJ(item.cnpj_fornecedor);
+        const ufEl = document.getElementById('aprovar-uf');
+        if (item.uf_fornecedor) {
+            ufEl.textContent = item.uf_fornecedor;
+            ufEl.style.display = '';
+        } else {
+            ufEl.style.display = 'none';
+        }
+
+        // Regime tributario
+        const regimeEl = document.getElementById('aprovar-regime');
+        if (item.regime_tributario === '1' || item.regime_tributario === '2') {
+            regimeEl.textContent = 'Simples Nacional';
+            regimeEl.className = 'badge bg-info ms-1';
+            regimeEl.style.display = '';
+        } else if (item.regime_tributario === '3') {
+            regimeEl.textContent = 'Regime Normal';
+            regimeEl.className = 'badge bg-warning text-dark ms-1';
+            regimeEl.style.display = '';
+        } else {
+            regimeEl.style.display = 'none';
+        }
+
+        // Produto
+        document.getElementById('aprovar-produto-cod').textContent = item.cod_produto;
+        document.getElementById('aprovar-produto-nome').textContent = item.nome_produto || '';
+
+        // Divergencia
+        document.getElementById('aprovar-campo').textContent = item.campo_label || item.campo;
+        document.getElementById('aprovar-esperado').textContent = item.valor_esperado;
+        document.getElementById('aprovar-encontrado').textContent = item.valor_encontrado;
+
+        // Diferenca
+        const diffEl = document.getElementById('aprovar-diff');
+        if (item.diferenca_percentual) {
+            const diff = parseFloat(item.diferenca_percentual);
+            diffEl.textContent = diff.toFixed(1) + '%';
+            if (diff > 10) {
+                diffEl.className = 'badge bg-danger';
+            } else if (diff > 5) {
+                diffEl.className = 'badge bg-warning text-dark';
+            } else {
+                diffEl.className = 'badge bg-info';
+            }
+        } else {
+            diffEl.textContent = '-';
+            diffEl.className = 'badge bg-secondary';
+        }
+
+        // Reset form
+        document.getElementById('aprovar-manter').checked = true;
         document.getElementById('aprovar-justificativa').value = '';
         document.getElementById('aprovar-feedback').classList.add('d-none');
+
         modalAprovar.show();
     };
 
     // Abrir modal de rejeicao
-    window.abrirModalRejeitar = function(id) {
-        document.getElementById('rejeitar-id').value = id;
+    window.abrirModalRejeitar = function(item) {
+        itemAtual = item;
+        document.getElementById('rejeitar-id').value = item.id;
+
+        // Header
+        document.getElementById('rejeitar-nf-header').textContent = item.numero_nf ? `NF ${item.numero_nf}` : `DFE ${item.odoo_dfe_id}`;
+
+        // Resumo
+        document.getElementById('rejeitar-fornecedor').textContent = item.razao_fornecedor ? item.razao_fornecedor.substring(0, 30) : '-';
+        document.getElementById('rejeitar-produto').textContent = item.cod_produto;
+        document.getElementById('rejeitar-campo').textContent = item.campo_label || item.campo;
+        document.getElementById('rejeitar-esperado').textContent = item.valor_esperado;
+        document.getElementById('rejeitar-encontrado').textContent = item.valor_encontrado;
+
+        // Reset form
         document.getElementById('rejeitar-justificativa').value = '';
         document.getElementById('rejeitar-feedback').classList.add('d-none');
+
         modalRejeitar.show();
     };
 
     // Submeter aprovacao
     window.submeterAprovacao = function() {
         const id = document.getElementById('aprovar-id').value;
-        const atualizarBaseline = document.getElementById('aprovar-atualizar').checked;
+        const acao = document.querySelector('input[name="aprovar-acao"]:checked').value;
+        const atualizarBaseline = (acao === 'atualizar');
         const justificativa = document.getElementById('aprovar-justificativa').value.trim();
 
         if (!justificativa) {

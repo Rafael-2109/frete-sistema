@@ -45,10 +45,20 @@ def _serializar_item_primeira_compra(item):
         'id': item.id,
         'odoo_dfe_id': item.odoo_dfe_id,
         'odoo_dfe_line_id': item.odoo_dfe_line_id,
+        # Dados da NF
+        'numero_nf': item.numero_nf,
+        'serie_nf': item.serie_nf,
+        'chave_nfe': item.chave_nfe,
+        # Produto e fornecedor
         'cod_produto': item.cod_produto,
         'nome_produto': item.nome_produto,
         'cnpj_fornecedor': item.cnpj_fornecedor,
         'razao_fornecedor': item.razao_fornecedor,
+        # Localizacao do fornecedor
+        'uf_fornecedor': item.uf_fornecedor,
+        'cidade_fornecedor': item.cidade_fornecedor,
+        # Regime tributario (CRT)
+        'regime_tributario': item.regime_tributario,
         # Quantidade e valores
         'quantidade': to_float(item.quantidade),
         'unidade_medida': item.unidade_medida,
@@ -73,10 +83,12 @@ def _serializar_item_primeira_compra(item):
         'cst_pis': item.cst_pis,
         'aliquota_pis': to_float(item.aliquota_pis),
         'bc_pis': to_float(item.bc_pis),
+        'valor_pis': to_float(item.valor_pis),
         # COFINS
         'cst_cofins': item.cst_cofins,
         'aliquota_cofins': to_float(item.aliquota_cofins),
         'bc_cofins': to_float(item.bc_cofins),
+        'valor_cofins': to_float(item.valor_cofins),
         # Status e auditoria
         'status': item.status,
         'validado_por': item.validado_por,
@@ -125,8 +137,11 @@ def divergencias():
     if data_fim:
         query = query.filter(DivergenciaFiscal.criado_em <= data_fim)
 
-    # Ordenar por data decrescente e paginar
-    paginacao = query.order_by(DivergenciaFiscal.criado_em.desc()).paginate(
+    # Ordenar por DFE (agrupamento visual) e depois por data decrescente
+    paginacao = query.order_by(
+        DivergenciaFiscal.odoo_dfe_id.desc(),  # Agrupar por NF
+        DivergenciaFiscal.criado_em.desc()
+    ).paginate(
         page=page,
         per_page=per_page,
         error_out=False
@@ -193,8 +208,11 @@ def primeira_compra():
             )
         )
 
-    # Ordenar por data decrescente e paginar
-    paginacao = query.order_by(CadastroPrimeiraCompra.criado_em.desc()).paginate(
+    # Ordenar por DFE (agrupamento visual) e depois por data decrescente
+    paginacao = query.order_by(
+        CadastroPrimeiraCompra.odoo_dfe_id.desc(),  # Agrupar por NF
+        CadastroPrimeiraCompra.criado_em.desc()
+    ).paginate(
         page=page,
         per_page=per_page,
         error_out=False

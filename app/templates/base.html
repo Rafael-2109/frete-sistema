@@ -302,20 +302,10 @@
             </a></li>
             ***/-->#}
               {% endif %}
-            </ul>
-          </li>
-          {% endif %}
-
-          <!-- COMPRAS - Validacao Fiscal e Recebimento -->
-          {% if current_user.tem_permissao('financeiro', 'pendencias') or current_user.pode_acessar_financeiro() or
-          current_user.perfil == 'administrador' %}
-          <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle" href="#" id="menuCompras" role="button" data-bs-toggle="dropdown">
-              <i class="fas fa-shopping-cart"></i> Compras
-            </a>
-            <ul class="dropdown-menu">
+              {% if current_user.tem_permissao('financeiro', 'pendencias') or current_user.pode_acessar_financeiro() or
+              current_user.perfil == 'administrador' %}
               <li>
-                <h6 class="dropdown-header">📋 Validacao Fiscal</h6>
+                <h6 class="dropdown-header">📋 Validacao Compras</h6>
               </li>
               <li><a class="dropdown-item" href="{{ url_for('recebimento_views.divergencias') }}">
                   <i class="fas fa-exclamation-triangle text-warning"></i> Divergencias Fiscais
@@ -326,9 +316,11 @@
               <li><a class="dropdown-item" href="{{ url_for('recebimento_views.perfis_fiscais') }}">
                   <i class="fas fa-id-card text-primary"></i> Perfis Fiscais
                 </a></li>
+              {% endif %}
             </ul>
           </li>
           {% endif %}
+
 
           <!-- CADASTROS - Dados mestres -->
           {% if not is_comercial_only and current_user.is_authenticated and (current_user.tem_permissao('cadastros') or

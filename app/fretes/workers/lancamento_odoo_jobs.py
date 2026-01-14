@@ -702,9 +702,9 @@ def lancar_lote_job(
             resultado['tempo_total_segundos'] = tempo_total
 
             total_enfileirados = sum(1 for j in resultado['jobs_fretes'] if j.get('job_id')) + \
-                                 sum(1 for j in resultado['jobs_despesas'] if j.get('job_id'))
+                                 sum(1 for j in resultado['jobs_despesas'] if j.get('job_id')) # type: ignore 
             total_erros = sum(1 for j in resultado['jobs_fretes'] if j.get('status') == 'erro') + \
-                          sum(1 for j in resultado['jobs_despesas'] if j.get('status') == 'erro')
+                          sum(1 for j in resultado['jobs_despesas'] if j.get('status') == 'erro') # type: ignore
 
             resultado['success'] = (total_erros == 0 and total_enfileirados > 0)
 

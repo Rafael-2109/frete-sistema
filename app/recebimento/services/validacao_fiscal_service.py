@@ -165,6 +165,9 @@ class ValidacaoFiscalService:
         }
 
         try:
+            # 0. Obter conexao Odoo
+            odoo = self._get_odoo()
+
             # 1. Buscar DFE no Odoo
             dfe = self._buscar_dfe(odoo_dfe_id)
             if not dfe:
@@ -184,11 +187,32 @@ class ValidacaoFiscalService:
             razao = dfe.get('nfe_infnfe_emit_xnome', '')
 
             # 3.1. Extrair dados da NF
+            crt = dfe.get('nfe_infnfe_emit_crt')
             dados_nf = {
                 'numero_nf': dfe.get('nfe_infnfe_ide_nnf'),
                 'serie_nf': dfe.get('nfe_infnfe_ide_serie'),
-                'chave_nfe': dfe.get('protnfe_infnfe_chnfe')
+                'chave_nfe': dfe.get('protnfe_infnfe_chnfe'),
+                'uf_fornecedor': dfe.get('nfe_infnfe_emit_uf'),
+                'cidade_fornecedor': None,  # Sera buscado do partner
+                'regime_tributario': str(crt) if crt and crt is not False else None
             }
+
+            # 3.2. Buscar cidade do fornecedor (do partner_id)
+            partner_id = dfe.get('partner_id')
+            if partner_id and isinstance(partner_id, (list, tuple)) and len(partner_id) > 0:
+                partner_dados = odoo.search_read(
+                    'res.partner',
+                    [['id', '=', partner_id[0]]],
+                    fields=['city', 'state_id'],
+                    limit=1
+                )
+                if partner_dados:
+                    dados_nf['cidade_fornecedor'] = partner_dados[0].get('city')
+                    # state_id retorna [id, nome_estado]
+                    state = partner_dados[0].get('state_id')
+                    if state and isinstance(state, (list, tuple)) and not dados_nf['uf_fornecedor']:
+                        # Se nao veio do DFE, pega do partner
+                        dados_nf['uf_fornecedor'] = state[1][:2] if len(state) > 1 else None
 
             # 4. Validar cada linha
             for linha in linhas:
@@ -271,7 +295,11 @@ class ValidacaoFiscalService:
             # Dados da NF para identificacao
             'nfe_infnfe_ide_nnf',       # Numero da NF
             'nfe_infnfe_ide_serie',     # Serie da NF
-            'protnfe_infnfe_chnfe'      # Chave de acesso NF-e
+            'protnfe_infnfe_chnfe',     # Chave de acesso NF-e
+            # Localizacao do emitente
+            'nfe_infnfe_emit_uf',       # UF do emitente
+            # Regime tributario do emitente (CRT)
+            'nfe_infnfe_emit_crt'       # 1=Simples, 2=Simples excesso, 3=Normal
         ]
 
         registros = odoo.search_read(
@@ -298,9 +326,9 @@ class ValidacaoFiscalService:
             # IPI
             'det_imposto_ipi_pipi', 'det_imposto_ipi_vipi',
             # PIS
-            'det_imposto_pis_cst', 'det_imposto_pis_ppis', 'det_imposto_pis_vbc',
+            'det_imposto_pis_cst', 'det_imposto_pis_ppis', 'det_imposto_pis_vbc', 'det_imposto_pis_vpis',
             # COFINS
-            'det_imposto_cofins_cst', 'det_imposto_cofins_pcofins', 'det_imposto_cofins_vbc'
+            'det_imposto_cofins_cst', 'det_imposto_cofins_pcofins', 'det_imposto_cofins_vbc', 'det_imposto_cofins_vcofins'
         ]
 
         return odoo.search_read(
@@ -699,6 +727,11 @@ class ValidacaoFiscalService:
             nome_produto=nome_produto,
             cnpj_fornecedor=cnpj,
             razao_fornecedor=razao,
+            # Localizacao do fornecedor
+            uf_fornecedor=dados_nf.get('uf_fornecedor'),
+            cidade_fornecedor=dados_nf.get('cidade_fornecedor'),
+            # Regime tributario
+            regime_tributario=dados_nf.get('regime_tributario'),
             # Quantidade e valores do produto
             quantidade=self._to_decimal(linha.get('det_prod_qcom')),
             unidade_medida=linha.get('det_prod_ucom'),
@@ -723,10 +756,12 @@ class ValidacaoFiscalService:
             cst_pis=linha.get('det_imposto_pis_cst'),
             aliquota_pis=self._to_decimal(linha.get('det_imposto_pis_ppis')),
             bc_pis=self._to_decimal(linha.get('det_imposto_pis_vbc')),
+            valor_pis=self._to_decimal(linha.get('det_imposto_pis_vpis')),
             # COFINS
             cst_cofins=linha.get('det_imposto_cofins_cst'),
             aliquota_cofins=self._to_decimal(linha.get('det_imposto_cofins_pcofins')),
             bc_cofins=self._to_decimal(linha.get('det_imposto_cofins_vbc')),
+            valor_cofins=self._to_decimal(linha.get('det_imposto_cofins_vcofins')),
             status='pendente'
         )
 
@@ -783,7 +818,8 @@ class ValidacaoFiscalService:
                     campo='cfop',
                     valor_esperado=', '.join(cfops_validos),
                     valor_encontrado=cfop_nf,
-                    razao=razao
+                    razao=razao,
+                    dados_nf=dados_nf
                 )
                 divergencias.append(div)
 
@@ -798,7 +834,8 @@ class ValidacaoFiscalService:
                     campo='aliq_icms',
                     valor_esperado=str(perfil.aliquota_icms_esperada),
                     valor_encontrado=str(aliq_icms_nf),
-                    razao=razao
+                    razao=razao,
+                    dados_nf=dados_nf
                 )
                 divergencias.append(div)
 
@@ -813,7 +850,8 @@ class ValidacaoFiscalService:
                     campo='aliq_icms_st',
                     valor_esperado=str(perfil.aliquota_icms_st_esperada),
                     valor_encontrado=str(aliq_icms_st_nf),
-                    razao=razao
+                    razao=razao,
+                    dados_nf=dados_nf
                 )
                 divergencias.append(div)
 
@@ -828,7 +866,8 @@ class ValidacaoFiscalService:
                     campo='aliq_ipi',
                     valor_esperado=str(perfil.aliquota_ipi_esperada),
                     valor_encontrado=str(aliq_ipi_nf),
-                    razao=razao
+                    razao=razao,
+                    dados_nf=dados_nf
                 )
                 divergencias.append(div)
 
@@ -843,7 +882,8 @@ class ValidacaoFiscalService:
                     campo='cst_pis',
                     valor_esperado=str(perfil.cst_pis_esperado),
                     valor_encontrado=str(cst_pis_nf),
-                    razao=razao
+                    razao=razao,
+                    dados_nf=dados_nf
                 )
                 divergencias.append(div)
 
@@ -858,7 +898,8 @@ class ValidacaoFiscalService:
                     campo='aliq_pis',
                     valor_esperado=str(perfil.aliquota_pis_esperada),
                     valor_encontrado=str(aliq_pis_nf),
-                    razao=razao
+                    razao=razao,
+                    dados_nf=dados_nf
                 )
                 divergencias.append(div)
 
@@ -873,7 +914,8 @@ class ValidacaoFiscalService:
                     campo='cst_cofins',
                     valor_esperado=str(perfil.cst_cofins_esperado),
                     valor_encontrado=str(cst_cofins_nf),
-                    razao=razao
+                    razao=razao,
+                    dados_nf=dados_nf
                 )
                 divergencias.append(div)
 
@@ -888,7 +930,8 @@ class ValidacaoFiscalService:
                     campo='aliq_cofins',
                     valor_esperado=str(perfil.aliquota_cofins_esperada),
                     valor_encontrado=str(aliq_cofins_nf),
-                    razao=razao
+                    razao=razao,
+                    dados_nf=dados_nf
                 )
                 divergencias.append(div)
 
@@ -906,6 +949,7 @@ class ValidacaoFiscalService:
         dados_nf: Dict = None
     ) -> Dict:
         """Cria registro de divergencia fiscal"""
+        dados_nf = dados_nf or {}
 
         config = self.CAMPOS_VALIDACAO.get(campo, {})
         label = config.get('label', campo)
@@ -927,11 +971,21 @@ class ValidacaoFiscalService:
         divergencia = DivergenciaFiscal(
             odoo_dfe_id=str(odoo_dfe_id),
             odoo_dfe_line_id=str(linha.get('id')),
+            # Dados da NF
+            numero_nf=dados_nf.get('numero_nf'),
+            serie_nf=dados_nf.get('serie_nf'),
+            chave_nfe=dados_nf.get('chave_nfe'),
+            # Perfil e produto
             perfil_fiscal_id=perfil.id,
             cod_produto=cod_produto,
             nome_produto=nome_produto,
             cnpj_fornecedor=perfil.cnpj_fornecedor,
             razao_fornecedor=razao,
+            # Localizacao do fornecedor
+            uf_fornecedor=dados_nf.get('uf_fornecedor'),
+            cidade_fornecedor=dados_nf.get('cidade_fornecedor'),
+            # Regime tributario
+            regime_tributario=dados_nf.get('regime_tributario'),
             campo=campo,
             campo_label=label,
             valor_esperado=valor_esperado,

@@ -43,11 +43,85 @@ class LancamentoOdooService:
     CONTA_ANALITICA_LOGISTICA_ID = 1186
     TEAM_LANCAMENTO_FRETE_ID = 119
     PAYMENT_PROVIDER_TRANSFERENCIA_ID = 30
-    COMPANY_NACOM_GOYA_CD_ID = 4
-    PICKING_TYPE_CD_RECEBIMENTO_ID = 13  # ✅ CD: Recebimento (CD)
 
-    # De-Para: Operação Fiscal FB → CD
-    # Quando o PO é criado com operação da empresa FB, corrigir para a equivalente da CD
+    # ========================================
+    # MAPEAMENTO DE EMPRESAS POR CNPJ
+    # ========================================
+    # Usado para identificar qual empresa é o tomador do frete
+    CNPJ_PARA_COMPANY = {
+        '61724241000178': 1,   # FB - Fábrica
+        '61724241000259': 3,   # SC - Santa Catarina
+        '61724241000330': 4,   # CD - Centro de Distribuição
+        '18467441000163': 5,   # LF - La Famiglia
+    }
+
+    # ========================================
+    # CONFIGURAÇÃO POR EMPRESA
+    # ========================================
+    # Cada empresa possui suas próprias configurações de IDs no Odoo
+    CONFIG_POR_EMPRESA = {
+        1: {  # FB - Fábrica
+            'company_id': 1,
+            'picking_type_id': None,  # A ser descoberto se necessário
+            'nome': 'NACOM GOYA - FB'
+        },
+        4: {  # CD - Centro de Distribuição
+            'company_id': 4,
+            'picking_type_id': 13,  # CD: Recebimento (CD)
+            'nome': 'NACOM GOYA - CD'
+        },
+    }
+
+    # Empresa padrão quando não for possível identificar
+    COMPANY_PADRAO_ID = 4  # CD
+
+    # ========================================
+    # OPERAÇÕES FISCAIS DE TRANSPORTE POR EMPRESA
+    # ========================================
+    # Estrutura: {company_id: {(destino, regime): operacao_id}}
+    # destino: 1=Interna, 2=Interestadual
+    # regime: 1=Simples Nacional, 3=Regime Normal (LR/LP)
+    OPERACOES_TRANSPORTE = {
+        1: {  # FB - Fábrica
+            (1, 3): 2022,  # Interna + Regime Normal
+            (2, 3): 3041,  # Interestadual + Regime Normal
+            (1, 1): 2738,  # Interna + Simples Nacional
+            (2, 1): 3040,  # Interestadual + Simples Nacional
+        },
+        4: {  # CD - Centro de Distribuição
+            (1, 3): 2632,  # Interna + Regime Normal
+            (2, 3): 3038,  # Interestadual + Regime Normal
+            (1, 1): 2739,  # Interna + Simples Nacional
+            (2, 1): 3037,  # Interestadual + Simples Nacional
+        },
+    }
+
+    # Lista de TODAS as operações de transporte válidas (para validação)
+    OPERACOES_TRANSPORTE_VALIDAS = {
+        # FB
+        2022, 3041, 2738, 3040,
+        # CD
+        2632, 3038, 2739, 3037,
+    }
+
+    # De-Para: Operação Fiscal entre empresas
+    # Usado quando o Odoo seleciona operação errada automaticamente
+    # Formato: {operacao_origem: {company_destino: operacao_correta}}
+    OPERACAO_DE_PARA = {
+        # FB → CD
+        2022: {4: 2632},   # Interna Regime Normal
+        3041: {4: 3038},   # Interestadual Regime Normal
+        2738: {4: 2739},   # Interna Simples Nacional
+        3040: {4: 3037},   # Interestadual Simples Nacional
+        # CD → FB
+        2632: {1: 2022},   # Interna Regime Normal
+        3038: {1: 3041},   # Interestadual Regime Normal
+        2739: {1: 2738},   # Interna Simples Nacional
+        3037: {1: 3040},   # Interestadual Simples Nacional
+    }
+
+    # Mapeamento legado (mantido para compatibilidade)
+    # DEPRECATED: Usar OPERACAO_DE_PARA
     OPERACAO_FB_PARA_CD = {
         2022: 2632,  # Aquisição transporte INTERNA
         3041: 3038,  # Aquisição transporte INTERESTADUAL
@@ -67,6 +141,141 @@ class LancamentoOdooService:
         self.usuario_ip = usuario_ip
         self.odoo = None
         self.auditoria_logs = []
+
+    # ========================================
+    # MÉTODOS DE IDENTIFICAÇÃO DE EMPRESA
+    # ========================================
+
+    def _identificar_company_por_cnpj(self, cnpj: str) -> int:
+        """
+        Identifica o ID da empresa Odoo pelo CNPJ
+
+        Args:
+            cnpj: CNPJ com ou sem formatação
+
+        Returns:
+            Company ID correspondente ou COMPANY_PADRAO_ID se não encontrado
+        """
+        if not cnpj:
+            return self.COMPANY_PADRAO_ID
+
+        # Limpar CNPJ (remover pontuação)
+        cnpj_limpo = ''.join(filter(str.isdigit, cnpj))[:14]
+
+        # Buscar no mapeamento
+        company_id = self.CNPJ_PARA_COMPANY.get(cnpj_limpo)
+
+        if company_id:
+            try:
+                current_app.logger.debug(f"🏢 CNPJ {cnpj_limpo} → Company ID {company_id}")
+            except RuntimeError:
+                pass  # Fora do contexto de aplicação
+            return company_id
+
+        try:
+            current_app.logger.warning(
+                f"⚠️ CNPJ {cnpj_limpo} não encontrado no mapeamento. Usando padrão: {self.COMPANY_PADRAO_ID}"
+            )
+        except RuntimeError:
+            pass  # Fora do contexto de aplicação
+        return self.COMPANY_PADRAO_ID
+
+    def _identificar_company_por_cte(self, cte: 'ConhecimentoTransporte') -> int:
+        """
+        Identifica o ID da empresa Odoo pelo CTe (CNPJ do tomador)
+
+        Args:
+            cte: Objeto ConhecimentoTransporte
+
+        Returns:
+            Company ID correspondente ao tomador do frete
+        """
+        if not cte:
+            return self.COMPANY_PADRAO_ID
+
+        # Identificar CNPJ do tomador baseado no campo 'tomador'
+        # 0, 1 = Remetente
+        # 3, 4 = Destinatário
+        cnpj_tomador = None
+        if cte.tomador in ['0', '1']:
+            cnpj_tomador = cte.cnpj_remetente
+        elif cte.tomador in ['3', '4']:
+            cnpj_tomador = cte.cnpj_destinatario
+        else:
+            # Fallback: tentar usar destinatário se tomador não estiver definido
+            cnpj_tomador = cte.cnpj_destinatario
+
+        return self._identificar_company_por_cnpj(cnpj_tomador)
+
+    def _obter_config_empresa(self, company_id: int) -> Dict[str, Any]:
+        """
+        Obtém a configuração da empresa para lançamento
+
+        Args:
+            company_id: ID da empresa no Odoo
+
+        Returns:
+            Dict com configurações (company_id, picking_type_id, nome)
+        """
+        config = self.CONFIG_POR_EMPRESA.get(company_id)
+
+        if config:
+            return config
+
+        # Se não tiver configuração específica, retornar config da empresa padrão
+        try:
+            current_app.logger.warning(
+                f"⚠️ Company ID {company_id} não possui configuração específica. "
+                f"Usando configuração padrão (Company ID {self.COMPANY_PADRAO_ID})"
+            )
+        except RuntimeError:
+            pass  # Fora do contexto de aplicação
+        return self.CONFIG_POR_EMPRESA.get(self.COMPANY_PADRAO_ID, {
+            'company_id': self.COMPANY_PADRAO_ID,
+            'picking_type_id': 13,
+            'nome': 'Padrão'
+        })
+
+    def _obter_operacao_correta(
+        self,
+        operacao_atual_id: int,
+        company_destino_id: int
+    ) -> Optional[int]:
+        """
+        Obtém a operação fiscal correta para a empresa de destino
+
+        Args:
+            operacao_atual_id: ID da operação fiscal atual
+            company_destino_id: ID da empresa de destino
+
+        Returns:
+            ID da operação correta ou None se não precisar corrigir
+        """
+        # Verificar se a operação atual precisa de correção
+        if operacao_atual_id in self.OPERACAO_DE_PARA:
+            mapeamento = self.OPERACAO_DE_PARA[operacao_atual_id]
+            operacao_correta = mapeamento.get(company_destino_id)
+
+            if operacao_correta:
+                return operacao_correta
+
+        # Verificar se a operação atual já é válida
+        if operacao_atual_id in self.OPERACOES_TRANSPORTE_VALIDAS:
+            # Verificar se pertence à empresa correta
+            for company_id, operacoes in self.OPERACOES_TRANSPORTE.items():
+                if operacao_atual_id in operacoes.values():
+                    if company_id == company_destino_id:
+                        return None  # Já está correto
+                    else:
+                        # Precisa trocar para a empresa correta
+                        # Encontrar operação equivalente
+                        for (destino, regime), op_id in operacoes.items():
+                            if op_id == operacao_atual_id:
+                                # Buscar mesma combinação na empresa destino
+                                operacoes_destino = self.OPERACOES_TRANSPORTE.get(company_destino_id, {})
+                                return operacoes_destino.get((destino, regime))
+
+        return None
 
     def _rollback_frete_odoo(self, frete_id: int, etapas_concluidas: int) -> bool:
         """
@@ -113,10 +322,16 @@ class LancamentoOdooService:
             db.session.rollback()
             return False
 
-    def _verificar_lancamento_existente(self, dfe_id: int, cte_chave: str) -> Dict[str, Any]:
+    def _verificar_lancamento_existente(self, dfe_id: int, cte_chave: str, company_id_esperado: int = None) -> Dict[str, Any]:
         """
         Verifica se já existe um lançamento parcial para este DFe e determina
         de qual etapa deve continuar.
+
+        Args:
+            dfe_id: ID do DFe no Odoo
+            cte_chave: Chave de acesso do CTe
+            company_id_esperado: ID da empresa correta identificada pelo CNPJ do tomador do CTe.
+                                 Se fornecido, verifica se o PO existente está na empresa correta.
 
         Returns:
             Dict com:
@@ -167,15 +382,41 @@ class LancamentoOdooService:
 
             # Verificar se o PO está em draft e precisa ser configurado/confirmado
             if po['state'] == 'draft':
-                # Verificar se já foi configurado (tem team_id e company correta)
+                # Verificar se já foi configurado (tem team_id e company válida)
                 team_ok = po.get('team_id') and po['team_id'][0] == self.TEAM_LANCAMENTO_FRETE_ID
-                company_ok = resultado['po_company_id'] == self.COMPANY_NACOM_GOYA_CD_ID
-                picking_ok = po.get('picking_type_id') and po['picking_type_id'][0] == self.PICKING_TYPE_CD_RECEBIMENTO_ID
+
+                # 🔧 CORREÇÃO 14/01/2026: Company OK apenas se for a empresa CORRETA para este CTe
+                # Se company_id_esperado foi informado, verifica se o PO está na empresa correta
+                # Caso contrário, aceita qualquer empresa configurada (comportamento anterior)
+                if company_id_esperado is not None:
+                    company_ok = resultado['po_company_id'] == company_id_esperado
+                    if not company_ok:
+                        current_app.logger.warning(
+                            f"⚠️ PO {po['id']} está na empresa {resultado['po_company_id']}, "
+                            f"mas deveria estar na empresa {company_id_esperado}"
+                        )
+                else:
+                    company_ok = resultado['po_company_id'] in self.CONFIG_POR_EMPRESA
+
+                # Picking OK se não é obrigatório ou se está definido para a empresa ESPERADA
+                config_empresa_esperada = self.CONFIG_POR_EMPRESA.get(company_id_esperado or resultado['po_company_id'], {})
+                picking_esperado = config_empresa_esperada.get('picking_type_id')
+                picking_ok = (
+                    picking_esperado is None or
+                    (po.get('picking_type_id') and po['picking_type_id'][0] == picking_esperado)
+                )
 
                 if not team_ok or not company_ok or not picking_ok:
                     resultado['continuar_de_etapa'] = 7  # Precisa configurar
+                    motivos = []
+                    if not team_ok:
+                        motivos.append("team_id incorreto")
+                    if not company_ok:
+                        motivos.append(f"company_id incorreto (atual: {resultado['po_company_id']}, esperado: {company_id_esperado})")
+                    if not picking_ok:
+                        motivos.append("picking_type_id incorreto")
                     resultado['mensagem'] = (
-                        f"PO {po['name']} existe mas não foi configurado corretamente. "
+                        f"PO {po['name']} existe mas não foi configurado corretamente ({', '.join(motivos)}). "
                         f"Continuando da ETAPA 7 (Configurar PO)"
                     )
                 else:
@@ -186,6 +427,18 @@ class LancamentoOdooService:
                     )
 
             elif po['state'] == 'purchase':
+                # 🔧 CORREÇÃO 14/01/2026: Verificar se PO confirmado está na empresa correta
+                # Se não estiver, não há como corrigir automaticamente (PO já confirmado)
+                if company_id_esperado is not None and resultado['po_company_id'] != company_id_esperado:
+                    current_app.logger.error(
+                        f"❌ ATENÇÃO: PO {po['id']} ({po['name']}) está na empresa {resultado['po_company_id']}, "
+                        f"mas deveria estar na empresa {company_id_esperado}. "
+                        f"O PO já está confirmado e não pode ser alterado automaticamente. "
+                        f"Requer correção manual no Odoo."
+                    )
+                    # Mesmo assim, continuamos para tentar finalizar o lançamento
+                    # A operação fiscal da invoice pode ser corrigida na ETAPA 13
+
                 # PO confirmado, verificar se tem Invoice
                 invoice_ids = po.get('invoice_ids', [])
 
@@ -485,6 +738,15 @@ class LancamentoOdooService:
             cte = ConhecimentoTransporte.query.filter_by(chave_acesso=cte_chave).first()
             cte_id = cte.id if cte else None
 
+            # ========================================
+            # IDENTIFICAR EMPRESA PELO CNPJ DO TOMADOR
+            # ========================================
+            company_id = self._identificar_company_por_cte(cte)
+            config_empresa = self._obter_config_empresa(company_id)
+            current_app.logger.info(
+                f"🏢 Empresa identificada: {config_empresa.get('nome', 'N/A')} (ID: {company_id})"
+            )
+
             # Usar vencimento do frete se não informado
             if not data_vencimento:
                 data_vencimento = frete.vencimento
@@ -541,8 +803,9 @@ class LancamentoOdooService:
             # ========================================
             # VERIFICAÇÃO DE RETOMADA: Existe lançamento parcial?
             # (Deve vir ANTES da validação de status!)
+            # 🔧 CORREÇÃO 14/01/2026: Passar company_id para verificar se PO está na empresa correta
             # ========================================
-            lancamento_existente = self._verificar_lancamento_existente(dfe_id, cte_chave)
+            lancamento_existente = self._verificar_lancamento_existente(dfe_id, cte_chave, company_id)
             continuar_de_etapa = lancamento_existente['continuar_de_etapa']
             purchase_order_id = lancamento_existente.get('purchase_order_id')
             invoice_id = lancamento_existente.get('invoice_id')
@@ -888,13 +1151,20 @@ class LancamentoOdooService:
             # ETAPA 7: Atualizar campos do PO (incluindo partner_ref e picking_type_id)
             # ========================================
             if continuar_de_etapa < 8:  # Só executa se não está retomando de etapa posterior
-                # Preparar dados para atualização
+                # Preparar dados para atualização usando empresa identificada pelo CTe
                 dados_po = {
                     'team_id': self.TEAM_LANCAMENTO_FRETE_ID,
                     'payment_provider_id': self.PAYMENT_PROVIDER_TRANSFERENCIA_ID,
-                    'company_id': self.COMPANY_NACOM_GOYA_CD_ID,
-                    'picking_type_id': self.PICKING_TYPE_CD_RECEBIMENTO_ID  # ✅ CD: Recebimento (CD)
+                    'company_id': company_id,  # ✅ Empresa identificada pelo CNPJ do tomador
                 }
+
+                # Adicionar picking_type_id se disponível na configuração
+                if config_empresa.get('picking_type_id'):
+                    dados_po['picking_type_id'] = config_empresa['picking_type_id']
+
+                current_app.logger.info(
+                    f"🏢 Configurando PO para empresa {config_empresa.get('nome')} (ID: {company_id})"
+                )
 
                 # 🔧 CORREÇÃO 17/12/2025: Buscar valor CORRETO do DFE (fonte da verdade)
                 # O valor deve vir do DFE, não do PO que pode ter sido alterado incorretamente
@@ -913,8 +1183,8 @@ class LancamentoOdooService:
                 except Exception as e:
                     current_app.logger.warning(f"⚠️ Erro ao buscar valor do DFE: {e}")
 
-                # ✅ CORRIGIR OPERAÇÃO FISCAL: De-Para FB → CD (cabeçalho e linhas)
-                # O Odoo pode criar o PO com operação da empresa FB, precisamos corrigir para CD
+                # ✅ CORRIGIR OPERAÇÃO FISCAL: Garantir operação correta para a empresa identificada
+                # O Odoo pode criar o PO com operação de outra empresa, precisamos corrigir
                 operacao_correta_id = None
                 line_ids_po = []  # Guardar IDs das linhas para verificação posterior
                 try:
@@ -928,12 +1198,14 @@ class LancamentoOdooService:
                         operacao_atual_nome = po_operacao[0]['l10n_br_operacao_id'][1]
                         line_ids_po = po_operacao[0].get('order_line', [])
 
-                        if operacao_atual_id in self.OPERACAO_FB_PARA_CD:
-                            operacao_correta_id = self.OPERACAO_FB_PARA_CD[operacao_atual_id]
+                        # Usar novo método que suporta qualquer empresa
+                        operacao_correta_id = self._obter_operacao_correta(operacao_atual_id, company_id)
+
+                        if operacao_correta_id:
                             dados_po['l10n_br_operacao_id'] = operacao_correta_id
                             current_app.logger.info(
                                 f"🔄 Corrigindo operação fiscal PO: {operacao_atual_id} ({operacao_atual_nome}) "
-                                f"→ {operacao_correta_id} (empresa CD)"
+                                f"→ {operacao_correta_id} (empresa {config_empresa.get('nome')})"
                             )
 
                             # Corrigir operação fiscal das linhas

@@ -14,11 +14,14 @@ Endpoints:
 Referencia: .claude/references/RECEBIMENTO_MATERIAIS.md
 """
 
-from flask import Blueprint, jsonify, request
+import base64
+
+from flask import Blueprint, jsonify, request, Response
 from flask_login import login_required, current_user
 
 from app.recebimento.models import DivergenciaFiscal, CadastroPrimeiraCompra, PerfilFiscalProdutoFornecedor
 from app.recebimento.services.validacao_fiscal_service import ValidacaoFiscalService
+from app.odoo.utils.connection import get_odoo_connection
 
 validacao_fiscal_bp = Blueprint('validacao_fiscal', __name__, url_prefix='/api/recebimento')
 
@@ -285,23 +288,154 @@ def listar_perfis_fiscais():
 
         perfis = query.order_by(PerfilFiscalProdutoFornecedor.criado_em.desc()).limit(limit).all()
 
+        itens = [{
+            'id': p.id,
+            'cod_produto': p.cod_produto,
+            'cnpj_fornecedor': p.cnpj_fornecedor,
+            'ncm_esperado': p.ncm_esperado,
+            'cfop_esperados': p.cfop_esperados,
+            'aliquota_icms_esperada': str(p.aliquota_icms_esperada) if p.aliquota_icms_esperada else None,
+            'aliquota_icms_st_esperada': str(p.aliquota_icms_st_esperada) if p.aliquota_icms_st_esperada else None,
+            'aliquota_ipi_esperada': str(p.aliquota_ipi_esperada) if p.aliquota_ipi_esperada else None,
+            'criado_por': p.criado_por,
+            'criado_em': p.criado_em.isoformat() if p.criado_em else None,
+            'atualizado_por': p.atualizado_por,
+            'atualizado_em': p.atualizado_em.isoformat() if p.atualizado_em else None
+        } for p in perfis]
+
         return jsonify({
             'sucesso': True,
             'total': len(perfis),
-            'perfis': [{
-                'id': p.id,
-                'cod_produto': p.cod_produto,
-                'cnpj_fornecedor': p.cnpj_fornecedor,
-                'ncm_esperado': p.ncm_esperado,
-                'cfop_esperados': p.cfop_esperados,
-                'aliquota_icms_esperada': str(p.aliquota_icms_esperada) if p.aliquota_icms_esperada else None,
-                'aliquota_icms_st_esperada': str(p.aliquota_icms_st_esperada) if p.aliquota_icms_st_esperada else None,
-                'aliquota_ipi_esperada': str(p.aliquota_ipi_esperada) if p.aliquota_ipi_esperada else None,
-                'criado_por': p.criado_por,
-                'criado_em': p.criado_em.isoformat() if p.criado_em else None,
-                'atualizado_por': p.atualizado_por,
-                'atualizado_em': p.atualizado_em.isoformat() if p.atualizado_em else None
-            } for p in perfis]
+            'perfis': itens,
+            'itens': itens  # Alias para compatibilidade com frontend
+        })
+
+    except Exception as e:
+        return jsonify({
+            'sucesso': False,
+            'erro': str(e)
+        }), 500
+
+
+# =============================================================================
+# ACESSO AO PDF DA NF
+# =============================================================================
+
+@validacao_fiscal_bp.route('/dfe/<int:dfe_id>/pdf', methods=['GET'])
+@login_required
+def obter_pdf_nf(dfe_id):
+    """
+    Retorna o PDF (DANFE) de uma NF do Odoo.
+    Busca o campo l10n_br_pdf_dfe do DFE.
+    """
+    try:
+        odoo = get_odoo_connection()
+        if not odoo.authenticate():
+            return jsonify({
+                'sucesso': False,
+                'erro': 'Falha na autenticacao com Odoo'
+            }), 500
+
+        # Buscar o PDF do DFE
+        registros = odoo.search_read(
+            'l10n_br_ciel_it_account.dfe',
+            [['id', '=', dfe_id]],
+            fields=['id', 'l10n_br_pdf_dfe', 'l10n_br_pdf_dfe_fname', 'nfe_infnfe_ide_nnf', 'nfe_infnfe_ide_serie'],
+            limit=1
+        )
+
+        if not registros:
+            return jsonify({
+                'sucesso': False,
+                'erro': f'DFE {dfe_id} nao encontrado no Odoo'
+            }), 404
+
+        dfe = registros[0]
+        pdf_base64 = dfe.get('l10n_br_pdf_dfe')
+        nome_arquivo = dfe.get('l10n_br_pdf_dfe_fname') or f'NF_{dfe.get("nfe_infnfe_ide_nnf", dfe_id)}.pdf'
+
+        if not pdf_base64:
+            return jsonify({
+                'sucesso': False,
+                'erro': f'PDF nao disponivel para DFE {dfe_id}'
+            }), 404
+
+        # Decodificar PDF de base64
+        try:
+            pdf_bytes = base64.b64decode(pdf_base64)
+        except Exception as decode_err:
+            return jsonify({
+                'sucesso': False,
+                'erro': f'Erro ao decodificar PDF: {str(decode_err)}'
+            }), 500
+
+        # Retornar PDF como download
+        return Response(
+            pdf_bytes,
+            mimetype='application/pdf',
+            headers={
+                'Content-Disposition': f'inline; filename="{nome_arquivo}"',
+                'Content-Length': str(len(pdf_bytes))
+            }
+        )
+
+    except Exception as e:
+        return jsonify({
+            'sucesso': False,
+            'erro': str(e)
+        }), 500
+
+
+@validacao_fiscal_bp.route('/dfe/<int:dfe_id>/info', methods=['GET'])
+@login_required
+def obter_info_dfe(dfe_id):
+    """
+    Retorna informacoes basicas do DFE para exibicao.
+    """
+    try:
+        odoo = get_odoo_connection()
+        if not odoo.authenticate():
+            return jsonify({
+                'sucesso': False,
+                'erro': 'Falha na autenticacao com Odoo'
+            }), 500
+
+        # Buscar informacoes do DFE
+        registros = odoo.search_read(
+            'l10n_br_ciel_it_account.dfe',
+            [['id', '=', dfe_id]],
+            fields=[
+                'id', 'name',
+                'nfe_infnfe_ide_nnf', 'nfe_infnfe_ide_serie',
+                'nfe_infnfe_emit_cnpj', 'nfe_infnfe_emit_xnome',
+                'protnfe_infnfe_chnfe',
+                'nfe_infnfe_ide_dhemi',
+                'nfe_infnfe_total_icmstot_vnf'
+            ],
+            limit=1
+        )
+
+        if not registros:
+            return jsonify({
+                'sucesso': False,
+                'erro': f'DFE {dfe_id} nao encontrado no Odoo'
+            }), 404
+
+        dfe = registros[0]
+
+        return jsonify({
+            'sucesso': True,
+            'dfe': {
+                'id': dfe['id'],
+                'name': dfe.get('name'),
+                'numero_nf': dfe.get('nfe_infnfe_ide_nnf'),
+                'serie_nf': dfe.get('nfe_infnfe_ide_serie'),
+                'cnpj_fornecedor': dfe.get('nfe_infnfe_emit_cnpj'),
+                'razao_fornecedor': dfe.get('nfe_infnfe_emit_xnome'),
+                'chave_nfe': dfe.get('protnfe_infnfe_chnfe'),
+                'data_emissao': str(dfe.get('nfe_infnfe_ide_dhemi')) if dfe.get('nfe_infnfe_ide_dhemi') else None,
+                'valor_total': dfe.get('nfe_infnfe_total_icmstot_vnf')
+            }
         })
 
     except Exception as e:

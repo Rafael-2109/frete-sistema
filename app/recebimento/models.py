@@ -98,6 +98,14 @@ class DivergenciaFiscal(db.Model):
     cnpj_fornecedor = db.Column(db.String(20), nullable=False)
     razao_fornecedor = db.Column(db.String(255), nullable=True)
 
+    # Localizacao do fornecedor
+    uf_fornecedor = db.Column(db.String(2), nullable=True)
+    cidade_fornecedor = db.Column(db.String(100), nullable=True)
+
+    # Regime Tributario do fornecedor (CRT da NF-e)
+    # 1=Simples Nacional, 2=Simples Nacional excesso sublimite, 3=Regime Normal
+    regime_tributario = db.Column(db.String(1), nullable=True)
+
     # Divergencia
     campo = db.Column(db.String(50), nullable=False)  # ncm, cfop, aliq_icms, etc
     campo_label = db.Column(db.String(100), nullable=True)  # "NCM", "% ICMS", etc
@@ -131,6 +139,46 @@ class DivergenciaFiscal(db.Model):
     def __repr__(self):
         return f'<DivergenciaFiscal {self.id} - {self.campo} ({self.status})>'
 
+    def to_dict(self):
+        """Serializa para dicionario (usado no template para JSON)"""
+        from decimal import Decimal
+
+        def to_float(val):
+            if val is None:
+                return None
+            if isinstance(val, Decimal):
+                return float(val)
+            return val
+
+        return {
+            'id': self.id,
+            'odoo_dfe_id': self.odoo_dfe_id,
+            'odoo_dfe_line_id': self.odoo_dfe_line_id,
+            'numero_nf': self.numero_nf,
+            'serie_nf': self.serie_nf,
+            'chave_nfe': self.chave_nfe,
+            'perfil_fiscal_id': self.perfil_fiscal_id,
+            'cod_produto': self.cod_produto,
+            'nome_produto': self.nome_produto,
+            'cnpj_fornecedor': self.cnpj_fornecedor,
+            'razao_fornecedor': self.razao_fornecedor,
+            'uf_fornecedor': self.uf_fornecedor,
+            'cidade_fornecedor': self.cidade_fornecedor,
+            'regime_tributario': self.regime_tributario,
+            'campo': self.campo,
+            'campo_label': self.campo_label,
+            'valor_esperado': self.valor_esperado,
+            'valor_encontrado': self.valor_encontrado,
+            'diferenca_percentual': to_float(self.diferenca_percentual),
+            'status': self.status,
+            'resolucao': self.resolucao,
+            'atualizar_baseline': self.atualizar_baseline,
+            'justificativa': self.justificativa,
+            'resolvido_por': self.resolvido_por,
+            'resolvido_em': self.resolvido_em.isoformat() if self.resolvido_em else None,
+            'criado_em': self.criado_em.isoformat() if self.criado_em else None
+        }
+
 
 class CadastroPrimeiraCompra(db.Model):
     """
@@ -155,6 +203,14 @@ class CadastroPrimeiraCompra(db.Model):
     nome_produto = db.Column(db.String(255), nullable=True)
     cnpj_fornecedor = db.Column(db.String(20), nullable=False)
     razao_fornecedor = db.Column(db.String(255), nullable=True)
+
+    # Localizacao do fornecedor
+    uf_fornecedor = db.Column(db.String(2), nullable=True)
+    cidade_fornecedor = db.Column(db.String(100), nullable=True)
+
+    # Regime Tributario do fornecedor (CRT da NF-e)
+    # 1=Simples Nacional, 2=Simples Nacional excesso sublimite, 3=Regime Normal
+    regime_tributario = db.Column(db.String(1), nullable=True)
 
     # Dados do produto/item da NF
     quantidade = db.Column(db.Numeric(15, 4), nullable=True)
@@ -181,10 +237,14 @@ class CadastroPrimeiraCompra(db.Model):
     aliquota_pis = db.Column(db.Numeric(5, 2), nullable=True)
     bc_pis = db.Column(db.Numeric(15, 2), nullable=True)
 
+    # PIS - Valor
+    valor_pis = db.Column(db.Numeric(15, 2), nullable=True)
+
     # COFINS
     cst_cofins = db.Column(db.String(5), nullable=True)
     aliquota_cofins = db.Column(db.Numeric(5, 2), nullable=True)
     bc_cofins = db.Column(db.Numeric(15, 2), nullable=True)
+    valor_cofins = db.Column(db.Numeric(15, 2), nullable=True)
 
     info_complementar = db.Column(db.Text, nullable=True)
 
