@@ -1,0 +1,256 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-id-card text-primary me-2"></i>Perfis Fiscais (Baselines)</h2>
+            <p class="text-muted mb-0">Dados fiscais esperados por produto/fornecedor - Base de comparacao</p>
+        </div>
+        <div>
+            <button type="button" class="btn btn-outline-primary" onclick="location.reload()">
+                <i class="fas fa-sync-alt"></i> Atualizar
+            </button>
+        </div>
+    </div>
+
+    <!-- Cards de Estatisticas -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card border-left-primary">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase small">Total Ativos</h6>
+                    <h2 class="mb-0">{{ stats.total }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-left-info">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase small">Criados Automaticamente</h6>
+                    <h2 class="mb-0">{{ stats.automatico }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-left-success">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase small">Criados Manualmente</h6>
+                    <h2 class="mb-0">{{ stats.manual }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h6 class="mb-0"><i class="fas fa-filter me-2"></i>Filtros</h6>
+        </div>
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('recebimento_views.perfis_fiscais') }}">
+                <div class="row">
+                    <div class="col-md-4">
+                        <label class="form-label">Codigo Produto</label>
+                        <input type="text" name="cod_produto" class="form-control form-control-sm"
+                               value="{{ filtros.cod_produto }}" placeholder="Digite o codigo...">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">CNPJ Fornecedor</label>
+                        <input type="text" name="cnpj" class="form-control form-control-sm"
+                               value="{{ filtros.cnpj }}" placeholder="Digite o CNPJ...">
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary btn-sm me-2">
+                            <i class="fas fa-search"></i> Buscar
+                        </button>
+                        <a href="{{ url_for('recebimento_views.perfis_fiscais') }}" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-times"></i> Limpar
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Paginacao Superior -->
+    {% if paginacao.pages > 1 %}
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <span class="text-muted">
+            Exibindo <strong>{{ ((paginacao.page - 1) * paginacao.per_page) + 1 }}</strong> -
+            <strong>{{ ((paginacao.page - 1) * paginacao.per_page) + paginacao.items|length }}</strong>
+            de <strong>{{ paginacao.total }}</strong>
+        </span>
+        <span class="badge bg-info">Pagina {{ paginacao.page }} de {{ paginacao.pages }}</span>
+    </div>
+    {% endif %}
+
+    <!-- Tabela de Perfis -->
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Produto</th>
+                            <th>Fornecedor</th>
+                            <th>NCM</th>
+                            <th>CFOP</th>
+                            <th>ICMS</th>
+                            <th>ICMS ST</th>
+                            <th>IPI</th>
+                            <th>PIS</th>
+                            <th>COFINS</th>
+                            <th>Origem</th>
+                            <th>Criado Em</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in paginacao.items %}
+                        <tr>
+                            <td>
+                                <code>{{ item.cod_produto }}</code>
+                            </td>
+                            <td>
+                                <small class="text-muted">{{ item.cnpj_fornecedor|formatar_cnpj }}</small>
+                            </td>
+                            <td><code>{{ item.ncm_esperado or '-' }}</code></td>
+                            <td>
+                                {% if item.cfop_esperados %}
+                                    {% set cfops = item.cfop_esperados|safe %}
+                                    <code>{{ cfops }}</code>
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if item.aliquota_icms_esperada is not none %}
+                                <code>{{ item.aliquota_icms_esperada }}%</code>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if item.aliquota_icms_st_esperada is not none %}
+                                <code>{{ item.aliquota_icms_st_esperada }}%</code>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if item.aliquota_ipi_esperada is not none %}
+                                <code>{{ item.aliquota_ipi_esperada }}%</code>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if item.aliquota_pis_esperada is not none %}
+                                <code>{{ item.aliquota_pis_esperada }}%</code>
+                                {% if item.cst_pis_esperado %}
+                                <br><small class="text-muted">CST: {{ item.cst_pis_esperado }}</small>
+                                {% endif %}
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if item.aliquota_cofins_esperada is not none %}
+                                <code>{{ item.aliquota_cofins_esperada }}%</code>
+                                {% if item.cst_cofins_esperado %}
+                                <br><small class="text-muted">CST: {{ item.cst_cofins_esperado }}</small>
+                                {% endif %}
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if item.criado_por == 'SISTEMA_AUTO_HISTORICO' %}
+                                <span class="badge bg-info" title="Criado automaticamente a partir do historico de NFs">
+                                    <i class="fas fa-robot"></i> Auto
+                                </span>
+                                {% else %}
+                                <span class="badge bg-success" title="Criado manualmente por {{ item.criado_por }}">
+                                    <i class="fas fa-user"></i> Manual
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <small>{{ item.criado_em|formatar_data_brasil }}</small>
+                                {% if item.atualizado_em %}
+                                <br><small class="text-muted">Atualizado: {{ item.atualizado_em|formatar_data_brasil }}</small>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="11" class="text-center py-4">
+                                <i class="fas fa-inbox fa-3x text-muted mb-3 d-block"></i>
+                                <span class="text-muted">Nenhum perfil fiscal encontrado</span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Paginacao Inferior -->
+    {% if paginacao.pages > 1 %}
+    <nav class="mt-3 d-flex justify-content-center">
+        <ul class="pagination">
+            <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('recebimento_views.perfis_fiscais', page=1, **filtros) }}">
+                    <i class="fas fa-angle-double-left"></i>
+                </a>
+            </li>
+            <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('recebimento_views.perfis_fiscais', page=paginacao.page-1, **filtros) }}">
+                    <i class="fas fa-angle-left"></i>
+                </a>
+            </li>
+
+            {% for p in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                {% if p %}
+                    <li class="page-item {% if p == paginacao.page %}active{% endif %}">
+                        <a class="page-link" href="{{ url_for('recebimento_views.perfis_fiscais', page=p, **filtros) }}">{{ p }}</a>
+                    </li>
+                {% else %}
+                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                {% endif %}
+            {% endfor %}
+
+            <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('recebimento_views.perfis_fiscais', page=paginacao.page+1, **filtros) }}">
+                    <i class="fas fa-angle-right"></i>
+                </a>
+            </li>
+            <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('recebimento_views.perfis_fiscais', page=paginacao.pages, **filtros) }}">
+                    <i class="fas fa-angle-double-right"></i>
+                </a>
+            </li>
+        </ul>
+    </nav>
+    {% endif %}
+
+    <!-- Legenda -->
+    <div class="card mt-4">
+        <div class="card-body">
+            <h6 class="mb-3">Legenda</h6>
+            <div class="row">
+                <div class="col-md-6">
+                    <span class="badge bg-info me-2"><i class="fas fa-robot"></i> Auto</span>
+                    <span class="text-muted">Criado automaticamente pelo sistema a partir do historico consistente de NFs (3+ NFs com mesmos valores)</span>
+                </div>
+                <div class="col-md-6">
+                    <span class="badge bg-success me-2"><i class="fas fa-user"></i> Manual</span>
+                    <span class="text-muted">Criado ou atualizado manualmente pelo fiscal durante validacao</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

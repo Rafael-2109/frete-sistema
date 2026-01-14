@@ -46,6 +46,7 @@ JANELA_CONTAS_PAGAR = int(os.environ.get('JANELA_CONTAS_PAGAR', 120))  # ✅ 120
 JANELA_NFDS = int(os.environ.get('JANELA_NFDS', 120))  # ✅ 120 minutos para NFDs de Devolução
 JANELA_PALLET = int(os.environ.get('JANELA_PALLET', 5760))  # ✅ 5760 minutos (96h) para Pallets - mesmo que faturamento
 DIAS_REVERSOES = int(os.environ.get('DIAS_REVERSOES', 30))  # ✅ 30 dias para Reversões de NF
+JANELA_VALIDACAO_FISCAL = int(os.environ.get('JANELA_VALIDACAO_FISCAL', 120))  # ✅ 120 minutos para Validação Fiscal
 MAX_RETRIES = 3
 RETRY_DELAY = 5
 
@@ -64,6 +65,7 @@ nfd_service = None  # ✅ Service de NFDs de Devolução
 pallet_service = None  # ✅ Service de Pallets
 reversao_service = None  # ✅ Service de Reversões de NF
 monitoramento_sync_service = None  # ✅ Service de Sincronização com Monitoramento
+validacao_fiscal_job = None  # ✅ Job de Validação Fiscal (Recebimento Fase 1)
 
 
 def inicializar_services():
@@ -72,7 +74,7 @@ def inicializar_services():
     Isso evita problemas de SSL e contexto que ocorrem quando
     instanciados dentro do app.app_context()
     """
-    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service
+    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_fiscal_job
 
     try:
         # IMPORTANTE: Importar e instanciar FORA do contexto
@@ -90,6 +92,7 @@ def inicializar_services():
         from app.pallet.services.sync_odoo_service import PalletSyncService  # ✅ Service de Pallets
         from app.devolucao.services.reversao_service import ReversaoService  # ✅ Service de Reversões de NF
         from app.devolucao.services.monitoramento_sync_service import MonitoramentoSyncService  # ✅ Service de Sync Monitoramento
+        from app.recebimento.jobs.validacao_fiscal_job import ValidacaoFiscalJob  # ✅ Job de Validação Fiscal
 
         logger.info("🔧 Inicializando services FORA do contexto...")
         faturamento_service = FaturamentoService()
@@ -106,6 +109,7 @@ def inicializar_services():
         pallet_service = PalletSyncService()  # ✅ Instanciar service de Pallets
         reversao_service = ReversaoService()  # ✅ Instanciar service de Reversões de NF
         monitoramento_sync_service = MonitoramentoSyncService()  # ✅ Instanciar service de Sync Monitoramento
+        validacao_fiscal_job = ValidacaoFiscalJob()  # ✅ Instanciar job de Validação Fiscal
         logger.info("✅ Services inicializados com sucesso")
 
         return True
@@ -120,7 +124,7 @@ def executar_sincronizacao():
     Executa sincronização usando services já instanciados
     Similar ao que funciona em SincronizacaoIntegradaService
     """
-    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service
+    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_fiscal_job
 
     logger.info("=" * 60)
     logger.info(f"🔄 SINCRONIZAÇÃO DEFINITIVA - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -141,10 +145,11 @@ def executar_sincronizacao():
     logger.info(f"   - Pallets: janela={JANELA_PALLET}min (96h)")  # ✅ Adicionar Pallets ao log
     logger.info(f"   - Reversões NF: dias={DIAS_REVERSOES}")  # ✅ Adicionar Reversões ao log
     logger.info(f"   - Monitoramento Sync: automático")  # ✅ Adicionar Monitoramento ao log
+    logger.info(f"   - Validação Fiscal: janela={JANELA_VALIDACAO_FISCAL}min")  # ✅ Validação Fiscal (Recebimento)
     logger.info("=" * 60)
 
     # Verificar se services estão inicializados
-    if not all([faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service]):
+    if not all([faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_fiscal_job]):
         logger.warning("⚠️ Services não inicializados, tentando inicializar...")
         if not inicializar_services():
             logger.error("❌ Falha ao inicializar services")
@@ -1041,6 +1046,66 @@ def executar_sincronizacao():
                 else:
                     break
 
+        # Limpar sessão entre services
+        try:
+            db.session.remove()
+            db.engine.dispose()
+            logger.info("♻️ Reconexão antes da Validação Fiscal")
+        except Exception as e:
+            pass
+
+        # 1️⃣5️⃣ VALIDAÇÃO FISCAL (RECEBIMENTO) - com retry
+        sucesso_validacao_fiscal = False
+        for tentativa in range(1, MAX_RETRIES + 1):
+            try:
+                logger.info(f"🔍 Validando NFs de Compra (tentativa {tentativa}/{MAX_RETRIES})...")
+                logger.info(f"   Janela: {JANELA_VALIDACAO_FISCAL} minutos")
+
+                # Usar job já instanciado
+                resultado_validacao = validacao_fiscal_job.executar(
+                    minutos_janela=JANELA_VALIDACAO_FISCAL
+                )
+
+                if resultado_validacao.get("sucesso"):
+                    sucesso_validacao_fiscal = True
+                    logger.info("✅ Validação Fiscal concluída!")
+                    logger.info(f"   - DFEs encontrados: {resultado_validacao.get('dfes_encontrados', 0)}")
+                    logger.info(f"   - DFEs validados: {resultado_validacao.get('dfes_validados', 0)}")
+                    logger.info(f"   - Aprovados: {resultado_validacao.get('dfes_aprovados', 0)}")
+                    logger.info(f"   - Bloqueados: {resultado_validacao.get('dfes_bloqueados', 0)}")
+                    logger.info(f"   - 1ª Compra: {resultado_validacao.get('dfes_primeira_compra', 0)}")
+                    logger.info(f"   - Erros: {resultado_validacao.get('dfes_erro', 0)}")
+
+                    db.session.commit()
+                    break
+                else:
+                    erro = resultado_validacao.get('erro', 'Erro desconhecido')
+                    logger.error(f"❌ Erro Validação Fiscal: {erro}")
+
+                    if tentativa < MAX_RETRIES:
+                        logger.info(f"🔄 Aguardando {RETRY_DELAY}s antes de tentar novamente...")
+                        sleep(RETRY_DELAY)
+                        # Reinicializar job
+                        from app.recebimento.jobs.validacao_fiscal_job import ValidacaoFiscalJob
+                        validacao_fiscal_job = ValidacaoFiscalJob()
+                    else:
+                        break
+
+            except Exception as e:
+                logger.error(f"❌ Erro ao validar NFs: {e}")
+                if tentativa < MAX_RETRIES and ("SSL" in str(e) or "connection" in str(e).lower()):
+                    logger.info(f"🔄 Tentando reconectar ({tentativa}/{MAX_RETRIES})...")
+                    sleep(RETRY_DELAY)
+                    try:
+                        db.session.rollback()
+                        db.session.remove()
+                        from app.recebimento.jobs.validacao_fiscal_job import ValidacaoFiscalJob
+                        validacao_fiscal_job = ValidacaoFiscalJob()
+                    except Exception as e:
+                        pass
+                else:
+                    break
+
         # Limpar conexões ao final
         try:
             db.session.remove()
@@ -1050,12 +1115,12 @@ def executar_sincronizacao():
 
         # Resumo final
         logger.info("=" * 60)
-        total_sucesso = sum([sucesso_faturamento, sucesso_carteira, sucesso_verificacao, sucesso_requisicoes, sucesso_pedidos, sucesso_alocacoes, sucesso_entradas, sucesso_ctes, sucesso_contas_receber, sucesso_baixas, sucesso_contas_pagar, sucesso_nfds, sucesso_pallets, sucesso_reversoes, sucesso_monitoramento])
+        total_sucesso = sum([sucesso_faturamento, sucesso_carteira, sucesso_verificacao, sucesso_requisicoes, sucesso_pedidos, sucesso_alocacoes, sucesso_entradas, sucesso_ctes, sucesso_contas_receber, sucesso_baixas, sucesso_contas_pagar, sucesso_nfds, sucesso_pallets, sucesso_reversoes, sucesso_monitoramento, sucesso_validacao_fiscal])
 
-        if total_sucesso == 15:
+        if total_sucesso == 16:
             logger.info("✅ SINCRONIZAÇÃO COMPLETA COM SUCESSO!")
-        elif total_sucesso >= 13:
-            logger.info(f"⚠️ Sincronização parcial - {total_sucesso}/15 módulos OK")
+        elif total_sucesso >= 14:
+            logger.info(f"⚠️ Sincronização parcial - {total_sucesso}/16 módulos OK")
             if not sucesso_faturamento:
                 logger.info("   ❌ Faturamento: FALHOU")
             if not sucesso_carteira:
@@ -1086,8 +1151,10 @@ def executar_sincronizacao():
                 logger.info("   ❌ Reversões NF: FALHOU")
             if not sucesso_monitoramento:
                 logger.info("   ❌ Sync Monitoramento: FALHOU")
+            if not sucesso_validacao_fiscal:
+                logger.info("   ❌ Validação Fiscal: FALHOU")
         else:
-            logger.error(f"❌ Sincronização com falhas graves - apenas {total_sucesso}/15 módulos OK")
+            logger.error(f"❌ Sincronização com falhas graves - apenas {total_sucesso}/16 módulos OK")
         logger.info("=" * 60)
 
 

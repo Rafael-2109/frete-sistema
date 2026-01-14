@@ -1,0 +1,448 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-exclamation-triangle text-warning me-2"></i>Divergencias Fiscais</h2>
+            <p class="text-muted mb-0">Validacao de NFs de compra - Resolver divergencias para liberar recebimento</p>
+        </div>
+        <div>
+            <button type="button" class="btn btn-outline-primary" onclick="location.reload()">
+                <i class="fas fa-sync-alt"></i> Atualizar
+            </button>
+        </div>
+    </div>
+
+    <!-- Cards de Estatisticas -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card border-left-primary">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase small">Total</h6>
+                    <h2 class="mb-0">{{ stats.total }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-left-warning">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase small">Pendentes</h6>
+                    <h2 class="mb-0">{{ stats.pendente }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-left-success">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase small">Aprovadas</h6>
+                    <h2 class="mb-0">{{ stats.aprovada }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-left-danger">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase small">Rejeitadas</h6>
+                    <h2 class="mb-0">{{ stats.rejeitada }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h6 class="mb-0"><i class="fas fa-filter me-2"></i>Filtros</h6>
+        </div>
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('recebimento_views.divergencias') }}">
+                <div class="row">
+                    <div class="col-md-2">
+                        <label class="form-label">Status</label>
+                        <select name="status" class="form-select form-select-sm">
+                            {% for valor, descricao in opcoes_status %}
+                            <option value="{{ valor }}" {% if filtros.status == valor %}selected{% endif %}>
+                                {{ descricao }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">CNPJ Fornecedor</label>
+                        <input type="text" name="cnpj" class="form-control form-control-sm"
+                               value="{{ filtros.cnpj }}" placeholder="Digite o CNPJ...">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Data Inicio</label>
+                        <input type="date" name="data_ini" class="form-control form-control-sm"
+                               value="{{ filtros.data_ini }}">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Data Fim</label>
+                        <input type="date" name="data_fim" class="form-control form-control-sm"
+                               value="{{ filtros.data_fim }}">
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary btn-sm me-2">
+                            <i class="fas fa-search"></i> Filtrar
+                        </button>
+                        <a href="{{ url_for('recebimento_views.divergencias') }}" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-times"></i> Limpar
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Paginacao Superior -->
+    {% if paginacao.pages > 1 %}
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <span class="text-muted">
+            Exibindo <strong>{{ ((paginacao.page - 1) * paginacao.per_page) + 1 }}</strong> -
+            <strong>{{ ((paginacao.page - 1) * paginacao.per_page) + paginacao.items|length }}</strong>
+            de <strong>{{ paginacao.total }}</strong>
+        </span>
+        <span class="badge bg-info">Pagina {{ paginacao.page }} de {{ paginacao.pages }}</span>
+    </div>
+    {% endif %}
+
+    <!-- Tabela de Divergencias -->
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 80px;">DFE</th>
+                            <th>Fornecedor</th>
+                            <th>Produto</th>
+                            <th>Campo</th>
+                            <th>Esperado</th>
+                            <th>Encontrado</th>
+                            <th style="width: 100px;">Status</th>
+                            <th style="width: 150px;">Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in paginacao.items %}
+                        <tr>
+                            <td>{{ item.odoo_dfe_id }}</td>
+                            <td>
+                                <span class="d-block fw-bold" title="{{ item.razao_fornecedor }}">{{ item.razao_fornecedor or '-' }}</span>
+                                <small class="text-muted">{{ item.cnpj_fornecedor|formatar_cnpj }}</small>
+                            </td>
+                            <td>
+                                <span class="d-block fw-bold">{{ item.cod_produto }}</span>
+                                <small class="text-muted" title="{{ item.nome_produto }}">{{ item.nome_produto or '-' }}</small>
+                            </td>
+                            <td>
+                                <span class="badge bg-secondary">{{ item.campo_label or item.campo }}</span>
+                            </td>
+                            <td><code class="text-success">{{ item.valor_esperado }}</code></td>
+                            <td><code class="text-danger">{{ item.valor_encontrado }}</code></td>
+                            <td>
+                                {% if item.status == 'pendente' %}
+                                <span class="badge bg-warning text-dark">Pendente</span>
+                                {% elif item.status == 'aprovada' %}
+                                <span class="badge bg-success">Aprovada</span>
+                                {% elif item.status == 'rejeitada' %}
+                                <span class="badge bg-danger">Rejeitada</span>
+                                {% else %}
+                                <span class="badge bg-secondary">{{ item.status }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if item.status == 'pendente' %}
+                                <div class="btn-group btn-group-sm">
+                                    <button type="button" class="btn btn-success"
+                                            onclick="abrirModalAprovar({{ item.id }}, '{{ item.campo_label }}', '{{ item.valor_encontrado }}')"
+                                            title="Aprovar">
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-danger"
+                                            onclick="abrirModalRejeitar({{ item.id }})"
+                                            title="Rejeitar">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                                {% else %}
+                                <small class="text-muted" title="Resolvido por {{ item.resolvido_por }}">
+                                    {{ item.resolvido_por or '-' }}
+                                </small>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="8" class="text-center py-4">
+                                <i class="fas fa-inbox fa-3x text-muted mb-3 d-block"></i>
+                                <span class="text-muted">Nenhuma divergencia encontrada</span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Paginacao Inferior -->
+    {% if paginacao.pages > 1 %}
+    <nav class="mt-3 d-flex justify-content-center">
+        <ul class="pagination">
+            <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('recebimento_views.divergencias', page=1, **filtros) }}">
+                    <i class="fas fa-angle-double-left"></i>
+                </a>
+            </li>
+            <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('recebimento_views.divergencias', page=paginacao.page-1, **filtros) }}">
+                    <i class="fas fa-angle-left"></i>
+                </a>
+            </li>
+
+            {% for p in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                {% if p %}
+                    <li class="page-item {% if p == paginacao.page %}active{% endif %}">
+                        <a class="page-link" href="{{ url_for('recebimento_views.divergencias', page=p, **filtros) }}">{{ p }}</a>
+                    </li>
+                {% else %}
+                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                {% endif %}
+            {% endfor %}
+
+            <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('recebimento_views.divergencias', page=paginacao.page+1, **filtros) }}">
+                    <i class="fas fa-angle-right"></i>
+                </a>
+            </li>
+            <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('recebimento_views.divergencias', page=paginacao.pages, **filtros) }}">
+                    <i class="fas fa-angle-double-right"></i>
+                </a>
+            </li>
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+
+<!-- Modal Aprovar -->
+<div class="modal fade" id="modalAprovar" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="fas fa-check me-2"></i>Aprovar Divergencia</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="aprovar-id">
+
+                <div class="alert alert-info">
+                    <strong>Divergencia:</strong> <span id="aprovar-campo"></span><br>
+                    <strong>Novo valor:</strong> <code id="aprovar-valor"></code>
+                </div>
+
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="aprovar-atualizar">
+                        <label class="form-check-label" for="aprovar-atualizar">
+                            <strong>Atualizar perfil fiscal</strong><br>
+                            <small class="text-muted">Usar este valor como novo baseline para proximas NFs</small>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="aprovar-justificativa" class="form-label">
+                        Justificativa <span class="text-danger">*</span>
+                    </label>
+                    <textarea class="form-control" id="aprovar-justificativa" rows="3"
+                              placeholder="Informe o motivo da aprovacao..." required></textarea>
+                </div>
+
+                <div id="aprovar-feedback" class="alert d-none"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="submeterAprovacao()">
+                    <span class="spinner-border spinner-border-sm d-none" id="aprovar-spinner"></span>
+                    <i class="fas fa-check me-1"></i> Aprovar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Rejeitar -->
+<div class="modal fade" id="modalRejeitar" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="fas fa-times me-2"></i>Rejeitar Divergencia</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="rejeitar-id">
+
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Ao rejeitar, a NF sera bloqueada e devera ser devolvida ao fornecedor.
+                </div>
+
+                <div class="mb-3">
+                    <label for="rejeitar-justificativa" class="form-label">
+                        Justificativa <span class="text-danger">*</span>
+                    </label>
+                    <textarea class="form-control" id="rejeitar-justificativa" rows="3"
+                              placeholder="Informe o motivo da rejeicao..." required></textarea>
+                </div>
+
+                <div id="rejeitar-feedback" class="alert d-none"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" onclick="submeterRejeicao()">
+                    <span class="spinner-border spinner-border-sm d-none" id="rejeitar-spinner"></span>
+                    <i class="fas fa-times me-1"></i> Rejeitar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    'use strict';
+
+    // Modal instances
+    let modalAprovar = null;
+    let modalRejeitar = null;
+
+    document.addEventListener('DOMContentLoaded', function() {
+        modalAprovar = new bootstrap.Modal(document.getElementById('modalAprovar'));
+        modalRejeitar = new bootstrap.Modal(document.getElementById('modalRejeitar'));
+    });
+
+    // Abrir modal de aprovacao
+    window.abrirModalAprovar = function(id, campo, valor) {
+        document.getElementById('aprovar-id').value = id;
+        document.getElementById('aprovar-campo').textContent = campo;
+        document.getElementById('aprovar-valor').textContent = valor;
+        document.getElementById('aprovar-atualizar').checked = false;
+        document.getElementById('aprovar-justificativa').value = '';
+        document.getElementById('aprovar-feedback').classList.add('d-none');
+        modalAprovar.show();
+    };
+
+    // Abrir modal de rejeicao
+    window.abrirModalRejeitar = function(id) {
+        document.getElementById('rejeitar-id').value = id;
+        document.getElementById('rejeitar-justificativa').value = '';
+        document.getElementById('rejeitar-feedback').classList.add('d-none');
+        modalRejeitar.show();
+    };
+
+    // Submeter aprovacao
+    window.submeterAprovacao = function() {
+        const id = document.getElementById('aprovar-id').value;
+        const atualizarBaseline = document.getElementById('aprovar-atualizar').checked;
+        const justificativa = document.getElementById('aprovar-justificativa').value.trim();
+
+        if (!justificativa) {
+            mostrarFeedback('aprovar', 'Justificativa obrigatoria', 'danger');
+            return;
+        }
+
+        const spinner = document.getElementById('aprovar-spinner');
+        spinner.classList.remove('d-none');
+
+        fetch(`/api/recebimento/divergencias/${id}/aprovar`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({
+                atualizar_baseline: atualizarBaseline,
+                justificativa: justificativa
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            spinner.classList.add('d-none');
+            if (data.sucesso) {
+                toastr.success('Divergencia aprovada com sucesso');
+                modalAprovar.hide();
+                setTimeout(() => location.reload(), 500);
+            } else {
+                mostrarFeedback('aprovar', data.mensagem || 'Erro ao aprovar', 'danger');
+            }
+        })
+        .catch(err => {
+            spinner.classList.add('d-none');
+            mostrarFeedback('aprovar', 'Erro de conexao', 'danger');
+            console.error(err);
+        });
+    };
+
+    // Submeter rejeicao
+    window.submeterRejeicao = function() {
+        const id = document.getElementById('rejeitar-id').value;
+        const justificativa = document.getElementById('rejeitar-justificativa').value.trim();
+
+        if (!justificativa) {
+            mostrarFeedback('rejeitar', 'Justificativa obrigatoria', 'danger');
+            return;
+        }
+
+        const spinner = document.getElementById('rejeitar-spinner');
+        spinner.classList.remove('d-none');
+
+        fetch(`/api/recebimento/divergencias/${id}/rejeitar`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({
+                justificativa: justificativa
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            spinner.classList.add('d-none');
+            if (data.sucesso) {
+                toastr.success('Divergencia rejeitada');
+                modalRejeitar.hide();
+                setTimeout(() => location.reload(), 500);
+            } else {
+                mostrarFeedback('rejeitar', data.mensagem || 'Erro ao rejeitar', 'danger');
+            }
+        })
+        .catch(err => {
+            spinner.classList.add('d-none');
+            mostrarFeedback('rejeitar', 'Erro de conexao', 'danger');
+            console.error(err);
+        });
+    };
+
+    // Mostrar feedback no modal
+    function mostrarFeedback(modal, mensagem, tipo) {
+        const el = document.getElementById(`${modal}-feedback`);
+        el.textContent = mensagem;
+        el.className = `alert alert-${tipo}`;
+        el.classList.remove('d-none');
+    }
+
+    // Helper para CSRF token
+    function getCSRFToken() {
+        return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    }
+})();
+</script>
+{% endblock %}

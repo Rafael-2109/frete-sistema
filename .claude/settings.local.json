@@ -14,7 +14,9 @@
       "Bash(xargs:*)",
       "Skill(gerindo-expedicao)",
       "Skill(gerindo-expedicao:*)",
-      "Bash(xargs -I {} bash -c \"echo ''=== {} ==='' && grep -n ''@.*route.*imprimir\\\\|@.*route.*print\\\\|@.*route.*separacao'' {} 2>/dev/null | head -5\")"
+      "Bash(xargs -I {} bash -c \"echo ''=== {} ==='' && grep -n ''@.*route.*imprimir\\\\|@.*route.*print\\\\|@.*route.*separacao'' {} 2>/dev/null | head -5\")",
+      "Skill(descobrindo-odoo-estrutura)",
+      "Skill(descobrindo-odoo-estrutura:*)"
     ],
     "deny": []
   },

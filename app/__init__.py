@@ -932,6 +932,10 @@ def create_app(config_name=None):
     from app.teams import teams_bp
     app.register_blueprint(teams_bp)
 
+    # 📦 Recebimento de Materiais - FASE 1: Validacao Fiscal
+    from app.recebimento import init_app as init_recebimento
+    init_recebimento(app)
+
     # 🧱 Cria tabelas se ainda não existirem (em ambiente local)
     with app.app_context():
         # Verificar se deve pular criação de tabelas (para evitar erro UTF-8)

@@ -1,0 +1,745 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-file-invoice text-warning me-2"></i>Validacao de Primeira Compra</h2>
+            <p class="text-muted mb-0">Produtos/fornecedores sem historico fiscal - Validacao manual obrigatoria</p>
+        </div>
+        <div>
+            <button type="button" class="btn btn-outline-primary" onclick="location.reload()">
+                <i class="fas fa-sync-alt"></i> Atualizar
+            </button>
+        </div>
+    </div>
+
+    <!-- Cards de Estatisticas -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card border-left-warning">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase small">Pendentes</h6>
+                    <h2 class="mb-0 text-warning">{{ stats.pendente }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-left-success">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase small">Validados</h6>
+                    <h2 class="mb-0 text-success">{{ stats.validado }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-left-danger">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase small">Rejeitados</h6>
+                    <h2 class="mb-0 text-danger">{{ stats.rejeitado }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h6 class="mb-0"><i class="fas fa-filter me-2"></i>Filtros</h6>
+        </div>
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('recebimento_views.primeira_compra') }}">
+                <div class="row">
+                    <div class="col-md-3">
+                        <label class="form-label">Status</label>
+                        <select name="status" class="form-select form-select-sm">
+                            <option value="">Todos</option>
+                            <option value="pendente" {% if filtros.status == 'pendente' %}selected{% endif %}>Pendentes</option>
+                            <option value="validado" {% if filtros.status == 'validado' %}selected{% endif %}>Validados</option>
+                            <option value="rejeitado" {% if filtros.status == 'rejeitado' %}selected{% endif %}>Rejeitados</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">CNPJ Fornecedor</label>
+                        <input type="text" name="cnpj" class="form-control form-control-sm"
+                               value="{{ filtros.cnpj }}" placeholder="Digite o CNPJ...">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Produto</label>
+                        <input type="text" name="produto" class="form-control form-control-sm"
+                               value="{{ filtros.produto }}" placeholder="Codigo ou nome...">
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary btn-sm me-2">
+                            <i class="fas fa-search"></i> Buscar
+                        </button>
+                        <a href="{{ url_for('recebimento_views.primeira_compra') }}" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-times"></i> Limpar
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Paginacao Superior -->
+    {% if paginacao.pages > 1 %}
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <span class="text-muted">
+            Exibindo <strong>{{ ((paginacao.page - 1) * paginacao.per_page) + 1 }}</strong> -
+            <strong>{{ ((paginacao.page - 1) * paginacao.per_page) + paginacao.items|length }}</strong>
+            de <strong>{{ paginacao.total }}</strong>
+        </span>
+        <span class="badge bg-info">Pagina {{ paginacao.page }} de {{ paginacao.pages }}</span>
+    </div>
+    {% endif %}
+
+    <!-- Tabela Compacta -->
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover align-middle mb-0" id="tabelaPrimeiraCompra">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 80px;">DFE</th>
+                            <th>Produto</th>
+                            <th>Fornecedor</th>
+                            <th class="text-end" style="width: 100px;">Qtd</th>
+                            <th class="text-end" style="width: 120px;">Valor Total</th>
+                            <th class="text-center" style="width: 90px;">NCM</th>
+                            <th class="text-center" style="width: 60px;">CFOP</th>
+                            <th class="text-center" style="width: 80px;">ICMS</th>
+                            <th class="text-center" style="width: 90px;">Status</th>
+                            <th class="text-center" style="width: 140px;">Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in paginacao.items %}
+                        <tr data-item-id="{{ item.id }}">
+                            <td>
+                                <a href="javascript:void(0)" onclick="abrirModalDetalhes({{ item.id }})"
+                                   class="text-primary fw-bold" title="Ver detalhes completos">
+                                    {{ item.odoo_dfe_id }}
+                                </a>
+                            </td>
+                            <td>
+                                <strong>{{ item.cod_produto }}</strong>
+                                <br><small class="text-muted" title="{{ item.nome_produto }}">{{ item.nome_produto }}</small>
+                            </td>
+                            <td>
+                                <span title="{{ item.razao_fornecedor }}">{{ item.razao_fornecedor }}</span>
+                                <br><small class="text-muted">{{ item.cnpj_fornecedor|formatar_cnpj }}</small>
+                            </td>
+                            <td class="text-end">
+                                {% if item.quantidade %}
+                                {{ item.quantidade|numero_br(2) }}
+                                <small class="text-muted">{{ item.unidade_medida or 'UN' }}</small>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                {% if item.valor_total %}
+                                <strong>R$ {{ item.valor_total|numero_br(2) }}</strong>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td class="text-center"><code>{{ item.ncm or '-' }}</code></td>
+                            <td class="text-center"><code>{{ item.cfop or '-' }}</code></td>
+                            <td class="text-center">
+                                {% if item.aliquota_icms is not none %}
+                                <span class="badge bg-secondary">{{ item.aliquota_icms }}%</span>
+                                {% if item.valor_icms %}
+                                <br><small class="text-success">R$ {{ item.valor_icms|numero_br(2) }}</small>
+                                {% endif %}
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if item.status == 'pendente' %}
+                                <span class="badge bg-warning text-dark"><i class="fas fa-clock"></i> Pendente</span>
+                                {% elif item.status == 'validado' %}
+                                <span class="badge bg-success"><i class="fas fa-check"></i> Validado</span>
+                                {% elif item.status == 'rejeitado' %}
+                                <span class="badge bg-danger"><i class="fas fa-times"></i> Rejeitado</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if item.status == 'pendente' %}
+                                <button type="button" class="btn btn-sm btn-outline-primary"
+                                        onclick="abrirModalDetalhes({{ item.id }})"
+                                        title="Ver detalhes e validar">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-success"
+                                        onclick="validarRapido({{ item.id }})"
+                                        title="Validar rapidamente">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-danger"
+                                        onclick="abrirModalRejeitar({{ item.id }})"
+                                        title="Rejeitar">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                                {% else %}
+                                <button type="button" class="btn btn-sm btn-outline-secondary"
+                                        onclick="abrirModalDetalhes({{ item.id }})"
+                                        title="Ver detalhes">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="10" class="text-center py-4">
+                                <i class="fas fa-inbox fa-3x text-muted mb-3 d-block"></i>
+                                <span class="text-muted">Nenhum registro de primeira compra encontrado</span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Paginacao Inferior -->
+    {% if paginacao.pages > 1 %}
+    <nav class="mt-3 d-flex justify-content-center">
+        <ul class="pagination">
+            <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('recebimento_views.primeira_compra', page=1, **filtros) }}">
+                    <i class="fas fa-angle-double-left"></i>
+                </a>
+            </li>
+            <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('recebimento_views.primeira_compra', page=paginacao.page-1, **filtros) }}">
+                    <i class="fas fa-angle-left"></i>
+                </a>
+            </li>
+
+            {% for p in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                {% if p %}
+                    <li class="page-item {% if p == paginacao.page %}active{% endif %}">
+                        <a class="page-link" href="{{ url_for('recebimento_views.primeira_compra', page=p, **filtros) }}">{{ p }}</a>
+                    </li>
+                {% else %}
+                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                {% endif %}
+            {% endfor %}
+
+            <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('recebimento_views.primeira_compra', page=paginacao.page+1, **filtros) }}">
+                    <i class="fas fa-angle-right"></i>
+                </a>
+            </li>
+            <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('recebimento_views.primeira_compra', page=paginacao.pages, **filtros) }}">
+                    <i class="fas fa-angle-double-right"></i>
+                </a>
+            </li>
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+
+<!-- Modal Detalhes / Validacao -->
+<div class="modal fade" id="modalDetalhes" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title">
+                    <i class="fas fa-file-invoice me-2"></i>Detalhes da Primeira Compra
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="modalDetalhesBody">
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="mt-2">Carregando...</p>
+                </div>
+            </div>
+            <div class="modal-footer" id="modalDetalhesFooter">
+                <!-- Botoes dinamicos -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Rejeitar -->
+<div class="modal fade" id="modalRejeitar" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="fas fa-times-circle me-2"></i>Rejeitar Primeira Compra</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="rejeitarItemId">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Ao rejeitar, a NF sera bloqueada e precisara de tratamento manual.
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Motivo da Rejeicao <span class="text-danger">*</span></label>
+                    <textarea class="form-control" id="rejeitarMotivo" rows="3"
+                              placeholder="Descreva o motivo da rejeicao..." required></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" onclick="confirmarRejeicao()">
+                    <i class="fas fa-times"></i> Rejeitar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Dados JSON para JS -->
+<script id="dadosItens" type="application/json">
+{{ itens_json|safe if itens_json else '[]' }}
+</script>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    'use strict';
+
+    // Cache de dados
+    let itensData = {};
+    try {
+        const dados = JSON.parse(document.getElementById('dadosItens').textContent || '[]');
+        dados.forEach(item => itensData[item.id] = item);
+    } catch(e) {
+        console.error('Erro ao carregar dados:', e);
+    }
+
+    // Modal instances
+    let modalDetalhes, modalRejeitar;
+
+    document.addEventListener('DOMContentLoaded', function() {
+        modalDetalhes = new bootstrap.Modal(document.getElementById('modalDetalhes'));
+        modalRejeitar = new bootstrap.Modal(document.getElementById('modalRejeitar'));
+    });
+
+    // Abrir modal de detalhes
+    window.abrirModalDetalhes = function(itemId) {
+        const item = itensData[itemId];
+        if (!item) {
+            alert('Item nao encontrado');
+            return;
+        }
+
+        const body = document.getElementById('modalDetalhesBody');
+        const footer = document.getElementById('modalDetalhesFooter');
+
+        // Renderizar conteudo
+        body.innerHTML = renderizarDetalhes(item);
+
+        // Footer com botoes
+        if (item.status === 'pendente') {
+            footer.innerHTML = `
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-danger" onclick="abrirModalRejeitar(${item.id}); modalDetalhes.hide();">
+                    <i class="fas fa-times"></i> Rejeitar
+                </button>
+                <button type="button" class="btn btn-success" onclick="validarItem(${item.id})">
+                    <i class="fas fa-check"></i> Validar e Criar Perfil
+                </button>
+            `;
+        } else {
+            footer.innerHTML = `
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            `;
+        }
+
+        modalDetalhes.show();
+    };
+
+    // Funcoes auxiliares de formatacao
+    const formatarValor = (v, decimais=2) => {
+        if (v === null || v === undefined || v === '') return '-';
+        const num = parseFloat(v);
+        if (isNaN(num)) return '-';
+        return num.toLocaleString('pt-BR', {minimumFractionDigits: decimais, maximumFractionDigits: decimais});
+    };
+
+    const formatarCnpj = (cnpj) => {
+        if (!cnpj) return '-';
+        const n = cnpj.replace(/\D/g, '');
+        if (n.length !== 14) return cnpj;
+        return n.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+    };
+
+    // Renderizar detalhes do item
+    function renderizarDetalhes(item) {
+        const totalImpostos = (parseFloat(item.valor_icms || 0) + parseFloat(item.valor_icms_st || 0) + parseFloat(item.valor_ipi || 0));
+
+        return `
+            <!-- Cabecalho -->
+            <div class="row mb-3">
+                <div class="col-12">
+                    <div class="alert ${item.status === 'pendente' ? 'alert-warning' : item.status === 'validado' ? 'alert-success' : 'alert-danger'} mb-0">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong><i class="fas fa-file-invoice me-2"></i>DFE #${item.odoo_dfe_id}</strong>
+                            </div>
+                            <span class="badge ${item.status === 'pendente' ? 'bg-warning text-dark' : item.status === 'validado' ? 'bg-success' : 'bg-danger'} fs-6">
+                                ${item.status.toUpperCase()}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Produto e Fornecedor -->
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <div class="card h-100 border-primary">
+                        <div class="card-header py-2 bg-primary text-white">
+                            <strong><i class="fas fa-box me-2"></i>Produto</strong>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-4">
+                                    <small class="text-muted d-block">Codigo</small>
+                                    <code class="fs-5">${item.cod_produto}</code>
+                                </div>
+                                <div class="col-8">
+                                    <small class="text-muted d-block">Nome Completo</small>
+                                    <strong>${item.nome_produto || '-'}</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card h-100 border-info">
+                        <div class="card-header py-2 bg-info text-white">
+                            <strong><i class="fas fa-building me-2"></i>Fornecedor</strong>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-5">
+                                    <small class="text-muted d-block">CNPJ</small>
+                                    <strong>${formatarCnpj(item.cnpj_fornecedor)}</strong>
+                                </div>
+                                <div class="col-7">
+                                    <small class="text-muted d-block">Razao Social</small>
+                                    <strong>${item.razao_fornecedor || '-'}</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quantidade e Valores -->
+            <div class="row mb-3">
+                <div class="col-12">
+                    <div class="card border-success">
+                        <div class="card-header py-2 bg-success text-white">
+                            <strong><i class="fas fa-calculator me-2"></i>Quantidade e Valores</strong>
+                        </div>
+                        <div class="card-body">
+                            <div class="row text-center">
+                                <div class="col-md-3 border-end">
+                                    <small class="text-muted d-block">Quantidade</small>
+                                    <span class="h4 text-primary">${formatarValor(item.quantidade, 4)}</span>
+                                    <span class="text-muted">${item.unidade_medida || 'UN'}</span>
+                                </div>
+                                <div class="col-md-3 border-end">
+                                    <small class="text-muted d-block">Valor Unitario</small>
+                                    <span class="h4">R$ ${formatarValor(item.valor_unitario, 4)}</span>
+                                </div>
+                                <div class="col-md-3 border-end">
+                                    <small class="text-muted d-block">Valor Total Produto</small>
+                                    <span class="h4 text-success fw-bold">R$ ${formatarValor(item.valor_total)}</span>
+                                </div>
+                                <div class="col-md-3">
+                                    <small class="text-muted d-block">Total Impostos</small>
+                                    <span class="h4 text-danger fw-bold">R$ ${formatarValor(totalImpostos)}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dados Fiscais Basicos -->
+            <div class="row mb-3">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header py-2 bg-light">
+                            <strong><i class="fas fa-file-alt me-2"></i>Dados Fiscais</strong>
+                        </div>
+                        <div class="card-body">
+                            <div class="row text-center">
+                                <div class="col-md-4">
+                                    <small class="text-muted d-block">NCM</small>
+                                    <code class="fs-4">${item.ncm || '-'}</code>
+                                </div>
+                                <div class="col-md-4">
+                                    <small class="text-muted d-block">CFOP</small>
+                                    <code class="fs-4">${item.cfop || '-'}</code>
+                                </div>
+                                <div class="col-md-4">
+                                    <small class="text-muted d-block">CST ICMS</small>
+                                    <code class="fs-4">${item.cst_icms || '-'}</code>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ICMS e ICMS ST -->
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-header py-2 bg-light">
+                            <strong><i class="fas fa-percent me-2"></i>ICMS</strong>
+                        </div>
+                        <div class="card-body">
+                            <div class="row text-center">
+                                <div class="col-4">
+                                    <small class="text-muted d-block">Aliquota</small>
+                                    <span class="badge bg-primary fs-5">${formatarValor(item.aliquota_icms)}%</span>
+                                </div>
+                                <div class="col-4">
+                                    <small class="text-muted d-block">Base Calculo</small>
+                                    <strong>R$ ${formatarValor(item.bc_icms)}</strong>
+                                </div>
+                                <div class="col-4">
+                                    <small class="text-muted d-block">Valor</small>
+                                    <strong class="text-danger fs-5">R$ ${formatarValor(item.valor_icms)}</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-header py-2 bg-light">
+                            <strong><i class="fas fa-percent me-2"></i>ICMS ST (Substituicao Tributaria)</strong>
+                        </div>
+                        <div class="card-body">
+                            <div class="row text-center">
+                                <div class="col-4">
+                                    <small class="text-muted d-block">Aliquota</small>
+                                    <span class="badge bg-secondary fs-5">${formatarValor(item.aliquota_icms_st)}%</span>
+                                </div>
+                                <div class="col-4">
+                                    <small class="text-muted d-block">Base Calculo</small>
+                                    <strong>R$ ${formatarValor(item.bc_icms_st)}</strong>
+                                </div>
+                                <div class="col-4">
+                                    <small class="text-muted d-block">Valor</small>
+                                    <strong class="text-danger fs-5">R$ ${formatarValor(item.valor_icms_st)}</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- IPI, PIS, COFINS -->
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="card h-100">
+                        <div class="card-header py-2 bg-light">
+                            <strong>IPI</strong>
+                        </div>
+                        <div class="card-body text-center">
+                            <div class="row">
+                                <div class="col-6">
+                                    <small class="text-muted d-block">Aliquota</small>
+                                    <span class="badge bg-info fs-5">${formatarValor(item.aliquota_ipi)}%</span>
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-muted d-block">Valor</small>
+                                    <strong class="text-danger fs-5">R$ ${formatarValor(item.valor_ipi)}</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card h-100">
+                        <div class="card-header py-2 bg-light">
+                            <strong>PIS</strong>
+                        </div>
+                        <div class="card-body text-center">
+                            <div class="row">
+                                <div class="col-4">
+                                    <small class="text-muted d-block">CST</small>
+                                    <code>${item.cst_pis || '-'}</code>
+                                </div>
+                                <div class="col-4">
+                                    <small class="text-muted d-block">Aliq</small>
+                                    <span class="badge bg-secondary">${formatarValor(item.aliquota_pis)}%</span>
+                                </div>
+                                <div class="col-4">
+                                    <small class="text-muted d-block">BC</small>
+                                    <small>R$ ${formatarValor(item.bc_pis)}</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card h-100">
+                        <div class="card-header py-2 bg-light">
+                            <strong>COFINS</strong>
+                        </div>
+                        <div class="card-body text-center">
+                            <div class="row">
+                                <div class="col-4">
+                                    <small class="text-muted d-block">CST</small>
+                                    <code>${item.cst_cofins || '-'}</code>
+                                </div>
+                                <div class="col-4">
+                                    <small class="text-muted d-block">Aliq</small>
+                                    <span class="badge bg-secondary">${formatarValor(item.aliquota_cofins)}%</span>
+                                </div>
+                                <div class="col-4">
+                                    <small class="text-muted d-block">BC</small>
+                                    <small>R$ ${formatarValor(item.bc_cofins)}</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            ${item.observacao ? `
+            <div class="row mt-3">
+                <div class="col-12">
+                    <div class="alert alert-info mb-0">
+                        <strong><i class="fas fa-comment me-2"></i>Observacao:</strong> ${item.observacao}
+                    </div>
+                </div>
+            </div>
+            ` : ''}
+
+            ${item.validado_por ? `
+            <div class="row mt-3">
+                <div class="col-12">
+                    <div class="alert alert-secondary mb-0">
+                        <small>
+                            <i class="fas fa-user me-1"></i> ${item.status === 'validado' ? 'Validado' : 'Rejeitado'} por
+                            <strong>${item.validado_por}</strong>
+                            ${item.validado_em ? ' em ' + new Date(item.validado_em).toLocaleString('pt-BR') : ''}
+                        </small>
+                    </div>
+                </div>
+            </div>
+            ` : ''}
+        `;
+    }
+
+    // Validar item rapidamente
+    window.validarRapido = function(itemId) {
+        if (!confirm('Confirma validacao e criacao do perfil fiscal para este produto/fornecedor?')) return;
+        validarItem(itemId);
+    };
+
+    // Validar item
+    window.validarItem = function(itemId) {
+        const btn = event.target;
+        const originalHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+        fetch(`/api/recebimento/primeira-compra/${itemId}/validar`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({observacao: ''})
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.sucesso) {
+                if (typeof toastr !== 'undefined') {
+                    toastr.success('Primeira compra validada! Perfil fiscal criado.');
+                }
+                setTimeout(() => location.reload(), 500);
+            } else {
+                alert('Erro: ' + data.mensagem);
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+        })
+        .catch(e => {
+            alert('Erro de conexao');
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        });
+    };
+
+    // Abrir modal de rejeitar
+    window.abrirModalRejeitar = function(itemId) {
+        document.getElementById('rejeitarItemId').value = itemId;
+        document.getElementById('rejeitarMotivo').value = '';
+        modalRejeitar.show();
+    };
+
+    // Confirmar rejeicao
+    window.confirmarRejeicao = function() {
+        const itemId = document.getElementById('rejeitarItemId').value;
+        const motivo = document.getElementById('rejeitarMotivo').value.trim();
+
+        if (!motivo) {
+            alert('Informe o motivo da rejeicao');
+            return;
+        }
+
+        const btn = event.target;
+        const originalHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Rejeitando...';
+
+        fetch(`/api/recebimento/primeira-compra/${itemId}/rejeitar`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({observacao: motivo})
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.sucesso) {
+                if (typeof toastr !== 'undefined') {
+                    toastr.success('Primeira compra rejeitada');
+                }
+                setTimeout(() => location.reload(), 500);
+            } else {
+                alert('Erro: ' + data.mensagem);
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+        })
+        .catch(e => {
+            alert('Erro de conexao');
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        });
+    };
+
+    function getCSRFToken() {
+        return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    }
+
+})();
+</script>
+{% endblock %}
