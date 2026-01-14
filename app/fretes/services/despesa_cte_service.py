@@ -370,3 +370,183 @@ class DespesaCteService:
                 DespesaExtra.despesa_cte_id.is_(None)
             )
         ).all()
+
+    @staticmethod
+    def buscar_ctes_manual(
+        despesa_id: int,
+        prefixo_cnpj_transportadora: str = None,
+        prefixo_cnpj_cliente: str = None,
+        numero_cte: str = None,
+        limit: int = 50
+    ) -> Dict[str, Any]:
+        """
+        Busca CTes para vinculação manual, usando apenas prefixos de CNPJ.
+        NÃO valida NFs em comum - permite vinculação livre.
+
+        Args:
+            despesa_id: ID da despesa extra
+            prefixo_cnpj_transportadora: Prefixo do CNPJ da transportadora (8 dígitos)
+            prefixo_cnpj_cliente: Prefixo do CNPJ do cliente (8 dígitos)
+            numero_cte: Número do CTe para filtro direto
+            limit: Limite de resultados
+
+        Returns:
+            Dict com:
+                - despesa: DespesaExtra
+                - frete: Frete relacionado
+                - ctes: Lista de CTes encontrados
+                - filtros_aplicados: Dict com filtros usados
+                - erro: Mensagem de erro se houver
+        """
+        resultado = {
+            'despesa': None,
+            'frete': None,
+            'ctes': [],
+            'filtros_aplicados': {},
+            'erro': None
+        }
+
+        try:
+            # Buscar despesa
+            despesa = DespesaExtra.query.get(despesa_id)
+            if not despesa:
+                resultado['erro'] = f'Despesa #{despesa_id} não encontrada'
+                return resultado
+
+            resultado['despesa'] = despesa
+
+            # Buscar frete relacionado
+            frete = Frete.query.get(despesa.frete_id)
+            if not frete:
+                resultado['erro'] = f'Frete #{despesa.frete_id} da despesa não encontrado'
+                return resultado
+
+            resultado['frete'] = frete
+
+            # Usar valores padrão do frete se não informados
+            # CNPJ formatado: XX.XXX.XXX/XXXX-XX → 10 primeiros chars = 8 dígitos do prefixo
+            if not prefixo_cnpj_transportadora and frete.transportadora and frete.transportadora.cnpj:
+                prefixo_cnpj_transportadora = frete.transportadora.cnpj[:10]
+
+            if not prefixo_cnpj_cliente and frete.cnpj_cliente:
+                prefixo_cnpj_cliente = frete.cnpj_cliente[:10]
+
+            # Registrar filtros aplicados
+            resultado['filtros_aplicados'] = {
+                'prefixo_transportadora': prefixo_cnpj_transportadora,
+                'prefixo_cliente': prefixo_cnpj_cliente,
+                'numero_cte': numero_cte
+            }
+
+            # Buscar CTes já vinculados a outras despesas (para marcar)
+            ctes_ja_vinculados = db.session.query(DespesaExtra.despesa_cte_id).filter(
+                DespesaExtra.despesa_cte_id.isnot(None)
+            ).all()
+            ids_ja_vinculados = set(c[0] for c in ctes_ja_vinculados)
+
+            # Construir query base
+            query = ConhecimentoTransporte.query
+
+            # Filtro por número do CTe (busca prioritária)
+            if numero_cte:
+                query = query.filter(
+                    ConhecimentoTransporte.numero_cte.ilike(f'%{numero_cte}%')
+                )
+            else:
+                # Filtros por CNPJ apenas se não houver filtro por número
+                filtros = []
+
+                if prefixo_cnpj_transportadora:
+                    filtros.append(
+                        ConhecimentoTransporte.cnpj_emitente.like(f'{prefixo_cnpj_transportadora}%')
+                    )
+
+                if prefixo_cnpj_cliente:
+                    # Cliente pode ser remetente ou destinatário
+                    filtros.append(
+                        or_(
+                            ConhecimentoTransporte.cnpj_remetente.like(f'{prefixo_cnpj_cliente}%'),
+                            ConhecimentoTransporte.cnpj_destinatario.like(f'{prefixo_cnpj_cliente}%')
+                        )
+                    )
+
+                if filtros:
+                    query = query.filter(and_(*filtros))
+
+            # Ordenar por data de emissão (mais recentes primeiro) e limitar
+            ctes = query.order_by(
+                ConhecimentoTransporte.data_emissao.desc().nullslast(),
+                ConhecimentoTransporte.id.desc()
+            ).limit(limit).all()
+
+            # Adicionar flag de disponibilidade
+            for cte in ctes:
+                cte._ja_vinculado = cte.id in ids_ja_vinculados
+
+            resultado['ctes'] = ctes
+            logger.info(f"Busca manual: {len(ctes)} CTes encontrados para despesa #{despesa_id}")
+
+            return resultado
+
+        except Exception as e:
+            logger.error(f"Erro na busca manual de CTe: {str(e)}")
+            resultado['erro'] = f'Erro na busca: {str(e)}'
+            return resultado
+
+    @staticmethod
+    def vincular_cte_manual(despesa_id: int, cte_id: int, usuario: str) -> Tuple[bool, str]:
+        """
+        Vincula um CTe a uma despesa extra de forma manual (sem validações de NF).
+        Aceita CTe Normal ou Complementar.
+
+        Args:
+            despesa_id: ID da despesa extra
+            cte_id: ID do CTe
+            usuario: Nome do usuário que está vinculando
+
+        Returns:
+            Tuple (sucesso: bool, mensagem: str)
+        """
+        try:
+            despesa = DespesaExtra.query.get(despesa_id)
+            if not despesa:
+                return False, f'Despesa #{despesa_id} não encontrada'
+
+            cte = ConhecimentoTransporte.query.get(cte_id)
+            if not cte:
+                return False, f'CTe #{cte_id} não encontrado'
+
+            # Validar se CTe já está vinculado a outra despesa
+            despesa_existente = DespesaExtra.query.filter(
+                and_(
+                    DespesaExtra.despesa_cte_id == cte_id,
+                    DespesaExtra.id != despesa_id
+                )
+            ).first()
+            if despesa_existente:
+                return False, f'CTe #{cte_id} já está vinculado à Despesa #{despesa_existente.id}'
+
+            # Realizar vinculação
+            despesa.despesa_cte_id = cte_id
+            despesa.chave_cte = cte.chave_acesso
+            despesa.status = 'VINCULADO_CTE'
+
+            # Atualizar número do documento
+            if despesa.numero_documento == 'PENDENTE_FATURA' or not despesa.numero_documento:
+                despesa.numero_documento = cte.numero_cte
+                despesa.tipo_documento = 'CTe'
+
+            # Registrar observação do vínculo manual
+            obs_atual = despesa.observacoes or ''
+            obs_manual = f"[VÍNCULO MANUAL] CTe {cte.numero_cte} vinculado por {usuario} em {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+            despesa.observacoes = f"{obs_atual}\n{obs_manual}".strip()
+
+            db.session.commit()
+
+            logger.info(f"[MANUAL] CTe #{cte_id} vinculado à Despesa #{despesa_id} por {usuario}")
+            return True, f'CTe {cte.numero_cte} vinculado manualmente com sucesso'
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao vincular CTe manualmente: {str(e)}")
+            return False, f'Erro ao vincular CTe: {str(e)}'

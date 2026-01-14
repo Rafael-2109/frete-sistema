@@ -62,7 +62,7 @@ class LancamentoOdooService:
     CONFIG_POR_EMPRESA = {
         1: {  # FB - Fábrica
             'company_id': 1,
-            'picking_type_id': None,  # A ser descoberto se necessário
+            'picking_type_id': 1,  # FB: Recebimento (FB) - CORRIGIDO 14/01/2026
             'nome': 'NACOM GOYA - FB'
         },
         4: {  # CD - Centro de Distribuição

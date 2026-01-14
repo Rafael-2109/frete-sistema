@@ -2364,7 +2364,7 @@ def exportar_faturas_excel():
                 try:
                     if len(str(cell.value)) > max_length:
                         max_length = len(str(cell.value))
-                except:
+                except Exception:
                     pass
             adjusted_width = min(max_length + 2, 50)
             worksheet_faturas.column_dimensions[column_letter].width = adjusted_width
@@ -4571,6 +4571,69 @@ def desvincular_cte_despesa(despesa_id):
         flash(mensagem, "error")
 
     return redirect(url_for("fretes.visualizar_frete", frete_id=despesa.frete_id))
+
+
+@fretes_bp.route("/despesas/<int:despesa_id>/vincular_cte_manual", methods=["GET", "POST"])
+@login_required
+def vincular_cte_manual_despesa(despesa_id):
+    """
+    Página para vincular CTe manualmente a uma despesa extra.
+    Permite busca por prefixo de CNPJ da transportadora e cliente, sem validar NFs.
+    """
+    from app.fretes.services.despesa_cte_service import DespesaCteService
+
+    despesa = DespesaExtra.query.get_or_404(despesa_id)
+    frete = Frete.query.get_or_404(despesa.frete_id)
+
+    if request.method == "POST":
+        cte_id = request.form.get("cte_id")
+        if not cte_id:
+            flash("Nenhum CTe selecionado", "error")
+            return redirect(url_for("fretes.vincular_cte_manual_despesa", despesa_id=despesa_id))
+
+        sucesso, mensagem = DespesaCteService.vincular_cte_manual(
+            despesa_id=despesa_id, cte_id=int(cte_id), usuario=current_user.nome
+        )
+
+        if sucesso:
+            flash(mensagem, "success")
+            return redirect(url_for("fretes.visualizar_frete", frete_id=frete.id))
+        else:
+            flash(mensagem, "error")
+            return redirect(url_for("fretes.vincular_cte_manual_despesa", despesa_id=despesa_id))
+
+    # GET: Buscar CTes com filtros
+    prefixo_transportadora = request.args.get("prefixo_transportadora", "")
+    prefixo_cliente = request.args.get("prefixo_cliente", "")
+    numero_cte = request.args.get("numero_cte", "")
+
+    # Se não houver filtros, usar valores padrão do frete
+    if not prefixo_transportadora and not prefixo_cliente and not numero_cte:
+        # Busca inicial com valores do frete
+        resultado = DespesaCteService.buscar_ctes_manual(despesa_id=despesa_id)
+    else:
+        # Busca com filtros informados
+        resultado = DespesaCteService.buscar_ctes_manual(
+            despesa_id=despesa_id,
+            prefixo_cnpj_transportadora=prefixo_transportadora if prefixo_transportadora else None,
+            prefixo_cnpj_cliente=prefixo_cliente if prefixo_cliente else None,
+            numero_cte=numero_cte if numero_cte else None
+        )
+
+    if resultado.get("erro"):
+        flash(resultado["erro"], "error")
+        return redirect(url_for("fretes.visualizar_frete", frete_id=frete.id))
+
+    return render_template(
+        "fretes/vincular_cte_manual_despesa.html",
+        despesa=despesa,
+        frete=frete,
+        ctes=resultado.get("ctes", []),
+        filtros=resultado.get("filtros_aplicados", {}),
+        prefixo_transportadora=prefixo_transportadora or resultado.get("filtros_aplicados", {}).get("prefixo_transportadora", ""),
+        prefixo_cliente=prefixo_cliente or resultado.get("filtros_aplicados", {}).get("prefixo_cliente", ""),
+        numero_cte=numero_cte
+    )
 
 
 @fretes_bp.route("/despesas/<int:despesa_id>/lancar_odoo", methods=["POST"])

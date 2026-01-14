@@ -866,8 +866,13 @@
                                                 <!-- Sem CTe vinculado, vincular -->
                                                 <a href="{{ url_for('fretes.vincular_cte_despesa', despesa_id=despesa.id) }}"
                                                     class="btn btn-sm btn-warning mb-1"
-                                                    title="Vincular CTe Complementar">
+                                                    title="Vincular CTe Complementar (Sugestão Automática)">
                                                     <i class="fas fa-link"></i> Vincular CTe
+                                                </a>
+                                                <a href="{{ url_for('fretes.vincular_cte_manual_despesa', despesa_id=despesa.id) }}"
+                                                    class="btn btn-sm btn-outline-info mb-1"
+                                                    title="Vincular CTe Manual (Busca por CNPJ)">
+                                                    <i class="fas fa-search"></i> Manual
                                                 </a>
                                                 {% endif %}
                                             {% else %}
