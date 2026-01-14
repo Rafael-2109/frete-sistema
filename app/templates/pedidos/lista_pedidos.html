@@ -800,16 +800,16 @@
                 <!-- ✨ NOVA COLUNA: Agenda -->
                 <td class="text-center">
                   {% if p.agendamento %}
-                    <strong class="text-success">{{ p.agendamento | formatar_data_brasil }}</strong>
+                    <strong>{{ p.agendamento | formatar_data_brasil }}</strong>
                     <br>
                     {% if p.agendamento_confirmado %}
-                      <button type="button" class="btn btn-sm btn-primary"
+                      <button type="button" class="btn btn-sm btn-success"
                               onclick="reverterConfirmacaoAgendamento('{{ p.separacao_lote_id }}', '{{ p.num_pedido }}'); return false;"
                               title="Clique para reverter confirmação">
                         <i class="fas fa-check-circle"></i> Confirmado
                       </button>
                     {% else %}
-                      <button type="button" class="btn btn-sm btn-warning"
+                      <button type="button" class="btn btn-sm btn-danger"
                               onclick="confirmarAgendamento('{{ p.separacao_lote_id }}', '{{ p.num_pedido }}'); return false;"
                               title="Clique para confirmar">
                         <i class="fas fa-hourglass-half"></i> Aguardando
