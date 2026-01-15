@@ -624,3 +624,306 @@ def pendencia_ibscbs_resolver(pendencia_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'sucesso': False, 'mensagem': str(e)}), 500
+
+
+# =============================================================================
+# API NCM IBS/CBS - INTEGRACAO ODOO
+# =============================================================================
+
+def _get_odoo_connection():
+    """Obtem conexao com Odoo"""
+    try:
+        from app.odoo.utils.connection import get_odoo_connection
+        return get_odoo_connection()
+    except Exception as e:
+        return None
+
+
+@recebimento_views_bp.route('/ncm-ibscbs/buscar-odoo/<prefixo>')
+@login_required
+def ncm_ibscbs_buscar_odoo(prefixo):
+    """
+    Busca NCMs no Odoo que comecam com o prefixo informado.
+    Retorna lista de NCMs com campos IBS/CBS para exibir ao usuario.
+    """
+    try:
+        if not prefixo or len(prefixo) != 4:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Prefixo deve ter 4 digitos'
+            }), 400
+
+        odoo = _get_odoo_connection()
+        if not odoo:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Erro ao conectar com Odoo'
+            }), 500
+
+        # Buscar NCMs que comecam com o prefixo
+        ncms = odoo.search_read(
+            'l10n_br_ciel_it_account.ncm',
+            [['codigo', '=like', f'{prefixo}%']],
+            [
+                'id',
+                'codigo',
+                'name',
+                'l10n_br_ibscbs_cst',
+                'l10n_br_ibscbs_classtrib_id',
+                'l10n_br_ibs_uf_aliquota',
+                'l10n_br_ibs_mun_aliquota',
+                'l10n_br_cbs_aliquota',
+                'l10n_br_ibscbs_reducao_aliquota'
+            ],
+            order='codigo'
+        )
+
+        if not ncms:
+            return jsonify({
+                'sucesso': True,
+                'ncms': [],
+                'mensagem': f'Nenhum NCM encontrado com prefixo {prefixo} no Odoo'
+            })
+
+        # Processar NCMs - buscar codigo da classificacao tributaria
+        ncms_processados = []
+        for ncm in ncms:
+            classtrib_codigo = None
+            classtrib_nome = None
+
+            # Extrair codigo da classificacao tributaria
+            if ncm.get('l10n_br_ibscbs_classtrib_id'):
+                classtrib_id = ncm['l10n_br_ibscbs_classtrib_id']
+                if isinstance(classtrib_id, (list, tuple)) and len(classtrib_id) >= 2:
+                    # Formato [id, nome] - buscar codigo
+                    try:
+                        classtrib = odoo.search_read(
+                            'l10n_br_ciel_it_account.classificacao.tributaria.ibscbs',
+                            [['id', '=', classtrib_id[0]]],
+                            ['codigo', 'name']
+                        )
+                        if classtrib:
+                            classtrib_codigo = classtrib[0].get('codigo')
+                            classtrib_nome = classtrib[0].get('name')
+                    except:
+                        classtrib_nome = classtrib_id[1] if len(classtrib_id) > 1 else None
+
+            ncms_processados.append({
+                'id': ncm['id'],
+                'codigo': ncm.get('codigo'),
+                'name': ncm.get('name'),
+                'cst': ncm.get('l10n_br_ibscbs_cst'),
+                'classtrib_codigo': classtrib_codigo,
+                'classtrib_nome': classtrib_nome,
+                'ibs_uf': ncm.get('l10n_br_ibs_uf_aliquota'),
+                'ibs_mun': ncm.get('l10n_br_ibs_mun_aliquota'),
+                'cbs': ncm.get('l10n_br_cbs_aliquota'),
+                'reducao': ncm.get('l10n_br_ibscbs_reducao_aliquota')
+            })
+
+        return jsonify({
+            'sucesso': True,
+            'ncms': ncms_processados,
+            'total': len(ncms_processados),
+            'mensagem': f'{len(ncms_processados)} NCM(s) encontrado(s) com prefixo {prefixo}'
+        })
+
+    except Exception as e:
+        return jsonify({
+            'sucesso': False,
+            'mensagem': f'Erro ao buscar NCMs no Odoo: {str(e)}'
+        }), 500
+
+
+@recebimento_views_bp.route('/ncm-ibscbs/atualizar-odoo', methods=['POST'])
+@login_required
+def ncm_ibscbs_atualizar_odoo():
+    """
+    Atualiza NCMs no Odoo com os valores do padrao cadastrado.
+    Recebe lista de IDs de NCMs do Odoo e os novos valores.
+    """
+    try:
+        dados = request.json
+        if not dados:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Dados nao informados'
+            }), 400
+
+        ncm_ids = dados.get('ncm_ids', [])
+        novos_valores = dados.get('novos_valores', {})
+
+        if not ncm_ids:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Nenhum NCM selecionado'
+            }), 400
+
+        odoo = _get_odoo_connection()
+        if not odoo:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Erro ao conectar com Odoo'
+            }), 500
+
+        # Buscar ID da classificacao tributaria pelo codigo
+        classtrib_id = None
+        if novos_valores.get('class_trib_codigo'):
+            classtrib = odoo.search_read(
+                'l10n_br_ciel_it_account.classificacao.tributaria.ibscbs',
+                [['codigo', '=', novos_valores['class_trib_codigo']]],
+                ['id']
+            )
+            if classtrib:
+                classtrib_id = classtrib[0]['id']
+
+        # Preparar valores para atualizacao
+        valores_odoo = {}
+
+        if novos_valores.get('cst_esperado'):
+            valores_odoo['l10n_br_ibscbs_cst'] = novos_valores['cst_esperado']
+
+        if classtrib_id:
+            valores_odoo['l10n_br_ibscbs_classtrib_id'] = classtrib_id
+
+        if novos_valores.get('aliquota_ibs_uf') is not None:
+            valores_odoo['l10n_br_ibs_uf_aliquota'] = float(novos_valores['aliquota_ibs_uf'])
+
+        if novos_valores.get('aliquota_ibs_mun') is not None:
+            valores_odoo['l10n_br_ibs_mun_aliquota'] = float(novos_valores['aliquota_ibs_mun'])
+
+        if novos_valores.get('aliquota_cbs') is not None:
+            valores_odoo['l10n_br_cbs_aliquota'] = float(novos_valores['aliquota_cbs'])
+
+        if novos_valores.get('reducao_aliquota') is not None:
+            valores_odoo['l10n_br_ibscbs_reducao_aliquota'] = float(novos_valores['reducao_aliquota'])
+
+        if not valores_odoo:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Nenhum valor para atualizar'
+            }), 400
+
+        # Atualizar cada NCM
+        atualizados = 0
+        erros = []
+
+        for ncm_id in ncm_ids:
+            try:
+                odoo.write(
+                    'l10n_br_ciel_it_account.ncm',
+                    [int(ncm_id)],
+                    valores_odoo
+                )
+                atualizados += 1
+            except Exception as e:
+                erros.append(f'NCM {ncm_id}: {str(e)}')
+
+        return jsonify({
+            'sucesso': True,
+            'atualizados': atualizados,
+            'total': len(ncm_ids),
+            'erros': erros,
+            'mensagem': f'{atualizados} de {len(ncm_ids)} NCM(s) atualizado(s) no Odoo'
+        })
+
+    except Exception as e:
+        return jsonify({
+            'sucesso': False,
+            'mensagem': f'Erro ao atualizar NCMs no Odoo: {str(e)}'
+        }), 500
+
+
+@recebimento_views_bp.route('/ncm-ibscbs/salvar-ajax', methods=['POST'])
+@login_required
+def ncm_ibscbs_salvar_ajax():
+    """
+    Salva (cria ou atualiza) um cadastro NCM IBS/CBS via AJAX.
+    Retorna os dados salvos para uso no modal de confirmacao Odoo.
+    """
+    try:
+        dados = request.json
+        if not dados:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Dados nao informados'
+            }), 400
+
+        ncm_id = dados.get('id')
+        ncm_prefixo = (dados.get('ncm_prefixo') or '').strip()
+
+        if not ncm_prefixo or len(ncm_prefixo) != 4:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'NCM prefixo deve ter exatamente 4 digitos'
+            }), 400
+
+        # Verificar se é edição ou novo
+        if ncm_id:
+            ncm = NcmIbsCbsValidado.query.get(int(ncm_id))
+            if not ncm:
+                return jsonify({
+                    'sucesso': False,
+                    'mensagem': 'NCM nao encontrado'
+                }), 404
+        else:
+            # Verificar se já existe
+            existente = NcmIbsCbsValidado.query.filter_by(ncm_prefixo=ncm_prefixo).first()
+            if existente:
+                return jsonify({
+                    'sucesso': False,
+                    'mensagem': f'NCM {ncm_prefixo} ja cadastrado'
+                }), 400
+            ncm = NcmIbsCbsValidado(ncm_prefixo=ncm_prefixo)
+
+        # Funcao para converter valores decimais
+        def parse_decimal(val):
+            if val is None or val == '':
+                return None
+            try:
+                return Decimal(str(val).replace(',', '.'))
+            except:
+                return None
+
+        # Atualizar campos
+        ncm.descricao_ncm = (dados.get('descricao_ncm') or '').strip() or None
+        ncm.cst_esperado = (dados.get('cst_esperado') or '').strip() or None
+        ncm.class_trib_codigo = (dados.get('class_trib_codigo') or '').strip() or None
+        ncm.aliquota_ibs_uf = parse_decimal(dados.get('aliquota_ibs_uf'))
+        ncm.aliquota_ibs_mun = parse_decimal(dados.get('aliquota_ibs_mun'))
+        ncm.aliquota_cbs = parse_decimal(dados.get('aliquota_cbs'))
+        ncm.reducao_aliquota = parse_decimal(dados.get('reducao_aliquota'))
+        ncm.observacao = (dados.get('observacao') or '').strip() or None
+        ncm.ativo = dados.get('ativo', True)
+        ncm.validado_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
+        ncm.validado_em = datetime.utcnow()
+
+        if not ncm_id:
+            db.session.add(ncm)
+
+        db.session.commit()
+
+        acao = 'atualizado' if ncm_id else 'cadastrado'
+
+        return jsonify({
+            'sucesso': True,
+            'mensagem': f'NCM {ncm_prefixo} {acao} com sucesso!',
+            'ncm': {
+                'id': ncm.id,
+                'ncm_prefixo': ncm.ncm_prefixo,
+                'descricao_ncm': ncm.descricao_ncm,
+                'cst_esperado': ncm.cst_esperado,
+                'class_trib_codigo': ncm.class_trib_codigo,
+                'aliquota_ibs_uf': float(ncm.aliquota_ibs_uf) if ncm.aliquota_ibs_uf else None,
+                'aliquota_ibs_mun': float(ncm.aliquota_ibs_mun) if ncm.aliquota_ibs_mun else None,
+                'aliquota_cbs': float(ncm.aliquota_cbs) if ncm.aliquota_cbs else None,
+                'reducao_aliquota': float(ncm.reducao_aliquota) if ncm.reducao_aliquota else None
+            }
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'sucesso': False,
+            'mensagem': f'Erro ao salvar: {str(e)}'
+        }), 500

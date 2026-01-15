@@ -114,7 +114,7 @@
                             </td>
                             <td>
                                 <span title="{{ item.descricao_ncm }}">
-                                    {{ item.descricao_ncm[:40] + '...' if item.descricao_ncm and item.descricao_ncm|length > 40 else item.descricao_ncm or '-' }}
+                                    {{ item.descricao_ncm[:80] + '...' if item.descricao_ncm and item.descricao_ncm|length > 80 else item.descricao_ncm or '-' }}
                                 </span>
                             </td>
                             <td class="text-center">
@@ -263,9 +263,9 @@
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Reducao Aliquota (%)</label>
-                            <input type="number" name="reducao_aliquota" id="ncm-reducao" class="form-control"
-                                   step="0.01" min="0" max="100"
-                                   placeholder="Ex: 60.00">
+                            <input type="text" name="reducao_aliquota" id="ncm-reducao" class="form-control"
+                                   inputmode="decimal"
+                                   placeholder="Ex: 60,00">
                             <small class="text-muted">Usado para calcular pAliqEfet</small>
                         </div>
                     </div>
@@ -276,21 +276,21 @@
                     <div class="row mb-3">
                         <div class="col-md-4">
                             <label class="form-label">IBS UF (%)</label>
-                            <input type="number" name="aliquota_ibs_uf" id="ncm-ibs-uf" class="form-control"
-                                   step="0.01" min="0" max="100"
-                                   placeholder="Ex: 0.10">
+                            <input type="text" name="aliquota_ibs_uf" id="ncm-ibs-uf" class="form-control"
+                                   inputmode="decimal"
+                                   placeholder="Ex: 0,10">
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">IBS Municipio (%)</label>
-                            <input type="number" name="aliquota_ibs_mun" id="ncm-ibs-mun" class="form-control"
-                                   step="0.01" min="0" max="100"
-                                   placeholder="Ex: 0.00">
+                            <input type="text" name="aliquota_ibs_mun" id="ncm-ibs-mun" class="form-control"
+                                   inputmode="decimal"
+                                   placeholder="Ex: 0,00">
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">CBS (%)</label>
-                            <input type="number" name="aliquota_cbs" id="ncm-cbs" class="form-control"
-                                   step="0.01" min="0" max="100"
-                                   placeholder="Ex: 0.90">
+                            <input type="text" name="aliquota_cbs" id="ncm-cbs" class="form-control"
+                                   inputmode="decimal"
+                                   placeholder="Ex: 0,90">
                         </div>
                     </div>
 
@@ -341,6 +341,134 @@
         </div>
     </div>
 </div>
+
+<!-- Modal Confirmar Atualizacao Odoo -->
+<div class="modal fade" id="modalOdoo" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-cloud-upload-alt me-2"></i>Atualizar NCMs no Odoo
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Mensagem de sucesso do salvamento local -->
+                <div class="alert alert-success mb-3" id="odoo-msg-sucesso">
+                    <i class="fas fa-check-circle me-2"></i>
+                    <span id="odoo-msg-texto">NCM salvo com sucesso no sistema local!</span>
+                </div>
+
+                <!-- Informacoes do padrao cadastrado -->
+                <div class="card mb-3">
+                    <div class="card-header bg-primary text-white py-2">
+                        <h6 class="mb-0"><i class="fas fa-cog me-2"></i>Padrao Cadastrado - Prefixo <code id="odoo-prefixo" class="text-white"></code></h6>
+                    </div>
+                    <div class="card-body py-2">
+                        <div class="row small">
+                            <div class="col-md-2">
+                                <strong>CST:</strong> <span id="odoo-padrao-cst">-</span>
+                            </div>
+                            <div class="col-md-2">
+                                <strong>ClassTrib:</strong> <span id="odoo-padrao-classtrib">-</span>
+                            </div>
+                            <div class="col-md-2">
+                                <strong>IBS UF:</strong> <span id="odoo-padrao-ibs-uf">-</span>%
+                            </div>
+                            <div class="col-md-2">
+                                <strong>IBS Mun:</strong> <span id="odoo-padrao-ibs-mun">-</span>%
+                            </div>
+                            <div class="col-md-2">
+                                <strong>CBS:</strong> <span id="odoo-padrao-cbs">-</span>%
+                            </div>
+                            <div class="col-md-2">
+                                <strong>Reducao:</strong> <span id="odoo-padrao-reducao">-</span>%
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pergunta -->
+                <div class="alert alert-warning">
+                    <i class="fas fa-question-circle me-2"></i>
+                    <strong>Deseja atualizar os NCM abaixo com prefixo <code id="odoo-prefixo-pergunta"></code> no Odoo?</strong>
+                </div>
+
+                <!-- Loading -->
+                <div id="odoo-loading" class="text-center py-4" style="display: none;">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                    <p class="mt-2 text-muted">Buscando NCMs no Odoo...</p>
+                </div>
+
+                <!-- Erro -->
+                <div id="odoo-erro" class="alert alert-danger" style="display: none;">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <span id="odoo-erro-texto"></span>
+                </div>
+
+                <!-- Nenhum NCM -->
+                <div id="odoo-vazio" class="alert alert-info" style="display: none;">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Nenhum NCM encontrado com este prefixo no Odoo.
+                </div>
+
+                <!-- Tabela de NCMs do Odoo -->
+                <div id="odoo-tabela-container" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-muted small">
+                            <span id="odoo-total">0</span> NCM(s) encontrado(s) no Odoo
+                        </span>
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="odoo-selecionar-todos" checked>
+                            <label class="form-check-label small" for="odoo-selecionar-todos">Selecionar todos</label>
+                        </div>
+                    </div>
+                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                        <table class="table table-sm table-bordered table-hover align-middle mb-0">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th style="width: 40px;" class="text-center">
+                                        <i class="fas fa-check"></i>
+                                    </th>
+                                    <th style="width: 100px;">NCM</th>
+                                    <th>Descricao</th>
+                                    <th style="width: 60px;" class="text-center">CST</th>
+                                    <th style="width: 80px;" class="text-center">ClassTrib</th>
+                                    <th style="width: 70px;" class="text-center">IBS UF</th>
+                                    <th style="width: 70px;" class="text-center">IBS Mun</th>
+                                    <th style="width: 60px;" class="text-center">CBS</th>
+                                    <th style="width: 70px;" class="text-center">Reducao</th>
+                                </tr>
+                            </thead>
+                            <tbody id="odoo-tabela-body">
+                                <!-- Preenchido via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Resultado da atualizacao -->
+                <div id="odoo-resultado" class="alert alert-success" style="display: none;">
+                    <i class="fas fa-check-circle me-2"></i>
+                    <span id="odoo-resultado-texto"></span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="btn-odoo-fechar">
+                    <i class="fas fa-times me-1"></i> Fechar
+                </button>
+                <button type="button" class="btn btn-outline-secondary" id="btn-odoo-pular" onclick="pularAtualizacaoOdoo()">
+                    <i class="fas fa-forward me-1"></i> Pular
+                </button>
+                <button type="button" class="btn btn-success" id="btn-odoo-atualizar" onclick="atualizarNcmsOdoo()">
+                    <i class="fas fa-cloud-upload-alt me-1"></i> Atualizar Selecionados no Odoo
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -351,13 +479,41 @@
     // Dados dos itens (serializado do backend)
     const itensData = {{ itens_json|safe }};
 
+    // Modais
     let modalNCM = null;
     let modalExcluir = null;
+    let modalOdoo = null;
+
+    // Estado do padrao salvo (usado para atualizar no Odoo)
+    let ncmSalvo = null;
+    let ncmsOdoo = [];
 
     document.addEventListener('DOMContentLoaded', function() {
         modalNCM = new bootstrap.Modal(document.getElementById('modalNCM'));
         modalExcluir = new bootstrap.Modal(document.getElementById('modalExcluir'));
+        modalOdoo = new bootstrap.Modal(document.getElementById('modalOdoo'));
+
+        // Interceptar submit do form para usar AJAX
+        document.querySelector('#modalNCM form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            salvarNcmAjax();
+        });
+
+        // Checkbox selecionar todos
+        document.getElementById('odoo-selecionar-todos').addEventListener('change', function() {
+            const checkboxes = document.querySelectorAll('#odoo-tabela-body input[type="checkbox"]');
+            checkboxes.forEach(cb => cb.checked = this.checked);
+        });
     });
+
+    // Helper para formatar número BR (vírgula como separador decimal)
+    function formatarBR(valor) {
+        if (valor === null || valor === undefined || valor === '') return '';
+        return parseFloat(valor).toLocaleString('pt-BR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+    }
 
     // Abrir modal para novo NCM
     window.abrirModalNovo = function() {
@@ -392,10 +548,10 @@
         document.getElementById('ncm-descricao').value = item.descricao_ncm || '';
         document.getElementById('ncm-cst').value = item.cst_esperado || '';
         document.getElementById('ncm-classtrib').value = item.class_trib_codigo || '';
-        document.getElementById('ncm-reducao').value = item.reducao_aliquota || '';
-        document.getElementById('ncm-ibs-uf').value = item.aliquota_ibs_uf || '';
-        document.getElementById('ncm-ibs-mun').value = item.aliquota_ibs_mun || '';
-        document.getElementById('ncm-cbs').value = item.aliquota_cbs || '';
+        document.getElementById('ncm-reducao').value = formatarBR(item.reducao_aliquota);
+        document.getElementById('ncm-ibs-uf').value = formatarBR(item.aliquota_ibs_uf);
+        document.getElementById('ncm-ibs-mun').value = formatarBR(item.aliquota_ibs_mun);
+        document.getElementById('ncm-cbs').value = formatarBR(item.aliquota_cbs);
         document.getElementById('ncm-observacao').value = item.observacao || '';
         document.getElementById('ncm-ativo').checked = item.ativo;
         modalNCM.show();
@@ -406,6 +562,238 @@
         document.getElementById('excluir-ncm').textContent = ncm;
         document.getElementById('formExcluir').action = `/operacional/compras/ncm-ibscbs/${id}/excluir`;
         modalExcluir.show();
+    };
+
+    // Salvar NCM via AJAX
+    async function salvarNcmAjax() {
+        const dados = {
+            id: document.getElementById('ncm-id').value || null,
+            ncm_prefixo: document.getElementById('ncm-prefixo').value,
+            descricao_ncm: document.getElementById('ncm-descricao').value,
+            cst_esperado: document.getElementById('ncm-cst').value,
+            class_trib_codigo: document.getElementById('ncm-classtrib').value,
+            reducao_aliquota: document.getElementById('ncm-reducao').value || null,
+            aliquota_ibs_uf: document.getElementById('ncm-ibs-uf').value || null,
+            aliquota_ibs_mun: document.getElementById('ncm-ibs-mun').value || null,
+            aliquota_cbs: document.getElementById('ncm-cbs').value || null,
+            observacao: document.getElementById('ncm-observacao').value,
+            ativo: document.getElementById('ncm-ativo').checked
+        };
+
+        try {
+            // Salvar no sistema local
+            const response = await fetch('/operacional/compras/ncm-ibscbs/salvar-ajax', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(dados)
+            });
+
+            const result = await response.json();
+
+            if (!result.sucesso) {
+                toastr.error(result.mensagem);
+                return;
+            }
+
+            // Guardar dados do NCM salvo
+            ncmSalvo = result.ncm;
+
+            // Fechar modal de cadastro
+            modalNCM.hide();
+
+            // Abrir modal do Odoo
+            abrirModalOdoo(result.mensagem);
+
+        } catch (error) {
+            console.error('Erro ao salvar:', error);
+            toastr.error('Erro ao salvar NCM');
+        }
+    }
+
+    // Abrir modal do Odoo e buscar NCMs
+    async function abrirModalOdoo(mensagemSucesso) {
+        // Resetar estado do modal
+        document.getElementById('odoo-msg-texto').textContent = mensagemSucesso;
+        document.getElementById('odoo-prefixo').textContent = ncmSalvo.ncm_prefixo;
+        document.getElementById('odoo-prefixo-pergunta').textContent = ncmSalvo.ncm_prefixo;
+
+        // Preencher dados do padrao
+        document.getElementById('odoo-padrao-cst').textContent = ncmSalvo.cst_esperado || '-';
+        document.getElementById('odoo-padrao-classtrib').textContent = ncmSalvo.class_trib_codigo || '-';
+        document.getElementById('odoo-padrao-ibs-uf').textContent = ncmSalvo.aliquota_ibs_uf ?? '-';
+        document.getElementById('odoo-padrao-ibs-mun').textContent = ncmSalvo.aliquota_ibs_mun ?? '-';
+        document.getElementById('odoo-padrao-cbs').textContent = ncmSalvo.aliquota_cbs ?? '-';
+        document.getElementById('odoo-padrao-reducao').textContent = ncmSalvo.reducao_aliquota ?? '-';
+
+        // Resetar estados visuais
+        document.getElementById('odoo-loading').style.display = 'block';
+        document.getElementById('odoo-erro').style.display = 'none';
+        document.getElementById('odoo-vazio').style.display = 'none';
+        document.getElementById('odoo-tabela-container').style.display = 'none';
+        document.getElementById('odoo-resultado').style.display = 'none';
+        document.getElementById('btn-odoo-atualizar').style.display = 'inline-block';
+        document.getElementById('btn-odoo-pular').style.display = 'inline-block';
+        document.getElementById('odoo-tabela-body').innerHTML = '';
+
+        // Mostrar modal
+        modalOdoo.show();
+
+        // Buscar NCMs no Odoo
+        try {
+            const response = await fetch(`/operacional/compras/ncm-ibscbs/buscar-odoo/${ncmSalvo.ncm_prefixo}`);
+            const result = await response.json();
+
+            document.getElementById('odoo-loading').style.display = 'none';
+
+            if (!result.sucesso) {
+                document.getElementById('odoo-erro').style.display = 'block';
+                document.getElementById('odoo-erro-texto').textContent = result.mensagem;
+                return;
+            }
+
+            ncmsOdoo = result.ncms || [];
+
+            if (ncmsOdoo.length === 0) {
+                document.getElementById('odoo-vazio').style.display = 'block';
+                document.getElementById('btn-odoo-atualizar').style.display = 'none';
+                return;
+            }
+
+            // Preencher tabela
+            document.getElementById('odoo-total').textContent = ncmsOdoo.length;
+            preencherTabelaOdoo(ncmsOdoo);
+            document.getElementById('odoo-tabela-container').style.display = 'block';
+
+        } catch (error) {
+            console.error('Erro ao buscar NCMs no Odoo:', error);
+            document.getElementById('odoo-loading').style.display = 'none';
+            document.getElementById('odoo-erro').style.display = 'block';
+            document.getElementById('odoo-erro-texto').textContent = 'Erro ao conectar com o Odoo';
+        }
+    }
+
+    // Preencher tabela de NCMs do Odoo
+    function preencherTabelaOdoo(ncms) {
+        const tbody = document.getElementById('odoo-tabela-body');
+        tbody.innerHTML = '';
+
+        ncms.forEach(ncm => {
+            // Verificar se valores sao diferentes do padrao
+            const cstDiferente = ncm.cst !== ncmSalvo.cst_esperado;
+            const classtribDiferente = ncm.classtrib_codigo !== ncmSalvo.class_trib_codigo;
+            const ibsUfDiferente = parseFloat(ncm.ibs_uf) !== parseFloat(ncmSalvo.aliquota_ibs_uf);
+            const ibsMunDiferente = parseFloat(ncm.ibs_mun) !== parseFloat(ncmSalvo.aliquota_ibs_mun);
+            const cbsDiferente = parseFloat(ncm.cbs) !== parseFloat(ncmSalvo.aliquota_cbs);
+            const reducaoDiferente = parseFloat(ncm.reducao) !== parseFloat(ncmSalvo.reducao_aliquota);
+
+            const temDiferenca = cstDiferente || classtribDiferente || ibsUfDiferente || ibsMunDiferente || cbsDiferente || reducaoDiferente;
+
+            const tr = document.createElement('tr');
+            if (temDiferenca) {
+                tr.classList.add('table-warning');
+            }
+
+            tr.innerHTML = `
+                <td class="text-center">
+                    <input type="checkbox" class="form-check-input ncm-checkbox" value="${ncm.id}" checked>
+                </td>
+                <td><code class="fw-bold">${ncm.codigo || '-'}</code></td>
+                <td class="small" title="${ncm.name || ''}">${(ncm.name || '-').substring(0, 50)}${(ncm.name || '').length > 50 ? '...' : ''}</td>
+                <td class="text-center ${cstDiferente ? 'text-danger fw-bold' : ''}">
+                    ${ncm.cst || '-'}
+                </td>
+                <td class="text-center ${classtribDiferente ? 'text-danger fw-bold' : ''}">
+                    ${ncm.classtrib_codigo || '-'}
+                </td>
+                <td class="text-center ${ibsUfDiferente ? 'text-danger fw-bold' : ''}">
+                    ${ncm.ibs_uf ?? '-'}
+                </td>
+                <td class="text-center ${ibsMunDiferente ? 'text-danger fw-bold' : ''}">
+                    ${ncm.ibs_mun ?? '-'}
+                </td>
+                <td class="text-center ${cbsDiferente ? 'text-danger fw-bold' : ''}">
+                    ${ncm.cbs ?? '-'}
+                </td>
+                <td class="text-center ${reducaoDiferente ? 'text-danger fw-bold' : ''}">
+                    ${ncm.reducao ?? '-'}
+                </td>
+            `;
+
+            tbody.appendChild(tr);
+        });
+
+        // Marcar selecionar todos
+        document.getElementById('odoo-selecionar-todos').checked = true;
+    }
+
+    // Atualizar NCMs selecionados no Odoo
+    window.atualizarNcmsOdoo = async function() {
+        const checkboxes = document.querySelectorAll('#odoo-tabela-body input[type="checkbox"]:checked');
+        const ncmIds = Array.from(checkboxes).map(cb => cb.value);
+
+        if (ncmIds.length === 0) {
+            toastr.warning('Selecione pelo menos um NCM para atualizar');
+            return;
+        }
+
+        const btnAtualizar = document.getElementById('btn-odoo-atualizar');
+        const btnOriginalHtml = btnAtualizar.innerHTML;
+        btnAtualizar.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Atualizando...';
+        btnAtualizar.disabled = true;
+
+        try {
+            const response = await fetch('/operacional/compras/ncm-ibscbs/atualizar-odoo', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    ncm_ids: ncmIds,
+                    novos_valores: {
+                        cst_esperado: ncmSalvo.cst_esperado,
+                        class_trib_codigo: ncmSalvo.class_trib_codigo,
+                        aliquota_ibs_uf: ncmSalvo.aliquota_ibs_uf,
+                        aliquota_ibs_mun: ncmSalvo.aliquota_ibs_mun,
+                        aliquota_cbs: ncmSalvo.aliquota_cbs,
+                        reducao_aliquota: ncmSalvo.reducao_aliquota
+                    }
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.sucesso) {
+                document.getElementById('odoo-resultado').style.display = 'block';
+                document.getElementById('odoo-resultado-texto').textContent = result.mensagem;
+                document.getElementById('btn-odoo-atualizar').style.display = 'none';
+                document.getElementById('btn-odoo-pular').style.display = 'none';
+                toastr.success(result.mensagem);
+
+                // Recarregar pagina apos 2 segundos
+                setTimeout(() => {
+                    location.reload();
+                }, 2000);
+            } else {
+                toastr.error(result.mensagem);
+                btnAtualizar.innerHTML = btnOriginalHtml;
+                btnAtualizar.disabled = false;
+            }
+
+        } catch (error) {
+            console.error('Erro ao atualizar NCMs no Odoo:', error);
+            toastr.error('Erro ao atualizar NCMs no Odoo');
+            btnAtualizar.innerHTML = btnOriginalHtml;
+            btnAtualizar.disabled = false;
+        }
+    };
+
+    // Pular atualizacao do Odoo
+    window.pularAtualizacaoOdoo = function() {
+        modalOdoo.hide();
+        toastr.info('NCM salvo no sistema local. Atualizacao no Odoo ignorada.');
+        location.reload();
     };
 })();
 </script>
