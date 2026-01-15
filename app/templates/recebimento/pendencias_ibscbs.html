@@ -1,0 +1,512 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-exclamation-circle text-warning me-2"></i>Pendencias IBS/CBS</h2>
+            <p class="text-muted mb-0">Reforma Tributaria 2026 - CTes e NFs de fornecedores Regime Normal sem destaque IBS/CBS</p>
+        </div>
+        <div>
+            <a href="{{ url_for('recebimento_views.ncm_ibscbs') }}" class="btn btn-outline-info">
+                <i class="fas fa-barcode me-1"></i> Cadastro NCM
+            </a>
+            <button type="button" class="btn btn-outline-primary ms-2" onclick="location.reload()">
+                <i class="fas fa-sync-alt"></i> Atualizar
+            </button>
+        </div>
+    </div>
+
+    <!-- Cards de Estatisticas -->
+    <div class="row mb-4">
+        <div class="col-md-2">
+            <div class="card border-left-primary">
+                <div class="card-body py-2">
+                    <h6 class="text-muted text-uppercase small mb-1">Total</h6>
+                    <h3 class="mb-0">{{ stats.total }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card border-left-warning">
+                <div class="card-body py-2">
+                    <h6 class="text-muted text-uppercase small mb-1">Pendentes</h6>
+                    <h3 class="mb-0">{{ stats.pendente }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card border-left-success">
+                <div class="card-body py-2">
+                    <h6 class="text-muted text-uppercase small mb-1">Aprovados</h6>
+                    <h3 class="mb-0">{{ stats.aprovado }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card border-left-danger">
+                <div class="card-body py-2">
+                    <h6 class="text-muted text-uppercase small mb-1">Rejeitados</h6>
+                    <h3 class="mb-0">{{ stats.rejeitado }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card border-left-info">
+                <div class="card-body py-2">
+                    <h6 class="text-muted text-uppercase small mb-1">CTe</h6>
+                    <h3 class="mb-0">{{ stats.cte }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card border-left-secondary">
+                <div class="card-body py-2">
+                    <h6 class="text-muted text-uppercase small mb-1">NF-e</h6>
+                    <h3 class="mb-0">{{ stats.nfe }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h6 class="mb-0"><i class="fas fa-filter me-2"></i>Filtros</h6>
+        </div>
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('recebimento_views.pendencias_ibscbs') }}">
+                <div class="row">
+                    <div class="col-md-2">
+                        <label class="form-label">Tipo Documento</label>
+                        <select name="tipo_doc" class="form-select form-select-sm">
+                            {% for valor, descricao in opcoes_tipo_doc %}
+                            <option value="{{ valor }}" {% if filtros.tipo_doc == valor %}selected{% endif %}>
+                                {{ descricao }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Status</label>
+                        <select name="status" class="form-select form-select-sm">
+                            {% for valor, descricao in opcoes_status %}
+                            <option value="{{ valor }}" {% if filtros.status == valor %}selected{% endif %}>
+                                {{ descricao }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">CNPJ Fornecedor</label>
+                        <input type="text" name="cnpj" class="form-control form-control-sm"
+                               value="{{ filtros.cnpj }}" placeholder="Digite o CNPJ...">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Motivo</label>
+                        <select name="motivo" class="form-select form-select-sm">
+                            {% for valor, descricao in opcoes_motivo %}
+                            <option value="{{ valor }}" {% if filtros.motivo == valor %}selected{% endif %}>
+                                {{ descricao }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary btn-sm me-2">
+                            <i class="fas fa-search"></i> Filtrar
+                        </button>
+                        <a href="{{ url_for('recebimento_views.pendencias_ibscbs') }}" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-times"></i> Limpar
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela de Pendencias -->
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 70px;">Tipo</th>
+                            <th style="width: 120px;">Documento</th>
+                            <th>Fornecedor</th>
+                            <th style="width: 80px;">NCM</th>
+                            <th style="width: 100px;" class="text-end">Valor</th>
+                            <th style="width: 130px;">Motivo</th>
+                            <th style="width: 90px;">Status</th>
+                            <th style="width: 100px;">Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in paginacao.items %}
+                        <tr>
+                            <td>
+                                {% if item.tipo_documento == 'CTe' %}
+                                <span class="badge bg-info">CTe</span>
+                                {% else %}
+                                <span class="badge bg-secondary">NF-e</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="fw-bold">{{ item.numero_documento or '-' }}</span>
+                                {% if item.serie %}
+                                <small class="text-muted d-block">Serie {{ item.serie }}</small>
+                                {% endif %}
+                                {% if item.data_emissao %}
+                                <small class="text-muted d-block">{{ item.data_emissao.strftime('%d/%m/%Y') }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="d-block fw-bold" title="{{ item.razao_fornecedor }}">
+                                    {{ item.razao_fornecedor[:30] + '...' if item.razao_fornecedor and item.razao_fornecedor|length > 30 else item.razao_fornecedor or '-' }}
+                                </span>
+                                <small class="text-muted">
+                                    {{ item.cnpj_fornecedor|formatar_cnpj }}
+                                    {% if item.uf_fornecedor %}
+                                    <span class="badge bg-light text-dark ms-1">{{ item.uf_fornecedor }}</span>
+                                    {% endif %}
+                                </small>
+                                <br>
+                                <small class="text-muted">
+                                    {% if item.regime_tributario == '3' %}
+                                    <span class="badge bg-warning text-dark">Regime Normal</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">{{ item.regime_tributario_descricao or 'N/A' }}</span>
+                                    {% endif %}
+                                </small>
+                            </td>
+                            <td>
+                                {% if item.ncm_prefixo %}
+                                <code class="fs-6">{{ item.ncm_prefixo }}</code>
+                                {% if item.ncm != item.ncm_prefixo %}
+                                <small class="text-muted d-block">{{ item.ncm }}</small>
+                                {% endif %}
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                {% if item.valor_total %}
+                                R$ {{ "{:,.2f}".format(item.valor_total|float).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                                {% else %}-{% endif %}
+                            </td>
+                            <td>
+                                {% if item.motivo_pendencia == 'nao_destacou' %}
+                                <span class="badge bg-danger">Nao destacou</span>
+                                {% elif item.motivo_pendencia == 'cst_incorreto' %}
+                                <span class="badge bg-warning text-dark">CST incorreto</span>
+                                {% elif item.motivo_pendencia == 'aliquota_divergente' %}
+                                <span class="badge bg-info">Aliq. divergente</span>
+                                {% elif item.motivo_pendencia == 'valor_zerado' %}
+                                <span class="badge bg-secondary">Valor zerado</span>
+                                {% else %}
+                                <span class="badge bg-secondary">{{ item.motivo_pendencia }}</span>
+                                {% endif %}
+                                {% if item.detalhes_pendencia %}
+                                <i class="fas fa-info-circle text-muted ms-1" data-bs-toggle="tooltip"
+                                   title="{{ item.detalhes_pendencia[:100] }}"></i>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if item.status == 'pendente' %}
+                                <span class="badge bg-warning text-dark">Pendente</span>
+                                {% elif item.status == 'aprovado' %}
+                                <span class="badge bg-success">Aprovado</span>
+                                {% elif item.status == 'rejeitado' %}
+                                <span class="badge bg-danger">Rejeitado</span>
+                                {% else %}
+                                <span class="badge bg-secondary">{{ item.status }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if item.status == 'pendente' %}
+                                <div class="btn-group btn-group-sm">
+                                    <button type="button" class="btn btn-success"
+                                            onclick="abrirModalResolver({{ item.id }}, '{{ item.tipo_documento }}', '{{ item.numero_documento }}', 'aprovar')"
+                                            title="Aprovar">
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-danger"
+                                            onclick="abrirModalResolver({{ item.id }}, '{{ item.tipo_documento }}', '{{ item.numero_documento }}', 'rejeitar')"
+                                            title="Rejeitar">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-info"
+                                            onclick="verDetalhes({{ item.id }})"
+                                            title="Ver detalhes">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                                {% else %}
+                                <small class="text-muted" title="Resolvido por {{ item.resolvido_por }}">
+                                    {{ item.resolvido_por or '-' }}
+                                </small>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="8" class="text-center py-4">
+                                <i class="fas fa-check-circle fa-3x text-success mb-3 d-block"></i>
+                                <span class="text-muted">Nenhuma pendencia IBS/CBS encontrada</span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Paginacao -->
+    {% if paginacao.pages > 1 %}
+    <nav class="mt-3 d-flex justify-content-center">
+        <ul class="pagination">
+            <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('recebimento_views.pendencias_ibscbs', page=1, **filtros) }}">
+                    <i class="fas fa-angle-double-left"></i>
+                </a>
+            </li>
+            <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('recebimento_views.pendencias_ibscbs', page=paginacao.page-1, **filtros) }}">
+                    <i class="fas fa-angle-left"></i>
+                </a>
+            </li>
+
+            {% for p in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                {% if p %}
+                    <li class="page-item {% if p == paginacao.page %}active{% endif %}">
+                        <a class="page-link" href="{{ url_for('recebimento_views.pendencias_ibscbs', page=p, **filtros) }}">{{ p }}</a>
+                    </li>
+                {% else %}
+                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                {% endif %}
+            {% endfor %}
+
+            <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('recebimento_views.pendencias_ibscbs', page=paginacao.page+1, **filtros) }}">
+                    <i class="fas fa-angle-right"></i>
+                </a>
+            </li>
+            <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('recebimento_views.pendencias_ibscbs', page=paginacao.pages, **filtros) }}">
+                    <i class="fas fa-angle-double-right"></i>
+                </a>
+            </li>
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+
+<!-- Modal Resolver Pendencia -->
+<div class="modal fade" id="modalResolver" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header" id="modalResolverHeader">
+                <h5 class="modal-title" id="modalResolverTitle">
+                    <i class="fas fa-check me-2"></i>Resolver Pendencia
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="resolver-id">
+                <input type="hidden" id="resolver-acao">
+
+                <div class="alert alert-info mb-3" id="resolver-info"></div>
+
+                <div class="mb-3" id="resolver-opcoes-aprovar">
+                    <label class="form-label">Motivo da aprovacao</label>
+                    <select class="form-select" id="resolver-resolucao-aprovar">
+                        <option value="fornecedor_isento">Fornecedor isento de IBS/CBS</option>
+                        <option value="ncm_nao_tributa">NCM nao tributa IBS/CBS</option>
+                        <option value="erro_sistema">Erro no sistema - ignorar</option>
+                    </select>
+                </div>
+
+                <div class="mb-3 d-none" id="resolver-opcoes-rejeitar">
+                    <label class="form-label">Motivo da rejeicao</label>
+                    <select class="form-select" id="resolver-resolucao-rejeitar">
+                        <option value="devolvido_fornecedor">Documento devolvido ao fornecedor</option>
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Justificativa <span class="text-danger">*</span></label>
+                    <textarea class="form-control" id="resolver-justificativa" rows="3"
+                              placeholder="Descreva o motivo da resolucao..." required></textarea>
+                </div>
+
+                <div id="resolver-feedback" class="alert d-none"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnResolver" onclick="submeterResolucao()">
+                    <span class="spinner-border spinner-border-sm d-none" id="resolver-spinner"></span>
+                    <i class="fas fa-check me-1"></i> Confirmar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Detalhes -->
+<div class="modal fade" id="modalDetalhes" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-info-circle me-2"></i>Detalhes da Pendencia
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="detalhes-conteudo">
+                <!-- Conteudo carregado dinamicamente -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    'use strict';
+
+    let modalResolver = null;
+    let modalDetalhes = null;
+
+    document.addEventListener('DOMContentLoaded', function() {
+        modalResolver = new bootstrap.Modal(document.getElementById('modalResolver'));
+        modalDetalhes = new bootstrap.Modal(document.getElementById('modalDetalhes'));
+
+        // Inicializar tooltips
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    });
+
+    // Abrir modal para resolver pendencia
+    window.abrirModalResolver = function(id, tipo, numero, acao) {
+        document.getElementById('resolver-id').value = id;
+        document.getElementById('resolver-acao').value = acao;
+
+        const header = document.getElementById('modalResolverHeader');
+        const title = document.getElementById('modalResolverTitle');
+        const btn = document.getElementById('btnResolver');
+        const info = document.getElementById('resolver-info');
+        const opcoesAprovar = document.getElementById('resolver-opcoes-aprovar');
+        const opcoesRejeitar = document.getElementById('resolver-opcoes-rejeitar');
+
+        if (acao === 'aprovar') {
+            header.className = 'modal-header bg-success text-white';
+            title.innerHTML = '<i class="fas fa-check me-2"></i>Aprovar Pendencia';
+            btn.className = 'btn btn-success';
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm d-none" id="resolver-spinner"></span><i class="fas fa-check me-1"></i> Aprovar';
+            info.innerHTML = `<strong>Aprovar</strong> ${tipo} ${numero || ''}`;
+            opcoesAprovar.classList.remove('d-none');
+            opcoesRejeitar.classList.add('d-none');
+        } else {
+            header.className = 'modal-header bg-danger text-white';
+            title.innerHTML = '<i class="fas fa-times me-2"></i>Rejeitar Pendencia';
+            btn.className = 'btn btn-danger';
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm d-none" id="resolver-spinner"></span><i class="fas fa-times me-1"></i> Rejeitar';
+            info.innerHTML = `<strong>Rejeitar</strong> ${tipo} ${numero || ''}<br><small class="text-muted">O documento sera marcado para devolucao ao fornecedor.</small>`;
+            opcoesAprovar.classList.add('d-none');
+            opcoesRejeitar.classList.remove('d-none');
+        }
+
+        document.getElementById('resolver-justificativa').value = '';
+        document.getElementById('resolver-feedback').classList.add('d-none');
+
+        modalResolver.show();
+    };
+
+    // Submeter resolucao
+    window.submeterResolucao = function() {
+        const id = document.getElementById('resolver-id').value;
+        const acao = document.getElementById('resolver-acao').value;
+        const justificativa = document.getElementById('resolver-justificativa').value.trim();
+
+        if (!justificativa) {
+            mostrarFeedback('Justificativa obrigatoria', 'danger');
+            return;
+        }
+
+        let resolucao;
+        if (acao === 'aprovar') {
+            resolucao = document.getElementById('resolver-resolucao-aprovar').value;
+        } else {
+            resolucao = document.getElementById('resolver-resolucao-rejeitar').value;
+        }
+
+        const spinner = document.getElementById('resolver-spinner');
+        spinner.classList.remove('d-none');
+
+        fetch(`/operacional/compras/pendencias-ibscbs/${id}/resolver`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({
+                resolucao: resolucao,
+                justificativa: justificativa
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            spinner.classList.add('d-none');
+            if (data.sucesso) {
+                toastr.success('Pendencia resolvida com sucesso');
+                modalResolver.hide();
+                setTimeout(() => location.reload(), 500);
+            } else {
+                mostrarFeedback(data.mensagem || 'Erro ao resolver', 'danger');
+            }
+        })
+        .catch(err => {
+            spinner.classList.add('d-none');
+            mostrarFeedback('Erro de conexao', 'danger');
+            console.error(err);
+        });
+    };
+
+    // Ver detalhes (pode ser expandido para mostrar mais info)
+    window.verDetalhes = function(id) {
+        // Por enquanto apenas mostra uma mensagem
+        // TODO: Implementar endpoint para buscar detalhes completos
+        document.getElementById('detalhes-conteudo').innerHTML = `
+            <div class="text-center py-4">
+                <i class="fas fa-info-circle fa-3x text-info mb-3"></i>
+                <p>Detalhes da pendencia ID: <strong>${id}</strong></p>
+                <p class="text-muted">Funcionalidade em desenvolvimento.</p>
+            </div>
+        `;
+        modalDetalhes.show();
+    };
+
+    // Mostrar feedback no modal
+    function mostrarFeedback(mensagem, tipo) {
+        const el = document.getElementById('resolver-feedback');
+        el.textContent = mensagem;
+        el.className = `alert alert-${tipo}`;
+        el.classList.remove('d-none');
+    }
+
+    // Helper para CSRF token
+    function getCSRFToken() {
+        return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    }
+})();
+</script>
+{% endblock %}

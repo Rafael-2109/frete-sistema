@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 def identificar_grupo_por_cnpj(cnpj):
     """
     Identifica grupo empresarial pelo prefixo do CNPJ (8 primeiros dígitos)
-    Retorna 'RESTANTE' se não pertencer a nenhum grupo
+    Retorna 'GERAL' se não pertencer a nenhum grupo
     """
     if not cnpj:
         return 'GERAL'

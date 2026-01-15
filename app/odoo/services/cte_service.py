@@ -43,7 +43,7 @@ import json
 from app import db
 from app.fretes.models import ConhecimentoTransporte, Frete
 from app.odoo.utils.connection import get_odoo_connection
-from app.odoo.utils.cte_xml_parser import extrair_info_complementar
+from app.odoo.utils.cte_xml_parser import extrair_info_complementar, CTeXMLParser
 from app.utils.file_storage import get_file_storage
 from app.utils.timezone import agora_utc
 
@@ -662,8 +662,61 @@ class CteService:
             cte.tomador_e_empresa = cte.calcular_tomador_e_empresa()
 
             db.session.add(cte)
+            db.session.flush()  # Para obter o ID do CTe
+
+            # ================================================
+            # 🆕 VALIDAÇÃO IBS/CBS (Reforma Tributária 2026)
+            # ================================================
+            # Apenas para CTes normais que são de tomador empresa
+            if cte.tomador_e_empresa:
+                try:
+                    self._validar_ibscbs_cte(cte, xml_base64)
+                except Exception as e:
+                    logger.warning(f"   ⚠️  Erro na validação IBS/CBS (não crítico): {e}")
 
             return {'novo': True}
+
+    def _validar_ibscbs_cte(self, cte: ConhecimentoTransporte, xml_base64: str = None) -> None:
+        """
+        Valida IBS/CBS do CTe (Reforma Tributária 2026)
+
+        Regra:
+        - Se emitente for Regime Normal (CRT=3), DEVE destacar IBS/CBS
+        - Se não destacar, registra pendência fiscal
+
+        Args:
+            cte: ConhecimentoTransporte recém criado/atualizado
+            xml_base64: XML do CTe em base64 (opcional)
+        """
+        try:
+            from app.recebimento.services.validacao_ibscbs_service import validacao_ibscbs_service
+
+            # Preparar conteúdo XML se disponível
+            xml_content = None
+            if xml_base64:
+                try:
+                    xml_bytes = base64.b64decode(xml_base64)
+                    try:
+                        xml_content = xml_bytes.decode('utf-8')
+                    except UnicodeDecodeError:
+                        xml_content = xml_bytes.decode('iso-8859-1')
+                except Exception as e:
+                    logger.warning(f"   ⚠️  Erro ao decodificar XML para validação IBS/CBS: {e}")
+
+            # Executar validação
+            ok, pendencia, msg = validacao_ibscbs_service.validar_cte(cte, xml_content)
+
+            if ok:
+                logger.info(f"   ✅ Validação IBS/CBS: {msg}")
+            else:
+                logger.warning(f"   ⚠️  Validação IBS/CBS: {msg}")
+                if pendencia:
+                    logger.warning(f"   📋 Pendência fiscal criada: ID={pendencia.id}")
+
+        except ImportError as e:
+            logger.debug(f"   ℹ️  Service de validação IBS/CBS não disponível: {e}")
+        except Exception as e:
+            logger.warning(f"   ⚠️  Erro na validação IBS/CBS: {e}")
 
     def _salvar_arquivos_cte(
         self,

@@ -1237,3 +1237,253 @@ class ValidacaoFiscalService:
         logger.info(f"1a compra rejeitada: cadastro={cadastro_id}")
 
         return {'sucesso': True, 'mensagem': 'Cadastro rejeitado'}
+
+    # =========================================================================
+    # VALIDACAO IBS/CBS (Reforma Tributaria 2026)
+    # =========================================================================
+
+    def validar_ibscbs_nfe(
+        self,
+        odoo_dfe_id: int,
+        linhas: List[Dict] = None
+    ) -> Dict:
+        """
+        Valida IBS/CBS nas linhas de uma NF-e.
+
+        Regra:
+        - Se emitente for Regime Normal (CRT=3)
+        - E o NCM (4 primeiros digitos) estiver na tabela de NCMs validados
+        - Entao DEVE destacar IBS/CBS
+
+        Args:
+            odoo_dfe_id: ID do DFE no Odoo
+            linhas: Linhas ja carregadas (opcional, busca se nao fornecido)
+
+        Returns:
+            {
+                'validado': bool,
+                'pendencias_criadas': int,
+                'ncm_nao_cadastrados': List[str],
+                'detalhes': str
+            }
+        """
+        from app.recebimento.models import NcmIbsCbsValidado, PendenciaFiscalIbsCbs
+        from app.recebimento.services.validacao_ibscbs_service import validacao_ibscbs_service
+
+        resultado = {
+            'validado': True,
+            'pendencias_criadas': 0,
+            'ncm_nao_cadastrados': [],
+            'detalhes': ''
+        }
+
+        try:
+            odoo = self._get_odoo()
+
+            # Buscar DFE
+            dfe = self._buscar_dfe(odoo_dfe_id)
+            if not dfe:
+                resultado['detalhes'] = f'DFE {odoo_dfe_id} nao encontrado'
+                return resultado
+
+            # Verificar regime tributario
+            crt = dfe.get('nfe_infnfe_emit_crt')
+            regime = str(crt) if crt and crt is not False else None
+
+            # Se nao for Regime Normal, nao valida
+            if regime not in ['3']:  # Apenas Regime Normal
+                resultado['detalhes'] = f'Regime tributario {regime} - IBS/CBS nao obrigatorio'
+                return resultado
+
+            # Extrair dados do emitente
+            cnpj = self._extrair_cnpj(dfe)
+            razao = dfe.get('nfe_infnfe_emit_xnome', '')
+            chave_nfe = dfe.get('protnfe_infnfe_chnfe')
+            numero_nf = dfe.get('nfe_infnfe_ide_nnf')
+            serie_nf = dfe.get('nfe_infnfe_ide_serie')
+            data_emissao_str = dfe.get('nfe_infnfe_ide_dhemi')
+
+            # Buscar linhas se nao fornecidas
+            if linhas is None:
+                linhas = self._buscar_linhas_dfe_ibscbs(odoo_dfe_id)
+
+            if not linhas:
+                resultado['detalhes'] = 'Sem linhas de produto'
+                return resultado
+
+            # Para cada linha, validar IBS/CBS com validacao COMPLETA de campos
+            for linha in linhas:
+                ncm = linha.get('det_prod_ncm', '')
+                ncm_prefixo = ncm[:4] if ncm and len(ncm) >= 4 else None
+
+                if not ncm_prefixo:
+                    continue
+
+                # Verificar se NCM esta na tabela de validados
+                ncm_validado = NcmIbsCbsValidado.query.filter_by(
+                    ncm_prefixo=ncm_prefixo,
+                    ativo=True
+                ).first()
+
+                if not ncm_validado:
+                    # NCM nao cadastrado - sugerir para cadastro
+                    if ncm_prefixo not in resultado['ncm_nao_cadastrados']:
+                        resultado['ncm_nao_cadastrados'].append(ncm_prefixo)
+                    continue
+
+                # NCM esta na tabela - montar estrutura com TODOS os campos para validacao
+                ibscbs_valores = {
+                    # CST e ClassTrib
+                    'cst': linha.get('det_imposto_ibscbs_cst'),
+                    'class_trib': linha.get('det_imposto_ibscbs_classtrib'),
+                    # Base de Calculo
+                    'base_calculo': self._to_decimal(linha.get('det_imposto_ibscbs_vbc')),
+                    # IBS UF com reducao e aliquota efetiva
+                    'ibs_uf_aliquota': self._to_decimal(linha.get('det_imposto_ibscbs_ibs_uf_aliq')),
+                    'ibs_uf_reducao': self._to_decimal(linha.get('det_imposto_ibscbs_ibs_uf_redaliq')),
+                    'ibs_uf_aliq_efetiva': self._to_decimal(linha.get('det_imposto_ibscbs_ibs_uf_aliqefet')),
+                    'ibs_uf_valor': self._to_decimal(linha.get('det_imposto_ibscbs_ibs_uf_valor')),
+                    # IBS Municipio com reducao e aliquota efetiva
+                    'ibs_mun_aliquota': self._to_decimal(linha.get('det_imposto_ibscbs_ibs_mun_aliq')),
+                    'ibs_mun_reducao': self._to_decimal(linha.get('det_imposto_ibscbs_ibs_mun_redaliq')),
+                    'ibs_mun_aliq_efetiva': self._to_decimal(linha.get('det_imposto_ibscbs_ibs_mun_aliqefet')),
+                    'ibs_mun_valor': self._to_decimal(linha.get('det_imposto_ibscbs_ibs_mun_valor')),
+                    # IBS Total
+                    'ibs_total': self._to_decimal(linha.get('det_imposto_ibscbs_ibs_valor')),
+                    # CBS com reducao e aliquota efetiva
+                    'cbs_aliquota': self._to_decimal(linha.get('det_imposto_ibscbs_cbs_aliq')),
+                    'cbs_reducao': self._to_decimal(linha.get('det_imposto_ibscbs_cbs_redaliq')),
+                    'cbs_aliq_efetiva': self._to_decimal(linha.get('det_imposto_ibscbs_cbs_aliqefet')),
+                    'cbs_valor': self._to_decimal(linha.get('det_imposto_ibscbs_cbs_valor'))
+                }
+
+                valor_produto = self._to_decimal(linha.get('det_prod_vprod')) or 0
+                dados_documento = {
+                    'chave_acesso': chave_nfe,
+                    'numero_documento': numero_nf,
+                    'serie': serie_nf,
+                    'data_emissao': data_emissao_str
+                }
+
+                # Usar validacao completa de campos do service
+                ok, motivo, divergencias = validacao_ibscbs_service.validar_nfe_linha(
+                    ncm=ncm,
+                    ibscbs_valores=ibscbs_valores,
+                    valor_produto=valor_produto,
+                    cnpj_fornecedor=cnpj,
+                    dados_documento=dados_documento
+                )
+
+                if not ok:
+                    resultado['validado'] = False
+
+                    # Verificar se ja existe pendencia para esta chave
+                    pendencia_existente = PendenciaFiscalIbsCbs.query.filter_by(
+                        chave_acesso=chave_nfe
+                    ).first()
+
+                    if not pendencia_existente:
+                        detalhes = "; ".join(divergencias) if divergencias else 'IBS/CBS com valores divergentes'
+
+                        pendencia = PendenciaFiscalIbsCbs(
+                            tipo_documento='NF-e',
+                            chave_acesso=chave_nfe,
+                            numero_documento=numero_nf,
+                            serie=serie_nf,
+                            data_emissao=self._parse_date(data_emissao_str) if data_emissao_str else None,
+                            odoo_dfe_id=odoo_dfe_id,
+                            cnpj_fornecedor=cnpj,
+                            razao_fornecedor=razao,
+                            regime_tributario=regime,
+                            regime_tributario_descricao=PendenciaFiscalIbsCbs.get_regime_descricao(regime),
+                            ncm=ncm,
+                            ncm_prefixo=ncm_prefixo,
+                            valor_total=valor_produto,
+                            valor_base_calculo=ibscbs_valores.get('base_calculo'),
+                            # Valores IBS/CBS encontrados
+                            ibscbs_cst=ibscbs_valores.get('cst'),
+                            ibscbs_class_trib=ibscbs_valores.get('class_trib'),
+                            ibscbs_base=ibscbs_valores.get('base_calculo'),
+                            ibs_uf_aliq=ibscbs_valores.get('ibs_uf_aliquota'),
+                            ibs_uf_valor=ibscbs_valores.get('ibs_uf_valor'),
+                            ibs_mun_aliq=ibscbs_valores.get('ibs_mun_aliquota'),
+                            ibs_mun_valor=ibscbs_valores.get('ibs_mun_valor'),
+                            ibs_total=ibscbs_valores.get('ibs_total'),
+                            cbs_aliq=ibscbs_valores.get('cbs_aliquota'),
+                            cbs_valor=ibscbs_valores.get('cbs_valor'),
+                            motivo_pendencia=motivo or 'aliquota_divergente',
+                            detalhes_pendencia=detalhes,
+                            status='pendente',
+                            criado_por='SISTEMA'
+                        )
+
+                        db.session.add(pendencia)
+                        db.session.commit()
+                        resultado['pendencias_criadas'] += 1
+
+                        logger.warning(
+                            f"Pendencia IBS/CBS criada: NF-e {numero_nf}, NCM {ncm}, fornecedor {cnpj}"
+                        )
+                        logger.warning(f"   Divergencias: {detalhes}")
+
+            if resultado['ncm_nao_cadastrados']:
+                resultado['detalhes'] = f"NCMs nao cadastrados para validacao: {', '.join(resultado['ncm_nao_cadastrados'])}"
+
+        except Exception as e:
+            logger.error(f"Erro ao validar IBS/CBS da NF-e {odoo_dfe_id}: {e}")
+            resultado['detalhes'] = f'Erro: {str(e)}'
+
+        return resultado
+
+    def _buscar_linhas_dfe_ibscbs(self, odoo_dfe_id: int) -> List[Dict]:
+        """Busca linhas do DFE com campos IBS/CBS completos (incluindo reducao e aliquota efetiva)"""
+        odoo = self._get_odoo()
+
+        campos = [
+            'id', 'dfe_id', 'product_id',
+            'det_prod_xprod', 'det_prod_ncm', 'det_prod_cfop',
+            'det_prod_vprod',
+            # Campos IBS/CBS (dependem do localizador brasileiro suportar)
+            'det_imposto_ibscbs_cst',
+            'det_imposto_ibscbs_classtrib',
+            'det_imposto_ibscbs_vbc',
+            # IBS UF
+            'det_imposto_ibscbs_ibs_uf_aliq',
+            'det_imposto_ibscbs_ibs_uf_redaliq',
+            'det_imposto_ibscbs_ibs_uf_aliqefet',
+            'det_imposto_ibscbs_ibs_uf_valor',
+            # IBS Municipio
+            'det_imposto_ibscbs_ibs_mun_aliq',
+            'det_imposto_ibscbs_ibs_mun_redaliq',
+            'det_imposto_ibscbs_ibs_mun_aliqefet',
+            'det_imposto_ibscbs_ibs_mun_valor',
+            # IBS Total
+            'det_imposto_ibscbs_ibs_valor',
+            # CBS
+            'det_imposto_ibscbs_cbs_aliq',
+            'det_imposto_ibscbs_cbs_redaliq',
+            'det_imposto_ibscbs_cbs_aliqefet',
+            'det_imposto_ibscbs_cbs_valor'
+        ]
+
+        try:
+            return odoo.search_read(
+                'l10n_br_ciel_it_account.dfe.line',
+                [['dfe_id', '=', odoo_dfe_id]],
+                fields=campos
+            )
+        except Exception as e:
+            # Se campos IBS/CBS nao existirem no Odoo, usar campos basicos
+            logger.debug(f"Campos IBS/CBS nao disponiveis no Odoo: {e}")
+            return self._buscar_linhas_dfe(odoo_dfe_id)
+
+    def _parse_date(self, date_str):
+        """Converte string de data para date object"""
+        if not date_str:
+            return None
+        try:
+            if isinstance(date_str, str):
+                return datetime.strptime(date_str.split()[0], '%Y-%m-%d').date()
+            return date_str
+        except Exception:
+            return None

@@ -6,6 +6,8 @@ Rotas:
 - GET /operacional/compras/divergencias - Tela de divergencias
 - GET /operacional/compras/primeira-compra - Tela de primeira compra
 - GET /operacional/compras/perfis-fiscais - Tela de perfis fiscais
+- GET /operacional/compras/ncm-ibscbs - Cadastro de NCMs IBS/CBS
+- GET /operacional/compras/pendencias-ibscbs - Pendencias IBS/CBS
 
 Referencia: .claude/references/RECEBIMENTO_MATERIAIS.md
 """
@@ -14,13 +16,15 @@ import json
 from decimal import Decimal
 from datetime import datetime
 
-from flask import Blueprint, render_template, request
-from flask_login import login_required
+from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for
+from flask_login import login_required, current_user
 
 from app.recebimento.models import (
     DivergenciaFiscal,
     CadastroPrimeiraCompra,
-    PerfilFiscalProdutoFornecedor
+    PerfilFiscalProdutoFornecedor,
+    NcmIbsCbsValidado,
+    PendenciaFiscalIbsCbs
 )
 from app import db
 
@@ -305,3 +309,318 @@ def perfis_fiscais():
             'cnpj': cnpj
         }
     )
+
+
+# =============================================================================
+# TELA 4: CADASTRO NCM IBS/CBS (Reforma Tributaria 2026)
+# =============================================================================
+
+def _serializar_ncm_ibscbs(item):
+    """Serializa item NCM IBS/CBS para JSON"""
+    def to_float(val):
+        if val is None:
+            return None
+        if isinstance(val, Decimal):
+            return float(val)
+        return val
+
+    def to_str(val):
+        if val is None:
+            return None
+        if isinstance(val, datetime):
+            return val.isoformat()
+        return str(val)
+
+    return {
+        'id': item.id,
+        'ncm_prefixo': item.ncm_prefixo,
+        'descricao_ncm': item.descricao_ncm,
+        'cst_esperado': item.cst_esperado,
+        'class_trib_codigo': item.class_trib_codigo,
+        'aliquota_ibs_uf': to_float(item.aliquota_ibs_uf),
+        'aliquota_ibs_mun': to_float(item.aliquota_ibs_mun),
+        'aliquota_cbs': to_float(item.aliquota_cbs),
+        'reducao_aliquota': to_float(item.reducao_aliquota),
+        'observacao': item.observacao,
+        'ativo': item.ativo,
+        'validado_por': item.validado_por,
+        'validado_em': to_str(item.validado_em),
+        'criado_em': to_str(item.criado_em)
+    }
+
+
+@recebimento_views_bp.route('/ncm-ibscbs')
+@login_required
+def ncm_ibscbs():
+    """
+    Tela CRUD de NCMs validados para IBS/CBS.
+    Cadastro dos 4 primeiros digitos do NCM com aliquotas esperadas.
+    """
+    # Parametros de filtro
+    ncm = request.args.get('ncm', '')
+    apenas_ativos = request.args.get('apenas_ativos', '1') == '1'
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+
+    # Query base
+    query = NcmIbsCbsValidado.query
+
+    # Aplicar filtros
+    if apenas_ativos:
+        query = query.filter_by(ativo=True)
+    if ncm:
+        query = query.filter(
+            db.or_(
+                NcmIbsCbsValidado.ncm_prefixo.ilike(f'%{ncm}%'),
+                NcmIbsCbsValidado.descricao_ncm.ilike(f'%{ncm}%')
+            )
+        )
+
+    # Ordenar por NCM
+    paginacao = query.order_by(
+        NcmIbsCbsValidado.ncm_prefixo.asc()
+    ).paginate(
+        page=page,
+        per_page=per_page,
+        error_out=False
+    )
+
+    # Estatisticas
+    stats = {
+        'total': NcmIbsCbsValidado.query.count(),
+        'ativos': NcmIbsCbsValidado.query.filter_by(ativo=True).count(),
+        'inativos': NcmIbsCbsValidado.query.filter_by(ativo=False).count()
+    }
+
+    # Serializar itens para JSON (usado nos modais)
+    itens_json = json.dumps([
+        _serializar_ncm_ibscbs(item)
+        for item in paginacao.items
+    ])
+
+    return render_template(
+        'ncm_ibscbs.html',
+        paginacao=paginacao,
+        stats=stats,
+        filtros={
+            'ncm': ncm,
+            'apenas_ativos': apenas_ativos
+        },
+        itens_json=itens_json
+    )
+
+
+@recebimento_views_bp.route('/ncm-ibscbs/salvar', methods=['POST'])
+@login_required
+def ncm_ibscbs_salvar():
+    """Salva (cria ou atualiza) um cadastro NCM IBS/CBS"""
+    try:
+        ncm_id = request.form.get('id')
+        ncm_prefixo = request.form.get('ncm_prefixo', '').strip()
+
+        if not ncm_prefixo or len(ncm_prefixo) != 4:
+            flash('NCM prefixo deve ter exatamente 4 digitos', 'danger')
+            return redirect(url_for('recebimento_views.ncm_ibscbs'))
+
+        # Verificar se é edição ou novo
+        if ncm_id:
+            ncm = NcmIbsCbsValidado.query.get(int(ncm_id))
+            if not ncm:
+                flash('NCM nao encontrado', 'danger')
+                return redirect(url_for('recebimento_views.ncm_ibscbs'))
+        else:
+            # Verificar se já existe
+            existente = NcmIbsCbsValidado.query.filter_by(ncm_prefixo=ncm_prefixo).first()
+            if existente:
+                flash(f'NCM {ncm_prefixo} ja cadastrado', 'warning')
+                return redirect(url_for('recebimento_views.ncm_ibscbs'))
+            ncm = NcmIbsCbsValidado(ncm_prefixo=ncm_prefixo)
+
+        # Atualizar campos
+        ncm.descricao_ncm = request.form.get('descricao_ncm', '').strip() or None
+        ncm.cst_esperado = request.form.get('cst_esperado', '').strip() or None
+        ncm.class_trib_codigo = request.form.get('class_trib_codigo', '').strip() or None
+
+        # Aliquotas
+        def parse_decimal(val):
+            if not val:
+                return None
+            try:
+                return Decimal(str(val).replace(',', '.'))
+            except:
+                return None
+
+        ncm.aliquota_ibs_uf = parse_decimal(request.form.get('aliquota_ibs_uf'))
+        ncm.aliquota_ibs_mun = parse_decimal(request.form.get('aliquota_ibs_mun'))
+        ncm.aliquota_cbs = parse_decimal(request.form.get('aliquota_cbs'))
+        ncm.reducao_aliquota = parse_decimal(request.form.get('reducao_aliquota'))
+
+        ncm.observacao = request.form.get('observacao', '').strip() or None
+        ncm.ativo = request.form.get('ativo') == '1'
+        ncm.validado_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
+        ncm.validado_em = datetime.utcnow()
+
+        if not ncm_id:
+            db.session.add(ncm)
+
+        db.session.commit()
+
+        acao = 'atualizado' if ncm_id else 'cadastrado'
+        flash(f'NCM {ncm_prefixo} {acao} com sucesso!', 'success')
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao salvar: {str(e)}', 'danger')
+
+    return redirect(url_for('recebimento_views.ncm_ibscbs'))
+
+
+@recebimento_views_bp.route('/ncm-ibscbs/<int:ncm_id>/excluir', methods=['POST'])
+@login_required
+def ncm_ibscbs_excluir(ncm_id):
+    """Exclui (desativa) um cadastro NCM IBS/CBS"""
+    try:
+        ncm = NcmIbsCbsValidado.query.get(ncm_id)
+        if not ncm:
+            flash('NCM nao encontrado', 'danger')
+            return redirect(url_for('recebimento_views.ncm_ibscbs'))
+
+        # Soft delete - apenas desativa
+        ncm.ativo = False
+        ncm.atualizado_em = datetime.utcnow()
+        db.session.commit()
+
+        flash(f'NCM {ncm.ncm_prefixo} desativado com sucesso', 'success')
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao excluir: {str(e)}', 'danger')
+
+    return redirect(url_for('recebimento_views.ncm_ibscbs'))
+
+
+# =============================================================================
+# TELA 5: PENDENCIAS IBS/CBS
+# =============================================================================
+
+@recebimento_views_bp.route('/pendencias-ibscbs')
+@login_required
+def pendencias_ibscbs():
+    """
+    Tela de pendencias fiscais IBS/CBS.
+    Lista CTes e NF-es de fornecedores Regime Normal que nao destacaram IBS/CBS.
+    """
+    # Parametros de filtro
+    tipo_doc = request.args.get('tipo_doc', '')
+    status = request.args.get('status', '')
+    cnpj = request.args.get('cnpj', '')
+    motivo = request.args.get('motivo', '')
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+
+    # Query base
+    query = PendenciaFiscalIbsCbs.query
+
+    # Aplicar filtros
+    if tipo_doc:
+        query = query.filter_by(tipo_documento=tipo_doc)
+    if status:
+        query = query.filter_by(status=status)
+    if cnpj:
+        query = query.filter(PendenciaFiscalIbsCbs.cnpj_fornecedor.ilike(f'%{cnpj}%'))
+    if motivo:
+        query = query.filter_by(motivo_pendencia=motivo)
+
+    # Ordenar por data decrescente
+    paginacao = query.order_by(
+        PendenciaFiscalIbsCbs.criado_em.desc()
+    ).paginate(
+        page=page,
+        per_page=per_page,
+        error_out=False
+    )
+
+    # Estatisticas
+    stats = {
+        'total': PendenciaFiscalIbsCbs.query.count(),
+        'pendente': PendenciaFiscalIbsCbs.query.filter_by(status='pendente').count(),
+        'aprovado': PendenciaFiscalIbsCbs.query.filter_by(status='aprovado').count(),
+        'rejeitado': PendenciaFiscalIbsCbs.query.filter_by(status='rejeitado').count(),
+        'cte': PendenciaFiscalIbsCbs.query.filter_by(tipo_documento='CTe').count(),
+        'nfe': PendenciaFiscalIbsCbs.query.filter_by(tipo_documento='NF-e').count()
+    }
+
+    # Opcoes de filtros
+    opcoes_tipo_doc = [
+        ('', 'Todos'),
+        ('CTe', 'CTe'),
+        ('NF-e', 'NF-e')
+    ]
+    opcoes_status = [
+        ('', 'Todos'),
+        ('pendente', 'Pendente'),
+        ('aprovado', 'Aprovado'),
+        ('rejeitado', 'Rejeitado')
+    ]
+    opcoes_motivo = [
+        ('', 'Todos'),
+        ('nao_destacou', 'Nao destacou IBS/CBS'),
+        ('cst_incorreto', 'CST incorreto'),
+        ('aliquota_divergente', 'Aliquota divergente'),
+        ('valor_zerado', 'Valor zerado')
+    ]
+
+    return render_template(
+        'pendencias_ibscbs.html',
+        paginacao=paginacao,
+        stats=stats,
+        filtros={
+            'tipo_doc': tipo_doc,
+            'status': status,
+            'cnpj': cnpj,
+            'motivo': motivo
+        },
+        opcoes_tipo_doc=opcoes_tipo_doc,
+        opcoes_status=opcoes_status,
+        opcoes_motivo=opcoes_motivo
+    )
+
+
+@recebimento_views_bp.route('/pendencias-ibscbs/<int:pendencia_id>/resolver', methods=['POST'])
+@login_required
+def pendencia_ibscbs_resolver(pendencia_id):
+    """Resolve uma pendencia IBS/CBS"""
+    try:
+        pendencia = PendenciaFiscalIbsCbs.query.get(pendencia_id)
+        if not pendencia:
+            return jsonify({'sucesso': False, 'mensagem': 'Pendencia nao encontrada'}), 404
+
+        resolucao = request.json.get('resolucao')
+        justificativa = request.json.get('justificativa', '').strip()
+
+        if not justificativa:
+            return jsonify({'sucesso': False, 'mensagem': 'Justificativa obrigatoria'}), 400
+
+        # Determinar status baseado na resolucao
+        if resolucao in ['fornecedor_isento', 'ncm_nao_tributa', 'erro_sistema']:
+            pendencia.status = 'aprovado'
+        elif resolucao == 'devolvido_fornecedor':
+            pendencia.status = 'rejeitado'
+        else:
+            pendencia.status = 'aprovado'
+
+        pendencia.resolucao = resolucao
+        pendencia.justificativa = justificativa
+        pendencia.resolvido_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
+        pendencia.resolvido_em = datetime.utcnow()
+
+        db.session.commit()
+
+        return jsonify({
+            'sucesso': True,
+            'mensagem': f'Pendencia {pendencia_id} resolvida com sucesso'
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'sucesso': False, 'mensagem': str(e)}), 500

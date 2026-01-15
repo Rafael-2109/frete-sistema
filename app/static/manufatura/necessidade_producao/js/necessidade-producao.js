@@ -979,20 +979,28 @@ function renderizarModalSeparacoes(dados, codProduto, diaReferencia) {
     </div>`;
 
     // ============================================================
-    // 3. ACCORDION DE PEDIDOS
+    // 3. ACCORDION DE PEDIDOS (Em Separação + Não Enviados)
     // ============================================================
+    const totalPedidosSeparacao = dados.pedidos ? dados.pedidos.length : 0;
+    const totalPedidosNaoEnviados = dados.pedidos_nao_enviados ? dados.pedidos_nao_enviados.length : 0;
+    const totalGeral = totalPedidosSeparacao + totalPedidosNaoEnviados;
+
     html += '<div class="accordion mb-3" id="accordion-pedidos-sep">';
     html += `
         <div class="accordion-item">
             <h2 class="accordion-header" id="heading-pedidos-sep">
                 <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-pedidos-sep">
-                    <i class="fas fa-clipboard-list me-2"></i>Pedidos Não Sincronizados <span class="badge bg-success ms-2">${dados.pedidos ? dados.pedidos.length : 0}</span>
+                    <i class="fas fa-clipboard-list me-2"></i>Pedidos Não Sincronizados
+                    <span class="badge bg-success ms-2">${totalPedidosSeparacao}</span>
+                    ${totalPedidosNaoEnviados > 0 ? `<span class="badge bg-warning text-dark ms-1" title="Pedidos não enviados para separação">+${totalPedidosNaoEnviados}</span>` : ''}
                 </button>
             </h2>
             <div id="collapse-pedidos-sep" class="accordion-collapse collapse" data-bs-parent="#accordion-pedidos-sep">
                 <div class="accordion-body p-0">`;
 
+    // ========== SEÇÃO 1: Pedidos em Separação ==========
     if (dados.pedidos && dados.pedidos.length > 0) {
+        html += '<div class="px-3 pt-3 pb-1"><h6 class="text-success mb-2"><i class="fas fa-truck me-1"></i>Em Separação (aguardando faturamento)</h6></div>';
         html += '<div class="table-responsive"><table class="table table-sm table-bordered table-striped mb-0">';
         html += '<thead class="table-light"><tr>';
         html += '<th>Pedido</th><th>CNPJ</th><th>Cliente</th><th class="text-end">Qtd</th>';
@@ -1000,7 +1008,6 @@ function renderizarModalSeparacoes(dados, codProduto, diaReferencia) {
         html += '</tr></thead><tbody>';
 
         dados.pedidos.forEach(ped => {
-            // ✅ ADICIONAR: onclick na linha para abrir modal de detalhes
             const separacaoLoteId = ped.separacao_lote_id || '';
             html += `<tr onclick="abrirModalDetalhesSeparacao('${separacaoLoteId}')" style="cursor: pointer;" title="Clique para ver detalhes">`;
             html += `<td><strong>${ped.num_pedido}</strong></td>`;
@@ -1015,9 +1022,38 @@ function renderizarModalSeparacoes(dados, codProduto, diaReferencia) {
         });
 
         html += '</tbody></table></div>';
-    } else {
-        html += '<div class="alert alert-info mb-0"><i class="fas fa-info-circle me-2"></i>Nenhum pedido não sincronizado</div>';
     }
+
+    // ========== SEÇÃO 2: Pedidos NÃO Enviados para Separação ==========
+    if (dados.pedidos_nao_enviados && dados.pedidos_nao_enviados.length > 0) {
+        html += '<div class="px-3 pt-3 pb-1"><h6 class="text-warning mb-2"><i class="fas fa-exclamation-triangle me-1"></i>Não enviados para Separação</h6></div>';
+        html += '<div class="table-responsive"><table class="table table-sm table-bordered mb-0">';
+        html += '<thead class="table-warning"><tr>';
+        html += '<th>Pedido</th><th>CNPJ</th><th>Cliente</th><th class="text-end">Qtd Pendente</th>';
+        html += '<th class="text-end">Carteira</th><th class="text-end">Em Sep.</th><th>Dt. Entrega</th><th>Vendedor</th>';
+        html += '</tr></thead><tbody>';
+
+        dados.pedidos_nao_enviados.forEach(ped => {
+            html += `<tr>`;
+            html += `<td><strong>${ped.num_pedido}</strong></td>`;
+            html += `<td><small>${ped.cnpj_cpf || '-'}</small></td>`;
+            html += `<td>${ped.raz_social_red || '-'}</td>`;
+            html += `<td class="text-end text-warning fw-bold">${Math.round(ped.qtd).toLocaleString('pt-BR')}</td>`;
+            html += `<td class="text-end"><small>${Math.round(ped.qtd_carteira).toLocaleString('pt-BR')}</small></td>`;
+            html += `<td class="text-end"><small>${Math.round(ped.qtd_em_separacao).toLocaleString('pt-BR')}</small></td>`;
+            html += `<td>${ped.data_entrega_pedido ? formatarDataSemTimezone(ped.data_entrega_pedido) : '<span class="text-muted">S/ data</span>'}</td>`;
+            html += `<td><small>${ped.vendedor || '-'}</small></td>`;
+            html += '</tr>';
+        });
+
+        html += '</tbody></table></div>';
+    }
+
+    // Mensagem se não houver nenhum pedido
+    if (totalGeral === 0) {
+        html += '<div class="alert alert-info mb-0"><i class="fas fa-info-circle me-2"></i>Nenhum pedido pendente para este produto</div>';
+    }
+
     html += '</div></div></div></div>';
 
     // ============================================================

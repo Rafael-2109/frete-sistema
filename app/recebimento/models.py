@@ -313,3 +313,176 @@ class ValidacaoFiscalDfe(db.Model):
     def pode_prosseguir(self):
         """Retorna True se a NF pode prosseguir no fluxo"""
         return self.status == 'aprovado'
+
+
+class NcmIbsCbsValidado(db.Model):
+    """
+    NCMs validados pelo departamento fiscal para IBS/CBS.
+    Armazena os 4 primeiros digitos do NCM e aliquotas esperadas.
+
+    Reforma Tributaria 2026:
+    - IBS (Imposto sobre Bens e Servicos) = UF + Municipio
+    - CBS (Contribuicao sobre Bens e Servicos) = Federal
+
+    Uso:
+    - NF de fornecedor nao optante do Simples que contenha produto
+      com NCM nesta tabela DEVE destacar IBS/CBS
+    - Se nao destacar, gera pendencia fiscal
+    """
+    __tablename__ = 'ncm_ibscbs_validado'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # NCM (4 primeiros digitos)
+    ncm_prefixo = db.Column(db.String(4), nullable=False, unique=True, index=True)
+    descricao_ncm = db.Column(db.String(255), nullable=True)
+
+    # Aliquotas esperadas (para validacao)
+    aliquota_ibs_uf = db.Column(db.Numeric(5, 2), nullable=True)      # % IBS UF
+    aliquota_ibs_mun = db.Column(db.Numeric(5, 2), nullable=True)     # % IBS Municipio
+    aliquota_cbs = db.Column(db.Numeric(5, 2), nullable=True)         # % CBS Federal
+
+    # Reducao de aliquota (se aplicavel)
+    reducao_aliquota = db.Column(db.Numeric(5, 2), nullable=True)     # % Reducao
+
+    # CST esperado
+    cst_esperado = db.Column(db.String(10), nullable=True)
+
+    # Classificacao tributaria esperada (codigo do Odoo)
+    class_trib_codigo = db.Column(db.String(20), nullable=True)
+
+    # Observacoes
+    observacao = db.Column(db.Text, nullable=True)
+
+    # Controle
+    ativo = db.Column(db.Boolean, default=True, nullable=False)
+    validado_por = db.Column(db.String(100), nullable=True)
+    validado_em = db.Column(db.DateTime, nullable=True)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    atualizado_em = db.Column(db.DateTime, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<NcmIbsCbsValidado {self.ncm_prefixo}>'
+
+
+class PendenciaFiscalIbsCbs(db.Model):
+    """
+    Pendencias fiscais de IBS/CBS.
+    Registra documentos de fornecedores nao optantes do Simples
+    que deveriam destacar IBS/CBS mas nao destacaram.
+
+    Tipos de documento:
+    - CTe: Valida apenas pelo regime tributario
+    - NF-e: Valida pelo regime + NCM (4 primeiros digitos)
+
+    Status:
+    - pendente: Aguardando analise fiscal
+    - aprovado: Fornecedor isento/validado manualmente
+    - rejeitado: Documento devolvido ao fornecedor
+    """
+    __tablename__ = 'pendencia_fiscal_ibscbs'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Tipo de documento
+    TIPO_DOC_CHOICES = ['CTe', 'NF-e']
+    tipo_documento = db.Column(db.String(10), nullable=False, index=True)
+
+    # Identificacao do documento
+    chave_acesso = db.Column(db.String(44), nullable=False, unique=True, index=True)
+    numero_documento = db.Column(db.String(20), nullable=True)
+    serie = db.Column(db.String(5), nullable=True)
+    data_emissao = db.Column(db.Date, nullable=True)
+
+    # Referencia ao DFE do Odoo
+    odoo_dfe_id = db.Column(db.Integer, nullable=True, index=True)
+
+    # Referencia ao CTe local (se for CTe)
+    cte_id = db.Column(db.Integer, db.ForeignKey('conhecimento_transporte.id'), nullable=True, index=True)
+
+    # Fornecedor
+    cnpj_fornecedor = db.Column(db.String(20), nullable=False, index=True)
+    razao_fornecedor = db.Column(db.String(255), nullable=True)
+    uf_fornecedor = db.Column(db.String(2), nullable=True)
+
+    # Regime tributario do fornecedor
+    # 1=Simples Nacional, 2=Simples excesso sublimite, 3=Regime Normal
+    regime_tributario = db.Column(db.String(1), nullable=True)
+    regime_tributario_descricao = db.Column(db.String(50), nullable=True)
+
+    # NCM (apenas para NF-e)
+    ncm = db.Column(db.String(10), nullable=True)
+    ncm_prefixo = db.Column(db.String(4), nullable=True, index=True)  # 4 primeiros digitos
+
+    # Valores do documento
+    valor_total = db.Column(db.Numeric(15, 2), nullable=True)
+    valor_base_calculo = db.Column(db.Numeric(15, 2), nullable=True)
+
+    # Valores IBS/CBS encontrados (zerados ou ausentes = pendencia)
+    ibscbs_cst = db.Column(db.String(10), nullable=True)
+    ibscbs_class_trib = db.Column(db.String(20), nullable=True)
+    ibscbs_base = db.Column(db.Numeric(15, 2), nullable=True)
+    ibs_uf_aliq = db.Column(db.Numeric(5, 2), nullable=True)
+    ibs_uf_valor = db.Column(db.Numeric(15, 2), nullable=True)
+    ibs_mun_aliq = db.Column(db.Numeric(5, 2), nullable=True)
+    ibs_mun_valor = db.Column(db.Numeric(15, 2), nullable=True)
+    ibs_total = db.Column(db.Numeric(15, 2), nullable=True)
+    cbs_aliq = db.Column(db.Numeric(5, 2), nullable=True)
+    cbs_valor = db.Column(db.Numeric(15, 2), nullable=True)
+
+    # Motivo da pendencia
+    motivo_pendencia = db.Column(db.String(100), nullable=False)
+    # Valores: 'nao_destacou', 'valor_zerado', 'cst_incorreto', 'aliquota_divergente'
+
+    detalhes_pendencia = db.Column(db.Text, nullable=True)
+
+    # Status da pendencia
+    STATUS_CHOICES = ['pendente', 'aprovado', 'rejeitado']
+    status = db.Column(db.String(20), default='pendente', nullable=False, index=True)
+
+    # Resolucao
+    resolucao = db.Column(db.String(50), nullable=True)
+    # Valores: 'fornecedor_isento', 'ncm_nao_tributa', 'erro_sistema', 'devolvido_fornecedor'
+    justificativa = db.Column(db.Text, nullable=True)
+    resolvido_por = db.Column(db.String(100), nullable=True)
+    resolvido_em = db.Column(db.DateTime, nullable=True)
+
+    # Auditoria
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_por = db.Column(db.String(100), default='SISTEMA')
+
+    # Relacionamento
+    cte = db.relationship('ConhecimentoTransporte', backref='pendencias_ibscbs')
+
+    def __repr__(self):
+        return f'<PendenciaFiscalIbsCbs {self.tipo_documento} {self.numero_documento} ({self.status})>'
+
+    @staticmethod
+    def get_regime_descricao(codigo):
+        """Retorna descricao do regime tributario"""
+        regimes = {
+            '1': 'Simples Nacional',
+            '2': 'Simples Nacional - Excesso Sublimite',
+            '3': 'Regime Normal'
+        }
+        return regimes.get(codigo, 'Desconhecido')
+
+    def to_dict(self):
+        """Serializa para dicionario"""
+        return {
+            'id': self.id,
+            'tipo_documento': self.tipo_documento,
+            'chave_acesso': self.chave_acesso,
+            'numero_documento': self.numero_documento,
+            'data_emissao': self.data_emissao.isoformat() if self.data_emissao else None,
+            'cnpj_fornecedor': self.cnpj_fornecedor,
+            'razao_fornecedor': self.razao_fornecedor,
+            'regime_tributario': self.regime_tributario,
+            'regime_tributario_descricao': self.regime_tributario_descricao,
+            'ncm': self.ncm,
+            'ncm_prefixo': self.ncm_prefixo,
+            'valor_total': float(self.valor_total) if self.valor_total else None,
+            'motivo_pendencia': self.motivo_pendencia,
+            'status': self.status,
+            'criado_em': self.criado_em.isoformat() if self.criado_em else None
+        }

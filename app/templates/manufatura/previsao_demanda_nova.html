@@ -588,7 +588,7 @@ function carregarGrupos() {
         
         grupos.forEach(function(grupo) {
             var $option = $('<option>').val(grupo.value).text(grupo.label);
-            if (grupo.value === 'RESTANTE') {
+            if (grupo.value === 'GERAL') {
                 $option.addClass('grupo-restante');
             }
             $select.append($option);

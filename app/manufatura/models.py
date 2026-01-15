@@ -58,7 +58,7 @@ class PrevisaoDemanda(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     data_mes = db.Column(db.Integer, nullable=False)
     data_ano = db.Column(db.Integer, nullable=False, index=True)
-    nome_grupo = db.Column(db.String(100))
+    nome_grupo = db.Column(db.String(100), nullable=False, default='GERAL')
     cod_produto = db.Column(db.String(50), nullable=False, index=True)
     nome_produto = db.Column(db.String(255))
     qtd_demanda_prevista = db.Column(db.Numeric(15, 3), nullable=False)

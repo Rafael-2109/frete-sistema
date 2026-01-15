@@ -33,7 +33,7 @@ def register_previsao_demanda_routes(bp):
                 GrupoEmpresarial.nome_grupo
             ).all()
             
-            # Formata resposta incluindo RESTANTE
+            # Formata resposta incluindo GERAL
             opcoes = [
                 {'value': '', 'label': 'Todos os Grupos'}
             ]
@@ -44,10 +44,10 @@ def register_previsao_demanda_routes(bp):
                     'label': grupo.nome_grupo
                 })
             
-            # Adiciona opção RESTANTE (clientes sem grupo)
+            # Adiciona opção GERAL (clientes sem grupo)
             opcoes.append({
-                'value': 'RESTANTE',
-                'label': 'RESTANTE (Sem Grupo)'
+                'value': 'GERAL',
+                'label': 'GERAL (Sem Grupo)'
             })
             
             return jsonify(opcoes)
@@ -226,7 +226,7 @@ def register_previsao_demanda_routes(bp):
         try:
             from app.manufatura.models import HistoricoPedidos
             
-            grupo = request.args.get('grupo')  # Pode ser nome do grupo ou 'RESTANTE'
+            grupo = request.args.get('grupo')  # Pode ser nome do grupo ou 'GERAL'
             
             # Query base para produtos únicos
             query = db.session.query(
@@ -240,7 +240,7 @@ def register_previsao_demanda_routes(bp):
             
             # Filtro por grupo se especificado
             if grupo and grupo != '':
-                if grupo == 'RESTANTE':
+                if grupo == 'GERAL':
                     # Busca todos os prefixos cadastrados
                     todos_prefixos = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
                         GrupoEmpresarial.ativo == True
@@ -480,7 +480,10 @@ def register_previsao_demanda_routes(bp):
                     ano = int(row['ano'])
                     qtd_prevista = float(row['qtd_prevista'])
                     disparo = str(row['disparo']).strip().upper()
-                    grupo = str(row.get('grupo', 'GERAL')).strip() if 'grupo' in row and pd.notna(row.get('grupo')) else 'GERAL'
+
+                    # ✅ NORMALIZAÇÃO: Grupo vazio/nulo → 'GERAL'
+                    grupo_raw = str(row.get('grupo', '')).strip() if 'grupo' in row and pd.notna(row.get('grupo')) else ''
+                    grupo = 'GERAL' if grupo_raw == '' else grupo_raw
 
                     # ✅ BUSCAR NOME DO PRODUTO DE CadastroPalletizacao
                     cadastro = CadastroPalletizacao.query.filter_by(
@@ -497,6 +500,16 @@ def register_previsao_demanda_routes(bp):
                     if disparo not in ['MTO', 'MTS']:
                         erros.append(f"Linha {idx+2}: Disparo deve ser MTO ou MTS (recebido: {disparo})") # type: ignore
                         continue
+
+                    # ✅ VALIDAÇÃO: Grupo deve existir (exceto 'GERAL')
+                    if grupo != 'GERAL':
+                        grupo_existe = GrupoEmpresarial.query.filter_by(
+                            nome_grupo=grupo,
+                            ativo=True
+                        ).first()
+                        if not grupo_existe:
+                            erros.append(f"Linha {idx+2}: Grupo '{grupo}' não está cadastrado. Use 'GERAL' ou cadastre o grupo primeiro.") # type: ignore
+                            continue
 
                     # Buscar existente
                     previsao = PrevisaoDemanda.query.filter_by(
@@ -576,7 +589,7 @@ def register_previsao_demanda_routes(bp):
 
             # Filtro por grupo se especificado
             if grupo and grupo != '':
-                if grupo == 'RESTANTE':
+                if grupo == 'GERAL':
                     # Busca todos os prefixos cadastrados
                     todos_prefixos = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
                         GrupoEmpresarial.ativo == True

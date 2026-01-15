@@ -1,0 +1,412 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-barcode text-primary me-2"></i>Cadastro NCM - IBS/CBS</h2>
+            <p class="text-muted mb-0">Reforma Tributaria 2026 - NCMs validados pelo departamento fiscal</p>
+        </div>
+        <div>
+            <button type="button" class="btn btn-success" onclick="abrirModalNovo()">
+                <i class="fas fa-plus me-1"></i> Novo NCM
+            </button>
+            <button type="button" class="btn btn-outline-primary ms-2" onclick="location.reload()">
+                <i class="fas fa-sync-alt"></i> Atualizar
+            </button>
+        </div>
+    </div>
+
+    <!-- Cards de Estatisticas -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card border-left-primary">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase small">Total Cadastrados</h6>
+                    <h2 class="mb-0">{{ stats.total }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-left-success">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase small">Ativos</h6>
+                    <h2 class="mb-0">{{ stats.ativos }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-left-secondary">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase small">Inativos</h6>
+                    <h2 class="mb-0">{{ stats.inativos }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Informacao sobre aliquotas CTe -->
+    <div class="alert alert-info mb-4">
+        <i class="fas fa-info-circle me-2"></i>
+        <strong>CTe:</strong> Aliquotas FIXAS - CST=000, cClassTrib=000001, pIBSUF=0.10%, pIBSMun=0.00%, pCBS=0.90% (sem reducao).
+        <br>
+        <strong>NF-e:</strong> Aliquotas por NCM (4 primeiros digitos) conforme cadastro abaixo, COM reducao quando aplicavel.
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h6 class="mb-0"><i class="fas fa-filter me-2"></i>Filtros</h6>
+        </div>
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('recebimento_views.ncm_ibscbs') }}">
+                <div class="row">
+                    <div class="col-md-4">
+                        <label class="form-label">NCM ou Descricao</label>
+                        <input type="text" name="ncm" class="form-control form-control-sm"
+                               value="{{ filtros.ncm }}" placeholder="Digite o NCM ou descricao...">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Status</label>
+                        <select name="apenas_ativos" class="form-select form-select-sm">
+                            <option value="1" {% if filtros.apenas_ativos %}selected{% endif %}>Apenas Ativos</option>
+                            <option value="0" {% if not filtros.apenas_ativos %}selected{% endif %}>Todos</option>
+                        </select>
+                    </div>
+                    <div class="col-md-5 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary btn-sm me-2">
+                            <i class="fas fa-search"></i> Filtrar
+                        </button>
+                        <a href="{{ url_for('recebimento_views.ncm_ibscbs') }}" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-times"></i> Limpar
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela de NCMs -->
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 80px;">NCM</th>
+                            <th>Descricao</th>
+                            <th style="width: 80px;" class="text-center">CST</th>
+                            <th style="width: 100px;" class="text-center">ClassTrib</th>
+                            <th style="width: 80px;" class="text-center">IBS UF</th>
+                            <th style="width: 80px;" class="text-center">IBS Mun</th>
+                            <th style="width: 80px;" class="text-center">CBS</th>
+                            <th style="width: 80px;" class="text-center">Reducao</th>
+                            <th style="width: 70px;">Status</th>
+                            <th style="width: 100px;">Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in paginacao.items %}
+                        <tr>
+                            <td>
+                                <code class="fs-6 fw-bold">{{ item.ncm_prefixo }}</code>
+                            </td>
+                            <td>
+                                <span title="{{ item.descricao_ncm }}">
+                                    {{ item.descricao_ncm[:40] + '...' if item.descricao_ncm and item.descricao_ncm|length > 40 else item.descricao_ncm or '-' }}
+                                </span>
+                            </td>
+                            <td class="text-center">
+                                <code>{{ item.cst_esperado or '-' }}</code>
+                            </td>
+                            <td class="text-center">
+                                <code>{{ item.class_trib_codigo or '-' }}</code>
+                            </td>
+                            <td class="text-center">
+                                {% if item.aliquota_ibs_uf is not none %}
+                                <span class="badge bg-primary">{{ item.aliquota_ibs_uf }}%</span>
+                                {% else %}-{% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if item.aliquota_ibs_mun is not none %}
+                                <span class="badge bg-info">{{ item.aliquota_ibs_mun }}%</span>
+                                {% else %}-{% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if item.aliquota_cbs is not none %}
+                                <span class="badge bg-success">{{ item.aliquota_cbs }}%</span>
+                                {% else %}-{% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if item.reducao_aliquota and item.reducao_aliquota > 0 %}
+                                <span class="badge bg-warning text-dark">{{ item.reducao_aliquota }}%</span>
+                                {% else %}-{% endif %}
+                            </td>
+                            <td>
+                                {% if item.ativo %}
+                                <span class="badge bg-success">Ativo</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Inativo</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <button type="button" class="btn btn-outline-primary"
+                                            onclick="abrirModalEditar({{ item.id }})"
+                                            title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    {% if item.ativo %}
+                                    <button type="button" class="btn btn-outline-danger"
+                                            onclick="confirmarExcluir({{ item.id }}, '{{ item.ncm_prefixo }}')"
+                                            title="Desativar">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="10" class="text-center py-4">
+                                <i class="fas fa-inbox fa-3x text-muted mb-3 d-block"></i>
+                                <span class="text-muted">Nenhum NCM cadastrado</span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Paginacao -->
+    {% if paginacao.pages > 1 %}
+    <nav class="mt-3 d-flex justify-content-center">
+        <ul class="pagination">
+            <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('recebimento_views.ncm_ibscbs', page=1, **filtros) }}">
+                    <i class="fas fa-angle-double-left"></i>
+                </a>
+            </li>
+            <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('recebimento_views.ncm_ibscbs', page=paginacao.page-1, **filtros) }}">
+                    <i class="fas fa-angle-left"></i>
+                </a>
+            </li>
+
+            {% for p in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                {% if p %}
+                    <li class="page-item {% if p == paginacao.page %}active{% endif %}">
+                        <a class="page-link" href="{{ url_for('recebimento_views.ncm_ibscbs', page=p, **filtros) }}">{{ p }}</a>
+                    </li>
+                {% else %}
+                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                {% endif %}
+            {% endfor %}
+
+            <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('recebimento_views.ncm_ibscbs', page=paginacao.page+1, **filtros) }}">
+                    <i class="fas fa-angle-right"></i>
+                </a>
+            </li>
+            <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('recebimento_views.ncm_ibscbs', page=paginacao.pages, **filtros) }}">
+                    <i class="fas fa-angle-double-right"></i>
+                </a>
+            </li>
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+
+<!-- Modal Cadastro/Edicao -->
+<div class="modal fade" id="modalNCM" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('recebimento_views.ncm_ibscbs_salvar') }}">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="modalNCMTitle">
+                        <i class="fas fa-barcode me-2"></i>Cadastrar NCM IBS/CBS
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="id" id="ncm-id">
+
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">NCM Prefixo (4 digitos) <span class="text-danger">*</span></label>
+                            <input type="text" name="ncm_prefixo" id="ncm-prefixo" class="form-control"
+                                   maxlength="4" pattern="\d{4}" required
+                                   placeholder="Ex: 2005">
+                            <small class="text-muted">4 primeiros digitos do NCM</small>
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label">Descricao</label>
+                            <input type="text" name="descricao_ncm" id="ncm-descricao" class="form-control"
+                                   placeholder="Ex: Conservas de produtos hortícolas">
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">CST Esperado</label>
+                            <input type="text" name="cst_esperado" id="ncm-cst" class="form-control"
+                                   placeholder="Ex: 200">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Classificacao Tributaria</label>
+                            <input type="text" name="class_trib_codigo" id="ncm-classtrib" class="form-control"
+                                   placeholder="Ex: 200034">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Reducao Aliquota (%)</label>
+                            <input type="number" name="reducao_aliquota" id="ncm-reducao" class="form-control"
+                                   step="0.01" min="0" max="100"
+                                   placeholder="Ex: 60.00">
+                            <small class="text-muted">Usado para calcular pAliqEfet</small>
+                        </div>
+                    </div>
+
+                    <hr>
+                    <h6 class="text-muted mb-3"><i class="fas fa-percent me-2"></i>Aliquotas Esperadas</h6>
+
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">IBS UF (%)</label>
+                            <input type="number" name="aliquota_ibs_uf" id="ncm-ibs-uf" class="form-control"
+                                   step="0.01" min="0" max="100"
+                                   placeholder="Ex: 0.10">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">IBS Municipio (%)</label>
+                            <input type="number" name="aliquota_ibs_mun" id="ncm-ibs-mun" class="form-control"
+                                   step="0.01" min="0" max="100"
+                                   placeholder="Ex: 0.00">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">CBS (%)</label>
+                            <input type="number" name="aliquota_cbs" id="ncm-cbs" class="form-control"
+                                   step="0.01" min="0" max="100"
+                                   placeholder="Ex: 0.90">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Observacao</label>
+                        <textarea name="observacao" id="ncm-observacao" class="form-control" rows="2"
+                                  placeholder="Observacoes adicionais..."></textarea>
+                    </div>
+
+                    <div class="form-check">
+                        <input type="checkbox" name="ativo" id="ncm-ativo" class="form-check-input" value="1" checked>
+                        <label class="form-check-label" for="ncm-ativo">NCM Ativo</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i> Salvar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Confirmar Exclusao -->
+<div class="modal fade" id="modalExcluir" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Confirmar Desativacao
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Tem certeza que deseja desativar o NCM <strong id="excluir-ncm"></strong>?</p>
+                <p class="text-muted small">O NCM sera desativado e nao sera mais utilizado para validacao.</p>
+            </div>
+            <div class="modal-footer">
+                <form method="POST" id="formExcluir">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash me-1"></i> Desativar
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    'use strict';
+
+    // Dados dos itens (serializado do backend)
+    const itensData = {{ itens_json|safe }};
+
+    let modalNCM = null;
+    let modalExcluir = null;
+
+    document.addEventListener('DOMContentLoaded', function() {
+        modalNCM = new bootstrap.Modal(document.getElementById('modalNCM'));
+        modalExcluir = new bootstrap.Modal(document.getElementById('modalExcluir'));
+    });
+
+    // Abrir modal para novo NCM
+    window.abrirModalNovo = function() {
+        document.getElementById('modalNCMTitle').innerHTML = '<i class="fas fa-barcode me-2"></i>Cadastrar NCM IBS/CBS';
+        document.getElementById('ncm-id').value = '';
+        document.getElementById('ncm-prefixo').value = '';
+        document.getElementById('ncm-prefixo').removeAttribute('readonly');
+        document.getElementById('ncm-descricao').value = '';
+        document.getElementById('ncm-cst').value = '';
+        document.getElementById('ncm-classtrib').value = '';
+        document.getElementById('ncm-reducao').value = '';
+        document.getElementById('ncm-ibs-uf').value = '';
+        document.getElementById('ncm-ibs-mun').value = '';
+        document.getElementById('ncm-cbs').value = '';
+        document.getElementById('ncm-observacao').value = '';
+        document.getElementById('ncm-ativo').checked = true;
+        modalNCM.show();
+    };
+
+    // Abrir modal para editar NCM
+    window.abrirModalEditar = function(id) {
+        const item = itensData.find(i => i.id === id);
+        if (!item) {
+            toastr.error('NCM nao encontrado');
+            return;
+        }
+
+        document.getElementById('modalNCMTitle').innerHTML = '<i class="fas fa-edit me-2"></i>Editar NCM IBS/CBS';
+        document.getElementById('ncm-id').value = item.id;
+        document.getElementById('ncm-prefixo').value = item.ncm_prefixo;
+        document.getElementById('ncm-prefixo').setAttribute('readonly', 'readonly');
+        document.getElementById('ncm-descricao').value = item.descricao_ncm || '';
+        document.getElementById('ncm-cst').value = item.cst_esperado || '';
+        document.getElementById('ncm-classtrib').value = item.class_trib_codigo || '';
+        document.getElementById('ncm-reducao').value = item.reducao_aliquota || '';
+        document.getElementById('ncm-ibs-uf').value = item.aliquota_ibs_uf || '';
+        document.getElementById('ncm-ibs-mun').value = item.aliquota_ibs_mun || '';
+        document.getElementById('ncm-cbs').value = item.aliquota_cbs || '';
+        document.getElementById('ncm-observacao').value = item.observacao || '';
+        document.getElementById('ncm-ativo').checked = item.ativo;
+        modalNCM.show();
+    };
+
+    // Confirmar exclusao
+    window.confirmarExcluir = function(id, ncm) {
+        document.getElementById('excluir-ncm').textContent = ncm;
+        document.getElementById('formExcluir').action = `/operacional/compras/ncm-ibscbs/${id}/excluir`;
+        modalExcluir.show();
+    };
+})();
+</script>
+{% endblock %}

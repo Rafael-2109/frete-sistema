@@ -230,6 +230,221 @@ class CTeXMLParser:
         }
         return tipos.get(self.get_tipo_cte(), 'Normal')
 
+    def get_ibscbs(self) -> Optional[Dict]:
+        """
+        Extrai informações de IBS/CBS do XML (Reforma Tributária 2026)
+
+        Estrutura esperada no XML:
+        <IBSCBS>
+            <CST>200</CST>
+            <cClassTrib>200034</cClassTrib>
+            <gIBSCBS>
+                <vBC>427.34</vBC>
+                <gIBSUF>
+                    <pIBSUF>0.10</pIBSUF>
+                    <gRed>
+                        <pRedAliq>60.00</pRedAliq>
+                        <pAliqEfet>0.04</pAliqEfet>
+                    </gRed>
+                    <vIBSUF>0.17</vIBSUF>
+                </gIBSUF>
+                <gIBSMun>
+                    <pIBSMun>0.00</pIBSMun>
+                    <gRed>
+                        <pRedAliq>60.00</pRedAliq>
+                        <pAliqEfet>0.00</pAliqEfet>
+                    </gRed>
+                    <vIBSMun>0.00</vIBSMun>
+                </gIBSMun>
+                <vIBS>0.17</vIBS>
+                <gCBS>
+                    <pCBS>0.90</pCBS>
+                    <gRed>
+                        <pRedAliq>60.00</pRedAliq>
+                        <pAliqEfet>0.36</pAliqEfet>
+                    </gRed>
+                    <vCBS>1.54</vCBS>
+                </gCBS>
+            </gIBSCBS>
+        </IBSCBS>
+
+        Returns:
+            Dict com dados IBS/CBS ou None se não encontrar
+        """
+        if self.root is None:
+            return None
+
+        # Buscar tag IBSCBS
+        ibscbs_element = self._find_tag('IBSCBS')
+
+        if ibscbs_element is None:
+            logger.debug("Tag <IBSCBS> não encontrada no XML")
+            return None
+
+        resultado = {
+            'encontrado': True,
+            'cst': None,
+            'class_trib': None,
+            'base_calculo': None,
+            # IBS UF
+            'ibs_uf_aliquota': None,
+            'ibs_uf_reducao': None,
+            'ibs_uf_aliq_efetiva': None,
+            'ibs_uf_valor': None,
+            # IBS Municipio
+            'ibs_mun_aliquota': None,
+            'ibs_mun_reducao': None,
+            'ibs_mun_aliq_efetiva': None,
+            'ibs_mun_valor': None,
+            # IBS Total
+            'ibs_total': None,
+            # CBS
+            'cbs_aliquota': None,
+            'cbs_reducao': None,
+            'cbs_aliq_efetiva': None,
+            'cbs_valor': None
+        }
+
+        # Extrair CST
+        cst_element = self._find_tag('CST', root=ibscbs_element)
+        if cst_element is not None and cst_element.text:
+            resultado['cst'] = cst_element.text.strip()
+
+        # Extrair Classificação Tributária
+        class_trib_element = self._find_tag('cClassTrib', root=ibscbs_element)
+        if class_trib_element is not None and class_trib_element.text:
+            resultado['class_trib'] = class_trib_element.text.strip()
+
+        # Buscar grupo gIBSCBS
+        gibscbs = self._find_tag('gIBSCBS', root=ibscbs_element)
+        if gibscbs is None:
+            # Tenta buscar diretamente os valores
+            gibscbs = ibscbs_element
+
+        # Base de Cálculo
+        vbc = self._find_tag('vBC', root=gibscbs)
+        if vbc is not None and vbc.text:
+            resultado['base_calculo'] = self._to_decimal(vbc.text.strip())
+
+        # IBS UF
+        gibsuf = self._find_tag('gIBSUF', root=gibscbs)
+        if gibsuf is not None:
+            pibsuf = self._find_tag('pIBSUF', root=gibsuf)
+            if pibsuf is not None and pibsuf.text:
+                resultado['ibs_uf_aliquota'] = self._to_decimal(pibsuf.text.strip())
+
+            # Redução dentro de gIBSUF
+            gred_uf = self._find_tag('gRed', root=gibsuf)
+            if gred_uf is not None:
+                pred = self._find_tag('pRedAliq', root=gred_uf)
+                if pred is not None and pred.text:
+                    resultado['ibs_uf_reducao'] = self._to_decimal(pred.text.strip())
+                paliqefet = self._find_tag('pAliqEfet', root=gred_uf)
+                if paliqefet is not None and paliqefet.text:
+                    resultado['ibs_uf_aliq_efetiva'] = self._to_decimal(paliqefet.text.strip())
+
+            vibsuf = self._find_tag('vIBSUF', root=gibsuf)
+            if vibsuf is not None and vibsuf.text:
+                resultado['ibs_uf_valor'] = self._to_decimal(vibsuf.text.strip())
+
+        # IBS Município
+        gibsmun = self._find_tag('gIBSMun', root=gibscbs)
+        if gibsmun is not None:
+            pibsmun = self._find_tag('pIBSMun', root=gibsmun)
+            if pibsmun is not None and pibsmun.text:
+                resultado['ibs_mun_aliquota'] = self._to_decimal(pibsmun.text.strip())
+
+            # Redução dentro de gIBSMun
+            gred_mun = self._find_tag('gRed', root=gibsmun)
+            if gred_mun is not None:
+                pred = self._find_tag('pRedAliq', root=gred_mun)
+                if pred is not None and pred.text:
+                    resultado['ibs_mun_reducao'] = self._to_decimal(pred.text.strip())
+                paliqefet = self._find_tag('pAliqEfet', root=gred_mun)
+                if paliqefet is not None and paliqefet.text:
+                    resultado['ibs_mun_aliq_efetiva'] = self._to_decimal(paliqefet.text.strip())
+
+            vibsmun = self._find_tag('vIBSMun', root=gibsmun)
+            if vibsmun is not None and vibsmun.text:
+                resultado['ibs_mun_valor'] = self._to_decimal(vibsmun.text.strip())
+
+        # IBS Total
+        vibs = self._find_tag('vIBS', root=gibscbs)
+        if vibs is not None and vibs.text:
+            resultado['ibs_total'] = self._to_decimal(vibs.text.strip())
+
+        # CBS
+        gcbs = self._find_tag('gCBS', root=gibscbs)
+        if gcbs is not None:
+            pcbs = self._find_tag('pCBS', root=gcbs)
+            if pcbs is not None and pcbs.text:
+                resultado['cbs_aliquota'] = self._to_decimal(pcbs.text.strip())
+
+            # Redução dentro de gCBS
+            gred_cbs = self._find_tag('gRed', root=gcbs)
+            if gred_cbs is not None:
+                pred = self._find_tag('pRedAliq', root=gred_cbs)
+                if pred is not None and pred.text:
+                    resultado['cbs_reducao'] = self._to_decimal(pred.text.strip())
+                paliqefet = self._find_tag('pAliqEfet', root=gred_cbs)
+                if paliqefet is not None and paliqefet.text:
+                    resultado['cbs_aliq_efetiva'] = self._to_decimal(paliqefet.text.strip())
+
+            vcbs = self._find_tag('vCBS', root=gcbs)
+            if vcbs is not None and vcbs.text:
+                resultado['cbs_valor'] = self._to_decimal(vcbs.text.strip())
+
+        logger.info(f"✅ IBS/CBS extraído do XML: CST={resultado['cst']}, vIBS={resultado['ibs_total']}, vCBS={resultado['cbs_valor']}")
+
+        return resultado
+
+    def _to_decimal(self, valor: str) -> Optional[float]:
+        """Converte string para float/decimal"""
+        if not valor:
+            return None
+        try:
+            return float(valor.replace(',', '.'))
+        except (ValueError, TypeError):
+            return None
+
+    def tem_ibscbs(self) -> bool:
+        """
+        Verifica se o XML contém a tag IBSCBS
+
+        Returns:
+            True se a tag IBSCBS existir
+        """
+        if self.root is None:
+            return False
+
+        ibscbs_element = self._find_tag('IBSCBS')
+        return ibscbs_element is not None
+
+    def ibscbs_tem_valores(self) -> bool:
+        """
+        Verifica se o XML tem IBSCBS com valores > 0
+
+        Returns:
+            True se IBSCBS existir e tiver valores
+        """
+        dados = self.get_ibscbs()
+        if not dados:
+            return False
+
+        # Verificar se tem algum valor > 0
+        valores = [
+            dados.get('ibs_uf_valor'),
+            dados.get('ibs_mun_valor'),
+            dados.get('ibs_total'),
+            dados.get('cbs_valor')
+        ]
+
+        for v in valores:
+            if v and v > 0:
+                return True
+
+        return False
+
 
 def parsear_cte_xml(xml_content: str) -> Dict:
     """
@@ -257,3 +472,17 @@ def extrair_info_complementar(xml_content: str) -> Optional[Dict]:
     """
     parser = CTeXMLParser(xml_content)
     return parser.get_info_complementar()
+
+
+def extrair_ibscbs(xml_content: str) -> Optional[Dict]:
+    """
+    Função helper para extrair dados de IBS/CBS do XML
+
+    Args:
+        xml_content: Conteúdo XML como string
+
+    Returns:
+        Dict com dados IBS/CBS ou None
+    """
+    parser = CTeXMLParser(xml_content)
+    return parser.get_ibscbs()

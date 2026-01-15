@@ -131,3 +131,16 @@ def executar_migration():
 
 if __name__ == '__main__':
     executar_migration()
+
+
+""" 
+                    ALTER TABLE cadastro_primeira_compra ADD COLUMN IF NOT EXISTS quantidade NUMERIC(15,4);
+                    ALTER TABLE cadastro_primeira_compra ADD COLUMN IF NOT EXISTS unidade_medida VARCHAR(10);
+                    ALTER TABLE cadastro_primeira_compra ADD COLUMN IF NOT EXISTS valor_unitario NUMERIC(15,4);
+                    ALTER TABLE cadastro_primeira_compra ADD COLUMN IF NOT EXISTS valor_total NUMERIC(15,2);
+                    ALTER TABLE cadastro_primeira_compra ADD COLUMN IF NOT EXISTS valor_icms NUMERIC(15,2);
+                    ALTER TABLE cadastro_primeira_compra ADD COLUMN IF NOT EXISTS valor_icms_st NUMERIC(15,2);
+                    ALTER TABLE cadastro_primeira_compra ADD COLUMN IF NOT EXISTS valor_ipi NUMERIC(15,2);
+                    ALTER TABLE cadastro_primeira_compra ADD COLUMN IF NOT EXISTS valor_tributos_aprox NUMERIC(15,2);
+                    ALTER TABLE cadastro_primeira_compra ADD COLUMN IF NOT EXISTS info_complementar TEXT;
+"""

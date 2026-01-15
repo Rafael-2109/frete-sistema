@@ -755,13 +755,13 @@ def api_separacoes_estoque():
             for item in carteira_items:
                 carteira_map[item.num_pedido] = item.data_entrega_pedido
 
-        # Montar lista de pedidos
-        pedidos = []
+        # Montar lista de pedidos em Separação (sincronizado_nf=False)
+        pedidos_em_separacao = []
         for sep in separacoes_detalhadas:
             data_entrega = carteira_map.get(sep.num_pedido)
 
-            pedidos.append({
-                'separacao_lote_id': sep.separacao_lote_id,  # ✅ NOVO: Para abrir modal de detalhes
+            pedidos_em_separacao.append({
+                'separacao_lote_id': sep.separacao_lote_id,
                 'num_pedido': sep.num_pedido,
                 'cnpj_cpf': sep.cnpj_cpf,
                 'raz_social_red': sep.raz_social_red,
@@ -771,6 +771,55 @@ def api_separacoes_estoque():
                 'agendamento_confirmado': sep.agendamento_confirmado or False,
                 'data_entrega_pedido': data_entrega.strftime('%Y-%m-%d') if data_entrega else None
             })
+
+        # ✅ NOVO: Buscar pedidos da CarteiraPrincipal que NÃO estão totalmente na Separação
+        # Lógica: CarteiraPrincipal.qtd_saldo_produto_pedido - SUM(Separacao.qtd_saldo onde sincronizado_nf=False)
+        from sqlalchemy import func as sql_func
+
+        # Buscar todos os itens da CarteiraPrincipal com saldo > 0
+        carteira_items_todos = CarteiraPrincipal.query.filter(
+            CarteiraPrincipal.cod_produto.in_(codigos_relacionados),
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0,
+            CarteiraPrincipal.ativo == True,
+            CarteiraPrincipal.status_pedido == 'Pedido de venda'  # Apenas pedidos confirmados
+        ).all()
+
+        # Calcular saldo já em Separação (não sincronizada) por num_pedido+cod_produto
+        # Agrupar separacoes por (num_pedido, cod_produto)
+        separacao_por_pedido = {}
+        for sep in separacoes_detalhadas:
+            chave = (sep.num_pedido, sep.cod_produto)
+            if chave not in separacao_por_pedido:
+                separacao_por_pedido[chave] = 0
+            separacao_por_pedido[chave] += float(sep.qtd_saldo or 0)
+
+        # Identificar pedidos não enviados ou parcialmente enviados
+        pedidos_nao_enviados = []
+        for item in carteira_items_todos:
+            qtd_carteira = float(item.qtd_saldo_produto_pedido or 0)
+            qtd_em_separacao = separacao_por_pedido.get((item.num_pedido, item.cod_produto), 0)
+            qtd_pendente = qtd_carteira - qtd_em_separacao
+
+            # Se há saldo pendente (não enviado para separação)
+            if qtd_pendente > 0.001:  # Tolerância para evitar problemas de arredondamento
+                pedidos_nao_enviados.append({
+                    'separacao_lote_id': None,  # Não tem separação ainda
+                    'num_pedido': item.num_pedido,
+                    'cnpj_cpf': item.cnpj_cpf,
+                    'raz_social_red': item.raz_social_red,
+                    'qtd': qtd_pendente,
+                    'qtd_carteira': qtd_carteira,  # Info adicional
+                    'qtd_em_separacao': qtd_em_separacao,  # Info adicional
+                    'expedicao': None,  # Não tem expedição definida
+                    'agendamento': None,
+                    'agendamento_confirmado': False,
+                    'data_entrega_pedido': item.data_entrega_pedido.strftime('%Y-%m-%d') if item.data_entrega_pedido else None,
+                    'data_pedido': item.data_pedido.strftime('%Y-%m-%d') if item.data_pedido else None,
+                    'vendedor': item.vendedor
+                })
+
+        # Ordenar pedidos não enviados por data_entrega_pedido (mais urgentes primeiro)
+        pedidos_nao_enviados.sort(key=lambda x: (x['data_entrega_pedido'] or '9999-99-99', x['num_pedido']))
 
         # ✅ NOVO: Buscar programação de produção D0-D60 agrupada por linha
         from app.manufatura.models import RecursosProducao
@@ -831,9 +880,10 @@ def api_separacoes_estoque():
             'cod_produto': cod_produto,
             'data_referencia': data_referencia,
             'dias': dias,
-            'pedidos': pedidos,
-            'programacoes_linhas': programacoes_linhas,  # ✅ NOVO
-            'linhas_producao': [{'linha': r.linha_producao, 'qtd_unidade_por_caixa': r.qtd_unidade_por_caixa} for r in recursos]  # ✅ NOVO
+            'pedidos': pedidos_em_separacao,  # Pedidos já em Separação (sincronizado_nf=False)
+            'pedidos_nao_enviados': pedidos_nao_enviados,  # ✅ NOVO: Pedidos da Carteira não enviados para Separação
+            'programacoes_linhas': programacoes_linhas,
+            'linhas_producao': [{'linha': r.linha_producao, 'qtd_unidade_por_caixa': r.qtd_unidade_por_caixa} for r in recursos]
         })
 
     except Exception as e:

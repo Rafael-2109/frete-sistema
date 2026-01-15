@@ -70,7 +70,7 @@ class DemandaService:
         
         # Filtro por grupo se especificado
         if grupo and grupo != '':
-            if grupo == 'RESTANTE':
+            if grupo == 'GERAL':
                 # Busca todos os prefixos cadastrados
                 from app.manufatura.models import GrupoEmpresarial
                 todos_prefixos = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
@@ -141,7 +141,7 @@ class DemandaService:
         
         # Filtro por grupo se especificado
         if grupo and grupo != '':
-            if grupo == 'RESTANTE':
+            if grupo == 'GERAL':
                 # Busca todos os prefixos cadastrados
                 from app.manufatura.models import GrupoEmpresarial
                 todos_prefixos = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
@@ -302,14 +302,14 @@ class DemandaService:
     def identificar_grupo_por_cnpj(self, cnpj):
         """
         Identifica grupo empresarial pelo prefixo do CNPJ (8 primeiros dígitos)
-        Retorna 'RESTANTE' se não pertencer a nenhum grupo
+        Retorna 'GERAL' se não pertencer a nenhum grupo
         """
         # Remove caracteres não numéricos do CNPJ
         cnpj_limpo = ''.join(filter(str.isdigit, cnpj))
         
         # Pega os 8 primeiros dígitos (prefixo)
         if len(cnpj_limpo) < 8:
-            return 'RESTANTE'
+            return 'GERAL'
         
         prefixo_cnpj = cnpj_limpo[:8]
         
@@ -322,13 +322,13 @@ class DemandaService:
         if grupo:
             return grupo.nome_grupo
         
-        return 'RESTANTE'
+        return 'GERAL'
     
     def calcular_media_historica(self, cod_produto, meses, mes_base, ano_base, grupo=None):
         """
         Calcula média dos últimos N meses para um produto
         HÍBRIDO: HistoricoPedidos (até 30/06/2025) + CarteiraPrincipal (a partir 01/07/2025)
-        Se grupo for especificado, filtra por grupo (incluindo 'RESTANTE')
+        Se grupo for especificado, filtra por grupo (incluindo 'GERAL')
         """
         from dateutil.relativedelta import relativedelta
 
@@ -356,7 +356,7 @@ class DemandaService:
             )
 
             # Filtro por grupo para HistoricoPedidos
-            if grupo and grupo != 'RESTANTE':
+            if grupo and grupo != 'GERAL':
                 prefixos_grupo = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
                     GrupoEmpresarial.nome_grupo == grupo,
                     GrupoEmpresarial.ativo == True
@@ -372,7 +372,7 @@ class DemandaService:
                     if cnpj_filters:
                         query_historico = query_historico.filter(or_(*cnpj_filters))
 
-            elif grupo == 'RESTANTE':
+            elif grupo == 'GERAL':
                 todos_prefixos = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
                     GrupoEmpresarial.ativo == True
                 ).all()
@@ -403,7 +403,7 @@ class DemandaService:
             )
 
             # Filtro por grupo para CarteiraPrincipal
-            if grupo and grupo != 'RESTANTE':
+            if grupo and grupo != 'GERAL':
                 prefixos_grupo = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
                     GrupoEmpresarial.nome_grupo == grupo,
                     GrupoEmpresarial.ativo == True
@@ -419,7 +419,7 @@ class DemandaService:
                     if cnpj_filters:
                         query_carteira = query_carteira.filter(or_(*cnpj_filters))
 
-            elif grupo == 'RESTANTE':
+            elif grupo == 'GERAL':
                 todos_prefixos = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
                     GrupoEmpresarial.ativo == True
                 ).all()
@@ -469,7 +469,7 @@ class DemandaService:
             )
 
             # Filtro por grupo
-            if grupo and grupo != 'RESTANTE':
+            if grupo and grupo != 'GERAL':
                 prefixos_grupo = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
                     GrupoEmpresarial.nome_grupo == grupo,
                     GrupoEmpresarial.ativo == True
@@ -485,7 +485,7 @@ class DemandaService:
                     if cnpj_filters:
                         query = query.filter(or_(*cnpj_filters))
 
-            elif grupo == 'RESTANTE':
+            elif grupo == 'GERAL':
                 todos_prefixos = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
                     GrupoEmpresarial.ativo == True
                 ).all()
@@ -510,7 +510,7 @@ class DemandaService:
             )
 
             # Filtro por grupo
-            if grupo and grupo != 'RESTANTE':
+            if grupo and grupo != 'GERAL':
                 prefixos_grupo = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
                     GrupoEmpresarial.nome_grupo == grupo,
                     GrupoEmpresarial.ativo == True
@@ -526,7 +526,7 @@ class DemandaService:
                     if cnpj_filters:
                         query = query.filter(or_(*cnpj_filters))
 
-            elif grupo == 'RESTANTE':
+            elif grupo == 'GERAL':
                 todos_prefixos = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
                     GrupoEmpresarial.ativo == True
                 ).all()
@@ -565,7 +565,7 @@ class DemandaService:
             )
 
             # Filtro por grupo
-            if grupo and grupo != 'RESTANTE':
+            if grupo and grupo != 'GERAL':
                 prefixos_grupo = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
                     GrupoEmpresarial.nome_grupo == grupo,
                     GrupoEmpresarial.ativo == True
@@ -581,7 +581,7 @@ class DemandaService:
                     if cnpj_filters:
                         query = query.filter(or_(*cnpj_filters))
 
-            elif grupo == 'RESTANTE':
+            elif grupo == 'GERAL':
                 todos_prefixos = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
                     GrupoEmpresarial.ativo == True
                 ).all()
@@ -606,7 +606,7 @@ class DemandaService:
             )
 
             # Filtro por grupo
-            if grupo and grupo != 'RESTANTE':
+            if grupo and grupo != 'GERAL':
                 prefixos_grupo = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
                     GrupoEmpresarial.nome_grupo == grupo,
                     GrupoEmpresarial.ativo == True
@@ -622,7 +622,7 @@ class DemandaService:
                     if cnpj_filters:
                         query = query.filter(or_(*cnpj_filters))
 
-            elif grupo == 'RESTANTE':
+            elif grupo == 'GERAL':
                 todos_prefixos = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
                     GrupoEmpresarial.ativo == True
                 ).all()
