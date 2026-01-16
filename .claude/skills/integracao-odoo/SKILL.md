@@ -197,15 +197,125 @@ def _rollback_xxx_odoo(self, xxx_id: int, etapas_concluidas: int) -> bool:
         xxx.status = 'status_anterior'
 ```
 
-## Exemplos de Implementação
+## Exemplos Reais de Implementacao
 
-### Frete (Referência Principal)
+### Exemplo 1: Lancamento de Frete (Referencia Principal)
+
+**Arquivos**:
 - Service: `app/fretes/services/lancamento_odoo_service.py`
 - Route: `app/fretes/routes.py` - `lancar_frete_odoo()`
+- Model: `app/fretes/models.py` - classe `Frete`
 
-### Despesa Extra (Implementação Recente)
+**Fluxo resumido**:
+```python
+# Route recebe requisicao
+@fretes_bp.route('/api/fretes/<int:frete_id>/lancar-odoo', methods=['POST'])
+def lancar_frete_odoo(frete_id):
+    service = LancamentoFreteOdooService()
+    resultado = service.lancar_frete_odoo(
+        frete_id=frete_id,
+        data_vencimento=data_venc,
+        usuario=current_user.nome
+    )
+    return jsonify(resultado)
+
+# Service executa 16 etapas
+class LancamentoFreteOdooService(LancamentoOdooService):
+    def lancar_frete_odoo(self, frete_id, data_vencimento, usuario):
+        # 1. Busca frete no banco local
+        frete = Frete.query.get(frete_id)
+
+        # 2. Valida pre-requisitos
+        if not frete.chave_cte:
+            raise ValueError("Frete sem CTe vinculado")
+
+        # 3. Executa 16 etapas no Odoo
+        resultado = self._executar_16_etapas(frete.chave_cte, data_vencimento)
+
+        # 4. Atualiza registro local
+        frete.odoo_invoice_id = resultado['invoice_id']
+        frete.status = 'LANCADO_ODOO'
+        db.session.commit()
+```
+
+---
+
+### Exemplo 2: Lancamento de Despesa Extra
+
+**Arquivos**:
 - Service: `app/fretes/services/lancamento_despesa_odoo_service.py`
 - Route: `app/fretes/routes.py` - `lancar_despesa_odoo()`
+- Model: `app/fretes/models.py` - classe `DespesaExtra`
+
+**Diferenca em relacao ao Frete**:
+```python
+# DespesaExtra pode ter transportadora diferente do Frete pai
+# Por isso tem campo transportadora_id proprio
+
+class LancamentoDespesaOdooService(LancamentoOdooService):
+    def lancar_despesa_odoo(self, despesa_id, data_vencimento, usuario):
+        despesa = DespesaExtra.query.get(despesa_id)
+
+        # Usa CTe da despesa (pode ser diferente do frete)
+        chave_cte = despesa.chave_cte
+
+        # Usa transportadora da despesa (se definida) ou do frete
+        transportadora = despesa.transportadora or despesa.frete.transportadora
+
+        # Resto do fluxo igual ao Frete
+```
+
+**Campos adicionados no modelo DespesaExtra**:
+```python
+# Em app/fretes/models.py
+
+class DespesaExtra(db.Model):
+    # ... campos existentes ...
+
+    # Campos de integracao Odoo (adicionados para lancamento)
+    odoo_dfe_id = db.Column(db.Integer, nullable=True, index=True)
+    odoo_purchase_order_id = db.Column(db.Integer, nullable=True)
+    odoo_invoice_id = db.Column(db.Integer, nullable=True)
+    lancado_odoo_em = db.Column(db.DateTime, nullable=True)
+    lancado_odoo_por = db.Column(db.String(100), nullable=True)
+
+    # Transportadora alternativa (se diferente do Frete pai)
+    transportadora_id = db.Column(db.Integer, db.ForeignKey('transportadoras.id'), nullable=True)
+```
+
+---
+
+### Padrao de Frontend para Lancamento
+
+**Modal de progresso** (usado em ambos):
+```html
+<!-- Modal mostra progresso das 16 etapas -->
+<div class="modal" id="modalProgresso">
+    <div class="progress-bar">
+        <div class="progress" style="width: 0%"></div>
+    </div>
+    <div id="etapaAtual">Iniciando...</div>
+</div>
+```
+
+**JavaScript AJAX**:
+```javascript
+function lancarOdoo(id, tipo) {
+    const url = tipo === 'frete'
+        ? `/api/fretes/${id}/lancar-odoo`
+        : `/api/despesas/${id}/lancar-odoo`;
+
+    fetch(url, { method: 'POST', body: JSON.stringify(dados) })
+        .then(response => response.json())
+        .then(resultado => {
+            if (resultado.sucesso) {
+                atualizarUI(resultado);
+            } else {
+                mostrarErro(resultado.erro, resultado.etapas_concluidas);
+            }
+        });
+}
+```
 
 ## Checklist para Nova Integração
 

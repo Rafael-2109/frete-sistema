@@ -18,7 +18,11 @@
       "Skill(descobrindo-odoo-estrutura)",
       "Skill(descobrindo-odoo-estrutura:*)",
       "Skill(exportando-arquivos)",
-      "Skill(exportando-arquivos:*)"
+      "Skill(exportando-arquivos:*)",
+      "Skill(superpowers:using-superpowers)",
+      "Skill(superpowers:using-superpowers:*)",
+      "Skill(rastreando-odoo)",
+      "Skill(rastreando-odoo:*)"
     ],
     "deny": []
   },

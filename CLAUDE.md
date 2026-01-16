@@ -1,6 +1,6 @@
 # [PRECISION MODE] - MODO PRECISION ENGINEER ATIVO
 
-**Ultima Atualizacao**: 13/12/2025
+**Ultima Atualizacao**: 16/01/2026
 
 ## REGRAS ABSOLUTAS - NUNCA IGNORAR:
 
@@ -148,62 +148,6 @@ R$ {{ (item.qtd * item.preco)|numero_br(2) }}
 
 ---
 
-# MEMORIA PERSISTENTE DO USUARIO
-
-## Arquitetura
-
-A skill `memoria-usuario` usa a **Memory Tool da Anthropic** com armazenamento em banco de dados.
-**Persiste entre deploys e sessoes.**
-
-### Tabelas do Agente (app/agente/models.py)
-
-| Tabela | Modelo | Descricao |
-|--------|--------|-----------|
-| `agent_memories` | AgentMemory | Memorias persistentes (preferencias, fatos, correcoes) |
-| `agent_sessions` | AgentSession | Historico de conversas (mensagens, tokens, custos) |
-
-### Estrutura de Paths Virtuais
-
-Os paths sao **virtuais** (armazenados no banco, nao arquivos fisicos):
-```
-/memories/                      # Raiz (diretorio virtual)
-/memories/preferences.xml       # Preferencias do usuario
-/memories/context/company.xml   # Informacoes da empresa
-/memories/learned/terms.xml     # Termos aprendidos
-/memories/corrections/          # Correcoes de terminologia
-```
-
-### Comandos da Skill
-
-```bash
-# Visualizar todas as memorias
-source .venv/bin/activate && python .claude/skills/memoria-usuario/scripts/memoria.py view --user-id 1
-
-# Visualizar path especifico
-python .claude/skills/memoria-usuario/scripts/memoria.py view --user-id 1 --path /memories/preferences.xml
-
-# Salvar memoria
-python .claude/skills/memoria-usuario/scripts/memoria.py save --user-id 1 --path /memories/preferences.xml --content "<preferencias>...</preferencias>"
-
-# Atualizar (str_replace)
-python .claude/skills/memoria-usuario/scripts/memoria.py update --user-id 1 --path /memories/preferences.xml --old "texto" --new "novo"
-
-# Deletar
-python .claude/skills/memoria-usuario/scripts/memoria.py delete --user-id 1 --path /memories/preferences.xml
-```
-
-### Gatilhos para SALVAR automaticamente:
-| Usuario diz... | Path Virtual |
-|----------------|--------------|
-| "Prefiro respostas curtas" | `/memories/preferences.xml` |
-| "Sou gerente de logistica" | `/memories/context/user.xml` |
-| "Aqui chamamos de X, nao Y" | `/memories/corrections/terms.xml` |
-| "Sempre faco isso antes de..." | `/memories/learned/patterns.xml` |
-
-### User ID padrao: 1 (Rafael - dono do projeto)
-
----
-
 # INDICE DE REFERENCIAS
 
 ## Onde Buscar Informacao
@@ -214,9 +158,10 @@ python .claude/skills/memoria-usuario/scripts/memoria.py delete --user-id 1 --pa
 | Campos de outros modelos | `.claude/references/MODELOS_CAMPOS.md` | Pedido, Embarque, Faturamento, DespesaExtra, ContasAReceber |
 | Regras de negocio detalhadas | `.claude/references/REGRAS_NEGOCIO.md` | Grupos CNPJ, bonificacao, roteirizacao, calculos |
 | Queries e mapeamentos SQL | `.claude/references/QUERIES_MAPEAMENTO.md` | Consultas SQL, JOINs entre tabelas |
-| Ajustes e fixes pendentes | `.claude/references/AJUSTES.md` | Bugs conhecidos, melhorias planejadas |
 | Consultas estoque/carteira | Skill `gerindo-expedicao` | Perguntas sobre disponibilidade, pedidos, estoque |
 | Integracao Odoo | Skill `integracao-odoo` | Lancamentos fiscais, CTe, 16 etapas |
+| Memoria do usuario | Skill `memoria-usuario` | Preferencias, correcoes, contexto persistente |
+| Indice completo | `.claude/references/INDEX.md` | Navegacao centralizada de toda documentacao |
 
 ## Documentos de Referencia Adicionais
 | Documento | Localizacao | Descricao |

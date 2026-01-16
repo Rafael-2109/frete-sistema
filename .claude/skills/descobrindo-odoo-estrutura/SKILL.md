@@ -82,6 +82,82 @@ python .../descobrindo.py \
   --limit 5
 ```
 
+---
+
+## Cenarios Praticos de Descoberta
+
+### Cenario 1: Usuario pergunta sobre campo desconhecido
+
+**Situacao**: "Qual o campo que guarda o codigo de barras do produto?"
+
+```bash
+# Passo 1: Buscar campos relacionados a "barcode" no modelo product.product
+source .venv/bin/activate && \
+python .claude/skills/descobrindo-odoo-estrutura/scripts/descobrindo.py \
+  --modelo product.product \
+  --buscar-campo barcode
+
+# Resultado esperado: Lista campos como barcode, barcode_ids, etc.
+```
+
+**Acao apos descoberta**: Documentar no CLAUDE.md ou references/MODELOS_CAMPOS.md se for campo frequentemente usado.
+
+---
+
+### Cenario 2: Debug de valor inesperado
+
+**Situacao**: "Por que a NF 12345 nao esta aparecendo no rastreamento?"
+
+```bash
+# Passo 1: Buscar o ID da NF pelo numero
+source .venv/bin/activate && \
+python .claude/skills/descobrindo-odoo-estrutura/scripts/descobrindo.py \
+  --modelo l10n_br_ciel_it_account.dfe \
+  --filtro '[["document_number","=","12345"]]' \
+  --campos '["id","name","state","document_type"]' \
+  --limit 1
+
+# Passo 2: Inspecionar TODOS os campos do registro encontrado
+python .claude/skills/descobrindo-odoo-estrutura/scripts/descobrindo.py \
+  --modelo l10n_br_ciel_it_account.dfe \
+  --inspecionar [ID_ENCONTRADO]
+```
+
+**Resultado**: Ver se `state` esta em status inesperado, se `document_type` e diferente, etc.
+
+---
+
+### Cenario 3: Preparar nova integracao
+
+**Situacao**: "Preciso criar integracao com modelo stock.picking (movimentacao de estoque)"
+
+```bash
+# Passo 1: Listar TODOS os campos do modelo
+source .venv/bin/activate && \
+python .claude/skills/descobrindo-odoo-estrutura/scripts/descobrindo.py \
+  --modelo stock.picking \
+  --listar-campos \
+  --json > /tmp/stock_picking_campos.json
+
+# Passo 2: Buscar campos especificos de interesse
+python .claude/skills/descobrindo-odoo-estrutura/scripts/descobrindo.py \
+  --modelo stock.picking \
+  --buscar-campo partner
+
+python .claude/skills/descobrindo-odoo-estrutura/scripts/descobrindo.py \
+  --modelo stock.picking \
+  --buscar-campo origin
+
+# Passo 3: Pegar um registro de exemplo para entender estrutura
+python .claude/skills/descobrindo-odoo-estrutura/scripts/descobrindo.py \
+  --modelo stock.picking \
+  --filtro '[["state","=","done"]]' \
+  --limit 1 \
+  --inspecionar
+```
+
+**Proximo passo**: Usar skill `integracao-odoo` para criar o Service com os campos descobertos.
+
 ## Modelos Conhecidos (Referencia)
 
 | Modelo | Descricao | Skill Relacionada |
