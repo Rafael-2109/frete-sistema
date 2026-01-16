@@ -1,11 +1,20 @@
 """
-Models do Modulo de Recebimento - FASE 1: Validacao Fiscal
-==========================================================
+Models do Modulo de Recebimento
+===============================
 
-Tabelas:
+FASE 1 - Validacao Fiscal:
 - PerfilFiscalProdutoFornecedor: Baseline fiscal por produto/fornecedor
 - DivergenciaFiscal: Divergencias que bloqueiam recebimento
 - CadastroPrimeiraCompra: Validacao manual de 1a compra
+- ValidacaoFiscalDfe: Controle de status por DFE
+- NcmIbsCbsValidado: NCMs validados para IBS/CBS (2026)
+- PendenciaFiscalIbsCbs: Pendencias de IBS/CBS
+
+FASE 2 - Vinculacao NF x PO:
+- ProdutoFornecedorDepara: De-Para de produtos (codigo fornecedor -> interno)
+- MatchNfPoItem: Resultado do match por item da NF
+- DivergenciaNfPo: Divergencias NF x PO para resolucao manual
+- ValidacaoNfPoDfe: Controle de status de validacao NF x PO
 
 Referencia: .claude/references/RECEBIMENTO_MATERIAIS.md
 """
@@ -484,5 +493,380 @@ class PendenciaFiscalIbsCbs(db.Model):
             'valor_total': float(self.valor_total) if self.valor_total else None,
             'motivo_pendencia': self.motivo_pendencia,
             'status': self.status,
+            'criado_em': self.criado_em.isoformat() if self.criado_em else None
+        }
+
+
+# =============================================================================
+# FASE 2: Vinculacao NF x PO
+# =============================================================================
+
+class ProdutoFornecedorDepara(db.Model):
+    """
+    De-Para de produtos: converte codigo do fornecedor para codigo interno.
+
+    Usado para:
+    - Identificar produto interno a partir do codigo na NF do fornecedor
+    - Converter unidade de medida (ex: ML -> Units com fator 1000)
+    - Sincronizar bidirecionalmente com product.supplierinfo do Odoo
+
+    Fluxo:
+    1. NF chega com det_prod_cprod (codigo do fornecedor)
+    2. Sistema busca nesta tabela por (cnpj_fornecedor, cod_produto_fornecedor)
+    3. Retorna cod_produto_interno + fator_conversao para validar contra PO
+    """
+    __tablename__ = 'produto_fornecedor_depara'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Identificacao do fornecedor
+    cnpj_fornecedor = db.Column(db.String(20), nullable=False, index=True)
+    razao_fornecedor = db.Column(db.String(255), nullable=True)
+
+    # Codigo do produto na NF do fornecedor
+    cod_produto_fornecedor = db.Column(db.String(50), nullable=False, index=True)
+    descricao_produto_fornecedor = db.Column(db.String(255), nullable=True)
+
+    # Codigo do produto interno (Odoo)
+    cod_produto_interno = db.Column(db.String(50), nullable=False, index=True)
+    nome_produto_interno = db.Column(db.String(255), nullable=True)
+    odoo_product_id = db.Column(db.Integer, nullable=True)
+
+    # Conversao de Unidade de Medida
+    um_fornecedor = db.Column(db.String(20), nullable=True)  # det_prod_ucom (ML, MI, MIL)
+    um_interna = db.Column(db.String(20), default='UNITS')   # product_uom
+    fator_conversao = db.Column(db.Numeric(10, 4), default=1.0000)  # 1000 para Milhar
+
+    # Controle
+    ativo = db.Column(db.Boolean, default=True)
+    sincronizado_odoo = db.Column(db.Boolean, default=False)
+    odoo_supplierinfo_id = db.Column(db.Integer, nullable=True)
+
+    # Auditoria
+    criado_por = db.Column(db.String(100), nullable=True)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    atualizado_por = db.Column(db.String(100), nullable=True)
+    atualizado_em = db.Column(db.DateTime, onupdate=datetime.utcnow)
+
+    # Unique constraint
+    __table_args__ = (
+        db.UniqueConstraint('cnpj_fornecedor', 'cod_produto_fornecedor',
+                            name='uq_depara_cnpj_cod_forn'),
+    )
+
+    def __repr__(self):
+        return f'<ProdutoFornecedorDepara {self.cod_produto_fornecedor} -> {self.cod_produto_interno}>'
+
+    def to_dict(self):
+        """Serializa para dicionario"""
+        return {
+            'id': self.id,
+            'cnpj_fornecedor': self.cnpj_fornecedor,
+            'razao_fornecedor': self.razao_fornecedor,
+            'cod_produto_fornecedor': self.cod_produto_fornecedor,
+            'descricao_produto_fornecedor': self.descricao_produto_fornecedor,
+            'cod_produto_interno': self.cod_produto_interno,
+            'nome_produto_interno': self.nome_produto_interno,
+            'odoo_product_id': self.odoo_product_id,
+            'um_fornecedor': self.um_fornecedor,
+            'um_interna': self.um_interna,
+            'fator_conversao': float(self.fator_conversao) if self.fator_conversao else 1.0,
+            'ativo': self.ativo,
+            'sincronizado_odoo': self.sincronizado_odoo,
+            'criado_em': self.criado_em.isoformat() if self.criado_em else None,
+            'atualizado_em': self.atualizado_em.isoformat() if self.atualizado_em else None
+        }
+
+
+class ValidacaoNfPoDfe(db.Model):
+    """
+    Controle de status de validacao NF x PO por DFE.
+
+    Status:
+    - pendente: Aguardando validacao
+    - validando: Em processamento
+    - aprovado: 100% itens com match (pronto para consolidar)
+    - bloqueado: <100% itens com match (divergencias pendentes)
+    - consolidado: POs foram ajustados/consolidados
+    - erro: Falha no processamento
+
+    IMPORTANTE: So executa acoes nos POs se status = 'aprovado' (100% match)
+    """
+    __tablename__ = 'validacao_nf_po_dfe'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Identificacao do DFE (Odoo)
+    odoo_dfe_id = db.Column(db.Integer, nullable=False, unique=True, index=True)
+    numero_nf = db.Column(db.String(20), nullable=True)
+    serie_nf = db.Column(db.String(10), nullable=True)
+    chave_nfe = db.Column(db.String(44), nullable=True, index=True)
+
+    # Fornecedor
+    cnpj_fornecedor = db.Column(db.String(20), nullable=True, index=True)
+    razao_fornecedor = db.Column(db.String(255), nullable=True)
+
+    # Dados da NF
+    data_nf = db.Column(db.Date, nullable=True)
+    valor_total_nf = db.Column(db.Numeric(15, 2), nullable=True)
+
+    # Status da validacao
+    status = db.Column(db.String(20), default='pendente', nullable=False, index=True)
+
+    # Contadores de match
+    total_itens = db.Column(db.Integer, default=0)
+    itens_match = db.Column(db.Integer, default=0)
+    itens_sem_depara = db.Column(db.Integer, default=0)
+    itens_sem_po = db.Column(db.Integer, default=0)
+    itens_preco_diverge = db.Column(db.Integer, default=0)
+    itens_data_diverge = db.Column(db.Integer, default=0)
+    itens_qtd_diverge = db.Column(db.Integer, default=0)
+
+    # Resultado da consolidacao (se aprovado)
+    po_consolidado_id = db.Column(db.Integer, nullable=True)
+    po_consolidado_name = db.Column(db.String(50), nullable=True)
+    pos_saldo_ids = db.Column(db.Text, nullable=True)      # JSON: [{"id": 123, "name": "PO00456"}]
+    pos_cancelados_ids = db.Column(db.Text, nullable=True)  # JSON: [{"id": 124, "name": "PO00457"}]
+    acao_executada = db.Column(db.JSON, nullable=True)     # Detalhes completos da acao
+
+    # Controle de erro
+    erro_mensagem = db.Column(db.Text, nullable=True)
+
+    # Auditoria
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    validado_em = db.Column(db.DateTime, nullable=True)
+    consolidado_em = db.Column(db.DateTime, nullable=True)
+    atualizado_em = db.Column(db.DateTime, onupdate=datetime.utcnow)
+
+    # Relacionamentos
+    itens_match_rel = db.relationship('MatchNfPoItem', backref='validacao',
+                                      lazy='dynamic', cascade='all, delete-orphan')
+    divergencias = db.relationship('DivergenciaNfPo', backref='validacao',
+                                   lazy='dynamic', cascade='all, delete-orphan')
+
+    def __repr__(self):
+        return f'<ValidacaoNfPoDfe {self.odoo_dfe_id} ({self.status})>'
+
+    @property
+    def percentual_match(self):
+        """Retorna percentual de itens com match"""
+        if self.total_itens == 0:
+            return 0
+        return round((self.itens_match / self.total_itens) * 100, 1)
+
+    @property
+    def pode_consolidar(self):
+        """Retorna True se pode executar consolidacao (100% match)"""
+        return self.status == 'aprovado' and self.itens_match == self.total_itens
+
+    def to_dict(self):
+        """Serializa para dicionario"""
+        import json
+        return {
+            'id': self.id,
+            'odoo_dfe_id': self.odoo_dfe_id,
+            'numero_nf': self.numero_nf,
+            'serie_nf': self.serie_nf,
+            'chave_nfe': self.chave_nfe,
+            'cnpj_fornecedor': self.cnpj_fornecedor,
+            'razao_fornecedor': self.razao_fornecedor,
+            'data_nf': self.data_nf.isoformat() if self.data_nf else None,
+            'valor_total_nf': float(self.valor_total_nf) if self.valor_total_nf else None,
+            'status': self.status,
+            'total_itens': self.total_itens,
+            'itens_match': self.itens_match,
+            'itens_sem_depara': self.itens_sem_depara,
+            'itens_sem_po': self.itens_sem_po,
+            'itens_preco_diverge': self.itens_preco_diverge,
+            'itens_data_diverge': self.itens_data_diverge,
+            'itens_qtd_diverge': self.itens_qtd_diverge,
+            'percentual_match': self.percentual_match,
+            'pode_consolidar': self.pode_consolidar,
+            'po_consolidado_id': self.po_consolidado_id,
+            'po_consolidado_name': self.po_consolidado_name,
+            'pos_saldo_ids': json.loads(self.pos_saldo_ids) if self.pos_saldo_ids else [],
+            'pos_cancelados_ids': json.loads(self.pos_cancelados_ids) if self.pos_cancelados_ids else [],
+            'erro_mensagem': self.erro_mensagem,
+            'criado_em': self.criado_em.isoformat() if self.criado_em else None,
+            'validado_em': self.validado_em.isoformat() if self.validado_em else None,
+            'consolidado_em': self.consolidado_em.isoformat() if self.consolidado_em else None
+        }
+
+
+class MatchNfPoItem(db.Model):
+    """
+    Resultado do match de cada item da NF com PO.
+
+    Registra para cada linha da NF:
+    - Dados da NF (apos conversao de codigo/UM)
+    - PO encontrado (se houver)
+    - Status do match
+
+    Status possíveis:
+    - match: OK, encontrou PO compativel
+    - sem_depara: Nao tem De-Para para o codigo do fornecedor
+    - sem_po: Nao encontrou PO para o produto
+    - preco_diverge: Preco da NF != Preco do PO (0% tolerancia)
+    - data_diverge: Data fora da tolerancia (±2 dias uteis)
+    - qtd_diverge: QTD NF > QTD PO + 10%
+    """
+    __tablename__ = 'match_nf_po_item'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # FK para validacao
+    validacao_id = db.Column(db.Integer, db.ForeignKey('validacao_nf_po_dfe.id',
+                             ondelete='CASCADE'), nullable=False, index=True)
+
+    # Identificacao da linha da NF (Odoo)
+    odoo_dfe_line_id = db.Column(db.Integer, nullable=False, index=True)
+
+    # Dados do produto na NF (original)
+    cod_produto_fornecedor = db.Column(db.String(50), nullable=True)
+    nome_produto = db.Column(db.String(255), nullable=True)
+    um_nf = db.Column(db.String(20), nullable=True)
+
+    # Dados convertidos (apos De-Para)
+    cod_produto_interno = db.Column(db.String(50), nullable=True)
+    fator_conversao = db.Column(db.Numeric(10, 4), nullable=True)
+
+    # Valores da NF (apos conversao)
+    qtd_nf = db.Column(db.Numeric(15, 3), nullable=True)
+    preco_nf = db.Column(db.Numeric(15, 4), nullable=True)
+    data_nf = db.Column(db.Date, nullable=True)
+
+    # PO Match encontrado
+    odoo_po_id = db.Column(db.Integer, nullable=True)
+    odoo_po_name = db.Column(db.String(50), nullable=True)
+    odoo_po_line_id = db.Column(db.Integer, nullable=True)
+    qtd_po = db.Column(db.Numeric(15, 3), nullable=True)
+    preco_po = db.Column(db.Numeric(15, 4), nullable=True)
+    data_po = db.Column(db.Date, nullable=True)
+
+    # Status do match
+    status_match = db.Column(db.String(20), nullable=False, index=True)
+    motivo_bloqueio = db.Column(db.Text, nullable=True)
+
+    # Auditoria
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<MatchNfPoItem {self.odoo_dfe_line_id} ({self.status_match})>'
+
+    def to_dict(self):
+        """Serializa para dicionario"""
+        return {
+            'id': self.id,
+            'validacao_id': self.validacao_id,
+            'odoo_dfe_line_id': self.odoo_dfe_line_id,
+            'cod_produto_fornecedor': self.cod_produto_fornecedor,
+            'cod_produto_interno': self.cod_produto_interno,
+            'nome_produto': self.nome_produto,
+            'um_nf': self.um_nf,
+            'fator_conversao': float(self.fator_conversao) if self.fator_conversao else None,
+            'qtd_nf': float(self.qtd_nf) if self.qtd_nf else None,
+            'preco_nf': float(self.preco_nf) if self.preco_nf else None,
+            'data_nf': self.data_nf.isoformat() if self.data_nf else None,
+            'odoo_po_id': self.odoo_po_id,
+            'odoo_po_name': self.odoo_po_name,
+            'odoo_po_line_id': self.odoo_po_line_id,
+            'qtd_po': float(self.qtd_po) if self.qtd_po else None,
+            'preco_po': float(self.preco_po) if self.preco_po else None,
+            'data_po': self.data_po.isoformat() if self.data_po else None,
+            'status_match': self.status_match,
+            'motivo_bloqueio': self.motivo_bloqueio,
+            'criado_em': self.criado_em.isoformat() if self.criado_em else None
+        }
+
+
+class DivergenciaNfPo(db.Model):
+    """
+    Divergencias NF x PO para resolucao manual.
+
+    Criada quando um item da NF nao faz match com PO.
+    BLOQUEIA a NF ate resolucao de TODAS as divergencias.
+
+    Tipos de divergencia:
+    - sem_depara: Codigo do fornecedor nao cadastrado no De-Para
+    - sem_po: Nao encontrou PO para o produto
+    - preco: Preco da NF diferente do PO
+    - quantidade: QTD NF > QTD PO + 10%
+    - data_entrega: Data da NF fora da tolerancia (±2 dias uteis)
+
+    Resolucoes possiveis:
+    - criar_depara: Criar De-Para e reprocessar
+    - aprovar_preco: Aprovar diferenca de preco
+    - ajustar_po: Ajustar PO manualmente
+    - rejeitar: Rejeitar NF / devolver ao fornecedor
+    """
+    __tablename__ = 'divergencia_nf_po'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # FK para validacao
+    validacao_id = db.Column(db.Integer, db.ForeignKey('validacao_nf_po_dfe.id',
+                             ondelete='CASCADE'), nullable=False, index=True)
+
+    # Referencias Odoo
+    odoo_dfe_id = db.Column(db.Integer, nullable=False, index=True)
+    odoo_dfe_line_id = db.Column(db.Integer, nullable=True)
+
+    # Identificacao
+    cnpj_fornecedor = db.Column(db.String(20), nullable=True)
+    razao_fornecedor = db.Column(db.String(255), nullable=True)
+    cod_produto_fornecedor = db.Column(db.String(50), nullable=True)
+    cod_produto_interno = db.Column(db.String(50), nullable=True)
+    nome_produto = db.Column(db.String(255), nullable=True)
+
+    # Tipo da divergencia
+    tipo_divergencia = db.Column(db.String(50), nullable=False, index=True)
+    campo_label = db.Column(db.String(100), nullable=True)  # "Preco", "Quantidade", etc
+    valor_nf = db.Column(db.String(100), nullable=True)
+    valor_po = db.Column(db.String(100), nullable=True)
+    diferenca_percentual = db.Column(db.Numeric(10, 2), nullable=True)
+
+    # PO candidato (se houver)
+    odoo_po_id = db.Column(db.Integer, nullable=True)
+    odoo_po_name = db.Column(db.String(50), nullable=True)
+    odoo_po_line_id = db.Column(db.Integer, nullable=True)
+
+    # Resolucao
+    status = db.Column(db.String(20), default='pendente', nullable=False, index=True)
+    resolucao = db.Column(db.String(50), nullable=True)
+    justificativa = db.Column(db.Text, nullable=True)
+    resolvido_por = db.Column(db.String(100), nullable=True)
+    resolvido_em = db.Column(db.DateTime, nullable=True)
+
+    # Auditoria
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<DivergenciaNfPo {self.id} - {self.tipo_divergencia} ({self.status})>'
+
+    def to_dict(self):
+        """Serializa para dicionario"""
+        return {
+            'id': self.id,
+            'validacao_id': self.validacao_id,
+            'odoo_dfe_id': self.odoo_dfe_id,
+            'odoo_dfe_line_id': self.odoo_dfe_line_id,
+            'cnpj_fornecedor': self.cnpj_fornecedor,
+            'razao_fornecedor': self.razao_fornecedor,
+            'cod_produto_fornecedor': self.cod_produto_fornecedor,
+            'cod_produto_interno': self.cod_produto_interno,
+            'nome_produto': self.nome_produto,
+            'tipo_divergencia': self.tipo_divergencia,
+            'campo_label': self.campo_label,
+            'valor_nf': self.valor_nf,
+            'valor_po': self.valor_po,
+            'diferenca_percentual': float(self.diferenca_percentual) if self.diferenca_percentual else None,
+            'odoo_po_id': self.odoo_po_id,
+            'odoo_po_name': self.odoo_po_name,
+            'odoo_po_line_id': self.odoo_po_line_id,
+            'status': self.status,
+            'resolucao': self.resolucao,
+            'justificativa': self.justificativa,
+            'resolvido_por': self.resolvido_por,
+            'resolvido_em': self.resolvido_em.isoformat() if self.resolvido_em else None,
             'criado_em': self.criado_em.isoformat() if self.criado_em else None
         }

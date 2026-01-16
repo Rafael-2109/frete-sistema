@@ -17,6 +17,7 @@
 3. **NUNCA modificar** sem mostrar o codigo atual primeiro
 4. **NUNCA pular** direto para a solucao
 5. **NUNCA mantenha lixo** Caso um codigo seja substituido, REMOVA o anterior, mantenha o codigo limpo.
+6. **NUNCA criar tela sem acesso via UI** - TODA tela criada DEVE ter link no menu (base.html) ou em outra tela acessivel
 
 ### ANTES DE PROPOR NOVOS ARQUIVOS OU REORGANIZACAO:
 
@@ -48,6 +49,102 @@
 
 ### PALAVRA DE ATIVACAO:
 Quando ver **"pense profundamente"** ou **"[PRECISION MODE]"**: DOBRAR o nivel de rigor e detalhe.
+
+---
+
+# REGRA CRITICA: ACESSO VIA UI OBRIGATORIO
+
+## ⚠️ TODA TELA CRIADA DEVE TER ACESSO PELA INTERFACE
+
+**VIOLACAO GRAVE** = Criar tela HTML sem link de acesso no menu ou em outra tela.
+
+### CHECKLIST OBRIGATORIO ao criar nova tela:
+1. **Definir rota** no arquivo de views (ex: `views.py`)
+2. **Criar template** HTML
+3. **ADICIONAR LINK** em uma das opcoes abaixo:
+   - Menu principal (`app/templates/base.html`)
+   - Botao/link em tela relacionada
+   - Dashboard com cards de acesso
+
+### Arquivo de Menu Principal:
+```
+app/templates/base.html
+```
+
+### Exemplo de adicao ao menu:
+```html
+<li><a class="dropdown-item" href="{{ url_for('modulo_views.nome_da_tela') }}">
+    <i class="fas fa-icon"></i> Nome da Tela
+  </a></li>
+```
+
+### Telas por Modulo (Referencia):
+
+| Modulo | Telas | Menu em |
+|--------|-------|---------|
+| Financeiro | Central Financeira (dashboard), Custeio, Relatorios, Contas a Receber/Pagar | base.html > Financeiro > Central Financeira |
+| Fretes | Dashboard Fretes, Listar, Lancar CTe, Aprovacoes, Faturas | base.html > Financeiro > Fretes |
+| Recebimento (Fase 1) | Divergencias Fiscais, Primeira Compra, Perfis Fiscais | base.html > Financeiro > Central Fiscal |
+| Recebimento (Fase 2) | Validacoes NF×PO, Divergencias NF×PO, De-Para Fornecedor, Preview Consolidacao | base.html > Financeiro > Central Fiscal |
+| Fiscal IBS/CBS | Documentos C/ IBS/CBS, Cadastro NCM IBS/CBS, Pendencias IBS/CBS | base.html > Financeiro > Central Fiscal |
+| Carteira | Dashboard, Agrupados Balanceado | base.html > Operacional |
+| Separacao | Lista, Card, Agendamento | base.html > Operacional |
+
+---
+
+# FORMATACAO NUMERICA BRASILEIRA
+
+## Padrao Obrigatorio
+
+**SEMPRE** exibir numeros no formato brasileiro:
+- **Decimal**: Virgula (`,`)
+- **Milhar**: Ponto (`.`)
+
+### Exemplos:
+| Valor Original | Formato BR |
+|----------------|------------|
+| 1234.56 | 1.234,56 |
+| 1234567.89 | 1.234.567,89 |
+| 0.1234 | 0,1234 |
+
+## Filtros Jinja2 Disponiveis
+
+**Arquivo**: `app/utils/template_filters.py`
+
+### valor_br (valores monetarios)
+```jinja
+{{ valor|valor_br }}      {# 2 decimais (padrao) -> 1.234,56 #}
+{{ valor|valor_br(0) }}   {# 0 decimais -> 1.234 #}
+{{ valor|valor_br(4) }}   {# 4 decimais -> 1.234,5678 #}
+```
+
+### numero_br (quantidades e numeros genericos)
+```jinja
+{{ qtd|numero_br }}       {# 3 decimais (padrao) -> 1.234,567 #}
+{{ qtd|numero_br(0) }}    {# 0 decimais -> 1.234 #}
+{{ qtd|numero_br(4) }}    {# 4 decimais -> 1.234,5678 #}
+```
+
+### Uso Correto em Templates
+```jinja
+{# Quantidade #}
+{{ item.qtd_nf|numero_br(3) }}
+
+{# Preco unitario (4 decimais) #}
+R$ {{ item.preco_nf|numero_br(4) }}
+
+{# Valor total (2 decimais) #}
+R$ {{ (item.qtd * item.preco)|numero_br(2) }}
+```
+
+### NUNCA usar format do Python em templates:
+```jinja
+{# ERRADO - formato americano #}
+{{ "%.2f"|format(valor) }}
+
+{# CORRETO - formato brasileiro #}
+{{ valor|numero_br(2) }}
+```
 
 ---
 

@@ -210,7 +210,7 @@ class SnapshotTituloRecebimento:
             empresas = self.connection.search_read(
                 'res.company',
                 [],
-                fields=['id', 'name', 'partner_id', 'currency_id', 'vat']
+                fields=['id', 'name', 'partner_id', 'currency_id', 'l10n_br_cnpj']
             )
 
             self.empresas = {}
@@ -219,11 +219,11 @@ class SnapshotTituloRecebimento:
                     'name': emp['name'],
                     'partner_id': emp.get('partner_id'),
                     'currency_id': emp.get('currency_id'),
-                    'vat': emp.get('vat')
+                    'l10n_br_cnpj': emp.get('l10n_br_cnpj')
                 }
                 print(f"   ID {emp['id']}: {emp['name']}")
-                if emp.get('vat'):
-                    print(f"          CNPJ: {emp['vat']}")
+                if emp.get('l10n_br_cnpj'):
+                    print(f"          CNPJ: {emp['l10n_br_cnpj']}")
 
             return self.empresas
 

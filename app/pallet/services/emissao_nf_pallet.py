@@ -90,7 +90,7 @@ def validar_cliente(odoo, cliente_id: int) -> Dict[str, Any]:
     clientes = odoo.search_read(
         'res.partner',
         [['id', '=', cliente_id]],
-        ['id', 'name', 'vat', 'city', 'state_id'],
+        ['id', 'name', 'l10n_br_cnpj', 'city', 'state_id'],
         limit=1
     )
     if not clientes:

@@ -311,11 +311,11 @@ class BackfillReversoes:
                 'res.partner',
                 'search_read',
                 [[('id', '=', p_id)]],
-                {'fields': ['vat', 'l10n_br_cnpj'], 'limit': 1}
+                {'fields': ['l10n_br_cnpj'], 'limit': 1}
             )
 
             if parceiro:
-                cnpj = parceiro[0].get('l10n_br_cnpj') or parceiro[0].get('vat')
+                cnpj = parceiro[0].get('l10n_br_cnpj')
                 if cnpj:
                     return self._limpar_cnpj(cnpj)
 

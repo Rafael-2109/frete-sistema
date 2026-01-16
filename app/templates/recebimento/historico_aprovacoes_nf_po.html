@@ -1,0 +1,297 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-history text-secondary me-2"></i>Historico de Aprovacoes NF x PO</h2>
+            <p class="text-muted mb-0">Registro de divergencias aprovadas e rejeitadas</p>
+        </div>
+        <div>
+            <a href="{{ url_for('recebimento_views.divergencias_nf_po') }}" class="btn btn-outline-warning me-2">
+                <i class="fas fa-exclamation-triangle"></i> Pendentes
+            </a>
+            <button type="button" class="btn btn-outline-success" onclick="exportarExcel()">
+                <i class="fas fa-file-excel"></i> Exportar Excel
+            </button>
+        </div>
+    </div>
+
+    <!-- Cards de Estatisticas -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card border-left-secondary">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase small">Total Resolvidas</h6>
+                    <h2 class="mb-0">{{ stats.total }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-left-success">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase small">Aprovadas</h6>
+                    <h2 class="mb-0 text-success">{{ stats.aprovada }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-left-danger">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase small">Rejeitadas</h6>
+                    <h2 class="mb-0 text-danger">{{ stats.rejeitada }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h6 class="mb-0"><i class="fas fa-filter me-2"></i>Filtros</h6>
+        </div>
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('recebimento_views.historico_aprovacoes_nf_po') }}">
+                <div class="row">
+                    <div class="col-md-2">
+                        <label class="form-label">Status</label>
+                        <select name="status" class="form-select form-select-sm">
+                            <option value="">Todos</option>
+                            <option value="aprovada" {% if filtros.status == 'aprovada' %}selected{% endif %}>Aprovadas</option>
+                            <option value="rejeitada" {% if filtros.status == 'rejeitada' %}selected{% endif %}>Rejeitadas</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Tipo</label>
+                        <select name="tipo" class="form-select form-select-sm">
+                            <option value="">Todos</option>
+                            {% for tipo in tipos_divergencia %}
+                            <option value="{{ tipo.valor }}" {% if filtros.tipo == tipo.valor %}selected{% endif %}>
+                                {{ tipo.label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">CNPJ</label>
+                        <input type="text" name="cnpj" class="form-control form-control-sm"
+                               value="{{ filtros.cnpj }}" placeholder="CNPJ...">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Resolvido por</label>
+                        <select name="resolvido_por" class="form-select form-select-sm">
+                            <option value="">Todos</option>
+                            {% for usuario in usuarios_resolvedores %}
+                            <option value="{{ usuario }}" {% if filtros.resolvido_por == usuario %}selected{% endif %}>
+                                {{ usuario }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Data Inicio</label>
+                        <input type="date" name="data_ini" class="form-control form-control-sm"
+                               value="{{ filtros.data_ini }}">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Data Fim</label>
+                        <input type="date" name="data_fim" class="form-control form-control-sm"
+                               value="{{ filtros.data_fim }}">
+                    </div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col-12 d-flex justify-content-end">
+                        <button type="submit" class="btn btn-primary btn-sm me-2">
+                            <i class="fas fa-search"></i> Buscar
+                        </button>
+                        <a href="{{ url_for('recebimento_views.historico_aprovacoes_nf_po') }}" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-times"></i> Limpar
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela -->
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover align-middle mb-0" id="tabelaHistorico">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 80px;">NF</th>
+                            <th>Fornecedor</th>
+                            <th>Produto</th>
+                            <th class="text-center">Tipo</th>
+                            <th>NF vs PO</th>
+                            <th class="text-center">Status</th>
+                            <th>Resolucao</th>
+                            <th>Resolvido Por</th>
+                            <th>Data</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in items %}
+                        <tr>
+                            <!-- Numero NF -->
+                            <td class="text-center">
+                                <strong class="text-primary">{{ item.numero_nf or '-' }}</strong>
+                                <br>
+                                <a href="{{ odoo_base_url }}#id={{ item.odoo_dfe_id }}&model=l10n_br_ciel_it_account.dfe&view_type=form"
+                                   target="_blank"
+                                   class="text-muted small"
+                                   title="Abrir DFE no Odoo">
+                                    <i class="fas fa-external-link-alt"></i> {{ item.odoo_dfe_id }}
+                                </a>
+                            </td>
+                            <!-- Fornecedor -->
+                            <td>
+                                <strong>{{ item.razao_fornecedor or 'N/A' }}</strong>
+                                <br><small class="text-muted">{{ item.cnpj_fornecedor }}</small>
+                            </td>
+                            <!-- Produto -->
+                            <td>
+                                <code>{{ item.cod_produto_fornecedor or 'N/A' }}</code>
+                                {% if item.cod_produto_interno %}
+                                <i class="fas fa-arrow-right text-muted mx-1"></i>
+                                <code class="text-success">{{ item.cod_produto_interno }}</code>
+                                {% endif %}
+                                <br><small class="text-muted">{{ item.nome_produto or 'N/A' }}</small>
+                            </td>
+                            <!-- Tipo Divergencia -->
+                            <td class="text-center">
+                                {% if item.tipo_divergencia == 'sem_depara' %}
+                                <span class="badge bg-secondary">Sem De-Para</span>
+                                {% elif item.tipo_divergencia == 'sem_po' %}
+                                <span class="badge bg-secondary">Sem PO</span>
+                                {% elif item.tipo_divergencia == 'preco' %}
+                                <span class="badge bg-danger">Preco</span>
+                                {% elif item.tipo_divergencia == 'quantidade' %}
+                                <span class="badge bg-warning text-dark">Quantidade</span>
+                                {% elif item.tipo_divergencia == 'data_entrega' %}
+                                <span class="badge bg-warning text-dark">Data</span>
+                                {% else %}
+                                <span class="badge bg-secondary">{{ item.tipo_divergencia }}</span>
+                                {% endif %}
+                            </td>
+                            <!-- NF vs PO -->
+                            <td>
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <small class="text-muted">NF:</small>
+                                        <strong>{{ item.valor_nf or 'N/A' }}</strong>
+                                    </div>
+                                    <div>
+                                        <small class="text-muted">PO:</small>
+                                        <strong>{{ item.valor_po or 'N/A' }}</strong>
+                                    </div>
+                                </div>
+                                {% if item.diferenca_percentual %}
+                                <small class="text-danger">Dif: {{ item.diferenca_percentual }}%</small>
+                                {% endif %}
+                            </td>
+                            <!-- Status -->
+                            <td class="text-center">
+                                {% if item.status == 'aprovada' %}
+                                <span class="badge bg-success">Aprovada</span>
+                                {% elif item.status == 'rejeitada' %}
+                                <span class="badge bg-danger">Rejeitada</span>
+                                {% else %}
+                                <span class="badge bg-secondary">{{ item.status }}</span>
+                                {% endif %}
+                            </td>
+                            <!-- Resolucao/Justificativa -->
+                            <td>
+                                {% if item.resolucao %}
+                                <small class="fw-bold">{{ item.resolucao }}</small><br>
+                                {% endif %}
+                                {% if item.justificativa %}
+                                <small class="text-muted" title="{{ item.justificativa }}">
+                                    {{ item.justificativa[:50] }}{% if item.justificativa|length > 50 %}...{% endif %}
+                                </small>
+                                {% endif %}
+                            </td>
+                            <!-- Resolvido Por -->
+                            <td>
+                                <small>{{ item.resolvido_por or '-' }}</small>
+                            </td>
+                            <!-- Data Resolucao -->
+                            <td>
+                                {% if item.resolvido_em %}
+                                <small>{{ item.resolvido_em.strftime('%d/%m/%Y') }}</small>
+                                <br><small class="text-muted">{{ item.resolvido_em.strftime('%H:%M') }}</small>
+                                {% else %}
+                                <small class="text-muted">-</small>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="9" class="text-center text-muted py-4">
+                                <i class="fas fa-inbox fa-3x mb-3 d-block"></i>
+                                Nenhum registro encontrado
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Paginacao -->
+    {% if paginacao.pages > 1 %}
+    <nav class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if paginacao.page > 1 %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ paginacao.page - 1 }}&status={{ filtros.status }}&tipo={{ filtros.tipo }}&cnpj={{ filtros.cnpj }}&resolvido_por={{ filtros.resolvido_por }}&data_ini={{ filtros.data_ini }}&data_fim={{ filtros.data_fim }}">
+                    <i class="fas fa-chevron-left"></i>
+                </a>
+            </li>
+            {% endif %}
+
+            {% for p in range(1, paginacao.pages + 1) %}
+            {% if p == 1 or p == paginacao.pages or (p >= paginacao.page - 2 and p <= paginacao.page + 2) %}
+            <li class="page-item {% if p == paginacao.page %}active{% endif %}">
+                <a class="page-link" href="?page={{ p }}&status={{ filtros.status }}&tipo={{ filtros.tipo }}&cnpj={{ filtros.cnpj }}&resolvido_por={{ filtros.resolvido_por }}&data_ini={{ filtros.data_ini }}&data_fim={{ filtros.data_fim }}">{{ p }}</a>
+            </li>
+            {% elif p == paginacao.page - 3 or p == paginacao.page + 3 %}
+            <li class="page-item disabled"><span class="page-link">...</span></li>
+            {% endif %}
+            {% endfor %}
+
+            {% if paginacao.page < paginacao.pages %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ paginacao.page + 1 }}&status={{ filtros.status }}&tipo={{ filtros.tipo }}&cnpj={{ filtros.cnpj }}&resolvido_por={{ filtros.resolvido_por }}&data_ini={{ filtros.data_ini }}&data_fim={{ filtros.data_fim }}">
+                    <i class="fas fa-chevron-right"></i>
+                </a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+
+    <!-- Informacao de Paginacao -->
+    <div class="text-center text-muted mt-2">
+        <small>
+            Mostrando {{ ((paginacao.page - 1) * paginacao.per_page) + 1 }} -
+            {{ [paginacao.page * paginacao.per_page, paginacao.total] | min }}
+            de {{ paginacao.total }} registros
+        </small>
+    </div>
+</div>
+
+<script>
+function exportarExcel() {
+    // Construir URL com filtros atuais
+    const params = new URLSearchParams(window.location.search);
+    params.set('export', 'excel');
+
+    // Usar skill exportando-arquivos via API
+    alert('Funcionalidade de exportacao em desenvolvimento.\n\nPor enquanto, use Ctrl+C na tabela ou solicite ao sistema.');
+}
+</script>
+{% endblock %}

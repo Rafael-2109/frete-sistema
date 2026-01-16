@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard Financeiro{% endblock %}
+{% block title %}Central Financeira{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/financeiro/extrato.css') }}">
 <style>
-/* Dashboard Financeiro - Estilos locais */
+/* Central Financeira - Estilos locais */
 .fin-dashboard-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
@@ -179,7 +179,7 @@
         <div class="fin-header__content">
             <h1 class="fin-header__title">
                 <i class="fas fa-landmark"></i>
-                Dashboard Financeiro
+                Central Financeira
             </h1>
             <p class="fin-header__subtitle">
                 Central de acesso aos modulos financeiros - Custos, Contas a Receber, Contas a Pagar e Fretes

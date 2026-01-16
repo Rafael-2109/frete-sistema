@@ -201,7 +201,7 @@ class OdooPartnerSync:
             domain.append(['active', '=', True])
             
         fields = [
-            'name', 'display_name', 'vat', 'phone', 'email', 'street',
+            'name', 'display_name', 'l10n_br_cnpj', 'phone', 'email', 'street',
             'street2', 'city', 'state_id', 'country_id', 'zip',
             'active', 'supplier_rank', 'customer_rank', 'create_date',
             'write_date'
@@ -211,14 +211,13 @@ class OdooPartnerSync:
             self.model, domain, fields, limit=limit, order='name'
         )
     
-    def get_customer_by_vat(self, vat: str) -> Optional[Dict]:
+    def get_customer_by_cnpj(self, cnpj: str) -> Optional[Dict]:
         """Buscar cliente por CNPJ/CPF"""
-        domain = [['vat', '=', vat]]
-        fields = ['name', 'display_name', 'vat', 'phone', 'email', 'city', 'state_id']
+        domain = [['l10n_br_cnpj', '=', cnpj]]
+        fields = ['name', 'display_name', 'l10n_br_cnpj', 'phone', 'email', 'city', 'state_id', 'country_id']
         
         results = self.client.search_read(self.model, domain, fields, limit=1)
-        return results[0] if results else None
-    
+        return results[0] if results else None    
     def create_customer(self, customer_data: Dict) -> int:
         """Criar cliente no Odoo"""
         return self.client.create(self.model, customer_data)

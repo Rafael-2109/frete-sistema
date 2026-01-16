@@ -1,0 +1,257 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-compress-arrows-alt text-primary me-2"></i>Preview de Consolidacao</h2>
+            <p class="text-muted mb-0">Revise as acoes antes de aprovar a consolidacao</p>
+        </div>
+        <div>
+            <a href="{{ url_for('recebimento_views.validacoes_nf_po') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    <!-- Info da NF -->
+    <div class="card mb-4 border-primary">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="fas fa-file-invoice me-2"></i>Dados da NF-e</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <strong>Numero NF:</strong>
+                    <p class="mb-0">{{ validacao.numero_nf or validacao.odoo_dfe_id }}</p>
+                </div>
+                <div class="col-md-3">
+                    <strong>Data:</strong>
+                    <p class="mb-0">{{ validacao.data_nf.strftime('%d/%m/%Y') if validacao.data_nf else 'N/A' }}</p>
+                </div>
+                <div class="col-md-3">
+                    <strong>Fornecedor:</strong>
+                    <p class="mb-0">{{ validacao.razao_fornecedor or 'N/A' }}</p>
+                </div>
+                <div class="col-md-3">
+                    <strong>CNPJ:</strong>
+                    <p class="mb-0">{{ validacao.cnpj_fornecedor }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if preview.erro %}
+    <!-- Erro no Preview -->
+    <div class="alert alert-danger">
+        <i class="fas fa-exclamation-triangle me-2"></i>
+        <strong>Erro ao gerar preview:</strong> {{ preview.erro }}
+    </div>
+    {% else %}
+
+    <!-- Resumo -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card border-success">
+                <div class="card-body text-center">
+                    <h5 class="text-success"><i class="fas fa-star"></i></h5>
+                    <h3 class="mb-0">{{ preview.po_principal.name }}</h3>
+                    <small class="text-muted">PO Principal</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h5 class="text-primary"><i class="fas fa-shopping-cart"></i></h5>
+                    <h3 class="mb-0">{{ preview.resumo.total_pos }}</h3>
+                    <small class="text-muted">POs Envolvidos</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h5 class="text-info"><i class="fas fa-plus-circle"></i></h5>
+                    <h3 class="mb-0">{{ preview.resumo.saldos_a_criar }}</h3>
+                    <small class="text-muted">POs Saldo</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h5 class="text-danger"><i class="fas fa-times-circle"></i></h5>
+                    <h3 class="mb-0">{{ preview.resumo.pos_a_cancelar }}</h3>
+                    <small class="text-muted">POs a Cancelar</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- POs Envolvidos -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h6 class="mb-0"><i class="fas fa-shopping-cart me-2"></i>Pedidos de Compra Envolvidos</h6>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>PO</th>
+                            <th>Itens</th>
+                            <th class="text-end">Valor</th>
+                            <th class="text-center">Acao</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for po in pos_envolvidos %}
+                        <tr>
+                            <td>
+                                <strong class="text-primary">{{ po.name }}</strong>
+                                {% if loop.first %}
+                                <span class="badge bg-success ms-2">Principal</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <ul class="mb-0 ps-3" style="font-size: 0.85em;">
+                                {% for item in po.itens %}
+                                    <li>
+                                        {{ item.cod_produto }} - {{ item.qtd_nf|int }} un
+                                        {% if item.saldo > 0 %}
+                                        <small class="text-info">(saldo: {{ item.saldo|int }})</small>
+                                        {% endif %}
+                                    </li>
+                                {% endfor %}
+                                </ul>
+                            </td>
+                            <td class="text-end">
+                                R$ {{ '{:,.2f}'.format(po.valor_total).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                            </td>
+                            <td class="text-center">
+                                {% if loop.first %}
+                                <span class="badge bg-success"><i class="fas fa-check"></i> Manter</span>
+                                {% else %}
+                                <span class="badge bg-danger"><i class="fas fa-times"></i> Cancelar</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lista de Acoes -->
+    <div class="card mb-4">
+        <div class="card-header bg-warning text-dark">
+            <h6 class="mb-0"><i class="fas fa-list-ol me-2"></i>Acoes que Serao Executadas no Odoo ({{ preview.acoes|length }} acoes)</h6>
+        </div>
+        <div class="card-body">
+            <div class="timeline">
+                {% for acao in preview.acoes %}
+                <div class="timeline-item d-flex mb-3">
+                    <div class="timeline-marker me-3">
+                        <span class="badge bg-{{ acao.cor }} rounded-circle" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">
+                            <i class="{{ acao.icone }}"></i>
+                        </span>
+                    </div>
+                    <div class="timeline-content flex-grow-1">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <strong>{{ acao.tipo|replace('_', ' ')|title }}</strong>
+                                <p class="text-muted mb-0">{{ acao.descricao }}</p>
+                            </div>
+                            <span class="badge bg-{{ acao.cor }}">{{ loop.index }}</span>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Alerta -->
+    <div class="alert alert-warning">
+        <h5><i class="fas fa-exclamation-triangle me-2"></i>Atencao!</h5>
+        <ul class="mb-0">
+            <li>Ao confirmar, as acoes acima serao executadas no Odoo de forma <strong>IRREVERSIVEL</strong>.</li>
+            <li>POs cancelados nao poderao ser reabertos facilmente.</li>
+            <li>Linhas serao movidas e quantidades ajustadas conforme descrito.</li>
+            <li>Verifique cuidadosamente todas as acoes antes de prosseguir.</li>
+        </ul>
+    </div>
+
+    <!-- Botoes de Acao -->
+    <div class="d-flex justify-content-end gap-3">
+        <a href="{{ url_for('recebimento_views.validacoes_nf_po') }}" class="btn btn-lg btn-outline-secondary">
+            <i class="fas fa-times me-2"></i>Cancelar
+        </a>
+        <button type="button" class="btn btn-lg btn-success" onclick="confirmarConsolidacao()">
+            <i class="fas fa-check me-2"></i>Confirmar Consolidacao
+        </button>
+    </div>
+
+    {% endif %}
+</div>
+
+<style>
+.timeline {
+    position: relative;
+}
+.timeline-item:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: 15px;
+    width: 2px;
+    height: calc(100% - 32px);
+    background: #e9ecef;
+    margin-top: 36px;
+}
+.border-left-success {
+    border-left: 4px solid #28a745 !important;
+}
+.border-left-info {
+    border-left: 4px solid #17a2b8 !important;
+}
+</style>
+
+<script>
+function confirmarConsolidacao() {
+    if (!confirm('CONFIRMACAO FINAL\n\nVoce tem certeza que deseja executar a consolidacao?\n\nEsta acao modificara os POs no Odoo e nao pode ser facilmente desfeita.')) {
+        return;
+    }
+
+    // Mostrar loading
+    const btn = event.target;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processando...';
+
+    fetch('/api/recebimento/consolidar-pos/{{ validacao.id }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.sucesso) {
+            alert('Consolidacao realizada com sucesso!\n\nPO Principal: ' + data.po_consolidado_name);
+            window.location.href = '{{ url_for("recebimento_views.validacoes_nf_po") }}';
+        } else {
+            alert('Erro na consolidacao: ' + (data.erro || 'Erro desconhecido'));
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-check me-2"></i>Confirmar Consolidacao';
+        }
+    })
+    .catch(err => {
+        alert('Erro ao comunicar com o servidor: ' + err);
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-check me-2"></i>Confirmar Consolidacao';
+    });
+}
+</script>
+{% endblock %}

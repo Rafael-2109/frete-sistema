@@ -1,5 +1,11 @@
 """
-Dashboard Financeiro - Central de acesso
+Central Financeira - Central de acesso
+======================================
+
+Implementa central de acesso aos modulos financeiros - Custos, Contas a Receber, Contas a Pagar e Fretes
+
+Autor: Sistema de Fretes  
+Data: 2026-01-15
 """
 
 from flask import render_template
@@ -36,5 +42,5 @@ def requires_financeiro(f):
 @login_required
 @requires_financeiro
 def dashboard():
-    """Dashboard central do modulo financeiro"""
+    """Central do modulo financeiro"""
     return render_template('financeiro/dashboard.html')

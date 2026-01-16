@@ -111,11 +111,11 @@ class OdooSaleOrderCreator:
         # Limpar CNPJ
         cnpj_limpo = ''.join(filter(str.isdigit, cnpj))
 
-        # Buscar por vat (pode estar formatado de várias formas)
+        # Buscar por cnpj (pode estar formatado de várias formas)
         clientes = self.execute(
             'res.partner', 'search_read',
-            [['vat', 'ilike', cnpj_limpo]],
-            fields=['id', 'name', 'vat', 'property_product_pricelist']
+            [['l10n_br_cnpj', 'ilike', cnpj_limpo]],
+            fields=['id', 'name', 'l10n_br_cnpj', 'property_product_pricelist']
         )
 
         return clientes[0] if clientes else None

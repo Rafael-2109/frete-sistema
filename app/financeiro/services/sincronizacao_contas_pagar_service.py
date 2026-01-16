@@ -290,13 +290,13 @@ class SincronizacaoContasAPagarService:
         dados = self.connection.search_read(
             'res.partner',
             [['id', 'in', partner_ids]],
-            ['id', 'name', 'l10n_br_cnpj', 'vat'],
+            ['id', 'name', 'l10n_br_cnpj'],
             limit=len(partner_ids)
         )
 
         result = {}
         for p in (dados or []):
-            cnpj = p.get('l10n_br_cnpj') or p.get('vat') or ''
+            cnpj = p.get('l10n_br_cnpj') or ''
             result[p['id']] = {
                 'cnpj': cnpj,
                 'name': p.get('name', '')

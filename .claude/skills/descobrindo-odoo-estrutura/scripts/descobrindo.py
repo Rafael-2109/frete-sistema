@@ -163,8 +163,8 @@ Exemplos:
 
   # Consulta generica
   python consultando_desconhecidas.py --modelo res.partner \\
-    --filtro '[["vat","ilike","93209765"]]' \\
-    --campos '["id","name","vat"]' --limit 5
+    --filtro '[["l10n_br_cnpj","ilike","93209765"]]' \\
+    --campos '["id","name","l10n_br_cnpj"]' --limit 5
 
   # Inspecionar registro
   python consultando_desconhecidas.py --modelo res.partner --inspecionar 123

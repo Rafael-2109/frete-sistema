@@ -1,0 +1,452 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-exchange-alt text-primary me-2"></i>De-Para Produto/Fornecedor</h2>
+            <p class="text-muted mb-0">Mapeamento de codigos de produtos do fornecedor para codigos internos</p>
+        </div>
+        <div>
+            <button type="button" class="btn btn-success me-2" onclick="abrirModalNovo()">
+                <i class="fas fa-plus"></i> Novo De-Para
+            </button>
+            <button type="button" class="btn btn-outline-info me-2" onclick="importarDoOdoo()">
+                <i class="fas fa-download"></i> Importar do Odoo
+            </button>
+            <button type="button" class="btn btn-outline-primary" onclick="location.reload()">
+                <i class="fas fa-sync-alt"></i> Atualizar
+            </button>
+        </div>
+    </div>
+
+    <!-- Cards de Estatisticas -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card border-left-primary">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase small">Total Ativos</h6>
+                    <h2 class="mb-0 text-primary">{{ stats.total }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-left-success">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase small">Sincronizados</h6>
+                    <h2 class="mb-0 text-success">{{ stats.sincronizados }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-left-warning">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase small">Pendentes Sync</h6>
+                    <h2 class="mb-0 text-warning">{{ stats.pendentes }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h6 class="mb-0"><i class="fas fa-filter me-2"></i>Filtros</h6>
+        </div>
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('recebimento_views.depara_fornecedor') }}">
+                <div class="row">
+                    <div class="col-md-3">
+                        <label class="form-label">CNPJ Fornecedor</label>
+                        <input type="text" name="cnpj" class="form-control form-control-sm"
+                               value="{{ filtros.cnpj }}" placeholder="Digite o CNPJ...">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Codigo Produto</label>
+                        <input type="text" name="cod_produto" class="form-control form-control-sm"
+                               value="{{ filtros.cod_produto }}" placeholder="Fornecedor ou interno...">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Status</label>
+                        <select name="ativo" class="form-select form-select-sm">
+                            <option value="true" {% if filtros.ativo == 'true' %}selected{% endif %}>Ativos</option>
+                            <option value="false" {% if filtros.ativo == 'false' %}selected{% endif %}>Inativos</option>
+                            <option value="todos" {% if filtros.ativo == 'todos' %}selected{% endif %}>Todos</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary btn-sm me-2">
+                            <i class="fas fa-search"></i> Buscar
+                        </button>
+                        <a href="{{ url_for('recebimento_views.depara_fornecedor') }}" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-times"></i> Limpar
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela -->
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Fornecedor</th>
+                            <th>Cod. Fornecedor</th>
+                            <th>Cod. Interno</th>
+                            <th class="text-center">UM Forn.</th>
+                            <th class="text-center">Fator</th>
+                            <th class="text-center">Sync</th>
+                            <th class="text-center">Status</th>
+                            <th class="text-center" style="width: 150px;">Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in items %}
+                        <tr data-id="{{ item.id }}">
+                            <td>
+                                <strong>{{ item.razao_fornecedor or 'N/A' }}</strong>
+                                <br><small class="text-muted">{{ item.cnpj_fornecedor }}</small>
+                            </td>
+                            <td>
+                                <code>{{ item.cod_produto_fornecedor }}</code>
+                                {% if item.descricao_produto_fornecedor %}
+                                <br><small class="text-muted" title="{{ item.descricao_produto_fornecedor }}">
+                                    {{ item.descricao_produto_fornecedor[:50] }}...
+                                </small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <code class="text-primary">{{ item.cod_produto_interno }}</code>
+                                {% if item.nome_produto_interno %}
+                                <br><small class="text-muted">{{ item.nome_produto_interno[:40] }}...</small>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <span class="badge bg-secondary">{{ item.um_fornecedor or 'N/A' }}</span>
+                            </td>
+                            <td class="text-center">
+                                {% if item.fator_conversao and item.fator_conversao != 1 %}
+                                <span class="badge bg-info">{{ item.fator_conversao }}</span>
+                                {% else %}
+                                <span class="text-muted">1</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if item.sincronizado_odoo %}
+                                <span class="badge bg-success"><i class="fas fa-check"></i></span>
+                                {% else %}
+                                <span class="badge bg-warning"><i class="fas fa-clock"></i></span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if item.ativo %}
+                                <span class="badge bg-success">Ativo</span>
+                                {% else %}
+                                <span class="badge bg-danger">Inativo</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <button class="btn btn-sm btn-outline-primary" onclick="editarDepara({{ item.id }})"
+                                        title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                {% if not item.sincronizado_odoo %}
+                                <button class="btn btn-sm btn-outline-info" onclick="sincronizarDepara({{ item.id }})"
+                                        title="Sincronizar com Odoo">
+                                    <i class="fas fa-sync"></i>
+                                </button>
+                                {% endif %}
+                                <button class="btn btn-sm btn-outline-danger" onclick="excluirDepara({{ item.id }})"
+                                        title="Desativar">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="8" class="text-center text-muted py-4">
+                                <i class="fas fa-inbox fa-3x mb-3 d-block"></i>
+                                Nenhum De-Para encontrado
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Paginacao -->
+    {% if paginacao.pages > 1 %}
+    <nav class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if paginacao.page > 1 %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ paginacao.page - 1 }}&cnpj={{ filtros.cnpj }}&cod_produto={{ filtros.cod_produto }}&ativo={{ filtros.ativo }}">
+                    <i class="fas fa-chevron-left"></i>
+                </a>
+            </li>
+            {% endif %}
+
+            {% for p in range(1, paginacao.pages + 1) %}
+            <li class="page-item {% if p == paginacao.page %}active{% endif %}">
+                <a class="page-link" href="?page={{ p }}&cnpj={{ filtros.cnpj }}&cod_produto={{ filtros.cod_produto }}&ativo={{ filtros.ativo }}">{{ p }}</a>
+            </li>
+            {% endfor %}
+
+            {% if paginacao.page < paginacao.pages %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ paginacao.page + 1 }}&cnpj={{ filtros.cnpj }}&cod_produto={{ filtros.cod_produto }}&ativo={{ filtros.ativo }}">
+                    <i class="fas fa-chevron-right"></i>
+                </a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+
+<!-- Modal Novo/Editar De-Para -->
+<div class="modal fade" id="modalDepara" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalDeparaTitle">Novo De-Para</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formDepara">
+                    <input type="hidden" id="deparaId" name="id">
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="text-primary mb-3">Dados do Fornecedor</h6>
+
+                            <div class="mb-3">
+                                <label class="form-label">CNPJ Fornecedor *</label>
+                                <input type="text" class="form-control" id="cnpjFornecedor" name="cnpj_fornecedor" required>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Razao Social</label>
+                                <input type="text" class="form-control" id="razaoFornecedor" name="razao_fornecedor">
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Codigo Produto Fornecedor *</label>
+                                <input type="text" class="form-control" id="codProdutoFornecedor" name="cod_produto_fornecedor" required>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Descricao Produto Fornecedor</label>
+                                <input type="text" class="form-control" id="descProdutoFornecedor" name="descricao_produto_fornecedor">
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <h6 class="text-success mb-3">Dados Internos</h6>
+
+                            <div class="mb-3">
+                                <label class="form-label">Codigo Produto Interno *</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="codProdutoInterno" name="cod_produto_interno" required>
+                                    <button class="btn btn-outline-secondary" type="button" onclick="buscarProdutoOdoo()">
+                                        <i class="fas fa-search"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Nome Produto Interno</label>
+                                <input type="text" class="form-control" id="nomeProdutoInterno" name="nome_produto_interno" readonly>
+                            </div>
+
+                            <input type="hidden" id="odooProductId" name="odoo_product_id">
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">UM Fornecedor</label>
+                                        <input type="text" class="form-control" id="umFornecedor" name="um_fornecedor"
+                                               placeholder="Ex: ML, MI, MIL" onchange="sugerirFator()">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Fator Conversao</label>
+                                        <input type="number" class="form-control" id="fatorConversao" name="fator_conversao"
+                                               value="1" step="0.0001" min="0.0001">
+                                        <small class="text-muted">1 UM Forn. = X unidades</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="salvarDepara()">
+                    <i class="fas fa-save"></i> Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const modalDepara = new bootstrap.Modal(document.getElementById('modalDepara'));
+
+function abrirModalNovo() {
+    document.getElementById('modalDeparaTitle').textContent = 'Novo De-Para';
+    document.getElementById('formDepara').reset();
+    document.getElementById('deparaId').value = '';
+    document.getElementById('fatorConversao').value = '1';
+    modalDepara.show();
+}
+
+function editarDepara(id) {
+    fetch(`/api/recebimento/depara/${id}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.sucesso) {
+                const d = data.depara;
+                document.getElementById('modalDeparaTitle').textContent = 'Editar De-Para';
+                document.getElementById('deparaId').value = d.id;
+                document.getElementById('cnpjFornecedor').value = d.cnpj_fornecedor;
+                document.getElementById('razaoFornecedor').value = d.razao_fornecedor || '';
+                document.getElementById('codProdutoFornecedor').value = d.cod_produto_fornecedor;
+                document.getElementById('descProdutoFornecedor').value = d.descricao_produto_fornecedor || '';
+                document.getElementById('codProdutoInterno').value = d.cod_produto_interno;
+                document.getElementById('nomeProdutoInterno').value = d.nome_produto_interno || '';
+                document.getElementById('odooProductId').value = d.odoo_product_id || '';
+                document.getElementById('umFornecedor').value = d.um_fornecedor || '';
+                document.getElementById('fatorConversao').value = d.fator_conversao || 1;
+                modalDepara.show();
+            } else {
+                alert('Erro ao buscar De-Para: ' + data.erro);
+            }
+        });
+}
+
+function salvarDepara() {
+    const id = document.getElementById('deparaId').value;
+    const method = id ? 'PUT' : 'POST';
+    const url = id ? `/api/recebimento/depara/${id}` : '/api/recebimento/depara';
+
+    const dados = {
+        cnpj_fornecedor: document.getElementById('cnpjFornecedor').value,
+        razao_fornecedor: document.getElementById('razaoFornecedor').value,
+        cod_produto_fornecedor: document.getElementById('codProdutoFornecedor').value,
+        descricao_produto_fornecedor: document.getElementById('descProdutoFornecedor').value,
+        cod_produto_interno: document.getElementById('codProdutoInterno').value,
+        nome_produto_interno: document.getElementById('nomeProdutoInterno').value,
+        odoo_product_id: document.getElementById('odooProductId').value || null,
+        um_fornecedor: document.getElementById('umFornecedor').value,
+        fator_conversao: parseFloat(document.getElementById('fatorConversao').value) || 1
+    };
+
+    fetch(url, {
+        method: method,
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(dados)
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.sucesso) {
+            modalDepara.hide();
+            location.reload();
+        } else {
+            alert('Erro: ' + data.erro);
+        }
+    });
+}
+
+function excluirDepara(id) {
+    if (!confirm('Deseja desativar este De-Para?')) return;
+
+    fetch(`/api/recebimento/depara/${id}`, {method: 'DELETE'})
+        .then(r => r.json())
+        .then(data => {
+            if (data.sucesso) {
+                location.reload();
+            } else {
+                alert('Erro: ' + data.erro);
+            }
+        });
+}
+
+function sincronizarDepara(id) {
+    fetch('/api/recebimento/depara/sincronizar-odoo', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({depara_id: id})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.sucesso) {
+            alert('Sincronizado com sucesso!');
+            location.reload();
+        } else {
+            alert('Erro: ' + data.erro);
+        }
+    });
+}
+
+function importarDoOdoo() {
+    if (!confirm('Importar De-Para do Odoo (product.supplierinfo)?')) return;
+
+    fetch('/api/recebimento/depara/importar-odoo', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({limit: 500})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.sucesso) {
+            alert(`Importacao concluida!\nImportados: ${data.importados}\nAtualizados: ${data.atualizados}\nErros: ${data.erros}`);
+            location.reload();
+        } else {
+            alert('Erro: ' + data.erro);
+        }
+    });
+}
+
+function buscarProdutoOdoo() {
+    const cod = document.getElementById('codProdutoInterno').value;
+    if (!cod) {
+        alert('Digite o codigo do produto');
+        return;
+    }
+
+    fetch(`/api/recebimento/buscar-produto-odoo?cod_produto=${cod}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.sucesso) {
+                document.getElementById('nomeProdutoInterno').value = data.produto.name;
+                document.getElementById('odooProductId').value = data.produto.id;
+            } else {
+                alert(data.erro);
+            }
+        });
+}
+
+function sugerirFator() {
+    const um = document.getElementById('umFornecedor').value;
+    if (!um) return;
+
+    fetch(`/api/recebimento/depara/sugerir-fator?um_fornecedor=${um}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.sucesso && data.fator_sugerido > 1) {
+                document.getElementById('fatorConversao').value = data.fator_sugerido;
+            }
+        });
+}
+</script>
+{% endblock %}

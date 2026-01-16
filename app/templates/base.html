@@ -213,7 +213,7 @@
             <ul class="dropdown-menu">
               <!-- Dashboard Central -->
               <li><a class="dropdown-item" href="{{ url_for('financeiro.dashboard') }}">
-                  <i class="fas fa-landmark text-primary"></i> <strong>Dashboard Financeiro</strong>
+                  <i class="fas fa-landmark text-primary"></i> <strong>Central Financeira</strong>
                 </a></li>
               <li><hr class="dropdown-divider"></li>
               {% if current_user.tem_permissao('fretes') or current_user.pode_acessar_financeiro() or
@@ -249,66 +249,21 @@
                 </a></li>
               {% endif %}
               {% endif %}
-              {% if current_user.tem_permissao('financeiro') or current_user.tem_permissao('faturamento') or
-              current_user.pode_acessar_financeiro() or current_user.perfil == 'administrador' %}
-              <li>
-                <hr class="dropdown-divider">
-              </li>
-              <li>
-                <h6 class="dropdown-header">💼 Financeiro</h6>
-              </li>
-              {% if current_user.tem_permissao('financeiro') or current_user.pode_acessar_financeiro() or
-              current_user.perfil == 'administrador' %}
-              <li><a class="dropdown-item" href="{{ url_for('custeio.index') }}">
-                  <i class="fas fa-calculator text-info"></i> Sistema de Custeio
-                  <span class="badge bg-info ms-2">NOVO</span>
-                </a></li>
-              {% endif %}
-              {% if current_user.tem_permissao('faturamento', 'visualizar') or current_user.pode_acessar_financeiro() or
-              current_user.perfil == 'administrador' %}
-              <li><a class="dropdown-item" href="{{ url_for('faturamento.listar_relatorios') }}">
-                  <i class="fas fa-chart-line"></i> Relatório de Faturamento
-                </a></li>
-              {% endif %}
+        
+
+              {# ================================================================= #}
+              {# CENTRAL FISCAL - Validações e Cadastros Fiscais                  #}
+              {# ================================================================= #}
               {% if current_user.tem_permissao('financeiro', 'pendencias') or current_user.pode_acessar_financeiro() or
               current_user.perfil == 'administrador' %}
-              <li><a class="dropdown-item" href="{{ url_for('financeiro.consultar_pendencias') }}">
-                  <i class="fas fa-exclamation-triangle"></i> Pendências Financeiras
-                </a></li>
-              {% endif %}
-              {% if current_user.tem_permissao('financeiro') or current_user.pode_acessar_financeiro() or
-              current_user.perfil == 'administrador' %}
-              <li><a class="dropdown-item" href="{{ url_for('financeiro.contas_receber_hub') }}">
-                  <i class="fas fa-file-invoice-dollar text-success"></i> Contas a Receber
-                </a></li>
-              <li><a class="dropdown-item" href="{{ url_for('financeiro.contas_pagar_hub') }}">
-                  <i class="fas fa-file-invoice-dollar text-danger"></i> Contas a Pagar
-                </a></li>
-              {% endif %}
-              {#<!--/***
-            <li><hr class="dropdown-divider"></li>
-            <li><h6 class="dropdown-header">📊 Business Intelligence</h6></li>
-            <li><a class="dropdown-item" href="{{ url_for('bi.dashboard') }}">
-              <i class="fas fa-chart-pie"></i> Dashboard BI
-            </a></li>
-            <li><a class="dropdown-item" href="{{ url_for('bi.transportadoras') }}">
-              <i class="fas fa-truck-moving"></i> Análise Transportadoras
-            </a></li>
-            <li><a class="dropdown-item" href="{{ url_for('bi.regional') }}">
-              <i class="fas fa-map-marked-alt"></i> Análise Regional
-            </a></li>
-            <li><a class="dropdown-item" href="{{ url_for('bi.despesas') }}">
-              <i class="fas fa-file-invoice-dollar"></i> Despesas Extras
-            </a></li>
-            ***/-->#}
-              {% endif %}
-              {% if current_user.tem_permissao('financeiro', 'pendencias') or current_user.pode_acessar_financeiro() or
-              current_user.perfil == 'administrador' %}
+              <li><hr class="dropdown-divider"></li>
               <li>
-                <h6 class="dropdown-header">📋 Validacao Compras</h6>
+                <h6 class="dropdown-header">📋 Central Fiscal</h6>
               </li>
+
+              {# Validação de Compras (Fase 1 - Fiscal) #}
               <li><a class="dropdown-item" href="{{ url_for('recebimento_views.divergencias') }}">
-                  <i class="fas fa-exclamation-triangle text-warning"></i> Divergencias Fiscais
+                  <i class="fas fa-exclamation-triangle text-warning"></i> Divergências Fiscais
                 </a></li>
               <li><a class="dropdown-item" href="{{ url_for('recebimento_views.primeira_compra') }}">
                   <i class="fas fa-clipboard-check text-info"></i> Primeira Compra
@@ -316,15 +271,24 @@
               <li><a class="dropdown-item" href="{{ url_for('recebimento_views.perfis_fiscais') }}">
                   <i class="fas fa-id-card text-primary"></i> Perfis Fiscais
                 </a></li>
-              {% endif %}
-              {% if current_user.tem_permissao('financeiro', 'pendencias') or current_user.pode_acessar_financeiro() or
-              current_user.perfil == 'administrador' %}
-              <li>
-                <h6 class="dropdown-header">📋 Fiscal</h6>
-              </li>
+
+              {# Validação NF × PO (Fase 2) #}
+              <li><a class="dropdown-item" href="{{ url_for('recebimento_views.validacoes_nf_po') }}">
+                  <i class="fas fa-check-double text-success"></i> Validações NF × PO
+                </a></li>
+              <li><a class="dropdown-item" href="{{ url_for('recebimento_views.divergencias_nf_po') }}">
+                  <i class="fas fa-exclamation-circle text-danger"></i> Divergências NF × PO
+                </a></li>
+              <li><a class="dropdown-item" href="{{ url_for('recebimento_views.historico_aprovacoes_nf_po') }}">
+                  <i class="fas fa-history text-secondary"></i> Histórico Aprovações
+                </a></li>
+              <li><a class="dropdown-item" href="{{ url_for('recebimento_views.depara_fornecedor') }}">
+                  <i class="fas fa-exchange-alt text-info"></i> De-Para Fornecedor
+                </a></li>
+
+              {# Cadastros Fiscais - IBS/CBS #}
               <li><a class="dropdown-item" href="{{ url_for('relatorios_fiscais.pagina_relatorio_ibscbs') }}">
                   <i class="fas fa-file-invoice text-info"></i> Documentos C/ IBS/CBS
-                  <span class="badge bg-info ms-2">NOVO</span>
                 </a></li>
               <li><a class="dropdown-item" href="{{ url_for('recebimento_views.ncm_ibscbs') }}">
                   <i class="fas fa-list-ol text-success"></i> Cadastro NCM IBS/CBS

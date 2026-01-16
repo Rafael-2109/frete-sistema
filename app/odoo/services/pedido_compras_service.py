@@ -262,7 +262,7 @@ class PedidoComprasServiceOtimizado:
             fornecedores = self.connection.read(
                 'res.partner',
                 partner_ids,
-                fields=['id', 'l10n_br_cnpj', 'vat', 'name']
+                fields=['id', 'l10n_br_cnpj', 'name']
             )
 
             # Mapear por ID
@@ -418,8 +418,7 @@ class PedidoComprasServiceOtimizado:
                 if partner_id:
                     fornecedor = fornecedores_cache.get(partner_id)
                     if fornecedor:
-                        # Pegar CNPJ (prioridade l10n_br_cnpj, depois vat)
-                        cnpj = fornecedor.get('l10n_br_cnpj') or fornecedor.get('vat') or ''
+                        cnpj = fornecedor.get('l10n_br_cnpj') or ''
 
                         if self._eh_fornecedor_grupo(cnpj):
                             self.logger.info(

@@ -156,8 +156,8 @@ class BaixaPagamentosService:
         # Buscar fornecedor pelo CNPJ
         parceiros = self.connection.search_read(
             'res.partner',
-            [['vat', 'ilike', cnpj_limpo[:8]]],  # Busca pela raiz do CNPJ
-            fields=['id', 'name', 'vat'],
+            [['l10n_br_cnpj', 'ilike', cnpj_limpo[:8]]],  # Busca pela raiz do CNPJ
+            fields=['id', 'name', 'l10n_br_cnpj'],
             limit=20
         )
 

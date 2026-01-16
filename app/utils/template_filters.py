@@ -71,10 +71,38 @@ def from_json(json_string):
     except (ValueError, TypeError, json.JSONDecodeError):
         return []
 
+
+def numero_br(valor, decimais=3):
+    """
+    Filtro para exibir numeros no formato brasileiro (1.234,567)
+    SEM prefixo R$ - para quantidades e valores genericos
+
+    Uso no template: {{ quantidade|numero_br }}
+    Uso com decimais: {{ quantidade|numero_br(0) }} -> 1.234
+
+    Exemplos:
+        1234.567 -> 1.234,567 (padrao 3 decimais)
+        1234.5678 |numero_br(4) -> 1.234,5678
+        1234 |numero_br(0) -> 1.234
+    """
+    if valor is None or valor == '':
+        return f"0,{'0' * decimais}" if decimais > 0 else "0"
+
+    try:
+        valor_float = float(valor)
+        if decimais == 0:
+            return f"{valor_float:,.0f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        else:
+            return f"{valor_float:,.{decimais}f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+    except (ValueError, TypeError):
+        return f"0,{'0' * decimais}" if decimais > 0 else "0"
+
+
 def register_template_filters(app):
     """Registra filtros customizados no Flask"""
     app.jinja_env.filters['file_url'] = file_url
     app.jinja_env.filters['datetime_br'] = datetime_br
     app.jinja_env.filters['date_br'] = date_br
     app.jinja_env.filters['valor_br'] = valor_br
+    app.jinja_env.filters['numero_br'] = numero_br
     app.jinja_env.filters['from_json'] = from_json 

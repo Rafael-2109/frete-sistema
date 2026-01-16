@@ -33,11 +33,11 @@ def buscar_cnpjs_fornecedores(odoo, partner_ids: list) -> dict:
     partners = odoo.search_read(
         'res.partner',
         [['id', 'in', list(set(partner_ids))]],
-        ['id', 'vat'],
+        ['id', 'l10n_br_cnpj'],
         limit=10000
     )
 
-    return {p['id']: p.get('vat') or '' for p in partners}
+    return {p['id']: p.get('l10n_br_cnpj') or '' for p in partners}
 
 
 def buscar_codigos_produtos(odoo, product_tmpl_ids: list) -> dict:

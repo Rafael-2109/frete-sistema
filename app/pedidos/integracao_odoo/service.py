@@ -109,7 +109,7 @@ class OdooIntegrationService:
             cnpj_formatado = cnpj
 
         # Campos possíveis para CNPJ no Odoo
-        campos_cnpj = ['l10n_br_cnpj', 'vat']
+        campos_cnpj = ['l10n_br_cnpj']
 
         # Formatos de CNPJ para tentar
         formatos_cnpj = [cnpj_formatado, cnpj_limpo, cnpj]

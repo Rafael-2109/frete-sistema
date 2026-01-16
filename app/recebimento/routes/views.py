@@ -1,15 +1,22 @@
 """
-Views de Validacao Fiscal - Telas HTML
-======================================
+Views de Recebimento de Materiais - Telas HTML
+==============================================
 
-Rotas:
-- GET /operacional/compras/divergencias - Tela de divergencias
+FASE 1 - Validacao Fiscal:
+- GET /operacional/compras/divergencias - Tela de divergencias fiscais
 - GET /operacional/compras/primeira-compra - Tela de primeira compra
 - GET /operacional/compras/perfis-fiscais - Tela de perfis fiscais
 - GET /operacional/compras/ncm-ibscbs - Cadastro de NCMs IBS/CBS
 - GET /operacional/compras/pendencias-ibscbs - Pendencias IBS/CBS
 
-Referencia: .claude/references/RECEBIMENTO_MATERIAIS.md
+FASE 2 - Vinculacao NF x PO:
+- GET /operacional/compras/depara-fornecedor - Tela de De-Para Produto/Fornecedor
+- GET /operacional/compras/divergencias-nf-po - Tela de divergencias NF x PO
+- GET /operacional/compras/validacoes-nf-po - Tela de validacoes NF x PO
+
+Referencia:
+- .claude/references/RECEBIMENTO_MATERIAIS.md
+- .claude/plans/wiggly-plotting-newt.md
 """
 
 import json
@@ -927,3 +934,581 @@ def ncm_ibscbs_salvar_ajax():
             'sucesso': False,
             'mensagem': f'Erro ao salvar: {str(e)}'
         }), 500
+
+
+# =============================================================================
+# FASE 2: DE-PARA PRODUTO/FORNECEDOR
+# =============================================================================
+
+@recebimento_views_bp.route('/depara-fornecedor')
+@login_required
+def depara_fornecedor():
+    """
+    Tela de gerenciamento de De-Para Produto/Fornecedor.
+    CRUD completo + sincronizacao com Odoo.
+    """
+    from app.recebimento.models import ProdutoFornecedorDepara
+
+    # Filtros
+    filtros = {
+        'cnpj': request.args.get('cnpj', ''),
+        'cod_produto': request.args.get('cod_produto', ''),
+        'ativo': request.args.get('ativo', 'true')
+    }
+
+    # Query base
+    query = ProdutoFornecedorDepara.query
+
+    # Aplicar filtros
+    if filtros['cnpj']:
+        query = query.filter(
+            ProdutoFornecedorDepara.cnpj_fornecedor.ilike(f"%{filtros['cnpj']}%")
+        )
+
+    if filtros['cod_produto']:
+        query = query.filter(
+            db.or_(
+                ProdutoFornecedorDepara.cod_produto_fornecedor.ilike(f"%{filtros['cod_produto']}%"),
+                ProdutoFornecedorDepara.cod_produto_interno.ilike(f"%{filtros['cod_produto']}%")
+            )
+        )
+
+    if filtros['ativo'] != 'todos':
+        query = query.filter(
+            ProdutoFornecedorDepara.ativo == (filtros['ativo'] == 'true')
+        )
+
+    # Ordenar
+    query = query.order_by(
+        ProdutoFornecedorDepara.razao_fornecedor,
+        ProdutoFornecedorDepara.cod_produto_fornecedor
+    )
+
+    # Paginacao
+    page = request.args.get('page', 1, type=int)
+    per_page = 50
+    paginacao = query.paginate(page=page, per_page=per_page, error_out=False)
+
+    # Estatisticas
+    stats = {
+        'total': ProdutoFornecedorDepara.query.filter_by(ativo=True).count(),
+        'sincronizados': ProdutoFornecedorDepara.query.filter_by(
+            ativo=True, sincronizado_odoo=True
+        ).count(),
+        'pendentes': ProdutoFornecedorDepara.query.filter_by(
+            ativo=True, sincronizado_odoo=False
+        ).count()
+    }
+
+    return render_template(
+        'recebimento/depara_fornecedor.html',
+        items=paginacao.items,
+        paginacao={
+            'page': paginacao.page,
+            'pages': paginacao.pages,
+            'total': paginacao.total,
+            'per_page': per_page,
+            'items': paginacao.items
+        },
+        filtros=filtros,
+        stats=stats
+    )
+
+
+# =============================================================================
+# FASE 2: DIVERGENCIAS NF x PO
+# =============================================================================
+
+@recebimento_views_bp.route('/divergencias-nf-po')
+@login_required
+def divergencias_nf_po():
+    """
+    Tela de divergencias NF x PO para resolucao manual.
+    """
+    from app.recebimento.models import DivergenciaNfPo, ValidacaoNfPoDfe, MatchNfPoItem
+
+    # Filtros
+    filtros = {
+        'status': request.args.get('status', 'pendente'),
+        'tipo': request.args.get('tipo', ''),
+        'cnpj': request.args.get('cnpj', '')
+    }
+
+    # Query base com JOIN para pegar dados da validacao (numero_nf)
+    query = db.session.query(DivergenciaNfPo).outerjoin(
+        ValidacaoNfPoDfe,
+        DivergenciaNfPo.validacao_id == ValidacaoNfPoDfe.id
+    )
+
+    # Aplicar filtros
+    if filtros['status'] and filtros['status'] != 'todas':
+        query = query.filter(DivergenciaNfPo.status == filtros['status'])
+
+    if filtros['tipo']:
+        query = query.filter(DivergenciaNfPo.tipo_divergencia == filtros['tipo'])
+
+    if filtros['cnpj']:
+        query = query.filter(
+            DivergenciaNfPo.cnpj_fornecedor.ilike(f"%{filtros['cnpj']}%")
+        )
+
+    # Ordenar
+    query = query.order_by(DivergenciaNfPo.criado_em.desc())
+
+    # Paginacao
+    page = request.args.get('page', 1, type=int)
+    per_page = 50
+    paginacao = query.paginate(page=page, per_page=per_page, error_out=False)
+
+    # Funcao helper para formatar CNPJ
+    def formatar_cnpj(cnpj):
+        """Formata CNPJ como XX.XXX.XXX/XXXX-XX"""
+        if not cnpj:
+            return None
+        # Limpar apenas digitos
+        cnpj_limpo = ''.join(c for c in str(cnpj) if c.isdigit())
+        if len(cnpj_limpo) == 14:
+            return f'{cnpj_limpo[:2]}.{cnpj_limpo[2:5]}.{cnpj_limpo[5:8]}/{cnpj_limpo[8:12]}-{cnpj_limpo[12:14]}'
+        return cnpj  # Retorna original se nao for 14 digitos
+
+    # Enriquecer itens com dados adicionais
+    items_enriquecidos = []
+    for div in paginacao.items:
+        item = {
+            'id': div.id,
+            'validacao_id': div.validacao_id,
+            'odoo_dfe_id': div.odoo_dfe_id,
+            'odoo_dfe_line_id': div.odoo_dfe_line_id,
+            'cnpj_fornecedor': formatar_cnpj(div.cnpj_fornecedor),
+            'razao_fornecedor': div.razao_fornecedor,
+            'cod_produto_fornecedor': div.cod_produto_fornecedor,
+            'cod_produto_interno': div.cod_produto_interno,
+            'nome_produto': div.nome_produto,
+            'tipo_divergencia': div.tipo_divergencia,
+            'campo_label': div.campo_label,
+            'valor_nf': div.valor_nf,
+            'valor_po': div.valor_po,
+            'diferenca_percentual': div.diferenca_percentual,
+            'odoo_po_id': div.odoo_po_id,
+            'odoo_po_name': div.odoo_po_name,
+            'odoo_po_line_id': div.odoo_po_line_id,
+            'status': div.status,
+            'resolucao': div.resolucao,
+            'justificativa': div.justificativa,
+            'resolvido_por': div.resolvido_por,
+            'resolvido_em': div.resolvido_em,
+            'criado_em': div.criado_em,
+            # Campos que serao preenchidos abaixo
+            'qtd_nf': None,
+            'preco_nf': None,
+            'um_nf': None,
+            'fator_conversao': 1
+        }
+
+        # Buscar dados da validacao (numero_nf, data_nf)
+        if div.validacao_id:
+            validacao = ValidacaoNfPoDfe.query.get(div.validacao_id)
+            if validacao:
+                item['numero_nf'] = validacao.numero_nf
+                item['data_nf'] = validacao.data_nf
+                item['valor_total_nf'] = validacao.valor_total_nf
+
+        # Buscar dados do match (qtd, preco, um)
+        match_encontrado = False
+        if div.odoo_dfe_line_id and div.validacao_id:
+            match = MatchNfPoItem.query.filter_by(
+                validacao_id=div.validacao_id,
+                odoo_dfe_line_id=div.odoo_dfe_line_id
+            ).first()
+            if match:
+                match_encontrado = True
+                item['qtd_nf'] = float(match.qtd_nf) if match.qtd_nf else None
+                item['preco_nf'] = float(match.preco_nf) if match.preco_nf else None
+                item['um_nf'] = match.um_nf
+                item['fator_conversao'] = float(match.fator_conversao) if match.fator_conversao else 1
+
+        # Se nao encontrou match, buscar qualquer match da mesma validacao
+        # com o mesmo codigo de produto fornecedor
+        if not match_encontrado and div.validacao_id and div.cod_produto_fornecedor:
+            match = MatchNfPoItem.query.filter_by(
+                validacao_id=div.validacao_id,
+                cod_produto_fornecedor=div.cod_produto_fornecedor
+            ).first()
+            if match:
+                match_encontrado = True
+                item['qtd_nf'] = float(match.qtd_nf) if match.qtd_nf else None
+                item['preco_nf'] = float(match.preco_nf) if match.preco_nf else None
+                item['um_nf'] = match.um_nf
+                item['fator_conversao'] = float(match.fator_conversao) if match.fator_conversao else 1
+
+        # Se ainda nao encontrou, marcar para buscar do Odoo
+        # (sera feito em batch depois para performance)
+        if not match_encontrado:
+            item['_buscar_odoo'] = True
+            item['_odoo_dfe_line_id'] = div.odoo_dfe_line_id
+
+        items_enriquecidos.append(item)
+
+    # Buscar dados do Odoo para itens sem match (em batch)
+    itens_para_buscar = [i for i in items_enriquecidos if i.get('_buscar_odoo')]
+    if itens_para_buscar:
+        try:
+            from app.odoo.utils.connection import get_odoo_connection
+            odoo = get_odoo_connection()
+            if odoo.authenticate():
+                dfe_line_ids = [i['_odoo_dfe_line_id'] for i in itens_para_buscar if i.get('_odoo_dfe_line_id')]
+                if dfe_line_ids:
+                    lines = odoo.read(
+                        'l10n_br_ciel_it_account.dfe.line',
+                        dfe_line_ids,
+                        ['id', 'det_prod_qcom', 'det_prod_vuncom', 'det_prod_ucom']
+                    )
+                    # Mapear por ID
+                    lines_map = {l['id']: l for l in lines} if lines else {}
+
+                    for item in itens_para_buscar:
+                        line_id = item.get('_odoo_dfe_line_id')
+                        if line_id and line_id in lines_map:
+                            line = lines_map[line_id]
+                            item['qtd_nf'] = float(line.get('det_prod_qcom') or 0)
+                            item['preco_nf'] = float(line.get('det_prod_vuncom') or 0)
+                            item['um_nf'] = line.get('det_prod_ucom')
+        except Exception as e:
+            # Se falhar, apenas loga - os dados ficarao vazios
+            import logging
+            logging.getLogger(__name__).warning(f"Erro ao buscar dados do Odoo: {e}")
+
+    # Limpar campos internos
+    for item in items_enriquecidos:
+        item.pop('_buscar_odoo', None)
+        item.pop('_odoo_dfe_line_id', None)
+
+    # Estatisticas
+    stats = {
+        'pendente': DivergenciaNfPo.query.filter_by(status='pendente').count(),
+        'aprovada': DivergenciaNfPo.query.filter_by(status='aprovada').count(),
+        'rejeitada': DivergenciaNfPo.query.filter_by(status='rejeitada').count()
+    }
+
+    # Tipos de divergencia para filtro
+    tipos_divergencia = [
+        {'valor': 'sem_depara', 'label': 'Sem De-Para'},
+        {'valor': 'sem_po', 'label': 'Sem Pedido de Compra'},
+        {'valor': 'preco', 'label': 'Preco Divergente'},
+        {'valor': 'quantidade', 'label': 'Quantidade Divergente'},
+        {'valor': 'data_entrega', 'label': 'Data Fora do Prazo'}
+    ]
+
+    # URL base do Odoo para links externos
+    odoo_base_url = 'https://odoo.nacomgoya.com.br/web'
+
+    return render_template(
+        'recebimento/divergencias_nf_po.html',
+        items=items_enriquecidos,
+        paginacao={
+            'page': paginacao.page,
+            'pages': paginacao.pages,
+            'total': paginacao.total,
+            'per_page': per_page
+        },
+        filtros=filtros,
+        stats=stats,
+        tipos_divergencia=tipos_divergencia,
+        odoo_base_url=odoo_base_url
+    )
+
+
+# =============================================================================
+# FASE 2: HISTORICO DE APROVACOES NF x PO
+# =============================================================================
+
+@recebimento_views_bp.route('/historico-aprovacoes-nf-po')
+@login_required
+def historico_aprovacoes_nf_po():
+    """
+    Tela de historico de aprovacoes/rejeicoes de divergencias NF x PO.
+    Mostra apenas divergencias ja resolvidas (aprovadas ou rejeitadas).
+    """
+    from app.recebimento.models import DivergenciaNfPo, ValidacaoNfPoDfe, MatchNfPoItem
+
+    # Filtros
+    filtros = {
+        'status': request.args.get('status', ''),  # aprovada, rejeitada
+        'tipo': request.args.get('tipo', ''),
+        'cnpj': request.args.get('cnpj', ''),
+        'data_ini': request.args.get('data_ini', ''),
+        'data_fim': request.args.get('data_fim', ''),
+        'resolvido_por': request.args.get('resolvido_por', '')
+    }
+
+    # Query base - apenas resolvidas
+    query = db.session.query(DivergenciaNfPo).filter(
+        DivergenciaNfPo.status.in_(['aprovada', 'rejeitada'])
+    )
+
+    # Aplicar filtros
+    if filtros['status']:
+        query = query.filter(DivergenciaNfPo.status == filtros['status'])
+
+    if filtros['tipo']:
+        query = query.filter(DivergenciaNfPo.tipo_divergencia == filtros['tipo'])
+
+    if filtros['cnpj']:
+        query = query.filter(
+            DivergenciaNfPo.cnpj_fornecedor.ilike(f"%{filtros['cnpj']}%")
+        )
+
+    if filtros['resolvido_por']:
+        query = query.filter(
+            DivergenciaNfPo.resolvido_por.ilike(f"%{filtros['resolvido_por']}%")
+        )
+
+    if filtros['data_ini']:
+        try:
+            from datetime import datetime
+            data_ini = datetime.strptime(filtros['data_ini'], '%Y-%m-%d')
+            query = query.filter(DivergenciaNfPo.resolvido_em >= data_ini)
+        except ValueError:
+            pass
+
+    if filtros['data_fim']:
+        try:
+            from datetime import datetime, timedelta
+            data_fim = datetime.strptime(filtros['data_fim'], '%Y-%m-%d') + timedelta(days=1)
+            query = query.filter(DivergenciaNfPo.resolvido_em < data_fim)
+        except ValueError:
+            pass
+
+    # Ordenar por data de resolucao desc
+    query = query.order_by(DivergenciaNfPo.resolvido_em.desc())
+
+    # Paginacao
+    page = request.args.get('page', 1, type=int)
+    per_page = 50
+    paginacao = query.paginate(page=page, per_page=per_page, error_out=False)
+
+    # Funcao helper para formatar CNPJ
+    def formatar_cnpj(cnpj):
+        """Formata CNPJ como XX.XXX.XXX/XXXX-XX"""
+        if not cnpj:
+            return None
+        # Limpar apenas digitos
+        cnpj_limpo = ''.join(c for c in str(cnpj) if c.isdigit())
+        if len(cnpj_limpo) == 14:
+            return f'{cnpj_limpo[:2]}.{cnpj_limpo[2:5]}.{cnpj_limpo[5:8]}/{cnpj_limpo[8:12]}-{cnpj_limpo[12:14]}'
+        return cnpj  # Retorna original se nao for 14 digitos
+
+    # Enriquecer itens com dados adicionais
+    items_enriquecidos = []
+    for div in paginacao.items:
+        item = {
+            'id': div.id,
+            'validacao_id': div.validacao_id,
+            'odoo_dfe_id': div.odoo_dfe_id,
+            'cnpj_fornecedor': formatar_cnpj(div.cnpj_fornecedor),
+            'razao_fornecedor': div.razao_fornecedor,
+            'cod_produto_fornecedor': div.cod_produto_fornecedor,
+            'cod_produto_interno': div.cod_produto_interno,
+            'nome_produto': div.nome_produto,
+            'tipo_divergencia': div.tipo_divergencia,
+            'valor_nf': div.valor_nf,
+            'valor_po': div.valor_po,
+            'diferenca_percentual': div.diferenca_percentual,
+            'odoo_po_name': div.odoo_po_name,
+            'status': div.status,
+            'resolucao': div.resolucao,
+            'justificativa': div.justificativa,
+            'resolvido_por': div.resolvido_por,
+            'resolvido_em': div.resolvido_em,
+            'criado_em': div.criado_em
+        }
+
+        # Buscar dados da validacao (numero_nf)
+        if div.validacao_id:
+            validacao = ValidacaoNfPoDfe.query.get(div.validacao_id)
+            if validacao:
+                item['numero_nf'] = validacao.numero_nf
+                item['data_nf'] = validacao.data_nf
+
+        items_enriquecidos.append(item)
+
+    # Estatisticas
+    stats = {
+        'total': DivergenciaNfPo.query.filter(
+            DivergenciaNfPo.status.in_(['aprovada', 'rejeitada'])
+        ).count(),
+        'aprovada': DivergenciaNfPo.query.filter_by(status='aprovada').count(),
+        'rejeitada': DivergenciaNfPo.query.filter_by(status='rejeitada').count()
+    }
+
+    # Usuarios que resolveram (para filtro)
+    usuarios_resolvedores = db.session.query(
+        DivergenciaNfPo.resolvido_por
+    ).filter(
+        DivergenciaNfPo.resolvido_por.isnot(None)
+    ).distinct().all()
+    usuarios_resolvedores = [u[0] for u in usuarios_resolvedores if u[0]]
+
+    # Tipos de divergencia para filtro
+    tipos_divergencia = [
+        {'valor': 'sem_depara', 'label': 'Sem De-Para'},
+        {'valor': 'sem_po', 'label': 'Sem Pedido de Compra'},
+        {'valor': 'preco', 'label': 'Preco Divergente'},
+        {'valor': 'quantidade', 'label': 'Quantidade Divergente'},
+        {'valor': 'data_entrega', 'label': 'Data Fora do Prazo'}
+    ]
+
+    # URL base do Odoo para links externos
+    odoo_base_url = 'https://odoo.nacomgoya.com.br/web'
+
+    return render_template(
+        'recebimento/historico_aprovacoes_nf_po.html',
+        items=items_enriquecidos,
+        paginacao={
+            'page': paginacao.page,
+            'pages': paginacao.pages,
+            'total': paginacao.total,
+            'per_page': per_page
+        },
+        filtros=filtros,
+        stats=stats,
+        tipos_divergencia=tipos_divergencia,
+        usuarios_resolvedores=usuarios_resolvedores,
+        odoo_base_url=odoo_base_url
+    )
+
+
+# =============================================================================
+# FASE 2: VALIDACOES NF x PO
+# =============================================================================
+
+@recebimento_views_bp.route('/validacoes-nf-po')
+@login_required
+def validacoes_nf_po():
+    """
+    Tela de validacoes NF x PO.
+    Mostra status de cada NF processada.
+    """
+    from app.recebimento.models import ValidacaoNfPoDfe
+
+    # Filtros
+    filtros = {
+        'status': request.args.get('status', ''),
+        'cnpj': request.args.get('cnpj', '')
+    }
+
+    # Query base
+    query = ValidacaoNfPoDfe.query
+
+    # Aplicar filtros
+    if filtros['status']:
+        query = query.filter(ValidacaoNfPoDfe.status == filtros['status'])
+
+    if filtros['cnpj']:
+        query = query.filter(
+            ValidacaoNfPoDfe.cnpj_fornecedor.ilike(f"%{filtros['cnpj']}%")
+        )
+
+    # Ordenar
+    query = query.order_by(ValidacaoNfPoDfe.criado_em.desc())
+
+    # Paginacao
+    page = request.args.get('page', 1, type=int)
+    per_page = 50
+    paginacao = query.paginate(page=page, per_page=per_page, error_out=False)
+
+    # Estatisticas
+    stats = {
+        'pendente': ValidacaoNfPoDfe.query.filter_by(status='pendente').count(),
+        'aprovado': ValidacaoNfPoDfe.query.filter_by(status='aprovado').count(),
+        'bloqueado': ValidacaoNfPoDfe.query.filter_by(status='bloqueado').count(),
+        'consolidado': ValidacaoNfPoDfe.query.filter_by(status='consolidado').count()
+    }
+
+    # Status para filtro
+    status_opcoes = [
+        {'valor': 'pendente', 'label': 'Pendente'},
+        {'valor': 'validando', 'label': 'Validando'},
+        {'valor': 'aprovado', 'label': 'Aprovado'},
+        {'valor': 'bloqueado', 'label': 'Bloqueado'},
+        {'valor': 'consolidado', 'label': 'Consolidado'},
+        {'valor': 'erro', 'label': 'Erro'}
+    ]
+
+    return render_template(
+        'recebimento/validacoes_nf_po.html',
+        items=paginacao.items,
+        paginacao={
+            'page': paginacao.page,
+            'pages': paginacao.pages,
+            'total': paginacao.total,
+            'per_page': per_page,
+            'items': paginacao.items
+        },
+        filtros=filtros,
+        stats=stats,
+        status_opcoes=status_opcoes
+    )
+
+
+# =============================================================================
+# FASE 2: PREVIEW DE CONSOLIDACAO
+# =============================================================================
+
+@recebimento_views_bp.route('/preview-consolidacao/<int:validacao_id>')
+@login_required
+def preview_consolidacao(validacao_id):
+    """
+    Tela de preview de consolidacao.
+    Mostra TODAS as acoes que serao executadas no Odoo antes da aprovacao.
+    """
+    from app.recebimento.models import ValidacaoNfPoDfe, MatchNfPoItem
+    from app.recebimento.services.odoo_po_service import OdooPoService
+
+    # Buscar validacao
+    validacao = ValidacaoNfPoDfe.query.get(validacao_id)
+    if not validacao:
+        flash('Validacao nao encontrada', 'danger')
+        return redirect(url_for('recebimento_views.validacoes_nf_po'))
+
+    if validacao.status != 'aprovado':
+        flash('Apenas validacoes aprovadas podem ser consolidadas', 'warning')
+        return redirect(url_for('recebimento_views.validacoes_nf_po'))
+
+    # Buscar matches
+    matches = MatchNfPoItem.query.filter_by(validacao_id=validacao_id).all()
+
+    # Simular consolidacao para obter preview das acoes
+    try:
+        odoo_po_service = OdooPoService()
+        preview = odoo_po_service.simular_consolidacao(validacao_id)
+    except Exception as e:
+        preview = {'erro': str(e), 'acoes': []}
+
+    # Agrupar matches por PO
+    pos_envolvidos = {}
+    for match in matches:
+        if match.odoo_po_id:
+            po_id = match.odoo_po_id
+            if po_id not in pos_envolvidos:
+                pos_envolvidos[po_id] = {
+                    'id': po_id,
+                    'name': match.odoo_po_name,
+                    'itens': []
+                }
+            pos_envolvidos[po_id]['itens'].append({
+                'cod_produto': match.cod_produto_interno,
+                'nome_produto': match.nome_produto,
+                'qtd_nf': float(match.qtd_nf) if match.qtd_nf else 0,
+                'qtd_po': float(match.qtd_po) if match.qtd_po else 0,
+                'preco_nf': float(match.preco_nf) if match.preco_nf else 0,
+                'preco_po': float(match.preco_po) if match.preco_po else 0
+            })
+
+    return render_template(
+        'recebimento/preview_consolidacao.html',
+        validacao=validacao,
+        matches=matches,
+        preview=preview,
+        pos_envolvidos=list(pos_envolvidos.values())
+    )

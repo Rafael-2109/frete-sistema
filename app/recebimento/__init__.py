@@ -19,10 +19,14 @@ recebimento_bp = Blueprint('recebimento', __name__, url_prefix='/recebimento')
 
 def init_app(app):
     """Registra blueprints do modulo recebimento"""
-    # APIs de validacao fiscal
+    # APIs de validacao fiscal (Fase 1)
     from .routes.validacao_fiscal_routes import validacao_fiscal_bp
     app.register_blueprint(validacao_fiscal_bp)
 
-    # Views (telas HTML) de validacao fiscal
+    # APIs de validacao NF x PO (Fase 2)
+    from .routes.validacao_nf_po_routes import validacao_nf_po_bp
+    app.register_blueprint(validacao_nf_po_bp)
+
+    # Views (telas HTML) de recebimento
     from .routes.views import recebimento_views_bp
     app.register_blueprint(recebimento_views_bp)
