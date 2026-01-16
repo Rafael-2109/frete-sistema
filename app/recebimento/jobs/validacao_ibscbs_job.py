@@ -179,12 +179,11 @@ class ValidacaoIbsCbsJob:
                         # Nao e Regime Normal - nao precisa destacar IBS/CBS
                         continue
 
-                    # Validar NF-e para IBS/CBS
-                    pendencia_criada = self._validar_nfe_ibscbs(dfe, regime_info)
+                    # Validar NF-e para IBS/CBS (retorna numero de pendencias criadas)
+                    pendencias_criadas = self._validar_nfe_ibscbs(dfe, regime_info)
 
                     resultado['processadas'] += 1
-                    if pendencia_criada:
-                        resultado['pendencias'] += 1
+                    resultado['pendencias'] += pendencias_criadas
 
                 except Exception as e:
                     logger.error(f"Erro ao processar NF-e {dfe.get('id')}: {e}")
@@ -196,29 +195,33 @@ class ValidacaoIbsCbsJob:
 
         return resultado
 
-    def _validar_nfe_ibscbs(self, dfe: Dict, regime_info: Dict) -> bool:
+    def _validar_nfe_ibscbs(self, dfe: Dict, regime_info: Dict) -> int:
         """
-        Valida uma NF-e para IBS/CBS e cria pendencia se necessario.
+        Valida uma NF-e para IBS/CBS e cria pendencias por NCM distinto.
 
         Logica:
         1. Buscar XML da NF-e
-        2. Extrair NCMs dos itens
-        3. Verificar se NCM esta cadastrado no sistema
-        4. Se nao tiver IBS/CBS destacado:
+        2. Parsear cada <det> (linha do item)
+        3. Extrair NCM e verificar se tem <IBSCBS> na linha
+        4. Agrupar por prefixo NCM (4 digitos)
+        5. Para cada prefixo SEM IBS/CBS destacado:
            - Se NCM cadastrado: motivo = 'nao_destacou' (divergencia)
            - Se NCM NAO cadastrado: motivo = 'falta_cadastro'
+        6. Criar uma pendencia por prefixo NCM distinto
 
         Args:
             dfe: Dados do DFE do Odoo
             regime_info: Informacoes do regime tributario
 
         Returns:
-            True se pendencia foi criada, False caso contrario
+            Numero de pendencias criadas (pode ser > 1 se houver multiplos NCMs)
         """
         from app.recebimento.models import NcmIbsCbsValidado
+        import xml.etree.ElementTree as ET
         import re
 
         dfe_id = dfe.get('id')
+        pendencias_criadas = 0
 
         try:
             odoo = self._get_odoo()
@@ -232,7 +235,7 @@ class ValidacaoIbsCbsJob:
 
             if not dfe_completo or not dfe_completo[0].get('l10n_br_xml_dfe'):
                 logger.debug(f"XML nao disponivel para NF-e DFE {dfe_id}")
-                return False
+                return 0
 
             # Decodificar XML
             try:
@@ -240,98 +243,171 @@ class ValidacaoIbsCbsJob:
             except UnicodeDecodeError:
                 xml_content = base64.b64decode(dfe_completo[0]['l10n_br_xml_dfe']).decode('iso-8859-1')
 
-            # Extrair NCMs do XML (buscar tags <NCM>XXXXXXXX</NCM>)
-            ncms_encontrados = re.findall(r'<NCM>(\d{4,8})</NCM>', xml_content)
-            ncm_prefixos = list(set([ncm[:4] for ncm in ncms_encontrados]))  # Pegar 4 primeiros digitos
+            # Remover namespaces para facilitar parsing
+            xml_content_clean = re.sub(r'\sxmlns[^"]*"[^"]*"', '', xml_content)
 
-            # Verificar se tem tag <IBSCBS> no XML
-            # Tags esperadas: <IBSCBS>, <IBSCBSTot>, <gIBSCBS>
-            tem_ibscbs = (
-                '<IBSCBS>' in xml_content or
-                '<IBSCBSTot>' in xml_content or
-                '<gIBSCBS>' in xml_content
-            )
+            try:
+                root = ET.fromstring(xml_content_clean)
+            except ET.ParseError as e:
+                logger.error(f"Erro ao parsear XML da NF-e DFE {dfe_id}: {e}")
+                return 0
 
-            if tem_ibscbs:
-                # Tem IBS/CBS destacado - nao criar pendencia
-                # Futuramente: validar valores contra cadastro de NCM
-                logger.debug(f"NF-e DFE {dfe_id} possui IBS/CBS destacado")
-                return False
+            # Encontrar todos os itens <det>
+            det_elements = root.findall('.//det')
 
-            # Nao tem IBS/CBS destacado - determinar motivo
-            # Verificar se algum NCM esta cadastrado no sistema
-            ncm_cadastrado = None
-            ncm_prefixo_principal = ncm_prefixos[0] if ncm_prefixos else None
+            if not det_elements:
+                logger.debug(f"Nenhum item <det> encontrado na NF-e DFE {dfe_id}")
+                return 0
 
-            if ncm_prefixo_principal:
-                ncm_cadastrado = NcmIbsCbsValidado.query.filter_by(
-                    ncm_prefixo=ncm_prefixo_principal,
-                    ativo=True
-                ).first()
+            # Estrutura para agrupar por prefixo NCM
+            # {prefixo: {'ncm_completo': str, 'itens_sem_ibscbs': list, 'itens_com_ibscbs': list}}
+            ncm_analise = {}
 
-            # Definir motivo e detalhes
-            if ncm_cadastrado:
-                # NCM cadastrado mas fornecedor nao destacou = DIVERGENCIA
-                motivo = 'nao_destacou'
-                detalhes = (
-                    f'NCM {ncm_prefixo_principal} esta cadastrado com IBS/CBS obrigatorio, '
-                    f'mas o fornecedor nao destacou no XML. '
-                    f'Aliquotas esperadas: IBS UF={ncm_cadastrado.aliquota_ibs_uf}%, '
-                    f'IBS Mun={ncm_cadastrado.aliquota_ibs_mun}%, CBS={ncm_cadastrado.aliquota_cbs}%'
-                )
-            else:
-                # NCM NAO cadastrado = FALTA CADASTRO
-                motivo = 'falta_cadastro'
-                detalhes = (
-                    f'NCM {ncm_prefixo_principal or "nao identificado"} nao esta cadastrado no sistema. '
-                    f'Nao e possivel validar se IBS/CBS deveria ser destacado. '
-                    f'Cadastre o NCM para habilitar a validacao.'
-                )
+            for det in det_elements:
+                n_item = det.get('nItem', '?')
 
-            logger.info(f"NF-e DFE {dfe_id} sem IBS/CBS - motivo: {motivo}")
+                # Buscar NCM dentro de <prod>
+                prod = det.find('prod')
+                if prod is None:
+                    continue
 
-            # Extrair data de emissao
+                ncm_elem = prod.find('NCM')
+                if ncm_elem is None or not ncm_elem.text:
+                    logger.debug(f"Item {n_item} sem NCM na NF-e DFE {dfe_id}")
+                    continue
+
+                ncm_completo = ncm_elem.text.strip()
+                if not ncm_completo or len(ncm_completo) < 4:
+                    logger.debug(f"NCM invalido '{ncm_completo}' no item {n_item} da NF-e DFE {dfe_id}")
+                    continue
+
+                ncm_prefixo = ncm_completo[:4]
+
+                # Verificar se tem <IBSCBS> no <imposto> deste item
+                imposto = det.find('imposto')
+                tem_ibscbs_item = False
+
+                if imposto is not None:
+                    ibscbs = imposto.find('IBSCBS')
+                    if ibscbs is not None:
+                        # Verificar se tem conteudo (CST ou gIBSCBS)
+                        cst = ibscbs.find('CST')
+                        gibscbs = ibscbs.find('gIBSCBS')
+                        if cst is not None or gibscbs is not None:
+                            tem_ibscbs_item = True
+
+                # Inicializar entrada do prefixo se nao existir
+                if ncm_prefixo not in ncm_analise:
+                    ncm_analise[ncm_prefixo] = {
+                        'ncm_completo': ncm_completo,
+                        'itens_sem_ibscbs': [],
+                        'itens_com_ibscbs': []
+                    }
+
+                if tem_ibscbs_item:
+                    ncm_analise[ncm_prefixo]['itens_com_ibscbs'].append(n_item)
+                else:
+                    ncm_analise[ncm_prefixo]['itens_sem_ibscbs'].append(n_item)
+
+            # Extrair data de emissao (para todas as pendencias)
             data_emissao_str = dfe.get('nfe_infnfe_ide_dhemi', '')
             data_emissao = None
             if data_emissao_str:
                 try:
-                    # Formato pode ser: 2026-01-15T10:30:00-03:00 ou 2026-01-15
                     data_str = data_emissao_str.split('T')[0]
                     data_emissao = datetime.strptime(data_str, '%Y-%m-%d').date()
                 except:
                     pass
 
-            pendencia = PendenciaFiscalIbsCbs(
-                tipo_documento='NF-e',
-                chave_acesso=dfe.get('protnfe_infnfe_chnfe'),
-                numero_documento=str(dfe.get('nfe_infnfe_ide_nnf', '')),
-                serie=str(dfe.get('nfe_infnfe_ide_serie', '')),
-                data_emissao=data_emissao,
-                odoo_dfe_id=dfe_id,
-                cnpj_fornecedor=''.join(c for c in (dfe.get('nfe_infnfe_emit_cnpj') or '') if c.isdigit()),
-                razao_fornecedor=dfe.get('nfe_infnfe_emit_xnome'),
-                uf_fornecedor=dfe.get('nfe_infnfe_emit_uf'),
-                regime_tributario=regime_info.get('regime_tributario'),
-                regime_tributario_descricao=regime_info.get('regime_descricao'),
-                ncm=ncms_encontrados[0] if ncms_encontrados else None,
-                ncm_prefixo=ncm_prefixo_principal,
-                valor_total=dfe.get('nfe_infnfe_total_icmstot_vnf'),
-                motivo_pendencia=motivo,
-                detalhes_pendencia=detalhes,
-                status='pendente',
-                criado_por='SISTEMA'
-            )
+            chave_acesso = dfe.get('protnfe_infnfe_chnfe')
+            numero_nf = str(dfe.get('nfe_infnfe_ide_nnf', ''))
+            serie = str(dfe.get('nfe_infnfe_ide_serie', ''))
+            cnpj = ''.join(c for c in (dfe.get('nfe_infnfe_emit_cnpj') or '') if c.isdigit())
+            razao = dfe.get('nfe_infnfe_emit_xnome')
+            uf = dfe.get('nfe_infnfe_emit_uf')
+            valor_total = dfe.get('nfe_infnfe_total_icmstot_vnf')
 
-            db.session.add(pendencia)
-            db.session.commit()
+            # Processar cada prefixo NCM
+            for ncm_prefixo, dados in ncm_analise.items():
+                # Se NAO tem itens sem IBS/CBS, este prefixo esta OK
+                if not dados['itens_sem_ibscbs']:
+                    logger.debug(f"Prefixo {ncm_prefixo} OK - todos itens com IBS/CBS na NF-e {numero_nf}")
+                    continue
 
-            logger.info(f"Pendencia IBS/CBS criada para NF-e {dfe.get('nfe_infnfe_ide_nnf')}: ID={pendencia.id}, motivo={motivo}")
-            return True
+                # Verificar se ja existe pendencia para esta chave + prefixo
+                pendencia_existente = PendenciaFiscalIbsCbs.query.filter_by(
+                    chave_acesso=chave_acesso,
+                    ncm_prefixo=ncm_prefixo
+                ).first()
+
+                if pendencia_existente:
+                    logger.debug(f"Pendencia ja existe para NF-e {numero_nf} + NCM {ncm_prefixo}")
+                    continue
+
+                # Verificar se NCM esta cadastrado no sistema
+                ncm_cadastrado = NcmIbsCbsValidado.query.filter_by(
+                    ncm_prefixo=ncm_prefixo,
+                    ativo=True
+                ).first()
+
+                # Definir motivo e detalhes
+                itens_str = ', '.join(dados['itens_sem_ibscbs'])
+
+                if ncm_cadastrado:
+                    motivo = 'nao_destacou'
+                    detalhes = (
+                        f'NCM {ncm_prefixo} (completo: {dados["ncm_completo"]}) esta cadastrado com IBS/CBS obrigatorio, '
+                        f'mas o fornecedor nao destacou nos itens: {itens_str}. '
+                        f'Aliquotas esperadas: IBS UF={ncm_cadastrado.aliquota_ibs_uf}%, '
+                        f'IBS Mun={ncm_cadastrado.aliquota_ibs_mun}%, CBS={ncm_cadastrado.aliquota_cbs}%'
+                    )
+                else:
+                    motivo = 'falta_cadastro'
+                    detalhes = (
+                        f'NCM {ncm_prefixo} (completo: {dados["ncm_completo"]}) nao esta cadastrado no sistema. '
+                        f'Itens sem IBS/CBS: {itens_str}. '
+                        f'Cadastre o NCM para habilitar a validacao.'
+                    )
+
+                # Criar pendencia para este prefixo
+                pendencia = PendenciaFiscalIbsCbs(
+                    tipo_documento='NF-e',
+                    chave_acesso=chave_acesso,
+                    numero_documento=numero_nf,
+                    serie=serie,
+                    data_emissao=data_emissao,
+                    odoo_dfe_id=dfe_id,
+                    cnpj_fornecedor=cnpj,
+                    razao_fornecedor=razao,
+                    uf_fornecedor=uf,
+                    regime_tributario=regime_info.get('regime_tributario'),
+                    regime_tributario_descricao=regime_info.get('regime_descricao'),
+                    ncm=dados['ncm_completo'],
+                    ncm_prefixo=ncm_prefixo,
+                    valor_total=valor_total,
+                    motivo_pendencia=motivo,
+                    detalhes_pendencia=detalhes,
+                    status='pendente',
+                    criado_por='SISTEMA'
+                )
+
+                db.session.add(pendencia)
+                pendencias_criadas += 1
+
+                logger.info(
+                    f"Pendencia IBS/CBS criada para NF-e {numero_nf}, NCM {ncm_prefixo}: "
+                    f"motivo={motivo}, itens={itens_str}"
+                )
+
+            if pendencias_criadas > 0:
+                db.session.commit()
+
+            return pendencias_criadas
 
         except Exception as e:
             logger.error(f"Erro ao validar NF-e DFE {dfe_id}: {e}")
             db.session.rollback()
-            return False
+            return 0
 
 
 def executar_validacao_ibscbs(minutos_janela: int = 120) -> Dict[str, Any]:
