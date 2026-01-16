@@ -504,7 +504,40 @@
             const checkboxes = document.querySelectorAll('#odoo-tabela-body input[type="checkbox"]');
             checkboxes.forEach(cb => cb.checked = this.checked);
         });
+
+        // Verificar se tem parametro cadastrar na URL para abrir modal automaticamente
+        const urlParams = new URLSearchParams(window.location.search);
+        const prefixoCadastrar = urlParams.get('cadastrar');
+        if (prefixoCadastrar && /^\d{4}$/.test(prefixoCadastrar)) {
+            // Abrir modal de cadastro com prefixo pre-preenchido
+            setTimeout(function() {
+                abrirModalNovoPrefixo(prefixoCadastrar);
+            }, 300);
+        }
     });
+
+    // Abrir modal para novo NCM com prefixo pre-preenchido (usado via parametro URL)
+    function abrirModalNovoPrefixo(prefixo) {
+        document.getElementById('modalNCMTitle').innerHTML = '<i class="fas fa-barcode me-2"></i>Cadastrar NCM IBS/CBS';
+        document.getElementById('ncm-id').value = '';
+        document.getElementById('ncm-prefixo').value = prefixo;
+        document.getElementById('ncm-prefixo').setAttribute('readonly', 'readonly');  // Bloqueado pois vem de pendencia
+        document.getElementById('ncm-descricao').value = '';
+        document.getElementById('ncm-cst').value = '';
+        document.getElementById('ncm-classtrib').value = '';
+        document.getElementById('ncm-reducao').value = '';
+        document.getElementById('ncm-ibs-uf').value = '';
+        document.getElementById('ncm-ibs-mun').value = '';
+        document.getElementById('ncm-cbs').value = '';
+        document.getElementById('ncm-observacao').value = '';
+        document.getElementById('ncm-ativo').checked = true;
+        modalNCM.show();
+
+        // Focar no proximo campo (descricao) apos abrir modal
+        setTimeout(function() {
+            document.getElementById('ncm-descricao').focus();
+        }, 500);
+    }
 
     // Helper para formatar número BR (vírgula como separador decimal)
     function formatarBR(valor) {

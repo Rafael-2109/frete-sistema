@@ -571,7 +571,8 @@ def pendencias_ibscbs():
     ]
     opcoes_motivo = [
         ('', 'Todos'),
-        ('nao_destacou', 'Nao destacou IBS/CBS'),
+        ('nao_destacou', 'Divergencia (NCM cadastrado)'),
+        ('falta_cadastro', 'Falta Cadastro NCM'),
         ('cst_incorreto', 'CST incorreto'),
         ('aliquota_divergente', 'Aliquota divergente'),
         ('valor_zerado', 'Valor zerado')
@@ -657,6 +658,64 @@ def pendencia_ibscbs_detalhes(pendencia_id):
             'cbs_valor': float(pendencia.cbs_valor) if pendencia.cbs_valor else None
         }
     })
+
+
+@recebimento_views_bp.route('/ncm-ibscbs/cadastro/<prefixo>')
+@login_required
+def ncm_ibscbs_cadastro_local(prefixo):
+    """
+    Busca cadastro local do NCM pelo prefixo.
+    Usado pelo modal de detalhes para verificar se NCM esta cadastrado.
+
+    Returns:
+        {
+            'sucesso': True,
+            'cadastrado': True/False,
+            'ncm': { dados do cadastro } ou null
+        }
+    """
+    from app.recebimento.models import NcmIbsCbsValidado
+
+    try:
+        if not prefixo or len(prefixo) != 4:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Prefixo deve ter 4 digitos'
+            }), 400
+
+        ncm = NcmIbsCbsValidado.query.filter_by(
+            ncm_prefixo=prefixo,
+            ativo=True
+        ).first()
+
+        if ncm:
+            return jsonify({
+                'sucesso': True,
+                'cadastrado': True,
+                'ncm': {
+                    'id': ncm.id,
+                    'ncm_prefixo': ncm.ncm_prefixo,
+                    'descricao_ncm': ncm.descricao_ncm,
+                    'cst_esperado': ncm.cst_esperado,
+                    'class_trib_codigo': ncm.class_trib_codigo,
+                    'aliquota_ibs_uf': float(ncm.aliquota_ibs_uf) if ncm.aliquota_ibs_uf else None,
+                    'aliquota_ibs_mun': float(ncm.aliquota_ibs_mun) if ncm.aliquota_ibs_mun else None,
+                    'aliquota_cbs': float(ncm.aliquota_cbs) if ncm.aliquota_cbs else None,
+                    'reducao_aliquota': float(ncm.reducao_aliquota) if ncm.reducao_aliquota else None
+                }
+            })
+        else:
+            return jsonify({
+                'sucesso': True,
+                'cadastrado': False,
+                'ncm': None
+            })
+
+    except Exception as e:
+        return jsonify({
+            'sucesso': False,
+            'mensagem': str(e)
+        }), 500
 
 
 # =============================================================================
@@ -960,6 +1019,115 @@ def ncm_ibscbs_salvar_ajax():
             'sucesso': False,
             'mensagem': f'Erro ao salvar: {str(e)}'
         }), 500
+
+
+# =============================================================================
+# SINCRONIZACAO MANUAL IBS/CBS
+# =============================================================================
+
+@recebimento_views_bp.route('/pendencias-ibscbs/sincronizar', methods=['POST'])
+@login_required
+def pendencias_ibscbs_sincronizar():
+    """
+    Executa sincronizacao manual de pendencias IBS/CBS.
+
+    Acoes:
+    1. Executa o job de validacao IBS/CBS (buscar novas NF-es e CTes)
+    2. Reprocessa pendencias existentes com motivo 'falta_cadastro'
+       para verificar se NCM foi cadastrado posteriormente
+
+    Returns:
+        JSON com estatisticas da sincronizacao
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    resultado = {
+        'sucesso': True,
+        'mensagem': '',
+        'estatisticas': {
+            'ctes_processados': 0,
+            'ctes_pendencias': 0,
+            'nfes_processadas': 0,
+            'nfes_pendencias': 0,
+            'pendencias_reprocessadas': 0,
+            'pendencias_atualizadas': 0,
+            'erros': 0
+        }
+    }
+
+    try:
+        # 1. Executar job de validacao IBS/CBS para buscar novos documentos
+        from app.recebimento.jobs.validacao_ibscbs_job import executar_validacao_ibscbs
+
+        logger.info("Iniciando sincronizacao manual de pendencias IBS/CBS...")
+
+        res_job = executar_validacao_ibscbs(minutos_janela=1440)  # Ultimas 24 horas
+
+        resultado['estatisticas']['ctes_processados'] = res_job.get('ctes_processados', 0)
+        resultado['estatisticas']['ctes_pendencias'] = res_job.get('ctes_pendencias', 0)
+        resultado['estatisticas']['nfes_processadas'] = res_job.get('nfes_processadas', 0)
+        resultado['estatisticas']['nfes_pendencias'] = res_job.get('nfes_pendencias', 0)
+        resultado['estatisticas']['erros'] = res_job.get('erros', 0)
+
+        # 2. Reprocessar pendencias com 'falta_cadastro' para verificar se NCM foi cadastrado
+        pendencias_falta_cadastro = PendenciaFiscalIbsCbs.query.filter_by(
+            status='pendente',
+            motivo_pendencia='falta_cadastro'
+        ).all()
+
+        resultado['estatisticas']['pendencias_reprocessadas'] = len(pendencias_falta_cadastro)
+
+        for pendencia in pendencias_falta_cadastro:
+            if not pendencia.ncm_prefixo:
+                continue
+
+            # Verificar se NCM foi cadastrado
+            ncm = NcmIbsCbsValidado.query.filter_by(
+                ncm_prefixo=pendencia.ncm_prefixo,
+                ativo=True
+            ).first()
+
+            if ncm:
+                # NCM agora esta cadastrado - atualizar motivo para 'nao_destacou'
+                pendencia.motivo_pendencia = 'nao_destacou'
+                pendencia.detalhes_pendencia = (
+                    f'NCM {pendencia.ncm_prefixo} esta cadastrado com IBS/CBS obrigatorio, '
+                    f'mas o fornecedor nao destacou no XML. '
+                    f'Aliquotas esperadas: IBS UF={ncm.aliquota_ibs_uf}%, '
+                    f'IBS Mun={ncm.aliquota_ibs_mun}%, CBS={ncm.aliquota_cbs}%'
+                )
+                resultado['estatisticas']['pendencias_atualizadas'] += 1
+
+        db.session.commit()
+
+        # Montar mensagem de resultado
+        msgs = []
+        if resultado['estatisticas']['ctes_processados'] > 0:
+            msgs.append(f"{resultado['estatisticas']['ctes_processados']} CTe(s) processados")
+        if resultado['estatisticas']['nfes_processadas'] > 0:
+            msgs.append(f"{resultado['estatisticas']['nfes_processadas']} NF-e(s) processadas")
+        if resultado['estatisticas']['ctes_pendencias'] > 0:
+            msgs.append(f"{resultado['estatisticas']['ctes_pendencias']} novas pendencias CTe")
+        if resultado['estatisticas']['nfes_pendencias'] > 0:
+            msgs.append(f"{resultado['estatisticas']['nfes_pendencias']} novas pendencias NF-e")
+        if resultado['estatisticas']['pendencias_atualizadas'] > 0:
+            msgs.append(f"{resultado['estatisticas']['pendencias_atualizadas']} pendencias atualizadas (NCM cadastrado)")
+
+        if msgs:
+            resultado['mensagem'] = 'Sincronizacao concluida: ' + ', '.join(msgs)
+        else:
+            resultado['mensagem'] = 'Sincronizacao concluida. Nenhum documento novo encontrado.'
+
+        logger.info(resultado['mensagem'])
+
+    except Exception as e:
+        logger.error(f"Erro na sincronizacao IBS/CBS: {e}")
+        db.session.rollback()
+        resultado['sucesso'] = False
+        resultado['mensagem'] = f'Erro na sincronizacao: {str(e)}'
+
+    return jsonify(resultado)
 
 
 # =============================================================================

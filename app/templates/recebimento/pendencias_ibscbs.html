@@ -12,8 +12,8 @@
             <a href="{{ url_for('recebimento_views.ncm_ibscbs') }}" class="btn btn-outline-info">
                 <i class="fas fa-barcode me-1"></i> Cadastro NCM
             </a>
-            <button type="button" class="btn btn-outline-primary ms-2" onclick="location.reload()">
-                <i class="fas fa-sync-alt"></i> Atualizar
+            <button type="button" class="btn btn-primary ms-2" id="btnSincronizar" onclick="sincronizarOdoo()">
+                <i class="fas fa-sync-alt me-1"></i> Sincronizar Odoo
             </button>
         </div>
     </div>
@@ -199,7 +199,9 @@
                             </td>
                             <td>
                                 {% if item.motivo_pendencia == 'nao_destacou' %}
-                                <span class="badge bg-danger">Nao destacou</span>
+                                <span class="badge bg-danger">Divergencia</span>
+                                {% elif item.motivo_pendencia == 'falta_cadastro' %}
+                                <span class="badge bg-warning text-dark">Falta Cadastro</span>
                                 {% elif item.motivo_pendencia == 'cst_incorreto' %}
                                 <span class="badge bg-warning text-dark">CST incorreto</span>
                                 {% elif item.motivo_pendencia == 'aliquota_divergente' %}
@@ -511,7 +513,7 @@
     };
 
     // Ver detalhes da pendencia
-    window.verDetalhes = function(id) {
+    window.verDetalhes = async function(id) {
         document.getElementById('detalhes-conteudo').innerHTML = `
             <div class="text-center py-4">
                 <div class="spinner-border text-info" role="status">
@@ -522,158 +524,227 @@
         `;
         modalDetalhes.show();
 
-        fetch(`/operacional/compras/pendencias-ibscbs/${id}/detalhes`)
-            .then(r => r.json())
-            .then(data => {
-                if (data.sucesso) {
-                    const p = data.pendencia;
-                    const ibs = data.ibscbs;
-                    document.getElementById('detalhes-conteudo').innerHTML = `
-                        <div class="row">
-                            <!-- Documento -->
-                            <div class="col-md-6">
-                                <h6 class="border-bottom pb-2 mb-3">
-                                    <i class="fas fa-file-alt me-2"></i>Documento
-                                </h6>
-                                <table class="table table-sm">
-                                    <tr><td>Tipo:</td><td><strong>${p.tipo_documento}</strong></td></tr>
-                                    <tr><td>Numero:</td><td>${p.numero_documento || '-'}${p.serie ? ' / Serie ' + p.serie : ''}</td></tr>
-                                    <tr><td>Chave:</td><td><small class="text-monospace" style="word-break:break-all;font-size:0.7rem;">${p.chave_acesso || '-'}</small></td></tr>
-                                    <tr><td>Emissao:</td><td>${p.data_emissao ? formatarData(p.data_emissao) : '-'}</td></tr>
-                                    <tr><td>Valor:</td><td>R$ ${formatarNumero(p.valor_total)}</td></tr>
-                                    <tr><td>Arquivos:</td><td>${gerarLinksPdfXml(p)}</td></tr>
-                                </table>
-                            </div>
-                            <!-- Fornecedor -->
-                            <div class="col-md-6">
-                                <h6 class="border-bottom pb-2 mb-3">
-                                    <i class="fas fa-building me-2"></i>Fornecedor
-                                </h6>
-                                <table class="table table-sm">
-                                    <tr><td>Razao:</td><td>${p.razao_fornecedor || '-'}</td></tr>
-                                    <tr><td>CNPJ:</td><td>${formatarCnpj(p.cnpj_fornecedor)}</td></tr>
-                                    <tr><td>Regime:</td><td><span class="badge bg-warning text-dark">${p.regime_tributario_descricao || 'N/A'}</span></td></tr>
-                                    ${p.ncm ? `<tr><td>NCM:</td><td><code>${p.ncm}</code></td></tr>` : ''}
-                                </table>
-                            </div>
-                        </div>
-                        <hr>
-                        <!-- IBS/CBS -->
-                        <h6 class="border-bottom pb-2 mb-3">
-                            <i class="fas fa-calculator me-2"></i>Valores IBS/CBS Encontrados
-                        </h6>
-                        ${ibs.cst || ibs.base ? `
-                        <div class="row">
-                            <div class="col-md-4">
-                                <div class="card bg-light">
-                                    <div class="card-body p-2 text-center">
-                                        <small class="text-muted">CST</small>
-                                        <div class="fw-bold">${ibs.cst || '-'}</div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="card bg-light">
-                                    <div class="card-body p-2 text-center">
-                                        <small class="text-muted">Class. Trib.</small>
-                                        <div class="fw-bold">${ibs.class_trib || '-'}</div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="card bg-light">
-                                    <div class="card-body p-2 text-center">
-                                        <small class="text-muted">Base Calculo</small>
-                                        <div class="fw-bold">R$ ${formatarNumero(ibs.base)}</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="row mt-2">
-                            <div class="col-md-4">
-                                <div class="card border-primary">
-                                    <div class="card-header bg-primary text-white py-1 px-2">
-                                        <small>IBS UF</small>
-                                    </div>
-                                    <div class="card-body p-2">
-                                        <div class="d-flex justify-content-between">
-                                            <span>Aliquota:</span>
-                                            <strong>${formatarNumero(ibs.ibs_uf_aliq)}%</strong>
-                                        </div>
-                                        <div class="d-flex justify-content-between">
-                                            <span>Valor:</span>
-                                            <strong>R$ ${formatarNumero(ibs.ibs_uf_valor)}</strong>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="card border-info">
-                                    <div class="card-header bg-info text-white py-1 px-2">
-                                        <small>IBS Municipio</small>
-                                    </div>
-                                    <div class="card-body p-2">
-                                        <div class="d-flex justify-content-between">
-                                            <span>Aliquota:</span>
-                                            <strong>${formatarNumero(ibs.ibs_mun_aliq)}%</strong>
-                                        </div>
-                                        <div class="d-flex justify-content-between">
-                                            <span>Valor:</span>
-                                            <strong>R$ ${formatarNumero(ibs.ibs_mun_valor)}</strong>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="card border-success">
-                                    <div class="card-header bg-success text-white py-1 px-2">
-                                        <small>CBS Federal</small>
-                                    </div>
-                                    <div class="card-body p-2">
-                                        <div class="d-flex justify-content-between">
-                                            <span>Aliquota:</span>
-                                            <strong>${formatarNumero(ibs.cbs_aliq)}%</strong>
-                                        </div>
-                                        <div class="d-flex justify-content-between">
-                                            <span>Valor:</span>
-                                            <strong>R$ ${formatarNumero(ibs.cbs_valor)}</strong>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="text-center mt-3">
-                            <span class="badge bg-dark fs-6">Total IBS: R$ ${formatarNumero(ibs.ibs_total)}</span>
-                        </div>
-                        ` : `
-                        <div class="alert alert-danger">
-                            <i class="fas fa-exclamation-triangle me-2"></i>
-                            <strong>IBS/CBS nao destacado!</strong>
-                            O documento nao contem as tags de IBS/CBS obrigatorias.
-                        </div>
-                        `}
-                        <hr>
-                        <!-- Pendencia -->
-                        <h6 class="border-bottom pb-2 mb-3">
-                            <i class="fas fa-exclamation-circle me-2"></i>Motivo da Pendencia
-                        </h6>
-                        <div class="alert alert-warning">
-                            ${getMotivoTexto(p.motivo_pendencia)}
-                        </div>
-                    `;
-                } else {
-                    document.getElementById('detalhes-conteudo').innerHTML = `
-                        <div class="alert alert-danger">Erro ao carregar detalhes: ${data.mensagem || 'Erro desconhecido'}</div>
-                    `;
-                }
-            })
-            .catch(err => {
-                console.error(err);
+        try {
+            // 1. Buscar detalhes da pendencia
+            const response = await fetch(`/operacional/compras/pendencias-ibscbs/${id}/detalhes`);
+            const data = await response.json();
+
+            if (!data.sucesso) {
                 document.getElementById('detalhes-conteudo').innerHTML = `
-                    <div class="alert alert-danger">Erro de conexao</div>
+                    <div class="alert alert-danger">Erro ao carregar detalhes: ${data.mensagem || 'Erro desconhecido'}</div>
                 `;
-            });
+                return;
+            }
+
+            const p = data.pendencia;
+            const ibs = data.ibscbs;
+
+            // 2. Buscar cadastro do NCM (se tiver NCM)
+            let ncmCadastro = null;
+            if (p.ncm_prefixo && p.ncm_prefixo.length === 4) {
+                try {
+                    const ncmResp = await fetch(`/operacional/compras/ncm-ibscbs/cadastro/${p.ncm_prefixo}`);
+                    const ncmData = await ncmResp.json();
+                    if (ncmData.sucesso && ncmData.cadastrado) {
+                        ncmCadastro = ncmData.ncm;
+                    }
+                } catch (e) {
+                    console.warn('Erro ao buscar cadastro NCM:', e);
+                }
+            }
+
+            // 3. Gerar HTML do conteudo do modal
+            document.getElementById('detalhes-conteudo').innerHTML = `
+                <div class="row">
+                    <!-- Documento -->
+                    <div class="col-md-6">
+                        <h6 class="border-bottom pb-2 mb-3">
+                            <i class="fas fa-file-alt me-2"></i>Documento
+                        </h6>
+                        <table class="table table-sm">
+                            <tr><td>Tipo:</td><td><strong>${p.tipo_documento}</strong></td></tr>
+                            <tr><td>Numero:</td><td>${p.numero_documento || '-'}${p.serie ? ' / Serie ' + p.serie : ''}</td></tr>
+                            <tr><td>Chave:</td><td><small class="text-monospace" style="word-break:break-all;font-size:0.7rem;">${p.chave_acesso || '-'}</small></td></tr>
+                            <tr><td>Emissao:</td><td>${p.data_emissao ? formatarData(p.data_emissao) : '-'}</td></tr>
+                            <tr><td>Valor:</td><td>R$ ${formatarNumero(p.valor_total)}</td></tr>
+                            <tr><td>Arquivos:</td><td>${gerarLinksPdfXml(p)}</td></tr>
+                        </table>
+                    </div>
+                    <!-- Fornecedor -->
+                    <div class="col-md-6">
+                        <h6 class="border-bottom pb-2 mb-3">
+                            <i class="fas fa-building me-2"></i>Fornecedor
+                        </h6>
+                        <table class="table table-sm">
+                            <tr><td>Razao:</td><td>${p.razao_fornecedor || '-'}</td></tr>
+                            <tr><td>CNPJ:</td><td>${formatarCnpj(p.cnpj_fornecedor)}</td></tr>
+                            <tr><td>Regime:</td><td><span class="badge bg-warning text-dark">${p.regime_tributario_descricao || 'N/A'}</span></td></tr>
+                            ${p.ncm_prefixo ? `<tr><td>NCM:</td><td><code>${p.ncm || p.ncm_prefixo}</code> ${ncmCadastro ? '<span class="badge bg-success">Cadastrado</span>' : '<span class="badge bg-danger">Nao cadastrado</span>'}</td></tr>` : ''}
+                        </table>
+                    </div>
+                </div>
+                <hr>
+
+                <!-- Secao de Cadastro IBS/CBS ou Alerta de Falta de Cadastro -->
+                ${gerarSecaoIbsCbs(p, ibs, ncmCadastro)}
+
+                <hr>
+                <!-- Pendencia -->
+                <h6 class="border-bottom pb-2 mb-3">
+                    <i class="fas fa-exclamation-circle me-2"></i>Motivo da Pendencia
+                </h6>
+                <div class="alert ${p.motivo_pendencia === 'falta_cadastro' ? 'alert-info' : 'alert-warning'}">
+                    ${getMotivoTexto(p.motivo_pendencia, p.ncm_prefixo)}
+                </div>
+            `;
+        } catch (err) {
+            console.error(err);
+            document.getElementById('detalhes-conteudo').innerHTML = `
+                <div class="alert alert-danger">Erro de conexao</div>
+            `;
+        }
     };
+
+    // Gera a secao de IBS/CBS baseado no cadastro e valores do documento
+    function gerarSecaoIbsCbs(p, ibs, ncmCadastro) {
+        // Se for CTe, aliquotas sao fixas
+        if (p.tipo_documento === 'CTe') {
+            return `
+                <h6 class="border-bottom pb-2 mb-3">
+                    <i class="fas fa-calculator me-2"></i>Aliquotas Esperadas (CTe - Fixas)
+                </h6>
+                <div class="alert alert-info mb-3">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>CTe possui aliquotas FIXAS:</strong> CST=000, IBS UF=0.10%, IBS Mun=0.00%, CBS=0.90%
+                </div>
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="card border-primary">
+                            <div class="card-header bg-primary text-white py-1 px-2">
+                                <small>IBS UF (Esperado)</small>
+                            </div>
+                            <div class="card-body p-2 text-center">
+                                <strong class="fs-5">0,10%</strong>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card border-info">
+                            <div class="card-header bg-info text-white py-1 px-2">
+                                <small>IBS Mun (Esperado)</small>
+                            </div>
+                            <div class="card-body p-2 text-center">
+                                <strong class="fs-5">0,00%</strong>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card border-success">
+                            <div class="card-header bg-success text-white py-1 px-2">
+                                <small>CBS (Esperado)</small>
+                            </div>
+                            <div class="card-body p-2 text-center">
+                                <strong class="fs-5">0,90%</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="alert alert-danger mt-3">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Fornecedor NAO destacou IBS/CBS!</strong> O CTe deveria conter as tags de IBS/CBS.
+                </div>
+            `;
+        }
+
+        // Se for NF-e sem NCM cadastrado
+        if (!ncmCadastro) {
+            const prefixo = p.ncm_prefixo || '0000';
+            return `
+                <h6 class="border-bottom pb-2 mb-3">
+                    <i class="fas fa-calculator me-2"></i>Cadastro IBS/CBS
+                </h6>
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>NCM nao cadastrado!</strong>
+                    <p class="mb-2">O NCM <code>${prefixo}</code> nao possui cadastro dos impostos IBS e CBS no sistema.</p>
+                    <a href="{{ url_for('recebimento_views.ncm_ibscbs') }}?cadastrar=${prefixo}"
+                       class="btn btn-sm btn-primary"
+                       onclick="abrirCadastroNcm('${prefixo}'); return false;">
+                        <i class="fas fa-plus me-1"></i>Clique aqui para cadastra-lo
+                    </a>
+                </div>
+            `;
+        }
+
+        // NF-e com NCM cadastrado - mostrar aliquotas esperadas
+        return `
+            <h6 class="border-bottom pb-2 mb-3">
+                <i class="fas fa-calculator me-2"></i>Aliquotas Esperadas (NCM ${ncmCadastro.ncm_prefixo})
+            </h6>
+            <div class="alert alert-success mb-3">
+                <i class="fas fa-check-circle me-2"></i>
+                <strong>NCM cadastrado:</strong> ${ncmCadastro.descricao_ncm || 'Sem descricao'}
+                ${ncmCadastro.reducao_aliquota ? `<br><small>Reducao de aliquota: ${formatarNumero(ncmCadastro.reducao_aliquota)}%</small>` : ''}
+            </div>
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="card border-secondary">
+                        <div class="card-header bg-secondary text-white py-1 px-2">
+                            <small>CST Esperado</small>
+                        </div>
+                        <div class="card-body p-2 text-center">
+                            <strong class="fs-5">${ncmCadastro.cst_esperado || '-'}</strong>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card border-primary">
+                        <div class="card-header bg-primary text-white py-1 px-2">
+                            <small>IBS UF</small>
+                        </div>
+                        <div class="card-body p-2 text-center">
+                            <strong class="fs-5">${formatarNumero(ncmCadastro.aliquota_ibs_uf)}%</strong>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card border-info">
+                        <div class="card-header bg-info text-white py-1 px-2">
+                            <small>IBS Mun</small>
+                        </div>
+                        <div class="card-body p-2 text-center">
+                            <strong class="fs-5">${formatarNumero(ncmCadastro.aliquota_ibs_mun)}%</strong>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card border-success">
+                        <div class="card-header bg-success text-white py-1 px-2">
+                            <small>CBS</small>
+                        </div>
+                        <div class="card-body p-2 text-center">
+                            <strong class="fs-5">${formatarNumero(ncmCadastro.aliquota_cbs)}%</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="alert alert-danger mt-3">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                <strong>DIVERGENCIA!</strong> O fornecedor NAO destacou IBS/CBS no documento, mas deveria ter destacado conforme cadastro acima.
+            </div>
+        `;
+    }
+
+    // Abre a pagina de cadastro de NCM com o prefixo pre-preenchido
+    function abrirCadastroNcm(prefixo) {
+        // Fecha o modal atual
+        modalDetalhes.hide();
+        // Redireciona para a pagina de cadastro com parametro para abrir modal
+        window.location.href = `{{ url_for('recebimento_views.ncm_ibscbs') }}?cadastrar=${prefixo}`;
+    }
+
+    // Abre a pagina de cadastro de NCM com o prefixo pre-preenchido (exposto globalmente)
+    window.abrirCadastroNcm = abrirCadastroNcm;
 
     // Funcoes auxiliares para formatacao
     function formatarNumero(value) {
@@ -697,9 +768,10 @@
         return data;
     }
 
-    function getMotivoTexto(motivo) {
+    function getMotivoTexto(motivo, ncmPrefixo) {
         const motivos = {
-            'nao_destacou': 'O documento <strong>nao contem</strong> as tags IBS/CBS obrigatorias para fornecedores Regime Normal.',
+            'nao_destacou': 'O documento <strong>nao contem</strong> as tags IBS/CBS obrigatorias para fornecedores Regime Normal. O NCM esta cadastrado no sistema - trata-se de uma <strong>divergencia</strong>.',
+            'falta_cadastro': `O NCM <code>${ncmPrefixo || 'N/A'}</code> <strong>nao esta cadastrado</strong> no sistema. Cadastre o NCM para habilitar a validacao automatica de IBS/CBS.`,
             'cst_incorreto': 'O <strong>CST informado esta incorreto</strong> para a operacao.',
             'aliquota_divergente': 'As <strong>aliquotas informadas divergem</strong> dos valores esperados.',
             'valor_zerado': 'Os <strong>valores de IBS/CBS estao zerados</strong>, mas deveriam ter destaque.'
@@ -750,6 +822,62 @@
     function getCSRFToken() {
         return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     }
+
+    // Sincronizar com Odoo
+    window.sincronizarOdoo = async function() {
+        const btn = document.getElementById('btnSincronizar');
+        const originalHtml = btn.innerHTML;
+
+        // Estado de loading
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Sincronizando...';
+
+        try {
+            const response = await fetch('/operacional/compras/pendencias-ibscbs/sincronizar', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken()
+                }
+            });
+
+            const data = await response.json();
+
+            if (data.sucesso) {
+                // Mostrar estatisticas detalhadas
+                const stats = data.estatisticas;
+                let detalhes = [];
+
+                if (stats.ctes_processados > 0) detalhes.push(`${stats.ctes_processados} CTe(s)`);
+                if (stats.nfes_processadas > 0) detalhes.push(`${stats.nfes_processadas} NF-e(s)`);
+                if (stats.ctes_pendencias > 0 || stats.nfes_pendencias > 0) {
+                    detalhes.push(`${stats.ctes_pendencias + stats.nfes_pendencias} novas pendencias`);
+                }
+                if (stats.pendencias_atualizadas > 0) {
+                    detalhes.push(`${stats.pendencias_atualizadas} atualizadas`);
+                }
+
+                if (detalhes.length > 0) {
+                    toastr.success(data.mensagem, 'Sincronizacao concluida');
+                } else {
+                    toastr.info(data.mensagem, 'Sincronizacao');
+                }
+
+                // Recarregar pagina apos 1.5 segundos
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                toastr.error(data.mensagem || 'Erro na sincronizacao', 'Erro');
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+
+        } catch (err) {
+            console.error('Erro na sincronizacao:', err);
+            toastr.error('Erro de conexao ao sincronizar', 'Erro');
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        }
+    };
 })();
 </script>
 {% endblock %}

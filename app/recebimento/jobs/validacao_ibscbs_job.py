@@ -200,6 +200,14 @@ class ValidacaoIbsCbsJob:
         """
         Valida uma NF-e para IBS/CBS e cria pendencia se necessario.
 
+        Logica:
+        1. Buscar XML da NF-e
+        2. Extrair NCMs dos itens
+        3. Verificar se NCM esta cadastrado no sistema
+        4. Se nao tiver IBS/CBS destacado:
+           - Se NCM cadastrado: motivo = 'nao_destacou' (divergencia)
+           - Se NCM NAO cadastrado: motivo = 'falta_cadastro'
+
         Args:
             dfe: Dados do DFE do Odoo
             regime_info: Informacoes do regime tributario
@@ -207,6 +215,9 @@ class ValidacaoIbsCbsJob:
         Returns:
             True se pendencia foi criada, False caso contrario
         """
+        from app.recebimento.models import NcmIbsCbsValidado
+        import re
+
         dfe_id = dfe.get('id')
 
         try:
@@ -229,6 +240,10 @@ class ValidacaoIbsCbsJob:
             except UnicodeDecodeError:
                 xml_content = base64.b64decode(dfe_completo[0]['l10n_br_xml_dfe']).decode('iso-8859-1')
 
+            # Extrair NCMs do XML (buscar tags <NCM>XXXXXXXX</NCM>)
+            ncms_encontrados = re.findall(r'<NCM>(\d{4,8})</NCM>', xml_content)
+            ncm_prefixos = list(set([ncm[:4] for ncm in ncms_encontrados]))  # Pegar 4 primeiros digitos
+
             # Verificar se tem tag <IBSCBS> no XML
             # Tags esperadas: <IBSCBS>, <IBSCBSTot>, <gIBSCBS>
             tem_ibscbs = (
@@ -243,8 +258,37 @@ class ValidacaoIbsCbsJob:
                 logger.debug(f"NF-e DFE {dfe_id} possui IBS/CBS destacado")
                 return False
 
-            # Nao tem IBS/CBS destacado - criar pendencia
-            logger.info(f"NF-e DFE {dfe_id} sem IBS/CBS - criando pendencia")
+            # Nao tem IBS/CBS destacado - determinar motivo
+            # Verificar se algum NCM esta cadastrado no sistema
+            ncm_cadastrado = None
+            ncm_prefixo_principal = ncm_prefixos[0] if ncm_prefixos else None
+
+            if ncm_prefixo_principal:
+                ncm_cadastrado = NcmIbsCbsValidado.query.filter_by(
+                    ncm_prefixo=ncm_prefixo_principal,
+                    ativo=True
+                ).first()
+
+            # Definir motivo e detalhes
+            if ncm_cadastrado:
+                # NCM cadastrado mas fornecedor nao destacou = DIVERGENCIA
+                motivo = 'nao_destacou'
+                detalhes = (
+                    f'NCM {ncm_prefixo_principal} esta cadastrado com IBS/CBS obrigatorio, '
+                    f'mas o fornecedor nao destacou no XML. '
+                    f'Aliquotas esperadas: IBS UF={ncm_cadastrado.aliquota_ibs_uf}%, '
+                    f'IBS Mun={ncm_cadastrado.aliquota_ibs_mun}%, CBS={ncm_cadastrado.aliquota_cbs}%'
+                )
+            else:
+                # NCM NAO cadastrado = FALTA CADASTRO
+                motivo = 'falta_cadastro'
+                detalhes = (
+                    f'NCM {ncm_prefixo_principal or "nao identificado"} nao esta cadastrado no sistema. '
+                    f'Nao e possivel validar se IBS/CBS deveria ser destacado. '
+                    f'Cadastre o NCM para habilitar a validacao.'
+                )
+
+            logger.info(f"NF-e DFE {dfe_id} sem IBS/CBS - motivo: {motivo}")
 
             # Extrair data de emissao
             data_emissao_str = dfe.get('nfe_infnfe_ide_dhemi', '')
@@ -269,9 +313,11 @@ class ValidacaoIbsCbsJob:
                 uf_fornecedor=dfe.get('nfe_infnfe_emit_uf'),
                 regime_tributario=regime_info.get('regime_tributario'),
                 regime_tributario_descricao=regime_info.get('regime_descricao'),
+                ncm=ncms_encontrados[0] if ncms_encontrados else None,
+                ncm_prefixo=ncm_prefixo_principal,
                 valor_total=dfe.get('nfe_infnfe_total_icmstot_vnf'),
-                motivo_pendencia='nao_destacou',
-                detalhes_pendencia='Tag <IBSCBS> nao encontrada no XML da NF-e',
+                motivo_pendencia=motivo,
+                detalhes_pendencia=detalhes,
                 status='pendente',
                 criado_por='SISTEMA'
             )
@@ -279,7 +325,7 @@ class ValidacaoIbsCbsJob:
             db.session.add(pendencia)
             db.session.commit()
 
-            logger.info(f"Pendencia IBS/CBS criada para NF-e {dfe.get('nfe_infnfe_ide_nnf')}: ID={pendencia.id}")
+            logger.info(f"Pendencia IBS/CBS criada para NF-e {dfe.get('nfe_infnfe_ide_nnf')}: ID={pendencia.id}, motivo={motivo}")
             return True
 
         except Exception as e:
