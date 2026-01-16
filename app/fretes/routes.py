@@ -4388,7 +4388,8 @@ def emitir_fatura_freteiro(transportadora_id):
             # Processa despesas extras selecionadas
             for despesa_id in despesas_selecionadas:
                 despesa = DespesaExtra.query.get(int(despesa_id))
-                if despesa and despesa.frete.transportadora_id == transportadora_id:
+                # ✅ CORRIGIDO: Usa transportadora_efetiva (pode ser diferente do frete)
+                if despesa and despesa.transportadora_efetiva.id == transportadora_id:
                     # 🆕 Usa valor alterado se existir, senão usa valor original
                     valor_despesa_final = valores_despesas_alterados.get(int(despesa_id)) or despesa.valor_despesa
                     valor_total_fatura += valor_despesa_final
