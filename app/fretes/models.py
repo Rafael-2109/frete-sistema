@@ -334,6 +334,13 @@ class DespesaExtra(db.Model):
     fatura_frete_id = db.Column(db.Integer, db.ForeignKey('faturas_frete.id'), nullable=True, index=True)
 
     # ================================================
+    # TRANSPORTADORA DO PAGAMENTO (override opcional)
+    # ================================================
+    # Se NULL → usar transportadora do frete (comportamento padrão)
+    # Se preenchido → usar esta transportadora (ex: devolução coletada por outro)
+    transportadora_id = db.Column(db.Integer, db.ForeignKey('transportadoras.id'), nullable=True, index=True)
+
+    # ================================================
     # STATUS DA DESPESA
     # ================================================
     STATUS_CHOICES = ['PENDENTE', 'VINCULADO_CTE', 'LANCADO_ODOO', 'LANCADO', 'CANCELADO']
@@ -417,6 +424,7 @@ class DespesaExtra(db.Model):
     fatura_frete = db.relationship('FaturaFrete', backref='despesas_extras')
     cte = db.relationship('ConhecimentoTransporte', foreign_keys=[despesa_cte_id], backref='despesas_extras_vinculadas')
     nfd = db.relationship('NFDevolucao', backref='despesas_extras')
+    transportadora = db.relationship('Transportadora', foreign_keys=[transportadora_id], backref='despesas_extras_diretas')
 
     def __repr__(self):
         return f'<DespesaExtra {self.tipo_despesa} - R$ {self.valor_despesa} - {self.status}>'
@@ -443,6 +451,22 @@ class DespesaExtra(db.Model):
             'CANCELADO': 'Cancelado'
         }
         return descricoes.get(self.status, self.status)
+
+    @property
+    def transportadora_efetiva(self):
+        """
+        Retorna a transportadora que deve receber pela despesa.
+        Se transportadora_id estiver preenchido, usa essa.
+        Caso contrário, usa a transportadora do frete (comportamento padrão).
+        """
+        if self.transportadora_id:
+            return self.transportadora
+        return self.frete.transportadora
+
+    @property
+    def usa_transportadora_alternativa(self):
+        """Indica se a despesa usa transportadora diferente do frete"""
+        return self.transportadora_id is not None and self.transportadora_id != self.frete.transportadora_id
 
 
 class ContaCorrenteTransportadora(db.Model):

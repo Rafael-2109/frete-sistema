@@ -133,7 +133,8 @@ def criar_despesa_devolucao(
     frete: Frete,
     nfd: NFDevolucao,
     valor: float,
-    criado_por: str
+    criado_por: str,
+    transportadora_id: int = None
 ) -> DespesaExtra:
     """
     Cria DespesaExtra do tipo DEVOLUÇÃO vinculada ao Frete e NFD.
@@ -143,15 +144,19 @@ def criar_despesa_devolucao(
         nfd: NFDevolucao relacionada
         valor: Valor da despesa
         criado_por: Usuário
+        transportadora_id: ID da transportadora que fará o frete de retorno (opcional)
+                          Se informado, preenche o campo transportadora_id da despesa
+                          para que apareça no fechamento da transportadora correta.
 
     Returns:
         DespesaExtra: Objeto criado (ainda não commitado)
     """
     despesa = DespesaExtra(
         frete_id=frete.id,
+        transportadora_id=transportadora_id,  # ✅ Transportadora do frete de retorno
         tipo_despesa='DEVOLUÇÃO',
-        tipo_documento='PENDENTE',
-        numero_documento=f'NFD-{nfd.numero_nfd}',
+        tipo_documento='PENDENTE_DOCUMENTO',  # ✅ Será definido ao vincular fatura
+        numero_documento='PENDENTE_FATURA',   # ✅ PENDENTE para aparecer no lançamento de freteiros
         valor_despesa=valor or 0,
         setor_responsavel='LOGISTICA',
         motivo_despesa='DEVOLUÇÃO',

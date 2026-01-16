@@ -113,15 +113,25 @@ class DespesaExtraForm(FlaskForm):
             is_valid, error_msg = validar_valor_brasileiro(field.data)
             if not is_valid:
                 raise ValidationError(error_msg)
-    
+
+    # ================================================
+    # TRANSPORTADORA DO PAGAMENTO (opcional)
+    # ================================================
+    # Se não selecionada, usa a transportadora do frete
+    # Útil para devoluções coletadas por outro transportador
+    transportadora_id = SelectField('Transportadora do Pagamento',
+                                   choices=[],  # Populado dinamicamente na view
+                                   coerce=lambda x: int(x) if x and x != '' else None,
+                                   validators=[Optional()])
+
     # Anexos de emails
-    emails_anexados = MultipleFileField('Anexar Emails (.msg)', 
+    emails_anexados = MultipleFileField('Anexar Emails (.msg)',
                                        validators=[
                                            FileAllowed(['msg'], 'Apenas arquivos .msg são permitidos')
                                        ])
-    
+
     observacoes = TextAreaField('Observações')
-    
+
     submit = SubmitField('Continuar')
 
 class DespesaExtraCompletoForm(FlaskForm):
@@ -154,6 +164,16 @@ class DespesaExtraCompletoForm(FlaskForm):
     valor_despesa = StringField('Valor da Despesa', validators=[DataRequired()],
                                description='Use vírgula como separador decimal (ex: 1.234,56)')
     vencimento_despesa = DateField('Vencimento da Despesa', validators=[Optional()])
+
+    # ================================================
+    # TRANSPORTADORA DO PAGAMENTO (opcional)
+    # ================================================
+    # Se não selecionada, usa a transportadora do frete
+    # Útil para devoluções coletadas por outro transportador
+    transportadora_id = SelectField('Transportadora do Pagamento',
+                                   choices=[],  # Populado dinamicamente na view
+                                   coerce=lambda x: int(x) if x and x != '' else None,
+                                   validators=[Optional()])
 
     observacoes = TextAreaField('Observações')
 
@@ -205,6 +225,7 @@ class FiltroFretesForm(FlaskForm):
     numero_cte = StringField('Número CTe')
     numero_fatura = StringField('Número da Fatura')
     numero_nf = StringField('Número da NF', description='Busca nos fretes que contêm esta NF')
+    numero_nfd = StringField('NF de Devolução', description='Busca fretes com despesa extra vinculada a esta NFD')
     transportadora_id = SelectField('Transportadora',
                                   choices=[],  # Será populado dinamicamente
                                   coerce=lambda x: x if x else None)

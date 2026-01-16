@@ -146,12 +146,14 @@ def criar_frete(ocorrencia_id: int):
         )
 
         # Criar DespesaExtra do tipo DEVOLUCAO
+        # ✅ NOVO: Passa transportadora_id para que a despesa apareça no fechamento correto
         valor_despesa = Decimal(str(data['valor_cotado']))
         despesa = criar_despesa_devolucao(
             frete=frete_principal,
             nfd=nfd,
             valor=float(valor_despesa),
-            criado_por=usuario
+            criado_por=usuario,
+            transportadora_id=data.get('transportadora_id')  # ✅ Transportadora do frete de retorno
         )
 
         # Buscar transportadora se ID fornecido

@@ -112,6 +112,27 @@
                             </div>
                         </div>
 
+                        <!-- Transportadora do Pagamento (opcional) -->
+                        <h6 class="border-bottom pb-2 mb-3 mt-4">
+                            <i class="fas fa-truck"></i> Transportadora do Pagamento
+                        </h6>
+                        <div class="form-group">
+                            {{ form.transportadora_id.label(class="form-label") }}
+                            {{ form.transportadora_id(class="form-select") }}
+                            {% if form.transportadora_id.errors %}
+                                {% for error in form.transportadora_id.errors %}
+                                    <div class="text-danger small">{{ error }}</div>
+                                {% endfor %}
+                            {% endif %}
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle"></i>
+                                Se não informado, a despesa será paga à transportadora do frete
+                                (<strong>{{ frete.transportadora.razao_social }}</strong>).
+                                Use este campo apenas quando a despesa deve ser paga a outro transportador
+                                (ex: devolução coletada por freteiro diferente).
+                            </small>
+                        </div>
+
                         <!-- Observações -->
                         <div class="form-group">
                             {{ form.observacoes.label(class="form-label") }}

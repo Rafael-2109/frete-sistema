@@ -149,26 +149,33 @@
                         </div>
                     </div>
                     <div class="row mt-3">
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             {{ form.numero_fatura.label(class="form-label") }}
                             {{ form.numero_fatura(class="form-control") }}
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             {{ form.numero_nf.label(class="form-label") }}
                             {{ form.numero_nf(class="form-control") }}
                             {% if form.numero_nf.description %}
                             <small class="form-text text-muted">{{ form.numero_nf.description }}</small>
                             {% endif %}
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
+                            {{ form.numero_nfd.label(class="form-label") }}
+                            {{ form.numero_nfd(class="form-control", placeholder="NFD") }}
+                            {% if form.numero_nfd.description %}
+                            <small class="form-text text-muted">{{ form.numero_nfd.description }}</small>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-2">
                             {{ form.transportadora_id.label(class="form-label") }}
                             {{ form.transportadora_id(class="form-control") }}
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             {{ form.status.label(class="form-label") }}
                             {{ form.status(class="form-control") }}
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             {{ form.data_inicio.label(class="form-label") }}
                             {{ form.data_inicio(class="form-control") }}
                         </div>

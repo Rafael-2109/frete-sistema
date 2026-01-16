@@ -746,6 +746,7 @@
                             <thead>
                                 <tr>
                                     <th>Tipo</th>
+                                    <th>Transportadora</th>
                                     <th>NFD</th>
                                     <th>Motivo</th>
                                     <th>Documento</th>
@@ -763,6 +764,17 @@
                                     <td>
                                         {{ despesa.tipo_despesa }}<br>
                                         <small class="text-muted">{{ despesa.setor_responsavel }}</small>
+                                    </td>
+                                    <td>
+                                        {% if despesa.usa_transportadora_alternativa %}
+                                            <span class="badge bg-info" title="Transportadora diferente do frete original">
+                                                <i class="fas fa-exchange-alt"></i> {{ despesa.transportadora.razao_social[:20] }}{% if despesa.transportadora.razao_social|length > 20 %}...{% endif %}
+                                            </span>
+                                        {% else %}
+                                            <span class="text-muted small" title="Usa transportadora do frete">
+                                                <i class="fas fa-truck"></i> {{ frete.transportadora.razao_social[:15] }}{% if frete.transportadora.razao_social|length > 15 %}...{% endif %}
+                                            </span>
+                                        {% endif %}
                                     </td>
                                     <td>
                                         {% if despesa.nfd_id %}

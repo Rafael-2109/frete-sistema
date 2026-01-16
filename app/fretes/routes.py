@@ -421,6 +421,12 @@ def listar_fretes():
     if form.numero_nf.data:
         query = query.filter(Frete.numeros_nfs.contains(form.numero_nf.data))
 
+    # ✅ NOVO: Filtro por número da NF de Devolução (via DespesaExtra)
+    if form.numero_nfd.data:
+        query = query.join(DespesaExtra).filter(
+            DespesaExtra.numero_nfd.ilike(f"%{form.numero_nfd.data}%")
+        )
+
     # ✅ NOVO: Filtro por transportadora
     if form.transportadora_id.data:
         try:
@@ -2438,11 +2444,18 @@ def criar_despesa_extra_frete(frete_id):
     frete = Frete.query.get_or_404(frete_id)
     form = DespesaExtraForm()
 
+    # Popular choices de transportadoras (todas ativas)
+    transportadoras_ativas = Transportadora.query.order_by(Transportadora.razao_social).all()
+    form.transportadora_id.choices = [('', f'-- Usar transportadora do frete ({frete.transportadora.razao_social}) --')] + [
+        (str(t.id), t.razao_social) for t in transportadoras_ativas
+    ]
+
     if form.validate_on_submit():
         # Cria e salva a despesa imediatamente
         despesa = DespesaExtra(
             frete_id=frete_id,
             fatura_frete_id=None,  # ✅ Despesa sem fatura inicialmente
+            transportadora_id=form.transportadora_id.data if form.transportadora_id.data else None,  # ✅ NOVO: Transportadora alternativa
             tipo_despesa=form.tipo_despesa.data,
             setor_responsavel=form.setor_responsavel.data,
             motivo_despesa=form.motivo_despesa.data,
@@ -2711,10 +2724,17 @@ def nova_despesa_extra(frete_id):
     frete = Frete.query.get_or_404(frete_id)
     form = DespesaExtraForm()
 
+    # Popular choices de transportadoras (todas ativas)
+    transportadoras_ativas = Transportadora.query.order_by(Transportadora.razao_social).all()
+    form.transportadora_id.choices = [('', f'-- Usar transportadora do frete ({frete.transportadora.razao_social}) --')] + [
+        (str(t.id), t.razao_social) for t in transportadoras_ativas
+    ]
+
     if form.validate_on_submit():
         despesa = DespesaExtra(
             frete_id=frete_id,
             fatura_frete_id=None,  # ✅ Despesa sem fatura inicialmente
+            transportadora_id=form.transportadora_id.data if form.transportadora_id.data else None,  # ✅ NOVO: Transportadora alternativa
             tipo_despesa=form.tipo_despesa.data,
             setor_responsavel=form.setor_responsavel.data,
             motivo_despesa=form.motivo_despesa.data,
@@ -3998,6 +4018,8 @@ def cancelar_cte(frete_id):
 @login_required
 def excluir_despesa_extra(despesa_id):
     """Exclui uma despesa extra se a fatura não estiver conferida"""
+    from app.devolucao.models import FreteDevolucao
+
     despesa = DespesaExtra.query.get_or_404(despesa_id)
     frete = despesa.frete
 
@@ -4007,14 +4029,24 @@ def excluir_despesa_extra(despesa_id):
         numero_documento = despesa.numero_documento
         valor = despesa.valor_despesa
 
+        # ✅ NOVO: Se for despesa de devolução, excluir também o FreteDevolucao vinculado
+        frete_devolucao_excluido = False
+        if tipo_despesa == 'DEVOLUÇÃO' and hasattr(despesa, 'frete_devolucao_vinculado') and despesa.frete_devolucao_vinculado:
+            frete_dev = despesa.frete_devolucao_vinculado
+            # Soft delete do FreteDevolucao (mesmo comportamento da rota de exclusão de frete)
+            frete_dev.ativo = False
+            frete_dev.atualizado_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
+            frete_dev.atualizado_em = datetime.utcnow()
+            frete_devolucao_excluido = True
+
         # Exclui a despesa
         db.session.delete(despesa)
         db.session.commit()
 
-        flash(
-            f"✅ Despesa extra excluída com sucesso! Tipo: {tipo_despesa} | Documento: {numero_documento} | Valor: R$ {valor:.2f}",
-            "success",
-        )
+        msg = f"✅ Despesa extra excluída com sucesso! Tipo: {tipo_despesa} | Documento: {numero_documento} | Valor: R$ {valor:.2f}"
+        if frete_devolucao_excluido:
+            msg += " | Frete de retorno também foi excluído da tela de ocorrências."
+        flash(msg, "success")
         return redirect(url_for("fretes.visualizar_frete", frete_id=frete.id))
 
     except Exception as e:
@@ -4108,12 +4140,22 @@ def lancamento_freteiros():
         )
 
         # ✅ DESPESAS EXTRAS PENDENTES - SEMPRE COM DATA DE EMBARQUE PREENCHIDA
+        # ✅ NOVO: Considera transportadora_efetiva (campo transportadora_id da despesa OU transportadora do frete)
         despesas_pendentes = (
             db.session.query(DespesaExtra)
             .join(Frete)
             .join(Embarque)
             .filter(
-                Frete.transportadora_id == freteiro.id,
+                # ✅ NOVO: Transportadora efetiva = despesa.transportadora_id OU frete.transportadora_id
+                db.or_(
+                    # Caso 1: Despesa tem transportadora_id explícito
+                    DespesaExtra.transportadora_id == freteiro.id,
+                    # Caso 2: Despesa não tem transportadora_id → usa do frete
+                    db.and_(
+                        DespesaExtra.transportadora_id.is_(None),
+                        Frete.transportadora_id == freteiro.id
+                    )
+                ),
                 Embarque.status == "ativo",  # Apenas embarques ativos
                 Embarque.data_embarque.isnot(None),  # ✅ SEMPRE com data de embarque preenchida
                 db.or_(
@@ -5689,6 +5731,7 @@ def exportar_fechamento_freteiros():
                 "Valor NFs": formatar_valor_br(float(frete.valor_total_nfs or 0)),
                 "Peso NFs": formatar_valor_br(float(frete.peso_total or 0)),
                 "Valor Frete/Despesa": formatar_valor_br(float(frete.valor_cte or frete.valor_cotado or 0)),
+                "Transp. Original (Frete)": "",  # ✅ Vazio para fretes (mesma transportadora)
             })
 
         # Processar DESPESAS EXTRAS da fatura
@@ -5699,6 +5742,11 @@ def exportar_fechamento_freteiros():
             cliente_despesa = frete_despesa.nome_cliente if frete_despesa else ""
             valor_nfs_despesa = float(frete_despesa.valor_total_nfs or 0) if frete_despesa else 0
             peso_nfs_despesa = float(frete_despesa.peso_total or 0) if frete_despesa else 0
+
+            # ✅ NOVO: Indicar quando despesa usa transportadora alternativa
+            transportadora_frete = ""
+            if despesa.usa_transportadora_alternativa and frete_despesa:
+                transportadora_frete = frete_despesa.transportadora.razao_social if frete_despesa.transportadora else ""
 
             dados_detalhamento.append({
                 "CNPJ Transportadora": transportadora.cnpj if transportadora else "",
@@ -5711,6 +5759,7 @@ def exportar_fechamento_freteiros():
                 "Valor NFs": formatar_valor_br(valor_nfs_despesa),
                 "Peso NFs": formatar_valor_br(peso_nfs_despesa),
                 "Valor Frete/Despesa": formatar_valor_br(float(despesa.valor_despesa or 0)),
+                "Transp. Original (Frete)": transportadora_frete,  # ✅ NOVO: Mostra se é diferente
             })
 
     df_detalhamento = pd.DataFrame(dados_detalhamento)

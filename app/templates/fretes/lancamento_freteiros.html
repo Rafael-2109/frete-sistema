@@ -302,9 +302,9 @@
                                                     {% for despesa in embarque_data.despesas_extras %}
                                                     <tr>
                                                         <td>
-                                                            <input type="checkbox" class="form-check-input despesa-checkbox" 
-                                                                   name="despesas_selecionadas" 
-                                                                   value="{{ despesa.id }}" 
+                                                            <input type="checkbox" class="form-check-input despesa-checkbox"
+                                                                   name="despesas_selecionadas"
+                                                                   value="{{ despesa.id }}"
                                                                    data-transportadora-id="{{ dados.freteiro.id }}"
                                                                    data-embarque-id="{{ embarque_id }}"
                                                                    data-valor-original="{{ despesa.valor_despesa }}"
@@ -313,6 +313,11 @@
                                                         <td>
                                                             <strong>{{ despesa.tipo_despesa }}</strong><br>
                                                             <small class="text-muted">{{ despesa.motivo_despesa }}</small>
+                                                            {% if despesa.usa_transportadora_alternativa %}
+                                                            <br><span class="badge bg-info" title="Transportadora diferente do frete original ({{ despesa.frete.transportadora.razao_social }})">
+                                                                <i class="fas fa-exchange-alt"></i> Transp. alternativa
+                                                            </span>
+                                                            {% endif %}
                                                         </td>
                                                         <td>
                                                             <small class="fw-bold" title="{{ despesa.frete.nome_cliente }}">
