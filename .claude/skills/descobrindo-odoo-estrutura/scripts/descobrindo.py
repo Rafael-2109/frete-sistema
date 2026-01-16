@@ -18,7 +18,7 @@ import sys
 import os
 import argparse
 import json
-from typing import Dict, List, Any, Optional
+from typing import Dict, Any, Optional
 
 # Adiciona path do projeto
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..')))

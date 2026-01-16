@@ -13,13 +13,13 @@ from sqlalchemy import func
 
 def register_previsao_demanda_routes(bp):
 
-    @bp.route('/previsao-demanda')
+    @bp.route('/previsao-demanda') # type: ignore
     @login_required
     def previsao_demanda():
         """Tela de gestão de previsão de demanda"""
         return render_template('manufatura/previsao_demanda_nova.html')
     
-    @bp.route('/api/previsao-demanda/listar-grupos')
+    @bp.route('/api/previsao-demanda/listar-grupos') # type: ignore
     @login_required
     def listar_grupos_empresariais():
         """Lista grupos empresariais disponíveis para filtro"""
@@ -55,7 +55,7 @@ def register_previsao_demanda_routes(bp):
         except Exception as e:
             return jsonify({'erro': str(e)}), 500
     
-    @bp.route('/api/previsao-demanda/calcular-comparacoes')
+    @bp.route('/api/previsao-demanda/calcular-comparacoes') # type: ignore
     @login_required
     def calcular_comparacoes():
         """Calcula comparações de histórico para análise"""
@@ -103,7 +103,7 @@ def register_previsao_demanda_routes(bp):
             logger.error(f"[COMPARACOES] Erro: {str(e)}", exc_info=True)
             return jsonify({'erro': str(e)}), 500
     
-    @bp.route('/api/previsao-demanda/buscar-existentes')
+    @bp.route('/api/previsao-demanda/buscar-existentes') # type: ignore
     @login_required
     def buscar_previsoes_existentes():
         """Busca previsões já cadastradas para o mês/ano/grupo"""
@@ -138,7 +138,7 @@ def register_previsao_demanda_routes(bp):
         except Exception as e:
             return jsonify({'erro': str(e)}), 500
     
-    @bp.route('/api/previsao-demanda/salvar', methods=['POST'])
+    @bp.route('/api/previsao-demanda/salvar', methods=['POST']) # type: ignore
     @login_required
     def salvar_previsao_editada():
         """Salva previsão editada pelo usuário"""
@@ -219,7 +219,7 @@ def register_previsao_demanda_routes(bp):
             db.session.rollback()
             return jsonify({'erro': str(e)}), 500
     
-    @bp.route('/api/previsao-demanda/produtos-historico')
+    @bp.route('/api/previsao-demanda/produtos-historico') # type: ignore
     @login_required
     def listar_produtos_historico():
         """Lista produtos únicos do histórico, opcionalmente filtrados por grupo"""
@@ -290,7 +290,7 @@ def register_previsao_demanda_routes(bp):
         except Exception as e:
             return jsonify({'erro': str(e)}), 500
     
-    @bp.route('/api/grupos-empresariais/listar')
+    @bp.route('/api/grupos-empresariais/listar') # type: ignore
     @login_required
     def listar_grupos_crud():
         """Lista grupos empresariais para CRUD (agrupados por nome)"""
@@ -323,7 +323,7 @@ def register_previsao_demanda_routes(bp):
         except Exception as e:
             return jsonify({'erro': str(e)}), 500
     
-    @bp.route('/api/grupos-empresariais/criar', methods=['POST'])
+    @bp.route('/api/grupos-empresariais/criar', methods=['POST']) # type: ignore
     @login_required
     def criar_grupo_empresarial():
         """Cria ou atualiza grupo empresarial com prefixos"""
@@ -384,7 +384,7 @@ def register_previsao_demanda_routes(bp):
             db.session.rollback()
             return jsonify({'erro': str(e)}), 500
         
-    @bp.route('/api/grupos-empresariais/<nome_grupo>', methods=['DELETE'])
+    @bp.route('/api/grupos-empresariais/<nome_grupo>', methods=['DELETE']) # type: ignore
     @login_required
     def deletar_grupo_empresarial(nome_grupo):
         """Desativa grupo empresarial (soft delete)"""
@@ -412,7 +412,7 @@ def register_previsao_demanda_routes(bp):
             db.session.rollback()
             return jsonify({'erro': str(e)}), 500
 
-    @bp.route('/api/previsao-demanda/importar-excel', methods=['POST'])
+    @bp.route('/api/previsao-demanda/importar-excel', methods=['POST']) # type: ignore
     @login_required
     def importar_excel():
         """Importa demanda prevista de arquivo Excel (UPSERT)"""
@@ -562,7 +562,7 @@ def register_previsao_demanda_routes(bp):
             logging.error(f"[IMPORTAR] Erro: {str(e)}", exc_info=True)
             return jsonify({'erro': str(e)}), 500
 
-    @bp.route('/api/previsao-demanda/exportar-excel')
+    @bp.route('/api/previsao-demanda/exportar-excel') # type: ignore
     @login_required
     def exportar_excel():
         """Exporta previsões com comparações e dados históricos para Excel"""

@@ -19,7 +19,7 @@ Data: 01/11/2025
 
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional, Set
+from typing import Dict, List, Any, Set
 from decimal import Decimal
 from collections import defaultdict
 
@@ -392,7 +392,7 @@ class PedidoComprasServiceOtimizado:
 
         self.logger.info(f"   ✅ {len(todos_pedidos)} pedidos carregados em memória")
 
-        return cache
+        return cache  # type: ignore
 
     def _processar_pedidos_otimizado(
         self,

@@ -31,8 +31,8 @@ Referencia: .claude/plans/wiggly-plotting-newt.md
 
 import logging
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Dict, List, Any, Optional, Tuple
-from datetime import datetime, date, timedelta
+from typing import Dict, List, Any, Optional
+from datetime import datetime, date
 from collections import defaultdict
 
 from app import db
@@ -257,7 +257,7 @@ class ValidacaoNfPoService:
                     validacao.status = 'erro'
                     validacao.erro_mensagem = str(e)
                     db.session.commit()
-            except:
+            except Exception as e:
                 pass
 
             return {
@@ -453,8 +453,8 @@ class ValidacaoNfPoService:
                     )
                     # Filtrar linhas com saldo (qty > received)
                     po['lines'] = [
-                        l for l in lines
-                        if (l.get('product_qty', 0) or 0) > (l.get('qty_received', 0) or 0)
+                        line for line in lines
+                        if (line.get('product_qty', 0) or 0) > (line.get('qty_received', 0) or 0)
                     ]
                 else:
                     po['lines'] = []
@@ -948,7 +948,8 @@ class ValidacaoNfPoService:
         for fmt in formatos:
             try:
                 return datetime.strptime(str(date_str)[:19], fmt).date()
-            except:
+            except Exception as e:
+                logger.error(f"Erro ao parsear data {date_str}: {e}")
                 continue
 
         return None

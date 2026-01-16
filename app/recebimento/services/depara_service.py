@@ -22,9 +22,8 @@ Referencia: .claude/references/CONVERSAO_UOM_ODOO.md
 """
 
 import logging
-import json
 from decimal import Decimal
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, Any, Optional
 from datetime import datetime
 
 from app import db

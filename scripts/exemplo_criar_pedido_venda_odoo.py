@@ -18,7 +18,6 @@ import xmlrpc.client
 import ssl
 import sys
 import os
-from datetime import datetime
 from typing import Dict, List, Optional, Any
 
 # Adicionar path do projeto

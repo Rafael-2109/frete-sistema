@@ -1228,7 +1228,7 @@ def fechar_frete():
             # (mesma lógica do botão "Salvar Embarque")
             try:
                 from app.fretes.routes import lancar_frete_automatico, verificar_requisitos_para_lancamento_frete
-                from app.embarques.models import EmbarqueItem
+                # EmbarqueItem já importado no topo do arquivo
 
                 # Flush para garantir que as alterações estejam visíveis
                 db.session.flush()

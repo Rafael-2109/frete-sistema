@@ -2,29 +2,35 @@
 Service de Operacoes no Odoo para POs - FASE 2
 ==============================================
 
-Executa operacoes de consolidacao e ajuste de POs no Odoo
+Executa operacoes de SPLIT e CONSOLIDACAO de POs no Odoo
 apos validacao 100% match da NF x PO.
 
-Operacoes:
-1. Consolidar N POs em 1 PO principal
-2. Ajustar quantidades das linhas
-3. Criar POs de saldo
-4. Cancelar POs vazios
-5. Vincular NF ao PO consolidado
+## REGRAS DE NEGÓCIO (Atualizado 16/01/2026)
 
-Regras:
-- PO principal: o de MAIOR VALOR TOTAL
-- Todas as operacoes sao ATOMICAS (commit ou rollback total)
-- Linhas de outros POs sao MOVIDAS para o PO principal
-- POs originais ficam com saldo ou sao cancelados
+### SPLIT (1 NF + 1 PO com match parcial)
+- PO Original (500 un) + NF (400 un)
+- Resultado:
+  - PO Original: permanece com SALDO (100 un)
+  - PO Conciliador (NOVO): criado com 400 un, vinculado à NF
 
-Referencia: .claude/plans/wiggly-plotting-newt.md
+### CONSOLIDAÇÃO (1 NF + N POs com match parcial)
+- PO A (500 un produto X) + PO B (500 un produto Y) + NF (400 X + 400 Y)
+- Resultado:
+  - PO A: permanece com SALDO (100 un X)
+  - PO B: permanece com SALDO (100 un Y)
+  - PO Conciliador (NOVO): criado com 400 X + 400 Y, vinculado à NF
+
+### REGRA GERAL
+SEMPRE criar um PO Conciliador novo que casa 100% com a NF.
+Os POs originais permanecem com o saldo restante.
+
+Referencia: .claude/plans/humming-snuggling-brooks.md
 """
 
 import logging
 import json
 from decimal import Decimal
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional
 from datetime import datetime
 
 from app import db
@@ -45,15 +51,21 @@ class OdooPoService:
         validacao_id: int
     ) -> Dict[str, Any]:
         """
-        Simula a consolidacao sem executar nada no Odoo.
+        Simula a SPLIT/CONSOLIDACAO sem executar nada no Odoo.
         Retorna preview de todas as acoes que serao executadas.
+
+        ## NOVA LÓGICA (16/01/2026)
+
+        SEMPRE mostra a criacao de um PO Conciliador novo.
+        Os POs originais ficam como saldo.
 
         Args:
             validacao_id: ID da validacao
 
         Returns:
             Dict com preview das acoes:
-            - po_principal: PO que sera o consolidado
+            - po_conciliador: Info do PO que sera criado
+            - pos_saldo: POs que ficarao com saldo
             - acoes: Lista de acoes detalhadas
             - resumo: Totais
         """
@@ -77,149 +89,166 @@ class OdooPoService:
                     'acoes': []
                 }
 
-            # Agrupar por PO
-            pos_map = {}
+            # Agrupar por PO Original
+            pos_originais = {}
+            itens_conciliador = []
+            valor_total_conciliador = Decimal('0')
+
             for match in matches:
                 if not match.odoo_po_id:
                     continue
 
-                if match.odoo_po_id not in pos_map:
-                    pos_map[match.odoo_po_id] = {
-                        'po_id': match.odoo_po_id,
-                        'po_name': match.odoo_po_name,
-                        'valor_total': Decimal('0'),
-                        'itens': []
-                    }
-
                 qtd_nf = Decimal(str(match.qtd_nf or 0))
                 qtd_po = Decimal(str(match.qtd_po or 0))
                 preco = Decimal(str(match.preco_nf or 0))
+                saldo = qtd_po - qtd_nf
 
-                pos_map[match.odoo_po_id]['valor_total'] += qtd_nf * preco
-                pos_map[match.odoo_po_id]['itens'].append({
+                # Dados para o PO Conciliador
+                item_conciliador = {
                     'match_id': match.id,
                     'cod_produto': match.cod_produto_interno,
                     'nome_produto': match.nome_produto,
-                    'qtd_nf': float(qtd_nf),
-                    'qtd_po': float(qtd_po),
-                    'saldo': float(qtd_po - qtd_nf),
+                    'qtd': float(qtd_nf),
+                    'preco': float(preco),
+                    'valor': float(qtd_nf * preco),
+                    'po_origem': match.odoo_po_name
+                }
+                itens_conciliador.append(item_conciliador)
+                valor_total_conciliador += qtd_nf * preco
+
+                # Agrupar dados do PO Original (ficará como saldo)
+                if match.odoo_po_id not in pos_originais:
+                    pos_originais[match.odoo_po_id] = {
+                        'po_id': match.odoo_po_id,
+                        'po_name': match.odoo_po_name,
+                        'itens': []
+                    }
+
+                pos_originais[match.odoo_po_id]['itens'].append({
+                    'cod_produto': match.cod_produto_interno,
+                    'nome_produto': match.nome_produto,
+                    'qtd_original': float(qtd_po),
+                    'qtd_usada': float(qtd_nf),
+                    'qtd_saldo': float(saldo) if saldo > 0 else 0,
                     'preco': float(preco)
                 })
 
-            if not pos_map:
+            if not itens_conciliador:
                 return {
                     'sucesso': False,
-                    'erro': 'Nenhum PO encontrado nos matches',
+                    'erro': 'Nenhum item para o PO Conciliador',
                     'acoes': []
                 }
-
-            # Ordenar POs por valor (maior primeiro)
-            pos_ordenados = sorted(
-                pos_map.values(),
-                key=lambda x: x['valor_total'],
-                reverse=True
-            )
-
-            # PO principal = maior valor
-            po_principal = pos_ordenados[0]
 
             # Gerar lista de acoes
             acoes = []
 
-            # Acao 1: Definir PO principal
+            # Acao 1: Criar PO Conciliador
             acoes.append({
-                'tipo': 'definir_principal',
-                'descricao': f"Definir {po_principal['po_name']} como PO principal (maior valor: R$ {float(po_principal['valor_total']):.2f})",
-                'po_id': po_principal['po_id'],
-                'po_name': po_principal['po_name'],
-                'icone': 'fas fa-star',
+                'tipo': 'criar_conciliador',
+                'descricao': f"Criar novo PO Conciliador para NF {validacao.numero_nf or validacao.odoo_dfe_id}",
+                'valor_total': float(valor_total_conciliador),
+                'qtd_itens': len(itens_conciliador),
+                'icone': 'fas fa-plus-square',
                 'cor': 'success'
             })
 
-            # Acoes de movimento e ajuste
-            for po in pos_ordenados:
-                for item in po['itens']:
-                    # Ajustar quantidade
-                    if item['qtd_nf'] != item['qtd_po']:
+            # Acao 2: Adicionar linhas ao PO Conciliador
+            for item in itens_conciliador:
+                acoes.append({
+                    'tipo': 'adicionar_linha_conciliador',
+                    'descricao': f"Adicionar {item['qtd']:.0f} un de {item['nome_produto'] or item['cod_produto']} ao PO Conciliador (de {item['po_origem']})",
+                    'produto': item['cod_produto'],
+                    'quantidade': item['qtd'],
+                    'preco': item['preco'],
+                    'icone': 'fas fa-cart-plus',
+                    'cor': 'primary'
+                })
+
+            # Acao 3: Ajustar quantidades nos POs Originais (ficam como saldo)
+            pos_com_saldo = []
+            for po_id, po_info in pos_originais.items():
+                tem_saldo = False
+                for item in po_info['itens']:
+                    if item['qtd_saldo'] > 0:
+                        tem_saldo = True
                         acoes.append({
-                            'tipo': 'ajustar_quantidade',
-                            'descricao': f"Ajustar quantidade de {item['nome_produto'] or item['cod_produto']} de {item['qtd_po']:.0f} para {item['qtd_nf']:.0f} un",
-                            'po_id': po['po_id'],
-                            'po_name': po['po_name'],
-                            'qtd_original': item['qtd_po'],
-                            'qtd_nova': item['qtd_nf'],
-                            'icone': 'fas fa-edit',
+                            'tipo': 'ajustar_saldo_original',
+                            'descricao': f"Reduzir {item['nome_produto'] or item['cod_produto']} em {po_info['po_name']}: {item['qtd_original']:.0f} → {item['qtd_saldo']:.0f} un (SALDO)",
+                            'po_id': po_id,
+                            'po_name': po_info['po_name'],
+                            'qtd_original': item['qtd_original'],
+                            'qtd_saldo': item['qtd_saldo'],
+                            'icone': 'fas fa-minus-circle',
                             'cor': 'warning'
                         })
-
-                    # Criar saldo
-                    if item['saldo'] > 0:
+                    else:
                         acoes.append({
-                            'tipo': 'criar_saldo',
-                            'descricao': f"Criar PO saldo com {item['saldo']:.0f} un de {item['nome_produto'] or item['cod_produto']}",
-                            'po_origem': po['po_name'],
-                            'quantidade': item['saldo'],
-                            'icone': 'fas fa-plus-circle',
-                            'cor': 'info'
+                            'tipo': 'zerar_linha_original',
+                            'descricao': f"Zerar {item['nome_produto'] or item['cod_produto']} em {po_info['po_name']}: {item['qtd_original']:.0f} → 0 un",
+                            'po_id': po_id,
+                            'po_name': po_info['po_name'],
+                            'icone': 'fas fa-times',
+                            'cor': 'secondary'
                         })
 
-                # Mover linhas se nao for o principal
-                if po['po_id'] != po_principal['po_id']:
-                    acoes.append({
-                        'tipo': 'mover_linhas',
-                        'descricao': f"Mover {len(po['itens'])} linha(s) de {po['po_name']} para {po_principal['po_name']}",
-                        'po_origem_id': po['po_id'],
-                        'po_origem_name': po['po_name'],
-                        'po_destino_id': po_principal['po_id'],
-                        'po_destino_name': po_principal['po_name'],
-                        'icone': 'fas fa-arrows-alt',
-                        'cor': 'primary'
+                if tem_saldo:
+                    pos_com_saldo.append({
+                        'po_id': po_id,
+                        'po_name': po_info['po_name'],
+                        'itens_saldo': [i for i in po_info['itens'] if i['qtd_saldo'] > 0]
                     })
 
-            # Acoes de vinculacao e cancelamento
+            # Acao 4: Confirmar PO Conciliador
+            acoes.append({
+                'tipo': 'confirmar_conciliador',
+                'descricao': "Confirmar PO Conciliador",
+                'icone': 'fas fa-check-circle',
+                'cor': 'success'
+            })
+
+            # Acao 5: Vincular NF ao PO Conciliador
             acoes.append({
                 'tipo': 'vincular_nf',
-                'descricao': f"Vincular NF {validacao.numero_nf or validacao.odoo_dfe_id} ao PO {po_principal['po_name']}",
+                'descricao': f"Vincular NF {validacao.numero_nf or validacao.odoo_dfe_id} ao PO Conciliador",
                 'dfe_id': validacao.odoo_dfe_id,
-                'po_id': po_principal['po_id'],
                 'icone': 'fas fa-link',
                 'cor': 'success'
             })
 
-            # POs para cancelar
-            for po in pos_ordenados[1:]:
-                acoes.append({
-                    'tipo': 'cancelar_po',
-                    'descricao': f"Cancelar PO {po['po_name']} (linhas movidas)",
-                    'po_id': po['po_id'],
-                    'po_name': po['po_name'],
-                    'icone': 'fas fa-times-circle',
-                    'cor': 'danger'
-                })
-
             # Resumo
             resumo = {
-                'total_pos': len(pos_ordenados),
-                'pos_a_cancelar': len(pos_ordenados) - 1,
-                'linhas_a_mover': sum(len(po['itens']) for po in pos_ordenados[1:]),
-                'saldos_a_criar': sum(1 for po in pos_ordenados for item in po['itens'] if item['saldo'] > 0),
-                'valor_total_nf': float(sum(po['valor_total'] for po in pos_ordenados))
+                'pos_originais_envolvidos': len(pos_originais),
+                'pos_com_saldo': len(pos_com_saldo),
+                'itens_no_conciliador': len(itens_conciliador),
+                'valor_total_conciliador': float(valor_total_conciliador)
             }
 
             return {
                 'sucesso': True,
-                'po_principal': {
-                    'id': po_principal['po_id'],
-                    'name': po_principal['po_name'],
-                    'valor': float(po_principal['valor_total'])
+                'po_conciliador': {
+                    'name': f"NOVO (sera criado)",
+                    'itens': itens_conciliador,
+                    'valor': float(valor_total_conciliador)
                 },
+                # Manter compatibilidade com template antigo
+                'po_principal': {
+                    'id': None,
+                    'name': 'PO Conciliador (NOVO)',
+                    'valor': float(valor_total_conciliador)
+                },
+                'pos_saldo': pos_com_saldo,
+                'pos_originais': list(pos_originais.values()),
                 'acoes': acoes,
                 'resumo': resumo,
-                'pos_envolvidos': pos_ordenados
+                # Compatibilidade com template antigo
+                'pos_envolvidos': list(pos_originais.values())
             }
 
         except Exception as e:
             logger.error(f"Erro ao simular consolidacao {validacao_id}: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return {
                 'sucesso': False,
                 'erro': str(e),
@@ -233,16 +262,21 @@ class OdooPoService:
         usuario: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Executa consolidacao de POs no Odoo.
+        Executa SPLIT/CONSOLIDACAO de POs no Odoo.
+
+        ## NOVA LÓGICA (16/01/2026)
+
+        SEMPRE cria um PO Conciliador novo que casa 100% com a NF.
+        Os POs originais permanecem com o saldo restante.
 
         FLUXO:
-        1. Identificar PO principal (maior valor)
-        2. Para cada linha de cada PO:
-           a) Se PO != principal: mover linha para PO principal
-           b) Ajustar quantidade para valor da NF
-           c) Se saldo > 0: criar PO saldo
-        3. Cancelar POs que ficaram vazios
-        4. Vincular DFE ao PO consolidado
+        1. Buscar fornecedor_id no Odoo pelo CNPJ
+        2. Criar PO Conciliador (vazio)
+        3. Para cada item da NF com match:
+           a) Criar linha no PO Conciliador com qtd/preco da NF
+           b) Reduzir quantidade no PO Original (fica como saldo)
+        4. Confirmar PO Conciliador (se necessário)
+        5. Vincular NF ao PO Conciliador
 
         Args:
             validacao_id: ID da validacao local
@@ -252,6 +286,8 @@ class OdooPoService:
         Returns:
             Dict com resultado da consolidacao
         """
+        from app.recebimento.models import MatchNfPoItem
+
         try:
             # Buscar validacao
             validacao = ValidacaoNfPoDfe.query.get(validacao_id)
@@ -268,94 +304,181 @@ class OdooPoService:
                 raise ValueError("Nenhum PO para consolidar")
 
             logger.info(
-                f"Iniciando consolidacao: validacao {validacao_id}, "
-                f"{len(pos_para_consolidar)} POs"
+                f"Iniciando SPLIT/CONSOLIDACAO: validacao {validacao_id}, "
+                f"{len(pos_para_consolidar)} POs envolvidos"
             )
 
             odoo = get_odoo_connection()
+            if not odoo.authenticate():
+                raise ValueError("Falha na autenticacao com Odoo")
 
-            # PO principal = primeiro da lista (ja ordenada por valor)
-            po_principal = pos_para_consolidar[0]
-            po_principal_id = po_principal['po_id']
-            po_principal_name = po_principal['po_name']
+            # =================================================================
+            # PASSO 1: Buscar fornecedor_id no Odoo pelo CNPJ
+            # =================================================================
+            cnpj_fornecedor = validacao.cnpj_fornecedor
+            cnpj_limpo = ''.join(c for c in str(cnpj_fornecedor) if c.isdigit())
 
-            # Resultados
-            pos_saldo_criados = []
-            pos_cancelados = []
-            linhas_movidas = []
-            linhas_ajustadas = []
+            # Formatar CNPJ para busca (Odoo armazena formatado)
+            def formatar_cnpj(cnpj: str) -> str:
+                if len(cnpj) == 14:
+                    return f"{cnpj[:2]}.{cnpj[2:5]}.{cnpj[5:8]}/{cnpj[8:12]}-{cnpj[12:14]}"
+                return cnpj
 
-            # Processar cada PO
-            for po_info in pos_para_consolidar:
-                po_id = po_info['po_id']
-                po_name = po_info['po_name']
+            cnpj_formatado = formatar_cnpj(cnpj_limpo)
+            partner_ids = odoo.search(
+                'res.partner',
+                [('l10n_br_cnpj', '=', cnpj_formatado)],
+                limit=1
+            )
 
-                for linha in po_info.get('linhas', []):
-                    po_line_id = linha['po_line_id']
-                    qtd_nf = Decimal(str(linha.get('qtd_nf', 0)))
-                    qtd_po = Decimal(str(linha.get('qtd_po', 0)))
+            if not partner_ids:
+                raise ValueError(f"Fornecedor com CNPJ {cnpj_fornecedor} nao encontrado no Odoo")
 
-                    # Se PO diferente do principal, precisa mover a linha
-                    if po_id != po_principal_id:
-                        # NOTA: Mover linha entre POs no Odoo e complexo
-                        # Por enquanto, vamos apenas registrar o vinculo
-                        # Em uma implementacao completa, usariamos:
-                        # - Cancelar linha no PO original
-                        # - Criar nova linha no PO principal
-                        linhas_movidas.append({
-                            'de_po': po_name,
-                            'de_po_id': po_id,
-                            'para_po': po_principal_name,
-                            'linha_id': po_line_id,
-                            'qtd': float(qtd_nf)
-                        })
+            fornecedor_id = partner_ids[0]
 
-                    # Verificar se precisa criar saldo
-                    saldo = qtd_po - qtd_nf
-                    if saldo > 0:
-                        # Criar PO saldo
-                        saldo_info = self._criar_po_saldo(
-                            odoo, po_id, po_line_id, float(saldo)
-                        )
-                        if saldo_info:
-                            pos_saldo_criados.append(saldo_info)
+            # PO de referencia para copiar configuracoes
+            po_referencia_id = pos_para_consolidar[0]['po_id']
 
-                    # Ajustar quantidade da linha
-                    self._ajustar_quantidade_linha(odoo, po_line_id, float(qtd_nf))
-                    linhas_ajustadas.append({
-                        'po': po_name,
-                        'linha_id': po_line_id,
-                        'qtd_original': float(qtd_po),
-                        'qtd_ajustada': float(qtd_nf)
+            # =================================================================
+            # PASSO 2: Criar PO Conciliador (vazio)
+            # =================================================================
+            po_conciliador_info = self._criar_po_conciliador(
+                odoo, fornecedor_id, validacao, po_referencia_id
+            )
+
+            if not po_conciliador_info:
+                raise ValueError("Falha ao criar PO Conciliador")
+
+            po_conciliador_id = po_conciliador_info['po_id']
+            po_conciliador_name = po_conciliador_info['po_name']
+
+            logger.info(f"PO Conciliador criado: {po_conciliador_name}")
+
+            # =================================================================
+            # PASSO 3: Para cada item da NF com match
+            # =================================================================
+            # Buscar matches diretamente da tabela para ter todos os dados
+            matches = MatchNfPoItem.query.filter_by(
+                validacao_id=validacao_id,
+                status_match='match'
+            ).all()
+
+            linhas_criadas_conciliador = []
+            linhas_ajustadas_originais = []
+            pos_com_saldo = set()
+
+            for match in matches:
+                if not match.odoo_po_line_id:
+                    logger.warning(f"Match {match.id} sem po_line_id, pulando")
+                    continue
+
+                qtd_nf = Decimal(str(match.qtd_nf or 0))
+                qtd_po = Decimal(str(match.qtd_po or 0))
+                preco_nf = float(match.preco_nf or 0)
+
+                # Buscar product_id da linha original
+                linha_original = odoo.read(
+                    'purchase.order.line',
+                    [match.odoo_po_line_id],
+                    ['product_id']
+                )
+
+                if not linha_original or not linha_original[0].get('product_id'):
+                    logger.warning(
+                        f"Linha {match.odoo_po_line_id} sem produto, pulando"
+                    )
+                    continue
+
+                product_id = linha_original[0]['product_id'][0]  # type: ignore
+
+                # -------------------------------------------------------------
+                # 3a) Criar linha no PO Conciliador
+                # -------------------------------------------------------------
+                nova_linha_id = self._criar_linha_po_conciliador(
+                    odoo,
+                    po_conciliador_id,
+                    product_id,
+                    float(qtd_nf),
+                    preco_nf,
+                    match.odoo_po_line_id
+                )
+
+                if nova_linha_id:
+                    linhas_criadas_conciliador.append({
+                        'linha_id': nova_linha_id,
+                        'produto': match.cod_produto_interno,
+                        'nome': match.nome_produto,
+                        'qtd': float(qtd_nf),
+                        'preco': preco_nf
                     })
 
-            # Verificar POs para cancelar (ficaram sem linhas)
-            for po_info in pos_para_consolidar[1:]:  # Exceto o principal
-                po_id = po_info['po_id']
-                # Verificar se todas as linhas foram zeradas
-                if self._verificar_po_vazio(odoo, po_id):
-                    self._cancelar_po(odoo, po_id)
-                    pos_cancelados.append({
-                        'po_id': po_id,
-                        'po_name': po_info['po_name']
-                    })
+                # -------------------------------------------------------------
+                # 3b) Reduzir quantidade no PO Original (fica como saldo)
+                # -------------------------------------------------------------
+                saldo = qtd_po - qtd_nf
+                nova_qtd_original = float(saldo) if saldo > 0 else 0
 
-            # Vincular DFE ao PO principal
-            self._vincular_dfe_ao_po(odoo, validacao.odoo_dfe_id, po_principal_id)
+                self._ajustar_quantidade_linha(
+                    odoo, match.odoo_po_line_id, nova_qtd_original
+                )
 
-            # Atualizar validacao
+                linhas_ajustadas_originais.append({
+                    'po_id': match.odoo_po_id,
+                    'po_name': match.odoo_po_name,
+                    'linha_id': match.odoo_po_line_id,
+                    'produto': match.cod_produto_interno,
+                    'qtd_original': float(qtd_po),
+                    'qtd_saldo': nova_qtd_original
+                })
+
+                # Registrar que este PO tem saldo
+                if nova_qtd_original > 0:
+                    pos_com_saldo.add((match.odoo_po_id, match.odoo_po_name))
+
+            # =================================================================
+            # PASSO 4: Confirmar PO Conciliador
+            # =================================================================
+            try:
+                odoo.execute(
+                    'purchase.order',
+                    'button_confirm',
+                    [po_conciliador_id]
+                )
+                logger.info(f"PO Conciliador {po_conciliador_name} confirmado")
+            except Exception as e:
+                logger.warning(
+                    f"Nao foi possivel confirmar PO Conciliador automaticamente: {e}"
+                )
+
+            # =================================================================
+            # PASSO 5: Vincular NF ao PO Conciliador
+            # =================================================================
+            self._vincular_dfe_ao_po(odoo, validacao.odoo_dfe_id, po_conciliador_id)
+
+            # =================================================================
+            # Atualizar validacao local
+            # =================================================================
             validacao.status = 'consolidado'
-            validacao.po_consolidado_id = po_principal_id
-            validacao.po_consolidado_name = po_principal_name
-            validacao.pos_saldo_ids = json.dumps(pos_saldo_criados)
-            validacao.pos_cancelados_ids = json.dumps(pos_cancelados)
+            validacao.po_consolidado_id = po_conciliador_id
+            validacao.po_consolidado_name = po_conciliador_name
+            validacao.pos_saldo_ids = json.dumps([
+                {'po_id': po_id, 'po_name': po_name}
+                for po_id, po_name in pos_com_saldo
+            ])
             validacao.acao_executada = {
+                'tipo': 'split_consolidacao',
                 'usuario': usuario,
                 'data': datetime.utcnow().isoformat(),
-                'linhas_movidas': linhas_movidas,
-                'linhas_ajustadas': linhas_ajustadas,
-                'pos_saldo_criados': pos_saldo_criados,
-                'pos_cancelados': pos_cancelados
+                'po_conciliador': {
+                    'id': po_conciliador_id,
+                    'name': po_conciliador_name,
+                    'linhas': linhas_criadas_conciliador
+                },
+                'pos_originais_ajustados': linhas_ajustadas_originais,
+                'pos_com_saldo': [
+                    {'po_id': po_id, 'po_name': po_name}
+                    for po_id, po_name in pos_com_saldo
+                ]
             }
             validacao.consolidado_em = datetime.utcnow()
             validacao.atualizado_em = datetime.utcnow()
@@ -363,24 +486,28 @@ class OdooPoService:
             db.session.commit()
 
             logger.info(
-                f"Consolidacao concluida: PO principal {po_principal_name}, "
-                f"{len(pos_saldo_criados)} saldos criados, "
-                f"{len(pos_cancelados)} POs cancelados"
+                f"SPLIT/CONSOLIDACAO concluida: "
+                f"PO Conciliador {po_conciliador_name} criado, "
+                f"{len(linhas_criadas_conciliador)} linhas, "
+                f"{len(pos_com_saldo)} POs com saldo"
             )
 
             return {
                 'sucesso': True,
-                'po_consolidado_id': po_principal_id,
-                'po_consolidado_name': po_principal_name,
-                'pos_saldo_criados': pos_saldo_criados,
-                'pos_cancelados': pos_cancelados,
-                'linhas_movidas': len(linhas_movidas),
-                'linhas_ajustadas': len(linhas_ajustadas)
+                'po_consolidado_id': po_conciliador_id,
+                'po_consolidado_name': po_conciliador_name,
+                'linhas_criadas': len(linhas_criadas_conciliador),
+                'pos_com_saldo': [
+                    {'po_id': po_id, 'po_name': po_name}
+                    for po_id, po_name in pos_com_saldo
+                ]
             }
 
         except Exception as e:
             db.session.rollback()
-            logger.error(f"Erro ao consolidar POs: {e}")
+            logger.error(f"Erro ao executar SPLIT/CONSOLIDACAO: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
 
             # Atualizar validacao com erro
             try:
@@ -389,7 +516,7 @@ class OdooPoService:
                     validacao.status = 'erro'
                     validacao.erro_mensagem = str(e)
                     db.session.commit()
-            except:
+            except Exception as e:
                 pass
 
             return {
@@ -499,6 +626,144 @@ class OdooPoService:
             logger.error(f"Erro ao criar PO saldo: {e}")
             return None
 
+    def _criar_po_conciliador(
+        self,
+        odoo,
+        fornecedor_id: int,
+        validacao: 'ValidacaoNfPoDfe',
+        po_referencia_id: int
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Cria um novo PO Conciliador que irá casar 100% com a NF.
+
+        O PO Conciliador é criado vazio e as linhas são adicionadas posteriormente.
+
+        Args:
+            odoo: Conexao Odoo
+            fornecedor_id: ID do partner (fornecedor) no Odoo
+            validacao: Objeto ValidacaoNfPoDfe com dados da NF
+            po_referencia_id: ID de um PO existente para copiar configuracoes
+
+        Returns:
+            Dict com info do PO conciliador ou None se falhou
+        """
+        try:
+            # Ler dados do PO de referencia para copiar configuracoes
+            po_ref = odoo.read(
+                'purchase.order',
+                [po_referencia_id],
+                ['picking_type_id', 'company_id', 'currency_id', 'fiscal_position_id']
+            )
+
+            po_ref_data = po_ref[0] if po_ref else {}
+
+            # Criar novo PO Conciliador
+            novo_po_data = {
+                'partner_id': fornecedor_id,
+                'date_order': validacao.data_nf.isoformat() if validacao.data_nf else datetime.utcnow().isoformat(),
+                'origin': f'Conciliacao NF {validacao.numero_nf or validacao.odoo_dfe_id}',
+                'state': 'draft',  # Comeca como rascunho
+            }
+
+            # Copiar configuracoes do PO de referencia
+            if po_ref_data.get('picking_type_id'):
+                novo_po_data['picking_type_id'] = po_ref_data['picking_type_id'][0]
+            if po_ref_data.get('company_id'):
+                novo_po_data['company_id'] = po_ref_data['company_id'][0]
+            if po_ref_data.get('currency_id'):
+                novo_po_data['currency_id'] = po_ref_data['currency_id'][0]
+            if po_ref_data.get('fiscal_position_id'):
+                novo_po_data['fiscal_position_id'] = po_ref_data['fiscal_position_id'][0]
+
+            # Criar PO
+            novo_po_id = odoo.create('purchase.order', novo_po_data)
+
+            if not novo_po_id:
+                logger.error("Falha ao criar PO Conciliador")
+                return None
+
+            # Buscar nome do novo PO
+            novo_po = odoo.read('purchase.order', [novo_po_id], ['name'])
+            novo_po_name = novo_po[0]['name'] if novo_po else str(novo_po_id)
+
+            logger.info(
+                f"PO Conciliador {novo_po_name} criado para NF {validacao.numero_nf}"
+            )
+
+            return {
+                'po_id': novo_po_id,
+                'po_name': novo_po_name
+            }
+
+        except Exception as e:
+            logger.error(f"Erro ao criar PO Conciliador: {e}")
+            return None
+
+    def _criar_linha_po_conciliador(
+        self,
+        odoo,
+        po_conciliador_id: int,
+        produto_id: int,
+        quantidade: float,
+        preco_unitario: float,
+        linha_referencia_id: int
+    ) -> Optional[int]:
+        """
+        Cria uma linha no PO Conciliador com os dados da NF.
+
+        Args:
+            odoo: Conexao Odoo
+            po_conciliador_id: ID do PO Conciliador
+            produto_id: ID do produto no Odoo
+            quantidade: Quantidade da NF
+            preco_unitario: Preco unitario da NF
+            linha_referencia_id: ID de uma linha de PO existente para copiar config
+
+        Returns:
+            ID da linha criada ou None se falhou
+        """
+        try:
+            # Ler dados da linha de referencia
+            linha_ref = odoo.read(
+                'purchase.order.line',
+                [linha_referencia_id],
+                ['name', 'product_uom', 'date_planned', 'taxes_id']
+            )
+
+            linha_ref_data = linha_ref[0] if linha_ref else {}
+
+            # Criar nova linha
+            nova_linha_data = {
+                'order_id': po_conciliador_id,
+                'product_id': produto_id,
+                'name': linha_ref_data.get('name', 'Item da NF'),
+                'product_qty': quantidade,
+                'price_unit': preco_unitario,
+                'date_planned': linha_ref_data.get('date_planned') or datetime.utcnow().isoformat(),
+            }
+
+            # Copiar UOM se existir
+            if linha_ref_data.get('product_uom'):
+                nova_linha_data['product_uom'] = linha_ref_data['product_uom'][0]
+
+            # Copiar impostos se existirem
+            if linha_ref_data.get('taxes_id'):
+                nova_linha_data['taxes_id'] = [(6, 0, linha_ref_data['taxes_id'])]
+
+            linha_id = odoo.create('purchase.order.line', nova_linha_data)
+
+            if linha_id:
+                logger.debug(
+                    f"Linha criada no PO Conciliador: produto {produto_id}, "
+                    f"qtd {quantidade}, preco {preco_unitario}"
+                )
+
+            return linha_id
+
+        except Exception as e:
+            logger.error(f"Erro ao criar linha no PO Conciliador: {e}")
+            return None
+
     def _ajustar_quantidade_linha(
         self,
         odoo,
@@ -601,7 +866,7 @@ class OdooPoService:
                     {'state': 'cancel'}
                 )
                 return True
-            except:
+            except Exception as e:
                 pass
 
             return False
@@ -755,8 +1020,8 @@ class OdooPoService:
                             ['product_qty', 'qty_received']
                         )
                         tem_saldo = any(
-                            (l.get('product_qty', 0) or 0) > (l.get('qty_received', 0) or 0)
-                            for l in lines
+                            (line.get('product_qty', 0) or 0) > (line.get('qty_received', 0) or 0)
+                            for line in lines
                         )
                         if tem_saldo:
                             pos_filtrados.append(po)
@@ -819,7 +1084,7 @@ class OdooPoService:
             for po_saldo in pos_saldo:
                 try:
                     self._cancelar_po(odoo, po_saldo['po_id'])
-                except:
+                except Exception as e:
                     pass
 
             # 2. Restaurar quantidades originais
@@ -830,7 +1095,7 @@ class OdooPoService:
                         linha_info['linha_id'],
                         {'product_qty': linha_info['qtd_original']}
                     )
-                except:
+                except Exception as e:
                     pass
 
             # 3. Descancelar POs cancelados
@@ -842,7 +1107,7 @@ class OdooPoService:
                         po_cancel['po_id'],
                         {'state': 'purchase'}
                     )
-                except:
+                except Exception as e:
                     pass
 
             # 4. Remover vinculo DFE -> PO
@@ -852,7 +1117,7 @@ class OdooPoService:
                     validacao.po_consolidado_id,
                     {'dfe_id': False}
                 )
-            except:
+            except Exception as e:
                 pass
 
             # Atualizar validacao

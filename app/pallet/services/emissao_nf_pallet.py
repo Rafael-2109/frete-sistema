@@ -20,7 +20,7 @@ Data: 02/01/2026
 import sys
 import os
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 
@@ -348,7 +348,7 @@ def emitir_nf_pallet(
 
         # ETAPA 6: Criar fatura
         invoice_id = criar_fatura(odoo, config, cliente_id, transportadora_id,
-                                   picking_id, quantidade)
+                                 picking_id, quantidade)  # type: ignore
         resultado['etapas'].append(f"Fatura criada: ID {invoice_id}")
 
         # ETAPA 7: Postar fatura (emitir NF-e)
