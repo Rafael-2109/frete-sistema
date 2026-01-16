@@ -605,11 +605,16 @@
         }
     };
 
-    // Gera a secao de IBS/CBS baseado no cadastro e valores do documento
+    // Gera a secao de IBS/CBS baseado no cadastro, valores do documento e motivo
     function gerarSecaoIbsCbs(p, ibs, ncmCadastro) {
-        // Se for CTe, aliquotas sao fixas
+        const motivo = p.motivo_pendencia;
+
+        // Verifica se tem valores IBS/CBS encontrados no documento
+        const temIbsCbsEncontrado = ibs && (ibs.cst || ibs.base || ibs.ibs_uf_aliq !== null);
+
+        // Se for CTe
         if (p.tipo_documento === 'CTe') {
-            return `
+            let html = `
                 <h6 class="border-bottom pb-2 mb-3">
                     <i class="fas fa-calculator me-2"></i>Aliquotas Esperadas (CTe - Fixas)
                 </h6>
@@ -649,15 +654,93 @@
                         </div>
                     </div>
                 </div>
-                <div class="alert alert-danger mt-3">
-                    <i class="fas fa-exclamation-triangle me-2"></i>
-                    <strong>Fornecedor NAO destacou IBS/CBS!</strong> O CTe deveria conter as tags de IBS/CBS.
-                </div>
             `;
+
+            // Se tem valores encontrados, mostrar comparacao
+            if (temIbsCbsEncontrado) {
+                html += `
+                    <h6 class="border-bottom pb-2 mb-3 mt-4">
+                        <i class="fas fa-search me-2"></i>Valores Encontrados no Documento
+                    </h6>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="card ${ibs.ibs_uf_aliq == 0.10 ? 'border-success' : 'border-danger'}">
+                                <div class="card-header ${ibs.ibs_uf_aliq == 0.10 ? 'bg-success' : 'bg-danger'} text-white py-1 px-2">
+                                    <small>IBS UF (Encontrado)</small>
+                                </div>
+                                <div class="card-body p-2 text-center">
+                                    <strong class="fs-5">${formatarNumero(ibs.ibs_uf_aliq)}%</strong>
+                                    <br><small class="text-muted">Valor: R$ ${formatarNumero(ibs.ibs_uf_valor)}</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card ${ibs.ibs_mun_aliq == 0.00 ? 'border-success' : 'border-danger'}">
+                                <div class="card-header ${ibs.ibs_mun_aliq == 0.00 ? 'bg-success' : 'bg-danger'} text-white py-1 px-2">
+                                    <small>IBS Mun (Encontrado)</small>
+                                </div>
+                                <div class="card-body p-2 text-center">
+                                    <strong class="fs-5">${formatarNumero(ibs.ibs_mun_aliq)}%</strong>
+                                    <br><small class="text-muted">Valor: R$ ${formatarNumero(ibs.ibs_mun_valor)}</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card ${ibs.cbs_aliq == 0.90 ? 'border-success' : 'border-danger'}">
+                                <div class="card-header ${ibs.cbs_aliq == 0.90 ? 'bg-success' : 'bg-danger'} text-white py-1 px-2">
+                                    <small>CBS (Encontrado)</small>
+                                </div>
+                                <div class="card-body p-2 text-center">
+                                    <strong class="fs-5">${formatarNumero(ibs.cbs_aliq)}%</strong>
+                                    <br><small class="text-muted">Valor: R$ ${formatarNumero(ibs.cbs_valor)}</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-md-6">
+                            <div class="card bg-light">
+                                <div class="card-body p-2 text-center">
+                                    <small class="text-muted">Base de Calculo</small>
+                                    <div class="fw-bold">R$ ${formatarNumero(ibs.base)}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card bg-light">
+                                <div class="card-body p-2 text-center">
+                                    <small class="text-muted">CST / Class. Trib.</small>
+                                    <div class="fw-bold">${ibs.cst || '-'} / ${ibs.class_trib || '-'}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                // Alerta de divergencia
+                if (motivo === 'aliquota_divergente' || motivo === 'valor_zerado' || motivo === 'cst_incorreto') {
+                    html += `
+                        <div class="alert alert-danger mt-3">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>DIVERGENCIA!</strong> Os valores encontrados nao correspondem aos esperados. Verifique os detalhes acima.
+                        </div>
+                    `;
+                }
+            } else {
+                // Nao tem valores - nao destacou
+                html += `
+                    <div class="alert alert-danger mt-3">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Fornecedor NAO destacou IBS/CBS!</strong> O CTe deveria conter as tags de IBS/CBS.
+                    </div>
+                `;
+            }
+
+            return html;
         }
 
-        // Se for NF-e sem NCM cadastrado
-        if (!ncmCadastro) {
+        // Se for NF-e sem NCM cadastrado (falta_cadastro)
+        if (!ncmCadastro || motivo === 'falta_cadastro') {
             const prefixo = p.ncm_prefixo || '0000';
             return `
                 <h6 class="border-bottom pb-2 mb-3">
@@ -677,7 +760,7 @@
         }
 
         // NF-e com NCM cadastrado - mostrar aliquotas esperadas
-        return `
+        let html = `
             <h6 class="border-bottom pb-2 mb-3">
                 <i class="fas fa-calculator me-2"></i>Aliquotas Esperadas (NCM ${ncmCadastro.ncm_prefixo})
             </h6>
@@ -728,11 +811,88 @@
                     </div>
                 </div>
             </div>
-            <div class="alert alert-danger mt-3">
-                <i class="fas fa-exclamation-triangle me-2"></i>
-                <strong>DIVERGENCIA!</strong> O fornecedor NAO destacou IBS/CBS no documento, mas deveria ter destacado conforme cadastro acima.
-            </div>
         `;
+
+        // Se tem valores encontrados no documento, mostrar comparacao
+        if (temIbsCbsEncontrado) {
+            html += `
+                <h6 class="border-bottom pb-2 mb-3 mt-4">
+                    <i class="fas fa-search me-2"></i>Valores Encontrados no Documento
+                </h6>
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="card ${ibs.cst === ncmCadastro.cst_esperado ? 'border-success' : 'border-danger'}">
+                            <div class="card-header ${ibs.cst === ncmCadastro.cst_esperado ? 'bg-success' : 'bg-danger'} text-white py-1 px-2">
+                                <small>CST Encontrado</small>
+                            </div>
+                            <div class="card-body p-2 text-center">
+                                <strong class="fs-5">${ibs.cst || '-'}</strong>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-primary">
+                            <div class="card-body p-2 text-center">
+                                <small class="text-muted">IBS UF</small>
+                                <div class="fw-bold">${formatarNumero(ibs.ibs_uf_aliq)}%</div>
+                                <small class="text-muted">R$ ${formatarNumero(ibs.ibs_uf_valor)}</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-info">
+                            <div class="card-body p-2 text-center">
+                                <small class="text-muted">IBS Mun</small>
+                                <div class="fw-bold">${formatarNumero(ibs.ibs_mun_aliq)}%</div>
+                                <small class="text-muted">R$ ${formatarNumero(ibs.ibs_mun_valor)}</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-success">
+                            <div class="card-body p-2 text-center">
+                                <small class="text-muted">CBS</small>
+                                <div class="fw-bold">${formatarNumero(ibs.cbs_aliq)}%</div>
+                                <small class="text-muted">R$ ${formatarNumero(ibs.cbs_valor)}</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col-12">
+                        <div class="card bg-light">
+                            <div class="card-body p-2 text-center">
+                                <small class="text-muted">Base de Calculo: </small>
+                                <strong>R$ ${formatarNumero(ibs.base)}</strong>
+                                <span class="mx-2">|</span>
+                                <small class="text-muted">Class. Trib.: </small>
+                                <strong>${ibs.class_trib || '-'}</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Alerta de divergencia
+            if (motivo === 'aliquota_divergente' || motivo === 'valor_zerado' || motivo === 'cst_incorreto') {
+                html += `
+                    <div class="alert alert-danger mt-3">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>DIVERGENCIA!</strong> Os valores encontrados nao correspondem aos esperados. Verifique os detalhes acima.
+                    </div>
+                `;
+            }
+        } else {
+            // Nao tem valores - nao destacou
+            html += `
+                <div class="alert alert-danger mt-3">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Fornecedor NAO destacou IBS/CBS!</strong> O documento deveria conter as tags de IBS/CBS conforme cadastro acima.
+                </div>
+            `;
+        }
+
+        return html;
     }
 
     // Abre a pagina de cadastro de NCM com o prefixo pre-preenchido
