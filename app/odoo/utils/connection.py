@@ -267,6 +267,19 @@ class OdooConnection:
         """
         return self.execute_kw(model, 'write', [ids, values])
 
+    def create(self, model: str, values: dict) -> int:
+        """
+        Cria novo registro no Odoo
+
+        Args:
+            model: Nome do modelo Odoo (ex: 'product.supplierinfo')
+            values: Dicionário com campos e valores do novo registro
+
+        Returns:
+            ID do registro criado
+        """
+        return self.execute_kw(model, 'create', [values])
+
     def buscar_registro_por_id(self, model: str, record_id: int, fields: Optional[list] = None) -> Optional[Dict]:
         """
         Busca um único registro por ID

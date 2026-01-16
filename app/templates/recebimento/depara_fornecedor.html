@@ -12,6 +12,9 @@
             <button type="button" class="btn btn-success me-2" onclick="abrirModalNovo()">
                 <i class="fas fa-plus"></i> Novo De-Para
             </button>
+            <button type="button" class="btn btn-outline-success me-2" onclick="abrirModalImportarExcel()">
+                <i class="fas fa-file-excel"></i> Importar Excel
+            </button>
             <button type="button" class="btn btn-outline-info me-2" onclick="importarDoOdoo()">
                 <i class="fas fa-download"></i> Importar do Odoo
             </button>
@@ -299,8 +302,110 @@
     </div>
 </div>
 
+<!-- Modal Importar Excel -->
+<div class="modal fade" id="modalImportarExcel" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="fas fa-file-excel me-2"></i>Importar De-Para via Excel</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Instrucoes -->
+                <div class="alert alert-info">
+                    <h6 class="alert-heading"><i class="fas fa-info-circle me-2"></i>Instrucoes</h6>
+                    <ul class="mb-0">
+                        <li>Baixe o <a href="#" onclick="baixarTemplateExcel(); return false;">template Excel</a> como modelo</li>
+                        <li>Preencha as colunas obrigatorias: <code>cnpj_fornecedor</code>, <code>cod_produto_fornecedor</code>, <code>cod_produto_interno</code></li>
+                        <li>Colunas opcionais: <code>descricao_produto_fornecedor</code>, <code>um_fornecedor</code>, <code>fator_conversao</code></li>
+                        <li>Se existir De-Para com mesmo CNPJ+Codigo, sera atualizado</li>
+                    </ul>
+                </div>
+
+                <!-- Upload -->
+                <form id="formImportarExcel" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Arquivo Excel *</label>
+                        <input type="file" class="form-control" id="arquivoExcel" name="arquivo"
+                               accept=".xlsx,.xls" required onchange="previewExcel()">
+                        <small class="text-muted">Arquivos aceitos: .xlsx, .xls</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="autoSyncOdoo" name="auto_sync_odoo" checked>
+                            <label class="form-check-label" for="autoSyncOdoo">
+                                Sincronizar automaticamente com Odoo
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Preview -->
+                    <div id="previewContainer" style="display: none;">
+                        <h6 class="mt-4 mb-2"><i class="fas fa-eye me-2"></i>Preview (primeiras 5 linhas)</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered" id="tabelaPreview">
+                                <thead class="table-light"></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                        <p class="text-muted small" id="previewInfo"></p>
+                    </div>
+                </form>
+
+                <!-- Resultado -->
+                <div id="resultadoImportacao" style="display: none;" class="mt-4">
+                    <h6><i class="fas fa-check-circle text-success me-2"></i>Resultado da Importacao</h6>
+                    <div class="row text-center">
+                        <div class="col-4">
+                            <div class="card bg-primary text-white">
+                                <div class="card-body py-2">
+                                    <h4 id="resCriados" class="mb-0">0</h4>
+                                    <small>Criados</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="card bg-info text-white">
+                                <div class="card-body py-2">
+                                    <h4 id="resAtualizados" class="mb-0">0</h4>
+                                    <small>Atualizados</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="card bg-danger text-white">
+                                <div class="card-body py-2">
+                                    <h4 id="resErros" class="mb-0">0</h4>
+                                    <small>Erros</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="listaErros" class="mt-3" style="display: none;">
+                        <h6 class="text-danger"><i class="fas fa-exclamation-triangle me-2"></i>Detalhes dos Erros</h6>
+                        <div class="overflow-auto" style="max-height: 200px;">
+                            <ul class="list-group list-group-flush" id="ulErros"></ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <a href="#" class="btn btn-link" onclick="baixarTemplateExcel(); return false;">
+                    <i class="fas fa-download"></i> Baixar Template
+                </a>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-success" id="btnProcessarExcel" onclick="processarExcel()">
+                    <i class="fas fa-upload"></i> Processar Importacao
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 const modalDepara = new bootstrap.Modal(document.getElementById('modalDepara'));
+const modalImportarExcel = new bootstrap.Modal(document.getElementById('modalImportarExcel'));
 
 function abrirModalNovo() {
     document.getElementById('modalDeparaTitle').textContent = 'Novo De-Para';
@@ -447,6 +552,103 @@ function sugerirFator() {
                 document.getElementById('fatorConversao').value = data.fator_sugerido;
             }
         });
+}
+
+// ========== FUNCOES IMPORTAR EXCEL ==========
+
+function abrirModalImportarExcel() {
+    // Reset estado
+    document.getElementById('formImportarExcel').reset();
+    document.getElementById('previewContainer').style.display = 'none';
+    document.getElementById('resultadoImportacao').style.display = 'none';
+    document.getElementById('btnProcessarExcel').disabled = false;
+    document.getElementById('btnProcessarExcel').innerHTML = '<i class="fas fa-upload"></i> Processar Importacao';
+    modalImportarExcel.show();
+}
+
+function baixarTemplateExcel() {
+    window.location.href = '/api/recebimento/depara/template-excel';
+}
+
+function previewExcel() {
+    const arquivo = document.getElementById('arquivoExcel').files[0];
+    if (!arquivo) {
+        document.getElementById('previewContainer').style.display = 'none';
+        return;
+    }
+
+    // Usar SheetJS (se disponivel) ou mostrar apenas info do arquivo
+    document.getElementById('previewContainer').style.display = 'block';
+    document.getElementById('previewInfo').textContent = `Arquivo: ${arquivo.name} (${(arquivo.size / 1024).toFixed(2)} KB)`;
+
+    // Limpar tabela preview
+    const thead = document.querySelector('#tabelaPreview thead');
+    const tbody = document.querySelector('#tabelaPreview tbody');
+    thead.innerHTML = '<tr><td class="text-muted text-center" colspan="6"><i class="fas fa-spinner fa-spin me-2"></i>Preparando preview...</td></tr>';
+    tbody.innerHTML = '';
+}
+
+function processarExcel() {
+    const arquivo = document.getElementById('arquivoExcel').files[0];
+    if (!arquivo) {
+        alert('Selecione um arquivo Excel');
+        return;
+    }
+
+    const btn = document.getElementById('btnProcessarExcel');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processando...';
+
+    const formData = new FormData();
+    formData.append('arquivo', arquivo);
+    formData.append('auto_sync_odoo', document.getElementById('autoSyncOdoo').checked ? 'true' : 'false');
+
+    fetch('/api/recebimento/depara/importar-excel', {
+        method: 'POST',
+        body: formData
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-upload"></i> Processar Importacao';
+
+        if (data.sucesso) {
+            // Exibir resultado
+            document.getElementById('resultadoImportacao').style.display = 'block';
+            document.getElementById('resCriados').textContent = data.criados || 0;
+            document.getElementById('resAtualizados').textContent = data.atualizados || 0;
+            document.getElementById('resErros').textContent = data.erros ? data.erros.length : 0;
+
+            // Exibir lista de erros se houver
+            if (data.erros && data.erros.length > 0) {
+                document.getElementById('listaErros').style.display = 'block';
+                const ul = document.getElementById('ulErros');
+                ul.innerHTML = data.erros.map(e =>
+                    `<li class="list-group-item list-group-item-${e.warning ? 'warning' : 'danger'} py-1">
+                        <small><strong>Linha ${e.linha}:</strong> ${e.erro}</small>
+                    </li>`
+                ).join('');
+            } else {
+                document.getElementById('listaErros').style.display = 'none';
+            }
+
+            // Mostrar mensagem de sucesso
+            if (data.criados > 0 || data.atualizados > 0) {
+                setTimeout(() => {
+                    if (confirm('Importacao concluida! Deseja recarregar a pagina?')) {
+                        location.reload();
+                    }
+                }, 500);
+            }
+        } else {
+            alert('Erro na importacao: ' + data.erro);
+        }
+    })
+    .catch(err => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-upload"></i> Processar Importacao';
+        alert('Erro de comunicacao: ' + err.message);
+    });
 }
 </script>
 {% endblock %}

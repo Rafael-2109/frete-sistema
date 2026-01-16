@@ -10,6 +10,8 @@ Endpoints:
   - DELETE /api/recebimento/depara/<id> - Remove De-Para
   - POST /api/recebimento/depara/sincronizar-odoo - Sincroniza com Odoo
   - POST /api/recebimento/depara/importar-odoo - Importa do Odoo
+  - POST /api/recebimento/depara/importar-excel - Importa de arquivo Excel
+  - GET /api/recebimento/depara/template-excel - Baixa template Excel
 
 - Validacao NF x PO:
   - POST /api/recebimento/validar-nf-po/<dfe_id> - Valida NF contra POs
@@ -29,9 +31,11 @@ Referencia: .claude/plans/wiggly-plotting-newt.md
 """
 
 import logging
-from flask import Blueprint, jsonify, request
+import io
+from flask import Blueprint, jsonify, request, send_file
 from flask_login import login_required, current_user
 from decimal import Decimal
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -323,6 +327,182 @@ def sugerir_fator_conversao():
         })
 
     except Exception as e:
+        return jsonify({
+            'sucesso': False,
+            'erro': str(e)
+        }), 500
+
+
+@validacao_nf_po_bp.route('/depara/importar-excel', methods=['POST'])
+@login_required
+def importar_depara_excel():
+    """
+    Importa De-Para de um arquivo Excel.
+
+    Colunas esperadas:
+    - cnpj_fornecedor (obrigatorio)
+    - cod_produto_fornecedor (obrigatorio)
+    - cod_produto_interno (obrigatorio)
+    - descricao_produto_fornecedor (opcional)
+    - um_fornecedor (opcional) - Ex: PL, ML, MI, MIL
+    - fator_conversao (opcional) - Default: 1.0
+
+    Retorna:
+    - total_processados
+    - criados
+    - atualizados
+    - erros (lista com detalhes)
+    """
+    try:
+        if 'arquivo' not in request.files:
+            return jsonify({
+                'sucesso': False,
+                'erro': 'Nenhum arquivo enviado'
+            }), 400
+
+        arquivo = request.files['arquivo']
+
+        if arquivo.filename == '':
+            return jsonify({
+                'sucesso': False,
+                'erro': 'Nenhum arquivo selecionado'
+            }), 400
+
+        # Verificar extensao
+        if not arquivo.filename.lower().endswith(('.xlsx', '.xls')):
+            return jsonify({
+                'sucesso': False,
+                'erro': 'Arquivo deve ser Excel (.xlsx ou .xls)'
+            }), 400
+
+        # Ler Excel
+        try:
+            df = pd.read_excel(arquivo, dtype=str)
+            df = df.fillna('')  # Substituir NaN por string vazia
+        except Exception as e:
+            return jsonify({
+                'sucesso': False,
+                'erro': f'Erro ao ler arquivo Excel: {str(e)}'
+            }), 400
+
+        # Validar colunas obrigatorias
+        colunas_obrigatorias = ['cnpj_fornecedor', 'cod_produto_fornecedor', 'cod_produto_interno']
+        colunas_faltando = [c for c in colunas_obrigatorias if c not in df.columns]
+        if colunas_faltando:
+            return jsonify({
+                'sucesso': False,
+                'erro': f'Colunas obrigatorias faltando: {", ".join(colunas_faltando)}',
+                'colunas_encontradas': list(df.columns)
+            }), 400
+
+        # Converter DataFrame para lista de dicts
+        dados = df.to_dict('records')
+
+        if not dados:
+            return jsonify({
+                'sucesso': False,
+                'erro': 'Arquivo vazio ou sem dados validos'
+            }), 400
+
+        # Obter parametro de sincronizacao
+        auto_sync = request.form.get('auto_sync_odoo', 'true').lower() == 'true'
+
+        # Processar importacao
+        service = DeparaService()
+        resultado = service.importar_lote_excel(
+            dados=dados,
+            usuario=current_user.nome if hasattr(current_user, 'nome') else str(current_user.id),
+            auto_sync_odoo=auto_sync
+        )
+
+        return jsonify({
+            'sucesso': True,
+            **resultado
+        })
+
+    except Exception as e:
+        logger.error(f"Erro ao importar De-Para do Excel: {e}")
+        return jsonify({
+            'sucesso': False,
+            'erro': str(e)
+        }), 500
+
+
+@validacao_nf_po_bp.route('/depara/template-excel', methods=['GET'])
+@login_required
+def baixar_template_depara_excel():
+    """
+    Gera e retorna um template Excel para importacao de De-Para.
+
+    Colunas:
+    - cnpj_fornecedor (obrigatorio)
+    - cod_produto_fornecedor (obrigatorio)
+    - cod_produto_interno (obrigatorio)
+    - descricao_produto_fornecedor (opcional)
+    - um_fornecedor (opcional)
+    - fator_conversao (opcional)
+    """
+    try:
+        # Criar DataFrame com exemplo
+        dados_exemplo = [
+            {
+                'cnpj_fornecedor': '61067161001835',
+                'cod_produto_fornecedor': '93060201707198',
+                'cod_produto_interno': '206200004',
+                'descricao_produto_fornecedor': 'PL 2086 PCS POTE AZ200 ALTO',
+                'um_fornecedor': 'PL',
+                'fator_conversao': 2086
+            },
+            {
+                'cnpj_fornecedor': '',
+                'cod_produto_fornecedor': '',
+                'cod_produto_interno': '',
+                'descricao_produto_fornecedor': '',
+                'um_fornecedor': '',
+                'fator_conversao': ''
+            }
+        ]
+
+        df = pd.DataFrame(dados_exemplo)
+
+        # Criar arquivo Excel em memoria
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='DePara')
+
+            # Adicionar aba de instrucoes
+            instrucoes = pd.DataFrame([
+                ['INSTRUCOES DE PREENCHIMENTO'],
+                [''],
+                ['Colunas Obrigatorias:'],
+                ['- cnpj_fornecedor: CNPJ do fornecedor (apenas numeros ou com pontuacao)'],
+                ['- cod_produto_fornecedor: Codigo do produto na NF do fornecedor'],
+                ['- cod_produto_interno: Codigo interno do produto (default_code no Odoo)'],
+                [''],
+                ['Colunas Opcionais:'],
+                ['- descricao_produto_fornecedor: Descricao do produto na NF do fornecedor'],
+                ['- um_fornecedor: Unidade de medida do fornecedor (ex: PL, ML, MI, KG)'],
+                ['- fator_conversao: Quantas unidades internas = 1 unidade do fornecedor'],
+                ['  Exemplo: 1 PL = 2086 unidades -> fator_conversao = 2086'],
+                [''],
+                ['IMPORTANTE:'],
+                ['- Se fator_conversao nao for informado, sera usado 1.0'],
+                ['- O sistema buscara automaticamente o produto no Odoo pelo cod_produto_interno'],
+                ['- Duplicatas (mesmo CNPJ + cod_produto_fornecedor) serao atualizadas'],
+            ], columns=[''])
+            instrucoes.to_excel(writer, index=False, sheet_name='Instrucoes', header=False)
+
+        output.seek(0)
+
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name='template_depara_fornecedor.xlsx'
+        )
+
+    except Exception as e:
+        logger.error(f"Erro ao gerar template Excel: {e}")
         return jsonify({
             'sucesso': False,
             'erro': str(e)

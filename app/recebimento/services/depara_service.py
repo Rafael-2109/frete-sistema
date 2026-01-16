@@ -544,11 +544,22 @@ class DeparaService:
 
             odoo = get_odoo_connection()
 
-            # Buscar fornecedor no Odoo pelo CNPJ
+            # Buscar fornecedor no Odoo pelo CNPJ (formatado ou limpo)
+            # Primeiro tenta com CNPJ formatado (XX.XXX.XXX/XXXX-XX)
+            cnpj_formatado = self._formatar_cnpj(item.cnpj_fornecedor)
             partner_ids = odoo.search(
                 'res.partner',
-                [('l10n_br_cnpj', 'ilike', item.cnpj_fornecedor)]
+                [('l10n_br_cnpj', '=', cnpj_formatado)]
             )
+
+            # Se nao encontrar, tenta com ILIKE no CNPJ formatado parcial
+            if not partner_ids:
+                # Extrai apenas a raiz do CNPJ formatado (XX.XXX.XXX)
+                cnpj_raiz = cnpj_formatado[:10] if len(cnpj_formatado) >= 10 else cnpj_formatado
+                partner_ids = odoo.search(
+                    'res.partner',
+                    [('l10n_br_cnpj', 'ilike', cnpj_raiz)]
+                )
 
             if not partner_ids:
                 raise ValueError(
@@ -557,29 +568,49 @@ class DeparaService:
 
             partner_id = partner_ids[0]
 
-            # Verificar se ja existe supplierinfo
+            # Verificar se ja existe supplierinfo para este MESMO product_code
+            # ESTRATEGIA DE BUSCA (em ordem de prioridade):
+            # 1. partner_id + product_code (mais especifico - ignora product_id pois pode ser null)
+            # 2. supplierinfo_id salvo localmente (fallback)
+
+            # Busca principal: partner_id + product_code
+            # NAO incluir product_id na busca porque no Odoo pode estar null/False
             supplierinfo_ids = odoo.search(
                 'product.supplierinfo',
                 [
                     ('partner_id', '=', partner_id),
-                    ('product_id', '=', item.odoo_product_id)
+                    ('product_code', '=', item.cod_produto_fornecedor)
                 ]
             )
+
+            # Se nao encontrou, verifica se tem supplierinfo_id salvo localmente
+            if not supplierinfo_ids and item.odoo_supplierinfo_id:
+                # Verificar se o supplierinfo salvo ainda existe e pertence a este De-Para
+                existing = odoo.read('product.supplierinfo', [item.odoo_supplierinfo_id],
+                                     ['id', 'product_code'])
+                if existing and existing[0].get('product_code') == item.cod_produto_fornecedor:
+                    supplierinfo_ids = [item.odoo_supplierinfo_id]
 
             # Dados para criar/atualizar
             supplierinfo_data = {
                 'partner_id': partner_id,
                 'product_id': item.odoo_product_id,
                 'product_code': item.cod_produto_fornecedor,
-                # fator_un e product_uom seriam atualizados se existissem no Odoo
-                # Atualmente esses campos nao sao usados efetivamente
             }
+
+            # Adicionar fator_un se definido (campo customizado do Odoo BR)
+            if item.fator_conversao and float(item.fator_conversao) != 1.0:
+                supplierinfo_data['fator_un'] = float(item.fator_conversao)
+
+            # Adicionar descricao do produto do fornecedor se definida
+            if item.descricao_produto_fornecedor:
+                supplierinfo_data['product_name'] = item.descricao_produto_fornecedor
 
             if supplierinfo_ids:
                 # Atualizar existente
                 odoo.write(
                     'product.supplierinfo',
-                    supplierinfo_ids[0],
+                    [supplierinfo_ids[0]],  # write espera lista de IDs
                     supplierinfo_data
                 )
                 item.odoo_supplierinfo_id = supplierinfo_ids[0]
@@ -881,6 +912,16 @@ class DeparaService:
             return ''
         return ''.join(c for c in str(cnpj) if c.isdigit())
 
+    def _formatar_cnpj(self, cnpj: str) -> str:
+        """
+        Formata CNPJ para o padrao XX.XXX.XXX/XXXX-XX.
+        Necessario para buscar no Odoo que armazena formatado.
+        """
+        cnpj_limpo = self._limpar_cnpj(cnpj)
+        if len(cnpj_limpo) != 14:
+            return cnpj_limpo  # Retorna como esta se nao for CNPJ valido
+        return f'{cnpj_limpo[:2]}.{cnpj_limpo[2:5]}.{cnpj_limpo[5:8]}/{cnpj_limpo[8:12]}-{cnpj_limpo[12:14]}'
+
     def _to_dict(self, item: ProdutoFornecedorDepara) -> Dict[str, Any]:
         """Converte model para dict."""
         if not item:
@@ -1041,3 +1082,174 @@ class DeparaService:
         # Outras UMs conhecidas podem ser adicionadas aqui
         # Por enquanto, retorna 1 como padrao
         return Decimal('1.0000')
+
+    # =========================================================================
+    # IMPORT EXCEL OPERATIONS
+    # =========================================================================
+
+    def importar_lote_excel(
+        self,
+        dados: list,
+        usuario: str,
+        auto_sync_odoo: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Importa multiplos De-Para de uma lista de dicionarios (vindo do Excel).
+
+        Para cada item:
+        1. Valida campos obrigatorios
+        2. Busca produto no Odoo (default_code) para obter odoo_product_id
+        3. Cria ou atualiza De-Para local
+        4. Sincroniza com Odoo (product.supplierinfo)
+
+        Args:
+            dados: Lista de dicts com campos do De-Para
+            usuario: Nome do usuario que esta importando
+            auto_sync_odoo: Se True, sincroniza automaticamente com Odoo
+
+        Returns:
+            Dict com estatisticas:
+            - total_processados: numero total de linhas processadas
+            - criados: numero de De-Para criados
+            - atualizados: numero de De-Para atualizados
+            - erros: lista com detalhes dos erros
+        """
+        resultado = {
+            'total_processados': 0,
+            'criados': 0,
+            'atualizados': 0,
+            'sincronizados': 0,
+            'erros': []
+        }
+
+        campos_obrigatorios = ['cnpj_fornecedor', 'cod_produto_fornecedor', 'cod_produto_interno']
+
+        for idx, linha in enumerate(dados, start=1):
+            resultado['total_processados'] += 1
+
+            try:
+                # Validar campos obrigatorios
+                campos_faltando = [c for c in campos_obrigatorios if not linha.get(c)]
+                if campos_faltando:
+                    resultado['erros'].append({
+                        'linha': idx,
+                        'erro': f"Campos obrigatorios faltando: {', '.join(campos_faltando)}",
+                        'dados': linha
+                    })
+                    continue
+
+                cnpj = self._limpar_cnpj(str(linha['cnpj_fornecedor']))
+                cod_fornecedor = str(linha['cod_produto_fornecedor']).strip()
+                cod_interno = str(linha['cod_produto_interno']).strip()
+
+                # Buscar produto no Odoo para obter odoo_product_id
+                produto_odoo = self.buscar_produto_odoo(cod_interno, busca_flexivel=True)
+                odoo_product_id = None
+                nome_produto_interno = None
+
+                if produto_odoo:
+                    odoo_product_id = produto_odoo.get('id')
+                    nome_produto_interno = produto_odoo.get('name')
+                else:
+                    resultado['erros'].append({
+                        'linha': idx,
+                        'erro': f"Produto interno '{cod_interno}' nao encontrado no Odoo",
+                        'dados': linha,
+                        'warning': True  # Nao impede criacao local
+                    })
+
+                # Extrair campos opcionais
+                descricao_fornecedor = linha.get('descricao_produto_fornecedor', '') or ''
+                um_fornecedor = linha.get('um_fornecedor', '') or None
+                fator_conversao = linha.get('fator_conversao')
+
+                # Converter fator para Decimal
+                if fator_conversao:
+                    try:
+                        fator_conversao = Decimal(str(fator_conversao))
+                    except:
+                        fator_conversao = Decimal('1.0')
+                else:
+                    fator_conversao = Decimal('1.0')
+
+                # Verificar se ja existe
+                existente = ProdutoFornecedorDepara.query.filter_by(
+                    cnpj_fornecedor=cnpj,
+                    cod_produto_fornecedor=cod_fornecedor
+                ).first()
+
+                if existente:
+                    # Atualizar existente
+                    existente.cod_produto_interno = cod_interno
+                    existente.nome_produto_interno = nome_produto_interno or existente.nome_produto_interno
+                    existente.descricao_produto_fornecedor = descricao_fornecedor or existente.descricao_produto_fornecedor
+                    existente.um_fornecedor = um_fornecedor or existente.um_fornecedor
+                    existente.fator_conversao = fator_conversao
+                    existente.odoo_product_id = odoo_product_id or existente.odoo_product_id
+                    existente.sincronizado_odoo = False  # Marca para re-sync
+                    existente.atualizado_por = usuario
+                    existente.atualizado_em = datetime.utcnow()
+                    existente.ativo = True  # Reativa se estava inativo
+
+                    db.session.flush()
+                    resultado['atualizados'] += 1
+                    depara_id = existente.id
+                else:
+                    # Criar novo
+                    novo = ProdutoFornecedorDepara(
+                        cnpj_fornecedor=cnpj,
+                        razao_fornecedor=linha.get('razao_fornecedor', ''),
+                        cod_produto_fornecedor=cod_fornecedor,
+                        descricao_produto_fornecedor=descricao_fornecedor,
+                        cod_produto_interno=cod_interno,
+                        nome_produto_interno=nome_produto_interno,
+                        odoo_product_id=odoo_product_id,
+                        um_fornecedor=um_fornecedor,
+                        um_interna='UNITS',
+                        fator_conversao=fator_conversao,
+                        ativo=True,
+                        sincronizado_odoo=False,
+                        criado_por=usuario,
+                        criado_em=datetime.utcnow()
+                    )
+                    db.session.add(novo)
+                    db.session.flush()
+                    resultado['criados'] += 1
+                    depara_id = novo.id
+
+                # Sincronizar com Odoo se solicitado e se tiver odoo_product_id
+                if auto_sync_odoo and odoo_product_id:
+                    try:
+                        self.sincronizar_para_odoo(depara_id)
+                        resultado['sincronizados'] += 1
+                    except Exception as sync_error:
+                        resultado['erros'].append({
+                            'linha': idx,
+                            'erro': f"Sync Odoo falhou: {str(sync_error)}",
+                            'dados': linha,
+                            'warning': True,
+                            'depara_id': depara_id
+                        })
+
+            except Exception as e:
+                db.session.rollback()
+                resultado['erros'].append({
+                    'linha': idx,
+                    'erro': str(e),
+                    'dados': linha
+                })
+                logger.error(f"Erro ao importar linha {idx}: {e}")
+
+        # Commit final
+        try:
+            db.session.commit()
+            logger.info(
+                f"Importacao Excel concluida: {resultado['criados']} criados, "
+                f"{resultado['atualizados']} atualizados, {len(resultado['erros'])} erros"
+            )
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao commitar importacao: {e}")
+            raise
+
+        return resultado
