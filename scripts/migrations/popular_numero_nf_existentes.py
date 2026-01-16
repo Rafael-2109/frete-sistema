@@ -56,14 +56,22 @@ def buscar_dados_nf_odoo(odoo, dfe_ids: list) -> dict:
         if dfe.get('partner_id'):
             partner_ids.append(dfe['partner_id'][0])
 
-    # Buscar cidade dos partners
+    # Buscar cidade dos partners (campo brasileiro l10n_br_municipio_id)
     if partner_ids:
         partners = odoo.search_read(
             'res.partner',
             [('id', 'in', list(set(partner_ids)))],
-            ['id', 'city']
+            ['id', 'l10n_br_municipio_id']
         )
-        partner_city_map = {p['id']: p.get('city') for p in partners}
+        # l10n_br_municipio_id retorna [id, "Nome (UF)"] - Ex: [5570, "Brasília (DF)"]
+        partner_city_map = {}
+        for p in partners:
+            municipio = p.get('l10n_br_municipio_id')
+            if municipio and isinstance(municipio, (list, tuple)) and len(municipio) > 1:
+                nome = municipio[1].split('(')[0].strip() if '(' in municipio[1] else municipio[1]
+                partner_city_map[p['id']] = nome
+            else:
+                partner_city_map[p['id']] = None
 
         # Atribuir cidade aos DFEs
         for _, dados in resultado.items():

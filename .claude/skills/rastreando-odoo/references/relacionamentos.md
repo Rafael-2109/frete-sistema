@@ -66,6 +66,8 @@
 |--------|-------|------|-----------|
 | `res.partner` | `l10n_br_cnpj` | char | CNPJ |
 | `res.partner` | `name` | char | Nome/Razão Social |
+| `res.partner` | `l10n_br_municipio_id` | many2one | Município brasileiro [id, "Nome (UF)"] |
+| `res.partner` | `state_id` | many2one | Estado [id, "Nome"] |
 
 ## Tipos de Documento (move_type)
 

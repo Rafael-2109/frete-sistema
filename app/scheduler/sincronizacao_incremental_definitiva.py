@@ -66,6 +66,7 @@ pallet_service = None  # ✅ Service de Pallets
 reversao_service = None  # ✅ Service de Reversões de NF
 monitoramento_sync_service = None  # ✅ Service de Sincronização com Monitoramento
 validacao_recebimento_job = None  # ✅ Job de Validação de Recebimento (Fase 1 + Fase 2)
+validacao_ibscbs_job = None  # ✅ Job de Validação IBS/CBS (CTes + NF-es)
 
 
 def inicializar_services():
@@ -74,7 +75,7 @@ def inicializar_services():
     Isso evita problemas de SSL e contexto que ocorrem quando
     instanciados dentro do app.app_context()
     """
-    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_recebimento_job
+    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_recebimento_job, validacao_ibscbs_job
 
     try:
         # IMPORTANTE: Importar e instanciar FORA do contexto
@@ -93,6 +94,7 @@ def inicializar_services():
         from app.devolucao.services.reversao_service import ReversaoService  # ✅ Service de Reversões de NF
         from app.devolucao.services.monitoramento_sync_service import MonitoramentoSyncService  # ✅ Service de Sync Monitoramento
         from app.recebimento.jobs.validacao_recebimento_job import ValidacaoRecebimentoJob  # ✅ Job de Validação de Recebimento (Fase 1 + Fase 2)
+        from app.recebimento.jobs.validacao_ibscbs_job import ValidacaoIbsCbsJob  # ✅ Job de Validação IBS/CBS (CTes + NF-es)
 
         logger.info("🔧 Inicializando services FORA do contexto...")
         faturamento_service = FaturamentoService()
@@ -110,6 +112,7 @@ def inicializar_services():
         reversao_service = ReversaoService()  # ✅ Instanciar service de Reversões de NF
         monitoramento_sync_service = MonitoramentoSyncService()  # ✅ Instanciar service de Sync Monitoramento
         validacao_recebimento_job = ValidacaoRecebimentoJob()  # ✅ Instanciar job de Validação de Recebimento (Fase 1 + Fase 2)
+        validacao_ibscbs_job = ValidacaoIbsCbsJob()  # ✅ Instanciar job de Validação IBS/CBS (CTes + NF-es)
         logger.info("✅ Services inicializados com sucesso")
 
         return True
@@ -124,7 +127,7 @@ def executar_sincronizacao():
     Executa sincronização usando services já instanciados
     Similar ao que funciona em SincronizacaoIntegradaService
     """
-    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_recebimento_job
+    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_recebimento_job, validacao_ibscbs_job
 
     logger.info("=" * 60)
     logger.info(f"🔄 SINCRONIZAÇÃO DEFINITIVA - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -146,10 +149,11 @@ def executar_sincronizacao():
     logger.info(f"   - Reversões NF: dias={DIAS_REVERSOES}")  # ✅ Adicionar Reversões ao log
     logger.info(f"   - Monitoramento Sync: automático")  # ✅ Adicionar Monitoramento ao log
     logger.info(f"   - Validação Recebimento (Fase 1+2): janela={JANELA_VALIDACAO_FISCAL}min")  # ✅ Validação de Recebimento (Fase 1 Fiscal + Fase 2 NF×PO)
+    logger.info(f"   - Validação IBS/CBS (CTe+NF-e): janela={JANELA_VALIDACAO_FISCAL}min")  # ✅ Validação IBS/CBS
     logger.info("=" * 60)
 
     # Verificar se services estão inicializados
-    if not all([faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_recebimento_job]):
+    if not all([faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_recebimento_job, validacao_ibscbs_job]):
         logger.warning("⚠️ Services não inicializados, tentando inicializar...")
         if not inicializar_services():
             logger.error("❌ Falha ao inicializar services")
@@ -1114,6 +1118,63 @@ def executar_sincronizacao():
                 else:
                     break
 
+        # Limpar sessão entre jobs
+        try:
+            db.session.remove()
+            db.engine.dispose()
+            logger.info("♻️ Reconexão antes da Validação IBS/CBS")
+        except Exception as e:
+            pass
+
+        # 1️⃣6️⃣ VALIDAÇÃO IBS/CBS (CTes + NF-es) - com retry
+        sucesso_validacao_ibscbs = False
+        for tentativa in range(1, MAX_RETRIES + 1):
+            try:
+                logger.info(f"📋 Validando IBS/CBS - CTes + NF-es (tentativa {tentativa}/{MAX_RETRIES})...")
+                logger.info(f"   Janela: {JANELA_VALIDACAO_FISCAL} minutos")
+
+                # Usar job já instanciado
+                resultado_ibscbs = validacao_ibscbs_job.executar(
+                    minutos_janela=JANELA_VALIDACAO_FISCAL
+                )
+
+                if resultado_ibscbs.get("sucesso"):
+                    sucesso_validacao_ibscbs = True
+                    logger.info("✅ Validação IBS/CBS concluída!")
+                    logger.info(f"   - CTes processados: {resultado_ibscbs.get('ctes_processados', 0)}, pendências: {resultado_ibscbs.get('ctes_pendencias', 0)}")
+                    logger.info(f"   - NF-es processadas: {resultado_ibscbs.get('nfes_processadas', 0)}, pendências: {resultado_ibscbs.get('nfes_pendencias', 0)}")
+                    logger.info(f"   - Erros: {resultado_ibscbs.get('erros', 0)}")
+
+                    db.session.commit()
+                    break
+                else:
+                    erro = resultado_ibscbs.get('erro', 'Erro desconhecido')
+                    logger.error(f"❌ Erro Validação IBS/CBS: {erro}")
+
+                    if tentativa < MAX_RETRIES:
+                        logger.info(f"🔄 Aguardando {RETRY_DELAY}s antes de tentar novamente...")
+                        sleep(RETRY_DELAY)
+                        # Reinicializar job
+                        from app.recebimento.jobs.validacao_ibscbs_job import ValidacaoIbsCbsJob
+                        validacao_ibscbs_job = ValidacaoIbsCbsJob()
+                    else:
+                        break
+
+            except Exception as e:
+                logger.error(f"❌ Erro ao validar IBS/CBS: {e}")
+                if tentativa < MAX_RETRIES and ("SSL" in str(e) or "connection" in str(e).lower()):
+                    logger.info(f"🔄 Tentando reconectar ({tentativa}/{MAX_RETRIES})...")
+                    sleep(RETRY_DELAY)
+                    try:
+                        db.session.rollback()
+                        db.session.remove()
+                        from app.recebimento.jobs.validacao_ibscbs_job import ValidacaoIbsCbsJob
+                        validacao_ibscbs_job = ValidacaoIbsCbsJob()
+                    except Exception as e:
+                        pass
+                else:
+                    break
+
         # Limpar conexões ao final
         try:
             db.session.remove()
@@ -1123,12 +1184,12 @@ def executar_sincronizacao():
 
         # Resumo final
         logger.info("=" * 60)
-        total_sucesso = sum([sucesso_faturamento, sucesso_carteira, sucesso_verificacao, sucesso_requisicoes, sucesso_pedidos, sucesso_alocacoes, sucesso_entradas, sucesso_ctes, sucesso_contas_receber, sucesso_baixas, sucesso_contas_pagar, sucesso_nfds, sucesso_pallets, sucesso_reversoes, sucesso_monitoramento, sucesso_validacao_recebimento])
+        total_sucesso = sum([sucesso_faturamento, sucesso_carteira, sucesso_verificacao, sucesso_requisicoes, sucesso_pedidos, sucesso_alocacoes, sucesso_entradas, sucesso_ctes, sucesso_contas_receber, sucesso_baixas, sucesso_contas_pagar, sucesso_nfds, sucesso_pallets, sucesso_reversoes, sucesso_monitoramento, sucesso_validacao_recebimento, sucesso_validacao_ibscbs])
 
-        if total_sucesso == 16:
+        if total_sucesso == 17:
             logger.info("✅ SINCRONIZAÇÃO COMPLETA COM SUCESSO!")
-        elif total_sucesso >= 14:
-            logger.info(f"⚠️ Sincronização parcial - {total_sucesso}/16 módulos OK")
+        elif total_sucesso >= 15:
+            logger.info(f"⚠️ Sincronização parcial - {total_sucesso}/17 módulos OK")
             if not sucesso_faturamento:
                 logger.info("   ❌ Faturamento: FALHOU")
             if not sucesso_carteira:
@@ -1161,8 +1222,10 @@ def executar_sincronizacao():
                 logger.info("   ❌ Sync Monitoramento: FALHOU")
             if not sucesso_validacao_recebimento:
                 logger.info("   ❌ Validação Recebimento (Fase 1+2): FALHOU")
+            if not sucesso_validacao_ibscbs:
+                logger.info("   ❌ Validação IBS/CBS (CTe+NF-e): FALHOU")
         else:
-            logger.error(f"❌ Sincronização com falhas graves - apenas {total_sucesso}/16 módulos OK")
+            logger.error(f"❌ Sincronização com falhas graves - apenas {total_sucesso}/17 módulos OK")
         logger.info("=" * 60)
 
 

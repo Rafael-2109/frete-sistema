@@ -1626,7 +1626,11 @@ def sincronizar_nf_embarque_pedido_completa(embarque_id):
                 if pedido.nf:
                     Separacao.query.filter_by(
                         separacao_lote_id=item.separacao_lote_id
-                    ).update({'numero_nf': None})
+                    ).update({
+                        'numero_nf': None,
+                        'sincronizado_nf': False  # ✅ CORREÇÃO: Reseta flag para item voltar à carteira
+                    })
+                    print(f"[SYNC] 🗑️ NF removida do pedido {pedido.num_pedido} - sincronizado_nf=False")
                     itens_removidos += 1
 
         # ✅ REMOVIDO: Não faz commit aqui - deixa para o chamador

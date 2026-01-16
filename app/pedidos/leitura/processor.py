@@ -288,37 +288,217 @@ class PedidoProcessor:
                 'error': str(e)
             }
 
-    def export_to_excel(self, data: List[Dict[str, Any]], output_path: str):
+    def export_to_excel(self, data: List[Dict[str, Any]], output_path: str,
+                        validacao_precos: Optional[Dict[str, Any]] = None):
         """
-        Exporta dados para Excel
+        Exporta dados para Excel com 2 abas:
+        - Aba 1 "Pedido Completo": Todos itens com preço tabela, preço pedido e diferença
+        - Aba 2 "Divergências": Apenas itens divergentes com % de diferença
+
+        Args:
+            data: Lista de itens extraídos do PDF
+            output_path: Caminho do arquivo de saída
+            validacao_precos: Dict com validação de preços (opcional)
+                - por_filial: lista com cnpj, validacoes (preco_documento, preco_tabela, diferenca_percentual)
         """
         if not data:
             raise ValueError("Sem dados para exportar")
 
-        df = pd.DataFrame(data)
+        from openpyxl.utils import get_column_letter
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
-        # Formata colunas monetárias
-        if 'valor_unitario' in df.columns:
-            df['valor_unitario'] = df['valor_unitario'].apply(
-                lambda x: f"R$ {float(x):,.2f}" if x else "R$ 0,00"
-            )
-        if 'valor_total' in df.columns:
-            df['valor_total'] = df['valor_total'].apply(
-                lambda x: f"R$ {float(x):,.2f}" if x else "R$ 0,00"
+        # Cria mapeamento de validação: (cnpj, nosso_codigo) → dados de preço
+        mapa_validacao = {}
+        if validacao_precos and validacao_precos.get('por_filial'):
+            for filial in validacao_precos['por_filial']:
+                cnpj = filial.get('cnpj', '')
+                for val in filial.get('validacoes', []):
+                    codigo = val.get('codigo', '')
+                    if codigo:
+                        chave = (cnpj, codigo)
+                        mapa_validacao[chave] = {
+                            'preco_documento': val.get('preco_documento'),
+                            'preco_tabela': val.get('preco_tabela'),
+                            'diferenca': val.get('diferenca', 0),
+                            'diferenca_percentual': val.get('diferenca_percentual', 0),
+                            'divergente': val.get('divergente', False)
+                        }
+
+        # Prepara dados para Aba 1: Pedido Completo
+        dados_completos = []
+        dados_divergencias = []
+
+        for item in data:
+            cnpj = item.get('cnpj_filial', '')
+            nosso_codigo = item.get('nosso_codigo', '')
+            chave = (cnpj, nosso_codigo)
+
+            # Busca dados de validação
+            val_data = mapa_validacao.get(chave, {})
+            preco_pedido = item.get('valor_unitario', 0)
+            preco_tabela = val_data.get('preco_tabela')
+            diferenca = val_data.get('diferenca', 0)
+            diferenca_pct = val_data.get('diferenca_percentual', 0)
+            divergente = val_data.get('divergente', False)
+
+            # Se não encontrou na validação, tenta calcular
+            if preco_tabela is None and preco_pedido:
+                preco_tabela = preco_pedido  # Sem tabela cadastrada
+                diferenca = 0
+                diferenca_pct = 0
+
+            # Linha para Aba 1
+            # Prioriza nossa_descricao (descrição do cadastro) sobre descricao (do PDF)
+            descricao_exibir = item.get('nossa_descricao') or item.get('descricao', '')
+
+            # Número do pedido do cliente (Atacadão: numero_comprador, Assaí: numero_pedido)
+            numero_pedido_cliente = (
+                item.get('numero_comprador') or
+                item.get('numero_pedido') or
+                item.get('pedido_edi') or
+                item.get('proposta') or
+                ''
             )
 
-        # Salva Excel
+            linha_completa = {
+                'CNPJ Filial': cnpj,
+                'Nº Pedido Cliente': numero_pedido_cliente,
+                'Nome Cliente': item.get('nome_cliente', ''),
+                'UF': item.get('estado', '') or item.get('uf', ''),
+                'Código Rede': item.get('codigo', ''),
+                'Nosso Código': nosso_codigo or '-',
+                'Descrição': descricao_exibir,
+                'Quantidade': item.get('quantidade', 0),
+                'Preço Pedido': preco_pedido,
+                'Preço Tabela': preco_tabela,
+                'Diferença (R$)': diferenca if preco_tabela else '-',
+                'Diferença (%)': diferenca_pct if preco_tabela else '-',
+                'Valor Total': item.get('valor_total', 0)
+            }
+            dados_completos.append(linha_completa)
+
+            # Se divergente, adiciona à Aba 2
+            if divergente:
+                linha_divergencia = {
+                    'CNPJ Filial': cnpj,
+                    'Nº Pedido Cliente': numero_pedido_cliente,
+                    'Nome Cliente': item.get('nome_cliente', ''),
+                    'UF': item.get('estado', '') or item.get('uf', ''),
+                    'Código Rede': item.get('codigo', ''),
+                    'Nosso Código': nosso_codigo or '-',
+                    'Descrição': descricao_exibir,
+                    'Quantidade': item.get('quantidade', 0),
+                    'Preço Pedido': preco_pedido,
+                    'Preço Tabela': preco_tabela,
+                    'Diferença (R$)': diferenca,
+                    'Diferença (%)': diferenca_pct,
+                    'Valor Total Pedido': (item.get('quantidade', 0) or 0) * (preco_pedido or 0),
+                    'Valor Total Tabela': (item.get('quantidade', 0) or 0) * (preco_tabela or 0)
+                }
+                dados_divergencias.append(linha_divergencia)
+
+        # Cria DataFrames
+        df_completo = pd.DataFrame(dados_completos)
+        df_divergencias = pd.DataFrame(dados_divergencias) if dados_divergencias else pd.DataFrame()
+
+        # Estilos
+        header_fill = PatternFill(start_color='366092', end_color='366092', fill_type='solid')
+        header_font = Font(bold=True, color='FFFFFF')
+        divergencia_fill = PatternFill(start_color='FFCDD2', end_color='FFCDD2', fill_type='solid')
+        thin_border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+
         with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
-            df.to_excel(writer, sheet_name='Pedidos', index=False)
+            # ========== Aba 1: Pedido Completo ==========
+            df_completo.to_excel(writer, sheet_name='Pedido Completo', index=False)
+            ws_completo = writer.sheets['Pedido Completo']
 
-            # Ajusta largura das colunas
-            worksheet = writer.sheets['Pedidos']
-            from openpyxl.utils import get_column_letter
+            # Formata header
+            for col_idx, col in enumerate(df_completo.columns, 1):
+                cell = ws_completo.cell(row=1, column=col_idx)
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = Alignment(horizontal='center')
+                cell.border = thin_border
 
-            for idx, column in enumerate(df.columns, 1):
-                column_length = max(df[column].astype(str).map(len).max(), len(column))
-                column_letter = get_column_letter(idx)
-                worksheet.column_dimensions[column_letter].width = min(column_length + 2, 50)
+            # Formata dados e ajusta largura
+            for col_idx, column in enumerate(df_completo.columns, 1):
+                col_letter = get_column_letter(col_idx)
+                max_length = len(str(column))
+
+                for row_idx, value in enumerate(df_completo[column], 2):
+                    cell = ws_completo.cell(row=row_idx, column=col_idx)
+                    cell.border = thin_border
+
+                    # Formata valores monetários
+                    if column in ['Preço Pedido', 'Preço Tabela', 'Diferença (R$)', 'Valor Total']:
+                        if isinstance(value, (int, float)) and value != '-':
+                            cell.number_format = 'R$ #,##0.00'
+                            cell.alignment = Alignment(horizontal='right')
+                    elif column == 'Diferença (%)':
+                        if isinstance(value, (int, float)) and value != '-':
+                            cell.number_format = '0.00"%"'
+                            cell.alignment = Alignment(horizontal='right')
+                            # Destaca divergências em vermelho
+                            if value != 0:
+                                cell.fill = divergencia_fill
+                    elif column == 'Quantidade':
+                        cell.alignment = Alignment(horizontal='right')
+
+                    # Calcula largura máxima
+                    if value is not None and value != '-':
+                        max_length = max(max_length, len(str(value)))
+
+                ws_completo.column_dimensions[col_letter].width = min(max_length + 2, 40)
+
+            # ========== Aba 2: Divergências ==========
+            if not df_divergencias.empty:
+                df_divergencias.to_excel(writer, sheet_name='Divergências', index=False)
+                ws_div = writer.sheets['Divergências']
+
+                # Formata header
+                for col_idx, col in enumerate(df_divergencias.columns, 1):
+                    cell = ws_div.cell(row=1, column=col_idx)
+                    cell.fill = PatternFill(start_color='C62828', end_color='C62828', fill_type='solid')
+                    cell.font = header_font
+                    cell.alignment = Alignment(horizontal='center')
+                    cell.border = thin_border
+
+                # Formata dados e ajusta largura
+                for col_idx, column in enumerate(df_divergencias.columns, 1):
+                    col_letter = get_column_letter(col_idx)
+                    max_length = len(str(column))
+
+                    for row_idx, value in enumerate(df_divergencias[column], 2):
+                        cell = ws_div.cell(row=row_idx, column=col_idx)
+                        cell.border = thin_border
+
+                        # Formata valores monetários
+                        if column in ['Preço Pedido', 'Preço Tabela', 'Diferença (R$)',
+                                      'Valor Total Pedido', 'Valor Total Tabela']:
+                            if isinstance(value, (int, float)):
+                                cell.number_format = 'R$ #,##0.00'
+                                cell.alignment = Alignment(horizontal='right')
+                        elif column == 'Diferença (%)':
+                            if isinstance(value, (int, float)):
+                                cell.number_format = '0.00"%"'
+                                cell.alignment = Alignment(horizontal='right')
+                        elif column == 'Quantidade':
+                            cell.alignment = Alignment(horizontal='right')
+
+                        # Calcula largura máxima
+                        if value is not None:
+                            max_length = max(max_length, len(str(value)))
+
+                    ws_div.column_dimensions[col_letter].width = min(max_length + 2, 40)
+            else:
+                # Cria aba vazia com mensagem
+                df_vazia = pd.DataFrame({'Mensagem': ['Nenhuma divergência de preço encontrada']})
+                df_vazia.to_excel(writer, sheet_name='Divergências', index=False)
 
         return output_path
 

@@ -1556,7 +1556,7 @@ $(document).ready(function() {
                         ` : ''}
                         <td><code>${item.codigo_rede}</code></td>
                         <td><code>${item.nosso_codigo || '-'}</code></td>
-                        <td><small>${item.descricao || item.nossa_descricao || '-'}</small></td>
+                        <td><small>${item.nossa_descricao || item.descricao || '-'}</small></td>
                         <td class="text-end">${item.quantidade}</td>
                         <td class="text-end">R$ ${formatMoney(item.preco_documento)}</td>
                         <td class="text-end">R$ ${formatMoney(item.preco_tabela || 0)}</td>

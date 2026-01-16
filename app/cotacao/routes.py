@@ -1141,7 +1141,19 @@ def fechar_frete():
         if embarque_existente:
             # ✅ ALTERAÇÃO DE COTAÇÃO: Atualiza embarque existente
             print(f"[DEBUG] 🔄 ALTERANDO cotação do embarque #{embarque_existente.numero}")
-            
+
+            # ✅ CORREÇÃO: Remove fretes sem CTe ANTES de atualizar a cotação
+            # (mesma lógica do botão "Salvar Embarque" em embarques/routes.py)
+            from app.embarques.routes import apagar_fretes_sem_cte_embarque
+            try:
+                sucesso_limpeza, resultado_limpeza = apagar_fretes_sem_cte_embarque(embarque_existente.id)
+                if sucesso_limpeza:
+                    print(f"[DEBUG] 🗑️ Limpeza de fretes: {resultado_limpeza}")
+                else:
+                    print(f"[DEBUG] ⚠️ Limpeza de fretes: {resultado_limpeza}")
+            except Exception as e:
+                print(f"[DEBUG] ⚠️ Erro na limpeza de fretes: {str(e)}")
+
             # Limpa dados antigos de cotação (conforme solicitado)
             cotacao_antiga = None
             if embarque_existente.cotacao_id:
@@ -1211,7 +1223,62 @@ def fechar_frete():
             if cotacao_antiga:
                 db.session.delete(cotacao_antiga)
                 print(f"[DEBUG] 🗑️ Cotação antiga removida: ID {cotacao_antiga.id}")
-            
+
+            # ✅ CORREÇÃO: Recria fretes automaticamente se todas as NFs estiverem validadas
+            # (mesma lógica do botão "Salvar Embarque")
+            try:
+                from app.fretes.routes import lancar_frete_automatico, verificar_requisitos_para_lancamento_frete
+                from app.embarques.models import EmbarqueItem
+
+                # Flush para garantir que as alterações estejam visíveis
+                db.session.flush()
+
+                # Coleta CNPJs únicos dos itens ativos com NF preenchida
+                itens_ativos = EmbarqueItem.query.filter_by(
+                    embarque_id=embarque_existente.id,
+                    status='ativo'
+                ).all()
+
+                cnpjs_unicos = set()
+                for item in itens_ativos:
+                    if item.cnpj_cliente:
+                        cnpjs_unicos.add(item.cnpj_cliente)
+
+                fretes_criados = 0
+                fretes_pendentes = 0
+
+                for cnpj in cnpjs_unicos:
+                    # Verifica se pode lançar frete para este CNPJ
+                    pode_lancar, motivo = verificar_requisitos_para_lancamento_frete(
+                        embarque_existente.id,
+                        cnpj
+                    )
+
+                    if pode_lancar:
+                        # Todas as NFs validadas - recria o frete
+                        sucesso, msg = lancar_frete_automatico(
+                            embarque_existente.id,
+                            cnpj,
+                            usuario=current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
+                        )
+                        if sucesso:
+                            fretes_criados += 1
+                            print(f"[DEBUG] ✅ Frete recriado para CNPJ {cnpj}: {msg}")
+                        else:
+                            print(f"[DEBUG] ⚠️ Erro ao recriar frete para CNPJ {cnpj}: {msg}")
+                    else:
+                        fretes_pendentes += 1
+                        print(f"[DEBUG] ⏳ Frete pendente para CNPJ {cnpj}: {motivo}")
+
+                if fretes_criados > 0:
+                    print(f"[DEBUG] 🎉 {fretes_criados} frete(s) recriado(s) automaticamente")
+                if fretes_pendentes > 0:
+                    print(f"[DEBUG] ⏳ {fretes_pendentes} frete(s) aguardando validação de NFs")
+
+            except Exception as e:
+                print(f"[DEBUG] ⚠️ Erro ao recriar fretes: {str(e)}")
+                # Não falha a operação principal se a recriação de fretes falhar
+
             embarque = embarque_existente  # Para usar nas próximas etapas
             
         else:

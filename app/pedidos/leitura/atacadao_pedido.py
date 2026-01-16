@@ -113,6 +113,12 @@ class AtacadaoPedidoExtractor(PDFExtractor):
             dados_cliente = self._get_dados_cliente(header_info['cnpj_filial'])
             header_info.update(dados_cliente)
 
+            # Atualiza local_entrega com dados do cliente (Odoo) se disponíveis
+            if dados_cliente.get('municipio') or dados_cliente.get('estado'):
+                cidade = dados_cliente.get('municipio') or header_info.get('cidade', '')
+                uf = dados_cliente.get('estado') or header_info.get('uf', '')
+                header_info['local_entrega'] = f"{cidade} - {uf}".strip(' -')
+
         # Extrai linhas de produtos
         produtos = self._extract_produtos(text)
 
@@ -363,7 +369,20 @@ class AtacadaoPedidoExtractor(PDFExtractor):
         return produtos
 
     def _get_dados_cliente(self, cnpj: str) -> Dict[str, Any]:
-        """Busca dados do cliente"""
+        """
+        Busca dados do cliente com fallback:
+        1. Primeiro tenta RelatorioFaturamentoImportado (local)
+        2. Se não encontrar, busca no Odoo (res.partner)
+        3. Nunca retorna None - usa valores padrão se necessário
+        """
+        resultado = {
+            'nome_cliente': None,
+            'municipio': None,
+            'estado': None,
+            'codigo_ibge': None
+        }
+
+        # 1. Tenta buscar no RelatorioFaturamentoImportado
         try:
             from app.faturamento.models import RelatorioFaturamentoImportado
             from app import db
@@ -373,23 +392,102 @@ class AtacadaoPedidoExtractor(PDFExtractor):
                 RelatorioFaturamentoImportado.ativo == True
             ).order_by(RelatorioFaturamentoImportado.criado_em.desc()).first()
 
-            if cliente:
-                return {
+            if cliente and cliente.nome_cliente:
+                resultado = {
                     'nome_cliente': cliente.nome_cliente,
                     'municipio': cliente.municipio,
                     'estado': cliente.estado,
                     'codigo_ibge': cliente.codigo_ibge
                 }
+                return resultado
 
         except Exception as e:
-            self.warnings.append(f"Erro ao buscar dados do cliente {cnpj}: {e}")
+            self.warnings.append(f"Erro ao buscar cliente local {cnpj}: {e}")
 
-        return {
+        # 2. Fallback: Busca no Odoo (res.partner)
+        try:
+            resultado_odoo = self._get_dados_cliente_odoo(cnpj)
+            if resultado_odoo.get('nome_cliente'):
+                return resultado_odoo
+        except Exception as e:
+            self.warnings.append(f"Erro ao buscar cliente no Odoo {cnpj}: {e}")
+
+        # 3. Se não encontrou em nenhum lugar, retorna com valores padrão
+        if not resultado.get('nome_cliente'):
+            resultado['nome_cliente'] = f"CLIENTE {cnpj}"
+            self.warnings.append(f"Cliente {cnpj} não encontrado - usando nome padrão")
+
+        return resultado
+
+    def _get_dados_cliente_odoo(self, cnpj: str) -> Dict[str, Any]:
+        """
+        Busca dados do cliente no Odoo via res.partner
+        Usa OdooConnection com Circuit Breaker para maior estabilidade
+        """
+        from app.odoo.utils.connection import get_odoo_connection
+
+        resultado = {
             'nome_cliente': None,
             'municipio': None,
             'estado': None,
             'codigo_ibge': None
         }
+
+        client = get_odoo_connection()
+
+        # Limpa CNPJ para busca (remove formatação)
+        cnpj_limpo = re.sub(r'\D', '', cnpj)
+
+        # Formata CNPJ para padrão XX.XXX.XXX/XXXX-XX (como está no Odoo)
+        # O Odoo armazena CNPJ FORMATADO e só aceita busca exata nesse formato
+        if len(cnpj_limpo) == 14:
+            cnpj_formatado = f"{cnpj_limpo[:2]}.{cnpj_limpo[2:5]}.{cnpj_limpo[5:8]}/{cnpj_limpo[8:12]}-{cnpj_limpo[12:14]}"
+        else:
+            cnpj_formatado = cnpj  # Usa o original se não tiver 14 dígitos
+
+        # Busca no res.partner pelo CNPJ formatado (único formato que funciona no Odoo)
+        domain = [('l10n_br_cnpj', '=', cnpj_formatado)]
+
+        partners = client.search_read(
+            'res.partner',
+            domain=domain,
+            fields=['name', 'state_id', 'l10n_br_municipio_id', 'l10n_br_cnpj'],
+            limit=1
+        )
+
+        if partners:
+            partner = partners[0]
+            resultado['nome_cliente'] = partner.get('name')
+
+            # Cidade - campo l10n_br_municipio_id (brasileiro)
+            # Retorna [id, "Nome da Cidade (UF)"] - Ex: [5570, "Brasília (DF)"]
+            if partner.get('l10n_br_municipio_id'):
+                municipio_id = partner.get('l10n_br_municipio_id')
+                if isinstance(municipio_id, (list, tuple)) and len(municipio_id) > 1:
+                    # Extrai apenas o nome da cidade (sem a UF entre parênteses)
+                    nome_completo = municipio_id[1]  # "Brasília (DF)"
+                    # Remove a UF entre parênteses se existir
+                    if '(' in nome_completo:
+                        resultado['municipio'] = nome_completo.split('(')[0].strip()
+                    else:
+                        resultado['municipio'] = nome_completo
+
+            # Estado - state_id retorna [id, "Nome do Estado (BR)"]
+            # Exemplo: [77, "Distrito Federal (BR)"]
+            if partner.get('state_id'):
+                state_id = partner.get('state_id')
+                if isinstance(state_id, (list, tuple)) and len(state_id) > 1:
+                    # Busca o código UF do estado
+                    states = client.search_read(
+                        'res.country.state',
+                        domain=[('id', '=', state_id[0])],
+                        fields=['code', 'name'],
+                        limit=1
+                    )
+                    if states:
+                        resultado['estado'] = states[0].get('code')
+
+        return resultado
 
     def _get_nosso_codigo(self, codigo_atacadao: str) -> Dict[str, Any]:
         """

@@ -34,7 +34,7 @@
 | `cnpj_cpf` | res.partner | `l10n_br_cnpj` ou `l10n_br_cpf` | CNPJ prioritário |
 | `raz_social` | res.partner | `name` | String direto |
 | `raz_social_red` | res.partner | `trade_name` ou `name[:100]` | Fallback para name |
-| `municipio` | res.partner | `city_id[1]` ou `city` | Extrai nome da cidade |
+| `municipio` | res.partner | `l10n_br_municipio_id[1]` | Extrai nome da cidade (BR) |
 | `estado` | res.partner | `state_id[1]` | Extrai UF |
 | `vendedor` | sale.order | `user_id[1]` | Nome do usuário |
 | `equipe_vendas` | sale.order | `team_id[1]` | Nome da equipe |
@@ -54,7 +54,7 @@
 | **ENDEREÇO ENTREGA** |
 | `empresa_endereco_ent` | res.partner (shipping) | `name` | Nome do endereço |
 | `cnpj_endereco_ent` | res.partner (shipping) | `l10n_br_cnpj` | CNPJ entrega |
-| `nome_cidade` | res.partner (shipping) | `city_id[1]` ou `city` | Cidade entrega |
+| `nome_cidade` | res.partner (shipping) | `l10n_br_municipio_id[1]` | Cidade entrega (BR) |
 | `cod_uf` | res.partner (shipping) | `state_id[1]` | UF entrega (2 chars) |
 | `cep_endereco_ent` | res.partner (shipping) | `zip` | CEP |
 | `bairro_endereco_ent` | res.partner (shipping) | `l10n_br_endereco_bairro` | Bairro |

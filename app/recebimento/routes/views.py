@@ -633,6 +633,32 @@ def pendencia_ibscbs_resolver(pendencia_id):
         return jsonify({'sucesso': False, 'mensagem': str(e)}), 500
 
 
+@recebimento_views_bp.route('/pendencias-ibscbs/<int:pendencia_id>/detalhes')
+@login_required
+def pendencia_ibscbs_detalhes(pendencia_id):
+    """Retorna detalhes completos de uma pendencia IBS/CBS"""
+    pendencia = PendenciaFiscalIbsCbs.query.get(pendencia_id)
+    if not pendencia:
+        return jsonify({'sucesso': False, 'mensagem': 'Pendencia nao encontrada'}), 404
+
+    return jsonify({
+        'sucesso': True,
+        'pendencia': pendencia.to_dict(),
+        'ibscbs': {
+            'cst': pendencia.ibscbs_cst,
+            'class_trib': pendencia.ibscbs_class_trib,
+            'base': float(pendencia.ibscbs_base) if pendencia.ibscbs_base else None,
+            'ibs_uf_aliq': float(pendencia.ibs_uf_aliq) if pendencia.ibs_uf_aliq else None,
+            'ibs_uf_valor': float(pendencia.ibs_uf_valor) if pendencia.ibs_uf_valor else None,
+            'ibs_mun_aliq': float(pendencia.ibs_mun_aliq) if pendencia.ibs_mun_aliq else None,
+            'ibs_mun_valor': float(pendencia.ibs_mun_valor) if pendencia.ibs_mun_valor else None,
+            'ibs_total': float(pendencia.ibs_total) if pendencia.ibs_total else None,
+            'cbs_aliq': float(pendencia.cbs_aliq) if pendencia.cbs_aliq else None,
+            'cbs_valor': float(pendencia.cbs_valor) if pendencia.cbs_valor else None
+        }
+    })
+
+
 # =============================================================================
 # API NCM IBS/CBS - INTEGRACAO ODOO
 # =============================================================================

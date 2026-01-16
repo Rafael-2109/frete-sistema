@@ -1021,7 +1021,13 @@ def historico():
 @bp.route('/export/<format>/<session_key>')
 @login_required
 def export(format, session_key):
-    """Exporta dados processados para Excel ou CSV"""
+    """
+    Exporta dados processados para Excel ou CSV
+
+    Excel: 2 abas
+    - Aba 1 "Pedido Completo": Todos itens com preço tabela, preço pedido e diferença
+    - Aba 2 "Divergências": Apenas itens divergentes com % de diferença
+    """
     try:
         # Recupera dados da sessão
         if session_key not in session:
@@ -1031,6 +1037,9 @@ def export(format, session_key):
         pedido_data = session[session_key]
         data = pedido_data['data']
         original_filename = pedido_data['filename'].rsplit('.', 1)[0]
+
+        # Recupera dados de validação de preços (para Excel com 2 abas)
+        validacao_precos = pedido_data.get('validacao_precos')
 
         if not data:
             flash('Sem dados para exportar', 'warning')
@@ -1044,7 +1053,8 @@ def export(format, session_key):
 
         if format == 'excel':
             output_path = os.path.join(temp_dir, f"{original_filename}_processado_{timestamp}.xlsx")
-            processor.export_to_excel(data, output_path)
+            # Passa validacao_precos para gerar as 2 abas com comparação de preços
+            processor.export_to_excel(data, output_path, validacao_precos=validacao_precos)
             mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         elif format == 'csv':
             output_path = os.path.join(temp_dir, f"{original_filename}_processado_{timestamp}.csv")

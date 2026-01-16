@@ -202,7 +202,7 @@ class OdooPartnerSync:
             
         fields = [
             'name', 'display_name', 'l10n_br_cnpj', 'phone', 'email', 'street',
-            'street2', 'city', 'state_id', 'country_id', 'zip',
+            'street2', 'l10n_br_municipio_id', 'state_id', 'country_id', 'zip',
             'active', 'supplier_rank', 'customer_rank', 'create_date',
             'write_date'
         ]
@@ -214,7 +214,7 @@ class OdooPartnerSync:
     def get_customer_by_cnpj(self, cnpj: str) -> Optional[Dict]:
         """Buscar cliente por CNPJ/CPF"""
         domain = [['l10n_br_cnpj', '=', cnpj]]
-        fields = ['name', 'display_name', 'l10n_br_cnpj', 'phone', 'email', 'city', 'state_id', 'country_id']
+        fields = ['name', 'display_name', 'l10n_br_cnpj', 'phone', 'email', 'l10n_br_municipio_id', 'state_id', 'country_id']
         
         results = self.client.search_read(self.model, domain, fields, limit=1)
         return results[0] if results else None    

@@ -203,11 +203,15 @@ class ValidacaoFiscalService:
                 partner_dados = odoo.search_read(
                     'res.partner',
                     [['id', '=', partner_id[0]]],
-                    fields=['city', 'state_id'],
+                    fields=['l10n_br_municipio_id', 'state_id'],
                     limit=1
                 )
                 if partner_dados:
-                    dados_nf['cidade_fornecedor'] = partner_dados[0].get('city')
+                    # l10n_br_municipio_id retorna [id, "Nome (UF)"] - Ex: [5570, "Brasília (DF)"]
+                    municipio = partner_dados[0].get('l10n_br_municipio_id')
+                    if municipio and isinstance(municipio, (list, tuple)) and len(municipio) > 1:
+                        nome_cidade = municipio[1].split('(')[0].strip() if '(' in municipio[1] else municipio[1]
+                        dados_nf['cidade_fornecedor'] = nome_cidade
                     # state_id retorna [id, nome_estado]
                     state = partner_dados[0].get('state_id')
                     if state and isinstance(state, (list, tuple)) and not dados_nf['uf_fornecedor']:

@@ -34,7 +34,7 @@ Data: 2026-01-14
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Optional, Tuple, List
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -702,17 +702,17 @@ class ValidacaoIbsCbsService:
     # PROCESSAMENTO EM LOTE
     # =========================================================================
 
-    def processar_ctes_pendentes(self, limite: int = 100) -> Dict:
+    def processar_ctes_pendentes(self, minutos_janela: int = 120) -> Dict:
         """
         Processa CTes que ainda nao foram validados para IBS/CBS.
 
         Args:
-            limite: Quantidade maxima de CTes para processar
+            minutos_janela: Janela de tempo em minutos para buscar CTes
 
         Returns:
             Dict com estatisticas do processamento
         """
-        logger.info(f"Iniciando processamento de CTes pendentes de validacao IBS/CBS (limite={limite})")
+        logger.info(f"Iniciando processamento de CTes pendentes de validacao IBS/CBS (janela={minutos_janela} minutos)")
 
         resultado = {
             'processados': 0,
@@ -724,6 +724,9 @@ class ValidacaoIbsCbsService:
 
         from sqlalchemy import and_
 
+        # Calcular data limite baseada na janela de tempo
+        data_limite = datetime.utcnow() - timedelta(minutes=minutos_janela)
+
         # Subquery para CTes que ja tem pendencia
         subquery = db.session.query(PendenciaFiscalIbsCbs.chave_acesso).filter(
             PendenciaFiscalIbsCbs.tipo_documento == 'CTe'
@@ -734,11 +737,12 @@ class ValidacaoIbsCbsService:
                 ConhecimentoTransporte.ativo == True,
                 ConhecimentoTransporte.tipo_cte == '0',  # Normal
                 ConhecimentoTransporte.chave_acesso.isnot(None),
+                ConhecimentoTransporte.data_emissao >= data_limite.date(),  # Filtro por data de emissao
                 ~ConhecimentoTransporte.chave_acesso.in_(subquery)
             )
-        ).limit(limite).all()
+        ).all()
 
-        logger.info(f"Encontrados {len(ctes)} CTes para processar")
+        logger.info(f"Encontrados {len(ctes)} CTes para processar (emissao >= {data_limite.date()})")
 
         for cte in ctes:
             try:

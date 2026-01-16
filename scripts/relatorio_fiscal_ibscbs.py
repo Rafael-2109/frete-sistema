@@ -199,7 +199,7 @@ def _extrair_relatorio_fiscal_impl(data_ini, data_fim, tipos: list = None):
             'res.partner',
             [['id', 'in', partner_ids]],
             ['id', 'name', 'l10n_br_razao_social', 'l10n_br_cnpj', 'l10n_br_cpf',
-             'l10n_br_ie', 'city', 'state_id', 'country_id']
+             'l10n_br_ie', 'l10n_br_municipio_id', 'state_id', 'country_id']
         )
         partners = {p['id']: p for p in partner_data}
 
@@ -582,7 +582,7 @@ def _extrair_relatorio_fiscal_impl(data_ini, data_fim, tipos: list = None):
             'CNPJ Cliente/Fornecedor': partner.get('l10n_br_cnpj', ''),
             'CPF Cliente/Fornecedor': partner.get('l10n_br_cpf', ''),
             'I.E. Cliente/Fornecedor': partner.get('l10n_br_ie', ''),
-            'Cidade Cliente/Fornecedor': partner.get('city', ''),
+            'Cidade Cliente/Fornecedor': (partner.get('l10n_br_municipio_id', [None, ''])[1].split('(')[0].strip() if partner.get('l10n_br_municipio_id') and isinstance(partner.get('l10n_br_municipio_id'), (list, tuple)) and len(partner.get('l10n_br_municipio_id')) > 1 else ''),
             'Estado Cliente/Fornecedor': state_name,
             'País Cliente/Fornecedor': country_name,
             'Data Emissão NF': move.get('invoice_date', ''),

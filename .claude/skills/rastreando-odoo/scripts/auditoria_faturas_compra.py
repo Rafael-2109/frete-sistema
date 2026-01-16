@@ -149,7 +149,7 @@ def extrair_auditoria(odoo, mes: int = None, ano: int = None, limit: int = 10000
             parceiros = odoo.search_read(
                 'res.partner',
                 [('id', 'in', chunk)],
-                fields=['id', 'name', 'l10n_br_cnpj', 'l10n_br_ie', 'city', 'state_id'],
+                fields=['id', 'name', 'l10n_br_cnpj', 'l10n_br_ie', 'l10n_br_municipio_id', 'state_id'],
                 limit=len(chunk)
             )
             for p in parceiros:
@@ -424,7 +424,7 @@ def extrair_auditoria(odoo, mes: int = None, ano: int = None, limit: int = 10000
                 'nome': fornecedor.get('name') or extrair_nome(fatura.get('partner_id')),
                 'cnpj': fornecedor.get('l10n_br_cnpj'),
                 'ie': fornecedor.get('l10n_br_ie'),
-                'cidade': fornecedor.get('city'),
+                'cidade': extrair_nome(fornecedor.get('l10n_br_municipio_id')).split('(')[0].strip() if fornecedor.get('l10n_br_municipio_id') else None,
                 'estado': extrair_nome(fornecedor.get('state_id')),
             },
             'titulos': titulos_processados,
