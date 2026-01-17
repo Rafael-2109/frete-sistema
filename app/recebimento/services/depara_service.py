@@ -1167,7 +1167,8 @@ class DeparaService:
                 if fator_conversao:
                     try:
                         fator_conversao = Decimal(str(fator_conversao))
-                    except:
+                    except Exception as e:
+                        logger.error(f"Erro ao converter fator de conversao: {e}")
                         fator_conversao = Decimal('1.0')
                 else:
                     fator_conversao = Decimal('1.0')

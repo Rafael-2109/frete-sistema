@@ -20,11 +20,11 @@ import json
 import argparse
 from datetime import datetime
 from collections import defaultdict
-from typing import Dict, List, Set, Optional, Any
+from typing import Dict, List, Set, Optional
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..')))
 
-from app.odoo.utils.connection import get_odoo_connection
+from app.odoo.utils.connection import get_odoo_connection # noqa: E402
 
 
 def chunked(lst: List, n: int):
@@ -37,7 +37,7 @@ def extrair_id(valor) -> Optional[int]:
     """Extrai ID de campo many2one."""
     if isinstance(valor, (list, tuple)) and len(valor) > 0:
         return valor[0]
-    return valor if valor else None
+    return valor if valor else None # type: ignore
 
 
 def extrair_nome(valor) -> str:
@@ -337,22 +337,22 @@ def executar_auditoria(data_inicio: str = '2024-01-01', data_fim: str = '2099-12
     for f in faturas_raw:
         pid = extrair_id(f.get('partner_id'))
         cid = extrair_id(f.get('company_id'))
-        if pid: partner_ids.add(pid)
-        if cid: company_ids.add(cid)
+        if pid: partner_ids.add(pid) # type: ignore # noqa: E701
+        if cid: company_ids.add(cid) # type: ignore # noqa: E701
 
     for nc in ncs_raw:
         pid = extrair_id(nc.get('partner_id'))
         cid = extrair_id(nc.get('company_id'))
-        if pid: partner_ids.add(pid)
-        if cid: company_ids.add(cid)
+        if pid: partner_ids.add(pid) # type: ignore # noqa: E701
+        if cid: company_ids.add(cid) # type: ignore # noqa: E701
 
     for e in extratos_raw:
         pid = extrair_id(e.get('partner_id'))
         cid = extrair_id(e.get('company_id'))
         jid = extrair_id(e.get('journal_id'))
-        if pid: partner_ids.add(pid)
-        if cid: company_ids.add(cid)
-        if jid: journal_ids.add(jid)
+        if pid: partner_ids.add(pid) # type: ignore # noqa: E701
+        if cid: company_ids.add(cid) # type: ignore # noqa: E701
+        if jid: journal_ids.add(jid) # type: ignore # noqa: E701
 
     # Buscar parceiros
     parceiros_por_id: Dict[int, Dict] = {}

@@ -39,16 +39,16 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-from app import db
-from app.recebimento.models import (
+from app import db # noqa: E402
+from app.recebimento.models import ( # noqa: E402
     ProdutoFornecedorDepara,
     ValidacaoNfPoDfe,
     MatchNfPoItem,
     DivergenciaNfPo
 )
-from app.recebimento.services.depara_service import DeparaService
-from app.recebimento.services.validacao_nf_po_service import ValidacaoNfPoService
-from app.recebimento.services.odoo_po_service import OdooPoService
+from app.recebimento.services.depara_service import DeparaService # noqa: E402
+from app.recebimento.services.validacao_nf_po_service import ValidacaoNfPoService # noqa: E402
+from app.recebimento.services.odoo_po_service import OdooPoService # noqa: E402
 
 validacao_nf_po_bp = Blueprint('validacao_nf_po', __name__, url_prefix='/api/recebimento')
 
@@ -1398,13 +1398,13 @@ def buscar_pos_candidatos_dfe(dfe_id):
                             po_info['linhas'].append(linha_info)
 
                     # Adicionar PO se tem pelo menos uma linha com saldo
-                    if any(l['tem_saldo'] for l in po_info['linhas']):
+                    if any(linha['tem_saldo'] for linha in po_info['linhas']):
                         pos_candidatos.append(po_info)
 
         # 5. Calcular resumo
         itens_com_po = sum(1 for item in itens_nf if item.get('cod_produto_interno') and
-                          any(any(l.get('match_item_nf') == item['cod_produto_fornecedor']
-                                  for l in po['linhas'])
+                          any(any(linha.get('match_item_nf') == item['cod_produto_fornecedor']
+                                  for linha in po['linhas'])
                               for po in pos_candidatos))
 
         resumo = {

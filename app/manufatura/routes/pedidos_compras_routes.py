@@ -4,7 +4,7 @@ Routes para Pedidos de Compra
 from flask import Blueprint, render_template, jsonify, request, flash, redirect, url_for
 from flask_login import login_required
 from sqlalchemy import desc
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 import logging
 
 from app import db
@@ -16,7 +16,6 @@ from app.manufatura.models import (
 from app.odoo.services.pedido_compras_service import PedidoComprasServiceOtimizado
 from app.odoo.services.alocacao_compras_service import AlocacaoComprasServiceOtimizado
 from app.utils.file_storage import get_file_storage
-from io import BytesIO
 
 logger = logging.getLogger(__name__)
 
@@ -570,7 +569,6 @@ def corrigir_company_id():
         - tabela: str (default: 'pedidos') - 'pedidos', 'requisicoes' ou 'alocacoes'
     """
     from app.odoo.utils.connection import get_odoo_connection
-    from app.manufatura.models import RequisicaoCompras, RequisicaoCompraAlocacao
 
     try:
         data = request.get_json() or {}
@@ -866,7 +864,6 @@ def status_company_id():
     [TEMPORÁRIO] Retorna status de preenchimento do company_id
     """
     from app.manufatura.models import RequisicaoCompras, RequisicaoCompraAlocacao
-    from sqlalchemy import text
 
     try:
         # Pedidos
