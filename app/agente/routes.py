@@ -65,6 +65,10 @@ HEARTBEAT_INTERVAL_SECONDS = 10  # Envia heartbeat a cada 10s (reduzido de 20s)
 # Timeout global do stream (9 minutos - deixa 1 min de margem antes do timeout do Render)
 MAX_STREAM_DURATION_SECONDS = 540
 
+# FIX: Timeout de inatividade do SDK - se não receber eventos em X segundos, considera travado
+# Este é o timeout CURTO para detectar quando o SDK para de emitir eventos
+SDK_INACTIVITY_TIMEOUT_SECONDS = 90  # 90 segundos sem eventos reais = travado
+
 # Erros conhecidos de sessão expirada
 SDK_SESSION_EXPIRED_ERRORS = [
     'No conversation found',
@@ -231,7 +235,13 @@ def _stream_chat_response(
     }
 
     def run_async_stream():
-        """Executa o stream assíncrono em uma thread separada."""
+        """
+        Executa o stream assíncrono em uma thread separada.
+
+        CRÍTICO: Esta função GARANTE que None sempre será colocado na fila,
+        mesmo em caso de exceções não tratadas. Isso evita que o loop principal
+        fique esperando eternamente.
+        """
         logger.info("[AGENTE] Thread iniciada para async stream")
 
         async def async_stream():
@@ -428,17 +438,70 @@ def _stream_chat_response(
                     'session_expired': response_state['session_expired'],
                 }))
 
-        # CRÍTICO: Try/except/finally na thread para GARANTIR que None seja colocado na fila
+        # =================================================================
+        # CRÍTICO: GARANTIA DE FINALIZAÇÃO
+        # =================================================================
+        # Este bloco GARANTE que None sempre será colocado na fila,
+        # independente de qualquer exceção. O finally externo é a última
+        # linha de defesa contra travamentos.
+        #
+        # Camadas de proteção:
+        # 1. asyncio.wait_for() - timeout global no async stream
+        # 2. try/except interno - captura exceções do SDK
+        # 3. try/except externo - captura exceções do asyncio.run()
+        # 4. finally - SEMPRE coloca None na fila
+        # =================================================================
+        none_sent = False  # Flag para evitar duplicação
+
         try:
-            asyncio.run(async_stream())
-            logger.info("[AGENTE] asyncio.run() completado")
+            # Timeout global: 30s antes do MAX_STREAM_DURATION para dar margem
+            timeout_seconds = MAX_STREAM_DURATION_SECONDS - 30
+
+            async def async_stream_with_timeout():
+                """Wrapper com timeout para evitar travamento indefinido."""
+                try:
+                    await asyncio.wait_for(
+                        async_stream(),
+                        timeout=timeout_seconds
+                    )
+                except asyncio.TimeoutError:
+                    logger.error(f"[AGENTE] async_stream timeout após {timeout_seconds}s")
+                    event_queue.put(_sse_event('error', {
+                        'message': 'Tempo limite interno excedido. A operação demorou muito.',
+                        'timeout': True
+                    }))
+
+            asyncio.run(async_stream_with_timeout())
+            logger.info("[AGENTE] asyncio.run() completado com sucesso")
+
         except Exception as e:
-            logger.error(f"[AGENTE] ERRO FATAL na thread: {e}", exc_info=True)
-            event_queue.put(_sse_event('error', {'message': f'Erro interno: {str(e)}'}))
+            error_msg = str(e)
+            logger.error(f"[AGENTE] ERRO FATAL na thread: {error_msg}", exc_info=True)
+
+            # Tenta enviar erro para o frontend
+            try:
+                event_queue.put(_sse_event('error', {
+                    'message': f'Erro interno: {error_msg[:200]}',
+                    'fatal': True
+                }))
+            except Exception:
+                logger.error("[AGENTE] Não foi possível enviar erro para a fila")
+
         finally:
-            # CRÍTICO: SEMPRE colocar None para finalizar o loop de streaming
-            event_queue.put(None)
-            logger.info("[AGENTE] Thread finalizada (finally)")
+            # =================================================================
+            # GARANTIA ABSOLUTA: None SEMPRE entra na fila
+            # =================================================================
+            # Este é o ponto mais crítico do código. Sem o None, o loop
+            # principal (while True) fica esperando eternamente.
+            # =================================================================
+            if not none_sent:
+                try:
+                    event_queue.put(None)
+                    none_sent = True
+                    logger.info("[AGENTE] Thread finalizada - None enviado (finally garantido)")
+                except Exception as final_error:
+                    # Última tentativa - isso não deveria acontecer
+                    logger.critical(f"[AGENTE] CRÍTICO: Falha ao enviar None: {final_error}")
 
     try:
         logger.info("[AGENTE] _stream_chat_response iniciado")
@@ -450,10 +513,12 @@ def _stream_chat_response(
         thread = Thread(target=run_async_stream, daemon=True)
         thread.start()
 
-        # FEAT-030: Loop com heartbeats + timeout global
+        # FEAT-030: Loop com heartbeats + timeout global + detecção de thread morta
         last_heartbeat = time.time()
+        last_event_time = time.time()  # Rastrear último evento recebido
         stream_start_time = time.time()
         event_count = 0
+        consecutive_empty = 0  # Contador de timeouts consecutivos sem eventos
 
         while True:
             # SEGURANÇA: Timeout global para evitar travamento indefinido
@@ -466,7 +531,7 @@ def _stream_chat_response(
             try:
                 # Timeout para permitir heartbeats (usa o menor entre heartbeat e tempo restante)
                 remaining_time = MAX_STREAM_DURATION_SECONDS - elapsed
-                queue_timeout = min(HEARTBEAT_INTERVAL_SECONDS, remaining_time)
+                queue_timeout = min(HEARTBEAT_INTERVAL_SECONDS, remaining_time, 30)  # Max 30s
                 event = event_queue.get(timeout=queue_timeout)
 
                 if event is None:  # Fim do stream
@@ -474,15 +539,53 @@ def _stream_chat_response(
                     break
 
                 event_count += 1
+                last_event_time = time.time()
+                consecutive_empty = 0  # Reset contador
                 yield event
 
             except Empty:
+                consecutive_empty += 1
+
+                # =================================================================
+                # DETECÇÃO DE THREAD MORTA
+                # =================================================================
+                # Se a thread morreu sem enviar None, precisamos detectar isso
+                # e forçar o fim do stream para não travar eternamente.
+                # =================================================================
+                if not thread.is_alive():
+                    logger.warning("[AGENTE] Thread morreu sem sinalizar - forçando fim do stream")
+                    yield _sse_event('error', {
+                        'message': 'Processamento interrompido inesperadamente. Tente novamente.',
+                        'thread_died': True
+                    })
+                    break
+
+                # =================================================================
+                # DETECÇÃO DE SDK TRAVADO (INATIVIDADE)
+                # =================================================================
+                # Se ficou muito tempo sem eventos REAIS da fila, o SDK está
+                # travado. Nota: heartbeats NÃO atualizam last_event_time porque
+                # são gerados aqui no except Empty, não vêm da fila.
+                # =================================================================
+                time_since_last_event = time.time() - last_event_time
+                if time_since_last_event > SDK_INACTIVITY_TIMEOUT_SECONDS:
+                    logger.warning(
+                        f"[AGENTE] SDK inativo há {time_since_last_event:.0f}s - "
+                        f"forçando timeout (thread viva mas sem progresso)"
+                    )
+                    yield _sse_event('error', {
+                        'message': 'O processamento parece ter travado. Tente novamente.',
+                        'sdk_stalled': True,
+                        'inactivity_seconds': int(time_since_last_event)
+                    })
+                    break
+
                 # FEAT-030: Envia heartbeat para manter conexão viva
                 current_time = time.time()
                 if current_time - last_heartbeat >= HEARTBEAT_INTERVAL_SECONDS:
                     yield _sse_event('heartbeat', {'timestamp': datetime.utcnow().isoformat()})
                     last_heartbeat = current_time
-                    logger.debug("[AGENTE] Heartbeat enviado")
+                    logger.debug(f"[AGENTE] Heartbeat enviado (empty count: {consecutive_empty})")
 
         # Aguarda thread finalizar com timeout maior (10s)
         thread.join(timeout=10.0)

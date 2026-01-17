@@ -9,7 +9,8 @@ Referência: https://platform.claude.com/docs/pt-BR/agent-sdk/
 
 import logging
 import asyncio
-from typing import AsyncGenerator, Dict, Any, List, Optional, Callable, Union 
+import time
+from typing import AsyncGenerator, Dict, Any, List, Optional, Callable, Union
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -453,6 +454,14 @@ Nunca invente informações."""
         last_message_id = None  # Para deduplicação conforme documentação
         done_emitted = False  # Controle para emitir done apenas uma vez
 
+        # =================================================================
+        # DIAGNÓSTICO: Rastreamento de tempo para identificar travamentos
+        # =================================================================
+        stream_start_time = time.time()
+        last_message_time = stream_start_time
+        current_tool_start_time = None
+        current_tool_name = None
+
         # Gerador assíncrono para o prompt (OBRIGATÓRIO quando can_use_tool é usado)
         # Ref: https://platform.claude.com/docs/pt-BR/agent-sdk/streaming-vs-single-mode
         async def prompt_generator():
@@ -468,6 +477,21 @@ Nunca invente informações."""
             # Conforme documentação: async for termina naturalmente quando generator é exaurido
             # NÃO usar return/break - deixar o loop terminar sozinho
             async for message in query(prompt=prompt_generator(), options=options):
+                # =================================================================
+                # DIAGNÓSTICO: Log de tempo entre mensagens
+                # =================================================================
+                current_time = time.time()
+                elapsed_total = current_time - stream_start_time
+                elapsed_since_last = current_time - last_message_time
+                last_message_time = current_time
+
+                logger.debug(
+                    f"[AGENT_CLIENT] Mensagem recebida | "
+                    f"tipo={type(message).__name__} | "
+                    f"total={elapsed_total:.1f}s | "
+                    f"desde_última={elapsed_since_last:.1f}s"
+                )
+
                 # Mensagem de sistema (contém session_id no subtype='init')
                 # Ref: https://platform.claude.com/docs/pt-BR/agent-sdk/sessions
                 if hasattr(message, 'subtype') and message.subtype == 'init':
@@ -529,6 +553,13 @@ Nunca invente informações."""
                                 )
                                 tool_calls.append(tool_call)
 
+                                # =================================================================
+                                # DIAGNÓSTICO: Marca início da execução da tool
+                                # =================================================================
+                                current_tool_start_time = time.time()
+                                current_tool_name = block.name
+                                logger.info(f"[AGENT_CLIENT] Tool INICIADA: {block.name}")
+
                                 # FEAT-024: Extrai descrição amigável do input
                                 tool_description = self._extract_tool_description(
                                     block.name,
@@ -559,6 +590,17 @@ Nunca invente informações."""
                 # Mensagem do usuário (contém resultados de ferramentas executadas)
                 # Quando o SDK executa uma ferramenta, o resultado vem como UserMessage
                 if isinstance(message, UserMessage):
+                    # =================================================================
+                    # DIAGNÓSTICO: Calcula duração da tool
+                    # =================================================================
+                    tool_duration_ms = 0
+                    if current_tool_start_time:
+                        tool_duration_ms = int((time.time() - current_tool_start_time) * 1000)
+                        logger.info(
+                            f"[AGENT_CLIENT] Tool COMPLETADA: {current_tool_name} em {tool_duration_ms}ms"
+                        )
+                        current_tool_start_time = None
+
                     content = getattr(message, 'content', None)
                     if content and isinstance(content, list):
                         for block in content:
@@ -613,6 +655,7 @@ Nunca invente informações."""
                                         'tool_use_id': tool_use_id,
                                         'tool_name': tool_name,
                                         'is_error': is_error,
+                                        'duration_ms': tool_duration_ms,  # DIAGNÓSTICO
                                     }
                                 )
                     continue
@@ -664,11 +707,19 @@ Nunca invente informações."""
             error_msg = str(e)
             error_type = type(e).__name__
 
-            # Log detalhado do erro
+            # =================================================================
+            # DIAGNÓSTICO: Log detalhado com contexto de tempo
+            # =================================================================
+            elapsed_total = time.time() - stream_start_time
             logger.error(
-                f"[AGENT_CLIENT] Erro ({error_type}): {error_msg}",
+                f"[AGENT_CLIENT] EXCEÇÃO após {elapsed_total:.1f}s | "
+                f"tipo={error_type} | mensagem={error_msg}",
                 exc_info=True
             )
+
+            # Se estava executando uma tool, loga qual era
+            if current_tool_name:
+                logger.error(f"[AGENT_CLIENT] Tool em execução quando falhou: {current_tool_name}")
 
             # Mensagem amigável para o usuário
             user_message = error_msg
@@ -686,9 +737,33 @@ Nunca invente informações."""
                 content=user_message,
                 metadata={
                     'error_type': error_type,
-                    'original_error': error_msg[:500]
+                    'original_error': error_msg[:500],
+                    'elapsed_seconds': elapsed_total,
+                    'last_tool': current_tool_name,
                 }
             )
+
+            # =================================================================
+            # GARANTIA: Emite done mesmo em caso de erro
+            # =================================================================
+            # Isso garante que o frontend não fica esperando eternamente.
+            # O routes.py depende do evento 'done' para finalizar corretamente.
+            # =================================================================
+            if not done_emitted:
+                done_emitted = True
+                logger.warning("[AGENT_CLIENT] Emitindo 'done' após exceção para evitar travamento")
+                yield StreamEvent(
+                    type='done',
+                    content={
+                        'text': full_text,
+                        'input_tokens': input_tokens,
+                        'output_tokens': output_tokens,
+                        'session_id': current_session_id,
+                        'tool_calls': len(tool_calls),
+                        'error_recovery': True,  # Flag indicando que veio de erro
+                    },
+                    metadata={'error_type': error_type}
+                )
 
     async def get_response(
         self,

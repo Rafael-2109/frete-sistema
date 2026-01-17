@@ -554,15 +554,47 @@ async function handleStreamResponse(response) {
     let buffer = '';
     let currentEventType = null;
 
+    // =================================================================
+    // TIMEOUT NO READER
+    // =================================================================
+    // Timeout de 60 segundos entre chunks para detectar conexão perdida.
+    // Se o servidor morrer mid-stream, o reader.read() ficaria esperando
+    // eternamente sem esse timeout.
+    // =================================================================
+    const READ_TIMEOUT_MS = 60000; // 60 segundos max entre chunks
+
+    /**
+     * Wrapper que adiciona timeout ao reader.read()
+     * Se não receber dados em READ_TIMEOUT_MS, rejeita com erro.
+     */
+    async function readWithTimeout() {
+        return Promise.race([
+            reader.read(),
+            new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Read timeout')), READ_TIMEOUT_MS)
+            )
+        ]);
+    }
+
     // FEAT-026: Guarda referência para permitir cancelamento
-    currentEventSource = { reader, cancel: () => reader.cancel() };
+    currentEventSource = {
+        reader,
+        cancel: () => {
+            try {
+                reader.cancel();
+            } catch (e) {
+                console.log('[SSE] Reader já cancelado');
+            }
+        }
+    };
 
     // Estado da mensagem atual
     const state = {
         text: '',           // Texto acumulado
         msgElement: null,   // Elemento DOM da mensagem
         bubbleElement: null, // Elemento do bubble
-        lastTextTime: Date.now() // FEAT-032: Timestamp do último texto recebido
+        lastTextTime: Date.now(), // FEAT-032: Timestamp do último texto recebido
+        lastChunkTime: Date.now() // Timestamp do último chunk recebido (qualquer tipo)
     };
 
     // FEAT-032: Timeout de feedback - mostra mensagem se ficar muito tempo sem texto
@@ -582,180 +614,256 @@ async function handleStreamResponse(response) {
         }
     }, 5000); // Verifica a cada 5 segundos
 
-    while (true) {
-        // FEAT-026: Verifica se foi interrompido
-        if (!isGenerating) {
-            reader.cancel();
-            break;
-        }
+    try {
+        while (true) {
+            // FEAT-026: Verifica se foi interrompido
+            if (!isGenerating) {
+                reader.cancel();
+                break;
+            }
 
-        const { done, value } = await reader.read();
-        if (done) break;
+            try {
+                // Usa readWithTimeout em vez de reader.read() direto
+                const { done, value } = await readWithTimeout();
+                if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
+                // Atualiza timestamp de último chunk
+                state.lastChunkTime = Date.now();
 
-        // Processa eventos SSE (formato: event: tipo\ndata: json\n\n)
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+                buffer += decoder.decode(value, { stream: true });
 
-        for (const line of lines) {
-            if (line.startsWith('event:')) {
-                currentEventType = line.slice(6).trim();
-            } else if (line.startsWith('data:')) {
-                try {
-                    const data = JSON.parse(line.slice(5));
+                // Processa eventos SSE (formato: event: tipo\ndata: json\n\n)
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
 
-                    // Cria elemento apenas quando primeiro texto chegar
-                    if (currentEventType === 'text' && !state.msgElement) {
-                        hideTyping();
-                        state.msgElement = createMessageElement('', 'assistant');
-                        chatMessages.appendChild(state.msgElement);
-                        state.bubbleElement = state.msgElement.querySelector('.message-bubble');
+                for (const line of lines) {
+                    if (line.startsWith('event:')) {
+                        currentEventType = line.slice(6).trim();
+                    } else if (line.startsWith('data:')) {
+                        try {
+                            const data = JSON.parse(line.slice(5));
+
+                            // Cria elemento apenas quando primeiro texto chegar
+                            if (currentEventType === 'text' && !state.msgElement) {
+                                hideTyping();
+                                state.msgElement = createMessageElement('', 'assistant');
+                                chatMessages.appendChild(state.msgElement);
+                                state.bubbleElement = state.msgElement.querySelector('.message-bubble');
+                            }
+
+                            // Processa o evento com estado compartilhado
+                            processSSEEvent(currentEventType, data, state);
+                            currentEventType = null;
+                        } catch (e) {
+                            console.error('[SSE] Erro ao parsear JSON:', e, 'linha:', line);
+                        }
                     }
-
-                    // Processa o evento com estado compartilhado
-                    processSSEEvent(currentEventType, data, state);
-                    currentEventType = null;
-                } catch (e) {
-                    console.error('[SSE] Erro ao parsear:', e);
                 }
+            } catch (readError) {
+                // =================================================================
+                // TRATAMENTO DE TIMEOUT NO READ
+                // =================================================================
+                if (readError.message === 'Read timeout') {
+                    console.error('[SSE] Timeout aguardando dados do servidor (60s)');
+                    addMessage(
+                        '⚠️ **Conexão com o servidor perdida**\n\n' +
+                        'O servidor demorou muito para responder. ' +
+                        'Tente enviar sua mensagem novamente.',
+                        'assistant'
+                    );
+                    break;
+                }
+                // Outros erros - propaga
+                throw readError;
             }
         }
+    } catch (error) {
+        // =================================================================
+        // TRATAMENTO DE ERRO GERAL NO STREAM
+        // =================================================================
+        console.error('[SSE] Erro no stream:', error);
+
+        // Mostra erro amigável se não houver mensagem parcial
+        if (!state.text) {
+            addMessage(
+                `❌ **Erro de conexão**\n\n${error.message || 'Erro desconhecido'}`,
+                'assistant'
+            );
+        }
+    } finally {
+        // =================================================================
+        // CLEANUP GARANTIDO
+        // =================================================================
+        // Este bloco SEMPRE executa, garantindo que:
+        // 1. Timer de feedback é limpo
+        // 2. Indicador de typing é escondido
+        // 3. Botão de stop é escondido
+        // 4. Items pendentes são finalizados
+        // =================================================================
+        clearInterval(feedbackTimer);
+        hideTyping();
+
+        // FIX: Garante que items pendentes sejam finalizados mesmo se stream terminar sem 'done'
+        // Isso resolve o problema de "Ações spinning" quando conexão quebra ou timeout
+        finalizePendingTimelineItems('success');
+        finalizePendingTodos(true);
     }
-
-    // FEAT-032: Limpa timer de feedback
-    clearInterval(feedbackTimer);
-
-    hideTyping();
-
-    // FIX: Garante que items pendentes sejam finalizados mesmo se stream terminar sem 'done'
-    // Isso resolve o problema de "Ações spinning" quando conexão quebra ou timeout
-    finalizePendingTimelineItems('success');
-    finalizePendingTodos(true);
 }
 
 // Processa evento SSE com estado compartilhado
 function processSSEEvent(eventType, data, state) {
-    switch (eventType) {
-        case 'start':
-            // Stream iniciado
-            break;
+    try {
+        switch (eventType) {
+            case 'start':
+                // Stream iniciado
+                break;
 
-        case 'init':
-            // FEAT-030: Captura nosso session_id (não o do SDK)
-            if (data.session_id) sessionId = data.session_id;
-            break;
+            case 'init':
+                // FEAT-030: Captura nosso session_id (não o do SDK)
+                if (data.session_id) sessionId = data.session_id;
+                break;
 
-        // FEAT-030: Heartbeat para manter conexão viva (ignorar)
-        case 'heartbeat':
-            console.log('[SSE] Heartbeat recebido:', data.timestamp);
-            break;
+            // FEAT-030: Heartbeat para manter conexão viva (ignorar)
+            case 'heartbeat':
+                console.log('[SSE] Heartbeat recebido:', data.timestamp);
+                // Heartbeat também conta como atividade
+                state.lastChunkTime = Date.now();
+                break;
 
-        case 'text':
-            // FEAT-032: Atualiza timestamp de último texto recebido
-            state.lastTextTime = Date.now();
+            case 'text':
+                // FEAT-032: Atualiza timestamp de último texto recebido
+                state.lastTextTime = Date.now();
 
-            // Acumula texto no estado compartilhado
-            state.text += data.content || '';
-            if (state.bubbleElement) {
-                state.bubbleElement.innerHTML = formatMessage(state.text);
-                scrollToBottom();
-            }
-            hideTyping();
-            // FEAT-028: Detecta URLs de arquivos para download
-            if (data.content) {
-                detectDownloadUrls(data.content);
-            }
-            break;
+                // Acumula texto no estado compartilhado
+                state.text += data.content || '';
+                if (state.bubbleElement) {
+                    state.bubbleElement.innerHTML = formatMessage(state.text);
+                    scrollToBottom();
+                }
+                hideTyping();
+                // FEAT-028: Detecta URLs de arquivos para download
+                if (data.content) {
+                    detectDownloadUrls(data.content);
+                }
+                break;
 
-        // FEAT-003: Evento de thinking
-        case 'thinking':
-            if (thinkingEnabled && data.content) {
-                showThinking(data.content);
-            }
-            break;
+            // FEAT-003: Evento de thinking
+            case 'thinking':
+                if (thinkingEnabled && data.content) {
+                    showThinking(data.content);
+                }
+                break;
 
-        // FEAT-006: Timeline - Início de tool call
-        // FEAT-024: Usa descrição amigável quando disponível
-        case 'tool_call':
-            const toolDescription = data.description || data.tool_name || data.content || 'ferramenta';
-            showTyping(`🔧 ${toolDescription}...`);
+            // FEAT-006: Timeline - Início de tool call
+            // FEAT-024: Usa descrição amigável quando disponível
+            case 'tool_call': {
+                const toolDescription = data.description || data.tool_name || data.content || 'ferramenta';
+                showTyping(`🔧 ${toolDescription}...`);
 
-            // Adiciona à timeline com descrição
-            addTimelineItem({
-                tool_name: data.tool_name || data.content || 'Tool',
-                description: data.description || '',  // FEAT-024
-                status: 'pending',
-                timestamp: new Date()
-            });
-            break;
-
-        // FEAT-006: Timeline - Resultado de tool
-        case 'tool_result':
-            // MELHORIA: Trata erros de tools adequadamente
-            const toolIsError = data.is_error || false;
-            const toolName = data.tool_name || 'ferramenta';
-
-            if (toolIsError) {
-                // Tool falhou - mostra feedback claro
-                showTyping(`⚠️ ${toolName} encontrou um problema...`);
-                updateLastTimelineItem({
-                    status: 'error',
-                    duration_ms: data.duration_ms || 0
+                // Adiciona à timeline com descrição
+                addTimelineItem({
+                    tool_name: data.tool_name || data.content || 'Tool',
+                    description: data.description || '',  // FEAT-024
+                    status: 'pending',
+                    timestamp: new Date()
                 });
-                console.warn(`[SSE] Tool '${toolName}' retornou erro:`, data.result);
-            } else {
-                // Tool executou com sucesso
-                showTyping('📊 Analisando dados...');
-                updateLastTimelineItem({
-                    status: 'success',
-                    duration_ms: data.duration_ms || 0
-                });
+
+                // =================================================================
+                // FEEDBACK VISUAL: Timeout para tools longas
+                // =================================================================
+                // Se a tool demorar mais de 10 segundos, mostra feedback adicional
+                // =================================================================
+                const toolName = data.tool_name || 'ferramenta';
+                setTimeout(() => {
+                    if (isGenerating) {
+                        // Verifica se ainda está na mesma tool
+                        const lastItem = actionTimeline[0];
+                        if (lastItem && lastItem.tool_name === toolName && lastItem.status === 'pending') {
+                            showTyping(`⏳ ${toolDescription} (ainda processando...)`);
+                        }
+                    }
+                }, 10000); // 10 segundos
+                break;
             }
-            break;
 
-        // FEAT-008/FEAT-024: Evento de todos (vem do TodoWrite)
-        case 'todos':
-            // FEAT-024: Suporta formato {todos: [...]} ou array direto
-            const todosData = data.todos || (Array.isArray(data) ? data : null);
-            if (todosData && Array.isArray(todosData)) {
-                updateTodoList(todosData);
+            // FEAT-006: Timeline - Resultado de tool
+            case 'tool_result': {
+                // MELHORIA: Trata erros de tools adequadamente
+                const toolIsError = data.is_error || false;
+                const toolResultName = data.tool_name || 'ferramenta';
+
+                if (toolIsError) {
+                    // Tool falhou - mostra feedback claro
+                    showTyping(`⚠️ ${toolResultName} encontrou um problema...`);
+                    updateLastTimelineItem({
+                        status: 'error',
+                        duration_ms: data.duration_ms || 0
+                    });
+                    console.warn(`[SSE] Tool '${toolResultName}' retornou erro:`, data.result);
+                } else {
+                    // Tool executou com sucesso
+                    showTyping('📊 Analisando dados...');
+                    updateLastTimelineItem({
+                        status: 'success',
+                        duration_ms: data.duration_ms || 0
+                    });
+                }
+                break;
             }
-            break;
 
-        case 'action_pending':
-            hideTyping();
-            pendingAction = data;
-            showConfirmation(data.message || 'Confirmar ação?');
-            break;
-
-        case 'error':
-            hideTyping();
-            hideThinkingPanel();
-
-            // FEAT-030: Finaliza todos os items pendentes (timeline e todos)
-            finalizePendingTimelineItems('error');
-            finalizePendingTodos(false);  // Não marca como completed, apenas para o spinner
-
-            // FEAT-030: Trata sessão expirada
-            if (data.session_expired) {
-                console.log('[SSE] Sessão SDK expirada, será criada nova na próxima mensagem');
-                addMessage(`⚠️ A sessão anterior expirou no servidor.\n\n**Mas não se preocupe!** Seu histórico está salvo e a conversa continuará normalmente.`, 'assistant');
-            } else {
-                addMessage(`❌ ${data.message || data.content || 'Erro desconhecido'}`, 'assistant');
+            // FEAT-008/FEAT-024: Evento de todos (vem do TodoWrite)
+            case 'todos': {
+                // FEAT-024: Suporta formato {todos: [...]} ou array direto
+                const todosData = data.todos || (Array.isArray(data) ? data : null);
+                if (todosData && Array.isArray(todosData)) {
+                    updateTodoList(todosData);
+                }
+                break;
             }
-            break;
 
-        case 'done':
-            hideTyping();
-            hideThinkingPanel();
-            if (data.session_id) sessionId = data.session_id;
-            updateMetrics(data.input_tokens, data.output_tokens, data.cost_usd);
+            case 'action_pending':
+                hideTyping();
+                pendingAction = data;
+                showConfirmation(data.message || 'Confirmar ação?');
+                break;
 
-            // FEAT-030: Finaliza items pendentes (timeline e todos)
-            finalizePendingTimelineItems('success');
-            finalizePendingTodos(true);  // Marca como completed
-            break;
+            case 'error':
+                hideTyping();
+                hideThinkingPanel();
+
+                // FEAT-030: Finaliza todos os items pendentes (timeline e todos)
+                finalizePendingTimelineItems('error');
+                finalizePendingTodos(false);  // Não marca como completed, apenas para o spinner
+
+                // FEAT-030: Trata sessão expirada
+                if (data.session_expired) {
+                    console.log('[SSE] Sessão SDK expirada, será criada nova na próxima mensagem');
+                    addMessage(`⚠️ A sessão anterior expirou no servidor.\n\n**Mas não se preocupe!** Seu histórico está salvo e a conversa continuará normalmente.`, 'assistant');
+                } else {
+                    addMessage(`❌ ${data.message || data.content || 'Erro desconhecido'}`, 'assistant');
+                }
+                break;
+
+            case 'done':
+                hideTyping();
+                hideThinkingPanel();
+                if (data.session_id) sessionId = data.session_id;
+                updateMetrics(data.input_tokens, data.output_tokens, data.cost_usd);
+
+                // FEAT-030: Finaliza items pendentes (timeline e todos)
+                finalizePendingTimelineItems('success');
+                finalizePendingTodos(true);  // Marca como completed
+                break;
+        }
+    } catch (e) {
+        // =================================================================
+        // TRATAMENTO DE ERRO NO PROCESSAMENTO DE EVENTO
+        // =================================================================
+        // Se houver erro ao processar um evento específico, loga mas
+        // não interrompe o stream. Isso evita que um evento malformado
+        // trave toda a interface.
+        // =================================================================
+        console.error('[SSE] Erro ao processar evento:', eventType, e);
     }
 }
 
