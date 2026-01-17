@@ -14,9 +14,9 @@ import os
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
-from app import create_app, db
-from app.devolucao.models import NFDevolucao
-from app.monitoramento.models import EntregaMonitorada
+from app import create_app, db # noqa: E402
+from app.devolucao.models import NFDevolucao # noqa: E402
+from app.monitoramento.models import EntregaMonitorada # noqa: E402
 
 
 def backfill():
@@ -86,7 +86,7 @@ def backfill():
         print("\n🔄 Sincronizando status_monitoramento...")
         for nfd in todas_nfds:
             if nfd.entrega_monitorada_id:
-                entrega = EntregaMonitorada.query.get(nfd.entrega_monitorada_id)
+                entrega = db.session.get(EntregaMonitorada,nfd.entrega_monitorada_id) if nfd.entrega_monitorada_id else None
                 if entrega and entrega.status_finalizacao in ('Cancelada', 'Devolvida', 'Troca de NF'):
                     if nfd.status_monitoramento != entrega.status_finalizacao:
                         nfd.status_monitoramento = entrega.status_finalizacao

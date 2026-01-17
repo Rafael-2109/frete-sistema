@@ -593,7 +593,7 @@ def adicionar_embarque():
             placa_anterior = registro_existente.placa
             
             # Aplica mesma lógica de limpeza do embarque substituído
-            embarque_substituido = Embarque.query.get(embarque_id)
+            embarque_substituido = db.session.get(Embarque,embarque_id) if embarque_id else None
             if embarque_substituido and embarque_substituido.data_embarque:
                 embarque_substituido.data_embarque = None
                 print(f"[DEBUG] Data embarque removida do Embarque #{embarque_substituido.numero} (substituído)")

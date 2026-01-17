@@ -851,7 +851,7 @@ class ValidacaoIbsCbsService:
         limite: int = 100
     ) -> List[PendenciaFiscalIbsCbs]:
         """Lista pendencias fiscais de IBS/CBS."""
-        query = PendenciaFiscalIbsCbs.query
+        query = db.session.query(PendenciaFiscalIbsCbs)
 
         if tipo_documento:
             query = query.filter_by(tipo_documento=tipo_documento)
@@ -869,7 +869,7 @@ class ValidacaoIbsCbsService:
         usuario: str
     ) -> PendenciaFiscalIbsCbs:
         """Resolve uma pendencia fiscal."""
-        pendencia = PendenciaFiscalIbsCbs.query.get(pendencia_id)
+        pendencia = db.session.get(PendenciaFiscalIbsCbs,pendencia_id) if pendencia_id else None
         if not pendencia:
             raise ValueError(f"Pendencia {pendencia_id} nao encontrada")
 
@@ -892,7 +892,7 @@ class ValidacaoIbsCbsService:
 
     def listar_ncms_cadastrados(self, apenas_ativos: bool = True) -> List[NcmIbsCbsValidado]:
         """Lista NCMs cadastrados para validacao."""
-        query = NcmIbsCbsValidado.query
+        query = db.session.query(NcmIbsCbsValidado)
 
         if apenas_ativos:
             query = query.filter_by(ativo=True)

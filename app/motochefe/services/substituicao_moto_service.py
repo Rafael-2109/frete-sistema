@@ -40,12 +40,12 @@ def substituir_moto_pedido(
     """
 
     # 1. BUSCAR PEDIDO E VALIDAR
-    pedido = PedidoVendaMoto.query.get(pedido_id)
+    pedido = db.session.get(PedidoVendaMoto,pedido_id) if pedido_id else None
     if not pedido:
         raise Exception(f'Pedido {pedido_id} não encontrado')
 
     # 2. BUSCAR ITEM DO PEDIDO COM MOTO ANTIGA
-    item_antigo = PedidoVendaMotoItem.query.filter_by(
+    item_antigo = db.session.query(PedidoVendaMotoItem).filter_by(
         pedido_id=pedido_id,
         numero_chassi=chassi_antigo,
         ativo=True
@@ -55,8 +55,8 @@ def substituir_moto_pedido(
         raise Exception(f'Moto {chassi_antigo} não encontrada neste pedido')
 
     # 3. BUSCAR MOTOS
-    moto_antiga = Moto.query.get(chassi_antigo)
-    moto_nova = Moto.query.get(chassi_novo)
+    moto_antiga = db.session.get(Moto,chassi_antigo) if chassi_antigo else None
+    moto_nova = db.session.get(Moto,chassi_novo) if chassi_novo else None
 
     if not moto_antiga or not moto_nova:
         raise Exception('Moto antiga ou nova não encontrada')

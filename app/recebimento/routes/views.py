@@ -431,13 +431,13 @@ def ncm_ibscbs_salvar():
 
         # Verificar se é edição ou novo
         if ncm_id:
-            ncm = NcmIbsCbsValidado.query.get(int(ncm_id))
+            ncm = db.session.get(NcmIbsCbsValidado,int(ncm_id)) if int(ncm_id) else None
             if not ncm:
                 flash('NCM nao encontrado', 'danger')
                 return redirect(url_for('recebimento_views.ncm_ibscbs'))
         else:
             # Verificar se já existe
-            existente = NcmIbsCbsValidado.query.filter_by(ncm_prefixo=ncm_prefixo).first()
+            existente = db.session.query(NcmIbsCbsValidado).filter_by(ncm_prefixo=ncm_prefixo).first()
             if existente:
                 flash(f'NCM {ncm_prefixo} ja cadastrado', 'warning')
                 return redirect(url_for('recebimento_views.ncm_ibscbs'))
@@ -454,7 +454,8 @@ def ncm_ibscbs_salvar():
                 return None
             try:
                 return Decimal(str(val).replace(',', '.'))
-            except:
+            except Exception as e:
+                print(f"[DEBUG] Erro ao converter decimal: {e}")
                 return None
 
         ncm.aliquota_ibs_uf = parse_decimal(request.form.get('aliquota_ibs_uf'))
@@ -487,7 +488,7 @@ def ncm_ibscbs_salvar():
 def ncm_ibscbs_excluir(ncm_id):
     """Exclui (desativa) um cadastro NCM IBS/CBS"""
     try:
-        ncm = NcmIbsCbsValidado.query.get(ncm_id)
+        ncm = db.session.get(NcmIbsCbsValidado,ncm_id) if ncm_id else None
         if not ncm:
             flash('NCM nao encontrado', 'danger')
             return redirect(url_for('recebimento_views.ncm_ibscbs'))
@@ -526,7 +527,7 @@ def pendencias_ibscbs():
     per_page = 20
 
     # Query base
-    query = PendenciaFiscalIbsCbs.query
+    query = db.session.query(PendenciaFiscalIbsCbs)
 
     # Aplicar filtros
     if tipo_doc:
@@ -599,7 +600,7 @@ def pendencias_ibscbs():
 def pendencia_ibscbs_resolver(pendencia_id):
     """Resolve uma pendencia IBS/CBS"""
     try:
-        pendencia = PendenciaFiscalIbsCbs.query.get(pendencia_id)
+        pendencia = db.session.get(PendenciaFiscalIbsCbs,pendencia_id) if pendencia_id else None
         if not pendencia:
             return jsonify({'sucesso': False, 'mensagem': 'Pendencia nao encontrada'}), 404
 
@@ -638,7 +639,7 @@ def pendencia_ibscbs_resolver(pendencia_id):
 @login_required
 def pendencia_ibscbs_detalhes(pendencia_id):
     """Retorna detalhes completos de uma pendencia IBS/CBS"""
-    pendencia = PendenciaFiscalIbsCbs.query.get(pendencia_id)
+    pendencia = db.session.get(PendenciaFiscalIbsCbs,pendencia_id) if pendencia_id else None
     if not pendencia:
         return jsonify({'sucesso': False, 'mensagem': 'Pendencia nao encontrada'}), 404
 
@@ -797,7 +798,8 @@ def ncm_ibscbs_buscar_odoo(prefixo):
                         if classtrib:
                             classtrib_codigo = classtrib[0].get('codigo')
                             classtrib_nome = classtrib[0].get('name')
-                    except:
+                    except Exception as e:
+                        print(f"[DEBUG] Erro ao buscar classificacao tributaria: {e}")
                         classtrib_nome = classtrib_id[1] if len(classtrib_id) > 1 else None
 
             ncms_processados.append({
@@ -952,7 +954,7 @@ def ncm_ibscbs_salvar_ajax():
 
         # Verificar se é edição ou novo
         if ncm_id:
-            ncm = NcmIbsCbsValidado.query.get(int(ncm_id))
+            ncm = db.session.get(NcmIbsCbsValidado,int(ncm_id)) if int(ncm_id) else None
             if not ncm:
                 return jsonify({
                     'sucesso': False,
@@ -960,7 +962,7 @@ def ncm_ibscbs_salvar_ajax():
                 }), 404
         else:
             # Verificar se já existe
-            existente = NcmIbsCbsValidado.query.filter_by(ncm_prefixo=ncm_prefixo).first()
+            existente = db.session.query(NcmIbsCbsValidado).filter_by(ncm_prefixo=ncm_prefixo).first()
             if existente:
                 return jsonify({
                     'sucesso': False,
@@ -974,7 +976,8 @@ def ncm_ibscbs_salvar_ajax():
                 return None
             try:
                 return Decimal(str(val).replace(',', '.'))
-            except:
+            except Exception as e:
+                print(f"[DEBUG] Erro ao converter decimal: {e}")
                 return None
 
         # Atualizar campos
@@ -1071,7 +1074,7 @@ def pendencias_ibscbs_sincronizar():
         resultado['estatisticas']['erros'] = res_job.get('erros', 0)
 
         # 2. Reprocessar pendencias com 'falta_cadastro' para verificar se NCM foi cadastrado
-        pendencias_falta_cadastro = PendenciaFiscalIbsCbs.query.filter_by(
+        pendencias_falta_cadastro = db.session.query(PendenciaFiscalIbsCbs).filter_by(
             status='pendente',
             motivo_pendencia='falta_cadastro'
         ).all()
@@ -1083,7 +1086,7 @@ def pendencias_ibscbs_sincronizar():
                 continue
 
             # Verificar se NCM foi cadastrado
-            ncm = NcmIbsCbsValidado.query.filter_by(
+            ncm = db.session.query(NcmIbsCbsValidado).filter_by(
                 ncm_prefixo=pendencia.ncm_prefixo,
                 ativo=True
             ).first()
@@ -1151,7 +1154,7 @@ def depara_fornecedor():
     }
 
     # Query base
-    query = ProdutoFornecedorDepara.query
+    query = db.session.query(ProdutoFornecedorDepara)
 
     # Aplicar filtros
     if filtros['cnpj']:
@@ -1301,7 +1304,7 @@ def divergencias_nf_po():
 
         # Buscar dados da validacao (numero_nf, data_nf)
         if div.validacao_id:
-            validacao = ValidacaoNfPoDfe.query.get(div.validacao_id)
+            validacao = db.session.get(ValidacaoNfPoDfe,div.validacao_id) if div.validacao_id else None
             if validacao:
                 item['numero_nf'] = validacao.numero_nf
                 item['data_nf'] = validacao.data_nf
@@ -1310,7 +1313,7 @@ def divergencias_nf_po():
         # Buscar dados do match (qtd, preco, um)
         match_encontrado = False
         if div.odoo_dfe_line_id and div.validacao_id:
-            match = MatchNfPoItem.query.filter_by(
+            match = db.session.query(MatchNfPoItem).filter_by(
                 validacao_id=div.validacao_id,
                 odoo_dfe_line_id=div.odoo_dfe_line_id
             ).first()
@@ -1324,7 +1327,7 @@ def divergencias_nf_po():
         # Se nao encontrou match, buscar qualquer match da mesma validacao
         # com o mesmo codigo de produto fornecedor
         if not match_encontrado and div.validacao_id and div.cod_produto_fornecedor:
-            match = MatchNfPoItem.query.filter_by(
+            match = db.session.query(MatchNfPoItem).filter_by(
                 validacao_id=div.validacao_id,
                 cod_produto_fornecedor=div.cod_produto_fornecedor
             ).first()
@@ -1358,7 +1361,7 @@ def divergencias_nf_po():
                         ['id', 'det_prod_qcom', 'det_prod_vuncom', 'det_prod_ucom']
                     )
                     # Mapear por ID
-                    lines_map = {l['id']: l for l in lines} if lines else {}
+                    lines_map = {line['id']: line for line in lines} if lines else {}
 
                     for item in itens_para_buscar:
                         line_id = item.get('_odoo_dfe_line_id')
@@ -1379,9 +1382,9 @@ def divergencias_nf_po():
 
     # Estatisticas
     stats = {
-        'pendente': DivergenciaNfPo.query.filter_by(status='pendente').count(),
-        'aprovada': DivergenciaNfPo.query.filter_by(status='aprovada').count(),
-        'rejeitada': DivergenciaNfPo.query.filter_by(status='rejeitada').count()
+        'pendente': db.session.query(DivergenciaNfPo).filter_by(status='pendente').count(),
+        'aprovada': db.session.query(DivergenciaNfPo).filter_by(status='aprovada').count(),
+        'rejeitada': db.session.query(DivergenciaNfPo).filter_by(status='rejeitada').count()
     }
 
     # Tipos de divergencia para filtro
@@ -1423,7 +1426,7 @@ def historico_aprovacoes_nf_po():
     Tela de historico de aprovacoes/rejeicoes de divergencias NF x PO.
     Mostra apenas divergencias ja resolvidas (aprovadas ou rejeitadas).
     """
-    from app.recebimento.models import DivergenciaNfPo, ValidacaoNfPoDfe, MatchNfPoItem
+    from app.recebimento.models import DivergenciaNfPo, ValidacaoNfPoDfe
 
     # Filtros
     filtros = {
@@ -1519,7 +1522,7 @@ def historico_aprovacoes_nf_po():
 
         # Buscar dados da validacao (numero_nf)
         if div.validacao_id:
-            validacao = ValidacaoNfPoDfe.query.get(div.validacao_id)
+            validacao = db.session.get(ValidacaoNfPoDfe,div.validacao_id) if div.validacao_id else None
             if validacao:
                 item['numero_nf'] = validacao.numero_nf
                 item['data_nf'] = validacao.data_nf
@@ -1528,11 +1531,11 @@ def historico_aprovacoes_nf_po():
 
     # Estatisticas
     stats = {
-        'total': DivergenciaNfPo.query.filter(
+        'total': db.session.query(DivergenciaNfPo).filter(
             DivergenciaNfPo.status.in_(['aprovada', 'rejeitada'])
         ).count(),
-        'aprovada': DivergenciaNfPo.query.filter_by(status='aprovada').count(),
-        'rejeitada': DivergenciaNfPo.query.filter_by(status='rejeitada').count()
+        'aprovada': db.session.query(DivergenciaNfPo).filter_by(status='aprovada').count(),
+        'rejeitada': db.session.query(DivergenciaNfPo).filter_by(status='rejeitada').count()
     }
 
     # Usuarios que resolveram (para filtro)
@@ -1592,7 +1595,7 @@ def validacoes_nf_po():
     }
 
     # Query base
-    query = ValidacaoNfPoDfe.query
+    query = db.session.query(ValidacaoNfPoDfe)
 
     # Aplicar filtros
     if filtros['status']:
@@ -1613,10 +1616,10 @@ def validacoes_nf_po():
 
     # Estatisticas
     stats = {
-        'pendente': ValidacaoNfPoDfe.query.filter_by(status='pendente').count(),
-        'aprovado': ValidacaoNfPoDfe.query.filter_by(status='aprovado').count(),
-        'bloqueado': ValidacaoNfPoDfe.query.filter_by(status='bloqueado').count(),
-        'consolidado': ValidacaoNfPoDfe.query.filter_by(status='consolidado').count()
+        'pendente': db.session.query(ValidacaoNfPoDfe).filter_by(status='pendente').count(),
+        'aprovado': db.session.query(ValidacaoNfPoDfe).filter_by(status='aprovado').count(),
+        'bloqueado': db.session.query(ValidacaoNfPoDfe).filter_by(status='bloqueado').count(),
+        'consolidado': db.session.query(ValidacaoNfPoDfe).filter_by(status='consolidado').count()
     }
 
     # Status para filtro
@@ -1660,7 +1663,7 @@ def preview_consolidacao(validacao_id):
     from app.recebimento.services.odoo_po_service import OdooPoService
 
     # Buscar validacao
-    validacao = ValidacaoNfPoDfe.query.get(validacao_id)
+    validacao = db.session.get(ValidacaoNfPoDfe,validacao_id) if validacao_id else None
     if not validacao:
         flash('Validacao nao encontrada', 'danger')
         return redirect(url_for('recebimento_views.validacoes_nf_po'))
@@ -1670,7 +1673,7 @@ def preview_consolidacao(validacao_id):
         return redirect(url_for('recebimento_views.validacoes_nf_po'))
 
     # Buscar matches
-    matches = MatchNfPoItem.query.filter_by(validacao_id=validacao_id).all()
+    matches = db.session.query(MatchNfPoItem).filter_by(validacao_id=validacao_id).all()
 
     # Simular consolidacao para obter preview das acoes
     try:

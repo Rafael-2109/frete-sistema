@@ -14,8 +14,8 @@ import os
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from app import create_app, db
-from app.pedidos.integracao_odoo.models import RegistroPedidoOdoo, PedidoImportacaoTemp
+from app import create_app, db # noqa: E402
+from app.pedidos.integracao_odoo.models import RegistroPedidoOdoo, PedidoImportacaoTemp # noqa: E402
 
 
 def main():
@@ -29,7 +29,7 @@ def main():
     app = create_app()
     with app.app_context():
         # Busca importação
-        importacao = PedidoImportacaoTemp.query.get(importacao_id)
+        importacao = db.session.get(PedidoImportacaoTemp,importacao_id) if importacao_id else None
         if not importacao:
             print(f"❌ Importação {importacao_id} não encontrada")
             sys.exit(1)
@@ -41,7 +41,7 @@ def main():
         print(f"📄 Documento: {importacao.numero_documento}")
 
         # Busca pedidos criados dessa importação
-        registros = RegistroPedidoOdoo.query.filter_by(
+        registros = db.session.query(RegistroPedidoOdoo).filter_by(
             rede=importacao.rede,
             numero_documento=importacao.numero_documento,
             status_odoo='SUCESSO'

@@ -436,7 +436,7 @@ class VerificacaoSendasService:
         # Atualizar EntregaMonitorada.reagendar para False
         if entregas_atualizadas:
             for entrega_id in entregas_atualizadas:
-                entrega = EntregaMonitorada.query.get(entrega_id)
+                entrega = db.session.get(EntregaMonitorada,entrega_id) if entrega_id else None
                 if entrega:
                     entrega.reagendar = False
                     # Também atualizar data_agenda se necessário

@@ -96,7 +96,7 @@ def devolver_moto_individual(chassi, documento_devolucao, observacao_adicional=N
     Raises:
         Exception: Se moto não estiver avariada ou não existir
     """
-    moto = Moto.query.get(chassi)
+    moto = db.session.get(Moto,chassi) if chassi else None
 
     if not moto:
         raise Exception(f'Moto {chassi} não encontrada')

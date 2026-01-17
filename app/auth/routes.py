@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, session
+from flask import Blueprint, render_template, redirect, url_for, flash, session, abort
 from flask_login import login_user, logout_user, login_required, current_user
 from datetime import datetime
 import logging
@@ -15,7 +15,7 @@ auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 def login():
     form = LoginForm()
     if form.validate_on_submit():
-        usuario = Usuario.query.filter_by(email=form.email.data).first()
+        usuario = db.session.query(Usuario).filter_by(email=form.email.data).first()
         if usuario and usuario.verificar_senha(form.senha.data):
             if usuario.is_approved:
                 # Atualizar último login
@@ -50,7 +50,7 @@ def registro():
     form = RegistroForm()
     if form.validate_on_submit():
         # Verificar se email já existe
-        usuario_existente = Usuario.query.filter_by(email=form.email.data).first()
+        usuario_existente = db.session.query(Usuario).filter_by(email=form.email.data).first()
         if usuario_existente:
             flash('Este e-mail já está cadastrado.', 'danger')
             return render_template('auth/registro.html', form=form, sistema='logistica')
@@ -83,7 +83,7 @@ def registro_motochefe():
     form = RegistroForm()
     if form.validate_on_submit():
         # Verificar se email já existe
-        usuario_existente = Usuario.query.filter_by(email=form.email.data).first()
+        usuario_existente = db.session.query(Usuario).filter_by(email=form.email.data).first()
         if usuario_existente:
             flash('Este e-mail já está cadastrado.', 'danger')
             return render_template('auth/registro.html', form=form, sistema='motochefe')
@@ -118,7 +118,7 @@ def usuarios_pendentes():
         flash('Acesso negado.', 'danger')
         return redirect(url_for('main.dashboard'))
     
-    usuarios = Usuario.query.filter_by(status='pendente').order_by(Usuario.criado_em.desc()).all()
+    usuarios = db.session.query(Usuario).filter_by(status='pendente').order_by(Usuario.criado_em.desc()).all()
     return render_template('auth/usuarios_pendentes.html', usuarios=usuarios)
 
 @auth_bp.route('/usuarios/<int:user_id>/aprovar', methods=['GET', 'POST'])
@@ -129,7 +129,9 @@ def aprovar_usuario(user_id):
         flash('Acesso negado.', 'danger')
         return redirect(url_for('main.dashboard'))
     
-    usuario = Usuario.query.get_or_404(user_id)
+    usuario = db.session.get(Usuario,user_id)
+    if not usuario:
+        abort(404)
     form = AprovarUsuarioForm()
     
     # Carregar lista de vendedores para vinculação
@@ -163,7 +165,9 @@ def rejeitar_usuario(user_id):
         flash('Acesso negado.', 'danger')
         return redirect(url_for('main.dashboard'))
     
-    usuario = Usuario.query.get_or_404(user_id)
+    usuario = db.session.get(Usuario,user_id)
+    if not usuario:
+        abort(404)
     form = RejeitarUsuarioForm()
     
     if form.validate_on_submit():
@@ -182,7 +186,7 @@ def listar_usuarios():
         flash('Acesso negado.', 'danger')
         return redirect(url_for('main.dashboard'))
     
-    usuarios = Usuario.query.order_by(Usuario.criado_em.desc()).all()
+    usuarios = db.session.query(Usuario).order_by(Usuario.criado_em.desc()).all()
     return render_template('auth/listar_usuarios.html', usuarios=usuarios)
 
 @auth_bp.route('/usuarios/<int:user_id>/editar', methods=['GET', 'POST'])
@@ -193,7 +197,9 @@ def editar_usuario(user_id):
         flash('Acesso negado.', 'danger')
         return redirect(url_for('main.dashboard'))
     
-    usuario = Usuario.query.get_or_404(user_id)
+    usuario = db.session.get(Usuario,user_id)
+    if not usuario:
+        abort(404)
     form = EditarUsuarioForm()
     
     # Carregar lista de vendedores

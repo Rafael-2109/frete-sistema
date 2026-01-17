@@ -400,7 +400,7 @@ def register_lista_materiais_routes(bp):
             }
         """
         try:
-            componente = ListaMateriais.query.get(id)
+            componente = db.session.get(ListaMateriais,id) if id else None
 
             if not componente:
                 return jsonify({
@@ -487,7 +487,7 @@ def register_lista_materiais_routes(bp):
             }
         """
         try:
-            componente = ListaMateriais.query.get(id)
+            componente = db.session.get(ListaMateriais,id) if id else None
 
             if not componente:
                 return jsonify({

@@ -55,7 +55,7 @@ if "postgres" in os.getenv("DATABASE_URL", ""):
 # 🔧 IMPORTANTE: Registrar tipos PostgreSQL ANTES de criar SQLAlchemy
 # Isso garante que todas as conexões usem os tipos corretos
 try:
-    import psycopg2
+    import psycopg2 # type: ignore
     from psycopg2 import extensions
 
     # Registrar tipos PostgreSQL globalmente
@@ -83,7 +83,7 @@ try:
 
     # Importar também o módulo de configuração se existir
     try:
-        from app.utils.pg_types_config import registrar_tipos_postgresql 
+        from app.utils.pg_types_config import registrar_tipos_postgresql #type: ignore
 
         print("✅ Módulo pg_types_config também importado")
     except Exception:
@@ -305,7 +305,7 @@ def create_app(config_name=None):
         from app.utils.logging_config import log_request_info, log_system_status, log_error, logger
 
         @app.before_request
-        def before_request():
+        def before_request(): # pyright: ignore[reportUnusedFunction]
             """Monitora o início das requisições"""
             g.start_time = time.time()
 
@@ -314,7 +314,7 @@ def create_app(config_name=None):
                 log_request_info(request)
 
         @app.after_request
-        def after_request(response):
+        def after_request(response): # pyright: ignore[reportUnusedFunction]
             """Monitora o fim das requisições"""
             if hasattr(g, "start_time"):
                 duration = time.time() - g.start_time
@@ -349,7 +349,7 @@ def create_app(config_name=None):
             return response
 
         @app.errorhandler(404)
-        def handle_404(error):
+        def handle_404(error): # pyright: ignore[reportUnusedFunction]
             """Captura erros 404 - não loga favicon e outros recursos estáticos"""
             if request.path.endswith(".ico") or request.path.startswith("/static"):
                 # Não loga erros para favicon e arquivos estáticos
@@ -359,13 +359,13 @@ def create_app(config_name=None):
                 return "Página não encontrada", 404
 
         @app.errorhandler(500)
-        def handle_500(error):
+        def handle_500(error): # pyright: ignore[reportUnusedFunction]
             """Captura erros 500 e faz log detalhado"""
             log_error(error, f"Erro 500 em {request.path}")
             return "Erro interno do servidor", 500
 
         @app.errorhandler(Exception)
-        def handle_exception(error):
+        def handle_exception(error): # pyright: ignore[reportUnusedFunction]
             """Captura qualquer exceção não tratada"""
             # Evita logar erros 404 como exceções críticas
             if hasattr(error, "code") and error.code == 404:
@@ -623,7 +623,7 @@ def create_app(config_name=None):
     def load_user(user_id):
         from app.auth.models import Usuario
 
-        return Usuario.query.get(int(user_id))
+        return db.session.get(Usuario,int(user_id)) if user_id else None
 
     # Registra comandos CLI apenas se existirem
     try:

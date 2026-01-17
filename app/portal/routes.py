@@ -584,8 +584,8 @@ def solicitar_agendamento_nf():
         # 🔟 ATUALIZAR EntregaMonitorada e criar AgendamentoEntrega
         if resultado.get('success'):
             # Buscar novamente após execução
-            entrega_monitorada = EntregaMonitorada.query.filter_by(numero_nf=numero_nf).first()
-            integracao = PortalIntegracao.query.get(integracao_id)
+            entrega_monitorada = db.session.query(EntregaMonitorada).filter_by(numero_nf=numero_nf).first()
+            integracao = db.session.get(PortalIntegracao,integracao_id) if integracao_id else None
             
             if entrega_monitorada and integracao:
                 # Atualizar data_agenda em EntregaMonitorada
@@ -879,7 +879,7 @@ def executar_agendamento_portal(integracao_id):
     try:
         # Buscar integração e extrair dados necessários ANTES de fechar a conexão
         try:
-            integracao = PortalIntegracao.query.get(integracao_id)
+            integracao = db.session.get(PortalIntegracao,integracao_id) if integracao_id else None
             if not integracao:
                 return {'success': False, 'message': 'Integração não encontrada'}
             
@@ -961,7 +961,7 @@ def executar_agendamento_portal(integracao_id):
                     from app.separacao.models import Separacao
                     
                     # Buscar integração novamente (sessão foi removida mas não fechada)
-                    integracao = PortalIntegracao.query.get(integracao_id)
+                    integracao = db.session.get(PortalIntegracao,integracao_id) if integracao_id else None
                     if integracao:
                         # Atualizar integração
                         integracao.protocolo = resultado.get('protocolo') 
@@ -969,7 +969,7 @@ def executar_agendamento_portal(integracao_id):
                         integracao.resposta_portal = resultado
                     
                     # IMPORTANTE: Atualizar também os campos na tabela Separacao!
-                    separacoes = Separacao.query.filter_by(
+                    separacoes = db.session.query(Separacao).filter_by(
                         separacao_lote_id=lote_id
                     ).all()
                     
@@ -1019,7 +1019,7 @@ def executar_agendamento_portal(integracao_id):
                     }
                 else:
                     # Erro no agendamento - reabrir sessão para salvar erro
-                    integracao = PortalIntegracao.query.get(integracao_id)
+                    integracao = db.session.get(PortalIntegracao,integracao_id) if integracao_id else None
                     if integracao:
                         integracao.status = 'erro'
                         integracao.ultimo_erro = resultado.get('message') if resultado else 'Erro desconhecido'
@@ -1045,7 +1045,7 @@ def executar_agendamento_portal(integracao_id):
                 try:
                     db.session.rollback()
                     # Buscar integração novamente
-                    integracao = PortalIntegracao.query.get(integracao_id)
+                    integracao = db.session.get(PortalIntegracao,integracao_id) if integracao_id else None
                     if integracao:
                         integracao.status = 'erro'
                         integracao.ultimo_erro = str(e)

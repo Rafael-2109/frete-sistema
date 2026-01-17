@@ -1191,7 +1191,7 @@ def reverter_avaria_lote():
 
         for chassi in chassis_list:
             try:
-                moto = Moto.query.get(chassi)
+                moto = db.session.get(Moto,chassi) if chassi else None
                 if not moto:
                     erros.append(f'{chassi}: Não encontrada')
                     continue
@@ -1251,7 +1251,7 @@ def voltar_avaria_lote():
 
         for chassi in chassis_list:
             try:
-                moto = Moto.query.get(chassi)
+                moto = db.session.get(Moto,chassi) if chassi else None
                 if not moto:
                     erros.append(f'{chassi}: Não encontrada')
                     continue

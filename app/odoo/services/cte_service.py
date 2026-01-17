@@ -832,8 +832,8 @@ class CteService:
             bool: True se vinculado com sucesso
         """
         try:
-            cte = ConhecimentoTransporte.query.get(cte_id)
-            frete = Frete.query.get(frete_id)
+            cte = db.session.get(ConhecimentoTransporte,cte_id) if cte_id else None
+            frete = db.session.get(Frete,frete_id) if frete_id else None
 
             if not cte or not frete:
                 return False

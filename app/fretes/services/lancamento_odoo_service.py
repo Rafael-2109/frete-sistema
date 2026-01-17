@@ -289,7 +289,7 @@ class LancamentoOdooService:
             True se rollback foi executado, False caso contrário
         """
         try:
-            frete = Frete.query.get(frete_id)
+            frete = db.session.get(Frete,frete_id) if frete_id else None
             if not frete:
                 return False
 
@@ -719,7 +719,7 @@ class LancamentoOdooService:
 
         try:
             # Buscar frete
-            frete = Frete.query.get(frete_id)
+            frete = db.session.get(Frete,frete_id) if frete_id else None
             if not frete:
                 raise ValueError(f"Frete ID {frete_id} não encontrado")
 
@@ -735,7 +735,7 @@ class LancamentoOdooService:
             )
 
             # Buscar CTe
-            cte = ConhecimentoTransporte.query.filter_by(chave_acesso=cte_chave).first()
+            cte = db.session.query(ConhecimentoTransporte).filter_by(chave_acesso=cte_chave).first()
             cte_id = cte.id if cte else None
 
             # ========================================
@@ -1715,13 +1715,13 @@ class LancamentoOdooService:
                 # 🔧 CORREÇÃO 17/12/2025: Re-buscar frete e CTe com sessão NOVA
                 # A sessão original pode ter expirado durante as operações longas no Odoo
                 current_app.logger.info(f"🔄 Re-buscando frete #{frete_id} para atualização final...")
-                frete = Frete.query.get(frete_id)
+                frete = db.session.get(Frete,frete_id) if frete_id else None
                 if not frete:
                     raise ValueError(f"Frete ID {frete_id} não encontrado na ETAPA 16")
 
                 # Re-buscar CTe também se existia
                 if cte_id:
-                    cte = ConhecimentoTransporte.query.get(cte_id)
+                    cte = db.session.get(ConhecimentoTransporte,cte_id) if cte_id else None
                     current_app.logger.debug(f"🔄 CTe #{cte_id} re-buscado: {'encontrado' if cte else 'não encontrado'}")
 
                 # Atualizar campos do Frete

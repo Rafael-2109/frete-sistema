@@ -57,7 +57,7 @@ def sincronizar_totais_embarque(embarque_ou_id):
     try:
         # Resolve embarque
         if isinstance(embarque_ou_id, int):
-            embarque = Embarque.query.get(embarque_ou_id)
+            embarque = db.session.get(Embarque,embarque_ou_id) if embarque_ou_id else None
             if not embarque:
                 return {'success': False, 'error': f'Embarque {embarque_ou_id} não encontrado'}
         else:

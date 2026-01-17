@@ -480,7 +480,7 @@ def api_recalcular_estoques_item(item_id):
             }), 400
         
         # Buscar item da carteira
-        item = CarteiraPrincipal.query.get(item_id)
+        item = db.session.get(CarteiraPrincipal,item_id) if item_id else None
         if not item:
             return jsonify({
                 'success': False,

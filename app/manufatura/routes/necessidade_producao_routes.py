@@ -9,13 +9,13 @@ from datetime import datetime
 
 def register_necessidade_producao_routes(bp):
 
-    @bp.route('/necessidade-producao')
+    @bp.route('/necessidade-producao') # type: ignore
     @login_required
     def necessidade_producao():
         """Tela de análise de necessidade de produção"""
         return render_template('manufatura/necessidade_producao/index.html')
 
-    @bp.route('/api/necessidade-producao/calcular')
+    @bp.route('/api/necessidade-producao/calcular') # type: ignore
     @login_required
     def calcular_necessidade():
         """Calcula necessidade de produção por produto"""
@@ -42,7 +42,7 @@ def register_necessidade_producao_routes(bp):
             logging.error(f"[NECESSIDADE] Erro ao calcular: {str(e)}")
             return jsonify({'erro': str(e)}), 500
 
-    @bp.route('/api/necessidade-producao/projecao-estoque')
+    @bp.route('/api/necessidade-producao/projecao-estoque') # type: ignore
     @login_required
     def projecao_estoque():
         """Retorna projeção de estoque D0-D60 para um produto"""
@@ -63,7 +63,7 @@ def register_necessidade_producao_routes(bp):
             logging.error(f"[PROJECAO] Erro ao calcular: {str(e)}")
             return jsonify({'erro': str(e)}), 500
 
-    @bp.route('/api/necessidade-producao/projecoes-batch', methods=['POST'])
+    @bp.route('/api/necessidade-producao/projecoes-batch', methods=['POST']) # type: ignore
     @login_required
     def projecoes_batch():
         """
@@ -124,7 +124,7 @@ def register_necessidade_producao_routes(bp):
             logging.error(f"[PROJECOES BATCH] Erro: {str(e)}", exc_info=True)
             return jsonify({'erro': str(e)}), 500
 
-    @bp.route('/api/necessidade-producao/programar', methods=['POST'])
+    @bp.route('/api/necessidade-producao/programar', methods=['POST']) # type: ignore
     @login_required
     def programar_producao():
         """Programa produção para um produto"""
@@ -154,7 +154,7 @@ def register_necessidade_producao_routes(bp):
             logging.error(f"[PROGRAMAR] Erro ao programar: {str(e)}")
             return jsonify({'erro': str(e)}), 500
 
-    @bp.route('/api/necessidade-producao/separacoes')
+    @bp.route('/api/necessidade-producao/separacoes') # type: ignore
     @login_required
     def listar_separacoes():
         """Lista separações (sincronizado_nf=False) de um produto"""
@@ -228,7 +228,7 @@ def register_necessidade_producao_routes(bp):
                     'status': sep.status,
                     'observ_ped_1': sep.observ_ped_1
                 })
-                por_dia[dia_key]['saidas'] += float(sep.qtd_saldo) if sep.qtd_saldo else 0
+                por_dia[dia_key]['saidas'] += float(sep.qtd_saldo) if sep.qtd_saldo else 0 # type: ignore # noqa: E127
 
             # Calcular estoque acumulado dia a dia
             # ✅ CORREÇÃO: Filtrar apenas dias com data válida (ignorar 'sem_data')
@@ -263,10 +263,10 @@ def register_necessidade_producao_routes(bp):
 
                 # Saldo final = estoque inicial + entradas - saídas
                 por_dia[dia]['saldo_final'] = (
-                    por_dia[dia]['estoque_inicial'] +
-                    por_dia[dia]['entradas'] -
-                    por_dia[dia]['saidas']
-                )
+                    por_dia[dia]['estoque_inicial'] + # type: ignore # noqa: E127
+                    por_dia[dia]['entradas'] - # type: ignore # noqa: E127
+                    por_dia[dia]['saidas'] # type: ignore # noqa: E127
+                ) # type: ignore # noqa: E127
 
                 # Atualizar saldo acumulado para próxima iteração
                 saldo_acumulado = por_dia[dia]['saldo_final']
@@ -293,7 +293,7 @@ def register_necessidade_producao_routes(bp):
             logging.error(f"[SEPARACOES] Traceback: {traceback.format_exc()}")
             return jsonify({'erro': str(e)}), 500
 
-    @bp.route('/api/necessidade-producao/separacao-detalhes')
+    @bp.route('/api/necessidade-producao/separacao-detalhes') # type: ignore
     @login_required
     def detalhes_separacao():
         """
@@ -304,7 +304,6 @@ def register_necessidade_producao_routes(bp):
             from app.separacao.models import Separacao
             from app.embarques.models import Embarque, EmbarqueItem
             from app.transportadoras.models import Transportadora
-            from sqlalchemy import func
 
             separacao_lote_id = request.args.get('separacao_lote_id')
             if not separacao_lote_id:
@@ -322,7 +321,7 @@ def register_necessidade_producao_routes(bp):
             sep_principal = separacoes[0]
 
             # ✅ Buscar dados de embarque via EmbarqueItem
-            embarque_item = EmbarqueItem.query.filter(
+            embarque_item = db.session.query(EmbarqueItem).filter(
                 EmbarqueItem.separacao_lote_id == separacao_lote_id,
                 EmbarqueItem.status == 'ativo'
             ).first()
@@ -331,7 +330,7 @@ def register_necessidade_producao_routes(bp):
             transportadora_info = None
 
             if embarque_item:
-                embarque = Embarque.query.get(embarque_item.embarque_id)
+                embarque = db.session.get(Embarque,embarque_item.embarque_id) if embarque_item.embarque_id else None
                 if embarque and embarque.status != 'cancelado':
                     embarque_info = {
                         'numero': embarque.numero,
@@ -342,7 +341,7 @@ def register_necessidade_producao_routes(bp):
 
                     # Buscar transportadora
                     if embarque.transportadora_id:
-                        transportadora = Transportadora.query.get(embarque.transportadora_id)
+                        transportadora = db.session.get(Transportadora,embarque.transportadora_id) if embarque.transportadora_id else None
                         if transportadora:
                             transportadora_info = {
                                 'nome': transportadora.nome,
@@ -401,7 +400,7 @@ def register_necessidade_producao_routes(bp):
             logging.error(f"[DETALHES] Traceback: {traceback.format_exc()}")
             return jsonify({'erro': str(e)}), 500
 
-    @bp.route('/api/necessidade-producao/autocomplete-produtos')
+    @bp.route('/api/necessidade-producao/autocomplete-produtos') # type: ignore
     @login_required
     def autocomplete_produtos():
         """Autocomplete para busca de produtos por código ou nome"""
@@ -437,7 +436,7 @@ def register_necessidade_producao_routes(bp):
             logging.error(f"[AUTOCOMPLETE] Erro: {str(e)}")
             return jsonify({'erro': str(e)}), 500
 
-    @bp.route('/api/necessidade-producao/filtros-opcoes')
+    @bp.route('/api/necessidade-producao/filtros-opcoes') # type: ignore
     @login_required
     def filtros_opcoes():
         """Retorna opções disponíveis para filtros de select"""
@@ -504,7 +503,7 @@ def register_necessidade_producao_routes(bp):
             logging.error(f"[FILTROS] Erro: {str(e)}")
             return jsonify({'erro': str(e)}), 500
 
-    @bp.route('/api/necessidade-producao/recursos-produtivos')
+    @bp.route('/api/necessidade-producao/recursos-produtivos') # type: ignore
     @login_required
     def recursos_produtivos():
         """Retorna dados para modal de Recursos Produtivos"""
@@ -661,7 +660,7 @@ def register_necessidade_producao_routes(bp):
             logging.error(f"[RECURSOS] Erro ao buscar recursos produtivos: {str(e)}")
             return jsonify({'erro': str(e)}), 500
 
-    @bp.route('/api/necessidade-producao/bom-recursiva-estoque')
+    @bp.route('/api/necessidade-producao/bom-recursiva-estoque') # type: ignore
     @login_required
     def bom_recursiva_estoque():
         """Retorna estrutura de produto (BOM) recursiva com estoque e projeção D0-D60 dos componentes"""
@@ -825,7 +824,7 @@ def register_necessidade_producao_routes(bp):
             logging.error(f"[BOM RECURSIVA] Traceback: {traceback.format_exc()}")
             return jsonify({'erro': str(e)}), 500
 
-    @bp.route('/api/necessidade-producao/adicionar-programacao', methods=['POST'])
+    @bp.route('/api/necessidade-producao/adicionar-programacao', methods=['POST']) # type: ignore
     @login_required
     def adicionar_programacao():
         """Adiciona uma nova programação de produção"""
@@ -905,7 +904,7 @@ def register_necessidade_producao_routes(bp):
             logging.error(f"[ADICIONAR PROGRAMACAO] Traceback: {traceback.format_exc()}")
             return jsonify({'erro': str(e)}), 500
 
-    @bp.route('/api/necessidade-producao/editar-programacao/<int:programacao_id>', methods=['PUT'])
+    @bp.route('/api/necessidade-producao/editar-programacao/<int:programacao_id>', methods=['PUT']) # type: ignore
     @login_required
     def editar_programacao(programacao_id):
         """Edita uma programação de produção existente"""
@@ -914,7 +913,7 @@ def register_necessidade_producao_routes(bp):
             from datetime import datetime
 
             # Buscar programação
-            programacao = ProgramacaoProducao.query.get(programacao_id)
+            programacao = db.session.get(ProgramacaoProducao,programacao_id) if programacao_id else None
             if not programacao:
                 return jsonify({'erro': 'Programação não encontrada'}), 404
 
@@ -963,7 +962,7 @@ def register_necessidade_producao_routes(bp):
             logging.error(f"[EDITAR PROGRAMACAO] Traceback: {traceback.format_exc()}")
             return jsonify({'erro': str(e)}), 500
 
-    @bp.route('/api/necessidade-producao/excluir-programacao/<int:programacao_id>', methods=['DELETE'])
+    @bp.route('/api/necessidade-producao/excluir-programacao/<int:programacao_id>', methods=['DELETE']) # type: ignore
     @login_required
     def excluir_programacao(programacao_id):
         """Exclui uma programação de produção"""
@@ -971,7 +970,7 @@ def register_necessidade_producao_routes(bp):
             from app.producao.models import ProgramacaoProducao
 
             # Buscar programação
-            programacao = ProgramacaoProducao.query.get(programacao_id)
+            programacao = db.session.get(ProgramacaoProducao,programacao_id) if programacao_id else None
             if not programacao:
                 return jsonify({'erro': 'Programação não encontrada'}), 404
 

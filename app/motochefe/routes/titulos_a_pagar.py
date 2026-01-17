@@ -158,7 +158,7 @@ def pagar_lote_titulos_a_pagar():
             titulo_id = int(item['id'])
             valor = Decimal(item['valor'])
 
-            titulo = TituloAPagar.query.get(titulo_id)
+            titulo = db.session.get(TituloAPagar,titulo_id) if titulo_id else None
             if titulo and titulo.pode_pagar:
                 pagar_titulo_a_pagar(
                     titulo,

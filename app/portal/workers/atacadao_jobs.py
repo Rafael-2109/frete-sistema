@@ -42,7 +42,7 @@ def processar_agendamento_atacadao(integracao_id, dados_agendamento):
             logger.info(f"[Worker] Iniciando processamento do agendamento {integracao_id}")
             
             # Buscar integração no banco
-            integracao = PortalIntegracao.query.get(integracao_id)
+            integracao = db.session.get(PortalIntegracao,integracao_id) if integracao_id else None
             if not integracao:
                 raise ValueError(f"Integração {integracao_id} não encontrada")
             
@@ -113,7 +113,7 @@ def processar_agendamento_atacadao(integracao_id, dados_agendamento):
                 if resultado.get('protocolo'):
                     # Importar modelo Pedido
                     
-                    separacoes = Separacao.query.filter_by(
+                    separacoes = db.session.query(Separacao).filter_by(
                         separacao_lote_id=dados_agendamento.get('lote_id')
                     ).all()
                     
@@ -148,7 +148,7 @@ def processar_agendamento_atacadao(integracao_id, dados_agendamento):
                     if data_agendamento_convertida:
                         update_data['agendamento'] = data_agendamento_convertida
 
-                    Separacao.query.filter_by(
+                    db.session.query(Separacao).filter_by(
                         separacao_lote_id=dados_agendamento.get('lote_id')
                     ).update(update_data)
 
@@ -193,7 +193,7 @@ def processar_agendamento_atacadao(integracao_id, dados_agendamento):
             
             # Atualizar integração com erro
             try:
-                integracao = PortalIntegracao.query.get(integracao_id)
+                integracao = db.session.get(PortalIntegracao,integracao_id) if integracao_id else None
                 if integracao:
                     integracao.status = 'erro'
                     integracao.resposta_portal = {'error': str(e)}
@@ -273,13 +273,14 @@ def reprocessar_integracao_erro(integracao_id):
     """
     from app import create_app
     from app.portal.models import PortalIntegracao
+    from app import db
     
     app = create_app()
     
     with app.app_context():
         try:
             # Buscar integração
-            integracao = PortalIntegracao.query.get(integracao_id)
+            integracao = db.session.get(PortalIntegracao,integracao_id) if integracao_id else None
             if not integracao:
                 raise ValueError(f"Integração {integracao_id} não encontrada")
             

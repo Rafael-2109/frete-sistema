@@ -444,7 +444,7 @@ class CorrecaoDatasService:
         }
 
         for correcao_id in ids:
-            correcao = CorrecaoDataNFCredito.query.get(correcao_id)
+            correcao = db.session.get(CorrecaoDataNFCredito,correcao_id) if correcao_id else None
             if not correcao:
                 resultado['erros'] += 1
                 resultado['detalhes'].append({
@@ -677,7 +677,7 @@ class CorrecaoDatasService:
         try:
             # 1. Buscar registros sem numero_nf
             registros = CorrecaoDataNFCredito.query.filter(
-                (CorrecaoDataNFCredito.numero_nf == None) |
+                (CorrecaoDataNFCredito.numero_nf is None) |
                 (CorrecaoDataNFCredito.numero_nf == '')
             ).all()
 

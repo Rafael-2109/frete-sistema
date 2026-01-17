@@ -198,7 +198,7 @@ def visualizar_embarque(id):
                         continue  # Pula entries vazias (sem ID)
 
                     try:
-                        item_existente = EmbarqueItem.query.get(int(item_id))
+                        item_existente = db.session.get(EmbarqueItem,int(item_id)) if int(item_id) else None
                     except (ValueError, TypeError):
                         print(f"[DEBUG EMBARQUE POST] ID inválido: {item_id}")
                         continue  # ID inválido
@@ -1439,7 +1439,8 @@ def sincronizar_nf_embarque_pedido_completa(embarque_id):
     """
     
     try:
-        embarque = Embarque.query.get(embarque_id)
+        from app import db
+        embarque = db.session.get(Embarque,embarque_id) if embarque_id else None
         if not embarque:
             return False, "Embarque não encontrado"
         
@@ -2001,7 +2002,7 @@ def desvincular_pedido(lote_id):
         if lote_id:
             item_embarque = EmbarqueItem.query.filter_by(separacao_lote_id=lote_id).first()
             if item_embarque:
-                embarque_relacionado = Embarque.query.get(item_embarque.embarque_id)
+                embarque_relacionado = db.session.get(Embarque,item_embarque.embarque_id) if item_embarque.embarque_id else None
                 if embarque_relacionado:
                     embarque_cancelado = embarque_relacionado.status == 'cancelado'
         
@@ -2545,7 +2546,8 @@ def api_sincronizar_totais(embarque_id):
         from app.embarques.services.sync_totais_service import sincronizar_totais_embarque
 
         # Verifica se embarque existe
-        embarque = Embarque.query.get(embarque_id)
+        from app import db
+        embarque = db.session.get(Embarque,embarque_id) if embarque_id else None
         if not embarque:
             return jsonify({
                 'success': False,
@@ -2590,7 +2592,8 @@ def api_gerar_solicitacao_coleta(embarque_id):
         com_endereco = request.args.get('com_endereco', 'false').lower() == 'true'
 
         # Buscar embarque
-        embarque = Embarque.query.get(embarque_id)
+        from app import db
+        embarque = db.session.get(Embarque,embarque_id) if embarque_id else None
         if not embarque:
             return jsonify({
                 'success': False,

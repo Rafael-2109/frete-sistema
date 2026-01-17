@@ -477,7 +477,7 @@ def reprocessar_integracao(integracao_id):
     Reprocessa uma integração que falhou
     """
     try:
-        integracao = PortalIntegracao.query.get(integracao_id)
+        integracao = db.session.get(PortalIntegracao,integracao_id) if integracao_id else None
         
         if not integracao:
             return jsonify({

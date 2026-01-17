@@ -72,12 +72,12 @@ class OdooPoService:
         from app.recebimento.models import MatchNfPoItem
 
         try:
-            validacao = ValidacaoNfPoDfe.query.get(validacao_id)
+            validacao = db.session.get(ValidacaoNfPoDfe,validacao_id) if validacao_id else None
             if not validacao:
                 raise ValueError(f"Validacao {validacao_id} nao encontrada")
 
             # Buscar matches
-            matches = MatchNfPoItem.query.filter_by(
+            matches = db.session.query(MatchNfPoItem).filter_by(
                 validacao_id=validacao_id,
                 status_match='match'
             ).all()
@@ -290,7 +290,7 @@ class OdooPoService:
 
         try:
             # Buscar validacao
-            validacao = ValidacaoNfPoDfe.query.get(validacao_id)
+            validacao = db.session.get(ValidacaoNfPoDfe,validacao_id) if validacao_id else None
             if not validacao:
                 raise ValueError(f"Validacao {validacao_id} nao encontrada")
 
@@ -358,7 +358,7 @@ class OdooPoService:
             # PASSO 3: Para cada item da NF com match
             # =================================================================
             # Buscar matches diretamente da tabela para ter todos os dados
-            matches = MatchNfPoItem.query.filter_by(
+            matches = db.session.query(MatchNfPoItem).filter_by(
                 validacao_id=validacao_id,
                 status_match='match'
             ).all()
@@ -511,7 +511,7 @@ class OdooPoService:
 
             # Atualizar validacao com erro
             try:
-                validacao = ValidacaoNfPoDfe.query.get(validacao_id)
+                validacao = db.session.get(ValidacaoNfPoDfe,validacao_id) if validacao_id else None
                 if validacao:
                     validacao.status = 'erro'
                     validacao.erro_mensagem = str(e)
@@ -1057,7 +1057,7 @@ class OdooPoService:
             Dict com resultado
         """
         try:
-            validacao = ValidacaoNfPoDfe.query.get(validacao_id)
+            validacao = db.session.get(ValidacaoNfPoDfe,validacao_id) if validacao_id else None
             if not validacao:
                 raise ValueError(f"Validacao {validacao_id} nao encontrada")
 

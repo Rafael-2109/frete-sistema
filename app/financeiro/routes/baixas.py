@@ -678,7 +678,7 @@ def baixas_ativar_lote():
         # Atualizar itens que podem ser modificados
         atualizados = 0
         for item_id in ids:
-            item = BaixaTituloItem.query.get(item_id)
+            item = db.session.get(BaixaTituloItem,item_id) if item_id else None
             if item and item.status not in ['SUCESSO', 'PROCESSANDO', 'INVALIDO']:
                 item.ativo = ativo
                 atualizados += 1

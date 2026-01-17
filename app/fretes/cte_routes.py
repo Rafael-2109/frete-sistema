@@ -312,7 +312,7 @@ def _buscar_despesas_para_cte_complementar(cte):
     cte_original_id = cte.cte_complementa_id
 
     for despesa in despesas_candidatas:
-        frete = Frete.query.get(despesa.frete_id)
+        frete = db.session.get(Frete,despesa.frete_id) if despesa.frete_id else None
         if not frete:
             continue
 
@@ -338,7 +338,7 @@ def _buscar_despesas_para_cte_complementar(cte):
         # PRIORIDADE 3: CNPJ cliente + prefixo transportadora
         if not prioridade:
             if (frete.cnpj_cliente and cte.cnpj_destinatario and
-                frete.cnpj_cliente == cte.cnpj_destinatario):
+                frete.cnpj_cliente == cte.cnpj_destinatario): # noqa: E129
                 if frete.transportadora and cte.cnpj_emitente:
                     prefixo_frete = frete.transportadora.cnpj[:8] if frete.transportadora.cnpj else None
                     prefixo_cte = cte.cnpj_emitente[:8] if cte.cnpj_emitente else None

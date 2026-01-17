@@ -907,7 +907,7 @@ def fechar_frete():
         
         if alterando_embarque:
             embarque_id = alterando_embarque.get('embarque_id')
-            embarque_existente = Embarque.query.get(embarque_id)
+            embarque_existente = db.session.get(Embarque,embarque_id) if embarque_id else None
             
             if not embarque_existente:
                 # Remove informação inválida da sessão
@@ -933,7 +933,7 @@ def fechar_frete():
         if not tipo or not transportadora_id or not pedidos_data:
             return jsonify({'success': False, 'message': 'Dados incompletos'}), 400
 
-        transportadora = Transportadora.query.get(transportadora_id)
+        transportadora = db.session.get(Transportadora,transportadora_id) if transportadora_id else None
         if not transportadora:
             return jsonify({'success': False, 'message': 'Transportadora não encontrada'}), 404
 
@@ -1157,7 +1157,7 @@ def fechar_frete():
             # Limpa dados antigos de cotação (conforme solicitado)
             cotacao_antiga = None
             if embarque_existente.cotacao_id:
-                cotacao_antiga = Cotacao.query.get(embarque_existente.cotacao_id)
+                cotacao_antiga = db.session.get(Cotacao,embarque_existente.cotacao_id) if embarque_existente.cotacao_id else None
             
             # Atualiza dados básicos do embarque
             embarque_existente.transportadora_id = transportadora_id
@@ -1546,7 +1546,7 @@ def fechar_frete_grupo():
         if not transportadora_id or not cnpjs:
             return jsonify({'success': False, 'message': 'Dados incompletos'}), 400
 
-        transportadora = Transportadora.query.get(transportadora_id)
+        transportadora = db.session.get(Transportadora,transportadora_id) if transportadora_id else None
         if not transportadora:
             return jsonify({'success': False, 'message': 'Transportadora não encontrada'}), 404
 
@@ -2545,7 +2545,7 @@ def calcular_frete_otimizacao_conservadora(pedidos):
             for item in dados:
                 tabela = item['tabela']
                 cidade_id = item['cidade_id']
-                cidade = Cidade.query.get(cidade_id)
+                cidade = db.session.get(Cidade,cidade_id) if cidade_id else None
                 
                 if not cidade:
                     continue

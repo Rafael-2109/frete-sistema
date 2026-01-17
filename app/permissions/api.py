@@ -157,7 +157,7 @@ def get_user_vendors(user_id):
         vendedores_salvos = []
         for uv in user_vendors_obj:
             if uv.vendedor_id:
-                vendedor = Vendedor.query.get(uv.vendedor_id)
+                vendedor = db.session.get(Vendedor,uv.vendedor_id) if uv.vendedor_id else None
                 if vendedor:
                     vendedores_salvos.append(vendedor.nome)
             elif uv.observacoes:
@@ -221,7 +221,7 @@ def get_user_teams(user_id):
         equipes_salvas = []
         for ue in user_teams_obj:
             if ue.equipe_id:
-                equipe = EquipeVendas.query.get(ue.equipe_id)
+                equipe = db.session.get(EquipeVendas,ue.equipe_id) if ue.equipe_id else None
                 if equipe:
                     equipes_salvas.append(equipe.nome)
             elif ue.observacoes:
@@ -284,7 +284,7 @@ def update_user_vendors_teams(user_id):
         
         # Adicionar novos vendedores
         for vendor_name in vendor_names:
-            vendedor = Vendedor.query.filter_by(nome=vendor_name).first()
+            vendedor = db.session.query(Vendedor).filter_by(nome=vendor_name).first()
             
             if vendedor:
                 uv = UserVendedor(

@@ -208,7 +208,8 @@ def lancar_frete_job(
             # ========================================
             # VALIDAÇÃO 1: Frete existe?
             # ========================================
-            frete = Frete.query.get(frete_id)
+            from app import db
+            frete = db.session.get(Frete,frete_id) if frete_id else None
             if not frete:
                 resultado['error'] = f"Frete ID {frete_id} não encontrado"
                 resultado['error_type'] = 'FRETE_NAO_ENCONTRADO'
@@ -237,7 +238,7 @@ def lancar_frete_job(
 
             if cte_chave:
                 # CTe informado explicitamente
-                cte = ConhecimentoTransporte.query.filter_by(chave_acesso=cte_chave).first()
+                cte = db.session.query(ConhecimentoTransporte).filter_by(chave_acesso=cte_chave).first()
                 if cte:
                     logger.info(f"✅ [Job Frete] CTe informado: {cte.numero_cte}")
                 else:
@@ -252,7 +253,7 @@ def lancar_frete_job(
 
                 # PRIORIDADE 1: CTe vinculado explicitamente
                 if frete.frete_cte_id:
-                    cte = frete.cte or ConhecimentoTransporte.query.get(frete.frete_cte_id)
+                    cte = frete.cte or db.session.get(ConhecimentoTransporte,frete.frete_cte_id) if frete.frete_cte_id else None
                     if cte:
                         cte_chave = cte.chave_acesso
                         logger.info(f"✅ [Job Frete] Usando CTe VINCULADO: {cte.numero_cte}")
@@ -414,7 +415,8 @@ def lancar_despesa_job(
             # ========================================
             # VALIDAÇÃO 1: Despesa existe?
             # ========================================
-            despesa = DespesaExtra.query.get(despesa_id)
+            from app import db
+            despesa = db.session.get(DespesaExtra,despesa_id) if despesa_id else None
             if not despesa:
                 resultado['error'] = f"Despesa Extra ID {despesa_id} não encontrada"
                 resultado['error_type'] = 'DESPESA_NAO_ENCONTRADA'
@@ -569,11 +571,12 @@ def lancar_lote_job(
         with _app_context_safe():
             from app.fretes.models import FaturaFrete, Frete, DespesaExtra
             from app.portal.workers import enqueue_job
+            from app import db
 
             # ========================================
             # VALIDAÇÃO: Fatura existe?
             # ========================================
-            fatura = FaturaFrete.query.get(fatura_frete_id)
+            fatura = db.session.get(FaturaFrete,fatura_frete_id) if fatura_frete_id else None
             if not fatura:
                 resultado['error'] = f"Fatura de Frete ID {fatura_frete_id} não encontrada"
                 resultado['error_type'] = 'FATURA_NAO_ENCONTRADA'
@@ -584,7 +587,7 @@ def lancar_lote_job(
             # ========================================
             # BUSCAR FRETES DA FATURA (excluir já lançados)
             # ========================================
-            fretes = Frete.query.filter_by(fatura_frete_id=fatura_frete_id).filter(
+            fretes = db.session.query(Frete).filter_by(fatura_frete_id=fatura_frete_id).filter(
                 Frete.status != 'LANCADO_ODOO'
             ).all()
             resultado['total_fretes'] = len(fretes)
@@ -593,7 +596,7 @@ def lancar_lote_job(
             # ========================================
             # BUSCAR DESPESAS DA FATURA (excluir já lançadas)
             # ========================================
-            despesas = DespesaExtra.query.filter_by(fatura_frete_id=fatura_frete_id).filter(
+            despesas = db.session.query(DespesaExtra).filter_by(fatura_frete_id=fatura_frete_id).filter(
                 DespesaExtra.status != 'LANCADO_ODOO'
             ).all()
             resultado['total_despesas'] = len(despesas)
@@ -702,9 +705,9 @@ def lancar_lote_job(
             resultado['tempo_total_segundos'] = tempo_total
 
             total_enfileirados = sum(1 for j in resultado['jobs_fretes'] if j.get('job_id')) + \
-                                 sum(1 for j in resultado['jobs_despesas'] if j.get('job_id')) # type: ignore 
+                                 sum(1 for j in resultado['jobs_despesas'] if j.get('job_id')) # type: ignore # noqa: E127
             total_erros = sum(1 for j in resultado['jobs_fretes'] if j.get('status') == 'erro') + \
-                          sum(1 for j in resultado['jobs_despesas'] if j.get('status') == 'erro') # type: ignore
+                          sum(1 for j in resultado['jobs_despesas'] if j.get('status') == 'erro') # type: ignore # noqa: E127
 
             resultado['success'] = (total_erros == 0 and total_enfileirados > 0)
 

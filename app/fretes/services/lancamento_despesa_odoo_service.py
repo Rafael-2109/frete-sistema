@@ -142,7 +142,7 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
             True se rollback foi executado, False caso contrário
         """
         try:
-            despesa = DespesaExtra.query.get(despesa_id)
+            despesa = db.session.get(DespesaExtra,despesa_id) if despesa_id else None
             if not despesa:
                 return False
 
@@ -395,7 +395,7 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
 
         try:
             # Buscar despesa
-            despesa = DespesaExtra.query.get(despesa_id)
+            despesa = db.session.get(DespesaExtra,despesa_id) if despesa_id else None
             if not despesa:
                 raise ValueError(f"Despesa Extra ID {despesa_id} não encontrada")
 
@@ -425,7 +425,7 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
             )
 
             # Buscar CTe
-            cte = ConhecimentoTransporte.query.get(despesa_cte_id)
+            cte = db.session.get(ConhecimentoTransporte,despesa_cte_id) if despesa_cte_id else None
             if not cte:
                 raise ValueError(f"CTe #{despesa_cte_id} não encontrado")
 

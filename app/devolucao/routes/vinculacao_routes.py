@@ -164,7 +164,8 @@ def api_obter_nfd(nfd_id: int):
     GET /devolucao/vinculacao/api/<nfd_id>
     """
     try:
-        nfd = NFDevolucao.query.get(nfd_id)
+        from app import db
+        nfd = db.session.get(NFDevolucao,nfd_id) if nfd_id else None
 
         if not nfd:
             return jsonify({
@@ -253,7 +254,8 @@ def api_listar_nfs_referenciadas(nfd_id: int):
     GET /devolucao/vinculacao/api/<nfd_id>/nfs-referenciadas
     """
     try:
-        nfd = NFDevolucao.query.get(nfd_id)
+        from app import db
+        nfd = db.session.get(NFDevolucao,nfd_id) if nfd_id else None
         if not nfd:
             return jsonify({
                 'sucesso': False,
@@ -311,7 +313,8 @@ def api_adicionar_nf_referenciada(nfd_id: int):
             }), 400
 
         # Verificar se NFD existe
-        nfd = NFDevolucao.query.get(nfd_id)
+        from app import db
+        nfd = db.session.get(NFDevolucao,nfd_id) if nfd_id else None
         if not nfd:
             return jsonify({
                 'sucesso': False,

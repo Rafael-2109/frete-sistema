@@ -844,7 +844,7 @@ def gerar_template_frete():
             import io
             
             # Busca dados da transportadora
-            transportadora = Transportadora.query.get(form.transportadora.data)
+            transportadora = db.session.get(Transportadora,form.transportadora.data) if form.transportadora.data else None
             if not transportadora:
                 flash('Transportadora não encontrada', 'error')
                 return render_template('tabelas/gerar_template_frete.html', form=form)

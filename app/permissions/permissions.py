@@ -195,7 +195,7 @@ def filter_by_user_data(query, model):
             equipe_nomes = []
             for ut in user_teams:
                 if ut.equipe_id:
-                    equipe = EquipeVendas.query.get(ut.equipe_id)
+                    equipe = db.session.get(EquipeVendas,ut.equipe_id) if ut.equipe_id else None
                     if equipe:
                         equipe_nomes.append(equipe.nome)
                 if ut.observacoes:  # Nome salvo no campo observacoes

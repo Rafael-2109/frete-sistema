@@ -2,12 +2,9 @@
 Métodos auxiliares para cálculos reais do BI
 """
 from app import db
-from datetime import datetime, date, timedelta
-from sqlalchemy import func, and_, or_, case, distinct, cast, Integer
+from sqlalchemy import func, and_, case, distinct, cast, Integer
 from app.fretes.models import Frete, DespesaExtra
-from app.embarques.models import Embarque, EmbarqueItem
-from app.separacao.models import Separacao
-from app.pedidos.models import Pedido
+from app.embarques.models import Embarque # type: ignore
 import logging
 
 logger = logging.getLogger(__name__)
@@ -298,7 +295,7 @@ class BiCalculosReais:
             
             if resultado:
                 from app.transportadoras.models import Transportadora
-                transp = Transportadora.query.get(resultado.transportadora_id)
+                transp = db.session.get(Transportadora,resultado.transportadora_id) if resultado.transportadora_id else None
                 if transp:
                     return {
                         'id': transp.id,
@@ -427,7 +424,7 @@ class BiCalculosReais:
             # Busca nome das transportadoras e calcula percentual
             top_transportadoras = []
             for r in resultados:
-                transp = Transportadora.query.get(r.transportadora_id)
+                transp = db.session.get(Transportadora,r.transportadora_id) if r.transportadora_id else None
                 if transp:
                     # Calcula valor total de fretes da transportadora
                     valor_fretes = db.session.query(

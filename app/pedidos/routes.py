@@ -1075,7 +1075,7 @@ def toggle_falta_item(item_id):
     API para alternar o status de falta_item de um item da separação
     """
     try:
-        item = Separacao.query.get(item_id)
+        item = db.session.get(Separacao,item_id) if item_id else None
 
         if not item:
             return jsonify({
@@ -1271,7 +1271,7 @@ def excluir_pedido(lote_id):
             if lote_id:
                 item_embarque = EmbarqueItem.query.filter_by(separacao_lote_id=lote_id).first()
                 if item_embarque:
-                    embarque_relacionado = Embarque.query.get(item_embarque.embarque_id)
+                    embarque_relacionado = db.session.get(Embarque,item_embarque.embarque_id) if item_embarque.embarque_id else None
             
             # Se o embarque estiver cancelado, limpa os vínculos órfãos
             if embarque_relacionado and embarque_relacionado.status == 'cancelado':
@@ -1823,7 +1823,7 @@ def processar_cotacao_manual():
         else:
             # Se são IDs numéricos, buscar por num_pedido
             pedidos = Pedido.query.filter(Pedido.num_pedido.in_([str(id) for id in lista_ids])).all()
-        transportadora = Transportadora.query.get(transportadora_id)
+        transportadora = db.session.get(Transportadora,transportadora_id) if transportadora_id else None
 
         if not pedidos or not transportadora:
             flash("Dados não encontrados!", "error")

@@ -10,12 +10,11 @@ Arquitetura:
 - Quando SDK expira, injeta histórico de mensagens como contexto
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import List, Dict, Any, Optional, Tuple
 import uuid
 
 from app import db
-
 
 # Constante para limite de mensagens no contexto
 MAX_MESSAGES_IN_CONTEXT = 50  # Últimas N mensagens enviadas ao SDK
@@ -535,5 +534,3 @@ class AgentMemory(db.Model):
 
         memory.path = new_path
         return True
-
-

@@ -204,7 +204,7 @@ class DocumentoService:
 
                 embarque = None
                 if embarque_item and embarque_item.status == 'ativo':
-                    embarque = Embarque.query.get(embarque_item.embarque_id)
+                    embarque = db.session.get(Embarque,embarque_item.embarque_id) if embarque_item.embarque_id else None
 
                 # Montar dados da NF
                 nf_data = {
@@ -244,7 +244,7 @@ class DocumentoService:
                     nome_transportadora = embarque.transportadora.razao_social or '-'
                     cnpj_transportadora = embarque.transportadora.cnpj or ''
                 elif embarque and embarque.transportadora_id:
-                    transp = Transportadora.query.get(embarque.transportadora_id)
+                    transp = db.session.get(Transportadora,embarque.transportadora_id) if embarque.transportadora_id else None
                     if transp:
                         nome_transportadora = transp.razao_social or '-'
                         cnpj_transportadora = transp.cnpj or ''
@@ -321,12 +321,12 @@ class DocumentoService:
                 ).first()
 
                 if embarque_item:
-                    embarque = Embarque.query.get(embarque_item.embarque_id)
+                    embarque = db.session.get(Embarque,embarque_item.embarque_id) if embarque_item.embarque_id else None
                     if embarque and getattr(embarque, 'transportadora', None):
                         transportadora_nome = embarque.transportadora.razao_social or '-'
                         transportadora_cnpj = embarque.transportadora.cnpj or ''
                     elif embarque and embarque.transportadora_id:
-                        transp = Transportadora.query.get(embarque.transportadora_id)
+                        transp = db.session.get(Transportadora,embarque.transportadora_id) if embarque.transportadora_id else None
                         if transp:
                             transportadora_nome = transp.razao_social or '-'
                             transportadora_cnpj = transp.cnpj or ''

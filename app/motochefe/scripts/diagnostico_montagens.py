@@ -7,10 +7,9 @@ import os
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 
-from app import create_app, db
-from app.motochefe.models import PedidoVendaMotoItem
-from app.motochefe.models.financeiro import TituloAPagar
-from sqlalchemy import text
+from app import create_app, db # noqa: E402
+from app.motochefe.models import PedidoVendaMotoItem # noqa: E402
+from app.motochefe.models.financeiro import TituloAPagar # noqa: E402
 
 def diagnosticar_montagens():
     app = create_app()
@@ -23,7 +22,7 @@ def diagnosticar_montagens():
         # 1. Verificar item ID 26 especificamente
         print("\n1. INVESTIGANDO ITEM ID 26:")
         print("-" * 80)
-        item_26 = PedidoVendaMotoItem.query.get(26)
+        item_26 = db.session.get(PedidoVendaMotoItem,26) if 26 else None
         if item_26:
             print(f"✅ Item encontrado:")
             print(f"   - ID: {item_26.id}")
@@ -35,7 +34,7 @@ def diagnosticar_montagens():
             print(f"   - Fornecedor Montagem: {item_26.fornecedor_montagem}")
 
             # Buscar TituloAPagar correspondente
-            titulo_pagar = TituloAPagar.query.filter_by(
+            titulo_pagar = db.session.query(TituloAPagar).filter_by(
                 pedido_id=item_26.pedido_id,
                 numero_chassi=item_26.numero_chassi,
                 tipo='MONTAGEM'
@@ -76,14 +75,14 @@ def diagnosticar_montagens():
         print("-" * 80)
 
         # Buscar todos os itens com montagem contratada
-        itens_com_montagem = PedidoVendaMotoItem.query.filter_by(
+        itens_com_montagem = db.session.query(PedidoVendaMotoItem).filter_by(
             montagem_contratada=True
         ).all()
 
         dessincronias = []
 
         for item in itens_com_montagem:
-            titulo = TituloAPagar.query.filter_by(
+            titulo = db.session.query(TituloAPagar).filter_by(
                 pedido_id=item.pedido_id,
                 numero_chassi=item.numero_chassi,
                 tipo='MONTAGEM'
@@ -130,7 +129,7 @@ def diagnosticar_montagens():
         print("\n3. TÍTULOS A PAGAR EXIBIDOS EM CONTAS A PAGAR:")
         print("-" * 80)
 
-        titulos_visiveis = TituloAPagar.query.filter(
+        titulos_visiveis = db.session.query(TituloAPagar).filter(
             TituloAPagar.tipo == 'MONTAGEM',
             TituloAPagar.status.in_(['ABERTO', 'PARCIAL'])
         ).all()
@@ -138,7 +137,7 @@ def diagnosticar_montagens():
         print(f"Total de títulos visíveis: {len(titulos_visiveis)}\n")
 
         for titulo in titulos_visiveis[:10]:  # Mostrar apenas 10 primeiros
-            item = PedidoVendaMotoItem.query.filter_by(
+            item = db.session.query(PedidoVendaMotoItem).filter_by(
                 pedido_id=titulo.pedido_id,
                 numero_chassi=titulo.numero_chassi
             ).first()

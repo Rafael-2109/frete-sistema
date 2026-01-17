@@ -88,7 +88,7 @@ class ExtratoMatchingService:
         Returns:
             Dict com estatísticas do matching
         """
-        lote = ExtratoLote.query.get(lote_id)
+        lote = db.session.get(ExtratoLote,lote_id) if lote_id else None
         if not lote:
             raise ValueError(f"Lote {lote_id} não encontrado")
 
@@ -513,7 +513,7 @@ class ExtratoMatchingService:
         """
         Vincula manualmente um título A RECEBER ao item de extrato.
         """
-        titulo = ContasAReceber.query.get(titulo_id)
+        titulo = db.session.get(ContasAReceber,titulo_id) if titulo_id else None
         if not titulo:
             raise ValueError(f"Título {titulo_id} não encontrado")
 
@@ -595,7 +595,7 @@ class ExtratoMatchingService:
             TituloModel = ContasAReceber
 
         for t in titulos:
-            titulo = TituloModel.query.get(t['titulo_id'])
+            titulo = db.session.get(TituloModel,t['titulo_id']) if t['titulo_id'] else None
             if not titulo:
                 raise ValueError(f"Título {t['titulo_id']} não encontrado")
 

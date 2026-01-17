@@ -393,7 +393,7 @@ class AtualizadorPesoService:
                     from app.transportadoras.models import Transportadora
 
                     # Buscar transportadora para pegar configurações
-                    transportadora = Transportadora.query.get(frete.transportadora_id)
+                    transportadora = db.session.get(Transportadora,frete.transportadora_id) if frete.transportadora_id else None
 
                     if not transportadora:
                         logger.warning(f"    ⚠️ Transportadora {frete.transportadora_id} não encontrada")

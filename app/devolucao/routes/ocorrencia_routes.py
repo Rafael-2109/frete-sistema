@@ -337,7 +337,7 @@ def detalhe(ocorrencia_id):
             # Buscar entrega monitorada vinculada ou por numero da NF
             entrega_ref = None
             if ref.entrega_monitorada_id:
-                entrega_ref = EntregaMonitorada.query.get(ref.entrega_monitorada_id)
+                entrega_ref = db.session.get(EntregaMonitorada,ref.entrega_monitorada_id) if ref.entrega_monitorada_id else None
             elif ref.numero_nf:
                 # Buscar por numero da NF
                 entrega_ref = EntregaMonitorada.query.filter_by(
@@ -424,7 +424,7 @@ def api_atualizar_logistica(ocorrencia_id):
     }
     """
     try:
-        ocorrencia = OcorrenciaDevolucao.query.get(ocorrencia_id)
+        ocorrencia = db.session.get(OcorrenciaDevolucao,ocorrencia_id) if ocorrencia_id else None
         if not ocorrencia:
             return jsonify({'sucesso': False, 'erro': 'Ocorrencia nao encontrada'}), 404
 
@@ -442,7 +442,7 @@ def api_atualizar_logistica(ocorrencia_id):
             # Buscar nome da transportadora
             if data['transportadora_retorno_id']:
                 from app.transportadoras.models import Transportadora
-                transp = Transportadora.query.get(data['transportadora_retorno_id'])
+                transp = db.session.get(Transportadora,data['transportadora_retorno_id']) if data['transportadora_retorno_id'] else None
                 if transp:
                     ocorrencia.transportadora_retorno_nome = transp.razao_social
 
@@ -503,7 +503,7 @@ def api_atualizar_comercial(ocorrencia_id):
     }
     """
     try:
-        ocorrencia = OcorrenciaDevolucao.query.get(ocorrencia_id)
+        ocorrencia = db.session.get(OcorrenciaDevolucao,ocorrencia_id) if ocorrencia_id else None
         if not ocorrencia:
             return jsonify({'sucesso': False, 'erro': 'Ocorrencia nao encontrada'}), 404
 
@@ -570,7 +570,7 @@ def api_obter_ocorrencia(ocorrencia_id):
     Obtem dados de uma ocorrencia
     """
     try:
-        ocorrencia = OcorrenciaDevolucao.query.get(ocorrencia_id)
+        ocorrencia = db.session.get(OcorrenciaDevolucao,ocorrencia_id) if ocorrencia_id else None
         if not ocorrencia:
             return jsonify({'sucesso': False, 'erro': 'Ocorrencia nao encontrada'}), 404
 
@@ -647,7 +647,7 @@ def api_upload_anexo(ocorrencia_id):
     from werkzeug.utils import secure_filename
 
     try:
-        ocorrencia = OcorrenciaDevolucao.query.get(ocorrencia_id)
+        ocorrencia = db.session.get(OcorrenciaDevolucao,ocorrencia_id) if ocorrencia_id else None
         if not ocorrencia:
             return jsonify({'sucesso': False, 'erro': 'Ocorrencia nao encontrada'}), 404
 
@@ -844,7 +844,7 @@ def download_xml(nfd_id):
     import os
 
     try:
-        nfd = NFDevolucao.query.get(nfd_id)
+        nfd = db.session.get(NFDevolucao,nfd_id) if nfd_id else None
         if not nfd:
             return jsonify({'sucesso': False, 'erro': 'NFD nao encontrada'}), 404
 
@@ -900,7 +900,7 @@ def download_pdf(nfd_id):
     import os
 
     try:
-        nfd = NFDevolucao.query.get(nfd_id)
+        nfd = db.session.get(NFDevolucao,nfd_id) if nfd_id else None
         if not nfd:
             return jsonify({'sucesso': False, 'erro': 'NFD nao encontrada'}), 404
 
@@ -961,7 +961,9 @@ def api_comparar_nf_venda(ocorrencia_id):
     try:
         from app.faturamento.models import FaturamentoProduto
 
-        ocorrencia = OcorrenciaDevolucao.query.get_or_404(ocorrencia_id)
+        ocorrencia = db.session.get(OcorrenciaDevolucao,ocorrencia_id) if ocorrencia_id else None
+        if not ocorrencia:
+            return jsonify({'sucesso': False, 'erro': 'Ocorrencia nao encontrada'}), 404
         nfd = ocorrencia.nf_devolucao
 
         if not nfd:

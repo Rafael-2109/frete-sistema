@@ -514,7 +514,7 @@ def lancar_cte():
 
         # Se há um frete selecionado pelo usuário, prepara para processamento
         if frete_selecionado_id:
-            frete_para_processar = Frete.query.get(frete_selecionado_id)
+            frete_para_processar = db.session.get(Frete,frete_selecionado_id) if frete_selecionado_id else None
             if not frete_para_processar:
                 flash("Frete selecionado não encontrado!", "error")
                 return redirect(url_for("fretes.lancar_cte"))
@@ -1016,7 +1016,7 @@ def lancar_frete_odoo(frete_id):
 
             # Se relationship falhar, buscar explicitamente pelo ID
             if not cte:
-                cte = ConhecimentoTransporte.query.get(frete.frete_cte_id)
+                cte = db.session.get(ConhecimentoTransporte,frete.frete_cte_id) if frete.frete_cte_id else None
 
             if cte:
                 chave_cte = cte.chave_acesso
@@ -1791,7 +1791,7 @@ def conferir_fatura(fatura_id):
         # ✅ Identifica se despesa tem fatura vinculada via FK
         cliente_obs = "Despesa Extra"
         if despesa.fatura_frete_id:
-            fatura_vinculada_obj = FaturaFrete.query.get(despesa.fatura_frete_id)
+            fatura_vinculada_obj = db.session.get(FaturaFrete,despesa.fatura_frete_id) if despesa.fatura_frete_id else None
             if fatura_vinculada_obj:
                 cliente_obs = f"Despesa Extra (Fatura: {fatura_vinculada_obj.numero_fatura})"
 
@@ -2539,12 +2539,12 @@ def confirmar_despesa_extra():
         flash("Despesa não encontrada. Reinicie o processo.", "error")
         return redirect(url_for("fretes.nova_despesa_extra_por_nf"))
 
-    despesa = DespesaExtra.query.get(despesa_id)
+    despesa = db.session.get(DespesaExtra,despesa_id) if despesa_id else None
     if not despesa:
         flash("Despesa não encontrada no banco.", "error")
         return redirect(url_for("fretes.nova_despesa_extra_por_nf"))
 
-    frete = Frete.query.get(despesa_data["frete_id"])
+    frete = db.session.get(Frete,despesa_data["frete_id"]) if despesa_data["frete_id"] else None
     if not frete:
         flash("Frete não encontrado!", "error")
         return redirect(url_for("fretes.nova_despesa_extra_por_nf"))
@@ -2622,7 +2622,7 @@ def selecionar_fatura_despesa():
         flash("Dados da despesa não encontrados. Reinicie o processo.", "error")
         return redirect(url_for("fretes.nova_despesa_extra_por_nf"))
 
-    frete = Frete.query.get(despesa_data["frete_id"])
+    frete = db.session.get(Frete,despesa_data["frete_id"]) if despesa_data["frete_id"] else None
     if not frete:
         flash("Frete não encontrado!", "error")
         return redirect(url_for("fretes.nova_despesa_extra_por_nf"))
@@ -2650,7 +2650,7 @@ def selecionar_fatura_despesa():
 
         try:
             # Busca a fatura selecionada
-            fatura = FaturaFrete.query.get(fatura_id)
+            fatura = db.session.get(FaturaFrete,fatura_id) if fatura_id else None
             if not fatura:
                 flash("Fatura não encontrada!", "error")
                 return render_template(
@@ -3129,12 +3129,12 @@ def lancar_frete_automatico(embarque_id, cnpj_cliente, usuario="Sistema"):
         if not pode_lancar:
             return False, motivo
 
-        embarque = Embarque.query.get(embarque_id)
+        embarque = db.session.get(Embarque,embarque_id) if embarque_id else None
         if not embarque:
             return False, "Embarque não encontrado"
 
         # ✅ NOVA VALIDAÇÃO: Se transportadora for "FOB - COLETA", não gera frete
-        transportadora = Transportadora.query.get(embarque.transportadora_id)
+        transportadora = db.session.get(Transportadora,embarque.transportadora_id) if embarque.transportadora_id else None
         if transportadora and transportadora.razao_social == "FOB - COLETA":
             return (
                 True,
@@ -3408,7 +3408,7 @@ def validar_cnpj_embarque_faturamento(embarque_id):
     try:
         from app.faturamento.models import RelatorioFaturamentoImportado
 
-        embarque = Embarque.query.get(embarque_id)
+        embarque = db.session.get(Embarque,embarque_id) if embarque_id else None
         if not embarque:
             return False, "Embarque não encontrado"
 
@@ -3513,7 +3513,7 @@ def processar_lancamento_automatico_fretes(embarque_id=None, cnpj_cliente=None, 
 
         if embarque_id:
             # Cenário 1: Embarque foi salvo
-            embarque = Embarque.query.get(embarque_id)
+            embarque = db.session.get(Embarque,embarque_id) if embarque_id else None
             if not embarque:
                 return False, "Embarque não encontrado"
 
@@ -3710,7 +3710,7 @@ def gerenciar_despesas_extras():
 def vincular_despesa_fatura(despesa_id):
     """Vincula uma despesa extra existente a uma fatura"""
     despesa = DespesaExtra.query.get_or_404(despesa_id)
-    frete = Frete.query.get(despesa.frete_id)
+    frete = db.session.get(Frete,despesa.frete_id) if despesa.frete_id else None
 
     # ✅ ALTERADO: Busca TODAS as faturas disponíveis (não só da mesma transportadora)
     # Permite vincular despesas extras a faturas de qualquer transportadora
@@ -3735,7 +3735,7 @@ def vincular_despesa_fatura(despesa_id):
 
         try:
             # Busca a fatura selecionada
-            fatura = FaturaFrete.query.get(fatura_id)
+            fatura = db.session.get(FaturaFrete,fatura_id) if fatura_id else None
             if not fatura:
                 flash("Fatura não encontrada!", "error")
                 return render_template(
@@ -3794,7 +3794,7 @@ def desvincular_despesa_fatura(despesa_id):
             return redirect(url_for("fretes.gerenciar_despesas_extras"))
 
         # ✅ VALIDAÇÃO CRÍTICA: Bloqueia desvinculação de fatura conferida
-        fatura_vinculada = FaturaFrete.query.get(despesa.fatura_frete_id)
+        fatura_vinculada = db.session.get(FaturaFrete,despesa.fatura_frete_id) if despesa.fatura_frete_id else None
         if fatura_vinculada and fatura_vinculada.status_conferencia == "CONFERIDO":
             flash("❌ Não é possível desvincular despesa de fatura já CONFERIDA!", "error")
             return redirect(url_for("fretes.gerenciar_despesas_extras"))
@@ -4332,9 +4332,9 @@ def emitir_fatura_freteiro(transportadora_id):
             for embarque_id, valor_novo in valores_considerados_embarque.items():
                 # Busca fretes do embarque selecionados
                 fretes_embarque = [
-                    Frete.query.get(int(fid))
+                    db.session.get(Frete,int(fid))
                     for fid in fretes_selecionados
-                    if Frete.query.get(int(fid)) and Frete.query.get(int(fid)).embarque_id == embarque_id
+                    if db.session.get(Frete,int(fid)) and db.session.get(Frete,int(fid)).embarque_id == embarque_id
                 ]
 
                 if fretes_embarque:
@@ -4358,7 +4358,7 @@ def emitir_fatura_freteiro(transportadora_id):
 
             # Processa fretes selecionados
             for frete_id in fretes_selecionados:
-                frete = Frete.query.get(int(frete_id))
+                frete = db.session.get(Frete,int(frete_id)) if int(frete_id) else None
                 if frete and frete.transportadora_id == transportadora_id:
                     # Usa valor rateado se existe, senão usa valor original
                     valor_considerado = (
@@ -4387,7 +4387,7 @@ def emitir_fatura_freteiro(transportadora_id):
 
             # Processa despesas extras selecionadas
             for despesa_id in despesas_selecionadas:
-                despesa = DespesaExtra.query.get(int(despesa_id))
+                despesa = db.session.get(DespesaExtra,int(despesa_id)) if int(despesa_id) else None
                 # ✅ CORRIGIDO: Usa transportadora_efetiva (pode ser diferente do frete)
                 if despesa and despesa.transportadora_efetiva.id == transportadora_id:
                     # 🆕 Usa valor alterado se existir, senão usa valor original
@@ -4431,13 +4431,13 @@ def emitir_fatura_freteiro(transportadora_id):
 
             # Vincula fretes à fatura
             for frete_id in fretes_selecionados:
-                frete = Frete.query.get(int(frete_id))
+                frete = db.session.get(Frete,int(frete_id)) if int(frete_id) else None
                 if frete:
                     frete.fatura_frete_id = nova_fatura.id
 
             # ✅ Vincula despesas à fatura via FK
             for despesa_id in despesas_selecionadas:
-                despesa = DespesaExtra.query.get(int(despesa_id))
+                despesa = db.session.get(DespesaExtra,int(despesa_id)) if int(despesa_id) else None
                 if despesa:
                     despesa.fatura_frete_id = nova_fatura.id
 
@@ -5413,7 +5413,7 @@ def _extract_job_args(job):
             # Tentar buscar dados do frete (fatura)
             if frete_id:
                 try:
-                    frete = Frete.query.get(frete_id)
+                    frete = db.session.get(Frete,frete_id) if frete_id else None
                     if frete:
                         resultado["fatura_numero"] = frete.fatura_frete.numero_fatura if frete.fatura_frete else None
                         resultado["valor_cte"] = float(frete.valor_cte) if frete.valor_cte else None
@@ -5431,7 +5431,7 @@ def _extract_job_args(job):
             # Tentar buscar dados da despesa
             if despesa_id:
                 try:
-                    despesa = DespesaExtra.query.get(despesa_id)
+                    despesa = db.session.get(DespesaExtra,despesa_id) if despesa_id else None
                     if despesa:
                         resultado["tipo_despesa"] = despesa.tipo_despesa
                         resultado["valor"] = float(despesa.valor_despesa) if despesa.valor_despesa else None
@@ -5451,7 +5451,7 @@ def _extract_job_args(job):
             # Tentar buscar dados da fatura
             if fatura_id:
                 try:
-                    fatura = FaturaFrete.query.get(fatura_id)
+                    fatura = db.session.get(FaturaFrete,fatura_id) if fatura_id else None
                     if fatura:
                         resultado["fatura_numero"] = fatura.numero_fatura
                         resultado["transportadora"] = (
@@ -5578,9 +5578,9 @@ def auditoria_lancamentos():
 
         # Buscar frete ou despesa
         if row.frete_id:
-            item["frete"] = Frete.query.get(row.frete_id)
+            item["frete"] = db.session.get(Frete,row.frete_id) if row.frete_id else None
         if row.despesa_extra_id:
-            item["despesa"] = DespesaExtra.query.get(row.despesa_extra_id)
+            item["despesa"] = db.session.get(DespesaExtra,row.despesa_extra_id) if row.despesa_extra_id else None
 
         lancamentos.append(item)
 

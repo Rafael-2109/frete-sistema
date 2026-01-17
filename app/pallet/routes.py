@@ -4,12 +4,12 @@ from datetime import datetime, date, timedelta
 from app import db
 from app.utils.valores_brasileiros import converter_valor_brasileiro
 from app.estoque.models import MovimentacaoEstoque
-from app.embarques.models import Embarque, EmbarqueItem
+from app.embarques.models import Embarque
 from app.transportadoras.models import Transportadora
 from app.cadastros_agendamento.models import ContatoAgendamento
 from app.pallet.models import ValePallet
 from app.pallet.utils import (
-    normalizar_cnpj, raiz_cnpj, buscar_tipo_destinatario,
+    raiz_cnpj, 
     calcular_prazo_cobranca, PRAZO_COBRANCA_SP_RED, PRAZO_COBRANCA_OUTROS
 )
 from sqlalchemy import func, or_
@@ -71,7 +71,7 @@ def calcular_prazo_remessa(remessa) -> int:
     rota = None
     if remessa.codigo_embarque:
         try:
-            embarque = Embarque.query.get(remessa.codigo_embarque)
+            embarque = db.session.get(Embarque,remessa.codigo_embarque) if remessa.codigo_embarque else None
             if embarque and embarque.itens_ativos:
                 # Usar a rota do primeiro item (geralmente todos tem a mesma)
                 for item in embarque.itens_ativos:
@@ -137,7 +137,7 @@ def index():
     vendas_pendentes_vinculo = MovimentacaoEstoque.query.filter(
         MovimentacaoEstoque.local_movimentacao == 'PALLET',
         MovimentacaoEstoque.tipo_movimentacao == 'SAIDA',
-        MovimentacaoEstoque.movimento_baixado_id == None,
+        MovimentacaoEstoque.movimento_baixado_id is None,
         MovimentacaoEstoque.ativo == True
     ).order_by(MovimentacaoEstoque.data_movimentacao.desc()).all()
 

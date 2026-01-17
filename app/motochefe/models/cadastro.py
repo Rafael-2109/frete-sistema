@@ -106,7 +106,7 @@ class EquipeVendasMoto(db.Model):
         from .produto import ModeloMoto
 
         # Buscar preço específico da equipe
-        tabela = TabelaPrecoEquipe.query.filter_by(
+        tabela = db.session.query(TabelaPrecoEquipe).filter_by(
             equipe_vendas_id=self.id,
             modelo_id=modelo_id,
             ativo=True
@@ -116,7 +116,7 @@ class EquipeVendasMoto(db.Model):
             return tabela.preco_venda
 
         # Fallback: usar preco_tabela do modelo
-        modelo = ModeloMoto.query.get(modelo_id)
+        modelo = db.session.get(ModeloMoto,modelo_id) if modelo_id else None
         return modelo.preco_tabela if modelo else Decimal('0')
 
 
@@ -361,7 +361,7 @@ class CrossDocking(db.Model):
         from .produto import ModeloMoto
 
         # Buscar preço específico do CrossDocking
-        tabela = TabelaPrecoCrossDocking.query.filter_by(
+        tabela = db.session.query(TabelaPrecoCrossDocking).filter_by(
             crossdocking_id=self.id,
             modelo_id=modelo_id,
             ativo=True
@@ -371,7 +371,7 @@ class CrossDocking(db.Model):
             return tabela.preco_venda
 
         # Fallback: usar preco_tabela do modelo
-        modelo = ModeloMoto.query.get(modelo_id)
+        modelo = db.session.get(ModeloMoto,modelo_id) if modelo_id else None
         return modelo.preco_tabela if modelo else Decimal('0')
 
 

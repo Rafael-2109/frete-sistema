@@ -1430,7 +1430,7 @@ def extrato_conciliar_multiplos():
         total_erros = 0
 
         for lote_id in lote_ids:
-            lote = ExtratoLote.query.get(lote_id)
+            lote = db.session.get(ExtratoLote,lote_id) if lote_id else None
             if not lote:
                 continue
 

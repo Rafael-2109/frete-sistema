@@ -61,6 +61,7 @@ class PedidoComprasServiceOtimizado:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self.connection = get_odoo_connection()
+        self._fornecedores_cache: Dict[int, Dict] = {}
 
     def sincronizar_pedidos_incremental(
         self,
@@ -410,6 +411,7 @@ class PedidoComprasServiceOtimizado:
         linhas_processadas = 0
         linhas_ignoradas = 0
         pedidos_grupo_ignorados = 0
+        self._fornecedores_cache = fornecedores_cache
 
         for pedido_odoo in pedidos_odoo:
             try:
@@ -585,8 +587,19 @@ class PedidoComprasServiceOtimizado:
         raz_social = None
 
         if partner_id:
-            # TODO: Buscar CNPJ do fornecedor (cache de parceiros)
-            raz_social = partner_id[1] if len(partner_id) > 1 else None
+            parceiro_id = None
+            if isinstance(partner_id, list):
+                parceiro_id = partner_id[0] if partner_id else None
+                raz_social = partner_id[1] if len(partner_id) > 1 else None
+            elif isinstance(partner_id, int):
+                parceiro_id = partner_id
+
+            if parceiro_id:
+                fornecedor = self._fornecedores_cache.get(parceiro_id)
+                if fornecedor:
+                    cnpj_fornecedor = fornecedor.get('l10n_br_cnpj')
+                    if not raz_social:
+                        raz_social = fornecedor.get('name')
 
         # Converter datas
         data_pedido_criacao = None

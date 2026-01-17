@@ -84,14 +84,14 @@ def processar_nf_cd_pedido(entrega_id):
     - Reseta o pedido para permitir nova cotação
     """
     try:
-        entrega = EntregaMonitorada.query.get(entrega_id)
+        entrega = db.session.get(EntregaMonitorada,entrega_id) if entrega_id else None
         if not entrega:
             return False, "Entrega não encontrada"
         
         print(f"[DEBUG] 🔍 Processando NF no CD para NF {entrega.numero_nf}")
         
         # ✅ MÉTODO ULTRA SIMPLIFICADO: Busca pedido diretamente pela NF
-        pedido = Pedido.query.filter_by(nf=entrega.numero_nf).first()
+        pedido = db.session.query(Pedido).filter_by(nf=entrega.numero_nf).first()
         
         if not pedido:
             msg_erro = f"Pedido não encontrado para NF {entrega.numero_nf}"

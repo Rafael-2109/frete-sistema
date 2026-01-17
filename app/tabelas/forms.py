@@ -1,6 +1,7 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, SubmitField, BooleanField, SelectField, FileField, IntegerField, HiddenField
 from wtforms.validators import DataRequired, NumberRange, ValidationError
+from app import db
 
 
 
@@ -14,18 +15,18 @@ class TabelaFreteForm(FlaskForm):
     tipo_carga = SelectField('Tipo de Carga', choices=[('FRACIONADA', 'Fracionada'), ('DIRETA', 'Direta')], validators=[DataRequired()])
     modalidade = SelectField('Modalidade (VALOR, PESO ou Veículo)',
                              choices=[
-        ('FRETE PESO','Frete Peso'),
-        ('FRETE VALOR','Frete Valor'),
-        ('FIORINO','Fiorino'),
-        ('VAN/HR','Van/HR'),
-        ('MASTER','Master'),
-        ('IVECO','Iveco'),
-        ('3/4','3/4'),
-        ('TOCO','Toco'),
-        ('TRUCK','Truck'),
-        ('CARRETA','Carreta')
-        ], validators=[DataRequired()]
-        )
+        ('FRETE PESO','Frete Peso'), # noqa: E122
+        ('FRETE VALOR','Frete Valor'), # noqa: E122
+        ('FIORINO','Fiorino'), # noqa: E122
+        ('VAN/HR','Van/HR'), # noqa: E122
+        ('MASTER','Master'), # noqa: E122
+        ('IVECO','Iveco'), # noqa: E122
+        ('3/4','3/4'), # noqa: E122
+        ('TOCO','Toco'), # noqa: E122
+        ('TRUCK','Truck'), # noqa: E122
+        ('CARRETA','Carreta') # noqa: E122
+        ], validators=[DataRequired()] # noqa: E122
+        ) # noqa: E123
 
     valor_kg = StringField('R$/kg')
     frete_minimo_peso = StringField('Frete Mínimo por Peso')
@@ -68,7 +69,7 @@ class TabelaFreteForm(FlaskForm):
         
         if tabela_existente:
             from app.transportadoras.models import Transportadora
-            transportadora = Transportadora.query.get(self.transportadora.data)
+            transportadora = db.session.get(Transportadora,self.transportadora.data) if self.transportadora.data else None
             raise ValidationError(f'Já existe tabela "{field.data}" para {transportadora.razao_social} com destino {self.uf_destino.data} e modalidade {self.modalidade.data}')
 
 class ImportarTabelaFreteForm(FlaskForm):

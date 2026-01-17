@@ -45,7 +45,7 @@ def validar_saldo(empresa_id, valor_necessario):
     Valida se empresa tem saldo suficiente
     Retorna (bool, mensagem)
     """
-    empresa = EmpresaVendaMoto.query.get(empresa_id)
+    empresa = db.session.get(EmpresaVendaMoto,empresa_id) if empresa_id else None
 
     if not empresa:
         return False, 'Empresa não encontrada'
@@ -64,7 +64,7 @@ def atualizar_saldo(empresa_id, valor, operacao='SOMAR'):
     Atualiza saldo da empresa
     operacao: 'SOMAR' ou 'SUBTRAIR'
     """
-    empresa = EmpresaVendaMoto.query.get(empresa_id)
+    empresa = db.session.get(EmpresaVendaMoto,empresa_id) if empresa_id else None
 
     if not empresa:
         raise Exception(f'Empresa ID {empresa_id} não encontrada')

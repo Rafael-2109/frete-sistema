@@ -20,7 +20,7 @@ import json
 import logging
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
-
+import asyncio
 
 import anthropic
 
@@ -646,7 +646,7 @@ class AIResolverService:
         # UNIDADE (ordem importa - verificar padroes mais especificos primeiro)
         # Inclui: UN, UNI, UNID, UND, PC, BD, BLD, BALDE, SC, SACO, PT, POTE, BL, BA, SH
         if any(u in unidade_upper for u in ['UN', 'UNI', 'PC', 'PECA', 'PÇ', 'BD', 'BALDE', 'BLD',
-                                             'SC', 'SACO', 'PT', 'POTE', 'BL', 'BA', 'SH', 'SACHE']):
+                                             'SC', 'SACO', 'PT', 'POTE', 'BL', 'BA', 'SH', 'SACHE']): # noqa: E127
             return 'UNIDADE'
 
         # PESO
@@ -1105,6 +1105,7 @@ class AIResolverService:
             from app.portal.utils.grupo_empresarial import GrupoEmpresarial
             from app.portal.atacadao.models import ProdutoDeParaAtacadao
             from app.portal.sendas.models import ProdutoDeParaSendas
+            
 
             # =========================================================
             # FASE 1: Busca em lote no De-Para de grupo (Atacadao/Sendas)
@@ -1649,14 +1650,12 @@ class AIResolverService:
         Returns:
             Dict com estatisticas e resultados
         """
-        import asyncio
         import time
         from app.devolucao.models import NFDevolucao
-        from app.producao.models import CadastroPalletizacao
 
         try:
             tempo_inicio = time.time()
-            nfd = NFDevolucao.query.get(nfd_id)
+            nfd = db.session.get(NFDevolucao,nfd_id) if nfd_id else None
             if not nfd:
                 return {'sucesso': False, 'erro': 'NFD nao encontrada'}
 

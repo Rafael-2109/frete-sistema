@@ -59,7 +59,7 @@ def calcular_fretes_possiveis(
 
     # Busca cidade usando a função unificada
     if cidade_destino_id:
-        cidade = Cidade.query.get(cidade_destino_id)
+        cidade = db.session.get(Cidade,cidade_destino_id) if cidade_destino_id else None
         if not cidade:
             return []
         # ✅ CARREGA DADOS DA CIDADE IMEDIATAMENTE PARA EVITAR PROBLEMAS DE SESSÃO

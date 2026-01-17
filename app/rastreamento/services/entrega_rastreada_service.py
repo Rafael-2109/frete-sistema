@@ -30,7 +30,7 @@ class EntregaRastreadaService:
         Returns:
             list: Lista de EntregaRastreada criadas
         """
-        embarque = Embarque.query.get(embarque_id)
+        embarque = db.session.get(Embarque,embarque_id) if embarque_id else None
         if not embarque or not embarque.itens:
             current_app.logger.warning(f"Embarque {embarque_id} não tem itens para criar entregas rastreadas")
             return []
@@ -39,7 +39,7 @@ class EntregaRastreadaService:
 
         for idx, item in enumerate(embarque.itens_ativos, start=1):
             # Buscar dados completos da carteira
-            pedido_carteira = CarteiraPrincipal.query.filter_by(
+            pedido_carteira = db.session.query(CarteiraPrincipal).filter_by(
                 num_pedido=item.pedido
             ).first()
 
@@ -156,7 +156,7 @@ class EntregaRastreadaService:
         Returns:
             list: Lista de dicts com {'entrega': EntregaRastreada, 'distancia': float}
         """
-        rastreamento = RastreamentoEmbarque.query.get(rastreamento_id)
+        rastreamento = db.session.get(RastreamentoEmbarque,rastreamento_id) if rastreamento_id else None
         if not rastreamento:
             return []
 
@@ -215,7 +215,7 @@ class EntregaRastreadaService:
         Returns:
             list: Lista de EntregaRastreada pendentes
         """
-        rastreamento = RastreamentoEmbarque.query.get(rastreamento_id)
+        rastreamento = db.session.get(RastreamentoEmbarque,rastreamento_id) if rastreamento_id else None
         if not rastreamento:
             return []
 
@@ -234,7 +234,7 @@ class EntregaRastreadaService:
         Returns:
             bool: True se todas concluídas, False caso contrário
         """
-        rastreamento = RastreamentoEmbarque.query.get(rastreamento_id)
+        rastreamento = db.session.get(RastreamentoEmbarque,rastreamento_id) if rastreamento_id else None
         if not rastreamento:
             return False
 
@@ -255,7 +255,7 @@ class EntregaRastreadaService:
         Returns:
             dict: Estatísticas {total, entregues, pendentes, proximas}
         """
-        rastreamento = RastreamentoEmbarque.query.get(rastreamento_id)
+        rastreamento = db.session.get(RastreamentoEmbarque,rastreamento_id) if rastreamento_id else None
         if not rastreamento:
             return {'total': 0, 'entregues': 0, 'pendentes': 0, 'proximas': 0}
 

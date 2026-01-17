@@ -2,7 +2,7 @@ from app import db
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
-from sqlalchemy.orm import validates
+from sqlalchemy.orm import validates # type: ignore
 
 class Usuario(db.Model, UserMixin):
     __tablename__ = 'usuarios'
@@ -156,13 +156,13 @@ class Usuario(db.Model, UserMixin):
         from app.permissions.models import PermissionModule, PermissionSubModule, UserPermission
         
         # Buscar módulo
-        modulo_obj = PermissionModule.query.filter_by(nome=modulo, ativo=True).first()
+        modulo_obj = db.session.query(PermissionModule).filter_by(nome=modulo, ativo=True).first()
         if not modulo_obj:
             return False
         
         # Se não especificou função, verificar se tem alguma permissão no módulo
         if not funcao:
-            return UserPermission.query.join(PermissionSubModule).filter(
+            return db.session.query(UserPermission).join(PermissionSubModule).filter(
                 UserPermission.user_id == self.id,
                 UserPermission.ativo == True,
                 UserPermission.can_view == True,
@@ -171,7 +171,7 @@ class Usuario(db.Model, UserMixin):
             ).first() is not None
         
         # Buscar submódulo específico
-        submodulo_obj = PermissionSubModule.query.filter_by(
+        submodulo_obj = db.session.query(PermissionSubModule).filter_by(
             module_id=modulo_obj.id,
             nome=funcao,
             ativo=True
@@ -181,7 +181,7 @@ class Usuario(db.Model, UserMixin):
             return False
         
         # Verificar permissão
-        permissao = UserPermission.query.filter_by(
+        permissao = db.session.query(UserPermission).filter_by(
             user_id=self.id,
             submodule_id=submodulo_obj.id,
             ativo=True
@@ -199,13 +199,13 @@ class Usuario(db.Model, UserMixin):
         from app.permissions.models import PermissionModule, PermissionSubModule, UserPermission
         
         # Buscar módulo
-        modulo_obj = PermissionModule.query.filter_by(nome=modulo, ativo=True).first()
+        modulo_obj = db.session.query(PermissionModule).filter_by(nome=modulo, ativo=True).first()
         if not modulo_obj:
             return False
         
         # Se não especificou função, verificar se pode editar em alguma função do módulo
         if not funcao:
-            return UserPermission.query.join(PermissionSubModule).filter(
+            return db.session.query(UserPermission).join(PermissionSubModule).filter(
                 UserPermission.user_id == self.id,
                 UserPermission.ativo == True,
                 UserPermission.can_edit == True,
@@ -214,7 +214,7 @@ class Usuario(db.Model, UserMixin):
             ).first() is not None
         
         # Buscar submódulo específico
-        submodulo_obj = PermissionSubModule.query.filter_by(
+        submodulo_obj = db.session.query(PermissionSubModule).filter_by(
             module_id=modulo_obj.id,
             nome=funcao,
             ativo=True
@@ -224,7 +224,7 @@ class Usuario(db.Model, UserMixin):
             return False
         
         # Verificar permissão
-        permissao = UserPermission.query.filter_by(
+        permissao = db.session.query(UserPermission).filter_by(
             user_id=self.id,
             submodule_id=submodulo_obj.id,
             ativo=True
@@ -237,7 +237,7 @@ class Usuario(db.Model, UserMixin):
         from app.permissions.models import PermissionModule, PermissionSubModule, UserPermission
         
         if self.perfil == 'administrador':
-            return PermissionModule.query.filter_by(ativo=True).order_by(PermissionModule.ordem).all()
+            return db.session.query(PermissionModule).filter_by(ativo=True).order_by(PermissionModule.ordem).all()
         
         # Buscar módulos através das permissões
         modulos_ids = db.session.query(PermissionSubModule.module_id).join(
@@ -249,7 +249,7 @@ class Usuario(db.Model, UserMixin):
             PermissionSubModule.ativo == True
         ).distinct().subquery()
         
-        return PermissionModule.query.filter(
+        return db.session.query(PermissionModule).filter(
             PermissionModule.id.in_(modulos_ids),
             PermissionModule.ativo == True
         ).order_by(PermissionModule.ordem).all()
@@ -258,13 +258,13 @@ class Usuario(db.Model, UserMixin):
         """Retorna todas as permissões do usuário em um módulo"""
         from app.permissions.models import PermissionModule, PermissionSubModule, UserPermission
         
-        modulo = PermissionModule.query.filter_by(nome=modulo_nome, ativo=True).first()
+        modulo = db.session.query(PermissionModule).filter_by(nome=modulo_nome, ativo=True).first()
         if not modulo:
             return []
         
         if self.perfil == 'administrador':
             # Admin tem todas as permissões
-            submodulos = PermissionSubModule.query.filter_by(module_id=modulo.id, ativo=True).all()
+            submodulos = db.session.query(PermissionSubModule).filter_by(module_id=modulo.id, ativo=True).all()
             return [{
                 'funcao': s.nome,
                 'nome_exibicao': s.nome_exibicao,
@@ -273,7 +273,7 @@ class Usuario(db.Model, UserMixin):
             } for s in submodulos]
         
         # Buscar permissões do usuário
-        permissoes = UserPermission.query.join(PermissionSubModule).filter(
+        permissoes = db.session.query(UserPermission).join(PermissionSubModule).filter(
             UserPermission.user_id == self.id,
             UserPermission.ativo == True,
             PermissionSubModule.module_id == modulo.id,
@@ -291,7 +291,7 @@ class Usuario(db.Model, UserMixin):
         """Aplica um template de permissão ao usuário"""
         from app.permissions.models import PermissionTemplate
         
-        template = PermissionTemplate.query.get(template_id)
+        template = db.session.get(PermissionTemplate,template_id) if template_id else None
         if not template or not template.ativo:
             return False
         

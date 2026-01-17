@@ -22,7 +22,6 @@ from app.devolucao.models import (
     NFDevolucaoLinha,
     NFDevolucaoNFReferenciada
 )
-from app.fretes.models import DespesaExtra
 from app.devolucao.services.frete_placeholder_service import (
     obter_ou_criar_frete_para_devolucao,
     criar_despesa_devolucao
@@ -49,7 +48,7 @@ def listar_fretes(ocorrencia_id: int):
     GET /devolucao/frete/api/{ocorrencia_id}/fretes
     """
     try:
-        ocorrencia = OcorrenciaDevolucao.query.get(ocorrencia_id)
+        ocorrencia = db.session.get(OcorrenciaDevolucao, ocorrencia_id)
         if not ocorrencia:
             return jsonify({'sucesso': False, 'erro': 'Ocorrencia nao encontrada'}), 404
 
@@ -97,7 +96,7 @@ def criar_frete(ocorrencia_id: int):
     4. Cria DespesaExtra do tipo DEVOLUCAO vinculada ao Frete e NFD
     """
     try:
-        ocorrencia = OcorrenciaDevolucao.query.get(ocorrencia_id)
+        ocorrencia = db.session.get(OcorrenciaDevolucao, ocorrencia_id)
         if not ocorrencia:
             return jsonify({'sucesso': False, 'erro': 'Ocorrencia nao encontrada'}), 404
 
@@ -159,7 +158,7 @@ def criar_frete(ocorrencia_id: int):
         # Buscar transportadora se ID fornecido
         transportadora = None
         if data.get('transportadora_id'):
-            transportadora = Transportadora.query.get(data['transportadora_id'])
+            transportadora = db.session.get(Transportadora,data['transportadora_id']) if data['transportadora_id'] else None
 
         # Criar FreteDevolucao (cotacao de retorno)
         frete_dev = FreteDevolucao(
@@ -220,7 +219,7 @@ def obter_frete(frete_id: int):
     GET /devolucao/frete/api/frete/{frete_id}
     """
     try:
-        frete = FreteDevolucao.query.get(frete_id)
+        frete = db.session.get(FreteDevolucao, frete_id)
         if not frete:
             return jsonify({'sucesso': False, 'erro': 'Frete nao encontrado'}), 404
 
@@ -242,7 +241,7 @@ def atualizar_frete(frete_id: int):
     PUT /devolucao/frete/api/frete/{frete_id}
     """
     try:
-        frete = FreteDevolucao.query.get(frete_id)
+        frete = db.session.get(FreteDevolucao, frete_id)
         if not frete:
             return jsonify({'sucesso': False, 'erro': 'Frete nao encontrado'}), 404
 
@@ -298,7 +297,7 @@ def atualizar_status_frete(frete_id: int):
     }
     """
     try:
-        frete = FreteDevolucao.query.get(frete_id)
+        frete = db.session.get(FreteDevolucao, frete_id)
         if not frete:
             return jsonify({'sucesso': False, 'erro': 'Frete nao encontrado'}), 404
 
@@ -359,7 +358,7 @@ def excluir_frete(frete_id: int):
     DELETE /devolucao/frete/api/frete/{frete_id}
     """
     try:
-        frete = FreteDevolucao.query.get(frete_id)
+        frete = db.session.get(FreteDevolucao, frete_id)
         if not frete:
             return jsonify({'sucesso': False, 'erro': 'Frete nao encontrado'}), 404
 
@@ -392,7 +391,7 @@ def listar_descartes(ocorrencia_id: int):
     GET /devolucao/frete/api/{ocorrencia_id}/descartes
     """
     try:
-        ocorrencia = OcorrenciaDevolucao.query.get(ocorrencia_id)
+        ocorrencia = db.session.get(OcorrenciaDevolucao, ocorrencia_id)
         if not ocorrencia:
             return jsonify({'sucesso': False, 'erro': 'Ocorrencia nao encontrada'}), 404
 
@@ -431,7 +430,7 @@ def criar_descarte(ocorrencia_id: int):
     }
     """
     try:
-        ocorrencia = OcorrenciaDevolucao.query.get(ocorrencia_id)
+        ocorrencia = db.session.get(OcorrenciaDevolucao, ocorrencia_id)
         if not ocorrencia:
             return jsonify({'sucesso': False, 'erro': 'Ocorrencia nao encontrada'}), 404
 
@@ -499,7 +498,7 @@ def obter_descarte(descarte_id: int):
     GET /devolucao/frete/api/descarte/{descarte_id}
     """
     try:
-        descarte = DescarteDevolucao.query.get(descarte_id)
+        descarte = db.session.get(DescarteDevolucao, descarte_id)
         if not descarte:
             return jsonify({'sucesso': False, 'erro': 'Descarte nao encontrado'}), 404
 
@@ -526,7 +525,7 @@ def atualizar_status_descarte(descarte_id: int):
     }
     """
     try:
-        descarte = DescarteDevolucao.query.get(descarte_id)
+        descarte = db.session.get(DescarteDevolucao, descarte_id)
         if not descarte:
             return jsonify({'sucesso': False, 'erro': 'Descarte nao encontrado'}), 404
 
@@ -587,7 +586,7 @@ def upload_documento_descarte(descarte_id: int, tipo: str):
     - file: arquivo
     """
     try:
-        descarte = DescarteDevolucao.query.get(descarte_id)
+        descarte = db.session.get(DescarteDevolucao, descarte_id)
         if not descarte:
             return jsonify({'sucesso': False, 'erro': 'Descarte nao encontrado'}), 404
 
@@ -650,7 +649,7 @@ def excluir_descarte(descarte_id: int):
     DELETE /devolucao/frete/api/descarte/{descarte_id}
     """
     try:
-        descarte = DescarteDevolucao.query.get(descarte_id)
+        descarte = db.session.get(DescarteDevolucao, descarte_id)
         if not descarte:
             return jsonify({'sucesso': False, 'erro': 'Descarte nao encontrado'}), 404
 
@@ -689,7 +688,7 @@ def download_termo_descarte(descarte_id: int):
     from io import BytesIO
 
     try:
-        descarte = DescarteDevolucao.query.get(descarte_id)
+        descarte = db.session.get(DescarteDevolucao, descarte_id)
         if not descarte:
             return jsonify({'sucesso': False, 'erro': 'Descarte nao encontrado'}), 404
 
@@ -769,7 +768,7 @@ def imprimir_termo_descarte(descarte_id: int):
     from flask import render_template
 
     try:
-        descarte = DescarteDevolucao.query.get(descarte_id)
+        descarte = db.session.get(DescarteDevolucao, descarte_id)
         if not descarte:
             return jsonify({'sucesso': False, 'erro': 'Descarte nao encontrado'}), 404
 
@@ -847,7 +846,7 @@ def calcular_peso_devolucao(ocorrencia_id: int):
     - detalhes: lista com peso por produto
     """
     try:
-        ocorrencia = OcorrenciaDevolucao.query.get(ocorrencia_id)
+        ocorrencia = db.session.get(OcorrenciaDevolucao, ocorrencia_id)
         if not ocorrencia:
             return jsonify({'sucesso': False, 'erro': 'Ocorrencia nao encontrada'}), 404
 
@@ -997,7 +996,7 @@ def estimar_frete_retorno(ocorrencia_id: int):
     from app.utils.calculadora_frete import CalculadoraFrete
 
     try:
-        ocorrencia = OcorrenciaDevolucao.query.get(ocorrencia_id)
+        ocorrencia = db.session.get(OcorrenciaDevolucao, ocorrencia_id)
         if not ocorrencia:
             return jsonify({'sucesso': False, 'erro': 'Ocorrencia nao encontrada'}), 404
 
@@ -1012,7 +1011,7 @@ def estimar_frete_retorno(ocorrencia_id: int):
             return jsonify({'sucesso': False, 'erro': 'uf_origem obrigatorio'}), 400
 
         # Buscar transportadora
-        transportadora = Transportadora.query.get(transportadora_id)
+        transportadora = db.session.get(Transportadora, transportadora_id)
         if not transportadora:
             return jsonify({'sucesso': False, 'erro': 'Transportadora nao encontrada'}), 404
 

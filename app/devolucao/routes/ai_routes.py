@@ -14,12 +14,11 @@ Criado em: 30/12/2024
 from flask import Blueprint, jsonify, request, render_template
 from flask_login import login_required, current_user
 
-from app.devolucao.services import get_ai_resolver, get_nfd_service
+from app.devolucao.services import get_ai_resolver
 from app.devolucao.models import (
     NFDevolucao,
     NFDevolucaoLinha,
     DeParaProdutoCliente,
-    OcorrenciaDevolucao,
 )
 from app.monitoramento.models import EntregaMonitorada
 from app import db
@@ -263,7 +262,7 @@ def api_atualizar_motivo_nfd(nfd_id: int):
             }), 400
 
         # Buscar NFD
-        nfd = NFDevolucao.query.get(nfd_id)
+        nfd = db.session.get(NFDevolucao, nfd_id)
         if not nfd:
             return jsonify({
                 'sucesso': False,
@@ -413,7 +412,7 @@ def api_listar_linhas_nfd(nfd_id: int):
         JSON com lista de linhas e status de resolucao
     """
     try:
-        nfd = NFDevolucao.query.get(nfd_id)
+        nfd = db.session.get(NFDevolucao, nfd_id)
         if not nfd:
             return jsonify({
                 'sucesso': False,
@@ -483,7 +482,7 @@ def api_confirmar_resolucao(linha_id: int):
                 'erro': 'codigo_interno obrigatorio'
             }), 400
 
-        linha = NFDevolucaoLinha.query.get(linha_id)
+        linha = db.session.get(NFDevolucaoLinha, linha_id)
         if not linha:
             return jsonify({
                 'sucesso': False,
@@ -491,7 +490,7 @@ def api_confirmar_resolucao(linha_id: int):
             }), 404
 
         # Buscar NFD para pegar prefixo CNPJ
-        nfd = NFDevolucao.query.get(linha.nf_devolucao_id)
+        nfd = db.session.get(NFDevolucao,linha.nf_devolucao_id) if linha.nf_devolucao_id else None
         if not nfd:
             return jsonify({
                 'sucesso': False,
@@ -746,7 +745,7 @@ def api_atualizar_depara(depara_id: int):
     try:
         data = request.get_json()
 
-        depara = DeParaProdutoCliente.query.get(depara_id)
+        depara = db.session.get(DeParaProdutoCliente, depara_id)
         if not depara:
             return jsonify({
                 'sucesso': False,
@@ -795,7 +794,7 @@ def api_excluir_depara(depara_id: int):
     DELETE /devolucao/ai/api/depara/<depara_id>
     """
     try:
-        depara = DeParaProdutoCliente.query.get(depara_id)
+        depara = db.session.get(DeParaProdutoCliente, depara_id)
         if not depara:
             return jsonify({
                 'sucesso': False,
@@ -840,7 +839,6 @@ def api_buscar_produtos():
     """
     try:
         from app.producao.models import CadastroPalletizacao
-        from sqlalchemy import or_
 
         query_str = request.args.get('q', '').strip()
         limite = min(request.args.get('limit', 20, type=int), 50)
@@ -1111,7 +1109,7 @@ def api_importar_depara():
         erros = []
 
         for idx, row in df.iterrows():
-            linha_num = idx + 2  # +2 porque idx comeca em 0 e Excel tem header na linha 1
+            linha_num = idx + 2  # +2 porque idx comeca em 0 e Excel tem header na linha 1 # type: ignore
 
             try:
                 codigo_cliente = str(row['codigo_cliente']).strip()

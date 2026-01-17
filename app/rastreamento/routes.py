@@ -3,16 +3,14 @@
 Endpoints para transportadores e monitoramento interno
 """
 
-from flask import render_template, request, jsonify, redirect, url_for, flash, current_app
+from flask import render_template, request, jsonify, redirect, url_for, current_app
 from flask_login import login_required, current_user
 from app.rastreamento import rastreamento_bp
-from app.rastreamento.models import RastreamentoEmbarque, PingGPS, LogRastreamento, ConfiguracaoRastreamento
+from app.rastreamento.models import RastreamentoEmbarque, PingGPS, ConfiguracaoRastreamento
 from app.rastreamento.services.gps_service import GPSService
-from app.rastreamento.services.qrcode_service import QRCodeService
-from app.embarques.models import Embarque
 from app.monitoramento.models import EntregaMonitorada
 from app import db, csrf
-from datetime import datetime, timedelta
+from datetime import datetime
 import json
 from app.utils.timezone import agora_brasil
 
@@ -371,7 +369,7 @@ def processar_upload_canhoto(token):
 
     # ✅ NOVO: Buscar entrega rastreada
     from app.rastreamento.models import EntregaRastreada
-    entrega = EntregaRastreada.query.get(entrega_id)
+    entrega = db.session.get(EntregaRastreada,entrega_id) if entrega_id else None
 
     if not entrega or entrega.rastreamento_id != rastreamento.id:
         return jsonify({'success': False, 'message': 'Entrega inválida'}), 404
@@ -442,7 +440,7 @@ def processar_upload_canhoto(token):
 
         # ✅ Atualizar EntregaMonitorada correspondente (se existir)
         if entrega.item.separacao_lote_id:
-            entrega_mon = EntregaMonitorada.query.filter_by(
+            entrega_mon = db.session.query(EntregaMonitorada).filter_by(
                 separacao_lote_id=entrega.item.separacao_lote_id
             ).first()
 
@@ -483,8 +481,7 @@ def processar_upload_canhoto(token):
 
         return jsonify({
             'success': True,
-            'message': f'Entrega de {entrega.cliente} confirmada!' if entregas_pendentes > 0
-                      else 'Todas as entregas foram concluídas!',
+            'message': f'Entrega de {entrega.cliente} confirmada!' if entregas_pendentes > 0 else 'Todas as entregas foram concluídas!',
             'entregas_restantes': entregas_pendentes,
             'todas_concluidas': todas_concluidas,
             'redirect': url_for('rastreamento.rastrear', token=token) if entregas_pendentes > 0

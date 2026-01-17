@@ -1370,7 +1370,7 @@ def atualizar_qtd_separacao():
             }), 400
 
         # Buscar separação
-        separacao = Separacao.query.get(separacao_id)
+        separacao = db.session.get(Separacao,separacao_id) if separacao_id else None
 
         if not separacao:
             return jsonify({

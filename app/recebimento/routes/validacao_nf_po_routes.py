@@ -572,7 +572,7 @@ def listar_validacoes_nf_po():
 def detalhe_validacao_nf_po(validacao_id):
     """Retorna detalhes de uma validacao NF x PO."""
     try:
-        validacao = ValidacaoNfPoDfe.query.get(validacao_id)
+        validacao = db.session.get(ValidacaoNfPoDfe,validacao_id) if validacao_id else None
 
         if not validacao:
             return jsonify({
@@ -581,10 +581,10 @@ def detalhe_validacao_nf_po(validacao_id):
             }), 404
 
         # Buscar matches
-        matches = MatchNfPoItem.query.filter_by(validacao_id=validacao_id).all()
+        matches = db.session.query(MatchNfPoItem).filter_by(validacao_id=validacao_id).all()
 
         # Buscar divergencias
-        divergencias = DivergenciaNfPo.query.filter_by(validacao_id=validacao_id).all()
+        divergencias = db.session.query(DivergenciaNfPo).filter_by(validacao_id=validacao_id).all()
 
         return jsonify({
             'sucesso': True,
@@ -713,7 +713,7 @@ def criar_depara_para_divergencia(divergencia_id):
     try:
         data = request.get_json() or {}
 
-        divergencia = DivergenciaNfPo.query.get(divergencia_id)
+        divergencia = db.session.get(DivergenciaNfPo,divergencia_id) if divergencia_id else None
 
         if not divergencia:
             return jsonify({
@@ -821,7 +821,7 @@ def aprovar_divergencia_nf_po(divergencia_id):
     try:
         data = request.get_json() or {}
 
-        divergencia = DivergenciaNfPo.query.get(divergencia_id)
+        divergencia = db.session.get(DivergenciaNfPo,divergencia_id) if divergencia_id else None
 
         if not divergencia:
             return jsonify({
@@ -890,7 +890,7 @@ def rejeitar_divergencia_nf_po(divergencia_id):
     try:
         data = request.get_json() or {}
 
-        divergencia = DivergenciaNfPo.query.get(divergencia_id)
+        divergencia = db.session.get(DivergenciaNfPo,divergencia_id) if divergencia_id else None
 
         if not divergencia:
             return jsonify({
@@ -941,7 +941,7 @@ def consolidar_pos(validacao_id):
     try:
         data = request.get_json() or {}
 
-        validacao = ValidacaoNfPoDfe.query.get(validacao_id)
+        validacao = db.session.get(ValidacaoNfPoDfe,validacao_id) if validacao_id else None
 
         if not validacao:
             return jsonify({
@@ -956,7 +956,7 @@ def consolidar_pos(validacao_id):
             }), 400
 
         # Buscar matches para montar lista de POs
-        matches = MatchNfPoItem.query.filter_by(
+        matches = db.session.query(MatchNfPoItem).filter_by(
             validacao_id=validacao_id,
             status_match='match'
         ).all()

@@ -179,7 +179,7 @@ class SessionManager:
         
         # Atualizar status da integração se ID fornecido
         if integracao_id:
-            integracao = PortalIntegracao.query.get(integracao_id)
+            integracao = db.session.get(PortalIntegracao,integracao_id) if integracao_id else None
             if integracao:
                 integracao.status = 'sessao_expirada'
                 integracao.ultimo_erro = 'Sessão expirada no portal'

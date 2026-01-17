@@ -512,7 +512,7 @@ def pagamentos_aprovar_todos(lote_id):
         })
 
         # Atualizar lote
-        lote = BaixaPagamentoLote.query.get(lote_id)
+        lote = db.session.get(BaixaPagamentoLote,lote_id) if lote_id else None
         if lote:
             lote.linhas_aprovadas = BaixaPagamentoItem.query.filter_by(
                 lote_id=lote_id,

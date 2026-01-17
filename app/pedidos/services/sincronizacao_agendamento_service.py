@@ -162,7 +162,7 @@ class SincronizadorAgendamentoService:
         """
         try:
             # Buscar EntregaMonitorada
-            entrega = EntregaMonitorada.query.get(entrega_id)
+            entrega = db.session.get(EntregaMonitorada,entrega_id) if entrega_id else None
 
             if not entrega:
                 return {
@@ -172,7 +172,7 @@ class SincronizadorAgendamentoService:
 
             # Buscar agendamento específico ou último
             if agendamento_id:
-                agendamento = AgendamentoEntrega.query.get(agendamento_id)
+                agendamento = db.session.get(AgendamentoEntrega,agendamento_id) if agendamento_id else None
             else:
                 if not entrega.agendamentos:
                     return {

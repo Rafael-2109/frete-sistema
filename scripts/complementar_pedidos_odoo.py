@@ -16,13 +16,13 @@ Cenários tratados:
 import sys
 import os
 import argparse
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from app import create_app, db
-from app.pedidos.integracao_odoo.models import RegistroPedidoOdoo, PedidoImportacaoTemp
-from app.pedidos.integracao_odoo.service import get_odoo_service, ResultadoCriacaoPedido
+from app import create_app, db # noqa: E402
+from app.pedidos.integracao_odoo.models import RegistroPedidoOdoo, PedidoImportacaoTemp # noqa: E402
+from app.pedidos.integracao_odoo.service import get_odoo_service # noqa: E402
 
 
 def diagnostico_pedido(importacao_id: int) -> Dict[str, Any]:
@@ -38,7 +38,7 @@ def diagnostico_pedido(importacao_id: int) -> Dict[str, Any]:
     app = create_app()
     with app.app_context():
         # Busca registro de importação
-        importacao = PedidoImportacaoTemp.query.get(importacao_id)
+        importacao = db.session.get(PedidoImportacaoTemp,importacao_id) if importacao_id else None
         if not importacao:
             return {'erro': f'Importação {importacao_id} não encontrada'}
 
@@ -60,7 +60,7 @@ def diagnostico_pedido(importacao_id: int) -> Dict[str, Any]:
             cnpj = filial.get('cnpj')
 
             # Verifica se foi inserida no Odoo
-            registro = RegistroPedidoOdoo.query.filter_by(
+            registro = db.session.query(RegistroPedidoOdoo).filter_by(
                 rede=importacao.rede,
                 numero_documento=importacao.numero_documento,
                 cnpj_cliente=cnpj,
@@ -167,7 +167,7 @@ def complementar_pedido_existente(order_id: int, itens: List[Dict], dry_run: boo
         return {
             'sucesso': True,
             'mensagem': f'[DRY-RUN] Adicionaria {len(order_lines)} itens ao pedido {order_id}',
-            'itens': [l[2]['product_id'] for l in order_lines],
+            'itens': [line[2]['product_id'] for line in order_lines],
             'erros': erros
         }
 
@@ -281,7 +281,7 @@ def executar_complementacao(importacao_id: int, dry_run: bool = True, usuario: s
         print(f"⚠️  Filiais com itens faltantes: {len(diag['itens_faltantes_por_filial'])}")
 
         # Busca dados da importação para pegar numero_pedido_cliente
-        importacao = PedidoImportacaoTemp.query.get(importacao_id)
+        importacao = db.session.get(PedidoImportacaoTemp,importacao_id) if importacao_id else None
 
         # 1. Complementar pedidos existentes com itens faltantes
         if diag['itens_faltantes_por_filial']:
@@ -363,7 +363,7 @@ def listar_importacoes():
     """Lista importações recentes"""
     app = create_app()
     with app.app_context():
-        importacoes = PedidoImportacaoTemp.query.filter(
+        importacoes = db.session.query(PedidoImportacaoTemp).filter(
             PedidoImportacaoTemp.status.in_(['LANCADO', 'ERRO'])
         ).order_by(PedidoImportacaoTemp.criado_em.desc()).limit(10).all()
 

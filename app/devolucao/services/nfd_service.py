@@ -495,7 +495,7 @@ class NFDService:
                 cnpj_entrega = getattr(candidato.entrega_monitorada, 'cnpj_cliente', None)
                 if cnpj_entrega:
                     cnpj_entrega_limpo = self._limpar_cnpj(cnpj_entrega)
-                    prefixo_entrega = cnpj_entrega_limpo[:8] if len(cnpj_entrega_limpo) >= 8 else cnpj_entrega_limpo
+                    prefixo_entrega = cnpj_entrega_limpo[:8] if len(cnpj_entrega_limpo) >= 8 else cnpj_entrega_limpo # type: ignore
 
                     if prefixo_odoo == prefixo_entrega:
                         return candidato
@@ -697,7 +697,8 @@ class NFDService:
             nfs_ref = extrair_nfs_referenciadas(xml_content)
 
             # Obter a NFD para atualizar numero_nf_venda
-            nfd = NFDevolucao.query.get(nfd_id)
+            from app import db
+            nfd = db.session.get(NFDevolucao,nfd_id) if nfd_id else None
 
             count = 0
             for nf_ref in nfs_ref:
@@ -1020,11 +1021,12 @@ class NFDService:
             Dict com resultado
         """
         try:
-            nfd = NFDevolucao.query.get(nfd_id)
+            from app import db
+            nfd = db.session.get(NFDevolucao,nfd_id) if nfd_id else None
             if not nfd:
                 return {'sucesso': False, 'erro': 'NFD não encontrada'}
 
-            entrega = EntregaMonitorada.query.get(entrega_monitorada_id)
+            entrega = db.session.get(EntregaMonitorada,entrega_monitorada_id) if entrega_monitorada_id else None
             if not entrega:
                 return {'sucesso': False, 'erro': 'Entrega não encontrada'}
 
@@ -1101,7 +1103,8 @@ class NFDService:
         Returns:
             Lista de candidatos
         """
-        nfd = NFDevolucao.query.get(nfd_id)
+        from app import db
+        nfd = db.session.get(NFDevolucao,nfd_id) if nfd_id else None
         if not nfd:
             return []
 
@@ -1112,10 +1115,10 @@ class NFDService:
 
         # Buscar NFDs do monitoramento com mesmo prefixo CNPJ
         # que ainda não foram vinculadas ao Odoo
-        from app.monitoramento.models import EntregaMonitorada
+        from app.monitoramento.models import EntregaMonitorada # noqa: E402
 
         # Buscar entregas que têm devolução registrada mas sem DFe vinculado
-        candidatos = NFDevolucao.query.filter(
+        candidatos = db.session.query(NFDevolucao).filter(
             NFDevolucao.odoo_dfe_id.is_(None),
             NFDevolucao.origem_registro == 'MONITORAMENTO',
             NFDevolucao.ativo == True

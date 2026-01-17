@@ -621,7 +621,7 @@ class BaixaPagamentosService:
         Returns:
             Dict com estatísticas
         """
-        lote = BaixaPagamentoLote.query.get(lote_id)
+        lote = db.session.get(BaixaPagamentoLote,lote_id) if lote_id else None
         if not lote:
             raise ValueError(f"Lote {lote_id} não encontrado")
 

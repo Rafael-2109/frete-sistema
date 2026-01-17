@@ -150,7 +150,7 @@ def buscar_pedidos_cliente_lote(nums_pedidos: List[str]) -> Dict[str, Optional[s
         encontrados = sum(1 for v in resultado.values() if v is not None)
         logger.info(f"✅ Busca em lote concluída: {encontrados}/{len(nums_pedidos)} com pedido_cliente")
 
-        return resultado
+        return resultado  # type: ignore
 
     except Exception as e:
         logger.error(f"❌ Erro ao buscar pedidos_cliente em lote: {e}")
@@ -178,7 +178,7 @@ def atualizar_pedido_cliente_separacao(separacao_id: int) -> bool:
         from app import db
 
         # Buscar o registro de Separacao
-        separacao = Separacao.query.get(separacao_id)
+        separacao = db.session.get(Separacao,separacao_id) if separacao_id else None
         if not separacao:
             logger.warning(f"Separacao {separacao_id} não encontrada")
             return False
@@ -224,11 +224,13 @@ def buscar_pedido_cliente_com_fallback(num_pedido: str, separacao_id: Optional[i
         >>> print(f"Pedido de compra: {pedido_cliente or 'Não encontrado'}")
     """
     try:
+        from app import db
+
         # Tentar buscar localmente primeiro se tiver separacao_id
         if separacao_id:
             from app.separacao.models import Separacao
 
-            separacao = Separacao.query.get(separacao_id)
+            separacao = db.session.get(Separacao,separacao_id) if separacao_id else None
             if separacao and separacao.pedido_cliente:
                 logger.debug(f"Pedido_cliente encontrado localmente para Separacao {separacao_id}")
                 return separacao.pedido_cliente

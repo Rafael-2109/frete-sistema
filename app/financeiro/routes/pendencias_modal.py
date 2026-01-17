@@ -36,7 +36,7 @@ def api_criar_pendencia_financeira():
         # Se passou conta_id, buscar a NF
         entrega_id = None
         if conta_id:
-            conta = ContasAReceber.query.get(conta_id)
+            conta = db.session.get(ContasAReceber,conta_id) if conta_id else None
             if conta:
                 numero_nf = conta.titulo_nf
                 if conta.entrega_monitorada_id:

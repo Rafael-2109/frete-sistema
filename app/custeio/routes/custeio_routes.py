@@ -733,7 +733,7 @@ def register_custeio_routes(bp):
 
             if id_registro:
                 # Atualizar existente
-                registro = CustoFrete.query.get(id_registro)
+                registro = db.session.get(CustoFrete, id_registro)
                 if not registro:
                     return jsonify({'erro': 'Registro não encontrado'}), 404
 
@@ -774,7 +774,7 @@ def register_custeio_routes(bp):
             from app.custeio.models import CustoFrete
             from app import db
 
-            registro = CustoFrete.query.get(id_registro)
+            registro = db.session.get(CustoFrete, id_registro)
             if not registro:
                 return jsonify({'erro': 'Registro não encontrado'}), 404
 
@@ -840,7 +840,7 @@ def register_custeio_routes(bp):
 
             if id_registro:
                 # Atualizar existente
-                registro = ParametroCusteio.query.get(id_registro)
+                registro = db.session.get(ParametroCusteio, id_registro)
                 if not registro:
                     return jsonify({'erro': 'Parâmetro não encontrado'}), 404
 
@@ -911,7 +911,7 @@ def register_custeio_routes(bp):
             from app.custeio.models import ParametroCusteio
             from app import db
 
-            parametro = ParametroCusteio.query.get(id_param)
+            parametro = db.session.get(ParametroCusteio, id_param)
             if not parametro:
                 return jsonify({'erro': 'Parâmetro não encontrado'}), 404
 
@@ -2737,7 +2737,7 @@ def register_custeio_routes(bp):
 
             if id_registro:
                 # Atualizar existente
-                registro = RegraComissao.query.get(id_registro)
+                registro = db.session.get(RegraComissao, id_registro)
                 if not registro:
                     return jsonify({'erro': 'Regra nao encontrada'}), 404
 
@@ -2802,7 +2802,7 @@ def register_custeio_routes(bp):
             from app.custeio.models import RegraComissao
             from app import db
 
-            registro = RegraComissao.query.get(id_registro)
+            registro = db.session.get(RegraComissao, id_registro)
             if not registro:
                 return jsonify({'erro': 'Regra nao encontrada'}), 404
 

@@ -109,7 +109,7 @@ class ExtratoConciliacaoService:
         Returns:
             Dict com estatísticas
         """
-        lote = ExtratoLote.query.get(lote_id)
+        lote = db.session.get(ExtratoLote,lote_id) if lote_id else None
         if not lote:
             raise ValueError(f"Lote {lote_id} não encontrado")
 
@@ -187,7 +187,7 @@ class ExtratoConciliacaoService:
                 raise ValueError(f"Linha de crédito não encontrada para move_id {item.move_id}")
 
         # Buscar título local (usando titulo_receber_id para clientes)
-        titulo = ContasAReceber.query.get(item.titulo_receber_id)
+        titulo = db.session.get(ContasAReceber,item.titulo_receber_id) if item.titulo_receber_id else None
         if not titulo:
             raise ValueError(f"Título {item.titulo_receber_id} não encontrado no sistema")
 
@@ -1273,10 +1273,10 @@ class ExtratoConciliacaoService:
         """
         # Determinar tipo de título (receber ou pagar)
         if vinculo.titulo_receber_id:
-            titulo_local = ContasAReceber.query.get(vinculo.titulo_receber_id)
+            titulo_local = db.session.get(ContasAReceber,vinculo.titulo_receber_id) if vinculo.titulo_receber_id else None
             tipo = 'receber'
         elif vinculo.titulo_pagar_id:
-            titulo_local = ContasAPagar.query.get(vinculo.titulo_pagar_id)
+            titulo_local = db.session.get(ContasAPagar,vinculo.titulo_pagar_id) if vinculo.titulo_pagar_id else None
             tipo = 'pagar'
         else:
             raise ValueError("Vínculo não possui título associado")

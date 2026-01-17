@@ -9,11 +9,9 @@ from app.bi.models import (
 )
 from app.bi.services_helpers import BiCalculosReais
 from app.fretes.models import Frete, DespesaExtra, ContaCorrenteTransportadora
-from app.embarques.models import Embarque, EmbarqueItem
 from app.transportadoras.models import Transportadora
 from datetime import datetime, date, timedelta
-from sqlalchemy import func, and_, or_, case, distinct
-from sqlalchemy.sql import text
+from sqlalchemy import func, and_, case, distinct
 import logging
 
 logger = logging.getLogger(__name__)
@@ -79,7 +77,7 @@ class BiETLService:
             
             for r in resultados:
                 # Busca dados complementares
-                transportadora = Transportadora.query.get(r.transportadora_id)
+                transportadora = db.session.get(Transportadora,r.transportadora_id) if r.transportadora_id else None
                 
                 # Calcula despesas extras
                 despesas = db.session.query(
@@ -253,7 +251,7 @@ class BiETLService:
             resultados = query.all()
             
             for r in resultados:
-                transportadora = Transportadora.query.get(r.transportadora_id) if r.transportadora_id else None
+                transportadora = db.session.get(Transportadora,r.transportadora_id) if r.transportadora_id else None
                 
                 # Verifica se já existe
                 bi_despesa = BiDespesaDetalhada.query.filter_by(

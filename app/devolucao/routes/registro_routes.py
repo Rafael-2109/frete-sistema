@@ -9,14 +9,12 @@ Criado em: 30/12/2024
 """
 from flask import (
     Blueprint, request, jsonify, render_template,
-    flash, redirect, url_for
 )
 from flask_login import login_required, current_user
 from app import db
 from app.devolucao.models import NFDevolucao, OcorrenciaDevolucao
 from app.monitoramento.models import EntregaMonitorada
 from app.utils.timezone import agora_brasil
-from datetime import datetime
 
 # Blueprint
 registro_bp = Blueprint('devolucao_registro', __name__, url_prefix='/registro')
@@ -76,7 +74,7 @@ def api_registrar_nfd():
         cnpj_emitente = None
 
         if entrega_id:
-            entrega = EntregaMonitorada.query.get(entrega_id)
+            entrega = db.session.get(EntregaMonitorada,entrega_id) if entrega_id else None
             if not entrega:
                 return jsonify({'success': False, 'error': 'Entrega nao encontrada'}), 404
 
@@ -178,7 +176,7 @@ def api_obter_nfd(nfd_id):
         JSON com dados da NFD
     """
     try:
-        nfd = NFDevolucao.query.get(nfd_id)
+        nfd = db.session.get(NFDevolucao,nfd_id) if nfd_id else None
 
         if not nfd:
             return jsonify({'success': False, 'error': 'NFD nao encontrada'}), 404
@@ -205,7 +203,7 @@ def api_atualizar_nfd(nfd_id):
     }
     """
     try:
-        nfd = NFDevolucao.query.get(nfd_id)
+        nfd = db.session.get(NFDevolucao,nfd_id) if nfd_id else None
 
         if not nfd:
             return jsonify({'success': False, 'error': 'NFD nao encontrada'}), 404
@@ -252,7 +250,7 @@ def api_excluir_nfd(nfd_id):
     Note: Faz soft delete (ativo=False)
     """
     try:
-        nfd = NFDevolucao.query.get(nfd_id)
+        nfd = db.session.get(NFDevolucao,nfd_id) if nfd_id else None
 
         if not nfd:
             return jsonify({'success': False, 'error': 'NFD nao encontrada'}), 404

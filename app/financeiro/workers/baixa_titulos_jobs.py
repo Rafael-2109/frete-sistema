@@ -520,7 +520,7 @@ def processar_lote_baixa_job(
             from app.financeiro.services.baixa_titulos_service import BaixaTitulosService
 
             # Buscar lote
-            lote = BaixaTituloLote.query.get(lote_id)
+            lote = db.session.get(BaixaTituloLote,lote_id) if lote_id else None
             if not lote:
                 resultado['error'] = f'Lote {lote_id} nao encontrado'
                 logger.error(f"[Job Baixa Lote] {resultado['error']}")
@@ -599,7 +599,7 @@ def processar_lote_baixa_job(
                 from app import db
                 from app.financeiro.models import BaixaTituloLote
 
-                lote = BaixaTituloLote.query.get(lote_id)
+                lote = db.session.get(BaixaTituloLote,lote_id) if lote_id else None
                 if lote:
                     lote.status = 'ERRO'
                     lote.processado_em = datetime.utcnow()

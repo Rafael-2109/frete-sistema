@@ -7,10 +7,8 @@ enquanto migramos gradualmente para usar Separacao com status='PREVISAO'
 """
 
 from app import db
-from datetime import datetime
 from app.separacao.models import Separacao
 from app.utils.text_utils import truncar_observacao
-from sqlalchemy import and_, or_
 import logging
 
 logger = logging.getLogger(__name__)
@@ -321,7 +319,6 @@ class PreSeparacaoQueryAdapter:
     
     def filter(self, *args):
         """Simula filter convertendo para query de Separacao"""
-        from sqlalchemy import and_, or_
         
         query = Separacao.query
         conditions = []
@@ -355,7 +352,7 @@ class PreSeparacaoQueryAdapter:
     
     def get(self, id):
         """Simula get por ID"""
-        separacao = Separacao.query.get(id)
+        separacao = db.session.get(Separacao,id) if id else None
         if separacao and separacao.status == PreSeparacaoItemAdapter.STATUS_PREVISAO:
             return PreSeparacaoItemAdapter(separacao)
         return None

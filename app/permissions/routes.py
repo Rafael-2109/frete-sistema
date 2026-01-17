@@ -128,7 +128,7 @@ def configurar_usuario(user_id):
         for uv in user_vendors:
             if uv.vendedor_id:
                 from app.permissions.models import Vendedor
-                vendedor = Vendedor.query.get(uv.vendedor_id)
+                vendedor = db.session.get(Vendedor,uv.vendedor_id) if uv.vendedor_id else None
                 if vendedor:
                     vendedores_selecionados.append(vendedor.nome)
             elif uv.observacoes:
@@ -142,7 +142,7 @@ def configurar_usuario(user_id):
         
         for ut in user_teams:
             if ut.equipe_id:
-                equipe = EquipeVendas.query.get(ut.equipe_id)
+                equipe = db.session.get(EquipeVendas,ut.equipe_id) if ut.equipe_id else None
                 if equipe:
                     equipes_selecionadas.append(equipe.nome)
             elif ut.observacoes:

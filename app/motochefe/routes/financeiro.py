@@ -344,7 +344,7 @@ def pagar_lote():
             # ✅ VALIDAR: Filtrar apenas títulos válidos
             titulo_ids_validos = []
             for titulo_id in titulo_ids:
-                titulo_pagar = TituloAPagar.query.get(titulo_id)
+                titulo_pagar = db.session.get(TituloAPagar,titulo_id) if titulo_id else None
                 if not titulo_pagar:
                     continue
 
@@ -392,7 +392,7 @@ def pagar_lote():
             # ✅ VALIDAR: Filtrar apenas títulos válidos
             titulo_ids_validos = []
             for titulo_id in titulo_ids:
-                titulo_pagar = TituloAPagar.query.get(titulo_id)
+                titulo_pagar = db.session.get(TituloAPagar,titulo_id) if titulo_id else None
                 if not titulo_pagar:
                     continue
 
@@ -421,7 +421,7 @@ def pagar_lote():
         # Processar FRETES individualmente (não agrupa em lote por enquanto)
         if itens_por_tipo['frete']:
             for item in itens_por_tipo['frete']:
-                embarque = EmbarqueMoto.query.get(int(item['id']))
+                embarque = db.session.get(EmbarqueMoto,int(item['id'])) if int(item['id']) else None
                 valor_pago = Decimal(item.get('valor', '0'))
 
                 if embarque:
@@ -521,7 +521,7 @@ def pagar_grupo():
                 if valor_disponivel <= 0:
                     break
 
-                embarque = EmbarqueMoto.query.get(int(emb_id))
+                embarque = db.session.get(EmbarqueMoto,int(emb_id)) if int(emb_id) else None
                 if embarque:
                     valor_saldo_frete = embarque.valor_frete_contratado - (embarque.valor_frete_pago or Decimal('0'))
                     if valor_saldo_frete <= 0:
@@ -594,7 +594,7 @@ def pagar_grupo():
                 if valor_disponivel <= 0:
                     break
 
-                comissao = ComissaoVendedor.query.get(int(com_id))
+                comissao = db.session.get(ComissaoVendedor,int(com_id)) if int(com_id) else None
                 if comissao:
                     valor_item = comissao.valor_rateado
                     if valor_disponivel >= valor_item:
@@ -618,7 +618,7 @@ def pagar_grupo():
             # ✅ Validar apenas se títulos existem e são válidos, mas NÃO calcular valores aqui
             titulo_ids_validos = []
             for titulo_id in itens_ids:
-                titulo_pagar = TituloAPagar.query.get(int(titulo_id))
+                titulo_pagar = db.session.get(TituloAPagar,int(titulo_id)) if int(titulo_id) else None
                 if not titulo_pagar:
                     continue
 
@@ -650,7 +650,7 @@ def pagar_grupo():
                 if valor_disponivel <= 0:
                     break
 
-                despesa = DespesaMensal.query.get(int(desp_id))
+                despesa = db.session.get(DespesaMensal,int(desp_id)) if int(desp_id) else None
                 if despesa:
                     valor_item = despesa.valor - (despesa.valor_pago or Decimal('0'))
                     if valor_disponivel >= valor_item:
@@ -674,7 +674,7 @@ def pagar_grupo():
             # ✅ Validar apenas se títulos existem e são válidos
             titulo_ids_validos = []
             for titulo_id in itens_ids:
-                titulo_pagar = TituloAPagar.query.get(int(titulo_id))
+                titulo_pagar = db.session.get(TituloAPagar,int(titulo_id)) if int(titulo_id) else None
                 if not titulo_pagar:
                     continue
 

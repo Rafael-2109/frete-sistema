@@ -139,7 +139,7 @@ class DeparaService:
             Dict com dados ou None
         """
         try:
-            item = ProdutoFornecedorDepara.query.get(depara_id)
+            item = db.session.get(ProdutoFornecedorDepara,depara_id) if depara_id else None
             return self._to_dict(item) if item else None
 
         except Exception as e:
@@ -189,7 +189,7 @@ class DeparaService:
             cnpj_limpo = self._limpar_cnpj(cnpj_fornecedor)
 
             # Verificar se ja existe
-            existente = ProdutoFornecedorDepara.query.filter_by(
+            existente = db.session.query(ProdutoFornecedorDepara).filter_by(
                 cnpj_fornecedor=cnpj_limpo,
                 cod_produto_fornecedor=cod_produto_fornecedor
             ).first()
@@ -199,6 +199,10 @@ class DeparaService:
                     f"Ja existe De-Para para fornecedor {cnpj_limpo} "
                     f"e produto {cod_produto_fornecedor}"
                 )
+
+            # Buscar razao social automaticamente se nao informada
+            if not razao_fornecedor:
+                razao_fornecedor = self._buscar_razao_fornecedor(cnpj_limpo)
 
             # Detectar fator de conversao automaticamente se UM for Milhar
             if um_fornecedor and um_fornecedor.upper() in UOMS_MILHAR:
@@ -263,6 +267,7 @@ class DeparaService:
         cod_produto_interno: Optional[str] = None,
         nome_produto_interno: Optional[str] = None,
         odoo_product_id: Optional[int] = None,
+        razao_fornecedor: Optional[str] = None,
         um_fornecedor: Optional[str] = None,
         um_interna: Optional[str] = None,
         fator_conversao: Optional[Decimal] = None,
@@ -278,6 +283,7 @@ class DeparaService:
             cod_produto_interno: Novo codigo interno
             nome_produto_interno: Novo nome do produto
             odoo_product_id: Novo ID do produto Odoo
+            razao_fornecedor: Razao social do fornecedor
             um_fornecedor: Nova UM do fornecedor
             um_interna: Nova UM interna
             fator_conversao: Novo fator de conversao
@@ -292,7 +298,7 @@ class DeparaService:
             ValueError: Se registro nao existir
         """
         try:
-            item = ProdutoFornecedorDepara.query.get(depara_id)
+            item = db.session.get(ProdutoFornecedorDepara,depara_id) if depara_id else None
 
             if not item:
                 raise ValueError(f"De-Para {depara_id} nao encontrado")
@@ -306,6 +312,9 @@ class DeparaService:
 
             if odoo_product_id is not None:
                 item.odoo_product_id = odoo_product_id
+
+            if razao_fornecedor is not None:
+                item.razao_fornecedor = razao_fornecedor
 
             if um_fornecedor is not None:
                 item.um_fornecedor = um_fornecedor
@@ -321,6 +330,10 @@ class DeparaService:
 
             if ativo is not None:
                 item.ativo = ativo
+
+            # Buscar razao social automaticamente se registro nao tiver
+            if not item.razao_fornecedor:
+                item.razao_fornecedor = self._buscar_razao_fornecedor(item.cnpj_fornecedor)
 
             # Marcar como nao sincronizado (mudou localmente)
             item.sincronizado_odoo = False
@@ -368,7 +381,7 @@ class DeparaService:
             ValueError: Se registro nao existir
         """
         try:
-            item = ProdutoFornecedorDepara.query.get(depara_id)
+            item = db.session.get(ProdutoFornecedorDepara,depara_id) if depara_id else None
 
             if not item:
                 raise ValueError(f"De-Para {depara_id} nao encontrado")
@@ -418,7 +431,7 @@ class DeparaService:
         try:
             cnpj_limpo = self._limpar_cnpj(cnpj_fornecedor)
 
-            item = ProdutoFornecedorDepara.query.filter_by(
+            item = db.session.query(ProdutoFornecedorDepara).filter_by(
                 cnpj_fornecedor=cnpj_limpo,
                 cod_produto_fornecedor=cod_produto_fornecedor,
                 ativo=True
@@ -504,7 +517,7 @@ class DeparaService:
         try:
             cnpj_limpo = self._limpar_cnpj(cnpj_fornecedor)
 
-            existe = ProdutoFornecedorDepara.query.filter_by(
+            existe = db.session.query(ProdutoFornecedorDepara).filter_by(
                 cnpj_fornecedor=cnpj_limpo,
                 cod_produto_fornecedor=cod_produto_fornecedor,
                 ativo=True
@@ -531,7 +544,7 @@ class DeparaService:
             Dict com resultado da sincronizacao
         """
         try:
-            item = ProdutoFornecedorDepara.query.get(depara_id)
+            item = db.session.get(ProdutoFornecedorDepara,depara_id) if depara_id else None
 
             if not item:
                 raise ValueError(f"De-Para {depara_id} nao encontrado")
@@ -922,6 +935,71 @@ class DeparaService:
             return cnpj_limpo  # Retorna como esta se nao for CNPJ valido
         return f'{cnpj_limpo[:2]}.{cnpj_limpo[2:5]}.{cnpj_limpo[5:8]}/{cnpj_limpo[8:12]}-{cnpj_limpo[12:14]}'
 
+    def _buscar_razao_fornecedor(self, cnpj: str) -> Optional[str]:
+        """
+        Busca a razao social do fornecedor usando estrategia de fallback:
+        1. PedidoCompras (dados locais de compras)
+        2. ProdutoFornecedorDepara existente (De-Para anterior)
+        3. Odoo res.partner (ultimo recurso)
+
+        Args:
+            cnpj: CNPJ limpo (apenas digitos)
+
+        Returns:
+            Razao social ou None se nao encontrar
+        """
+        from app.manufatura.models import PedidoCompras
+
+        cnpj_limpo = self._limpar_cnpj(cnpj)
+
+        # 1º Fallback: PedidoCompras
+        pedido = PedidoCompras.query.filter_by(
+            cnpj_fornecedor=cnpj_limpo
+        ).first()
+        if pedido and pedido.raz_social:
+            logger.debug(f"Razao social encontrada em PedidoCompras: {pedido.raz_social}")
+            return pedido.raz_social
+
+        # 2º Fallback: De-Para existente
+        depara_existente = ProdutoFornecedorDepara.query.filter_by(
+            cnpj_fornecedor=cnpj_limpo
+        ).filter(
+            ProdutoFornecedorDepara.razao_fornecedor.isnot(None),
+            ProdutoFornecedorDepara.razao_fornecedor != ''
+        ).first()
+        if depara_existente and depara_existente.razao_fornecedor:
+            logger.debug(f"Razao social encontrada em De-Para: {depara_existente.razao_fornecedor}")
+            return depara_existente.razao_fornecedor
+
+        # 3º Fallback: Odoo
+        try:
+            odoo = get_odoo_connection()
+            cnpj_formatado = self._formatar_cnpj(cnpj_limpo)
+
+            partner_ids = odoo.search(
+                'res.partner',
+                [('l10n_br_cnpj', '=', cnpj_formatado)]
+            )
+
+            if not partner_ids:
+                # Tenta busca parcial
+                cnpj_raiz = cnpj_formatado[:10] if len(cnpj_formatado) >= 10 else cnpj_formatado
+                partner_ids = odoo.search(
+                    'res.partner',
+                    [('l10n_br_cnpj', 'ilike', cnpj_raiz)]
+                )
+
+            if partner_ids:
+                partner = odoo.read('res.partner', [partner_ids[0]], ['name'])
+                if partner and partner[0].get('name'):
+                    logger.debug(f"Razao social encontrada no Odoo: {partner[0]['name']}")
+                    return partner[0]['name']
+
+        except Exception as e:
+            logger.warning(f"Erro ao buscar razao social no Odoo para CNPJ {cnpj}: {e}")
+
+        return None
+
     def _to_dict(self, item: ProdutoFornecedorDepara) -> Dict[str, Any]:
         """Converte model para dict."""
         if not item:
@@ -1163,6 +1241,11 @@ class DeparaService:
                 um_fornecedor = linha.get('um_fornecedor', '') or None
                 fator_conversao = linha.get('fator_conversao')
 
+                # Buscar razao social do fornecedor (estrategia de fallback)
+                razao_fornecedor = linha.get('razao_fornecedor', '') or ''
+                if not razao_fornecedor:
+                    razao_fornecedor = self._buscar_razao_fornecedor(cnpj) or ''
+
                 # Converter fator para Decimal
                 if fator_conversao:
                     try:
@@ -1187,6 +1270,7 @@ class DeparaService:
                     existente.um_fornecedor = um_fornecedor or existente.um_fornecedor
                     existente.fator_conversao = fator_conversao
                     existente.odoo_product_id = odoo_product_id or existente.odoo_product_id
+                    existente.razao_fornecedor = razao_fornecedor or existente.razao_fornecedor
                     existente.sincronizado_odoo = False  # Marca para re-sync
                     existente.atualizado_por = usuario
                     existente.atualizado_em = datetime.utcnow()
@@ -1199,7 +1283,7 @@ class DeparaService:
                     # Criar novo
                     novo = ProdutoFornecedorDepara(
                         cnpj_fornecedor=cnpj,
-                        razao_fornecedor=linha.get('razao_fornecedor', ''),
+                        razao_fornecedor=razao_fornecedor,
                         cod_produto_fornecedor=cod_fornecedor,
                         descricao_produto_fornecedor=descricao_fornecedor,
                         cod_produto_interno=cod_interno,

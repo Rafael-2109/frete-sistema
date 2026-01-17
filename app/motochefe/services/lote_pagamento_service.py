@@ -188,7 +188,7 @@ def processar_pagamento_lote_comissoes(comissao_ids, empresa_pagadora, data_paga
 
     # 1. BUSCAR COMISSÕES E VALIDAR
     for com_id in comissao_ids:
-        comissao = ComissaoVendedor.query.get(com_id)
+        comissao = db.session.get(ComissaoVendedor,com_id) if com_id else None
         if not comissao:
             raise Exception(f'Comissão ID {com_id} não encontrada')
 
@@ -303,7 +303,7 @@ def processar_pagamento_lote_montagens(titulo_ids, empresa_pagadora, data_pagame
         if valor_disponivel is not None and valor_disponivel <= 0:
             break
 
-        titulo_pagar = TituloAPagar.query.get(titulo_id)
+        titulo_pagar = db.session.get(TituloAPagar,titulo_id) if titulo_id else None
         if not titulo_pagar:
             continue  # Pular título não encontrado
 
@@ -404,7 +404,7 @@ def processar_pagamento_lote_montagens(titulo_ids, empresa_pagadora, data_pagame
             titulo_pagar.data_pagamento = data_pag
 
             # ✅ SINCRONIZAÇÃO: Atualizar PedidoVendaMotoItem.montagem_paga
-            item_pedido = PedidoVendaMotoItem.query.filter_by(
+            item_pedido = db.session.query(PedidoVendaMotoItem).filter_by(
                 pedido_id=titulo_pagar.pedido_id,
                 numero_chassi=titulo_pagar.numero_chassi
             ).first()
@@ -454,7 +454,7 @@ def processar_pagamento_lote_despesas(despesa_ids, empresa_pagadora, data_pagame
 
     # 1. BUSCAR DESPESAS E VALIDAR
     for desp_id in despesa_ids:
-        despesa = DespesaMensal.query.get(desp_id)
+        despesa = db.session.get(DespesaMensal,desp_id) if desp_id else None
         if not despesa:
             raise Exception(f'Despesa ID {desp_id} não encontrada')
 
@@ -569,7 +569,7 @@ def processar_pagamento_lote_movimentacoes(titulo_ids, empresa_pagadora, data_pa
         if valor_disponivel is not None and valor_disponivel <= 0:
             break
 
-        titulo_pagar = TituloAPagar.query.get(titulo_id)
+        titulo_pagar = db.session.get(TituloAPagar,titulo_id) if titulo_id else None
         if not titulo_pagar:
             continue
 
@@ -767,7 +767,7 @@ def obter_detalhes_lote_pagamento(movimentacao_pai_id):
                 item_detalhe['saldo_apos'] = Decimal('0')
 
         elif mov_filha.categoria == 'Comissão' and mov_filha.comissao_vendedor_id:
-            comissao = ComissaoVendedor.query.get(mov_filha.comissao_vendedor_id)
+            comissao = db.session.get(ComissaoVendedor,mov_filha.comissao_vendedor_id) if mov_filha.comissao_vendedor_id else None
             item_detalhe['tipo_item'] = 'COMISSAO'
             item_detalhe['item_objeto'] = comissao
 
@@ -777,7 +777,7 @@ def obter_detalhes_lote_pagamento(movimentacao_pai_id):
             item_detalhe['saldo_apos'] = Decimal('0')
 
         elif mov_filha.categoria == 'Montagem' and mov_filha.numero_chassi:
-            item = PedidoVendaMotoItem.query.filter_by(numero_chassi=mov_filha.numero_chassi).first()
+            item = db.session.query(PedidoVendaMotoItem).filter_by(numero_chassi=mov_filha.numero_chassi).first()
             item_detalhe['tipo_item'] = 'MONTAGEM'
             item_detalhe['item_objeto'] = item
 
@@ -787,7 +787,7 @@ def obter_detalhes_lote_pagamento(movimentacao_pai_id):
             item_detalhe['saldo_apos'] = Decimal('0')
 
         elif mov_filha.categoria == 'Despesa' and mov_filha.despesa_mensal_id:
-            despesa = DespesaMensal.query.get(mov_filha.despesa_mensal_id)
+            despesa = db.session.get(DespesaMensal,mov_filha.despesa_mensal_id) if mov_filha.despesa_mensal_id else None
             item_detalhe['tipo_item'] = 'DESPESA'
             item_detalhe['item_objeto'] = despesa
 
@@ -800,7 +800,7 @@ def obter_detalhes_lote_pagamento(movimentacao_pai_id):
             from app.motochefe.models.financeiro import TituloAPagar
 
             # Buscar TituloAPagar de MOVIMENTACAO correspondente
-            titulo_pagar = TituloAPagar.query.filter_by(
+            titulo_pagar = db.session.query(TituloAPagar).filter_by(
                 pedido_id=mov_filha.pedido_id,
                 numero_chassi=mov_filha.numero_chassi,
                 tipo='MOVIMENTACAO'
@@ -812,7 +812,7 @@ def obter_detalhes_lote_pagamento(movimentacao_pai_id):
             if titulo_pagar:
                 # Calcular saldo HISTORICAMENTE
                 # Buscar todas as movimentações POSTERIORES a esta para recalcular o saldo no momento
-                movimentacoes_posteriores = MovimentacaoFinanceira.query.filter(
+                movimentacoes_posteriores = db.session.query(MovimentacaoFinanceira).filter(
                     MovimentacaoFinanceira.pedido_id == mov_filha.pedido_id,
                     MovimentacaoFinanceira.numero_chassi == mov_filha.numero_chassi,
                     MovimentacaoFinanceira.categoria == 'Movimentação',
@@ -836,13 +836,13 @@ def obter_detalhes_lote_pagamento(movimentacao_pai_id):
 
         elif mov_filha.categoria and 'Título' in mov_filha.categoria and mov_filha.titulo_financeiro_id:
             from app.motochefe.models.financeiro import TituloFinanceiro
-            titulo = TituloFinanceiro.query.get(mov_filha.titulo_financeiro_id)
+            titulo = db.session.get(TituloFinanceiro,mov_filha.titulo_financeiro_id) if mov_filha.titulo_financeiro_id else None
             item_detalhe['tipo_item'] = 'TITULO'
             item_detalhe['item_objeto'] = titulo
 
             # Calcular saldo HISTORICAMENTE
             # Buscar todas as movimentações POSTERIORES a esta para recalcular o saldo no momento
-            movimentacoes_posteriores = MovimentacaoFinanceira.query.filter(
+            movimentacoes_posteriores = db.session.query(MovimentacaoFinanceira).filter(
                 MovimentacaoFinanceira.titulo_financeiro_id == titulo.id,
                 MovimentacaoFinanceira.id > mov_filha.id,
                 MovimentacaoFinanceira.tipo == 'RECEBIMENTO'
@@ -919,7 +919,7 @@ def processar_recebimento_lote_titulos(titulo_ids, valores_recebidos, empresa_re
 
     # 1. BUSCAR TÍTULOS E VALIDAR
     for titulo_id in titulo_ids:
-        titulo = TituloFinanceiro.query.get(titulo_id)
+        titulo = db.session.get(TituloFinanceiro,titulo_id) if titulo_id else None
         if not titulo:
             raise Exception(f'Título ID {titulo_id} não encontrado')
 

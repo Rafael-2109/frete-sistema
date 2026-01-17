@@ -60,7 +60,7 @@ class DespesaCteService:
 
         try:
             # Buscar despesa
-            despesa = DespesaExtra.query.get(despesa_id)
+            despesa = db.session.get(DespesaExtra,despesa_id) if despesa_id else None
             if not despesa:
                 resultado['erro'] = f'Despesa #{despesa_id} não encontrada'
                 return resultado
@@ -68,7 +68,7 @@ class DespesaCteService:
             resultado['despesa'] = despesa
 
             # Buscar frete relacionado
-            frete = Frete.query.get(despesa.frete_id)
+            frete = db.session.get(Frete,despesa.frete_id) if despesa.frete_id else None
             if not frete:
                 resultado['erro'] = f'Frete #{despesa.frete_id} da despesa não encontrado'
                 return resultado
@@ -85,7 +85,7 @@ class DespesaCteService:
             # PRIORIDADE 0: CTe Normal já vinculado ao Frete (NOVO!)
             # =============================================================
             if frete.frete_cte_id:
-                cte_frete = ConhecimentoTransporte.query.get(frete.frete_cte_id)
+                cte_frete = db.session.get(ConhecimentoTransporte,frete.frete_cte_id) if frete.frete_cte_id else None
                 if cte_frete and cte_frete.id not in ids_excluir:
                     resultado['sugestoes_prioridade_0'] = [cte_frete]
                     logger.info(f"Prioridade 0: CTe do frete encontrado (#{cte_frete.id})")
@@ -221,11 +221,11 @@ class DespesaCteService:
             Tuple (sucesso: bool, mensagem: str)
         """
         try:
-            despesa = DespesaExtra.query.get(despesa_id)
+            despesa = db.session.get(DespesaExtra,despesa_id) if despesa_id else None
             if not despesa:
                 return False, f'Despesa #{despesa_id} não encontrada'
 
-            cte = ConhecimentoTransporte.query.get(cte_id)
+            cte = db.session.get(ConhecimentoTransporte,cte_id) if cte_id else None
             if not cte:
                 return False, f'CTe #{cte_id} não encontrado'
 
@@ -233,7 +233,7 @@ class DespesaCteService:
             # Agora aceita CTe Normal (tipo='0') e Complementar (tipo='1')
 
             # Validar se CTe já está vinculado a outra despesa
-            despesa_existente = DespesaExtra.query.filter(
+            despesa_existente = db.session.query(DespesaExtra).filter(
                 and_(
                     DespesaExtra.despesa_cte_id == cte_id,
                     DespesaExtra.id != despesa_id
@@ -275,7 +275,7 @@ class DespesaCteService:
             Tuple (sucesso: bool, mensagem: str)
         """
         try:
-            despesa = DespesaExtra.query.get(despesa_id)
+            despesa = db.session.get(DespesaExtra,despesa_id) if despesa_id else None
             if not despesa:
                 return False, f'Despesa #{despesa_id} não encontrada'
 
@@ -316,7 +316,7 @@ class DespesaCteService:
             Tuple (sucesso: bool, mensagem: str)
         """
         try:
-            despesa = DespesaExtra.query.get(despesa_id)
+            despesa = db.session.get(DespesaExtra,despesa_id) if despesa_id else None
             if not despesa:
                 return False, f'Despesa #{despesa_id} não encontrada'
 
@@ -345,7 +345,7 @@ class DespesaCteService:
         """
         # Aceita CTE ou CTe (case-insensitive via func.upper)
         from sqlalchemy import func
-        return DespesaExtra.query.filter(
+        return db.session.query(DespesaExtra).filter(
             and_(
                 func.upper(DespesaExtra.tipo_documento) == 'CTE',
                 DespesaExtra.status == 'VINCULADO_CTE',
@@ -408,7 +408,7 @@ class DespesaCteService:
 
         try:
             # Buscar despesa
-            despesa = DespesaExtra.query.get(despesa_id)
+            despesa = db.session.get(DespesaExtra,despesa_id) if despesa_id else None
             if not despesa:
                 resultado['erro'] = f'Despesa #{despesa_id} não encontrada'
                 return resultado
@@ -416,7 +416,7 @@ class DespesaCteService:
             resultado['despesa'] = despesa
 
             # Buscar frete relacionado
-            frete = Frete.query.get(despesa.frete_id)
+            frete = db.session.get(Frete,despesa.frete_id) if despesa.frete_id else None
             if not frete:
                 resultado['erro'] = f'Frete #{despesa.frete_id} da despesa não encontrado'
                 return resultado
@@ -508,16 +508,16 @@ class DespesaCteService:
             Tuple (sucesso: bool, mensagem: str)
         """
         try:
-            despesa = DespesaExtra.query.get(despesa_id)
+            despesa = db.session.get(DespesaExtra,despesa_id) if despesa_id else None
             if not despesa:
                 return False, f'Despesa #{despesa_id} não encontrada'
 
-            cte = ConhecimentoTransporte.query.get(cte_id)
+            cte = db.session.get(ConhecimentoTransporte,cte_id) if cte_id else None
             if not cte:
                 return False, f'CTe #{cte_id} não encontrado'
 
             # Validar se CTe já está vinculado a outra despesa
-            despesa_existente = DespesaExtra.query.filter(
+            despesa_existente = db.session.query(DespesaExtra).filter(
                 and_(
                     DespesaExtra.despesa_cte_id == cte_id,
                     DespesaExtra.id != despesa_id

@@ -606,7 +606,7 @@ def pagar_comissao(id):
         if not empresa_pagadora_id:
             raise Exception('Selecione a empresa pagadora')
 
-        empresa_pagadora = EmpresaVendaMoto.query.get(empresa_pagadora_id)
+        empresa_pagadora = db.session.get(EmpresaVendaMoto,empresa_pagadora_id) if empresa_pagadora_id else None
         if not empresa_pagadora:
             raise Exception('Empresa pagadora não encontrada')
 
@@ -683,7 +683,7 @@ def pagar_comissoes_lote():
             raise Exception('Lista de comissões vazia')
 
         # Buscar empresa
-        empresa_pagadora = EmpresaVendaMoto.query.get(empresa_pagadora_id)
+        empresa_pagadora = db.session.get(EmpresaVendaMoto,empresa_pagadora_id) if empresa_pagadora_id else None
         if not empresa_pagadora:
             raise Exception('Empresa pagadora não encontrada')
 

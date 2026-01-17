@@ -54,7 +54,7 @@ def dashboard():
         
         embarque = None
         if embarque_item:
-            embarque = Embarque.query.get(embarque_item.embarque_id)
+            embarque = db.session.get(Embarque,embarque_item.embarque_id) if embarque_item.embarque_id else None
         
         alertas_enriquecidos.append({
             'alerta': alerta,

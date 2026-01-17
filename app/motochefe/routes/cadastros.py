@@ -235,13 +235,13 @@ def adicionar_preco_equipe(equipe_id):
         return redirect(url_for('motochefe.editar_equipe', id=equipe_id))
 
     # Verificar se modelo existe
-    modelo = ModeloMoto.query.get(int(modelo_id))
+    modelo = db.session.get(ModeloMoto,int(modelo_id)) if int(modelo_id) else None
     if not modelo:
         flash('Modelo não encontrado', 'danger')
         return redirect(url_for('motochefe.editar_equipe', id=equipe_id))
 
     # Verificar duplicidade
-    existe = TabelaPrecoEquipe.query.filter_by(
+    existe = db.session.query(TabelaPrecoEquipe).filter_by(
         equipe_vendas_id=equipe_id,
         modelo_id=int(modelo_id),
         ativo=True

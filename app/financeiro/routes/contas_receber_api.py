@@ -179,7 +179,7 @@ def api_confirmacao(conta_id):
         # Buscar nome do tipo para retornar
         tipo_nome = None
         if tipo_id:
-            tipo_obj = ContasAReceberTipo.query.get(tipo_id)
+            tipo_obj = db.session.get(ContasAReceberTipo,tipo_id) if tipo_id else None
             tipo_nome = tipo_obj.tipo if tipo_obj else None
 
         return jsonify({

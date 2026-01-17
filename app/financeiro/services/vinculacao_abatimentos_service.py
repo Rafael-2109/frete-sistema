@@ -180,11 +180,11 @@ class VinculacaoAbatimentosService:
         Returns:
             Tuple (sucesso, mensagem)
         """
-        abatimento = ContasAReceberAbatimento.query.get(abatimento_id)
+        abatimento = db.session.get(ContasAReceberAbatimento,abatimento_id) if abatimento_id else None
         if not abatimento:
             return False, 'Abatimento não encontrado'
 
-        reconciliacao = ContasAReceberReconciliacao.query.get(reconciliacao_id)
+        reconciliacao = db.session.get(ContasAReceberReconciliacao,reconciliacao_id) if reconciliacao_id else None
         if not reconciliacao:
             return False, 'Reconciliação não encontrada'
 
@@ -225,7 +225,7 @@ class VinculacaoAbatimentosService:
         Returns:
             Tuple (sucesso, mensagem)
         """
-        abatimento = ContasAReceberAbatimento.query.get(abatimento_id)
+        abatimento = db.session.get(ContasAReceberAbatimento,abatimento_id) if abatimento_id else None
         if not abatimento:
             return False, 'Abatimento não encontrado'
 

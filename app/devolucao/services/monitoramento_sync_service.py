@@ -323,7 +323,8 @@ class MonitoramentoSyncService:
             Dict com resultado
         """
         try:
-            entrega = EntregaMonitorada.query.get(entrega_id)
+            from app import db
+            entrega = db.session.get(EntregaMonitorada,entrega_id) if entrega_id else None
             if not entrega:
                 return {'sucesso': False, 'erro': 'Entrega nao encontrada'}
 

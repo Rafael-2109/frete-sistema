@@ -178,7 +178,7 @@ def atualizar_nf_embarque_item_especifico(embarque_item_id):
     try:
         from app.embarques.models import Embarque
         
-        item = EmbarqueItem.query.get(embarque_item_id)
+        item = db.session.get(EmbarqueItem,embarque_item_id) if embarque_item_id else None
         
         if not item:
             return {'sucesso': False, 'erro': 'EmbarqueItem não encontrado'}
@@ -190,7 +190,7 @@ def atualizar_nf_embarque_item_especifico(embarque_item_id):
         if item.status != 'ativo':
             return {'sucesso': False, 'erro': 'EmbarqueItem não está ativo'}
             
-        embarque = Embarque.query.get(item.embarque_id)
+        embarque = db.session.get(Embarque,item.embarque_id) if item.embarque_id else None
         if not embarque or embarque.status != 'ativo':
             return {'sucesso': False, 'erro': 'Embarque não está ativo'}
             

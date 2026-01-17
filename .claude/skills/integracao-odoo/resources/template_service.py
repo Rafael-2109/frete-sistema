@@ -95,7 +95,7 @@ class LancamentoXxxOdooService(LancamentoOdooService):
         Faz rollback dos campos Odoo em caso de erro.
         """
         try:
-            # xxx = Xxx.query.get(xxx_id)
+            # xxx = db.session.get(Xxx,xxx_id) if xxx_id else None
             # if not xxx:
             #     return False
 
@@ -153,7 +153,7 @@ class LancamentoXxxOdooService(LancamentoOdooService):
             # ================================================
             # VALIDAÇÕES INICIAIS
             # ================================================
-            # xxx = Xxx.query.get(xxx_id)
+            # xxx = db.session.get(Xxx,xxx_id) if xxx_id else None
             # if not xxx:
             #     raise ValueError(f"Xxx #{xxx_id} não encontrado")
 
@@ -166,7 +166,7 @@ class LancamentoXxxOdooService(LancamentoOdooService):
             #     raise ValueError(f"Status '{xxx.status}' não permite lançamento")
 
             # Buscar CTe
-            # cte = ConhecimentoTransporte.query.get(xxx.cte_id)
+            # cte = db.session.get(ConhecimentoTransporte,xxx.cte_id) if xxx.cte_id else None
             # cte_chave = cte.chave_acesso
             # cte_id = cte.id
 

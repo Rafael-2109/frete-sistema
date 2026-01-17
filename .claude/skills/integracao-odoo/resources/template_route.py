@@ -26,7 +26,7 @@ def lancar_xxx_odoo(xxx_id):
     from app.xxx.services.lancamento_xxx_odoo_service import LancamentoXxxOdooService
     from app.xxx.models import Xxx
 
-    xxx = Xxx.query.get_or_404(xxx_id)
+    xxx = db.session.get(Xxx,xxx_id) if xxx_id else None
 
     # ================================================
     # VALIDAÇÕES
@@ -115,7 +115,7 @@ def auditoria_xxx_odoo(xxx_id):
     from app.fretes.models import LancamentoFreteOdooAuditoria
     from app.xxx.models import Xxx
 
-    xxx = Xxx.query.get_or_404(xxx_id)
+    xxx = db.session.get(Xxx,xxx_id) if xxx_id else None
 
     # Ajustar filtro conforme campo na auditoria
     auditorias = LancamentoFreteOdooAuditoria.query.filter_by(

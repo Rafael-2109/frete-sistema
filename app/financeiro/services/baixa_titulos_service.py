@@ -113,7 +113,7 @@ class BaixaTitulosService:
         Returns:
             Dict com estatisticas do processamento
         """
-        lote = BaixaTituloLote.query.get(lote_id)
+        lote = db.session.get(BaixaTituloLote,lote_id) if lote_id else None
         if not lote:
             raise ValueError(f"Lote {lote_id} nao encontrado")
 

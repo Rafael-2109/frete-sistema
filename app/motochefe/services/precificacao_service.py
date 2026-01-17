@@ -27,11 +27,12 @@ def obter_regras_aplicaveis(cliente_id, equipe_id):
             'comissao_rateada': bool
         }
     """
-    cliente = ClienteMoto.query.get(cliente_id)
+    from app import db
+    cliente = db.session.get(ClienteMoto,cliente_id) if cliente_id else None
 
     if cliente and cliente.crossdocking:
         # ✅ Usa regras de CrossDocking genérico (único registro)
-        crossdocking = CrossDocking.query.first()  # ⚠️ ALTERADO: Busca o único registro genérico
+        crossdocking = db.session.query(CrossDocking).first()  # ⚠️ ALTERADO: Busca o único registro genérico
 
         if not crossdocking:
             # ⚠️ Erro crítico: CrossDocking não configurado
@@ -52,7 +53,7 @@ def obter_regras_aplicaveis(cliente_id, equipe_id):
         }
     else:
         # ✅ Usa regras de EquipeVendasMoto
-        equipe = EquipeVendasMoto.query.get(equipe_id)
+        equipe = db.session.get(EquipeVendasMoto,equipe_id) if equipe_id else None
         if equipe:
             return {
                 'tipo': 'equipe',
@@ -111,7 +112,8 @@ def obter_configuracao_equipe(equipe_id):
             'permitir_montagem': bool
         }
     """
-    equipe = EquipeVendasMoto.query.get(equipe_id)
+    from app import db
+    equipe = db.session.get(EquipeVendasMoto,equipe_id) if equipe_id else None
 
     if not equipe:
         return {

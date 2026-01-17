@@ -1079,7 +1079,7 @@ def editar_palletizacao_api(id):
     """API para editar produto via modal"""
     try:
         # Buscar produto
-        produto = CadastroPalletizacao.query.get(id)
+        produto = db.session.get(CadastroPalletizacao,id) if id else None
 
         if not produto:
             return jsonify({'sucesso': False, 'erro': 'Produto não encontrado'}), 404

@@ -27,7 +27,7 @@ def gerar_comissao_moto(titulo_venda):
         raise Exception(f'Título não está pago: {titulo_venda.status}')
 
     # Verificar se já existe comissão para esta moto
-    comissao_existente = ComissaoVendedor.query.filter_by(
+    comissao_existente = db.session.query(ComissaoVendedor).filter_by(
         pedido_id=titulo_venda.pedido_id,
         numero_chassi=titulo_venda.numero_chassi
     ).first()
@@ -42,7 +42,7 @@ def gerar_comissao_moto(titulo_venda):
         raise Exception('Equipe de vendas não encontrada')
 
     # Buscar item da moto
-    item = PedidoVendaMotoItem.query.filter_by(
+    item = db.session.query(PedidoVendaMotoItem).filter_by(
         pedido_id=pedido.id,
         numero_chassi=titulo_venda.numero_chassi
     ).first()

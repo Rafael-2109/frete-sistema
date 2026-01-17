@@ -219,7 +219,7 @@ class ServicoProjecaoEstoque:
         from app.manufatura.models import RequisicaoCompras, RequisicaoCompraAlocacao
 
         # Buscar requisição
-        requisicao = RequisicaoCompras.query.get(requisicao_id)
+        requisicao = db.session.get(RequisicaoCompras,requisicao_id) if requisicao_id else None
         if not requisicao:
             return {'sucesso': False, 'erro': 'Requisição não encontrada'}
 
@@ -250,7 +250,7 @@ class ServicoProjecaoEstoque:
         )
 
         # Buscar pedidos vinculados via alocação
-        alocacoes = RequisicaoCompraAlocacao.query.filter_by(
+        alocacoes = db.session.query(RequisicaoCompraAlocacao).filter_by(
             requisicao_compra_id=requisicao.id
         ).all()
 
@@ -408,7 +408,7 @@ class ServicoProjecaoEstoque:
         resultado = []
 
         # Primeiro: verificar se este produto TEM programação própria
-        programacoes_diretas = ProgramacaoProducao.query.filter(
+        programacoes_diretas = db.session.query(ProgramacaoProducao).filter(
             ProgramacaoProducao.cod_produto == cod_produto,
             ProgramacaoProducao.data_programacao.between(data_inicio, data_fim)
         ).all()
@@ -428,7 +428,7 @@ class ServicoProjecaoEstoque:
         if self._eh_produto_intermediario(cod_produto):
             # ✅ Buscar BOMs upstream com cache
             if cod_produto not in self._cache_boms_upstream:
-                self._cache_boms_upstream[cod_produto] = ListaMateriais.query.filter(
+                self._cache_boms_upstream[cod_produto] = db.session.query(ListaMateriais).filter(
                     ListaMateriais.cod_produto_componente == cod_produto,
                     ListaMateriais.status == 'ativo'
                 ).all()
@@ -478,7 +478,7 @@ class ServicoProjecaoEstoque:
 
         # Buscar quais produtos CONSOMEM este componente DIRETAMENTE
         # ✅ CORREÇÃO: Usar .in_() para buscar todos os códigos unificados
-        boms = ListaMateriais.query.filter(
+        boms = db.session.query(ListaMateriais).filter(
             ListaMateriais.cod_produto_componente.in_(codigos_unificados),
             ListaMateriais.status == 'ativo'
         ).all()
@@ -887,7 +887,7 @@ class ServicoProjecaoEstoque:
         # ✅ CORRIGIDO: usar NOT IN em vez de IN para não excluir status válidos
         # ✅ Trata NULL com db.or_ para não perder registros
         from sqlalchemy import or_
-        requisicoes = RequisicaoCompras.query.filter(
+        requisicoes = db.session.query(RequisicaoCompras).filter(
             RequisicaoCompras.cod_produto == cod_produto,
             RequisicaoCompras.importado_odoo == True,
             or_(

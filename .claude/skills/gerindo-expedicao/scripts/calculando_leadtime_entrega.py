@@ -23,7 +23,7 @@ from decimal import Decimal
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..')))
 
 # Importar modulo centralizado de resolucao de entidades
-from resolver_entidades import (
+from resolver_entidades import ( # noqa: E402
     resolver_pedido,
     formatar_sugestao_pedido
 )
@@ -149,7 +149,7 @@ def calcular_expedicao_sugerida(args):
     ).all()
 
     if not cidades_atendidas:
-        cidades_atendidas = CidadeAtendida.query.filter(
+        cidades_atendidas = db.session.query(CidadeAtendida).filter(
             CidadeAtendida.uf == uf
         ).limit(10).all()
 
@@ -177,7 +177,7 @@ def calcular_expedicao_sugerida(args):
             status = 'ATENCAO'  # Poucos dias
 
         # Buscar nome da transportadora
-        transportadora = Transportadora.query.get(ca.transportadora_id) if ca.transportadora_id else None
+        transportadora = db.session.get(Transportadora,ca.transportadora_id) if ca.transportadora_id else None
         nome_transp = transportadora.razao_social if transportadora else f"Transportadora #{ca.transportadora_id}"
         modalidade = getattr(ca, 'modalidade', None)
 
@@ -300,7 +300,7 @@ def calcular_leadtime_entrega(args):
 
     if not cidades_atendidas:
         # Tentar buscar apenas por UF (mais generico)
-        cidades_atendidas = CidadeAtendida.query.filter(
+        cidades_atendidas = db.session.query(CidadeAtendida).filter(
             CidadeAtendida.uf == uf
         ).limit(5).all()
 
@@ -310,7 +310,7 @@ def calcular_leadtime_entrega(args):
         data_entrega = data_embarque + timedelta(days=lead_time)
 
         # Buscar nome da transportadora
-        transportadora = Transportadora.query.get(ca.transportadora_id) if ca.transportadora_id else None
+        transportadora = db.session.get(Transportadora,ca.transportadora_id) if ca.transportadora_id else None
         nome_transp = transportadora.razao_social if transportadora else f"Transportadora #{ca.transportadora_id}"
 
         # Buscar nome da cidade via relacionamento

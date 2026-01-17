@@ -1068,7 +1068,7 @@ class ValidacaoFiscalService:
         Returns:
             {'sucesso': bool, 'mensagem': str}
         """
-        divergencia = DivergenciaFiscal.query.get(divergencia_id)
+        divergencia = db.session.get(DivergenciaFiscal,divergencia_id) if divergencia_id else None
         if not divergencia:
             return {'sucesso': False, 'mensagem': 'Divergencia nao encontrada'}
 
@@ -1085,7 +1085,7 @@ class ValidacaoFiscalService:
 
         # Se atualizar baseline
         if atualizar_baseline and divergencia.perfil_fiscal_id:
-            perfil = PerfilFiscalProdutoFornecedor.query.get(divergencia.perfil_fiscal_id)
+            perfil = db.session.get(PerfilFiscalProdutoFornecedor,divergencia.perfil_fiscal_id) if divergencia.perfil_fiscal_id else None
             if perfil:
                 self._atualizar_perfil_campo(
                     perfil=perfil,
@@ -1107,7 +1107,7 @@ class ValidacaoFiscalService:
         usuario: str
     ) -> Dict:
         """Rejeita uma divergencia fiscal (NF sera rejeitada)"""
-        divergencia = DivergenciaFiscal.query.get(divergencia_id)
+        divergencia = db.session.get(DivergenciaFiscal,divergencia_id) if divergencia_id else None
         if not divergencia:
             return {'sucesso': False, 'mensagem': 'Divergencia nao encontrada'}
 
@@ -1175,7 +1175,7 @@ class ValidacaoFiscalService:
         Returns:
             {'sucesso': bool, 'mensagem': str, 'perfil_id': int}
         """
-        cadastro = CadastroPrimeiraCompra.query.get(cadastro_id)
+        cadastro = db.session.get(CadastroPrimeiraCompra,cadastro_id) if cadastro_id else None
         if not cadastro:
             return {'sucesso': False, 'mensagem': 'Cadastro nao encontrado'}
 
@@ -1224,7 +1224,7 @@ class ValidacaoFiscalService:
         observacao: str
     ) -> Dict:
         """Rejeita registro de 1a compra (NF sera rejeitada)"""
-        cadastro = CadastroPrimeiraCompra.query.get(cadastro_id)
+        cadastro = db.session.get(CadastroPrimeiraCompra,cadastro_id) if cadastro_id else None
         if not cadastro:
             return {'sucesso': False, 'mensagem': 'Cadastro nao encontrado'}
 
@@ -1324,7 +1324,7 @@ class ValidacaoFiscalService:
                     continue
 
                 # Verificar se NCM esta na tabela de validados
-                ncm_validado = NcmIbsCbsValidado.query.filter_by(
+                ncm_validado = db.session.query(NcmIbsCbsValidado).filter_by(
                     ncm_prefixo=ncm_prefixo,
                     ativo=True
                 ).first()
@@ -1382,7 +1382,7 @@ class ValidacaoFiscalService:
                     resultado['validado'] = False
 
                     # Verificar se ja existe pendencia para esta chave
-                    pendencia_existente = PendenciaFiscalIbsCbs.query.filter_by(
+                    pendencia_existente = db.session.query(PendenciaFiscalIbsCbs).filter_by(
                         chave_acesso=chave_nfe
                     ).first()
 

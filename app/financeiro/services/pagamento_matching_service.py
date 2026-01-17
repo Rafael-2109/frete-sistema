@@ -83,7 +83,7 @@ class PagamentoMatchingService:
         Returns:
             Dict com estatísticas do matching
         """
-        lote = ExtratoLote.query.get(lote_id)
+        lote = db.session.get(ExtratoLote,lote_id) if lote_id else None
         if not lote:
             raise ValueError(f"Lote {lote_id} não encontrado")
 
@@ -504,7 +504,7 @@ class PagamentoMatchingService:
         """
         Vincula manualmente um título A PAGAR ao item de extrato.
         """
-        titulo = ContasAPagar.query.get(titulo_id)
+        titulo = db.session.get(ContasAPagar,titulo_id) if titulo_id else None
         if not titulo:
             raise ValueError(f"Título {titulo_id} não encontrado")
 
