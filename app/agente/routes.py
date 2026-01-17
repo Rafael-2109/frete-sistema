@@ -142,14 +142,41 @@ def api_chat():
             f"Plan: {plan_mode}{files_info}"
         )
 
-        # Enriquece mensagem com arquivos
+        # FEAT-032: Processar arquivos - separar imagens (Vision) dos outros (contexto texto)
+        image_files = []
+        other_files = []
         enriched_message = message
+
         if files:
-            files_context = "\n\n[Arquivos anexados pelo usuário:]\n"
             for f in files:
-                files_context += f"- {f.get('name', 'arquivo')} ({f.get('type', 'file')}, {f.get('size', 0)} bytes)\n"
-                files_context += f"  URL: {f.get('url', 'N/A')}\n"
-            enriched_message = message + files_context
+                file_type = f.get('type', 'file')
+                if file_type == 'image':
+                    # Converter imagem para base64 (Vision API)
+                    file_path = _resolve_file_path(f.get('url', ''))
+                    if file_path and os.path.exists(file_path):
+                        image_data = _image_to_base64(file_path)
+                        if image_data:
+                            image_files.append(image_data)
+                            logger.info(f"[AGENTE] Imagem preparada para Vision: {f.get('name')}")
+                        else:
+                            # Fallback: se falhar conversão, adiciona como contexto texto
+                            other_files.append(f)
+                    else:
+                        logger.warning(f"[AGENTE] Arquivo de imagem não encontrado: {f.get('url')}")
+                        other_files.append(f)
+                else:
+                    other_files.append(f)
+
+            # Contexto textual apenas para arquivos não-imagem
+            if other_files:
+                files_context = "\n\n[Arquivos anexados pelo usuário:]\n"
+                for f in other_files:
+                    files_context += f"- {f.get('name', 'arquivo')} ({f.get('type', 'file')}, {f.get('size', 0)} bytes)\n"
+                    files_context += f"  URL: {f.get('url', 'N/A')}\n"
+                enriched_message = message + files_context
+
+            if image_files:
+                logger.info(f"[AGENTE] {len(image_files)} imagem(ns) preparada(s) para Vision API")
 
         return Response(
             stream_with_context(_stream_chat_response(
@@ -161,6 +188,7 @@ def api_chat():
                 model=model,
                 thinking_enabled=thinking_enabled,
                 plan_mode=plan_mode,
+                image_files=image_files,  # FEAT-032: Imagens para Vision API
             )),
             mimetype='text/event-stream',
             headers={
@@ -187,6 +215,7 @@ def _stream_chat_response(
     model: str = None,
     thinking_enabled: bool = False,
     plan_mode: bool = False,
+    image_files: List[dict] = None,
 ) -> Generator[str, None, None]:
     """
     Gera resposta em streaming (SSE).
@@ -197,8 +226,11 @@ def _stream_chat_response(
     - Trata sessão expirada no SDK
     - Acumula texto para salvar resposta completa
 
+    FEAT-032: Suporte a Vision API
+    - image_files: Lista de imagens em formato base64 para Vision
+
     Args:
-        message: Mensagem enriquecida (com arquivos)
+        message: Mensagem enriquecida (com arquivos não-imagem)
         original_message: Mensagem original do usuário
         user_id: ID do usuário
         user_name: Nome do usuário
@@ -206,6 +238,7 @@ def _stream_chat_response(
         model: Modelo a usar
         thinking_enabled: Extended Thinking
         plan_mode: Modo somente-leitura
+        image_files: Lista de dicts com imagens em base64 para Vision API
 
     Yields:
         Eventos SSE formatados
@@ -302,7 +335,7 @@ def _stream_chat_response(
                 if context_injection:
                     prompt_to_send = f"[CONTEXTO DO USUÁRIO]\n{context_injection}\n\n{prompt_to_send}"
 
-                logger.info(f"[AGENTE] Chamando SDK | sdk_session_id: {sdk_session_id[:8] if sdk_session_id else 'Nova'}")
+                logger.info(f"[AGENTE] Chamando SDK | sdk_session_id: {sdk_session_id[:8] if sdk_session_id else 'Nova'} | images: {len(image_files) if image_files else 0}")
 
                 async for event in client.stream_response(
                     prompt=prompt_to_send,
@@ -313,6 +346,7 @@ def _stream_chat_response(
                     thinking_enabled=thinking_enabled,
                     plan_mode=plan_mode,
                     user_id=user_id,  # Para Memory Tool
+                    image_files=image_files,  # FEAT-032: Imagens para Vision API
                 ):
                     # Evento de inicialização
                     if event.type == 'init':
@@ -1030,6 +1064,92 @@ def _get_mimetype(filename: str) -> str:
     return mimetypes.get(ext, 'application/octet-stream')
 
 
+def _resolve_file_path(url: str) -> Optional[str]:
+    """
+    Resolve URL de arquivo para caminho local.
+
+    Args:
+        url: URL do arquivo (ex: /agente/api/files/session/uuid_file.png)
+
+    Returns:
+        Caminho absoluto do arquivo ou None se não encontrado
+    """
+    if not url:
+        return None
+
+    # Extrair partes da URL: /agente/api/files/{session_id}/{filename}
+    parts = url.split('/')
+    if len(parts) < 5:
+        return None
+
+    try:
+        # Formato: ['', 'agente', 'api', 'files', 'session_id', 'filename']
+        session_id = parts[-2]
+        filename = parts[-1]
+
+        # Tentar caminho com user_id primeiro
+        if hasattr(current_user, 'id'):
+            user_folder = os.path.join(UPLOAD_FOLDER, str(current_user.id), session_id)
+            user_path = os.path.join(user_folder, filename)
+            if os.path.exists(user_path):
+                return user_path
+
+        # Fallback: caminho sem user_id
+        fallback_folder = os.path.join(UPLOAD_FOLDER, session_id)
+        fallback_path = os.path.join(fallback_folder, filename)
+        if os.path.exists(fallback_path):
+            return fallback_path
+
+        return None
+    except Exception as e:
+        logger.error(f"[AGENTE] Erro ao resolver caminho do arquivo: {e}")
+        return None
+
+
+def _image_to_base64(file_path: str) -> Optional[dict]:
+    """
+    Converte imagem para formato Vision API do Claude.
+
+    Args:
+        file_path: Caminho absoluto da imagem
+
+    Returns:
+        Dict com formato Vision Block ou None se erro
+    """
+    import base64
+
+    ext = file_path.rsplit('.', 1)[-1].lower() if '.' in file_path else ''
+    media_types = {
+        'png': 'image/png',
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'gif': 'image/gif',
+        'webp': 'image/webp'
+    }
+
+    if ext not in media_types:
+        logger.warning(f"[AGENTE] Formato de imagem não suportado para Vision: {ext}")
+        return None
+
+    try:
+        with open(file_path, 'rb') as f:
+            image_data = base64.b64encode(f.read()).decode('utf-8')
+
+        logger.info(f"[AGENTE] Imagem convertida para base64: {os.path.basename(file_path)} ({len(image_data)} chars)")
+
+        return {
+            'type': 'image',
+            'source': {
+                'type': 'base64',
+                'media_type': media_types[ext],
+                'data': image_data
+            }
+        }
+    except Exception as e:
+        logger.error(f"[AGENTE] Erro ao converter imagem para base64: {e}")
+        return None
+
+
 @agente_bp.route('/api/upload', methods=['POST'])
 @login_required
 def api_upload_file():
@@ -1144,10 +1264,18 @@ def api_download_file(session_id: str, filename: str):
         mimetype = _get_mimetype(safe_filename)
         logger.info(f"[AGENTE] Enviando arquivo: {original_name} ({mimetype})")
 
+        # Imagens: exibir inline (no navegador)
+        # Outros arquivos: forçar download
+        ext = safe_filename.rsplit('.', 1)[-1].lower() if '.' in safe_filename else ''
+        is_image = ext in ('png', 'jpg', 'jpeg', 'gif')
+
+        # Parâmetro ?download=1 força download mesmo para imagens
+        force_download = request.args.get('download', '0') == '1'
+
         return send_file(
             file_path,
             mimetype=mimetype,
-            as_attachment=True,
+            as_attachment=(not is_image) or force_download,
             download_name=original_name
         )
 

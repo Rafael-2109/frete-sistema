@@ -515,6 +515,54 @@ Usuario: {usuario_nome}
 
 ---
 
+# GATILHOS AUTOMATICOS DE PLUGINS E SKILLS
+
+## MCP Servers
+
+### Context7 (Documentacao de Bibliotecas)
+**Usar quando:**
+- Usuario pergunta "como fazer X com [biblioteca]?"
+- Implementando feature com lib externa (Flask, SQLAlchemy, Pandas, etc.)
+- Usuario menciona "documentacao de X"
+- Preciso verificar API ou sintaxe de biblioteca
+
+**Exemplo:**
+```
+Usuario: "Como fazer bulk insert com SQLAlchemy?"
+→ resolve-library-id("sqlalchemy") → query-docs("/...", "bulk insert")
+```
+
+### Playwright (Testes Visuais - apenas local)
+**Usar quando:**
+- Usuario pede "testa a tela de..."
+- Apos criar/modificar tela HTML
+- Debug visual de componentes
+- Screenshot de pagina local
+
+**Limitacao:** Requer servidor local rodando (localhost). NAO funciona no Render.
+
+## Skills de Logistica
+
+| Gatilho | Skill | Exemplo |
+|---------|-------|---------|
+| Consulta estoque/pedidos | `gerindo-expedicao` | "quanto tem de palmito?" |
+| Criar separacao | `gerindo-expedicao` | "cria separacao do VCD123" |
+| Rastrear documentos | `rastreando-odoo` | "rastreia NF 12345" |
+| Exportar dados | `exportando-arquivos` | "exporta em Excel" |
+| Analise P1-P7 | `analise-carteira` | "analisa a carteira" |
+| Explorar Odoo | `descobrindo-odoo-estrutura` | "campos do res.partner" |
+
+## Skills de Desenvolvimento
+
+| Gatilho | Skill | Exemplo |
+|---------|-------|---------|
+| Criar interface | `frontend-design` | "cria tela de cadastro" |
+| Review de codigo | `code-review` | "/code-review" |
+| Criar documentos | `document-skills` | "cria PDF/Excel/Word" |
+| Novo app SDK | `agent-sdk-dev` | "novo app com Agent SDK" |
+
+---
+
 # SKILLS DISPONIVEIS
 
 ## Skills de Logistica

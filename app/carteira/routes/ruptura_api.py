@@ -16,30 +16,30 @@ import json
 
 logger = logging.getLogger(__name__)
 
-# Tentar importar Redis e Celery (opcional)
+# Tentar importar Redis (opcional)
 try:
     import redis
     import os
-    
-    # Usar variáveis de ambiente do Render
-    REDIS_CLIENT = redis.StrictRedis(
-        host=os.environ.get('REDIS_HOST', 'localhost'),
-        port=int(os.environ.get('REDIS_PORT', 6379)),
-        db=int(os.environ.get('REDIS_DB', 0)),
-        password=os.environ.get('REDIS_PASSWORD', None),  # Se houver senha
+
+    # Usar REDIS_URL (padrao Render) ou fallback para localhost
+    REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+
+    # Conectar usando URL (suporta redis:// e rediss:// para SSL)
+    REDIS_CLIENT = redis.from_url(
+        REDIS_URL,
         decode_responses=True,
-        socket_connect_timeout=1,
-        socket_timeout=1
+        socket_connect_timeout=2,
+        socket_timeout=2
     )
     # Testar conexão
     REDIS_CLIENT.ping()
     REDIS_DISPONIVEL = True
     REDIS_TTL = int(os.environ.get('REDIS_TTL', 30))  # 30 segundos de cache por padrão
+    logger.info(f"Redis conectado com sucesso")
 except Exception as e:
-    logger.error(f"Erro ao conectar ao Redis: {e}")
+    logger.warning(f"Redis nao disponivel ({e}) - usando processamento direto")
     REDIS_CLIENT = None
     REDIS_DISPONIVEL = False
-    logger.warning("Redis não disponível - usando processamento direto")
 
 
 @carteira_bp.route('/api/ruptura/analisar-pedido/<num_pedido>', methods=['GET'])

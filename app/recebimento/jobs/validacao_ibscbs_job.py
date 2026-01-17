@@ -152,42 +152,45 @@ class ValidacaoIbsCbsJob:
 
             logger.info(f"Encontradas {len(dfes)} NF-es para validar")
 
-            for dfe in dfes:
-                try:
-                    chave = dfe.get('protnfe_infnfe_chnfe')
-                    if not chave:
-                        continue
+            # Usar no_autoflush para evitar erro de Query-invoked autoflush
+            # quando queries sao executadas durante o loop de processamento
+            with db.session.no_autoflush:
+                for dfe in dfes:
+                    try:
+                        chave = dfe.get('protnfe_infnfe_chnfe')
+                        if not chave:
+                            continue
 
-                    # Verificar se ja existe pendencia para esta chave
-                    if PendenciaFiscalIbsCbs.query.filter_by(chave_acesso=chave).first():
-                        continue
+                        # Verificar se ja existe pendencia para esta chave
+                        if PendenciaFiscalIbsCbs.query.filter_by(chave_acesso=chave).first():
+                            continue
 
-                    cnpj = ''.join(c for c in (dfe.get('nfe_infnfe_emit_cnpj') or '') if c.isdigit())
+                        cnpj = ''.join(c for c in (dfe.get('nfe_infnfe_emit_cnpj') or '') if c.isdigit())
 
-                    # Ignorar CNPJs do grupo (Nacom, Goya)
-                    if any(cnpj.startswith(p) for p in CNPJS_IGNORAR):
-                        continue
+                        # Ignorar CNPJs do grupo (Nacom, Goya)
+                        if any(cnpj.startswith(p) for p in CNPJS_IGNORAR):
+                            continue
 
-                    # Verificar regime tributario do fornecedor
-                    regime_info = validacao_ibscbs_service.buscar_regime_tributario_odoo(cnpj)
+                        # Verificar regime tributario do fornecedor
+                        regime_info = validacao_ibscbs_service.buscar_regime_tributario_odoo(cnpj)
 
-                    if not regime_info:
-                        logger.debug(f"Regime tributario nao encontrado para CNPJ {cnpj}")
-                        continue
+                        if not regime_info:
+                            logger.debug(f"Regime tributario nao encontrado para CNPJ {cnpj}")
+                            continue
 
-                    if regime_info.get('regime_tributario') != '3':
-                        # Nao e Regime Normal - nao precisa destacar IBS/CBS
-                        continue
+                        if regime_info.get('regime_tributario') != '3':
+                            # Nao e Regime Normal - nao precisa destacar IBS/CBS
+                            continue
 
-                    # Validar NF-e para IBS/CBS (retorna numero de pendencias criadas)
-                    pendencias_criadas = self._validar_nfe_ibscbs(dfe, regime_info)
+                        # Validar NF-e para IBS/CBS (retorna numero de pendencias criadas)
+                        pendencias_criadas = self._validar_nfe_ibscbs(dfe, regime_info)
 
-                    resultado['processadas'] += 1
-                    resultado['pendencias'] += pendencias_criadas
+                        resultado['processadas'] += 1
+                        resultado['pendencias'] += pendencias_criadas
 
-                except Exception as e:
-                    logger.error(f"Erro ao processar NF-e {dfe.get('id')}: {e}")
-                    resultado['erros'] += 1
+                    except Exception as e:
+                        logger.error(f"Erro ao processar NF-e {dfe.get('id')}: {e}")
+                        resultado['erros'] += 1
 
         except Exception as e:
             logger.error(f"Erro ao buscar NF-es: {e}")
@@ -316,7 +319,8 @@ class ValidacaoIbsCbsJob:
                 try:
                     data_str = data_emissao_str.split('T')[0]
                     data_emissao = datetime.strptime(data_str, '%Y-%m-%d').date()
-                except:
+                except Exception as e:
+                    logger.error(f"Erro ao extrair data de emissao: {e}")
                     pass
 
             chave_acesso = dfe.get('protnfe_infnfe_chnfe')
@@ -328,76 +332,79 @@ class ValidacaoIbsCbsJob:
             valor_total = dfe.get('nfe_infnfe_total_icmstot_vnf')
 
             # Processar cada prefixo NCM
-            for ncm_prefixo, dados in ncm_analise.items():
-                # Se NAO tem itens sem IBS/CBS, este prefixo esta OK
-                if not dados['itens_sem_ibscbs']:
-                    logger.debug(f"Prefixo {ncm_prefixo} OK - todos itens com IBS/CBS na NF-e {numero_nf}")
-                    continue
+            # Usar no_autoflush para evitar erro de Query-invoked autoflush
+            # quando queries sao executadas enquanto ha objetos pendentes na sessao
+            with db.session.no_autoflush:
+                for ncm_prefixo, dados in ncm_analise.items():
+                    # Se NAO tem itens sem IBS/CBS, este prefixo esta OK
+                    if not dados['itens_sem_ibscbs']:
+                        logger.debug(f"Prefixo {ncm_prefixo} OK - todos itens com IBS/CBS na NF-e {numero_nf}")
+                        continue
 
-                # Verificar se ja existe pendencia para esta chave + prefixo
-                pendencia_existente = PendenciaFiscalIbsCbs.query.filter_by(
-                    chave_acesso=chave_acesso,
-                    ncm_prefixo=ncm_prefixo
-                ).first()
+                    # Verificar se ja existe pendencia para esta chave + prefixo
+                    pendencia_existente = PendenciaFiscalIbsCbs.query.filter_by(
+                        chave_acesso=chave_acesso,
+                        ncm_prefixo=ncm_prefixo
+                    ).first()
 
-                if pendencia_existente:
-                    logger.debug(f"Pendencia ja existe para NF-e {numero_nf} + NCM {ncm_prefixo}")
-                    continue
+                    if pendencia_existente:
+                        logger.debug(f"Pendencia ja existe para NF-e {numero_nf} + NCM {ncm_prefixo}")
+                        continue
 
-                # Verificar se NCM esta cadastrado no sistema
-                ncm_cadastrado = NcmIbsCbsValidado.query.filter_by(
-                    ncm_prefixo=ncm_prefixo,
-                    ativo=True
-                ).first()
+                    # Verificar se NCM esta cadastrado no sistema
+                    ncm_cadastrado = NcmIbsCbsValidado.query.filter_by(
+                        ncm_prefixo=ncm_prefixo,
+                        ativo=True
+                    ).first()
 
-                # Definir motivo e detalhes
-                itens_str = ', '.join(dados['itens_sem_ibscbs'])
+                    # Definir motivo e detalhes
+                    itens_str = ', '.join(dados['itens_sem_ibscbs'])
 
-                if ncm_cadastrado:
-                    motivo = 'nao_destacou'
-                    detalhes = (
-                        f'NCM {ncm_prefixo} (completo: {dados["ncm_completo"]}) esta cadastrado com IBS/CBS obrigatorio, '
-                        f'mas o fornecedor nao destacou nos itens: {itens_str}. '
-                        f'Aliquotas esperadas: IBS UF={ncm_cadastrado.aliquota_ibs_uf}%, '
-                        f'IBS Mun={ncm_cadastrado.aliquota_ibs_mun}%, CBS={ncm_cadastrado.aliquota_cbs}%'
+                    if ncm_cadastrado:
+                        motivo = 'nao_destacou'
+                        detalhes = (
+                            f'NCM {ncm_prefixo} (completo: {dados["ncm_completo"]}) esta cadastrado com IBS/CBS obrigatorio, '
+                            f'mas o fornecedor nao destacou nos itens: {itens_str}. '
+                            f'Aliquotas esperadas: IBS UF={ncm_cadastrado.aliquota_ibs_uf}%, '
+                            f'IBS Mun={ncm_cadastrado.aliquota_ibs_mun}%, CBS={ncm_cadastrado.aliquota_cbs}%'
+                        )
+                    else:
+                        motivo = 'falta_cadastro'
+                        detalhes = (
+                            f'NCM {ncm_prefixo} (completo: {dados["ncm_completo"]}) nao esta cadastrado no sistema. '
+                            f'Itens sem IBS/CBS: {itens_str}. '
+                            f'Cadastre o NCM para habilitar a validacao.'
+                        )
+
+                    # Criar pendencia para este prefixo
+                    pendencia = PendenciaFiscalIbsCbs(
+                        tipo_documento='NF-e',
+                        chave_acesso=chave_acesso,
+                        numero_documento=numero_nf,
+                        serie=serie,
+                        data_emissao=data_emissao,
+                        odoo_dfe_id=dfe_id,
+                        cnpj_fornecedor=cnpj,
+                        razao_fornecedor=razao,
+                        uf_fornecedor=uf,
+                        regime_tributario=regime_info.get('regime_tributario'),
+                        regime_tributario_descricao=regime_info.get('regime_descricao'),
+                        ncm=dados['ncm_completo'],
+                        ncm_prefixo=ncm_prefixo,
+                        valor_total=valor_total,
+                        motivo_pendencia=motivo,
+                        detalhes_pendencia=detalhes,
+                        status='pendente',
+                        criado_por='SISTEMA'
                     )
-                else:
-                    motivo = 'falta_cadastro'
-                    detalhes = (
-                        f'NCM {ncm_prefixo} (completo: {dados["ncm_completo"]}) nao esta cadastrado no sistema. '
-                        f'Itens sem IBS/CBS: {itens_str}. '
-                        f'Cadastre o NCM para habilitar a validacao.'
+
+                    db.session.add(pendencia)
+                    pendencias_criadas += 1
+
+                    logger.info(
+                        f"Pendencia IBS/CBS criada para NF-e {numero_nf}, NCM {ncm_prefixo}: "
+                        f"motivo={motivo}, itens={itens_str}"
                     )
-
-                # Criar pendencia para este prefixo
-                pendencia = PendenciaFiscalIbsCbs(
-                    tipo_documento='NF-e',
-                    chave_acesso=chave_acesso,
-                    numero_documento=numero_nf,
-                    serie=serie,
-                    data_emissao=data_emissao,
-                    odoo_dfe_id=dfe_id,
-                    cnpj_fornecedor=cnpj,
-                    razao_fornecedor=razao,
-                    uf_fornecedor=uf,
-                    regime_tributario=regime_info.get('regime_tributario'),
-                    regime_tributario_descricao=regime_info.get('regime_descricao'),
-                    ncm=dados['ncm_completo'],
-                    ncm_prefixo=ncm_prefixo,
-                    valor_total=valor_total,
-                    motivo_pendencia=motivo,
-                    detalhes_pendencia=detalhes,
-                    status='pendente',
-                    criado_por='SISTEMA'
-                )
-
-                db.session.add(pendencia)
-                pendencias_criadas += 1
-
-                logger.info(
-                    f"Pendencia IBS/CBS criada para NF-e {numero_nf}, NCM {ncm_prefixo}: "
-                    f"motivo={motivo}, itens={itens_str}"
-                )
 
             if pendencias_criadas > 0:
                 db.session.commit()

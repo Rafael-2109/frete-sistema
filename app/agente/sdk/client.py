@@ -412,6 +412,7 @@ Nunca invente informações."""
         thinking_enabled: bool = False,
         plan_mode: bool = False,
         user_id: int = None,
+        image_files: Optional[List[dict]] = None,
     ) -> AsyncGenerator[StreamEvent, None]:
         """
         Gera resposta em streaming usando SDK oficial.
@@ -427,6 +428,7 @@ Nunca invente informações."""
             thinking_enabled: Ativar Extended Thinking (FEAT-002)
             plan_mode: Ativar modo somente-leitura (FEAT-010)
             user_id: ID do usuário (para Memory Tool)
+            image_files: Lista de imagens em formato Vision API (FEAT-032)
 
         Yields:
             StreamEvent com tipo e conteúdo
@@ -464,12 +466,30 @@ Nunca invente informações."""
 
         # Gerador assíncrono para o prompt (OBRIGATÓRIO quando can_use_tool é usado)
         # Ref: https://platform.claude.com/docs/pt-BR/agent-sdk/streaming-vs-single-mode
+        # FEAT-032: Suporte a Vision API - imagens são enviadas como content blocks
         async def prompt_generator():
+            # Construir content com texto + imagens (se houver)
+            if image_files:
+                content_blocks = []
+                # Adicionar imagens primeiro (para Claude "ver" antes de ler o texto)
+                for img in image_files:
+                    content_blocks.append(img)
+                # Adicionar texto
+                content_blocks.append({
+                    "type": "text",
+                    "text": prompt
+                })
+                content = content_blocks
+                logger.info(f"[AGENT_CLIENT] Enviando {len(image_files)} imagem(ns) via Vision API")
+            else:
+                # Manter compatibilidade: texto simples quando não há imagens
+                content = prompt
+
             yield {
                 "type": "user",
                 "message": {
                     "role": "user",
-                    "content": prompt
+                    "content": content
                 }
             }
 

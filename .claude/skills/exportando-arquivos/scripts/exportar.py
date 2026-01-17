@@ -25,6 +25,9 @@ from decimal import Decimal
 # Adicionar path do projeto para imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..')))
 
+# Dominio de producao no Render
+RENDER_DOMAIN = "https://sistema-fretes.onrender.com"
+
 
 def decimal_default(obj):
     """Serializa Decimal e date para JSON."""
@@ -180,25 +183,64 @@ def gerar_json(dados, nome_arquivo):
     return filepath, filename
 
 
+def copiar_imagem(caminho_origem, nome_arquivo=None):
+    """
+    Copia uma imagem existente para a pasta de downloads.
+
+    Args:
+        caminho_origem: Caminho completo da imagem existente
+        nome_arquivo: Nome para o arquivo (opcional, usa nome original)
+
+    Returns:
+        Caminho do arquivo copiado e nome do arquivo
+    """
+    import shutil
+
+    if not os.path.exists(caminho_origem):
+        raise FileNotFoundError(f"Imagem não encontrada: {caminho_origem}")
+
+    # Extrair extensão
+    ext = caminho_origem.rsplit('.', 1)[-1].lower() if '.' in caminho_origem else 'png'
+    if ext not in ('png', 'jpg', 'jpeg', 'gif'):
+        raise ValueError(f"Formato de imagem não suportado: {ext}")
+
+    # Usar nome original se não especificado
+    if not nome_arquivo:
+        nome_arquivo = os.path.basename(caminho_origem).rsplit('.', 1)[0]
+
+    # Gerar nome unico
+    file_id = str(uuid.uuid4())[:8]
+    filename = f"{file_id}_{nome_arquivo}.{ext}"
+    filepath = os.path.join(get_upload_folder(), filename)
+
+    # Copiar arquivo
+    shutil.copy2(caminho_origem, filepath)
+
+    return filepath, filename
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description='Gera arquivo para download (Excel, CSV ou JSON)',
+        description='Gera arquivo para download (Excel, CSV, JSON ou Imagem)',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Exemplos:
   echo '{"dados": [{"col1": "val1"}]}' | python exportar.py --formato excel --nome teste
   echo '{"dados": [{"col1": "val1"}]}' | python exportar.py --formato csv --nome teste
+  python exportar.py --formato imagem --imagem /caminho/para/imagem.png --nome screenshot
         """
     )
 
-    parser.add_argument('--formato', required=True, choices=['excel', 'csv', 'json'],
-                        help='Formato do arquivo (excel, csv, json)')
+    parser.add_argument('--formato', required=True, choices=['excel', 'csv', 'json', 'imagem'],
+                        help='Formato do arquivo (excel, csv, json, imagem)')
     parser.add_argument('--nome', required=True,
                         help='Nome do arquivo (sem extensao)')
     parser.add_argument('--titulo', default=None,
                         help='Titulo da planilha (apenas Excel)')
     parser.add_argument('--colunas', default=None,
                         help='Colunas a incluir (JSON array)')
+    parser.add_argument('--imagem', default=None,
+                        help='Caminho da imagem a exportar (apenas formato imagem)')
 
     args = parser.parse_args()
 
@@ -209,7 +251,48 @@ Exemplos:
     }
 
     try:
-        # Ler dados do stdin
+        # Tratamento especial para imagens (não precisa de stdin)
+        if args.formato == 'imagem':
+            if not args.imagem:
+                resultado['erro'] = 'Parametro --imagem obrigatorio para formato imagem'
+                resultado['mensagem'] = 'Use: python exportar.py --formato imagem --imagem /caminho/imagem.png --nome teste'
+                print(json.dumps(resultado, ensure_ascii=False, indent=2))
+                return
+
+            filepath, filename = copiar_imagem(args.imagem, args.nome)
+            extensao = filepath.rsplit('.', 1)[-1].lower()
+            tamanho = os.path.getsize(filepath)
+
+            url_relativa = f"/agente/api/files/default/{filename}"
+            url_completa = f"{RENDER_DOMAIN}{url_relativa}"
+
+            resultado['sucesso'] = True
+            resultado['arquivo'] = {
+                'nome': filename,
+                'nome_original': f"{args.nome}.{extensao}",
+                'url': url_relativa,
+                'url_completa': url_completa,
+                'tamanho': tamanho,
+                'tamanho_formatado': f"{tamanho / 1024:.1f} KB" if tamanho < 1024*1024 else f"{tamanho / (1024*1024):.1f} MB",
+                'formato': 'imagem',
+                'tipo_imagem': extensao,
+                'caminho_local': filepath
+            }
+            resultado['mensagem'] = f"Imagem {extensao.upper()} exportada com sucesso!"
+
+            # Instrucao para o agente - imagens podem ser exibidas inline
+            resultado['instrucao_agente'] = (
+                f"Informe ao usuario que a imagem esta disponivel.\n"
+                f"Para EXIBIR a imagem inline:\n"
+                f"![{args.nome}]({url_completa})\n\n"
+                f"Para link de DOWNLOAD:\n"
+                f"📥 **[Clique aqui para baixar]({url_completa}?download=1)**"
+            )
+
+            print(json.dumps(resultado, ensure_ascii=False, indent=2, default=decimal_default))
+            return
+
+        # Ler dados do stdin (para excel, csv, json)
         input_data = sys.stdin.read().strip()
 
         if not input_data:
@@ -241,7 +324,7 @@ Exemplos:
         if args.colunas:
             try:
                 colunas = json.loads(args.colunas)
-            except:
+            except (json.JSONDecodeError, TypeError):
                 pass
 
         # Gerar arquivo conforme formato
@@ -260,13 +343,17 @@ Exemplos:
 
         # Gerar URL de download
         # Formato: /agente/api/files/{session_id}/{filename}
-        url_download = f"/agente/api/files/default/{filename}"
+        url_relativa = f"/agente/api/files/default/{filename}"
+
+        # URL completa com dominio (para uso no Render/producao)
+        url_completa = f"{RENDER_DOMAIN}{url_relativa}"
 
         resultado['sucesso'] = True
         resultado['arquivo'] = {
             'nome': filename,
             'nome_original': f"{args.nome}.{extensao}",
-            'url': url_download,
+            'url': url_relativa,
+            'url_completa': url_completa,
             'tamanho': tamanho,
             'tamanho_formatado': f"{tamanho / 1024:.1f} KB" if tamanho < 1024*1024 else f"{tamanho / (1024*1024):.1f} MB",
             'registros': len(dados),
@@ -275,11 +362,11 @@ Exemplos:
         }
         resultado['mensagem'] = f"Arquivo {args.formato.upper()} criado com {len(dados)} registros!"
 
-        # Instrucao para o agente
+        # Instrucao para o agente - SEMPRE usar URL completa
         resultado['instrucao_agente'] = (
             f"Informe ao usuario que o arquivo esta disponivel para download.\n"
-            f"Use este formato na resposta:\n"
-            f"📥 **[Clique aqui para baixar]({url_download})**\n"
+            f"IMPORTANTE: Use a URL COMPLETA na resposta (com dominio):\n"
+            f"📥 **[Clique aqui para baixar]({url_completa})**\n"
             f"Arquivo: {args.nome}.{extensao} | {len(dados)} registros"
         )
 

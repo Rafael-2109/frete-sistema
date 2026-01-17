@@ -33,9 +33,13 @@ FORMATOS SUPORTADOS
 │   Separador: ponto-e-virgula (;)
 │   Encoding: UTF-8 com BOM
 │
-└── JSON (.json)
-    Formatacao: indentado, UTF-8
-    Uso: Integracao com outros sistemas
+├── JSON (.json)
+│   Formatacao: indentado, UTF-8
+│   Uso: Integracao com outros sistemas
+│
+└── Imagem (.png, .jpg, .jpeg, .gif)
+    Copia imagem existente para pasta de downloads
+    Pode ser exibida inline ou baixada
 ```
 
 ## Parametros
@@ -44,10 +48,11 @@ FORMATOS SUPORTADOS
 
 | Parametro | Obrigatorio | Descricao | Exemplo |
 |-----------|-------------|-----------|---------|
-| `--formato` | Sim | Formato do arquivo | `--formato excel` |
+| `--formato` | Sim | Formato do arquivo | `--formato excel` ou `--formato imagem` |
 | `--nome` | Sim | Nome do arquivo (sem extensao) | `--nome pedidos_atacadao` |
 | `--titulo` | Nao | Titulo da planilha (Excel) | `--titulo "Pedidos Atacadao"` |
 | `--colunas` | Nao | Colunas a incluir (JSON array) | `--colunas '["Pedido","Cliente"]'` |
+| `--imagem` | Sim* | Caminho da imagem (apenas formato imagem) | `--imagem /tmp/screenshot.png` |
 
 ### Entrada de Dados
 
@@ -102,6 +107,16 @@ echo '{"dados": [...]}' | python .../exportar.py \
   --colunas '["Pedido", "Valor"]'
 ```
 
+### Exportar imagem
+```bash
+python .claude/skills/exportando-arquivos/scripts/exportar.py \
+  --formato imagem \
+  --imagem /tmp/screenshot.png \
+  --nome grafico_vendas
+```
+
+> **Nota**: Para imagens, nao precisa de stdin (echo). O arquivo e copiado diretamente.
+
 ## Retorno JSON
 
 ```json
@@ -111,13 +126,14 @@ echo '{"dados": [...]}' | python .../exportar.py \
     "nome": "abc123_pedidos.xlsx",
     "nome_original": "pedidos.xlsx",
     "url": "/agente/api/files/default/abc123_pedidos.xlsx",
+    "url_completa": "https://sistema-fretes.onrender.com/agente/api/files/default/abc123_pedidos.xlsx",
     "tamanho": 15234,
     "tamanho_formatado": "14.9 KB",
     "registros": 10,
     "formato": "excel"
   },
   "mensagem": "Arquivo EXCEL criado com 10 registros!",
-  "instrucao_agente": "Informe ao usuario... 📥 **[Clique aqui para baixar](URL)**"
+  "instrucao_agente": "Informe ao usuario... 📥 **[Clique aqui para baixar](URL_COMPLETA)**"
 }
 ```
 
@@ -131,12 +147,14 @@ Quando o usuario pedir "exporte os 10 maiores pedidos para Excel":
    ```bash
    echo '{"dados": [...]}' | python .../exportar.py --formato excel --nome pedidos
    ```
-4. **Ler URL** do campo `arquivo.url` no retorno
+4. **Ler URL** do campo `arquivo.url_completa` no retorno (SEMPRE usar URL completa!)
 5. **Responder ao usuario** com link para download:
    ```
-   📥 **[Clique aqui para baixar](/agente/api/files/default/abc_pedidos.xlsx)**
+   📥 **[Clique aqui para baixar](https://sistema-fretes.onrender.com/agente/api/files/default/abc_pedidos.xlsx)**
    Arquivo: pedidos.xlsx | 10 registros
    ```
+
+> **IMPORTANTE**: No Render, SEMPRE use `url_completa` para garantir que o link funcione!
 
 ## Formatacao Automatica (Excel)
 

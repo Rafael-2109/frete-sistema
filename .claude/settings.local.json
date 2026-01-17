@@ -22,59 +22,18 @@
       "Skill(superpowers:using-superpowers)",
       "Skill(superpowers:using-superpowers:*)",
       "Skill(rastreando-odoo)",
-      "Skill(rastreando-odoo:*)"
+      "Skill(rastreando-odoo:*)",
+      "Bash(for file in /home/rafaelnascimento/projetos/frete_sistema/.claude/skills/*/SKILL.md)",
+      "mcp__plugin_context7_context7__query-docs",
+      "Bash(claude plugins:*)",
+      "mcp__render__get_selected_workspace",
+      "mcp__render__list_services",
+      "mcp__render__list_workspaces",
+      "mcp__render__list_logs",
+      "mcp__render__list_key_value",
+      "mcp__render__get_key_value"
     ],
     "deny": []
-  },
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 $CLAUDE_PROJECT_DIR/.claude/hooks/audit-separacao.py"
-          },
-          {
-            "type": "command",
-            "command": "python3 $CLAUDE_PROJECT_DIR/.claude/hooks/notificar-alteracao.py"
-          }
-        ]
-      },
-      {
-        "matcher": "Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 $CLAUDE_PROJECT_DIR/.claude/hooks/audit-separacao.py"
-          },
-          {
-            "type": "command",
-            "command": "python3 $CLAUDE_PROJECT_DIR/.claude/hooks/notificar-alteracao.py"
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 $CLAUDE_PROJECT_DIR/.claude/hooks/validar-pedido-critico.py"
-          }
-        ]
-      },
-      {
-        "matcher": "Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 $CLAUDE_PROJECT_DIR/.claude/hooks/validar-pedido-critico.py"
-          }
-        ]
-      }
-    ]
   },
   "outputStyle": "precision-engineer"
 }
