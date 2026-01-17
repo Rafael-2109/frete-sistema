@@ -365,6 +365,7 @@ class NFDevolucaoLinha(db.Model):
         ('DEPARA', 'De-Para'),
         ('HAIKU', 'Claude Haiku'),
         ('MANUAL', 'Manual'),
+        ('ODOO', 'Odoo Reversão'),
     ]
     metodo_resolucao = db.Column(db.String(20), nullable=True)
     confianca_resolucao = db.Column(db.Numeric(5, 4), nullable=True)  # 0.0000 a 1.0000
@@ -498,6 +499,7 @@ class NFDevolucaoNFReferenciada(db.Model):
         ('XML', 'Extraido do XML (tag refNFe)'),
         ('MANUAL', 'Inserido manualmente'),
         ('MONITORAMENTO', 'Registro do monitoramento'),
+        ('ODOO_REVERSAO', 'Reversão automática do Odoo'),
     ]
     origem = db.Column(db.String(20), default='MANUAL', nullable=False)
 

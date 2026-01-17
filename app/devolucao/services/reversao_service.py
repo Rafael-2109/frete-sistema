@@ -371,6 +371,154 @@ class ReversaoService:
             logger.error(f"Erro ao buscar NF original {nf_id}: {e}")
             return None
 
+    def _buscar_itens_nf_original(self, nf_id: int) -> List[Dict]:
+        """
+        Busca os itens (invoice_line_ids) da NF original no Odoo
+
+        Args:
+            nf_id: ID do account.move no Odoo
+
+        Returns:
+            Lista de dicts com dados dos itens
+        """
+        try:
+            # Buscar linhas da NF no Odoo
+            linhas = self.odoo.execute_kw(
+                'account.move.line',
+                'search_read',
+                [[
+                    ('move_id', '=', nf_id),
+                    ('display_type', '=', 'product'),  # Apenas linhas de produto
+                ]],
+                {'fields': [
+                    'product_id',
+                    'name',
+                    'quantity',
+                    'price_unit',
+                    'price_subtotal',
+                    'product_uom_id',
+                ]}
+            )
+            return linhas or []
+        except Exception as e:
+            logger.error(f"Erro ao buscar itens da NF {nf_id}: {e}")
+            return []
+
+    def _criar_linhas_reversao(self, nfd: NFDevolucao, itens: List[Dict]) -> int:
+        """
+        Cria NFDevolucaoLinha para cada item da NF revertida
+
+        Args:
+            nfd: Instância de NFDevolucao
+            itens: Lista de itens do Odoo
+
+        Returns:
+            Quantidade de linhas criadas
+        """
+        from app.devolucao.models import NFDevolucaoLinha
+
+        linhas_criadas = 0
+
+        for item in itens:
+            try:
+                # Extrair dados do produto
+                product_id = item.get('product_id')
+                if product_id and isinstance(product_id, (list, tuple)):
+                    cod_produto = str(product_id[0])
+                    nome_produto = product_id[1] if len(product_id) > 1 else item.get('name', '')
+                else:
+                    cod_produto = str(product_id) if product_id else ''
+                    nome_produto = item.get('name', '')
+
+                quantidade = Decimal(str(item.get('quantity', 0)))
+                valor_unitario = Decimal(str(item.get('price_unit', 0)))
+                valor_total = Decimal(str(item.get('price_subtotal', 0)))
+
+                # Extrair unidade de medida
+                uom = item.get('product_uom_id')
+                unidade = uom[1] if uom and isinstance(uom, (list, tuple)) and len(uom) > 1 else 'UN'
+
+                # Criar linha - usando campos corretos do modelo
+                linha = NFDevolucaoLinha(
+                    nf_devolucao_id=nfd.id,
+                    # Código do cliente (original) = código interno pois é nossa NF
+                    codigo_produto_cliente=cod_produto,
+                    descricao_produto_cliente=nome_produto,
+                    # Código interno = mesmo código (já resolvido pois é nossa NF)
+                    codigo_produto_interno=cod_produto,
+                    descricao_produto_interno=nome_produto,
+                    produto_resolvido=True,  # Já resolvido (é nossa NF)
+                    metodo_resolucao='ODOO',  # Indica origem da resolução
+                    # Quantidades
+                    quantidade=quantidade,
+                    unidade_medida=unidade,
+                    valor_unitario=valor_unitario,
+                    valor_total=valor_total,
+                )
+                db.session.add(linha)
+                linhas_criadas += 1
+
+            except Exception as e:
+                logger.error(f"Erro ao criar linha para item {item}: {e}")
+                continue
+
+        return linhas_criadas
+
+    def _criar_nf_referenciada(self, nfd: NFDevolucao, nf_original: Dict) -> bool:
+        """
+        Cria NFDevolucaoNFReferenciada para vincular a NF original
+
+        Args:
+            nfd: Instância de NFDevolucao
+            nf_original: Dados da NF original do Odoo
+
+        Returns:
+            True se criou, False se já existia ou erro
+        """
+        from app.devolucao.models import NFDevolucaoNFReferenciada
+
+        try:
+            numero_nf = nf_original.get('l10n_br_numero_nota_fiscal')
+            if not numero_nf:
+                return False
+
+            # Verificar se já existe
+            existente = NFDevolucaoNFReferenciada.query.filter_by(
+                nf_devolucao_id=nfd.id,
+                numero_nf=str(numero_nf)
+            ).first()
+
+            if existente:
+                return False
+
+            # Buscar EntregaMonitorada se existir
+            entrega_id = None
+            entrega = EntregaMonitorada.query.filter_by(
+                numero_nf=str(numero_nf)
+            ).first()
+            if entrega:
+                entrega_id = entrega.id
+
+            # Extrair data de emissão
+            data_emissao = self._parse_date(nf_original.get('invoice_date'))
+
+            # Criar vínculo - usando campos corretos do modelo
+            ref = NFDevolucaoNFReferenciada(
+                nf_devolucao_id=nfd.id,
+                numero_nf=str(numero_nf),
+                serie_nf='1',  # Série padrão
+                chave_nf=nf_original.get('l10n_br_chave_nf'),
+                data_emissao_nf=data_emissao,
+                origem='ODOO_REVERSAO',  # Nova origem para identificar reversões
+                entrega_monitorada_id=entrega_id,
+            )
+            db.session.add(ref)
+            return True
+
+        except Exception as e:
+            logger.error(f"Erro ao criar NF referenciada: {e}")
+            return False
+
     def _extrair_cnpj_parceiro(self, partner_id) -> Optional[str]:
         """
         Extrai CNPJ do parceiro
@@ -448,6 +596,18 @@ class ReversaoService:
         nfd.atualizado_em = agora_brasil()
         nfd.atualizado_por = 'Sistema Odoo - Reversao'
 
+        # Se não tem linhas, tentar buscar e criar
+        from app.devolucao.models import NFDevolucaoLinha
+        linhas_existentes = NFDevolucaoLinha.query.filter_by(nf_devolucao_id=nfd.id).count()
+        if linhas_existentes == 0:
+            itens = self._buscar_itens_nf_original(nf_original.get('id'))
+            if itens:
+                linhas_criadas = self._criar_linhas_reversao(nfd, itens)
+                logger.info(f"   Criadas {linhas_criadas} linhas para NFD existente {nfd.id}")
+
+        # Garantir vínculo estrutural
+        self._criar_nf_referenciada(nfd, nf_original)
+
     def _criar_nfd_reversao(
         self,
         nc_data: Dict,
@@ -520,6 +680,17 @@ class ReversaoService:
 
         db.session.add(nfd)
         db.session.flush()
+
+        # Buscar e criar itens da NF original
+        itens = self._buscar_itens_nf_original(nf_original.get('id'))
+        if itens:
+            linhas_criadas = self._criar_linhas_reversao(nfd, itens)
+            logger.info(f"   Criadas {linhas_criadas} linhas para NFD {nfd.id}")
+        else:
+            logger.warning(f"   Nenhum item encontrado para NF original {nf_original.get('id')}")
+
+        # Criar vínculo estrutural com NF original
+        self._criar_nf_referenciada(nfd, nf_original)
 
         return nfd
 
@@ -611,7 +782,8 @@ class ReversaoService:
 
             if not itens_fat:
                 logger.warning(f"   Nenhum item de faturamento encontrado para NF {numero_nf}")
-                resultado['sucesso'] = True
+                resultado['sucesso'] = False
+                resultado['erros'].append(f"Nenhum FaturamentoProduto encontrado para NF {numero_nf}")
                 return resultado
 
             logger.info(f"   Encontrados {len(itens_fat)} itens de faturamento")
