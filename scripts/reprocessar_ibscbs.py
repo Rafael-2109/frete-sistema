@@ -156,7 +156,7 @@ def reprocessar_ctes(dry_run: bool = True, limite: int = None, verbose: bool = F
             impostos = parser.get_impostos()
 
             if verbose:
-                print(f"  Impostos extraidos: ICMS={impostos.get('valor_icms')}, PIS={impostos.get('valor_pis')}, COFINS={impostos.get('valor_cofins')}")
+                print(f"  Impostos extraidos: TotalTributos={impostos.get('total_tributos')}, ICMS={impostos.get('valor_icms')}")
 
             # Validar com impostos
             divergencias = validacao_ibscbs_service._validar_campos_cte(ibscbs, cte, impostos)

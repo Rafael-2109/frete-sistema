@@ -10,16 +10,19 @@ REGRA FUNDAMENTAL DA BASE DE CALCULO IBS/CBS:
 A base de calculo do IBS/CBS e o valor do documento MENOS os impostos
 que estao sendo substituidos (ICMS, PIS, COFINS).
 
-Formula: Base IBS/CBS = Valor Total - ICMS - PIS - COFINS
+CTe: Base IBS/CBS = Valor Total - vTotTrib (total dos tributos)
+     No CTe, o vTotTrib ja contem ICMS+PIS+COFINS embutidos (sem tags separadas)
 
-Os valores de ICMS, PIS e COFINS sao extraidos do proprio XML do documento.
+NF-e: Base IBS/CBS = Valor Produto - ICMS - PIS - COFINS (tags separadas)
+
+Os valores sao extraidos do proprio XML do documento.
 
 REGRAS DE VALIDACAO:
 
 CTe (Aliquotas FIXAS):
 - CST: 000
 - cClassTrib: 000001
-- vBC: valor_total - ICMS - PIS - COFINS
+- vBC: valor_total - vTotTrib (total tributos = ICMS+PIS+COFINS embutidos)
 - pIBSUF: 0.10%
 - pIBSMun: 0.00%
 - pCBS: 0.90%
@@ -278,12 +281,13 @@ class ValidacaoIbsCbsService:
         A base de cálculo do IBS/CBS é o valor do documento MENOS os impostos
         que estão sendo substituídos (ICMS, PIS, COFINS).
 
-        Fórmula: Base IBS/CBS = Valor Total - ICMS - PIS - COFINS
+        Para CTe: Base IBS/CBS = Valor Total - vTotTrib
+        No CTe, o vTotTrib já contém ICMS+PIS+COFINS embutidos (sem tags separadas).
 
         Args:
             ibscbs: Dados IBS/CBS extraidos do XML
             cte: ConhecimentoTransporte
-            impostos: Dados de impostos (ICMS, PIS, COFINS) extraidos do XML
+            impostos: Dados de impostos extraidos do XML (usa total_tributos)
 
         Returns:
             Lista de divergencias encontradas (vazia se OK)
@@ -298,29 +302,28 @@ class ValidacaoIbsCbsService:
         valor_cte = Decimal(str(cte.valor_total)) if cte.valor_total else Decimal('0')
 
         # ====== CALCULAR BASE DE CALCULO ESPERADA DO IBS/CBS ======
-        # Base IBS/CBS = Valor Total - ICMS - PIS - COFINS
-        # Os valores vem do proprio XML do documento
+        # Para CTe: Base IBS/CBS = Valor Total - vTotTrib (total dos tributos)
+        # No CTe, o vTotTrib contem ICMS + PIS + COFINS embutidos (sem tags separadas)
+        # Diferente de NF-e onde PIS/COFINS aparecem separadamente
 
-        valor_icms = Decimal('0')
-        valor_pis = Decimal('0')
-        valor_cofins = Decimal('0')
+        total_tributos = Decimal('0')
 
         if impostos:
-            if impostos.get('valor_icms'):
-                valor_icms = Decimal(str(impostos['valor_icms']))
-            if impostos.get('valor_pis'):
-                valor_pis = Decimal(str(impostos['valor_pis']))
-            if impostos.get('valor_cofins'):
-                valor_cofins = Decimal(str(impostos['valor_cofins']))
+            if impostos.get('total_tributos'):
+                # CTe: usar vTotTrib que ja contem ICMS+PIS+COFINS
+                total_tributos = Decimal(str(impostos['total_tributos']))
+            elif impostos.get('valor_icms'):
+                # Fallback: se nao tiver vTotTrib, usar apenas ICMS
+                total_tributos = Decimal(str(impostos['valor_icms']))
         else:
             # Fallback: usar valor_icms do modelo se impostos nao foram passados
             if cte.valor_icms:
-                valor_icms = Decimal(str(cte.valor_icms))
+                total_tributos = Decimal(str(cte.valor_icms))
 
-        # Base esperada = Valor Total - ICMS - PIS - COFINS
-        base_ibscbs_esperada = (valor_cte - valor_icms - valor_pis - valor_cofins).quantize(Decimal('0.01'), ROUND_HALF_UP)
+        # Base esperada = Valor Total - Total dos Tributos (ICMS+PIS+COFINS)
+        base_ibscbs_esperada = (valor_cte - total_tributos).quantize(Decimal('0.01'), ROUND_HALF_UP)
 
-        logger.info(f"Calculo base IBS/CBS: Valor={valor_cte}, ICMS={valor_icms}, PIS={valor_pis}, COFINS={valor_cofins} => Base esperada={base_ibscbs_esperada}")
+        logger.info(f"Calculo base IBS/CBS CTe: Valor={valor_cte}, TotalTributos(vTotTrib)={total_tributos} => Base esperada={base_ibscbs_esperada}")
 
         # ====== VALIDAR CST ======
         cst_xml = ibscbs.get('cst')
