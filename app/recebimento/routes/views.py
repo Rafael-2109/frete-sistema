@@ -638,12 +638,18 @@ def pendencia_ibscbs_resolver(pendencia_id):
 @recebimento_views_bp.route('/pendencias-ibscbs/<int:pendencia_id>/detalhes')
 @login_required
 def pendencia_ibscbs_detalhes(pendencia_id):
-    """Retorna detalhes completos de uma pendencia IBS/CBS"""
-    pendencia = db.session.get(PendenciaFiscalIbsCbs,pendencia_id) if pendencia_id else None
+    """
+    Retorna detalhes completos de uma pendencia IBS/CBS.
+
+    Para CTe, inclui dados de impostos (vBC_ICMS, vICMS) para mostrar
+    o calculo do teste duplo de PIS/COFINS (Presumido vs Real).
+    """
+    pendencia = db.session.get(PendenciaFiscalIbsCbs, pendencia_id) if pendencia_id else None
     if not pendencia:
         return jsonify({'sucesso': False, 'mensagem': 'Pendencia nao encontrada'}), 404
 
-    return jsonify({
+    # Dados basicos da resposta
+    response_data = {
         'sucesso': True,
         'pendencia': pendencia.to_dict(),
         'ibscbs': {
@@ -657,8 +663,82 @@ def pendencia_ibscbs_detalhes(pendencia_id):
             'ibs_total': float(pendencia.ibs_total) if pendencia.ibs_total else None,
             'cbs_aliq': float(pendencia.cbs_aliq) if pendencia.cbs_aliq else None,
             'cbs_valor': float(pendencia.cbs_valor) if pendencia.cbs_valor else None
-        }
-    })
+        },
+        'impostos': None,
+        'calculo_base': None
+    }
+
+    # Para CTe, buscar dados de impostos para mostrar o calculo
+    if pendencia.tipo_documento == 'CTe' and pendencia.cte_id:
+        try:
+            from app.fretes.models import ConhecimentoTransporte
+            from app.recebimento.services.validacao_ibscbs_service import validacao_ibscbs_service
+            from app.odoo.utils.cte_xml_parser import CTeXMLParser
+            from decimal import Decimal
+
+            cte = ConhecimentoTransporte.query.get(pendencia.cte_id)
+            if cte:
+                # Tentar buscar XML para extrair impostos
+                xml_content = validacao_ibscbs_service._obter_xml_cte(cte)
+
+                if xml_content:
+                    parser = CTeXMLParser(xml_content)
+                    impostos = parser.get_impostos()
+
+                    if impostos:
+                        base_icms = float(impostos.get('base_icms') or 0)
+                        valor_icms = float(impostos.get('valor_icms') or 0)
+
+                        response_data['impostos'] = {
+                            'base_icms': base_icms,
+                            'valor_icms': valor_icms,
+                            'aliquota_icms': float(impostos.get('aliquota_icms') or 0),
+                            'total_tributos': float(impostos.get('total_tributos') or 0)
+                        }
+
+                        # Calcular bases esperadas para teste duplo
+                        base_apos_icms = base_icms - valor_icms
+
+                        # Fatores PIS/COFINS
+                        fator_presumido = 0.9635  # 1 - 3,65%
+                        fator_real = 0.9075       # 1 - 9,25%
+
+                        base_presumido = round(base_apos_icms * fator_presumido, 2)
+                        base_real = round(base_apos_icms * fator_real, 2)
+
+                        # Verificar qual fez match
+                        vbc_xml = float(pendencia.ibscbs_base or 0)
+                        tolerancia = 0.02
+
+                        match_presumido = abs(vbc_xml - base_presumido) <= tolerancia
+                        match_real = abs(vbc_xml - base_real) <= tolerancia
+
+                        response_data['calculo_base'] = {
+                            'base_apos_icms': round(base_apos_icms, 2),
+                            'base_presumido': base_presumido,
+                            'base_real': base_real,
+                            'vbc_xml': vbc_xml,
+                            'match_presumido': match_presumido,
+                            'match_real': match_real,
+                            'regime_detectado': 'Lucro Presumido' if match_presumido else ('Lucro Real' if match_real else None)
+                        }
+                else:
+                    # Fallback: usar dados do modelo CTe
+                    base_icms = float(cte.valor_total or 0)
+                    valor_icms = float(cte.valor_icms or 0)
+
+                    response_data['impostos'] = {
+                        'base_icms': base_icms,
+                        'valor_icms': valor_icms,
+                        'aliquota_icms': None,
+                        'total_tributos': None
+                    }
+
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Erro ao buscar impostos do CTe: {e}")
+
+    return jsonify(response_data)
 
 
 @recebimento_views_bp.route('/ncm-ibscbs/cadastro/<prefixo>')

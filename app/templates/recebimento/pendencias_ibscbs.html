@@ -538,6 +538,8 @@
 
             const p = data.pendencia;
             const ibs = data.ibscbs;
+            const impostos = data.impostos;  // Dados de impostos do CTe (vBC_ICMS, vICMS)
+            const calculoBase = data.calculo_base;  // Calculo do teste duplo PIS/COFINS
 
             // 2. Buscar cadastro do NCM (se tiver NCM)
             let ncmCadastro = null;
@@ -586,7 +588,7 @@
                 <hr>
 
                 <!-- Secao de Cadastro IBS/CBS ou Alerta de Falta de Cadastro -->
-                ${gerarSecaoIbsCbs(p, ibs, ncmCadastro)}
+                ${gerarSecaoIbsCbs(p, ibs, ncmCadastro, impostos, calculoBase)}
 
                 <hr>
                 <!-- Pendencia -->
@@ -606,7 +608,7 @@
     };
 
     // Gera a secao de IBS/CBS baseado no cadastro, valores do documento e motivo
-    function gerarSecaoIbsCbs(p, ibs, ncmCadastro) {
+    function gerarSecaoIbsCbs(p, ibs, ncmCadastro, impostos, calculoBase) {
         const motivo = p.motivo_pendencia;
 
         // Verifica se tem valores IBS/CBS encontrados no documento
@@ -616,83 +618,189 @@
         if (p.tipo_documento === 'CTe') {
             let html = `
                 <h6 class="border-bottom pb-2 mb-3">
-                    <i class="fas fa-calculator me-2"></i>Aliquotas Esperadas (CTe - Fixas)
+                    <i class="fas fa-calculator me-2"></i>Calculo da Base IBS/CBS (CTe)
                 </h6>
-                <div class="alert alert-info mb-3">
-                    <i class="fas fa-info-circle me-2"></i>
-                    <strong>CTe possui aliquotas FIXAS:</strong> CST=000, IBS UF=0.10%, IBS Mun=0.00%, CBS=0.90%
-                </div>
-                <div class="row">
-                    <div class="col-md-4">
-                        <div class="card border-primary">
-                            <div class="card-header bg-primary text-white py-1 px-2">
-                                <small>IBS UF (Esperado)</small>
+            `;
+
+            // =====================================================
+            // SECAO 1: Calculo da Base de Calculo (teste duplo)
+            // =====================================================
+            if (impostos && calculoBase) {
+                const matchPresumido = calculoBase.match_presumido;
+                const matchReal = calculoBase.match_real;
+                const naoMatchNenhum = !matchPresumido && !matchReal;
+
+                html += `
+                    <div class="card mb-3 ${naoMatchNenhum ? 'border-danger' : 'border-success'}">
+                        <div class="card-header ${naoMatchNenhum ? 'bg-danger' : 'bg-success'} text-white py-2">
+                            <i class="fas fa-${naoMatchNenhum ? 'times-circle' : 'check-circle'} me-2"></i>
+                            <strong>Formula:</strong> Base IBS/CBS = (vBC_ICMS - vICMS) × (1 - PIS/COFINS%)
+                        </div>
+                        <div class="card-body">
+                            <!-- Dados do ICMS -->
+                            <div class="row mb-3">
+                                <div class="col-md-4">
+                                    <div class="bg-light p-2 rounded text-center">
+                                        <small class="text-muted d-block">vBC_ICMS (Base ICMS)</small>
+                                        <strong class="fs-5">R$ ${formatarNumero(impostos.base_icms)}</strong>
+                                    </div>
+                                </div>
+                                <div class="col-md-1 d-flex align-items-center justify-content-center">
+                                    <span class="fs-4 text-muted">-</span>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="bg-light p-2 rounded text-center">
+                                        <small class="text-muted d-block">vICMS (Valor ICMS)</small>
+                                        <strong class="fs-5">R$ ${formatarNumero(impostos.valor_icms)}</strong>
+                                    </div>
+                                </div>
+                                <div class="col-md-1 d-flex align-items-center justify-content-center">
+                                    <span class="fs-4 text-muted">=</span>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="bg-primary text-white p-2 rounded text-center">
+                                        <small class="d-block">Base apos ICMS</small>
+                                        <strong class="fs-5">R$ ${formatarNumero(calculoBase.base_apos_icms)}</strong>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="card-body p-2 text-center">
-                                <strong class="fs-5">0,10%</strong>
+
+                            <hr>
+
+                            <!-- Teste Duplo PIS/COFINS -->
+                            <p class="text-muted mb-2"><small><i class="fas fa-info-circle me-1"></i>Como nao sabemos se a transportadora e Lucro Presumido ou Lucro Real, testamos AMBAS:</small></p>
+                            <div class="row">
+                                <!-- Lucro Presumido -->
+                                <div class="col-md-6">
+                                    <div class="card ${matchPresumido ? 'border-success bg-success-subtle' : 'border-secondary'}">
+                                        <div class="card-header py-1 ${matchPresumido ? 'bg-success text-white' : 'bg-light'}">
+                                            <strong>${matchPresumido ? '✓ ' : ''}Lucro Presumido</strong>
+                                            <span class="badge ${matchPresumido ? 'bg-white text-success' : 'bg-secondary'} float-end">3,65%</span>
+                                        </div>
+                                        <div class="card-body py-2">
+                                            <small class="text-muted">PIS 0,65% + COFINS 3,00%</small>
+                                            <div class="mt-1">
+                                                <code>R$ ${formatarNumero(calculoBase.base_apos_icms)} × 0,9635</code>
+                                            </div>
+                                            <div class="fw-bold fs-5 ${matchPresumido ? 'text-success' : ''}">
+                                                = R$ ${formatarNumero(calculoBase.base_presumido)}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- Lucro Real -->
+                                <div class="col-md-6">
+                                    <div class="card ${matchReal ? 'border-success bg-success-subtle' : 'border-secondary'}">
+                                        <div class="card-header py-1 ${matchReal ? 'bg-success text-white' : 'bg-light'}">
+                                            <strong>${matchReal ? '✓ ' : ''}Lucro Real</strong>
+                                            <span class="badge ${matchReal ? 'bg-white text-success' : 'bg-secondary'} float-end">9,25%</span>
+                                        </div>
+                                        <div class="card-body py-2">
+                                            <small class="text-muted">PIS 1,65% + COFINS 7,60%</small>
+                                            <div class="mt-1">
+                                                <code>R$ ${formatarNumero(calculoBase.base_apos_icms)} × 0,9075</code>
+                                            </div>
+                                            <div class="fw-bold fs-5 ${matchReal ? 'text-success' : ''}">
+                                                = R$ ${formatarNumero(calculoBase.base_real)}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
+
+                            <!-- Resultado do Match -->
+                            <div class="row mt-3">
+                                <div class="col-12">
+                                    <div class="card ${naoMatchNenhum ? 'bg-danger' : 'bg-success'} text-white">
+                                        <div class="card-body py-2 d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <strong>vBC do XML (Encontrado):</strong>
+                                                <span class="fs-5 ms-2">R$ ${formatarNumero(calculoBase.vbc_xml)}</span>
+                                            </div>
+                                            <div>
+                                                ${calculoBase.regime_detectado
+                                                    ? `<span class="badge bg-white text-success fs-6">✓ Match: ${calculoBase.regime_detectado}</span>`
+                                                    : '<span class="badge bg-white text-danger fs-6">✗ Nenhum Match</span>'
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            ${naoMatchNenhum ? `
+                                <div class="alert alert-danger mt-3 mb-0">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>
+                                    <strong>DIVERGENCIA NA BASE!</strong>
+                                    O vBC informado (R$ ${formatarNumero(calculoBase.vbc_xml)}) nao corresponde a nenhum dos calculos esperados:
+                                    <ul class="mb-0 mt-1">
+                                        <li>Presumido: R$ ${formatarNumero(calculoBase.base_presumido)}</li>
+                                        <li>Real: R$ ${formatarNumero(calculoBase.base_real)}</li>
+                                    </ul>
+                                </div>
+                            ` : ''}
                         </div>
                     </div>
-                    <div class="col-md-4">
-                        <div class="card border-info">
-                            <div class="card-header bg-info text-white py-1 px-2">
-                                <small>IBS Mun (Esperado)</small>
-                            </div>
-                            <div class="card-body p-2 text-center">
-                                <strong class="fs-5">0,00%</strong>
-                            </div>
-                        </div>
+                `;
+            } else {
+                // Fallback: se nao tiver dados de impostos
+                html += `
+                    <div class="alert alert-warning mb-3">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Dados de impostos nao disponiveis.</strong> Nao foi possivel extrair vBC_ICMS e vICMS do XML.
                     </div>
-                    <div class="col-md-4">
-                        <div class="card border-success">
-                            <div class="card-header bg-success text-white py-1 px-2">
-                                <small>CBS (Esperado)</small>
-                            </div>
-                            <div class="card-body p-2 text-center">
-                                <strong class="fs-5">0,90%</strong>
-                            </div>
-                        </div>
-                    </div>
+                `;
+            }
+
+            // =====================================================
+            // SECAO 2: Aliquotas Fixas (IBS UF, IBS Mun, CBS)
+            // =====================================================
+            html += `
+                <h6 class="border-bottom pb-2 mb-3 mt-4">
+                    <i class="fas fa-percentage me-2"></i>Aliquotas (CTe - Fixas)
+                </h6>
+                <div class="alert alert-info mb-3 py-2">
+                    <small><i class="fas fa-info-circle me-2"></i>CTe possui aliquotas FIXAS: CST=000, IBS UF=0.10%, IBS Mun=0.00%, CBS=0.90%</small>
                 </div>
             `;
 
             // Se tem valores encontrados, mostrar comparacao
             if (temIbsCbsEncontrado) {
                 html += `
-                    <h6 class="border-bottom pb-2 mb-3 mt-4">
-                        <i class="fas fa-search me-2"></i>Valores Encontrados no Documento
-                    </h6>
                     <div class="row">
                         <div class="col-md-4">
                             <div class="card ${ibs.ibs_uf_aliq == 0.10 ? 'border-success' : 'border-danger'}">
                                 <div class="card-header ${ibs.ibs_uf_aliq == 0.10 ? 'bg-success' : 'bg-danger'} text-white py-1 px-2">
-                                    <small>IBS UF (Encontrado)</small>
+                                    <small>IBS UF ${ibs.ibs_uf_aliq == 0.10 ? '✓' : '✗'}</small>
                                 </div>
                                 <div class="card-body p-2 text-center">
-                                    <strong class="fs-5">${formatarNumero(ibs.ibs_uf_aliq)}%</strong>
-                                    <br><small class="text-muted">Valor: R$ ${formatarNumero(ibs.ibs_uf_valor)}</small>
+                                    <small class="text-muted">Esperado: 0,10%</small>
+                                    <div class="fw-bold ${ibs.ibs_uf_aliq == 0.10 ? 'text-success' : 'text-danger'}">${formatarNumero(ibs.ibs_uf_aliq)}%</div>
+                                    <small class="text-muted">R$ ${formatarNumero(ibs.ibs_uf_valor)}</small>
                                 </div>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="card ${ibs.ibs_mun_aliq == 0.00 ? 'border-success' : 'border-danger'}">
                                 <div class="card-header ${ibs.ibs_mun_aliq == 0.00 ? 'bg-success' : 'bg-danger'} text-white py-1 px-2">
-                                    <small>IBS Mun (Encontrado)</small>
+                                    <small>IBS Mun ${ibs.ibs_mun_aliq == 0.00 ? '✓' : '✗'}</small>
                                 </div>
                                 <div class="card-body p-2 text-center">
-                                    <strong class="fs-5">${formatarNumero(ibs.ibs_mun_aliq)}%</strong>
-                                    <br><small class="text-muted">Valor: R$ ${formatarNumero(ibs.ibs_mun_valor)}</small>
+                                    <small class="text-muted">Esperado: 0,00%</small>
+                                    <div class="fw-bold ${ibs.ibs_mun_aliq == 0.00 ? 'text-success' : 'text-danger'}">${formatarNumero(ibs.ibs_mun_aliq)}%</div>
+                                    <small class="text-muted">R$ ${formatarNumero(ibs.ibs_mun_valor)}</small>
                                 </div>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="card ${ibs.cbs_aliq == 0.90 ? 'border-success' : 'border-danger'}">
                                 <div class="card-header ${ibs.cbs_aliq == 0.90 ? 'bg-success' : 'bg-danger'} text-white py-1 px-2">
-                                    <small>CBS (Encontrado)</small>
+                                    <small>CBS ${ibs.cbs_aliq == 0.90 ? '✓' : '✗'}</small>
                                 </div>
                                 <div class="card-body p-2 text-center">
-                                    <strong class="fs-5">${formatarNumero(ibs.cbs_aliq)}%</strong>
-                                    <br><small class="text-muted">Valor: R$ ${formatarNumero(ibs.cbs_valor)}</small>
+                                    <small class="text-muted">Esperado: 0,90%</small>
+                                    <div class="fw-bold ${ibs.cbs_aliq == 0.90 ? 'text-success' : 'text-danger'}">${formatarNumero(ibs.cbs_aliq)}%</div>
+                                    <small class="text-muted">R$ ${formatarNumero(ibs.cbs_valor)}</small>
                                 </div>
                             </div>
                         </div>
@@ -701,35 +809,25 @@
                         <div class="col-md-6">
                             <div class="card bg-light">
                                 <div class="card-body p-2 text-center">
-                                    <small class="text-muted">Base de Calculo</small>
-                                    <div class="fw-bold">R$ ${formatarNumero(ibs.base)}</div>
+                                    <small class="text-muted">CST ${ibs.cst === '000' ? '✓' : '✗'}</small>
+                                    <div class="fw-bold ${ibs.cst === '000' ? '' : 'text-danger'}">${ibs.cst || '-'} <small class="text-muted">(esperado: 000)</small></div>
                                 </div>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="card bg-light">
                                 <div class="card-body p-2 text-center">
-                                    <small class="text-muted">CST / Class. Trib.</small>
-                                    <div class="fw-bold">${ibs.cst || '-'} / ${ibs.class_trib || '-'}</div>
+                                    <small class="text-muted">Class. Trib. ${ibs.class_trib === '000001' ? '✓' : '✗'}</small>
+                                    <div class="fw-bold ${ibs.class_trib === '000001' ? '' : 'text-danger'}">${ibs.class_trib || '-'} <small class="text-muted">(esperado: 000001)</small></div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 `;
-
-                // Alerta de divergencia
-                if (motivo === 'aliquota_divergente' || motivo === 'valor_zerado' || motivo === 'cst_incorreto') {
-                    html += `
-                        <div class="alert alert-danger mt-3">
-                            <i class="fas fa-exclamation-triangle me-2"></i>
-                            <strong>DIVERGENCIA!</strong> Os valores encontrados nao correspondem aos esperados. Verifique os detalhes acima.
-                        </div>
-                    `;
-                }
             } else {
                 // Nao tem valores - nao destacou
                 html += `
-                    <div class="alert alert-danger mt-3">
+                    <div class="alert alert-danger">
                         <i class="fas fa-exclamation-triangle me-2"></i>
                         <strong>Fornecedor NAO destacou IBS/CBS!</strong> O CTe deveria conter as tags de IBS/CBS.
                     </div>
