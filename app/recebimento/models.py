@@ -627,6 +627,14 @@ class ValidacaoNfPoDfe(db.Model):
     itens_data_diverge = db.Column(db.Integer, default=0)
     itens_qtd_diverge = db.Column(db.Integer, default=0)
 
+    # POs vinculados (importados do Odoo via campos purchase_id/purchase_fiscal_id)
+    # Sao os POs que o Odoo ja vinculou automaticamente ao DFE
+    odoo_po_vinculado_id = db.Column(db.Integer, nullable=True, index=True)  # ID do PO vinculado
+    odoo_po_vinculado_name = db.Column(db.String(50), nullable=True)         # Nome do PO (ex: PO00123)
+    odoo_po_fiscal_id = db.Column(db.Integer, nullable=True)                 # ID do PO fiscal (escrituracao)
+    odoo_po_fiscal_name = db.Column(db.String(50), nullable=True)            # Nome do PO fiscal
+    pos_vinculados_importados_em = db.Column(db.DateTime, nullable=True)     # Quando foram importados
+
     # Resultado da consolidacao (se aprovado)
     po_consolidado_id = db.Column(db.Integer, nullable=True)
     po_consolidado_name = db.Column(db.String(50), nullable=True)

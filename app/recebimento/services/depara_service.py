@@ -188,17 +188,65 @@ class DeparaService:
             # Limpar CNPJ
             cnpj_limpo = self._limpar_cnpj(cnpj_fornecedor)
 
-            # Verificar se ja existe
+            # Verificar se ja existe (ativo ou inativo)
             existente = db.session.query(ProdutoFornecedorDepara).filter_by(
                 cnpj_fornecedor=cnpj_limpo,
                 cod_produto_fornecedor=cod_produto_fornecedor
             ).first()
 
             if existente:
-                raise ValueError(
-                    f"Ja existe De-Para para fornecedor {cnpj_limpo} "
-                    f"e produto {cod_produto_fornecedor}"
-                )
+                if existente.ativo:
+                    # Se ativo, retorna erro (comportamento original)
+                    raise ValueError(
+                        f"Ja existe De-Para para fornecedor {cnpj_limpo} "
+                        f"e produto {cod_produto_fornecedor}"
+                    )
+                else:
+                    # Se inativo (soft deleted), reativar e atualizar
+                    logger.info(
+                        f"Reativando De-Para inativo: {cnpj_limpo}/{cod_produto_fornecedor}"
+                    )
+                    existente.ativo = True
+                    existente.cod_produto_interno = cod_produto_interno
+                    existente.nome_produto_interno = nome_produto_interno
+                    existente.descricao_produto_fornecedor = descricao_produto_fornecedor
+                    existente.odoo_product_id = odoo_product_id
+                    existente.um_fornecedor = um_fornecedor
+                    existente.um_interna = um_interna
+                    existente.fator_conversao = fator_conversao
+                    existente.sincronizado_odoo = False
+                    existente.atualizado_por = criado_por
+                    existente.atualizado_em = datetime.utcnow()
+
+                    # Buscar razao social se nao informada
+                    if razao_fornecedor:
+                        existente.razao_fornecedor = razao_fornecedor
+                    elif not existente.razao_fornecedor:
+                        existente.razao_fornecedor = self._buscar_razao_fornecedor(cnpj_limpo)
+
+                    db.session.commit()
+
+                    logger.info(
+                        f"De-Para reativado: {cnpj_limpo}/{cod_produto_fornecedor} -> "
+                        f"{cod_produto_interno}"
+                    )
+
+                    resultado = self._to_dict(existente)
+
+                    # AUTO SYNC: Sincronizar automaticamente com Odoo se tiver odoo_product_id
+                    if auto_sync_odoo and (odoo_product_id or existente.odoo_product_id):
+                        try:
+                            sync_result = self.sincronizar_para_odoo(existente.id)
+                            resultado['odoo_sync'] = sync_result
+                            logger.info(f"De-Para {existente.id} sincronizado automaticamente com Odoo")
+                        except Exception as sync_error:
+                            logger.warning(
+                                f"Nao foi possivel sincronizar De-Para {existente.id} com Odoo: {sync_error}"
+                            )
+                            resultado['odoo_sync'] = {'sucesso': False, 'erro': str(sync_error)}
+
+                    resultado['reativado'] = True
+                    return resultado
 
             # Buscar razao social automaticamente se nao informada
             if not razao_fornecedor:
@@ -367,40 +415,97 @@ class DeparaService:
             logger.error(f"Erro ao atualizar De-Para {depara_id}: {e}")
             raise
 
-    def excluir(self, depara_id: int) -> bool:
+    def excluir(self, depara_id: int, sync_odoo: bool = True) -> Dict[str, Any]:
         """
         Exclui mapeamento De-Para (soft delete - marca como inativo).
+        Tambem exclui o product.supplierinfo correspondente no Odoo.
 
         Args:
             depara_id: ID do registro
+            sync_odoo: Se True, sincroniza exclusao com Odoo (default: True)
 
         Returns:
-            True se excluido com sucesso
+            Dict com resultado da exclusao e status da sincronizacao Odoo
 
         Raises:
             ValueError: Se registro nao existir
         """
         try:
-            item = db.session.get(ProdutoFornecedorDepara,depara_id) if depara_id else None
+            item = db.session.get(ProdutoFornecedorDepara, depara_id) if depara_id else None
 
             if not item:
                 raise ValueError(f"De-Para {depara_id} nao encontrado")
 
-            # Soft delete
+            resultado = {
+                'sucesso': True,
+                'depara_id': depara_id,
+                'cnpj_fornecedor': item.cnpj_fornecedor,
+                'cod_produto_fornecedor': item.cod_produto_fornecedor,
+                'odoo_sync': None
+            }
+
+            # Sincronizar exclusao com Odoo se tiver supplierinfo_id
+            if sync_odoo and item.odoo_supplierinfo_id:
+                try:
+                    sync_result = self._excluir_supplierinfo_odoo(item.odoo_supplierinfo_id)
+                    resultado['odoo_sync'] = sync_result
+                    logger.info(
+                        f"Supplierinfo {item.odoo_supplierinfo_id} excluido do Odoo "
+                        f"para De-Para {depara_id}"
+                    )
+                except Exception as sync_error:
+                    logger.warning(
+                        f"Nao foi possivel excluir supplierinfo {item.odoo_supplierinfo_id} "
+                        f"do Odoo: {sync_error}"
+                    )
+                    resultado['odoo_sync'] = {'sucesso': False, 'erro': str(sync_error)}
+
+            # Soft delete local
             item.ativo = False
+            item.sincronizado_odoo = False  # Marcar como nao sincronizado
             item.atualizado_em = datetime.utcnow()
 
             db.session.commit()
 
             logger.info(f"De-Para {depara_id} desativado")
 
-            return True
+            return resultado
 
         except ValueError:
             raise
         except Exception as e:
             db.session.rollback()
             logger.error(f"Erro ao excluir De-Para {depara_id}: {e}")
+            raise
+
+    def _excluir_supplierinfo_odoo(self, supplierinfo_id: int) -> Dict[str, Any]:
+        """
+        Exclui um product.supplierinfo do Odoo.
+
+        Args:
+            supplierinfo_id: ID do supplierinfo no Odoo
+
+        Returns:
+            Dict com resultado da exclusao
+        """
+        try:
+            odoo = get_odoo_connection()
+
+            # Verificar se o supplierinfo existe
+            existing = odoo.read('product.supplierinfo', [supplierinfo_id], ['id'])
+            if not existing:
+                logger.info(f"Supplierinfo {supplierinfo_id} nao existe no Odoo (ja foi excluido?)")
+                return {'sucesso': True, 'mensagem': 'Supplierinfo nao existe no Odoo'}
+
+            # Excluir o supplierinfo
+            odoo.unlink('product.supplierinfo', [supplierinfo_id])
+
+            logger.info(f"Supplierinfo {supplierinfo_id} excluido do Odoo")
+
+            return {'sucesso': True, 'supplierinfo_id': supplierinfo_id}
+
+        except Exception as e:
+            logger.error(f"Erro ao excluir supplierinfo {supplierinfo_id} do Odoo: {e}")
             raise
 
     # =========================================================================

@@ -26,7 +26,7 @@
 
     <!-- Cards de Estatisticas -->
     <div class="row mb-4">
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card border-left-primary">
                 <div class="card-body">
                     <h6 class="text-muted text-uppercase small">Total Ativos</h6>
@@ -34,7 +34,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card border-left-success">
                 <div class="card-body">
                     <h6 class="text-muted text-uppercase small">Sincronizados</h6>
@@ -42,13 +42,24 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card border-left-warning">
                 <div class="card-body">
                     <h6 class="text-muted text-uppercase small">Pendentes Sync</h6>
                     <h2 class="mb-0 text-warning">{{ stats.pendentes }}</h2>
                 </div>
             </div>
+        </div>
+        <div class="col-md-3">
+            <a href="?ativo=false" class="text-decoration-none">
+                <div class="card border-left-danger">
+                    <div class="card-body">
+                        <h6 class="text-muted text-uppercase small">Inativos</h6>
+                        <h2 class="mb-0 text-danger">{{ stats.inativos }}</h2>
+                        <small class="text-muted">Clique para ver</small>
+                    </div>
+                </div>
+            </a>
         </div>
     </div>
 
@@ -154,6 +165,7 @@
                                 {% endif %}
                             </td>
                             <td class="text-center">
+                                {% if item.ativo %}
                                 <button class="btn btn-sm btn-outline-primary" onclick="editarDepara({{ item.id }})"
                                         title="Editar">
                                     <i class="fas fa-edit"></i>
@@ -168,6 +180,12 @@
                                         title="Desativar">
                                     <i class="fas fa-trash"></i>
                                 </button>
+                                {% else %}
+                                <button class="btn btn-sm btn-success" onclick="reativarDepara({{ item.id }})"
+                                        title="Reativar De-Para">
+                                    <i class="fas fa-redo"></i> Reativar
+                                </button>
+                                {% endif %}
                             </td>
                         </tr>
                         {% else %}
@@ -483,6 +501,30 @@ function excluirDepara(id) {
             } else {
                 alert('Erro: ' + data.erro);
             }
+        });
+}
+
+function reativarDepara(id) {
+    if (!confirm('Deseja reativar este De-Para?')) return;
+
+    fetch(`/api/recebimento/depara/${id}/reativar`, {method: 'PUT'})
+        .then(r => r.json())
+        .then(data => {
+            if (data.sucesso) {
+                let msg = 'De-Para reativado com sucesso!';
+                if (data.odoo_sync && data.odoo_sync.sucesso) {
+                    msg += '\nSincronizado com Odoo.';
+                } else if (data.odoo_sync && !data.odoo_sync.sucesso) {
+                    msg += '\nAviso: Nao foi possivel sincronizar com Odoo.';
+                }
+                alert(msg);
+                location.reload();
+            } else {
+                alert('Erro: ' + data.erro);
+            }
+        })
+        .catch(err => {
+            alert('Erro de comunicacao: ' + err.message);
         });
 }
 

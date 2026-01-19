@@ -226,14 +226,18 @@ def atualizar_depara(depara_id):
 @validacao_nf_po_bp.route('/depara/<int:depara_id>', methods=['DELETE'])
 @login_required
 def excluir_depara(depara_id):
-    """Exclui (desativa) mapeamento De-Para."""
+    """
+    Exclui (desativa) mapeamento De-Para.
+    Tambem sincroniza a exclusao com o Odoo (remove product.supplierinfo).
+    """
     try:
         service = DeparaService()
-        service.excluir(depara_id)
+        resultado = service.excluir(depara_id)
 
         return jsonify({
             'sucesso': True,
-            'mensagem': f'De-Para {depara_id} desativado'
+            'mensagem': f'De-Para {depara_id} desativado',
+            **resultado
         })
 
     except ValueError as e:
@@ -243,6 +247,71 @@ def excluir_depara(depara_id):
         }), 404
 
     except Exception as e:
+        return jsonify({
+            'sucesso': False,
+            'erro': str(e)
+        }), 500
+
+
+@validacao_nf_po_bp.route('/depara/<int:depara_id>/reativar', methods=['PUT'])
+@login_required
+def reativar_depara(depara_id):
+    """
+    Reativa um mapeamento De-Para que estava inativo (soft deleted).
+    Tambem tenta sincronizar com Odoo se tiver odoo_product_id.
+    """
+    try:
+        item = db.session.get(ProdutoFornecedorDepara, depara_id)
+
+        if not item:
+            return jsonify({
+                'sucesso': False,
+                'erro': f'De-Para {depara_id} nao encontrado'
+            }), 404
+
+        if item.ativo:
+            return jsonify({
+                'sucesso': False,
+                'erro': f'De-Para {depara_id} ja esta ativo'
+            }), 400
+
+        # Reativar
+        item.ativo = True
+        item.sincronizado_odoo = False  # Marcar para re-sincronizar
+        item.atualizado_por = current_user.nome if current_user else None
+        item.atualizado_em = db.func.now()
+
+        db.session.commit()
+
+        resultado = {
+            'sucesso': True,
+            'mensagem': f'De-Para {depara_id} reativado com sucesso',
+            'depara_id': depara_id,
+            'cnpj_fornecedor': item.cnpj_fornecedor,
+            'cod_produto_fornecedor': item.cod_produto_fornecedor,
+            'cod_produto_interno': item.cod_produto_interno
+        }
+
+        # Tentar sincronizar com Odoo se tiver produto vinculado
+        if item.odoo_product_id:
+            try:
+                service = DeparaService()
+                sync_result = service.sincronizar_para_odoo(depara_id)
+                resultado['odoo_sync'] = sync_result
+                logger.info(f"De-Para {depara_id} reativado e sincronizado com Odoo")
+            except Exception as sync_error:
+                logger.warning(
+                    f"De-Para {depara_id} reativado mas falhou sync Odoo: {sync_error}"
+                )
+                resultado['odoo_sync'] = {'sucesso': False, 'erro': str(sync_error)}
+        else:
+            resultado['odoo_sync'] = None
+
+        return jsonify(resultado)
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao reativar De-Para {depara_id}: {e}")
         return jsonify({
             'sucesso': False,
             'erro': str(e)

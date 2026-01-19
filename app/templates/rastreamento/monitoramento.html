@@ -1,0 +1,715 @@
+{% extends 'base.html' %}
+
+{% block title %}Monitoramento em Tempo Real{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+    /* Layout principal */
+    .monitoramento-container {
+        display: grid;
+        grid-template-columns: 1fr 400px;
+        gap: 20px;
+        height: calc(100vh - 160px);
+    }
+
+    @media (max-width: 1200px) {
+        .monitoramento-container {
+            grid-template-columns: 1fr;
+            height: auto;
+        }
+    }
+
+    /* Mapa */
+    #mapa-monitoramento {
+        height: 100%;
+        min-height: 500px;
+        border-radius: 15px;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+    }
+
+    /* Painel lateral */
+    .painel-lateral {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        overflow-y: auto;
+        max-height: calc(100vh - 160px);
+    }
+
+    /* Cards de estatísticas */
+    .stats-row {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+    }
+
+    .stat-card {
+        background: white;
+        border-radius: 12px;
+        padding: 15px;
+        text-align: center;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        transition: all 0.3s ease;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+
+    .stat-card h3 {
+        font-size: 1.8rem;
+        font-weight: 700;
+        margin: 0;
+    }
+
+    .stat-card p {
+        font-size: 0.75rem;
+        color: #6c757d;
+        margin: 5px 0 0;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .stat-card.success h3 { color: #28a745; }
+    .stat-card.warning h3 { color: #ffc107; }
+    .stat-card.danger h3 { color: #dc3545; }
+    .stat-card.info h3 { color: #0dcaf0; }
+
+    /* Alerta de dificuldades */
+    .alerta-dificuldade {
+        background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        color: white;
+        border-radius: 15px;
+        padding: 15px 20px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        box-shadow: 0 5px 20px rgba(220, 53, 69, 0.3);
+    }
+
+    .alerta-dificuldade:hover {
+        transform: scale(1.02);
+    }
+
+    .alerta-dificuldade.sem-dificuldade {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        box-shadow: 0 5px 20px rgba(40, 167, 69, 0.3);
+    }
+
+    .alerta-dificuldade h5 {
+        margin: 0;
+        font-weight: 600;
+    }
+
+    .alerta-dificuldade .badge-numero {
+        background: white;
+        color: #dc3545;
+        font-size: 1.5rem;
+        font-weight: 700;
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        animation: pulse-alert 2s infinite;
+    }
+
+    .alerta-dificuldade.sem-dificuldade .badge-numero {
+        color: #28a745;
+        animation: none;
+    }
+
+    @keyframes pulse-alert {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+    }
+
+    /* Lista de rastreamentos */
+    .lista-rastreamentos {
+        background: white;
+        border-radius: 15px;
+        overflow: hidden;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        flex: 1;
+    }
+
+    .lista-rastreamentos-header {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+        padding: 15px 20px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .lista-rastreamentos-body {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+
+    .item-rastreamento {
+        padding: 15px 20px;
+        border-bottom: 1px solid #f0f0f0;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .item-rastreamento:hover {
+        background: #f8f9fa;
+    }
+
+    .item-rastreamento:last-child {
+        border-bottom: none;
+    }
+
+    .item-rastreamento .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+    }
+
+    .item-rastreamento .embarque-numero {
+        font-weight: 700;
+        color: #212529;
+    }
+
+    .item-rastreamento .status-badge {
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .status-ativo { background: #d4edda; color: #155724; }
+    .status-proximo { background: #fff3cd; color: #856404; }
+    .status-dificuldade { background: #f8d7da; color: #721c24; animation: blink 1s infinite; }
+
+    @keyframes blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.7; }
+    }
+
+    .item-rastreamento .info-row {
+        display: flex;
+        gap: 15px;
+        font-size: 0.85rem;
+        color: #6c757d;
+    }
+
+    .item-rastreamento .info-item {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+    .item-rastreamento .clientes {
+        margin-top: 8px;
+        font-size: 0.8rem;
+        color: #495057;
+    }
+
+    /* Modal de dificuldades */
+    .modal-dificuldade .modal-header {
+        background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        color: white;
+    }
+
+    .modal-dificuldade .table {
+        margin: 0;
+    }
+
+    .modal-dificuldade .tempo-cell {
+        font-weight: 700;
+        color: #dc3545;
+    }
+
+    /* Indicadores no mapa */
+    .leaflet-marker-icon {
+        background: transparent !important;
+        border: none !important;
+    }
+
+    .custom-marker-truck i,
+    .custom-marker-destino i,
+    .custom-marker-origem i {
+        filter: drop-shadow(2px 2px 3px rgba(0,0,0,0.3));
+    }
+
+    /* Loading overlay */
+    .loading-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255,255,255,0.8);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+        border-radius: 15px;
+    }
+
+    .loading-overlay.show {
+        display: flex;
+    }
+
+    /* Auto-refresh indicator */
+    .refresh-indicator {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.85rem;
+        color: #6c757d;
+    }
+
+    .refresh-indicator .spinner-border {
+        width: 16px;
+        height: 16px;
+        border-width: 2px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0">
+            <i class="fas fa-satellite-dish text-success"></i> Monitoramento em Tempo Real
+        </h4>
+        <div class="refresh-indicator" id="refreshIndicator">
+            <span class="spinner-border text-success" role="status"></span>
+            <span>Atualizando a cada 30s</span>
+        </div>
+    </div>
+
+    <!-- Container principal -->
+    <div class="monitoramento-container">
+        <!-- Mapa -->
+        <div style="position: relative;">
+            <div id="mapa-monitoramento"></div>
+            <div class="loading-overlay" id="loadingMapa">
+                <div class="spinner-border text-success" style="width: 3rem; height: 3rem;"></div>
+            </div>
+        </div>
+
+        <!-- Painel lateral -->
+        <div class="painel-lateral">
+            <!-- Estatísticas -->
+            <div class="stats-row">
+                <div class="stat-card success">
+                    <h3 id="statAtivos">{{ rastreamentos|length }}</h3>
+                    <p>Em Rota</p>
+                </div>
+                <div class="stat-card warning">
+                    <h3 id="statProximos">0</h3>
+                    <p>Chegando</p>
+                </div>
+                <div class="stat-card info">
+                    <h3 id="statEntregues">0</h3>
+                    <p>Entregues Hoje</p>
+                </div>
+            </div>
+
+            <!-- Alerta de dificuldades -->
+            <div class="alerta-dificuldade {% if entregas_dificuldade == 0 %}sem-dificuldade{% endif %}"
+                 id="alertaDificuldade"
+                 data-bs-toggle="modal"
+                 data-bs-target="#modalDificuldades">
+                <div>
+                    <h5>
+                        {% if entregas_dificuldade > 0 %}
+                            <i class="fas fa-exclamation-triangle"></i> Entregas com Dificuldade
+                        {% else %}
+                            <i class="fas fa-check-circle"></i> Sem Dificuldades
+                        {% endif %}
+                    </h5>
+                    <small>
+                        {% if entregas_dificuldade > 0 %}
+                            Motoristas > 40min no cliente
+                        {% else %}
+                            Todas entregas fluindo normalmente
+                        {% endif %}
+                    </small>
+                </div>
+                <div class="badge-numero" id="badgeDificuldades">{{ entregas_dificuldade }}</div>
+            </div>
+
+            <!-- Lista de rastreamentos ativos -->
+            <div class="lista-rastreamentos">
+                <div class="lista-rastreamentos-header">
+                    <span><i class="fas fa-truck"></i> Motoristas Rastreados</span>
+                    <span class="badge bg-light text-dark" id="totalRastreamentos">{{ rastreamentos|length }}</span>
+                </div>
+                <div class="lista-rastreamentos-body" id="listaRastreamentos">
+                    {% for rastr in rastreamentos %}
+                    {% set ultimo_ping = rastr.pings.first() %}
+                    <div class="item-rastreamento"
+                         data-rastreamento-id="{{ rastr.id }}"
+                         data-embarque-id="{{ rastr.embarque_id }}"
+                         onclick="focarNoMapa({{ ultimo_ping.latitude if ultimo_ping else 'null' }}, {{ ultimo_ping.longitude if ultimo_ping else 'null' }})">
+                        <div class="header">
+                            <span class="embarque-numero">
+                                <i class="fas fa-truck"></i> #{{ rastr.embarque.numero if rastr.embarque else rastr.embarque_id }}
+                            </span>
+                            <span class="status-badge {% if rastr.status == 'CHEGOU_DESTINO' %}status-proximo{% else %}status-ativo{% endif %}">
+                                {{ 'Chegando' if rastr.status == 'CHEGOU_DESTINO' else 'Em Rota' }}
+                            </span>
+                        </div>
+                        <div class="info-row">
+                            <div class="info-item">
+                                <i class="fas fa-building"></i>
+                                {{ rastr.embarque.transportadora.nome[:15] if rastr.embarque and rastr.embarque.transportadora else 'N/A' }}...
+                            </div>
+                            <div class="info-item">
+                                <i class="fas fa-clock"></i>
+                                {% if rastr.ultimo_ping_em %}
+                                    {{ rastr.ultimo_ping_em.strftime('%H:%M') }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </div>
+                            {% if ultimo_ping and ultimo_ping.bateria_nivel %}
+                            <div class="info-item">
+                                <i class="fas fa-battery-{{ 'full' if ultimo_ping.bateria_nivel > 50 else 'half' if ultimo_ping.bateria_nivel > 20 else 'empty' }}"></i>
+                                {{ ultimo_ping.bateria_nivel }}%
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="clientes">
+                            {% set entregas_pendentes = rastr.entregas.limit(3).all() %}
+                            {% if entregas_pendentes %}
+                                <i class="fas fa-map-marker-alt text-danger"></i>
+                                {% for e in entregas_pendentes %}
+                                    {{ e.cliente[:20] }}{% if not loop.last %}, {% endif %}
+                                {% endfor %}
+                                {% if rastr.entregas.count() > 2 %}...{% endif %}
+                            {% else %}
+                                <span class="text-success"><i class="fas fa-check"></i> Todas entregas concluídas</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="p-4 text-center text-muted">
+                        <i class="fas fa-truck fa-3x mb-3 opacity-50"></i>
+                        <p class="mb-0">Nenhum motorista em rota no momento</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Dificuldades -->
+<div class="modal fade modal-dificuldade" id="modalDificuldades" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle"></i> Entregas com Dificuldade (>40 min)
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="listaDificuldades">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-danger"></div>
+                        <p class="mt-2">Carregando...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    // ========== VARIÁVEIS GLOBAIS ==========
+    let mapa = null;
+    let markers = {};
+    let refreshInterval = null;
+
+    const origemCD = {{ origem_cd|tojson|safe }};
+    const CONFIG = {
+        intervalo_ping: {{ config.intervalo_ping_segundos }},
+        distancia_chegada: {{ config.distancia_chegada_metros }},
+        refresh_ms: 30000  // 30 segundos
+    };
+
+    // ========== INICIALIZAÇÃO ==========
+    document.addEventListener('DOMContentLoaded', function() {
+        inicializarMapa();
+        carregarDados();
+        iniciarAutoRefresh();
+    });
+
+    function inicializarMapa() {
+        // Centro inicial no Brasil
+        mapa = L.map('mapa-monitoramento').setView([-15.7801, -47.9292], 5);
+
+        // Camada do OpenStreetMap
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(mapa);
+
+        // Marcador da origem (CD)
+        const iconeOrigem = L.divIcon({
+            html: '<i class="fas fa-warehouse" style="color: #6c757d; font-size: 28px;"></i>',
+            className: 'custom-marker-origem',
+            iconSize: [35, 35],
+            iconAnchor: [17, 35]
+        });
+
+        L.marker([origemCD.lat, origemCD.lng], { icon: iconeOrigem })
+            .addTo(mapa)
+            .bindPopup(`
+                <strong>📍 ORIGEM</strong><br>
+                ${origemCD.nome}<br>
+                <small>${origemCD.endereco}</small>
+            `);
+    }
+
+    async function carregarDados() {
+        document.getElementById('loadingMapa').classList.add('show');
+
+        try {
+            const response = await fetch('/rastreamento/api/ativos');
+            const data = await response.json();
+
+            if (data.success) {
+                atualizarMapa(data.data.rastreamentos);
+                atualizarEstatisticas(data.data);
+                atualizarLista(data.data.rastreamentos);
+            }
+        } catch (error) {
+            console.error('Erro ao carregar dados:', error);
+        } finally {
+            document.getElementById('loadingMapa').classList.remove('show');
+        }
+    }
+
+    function atualizarMapa(rastreamentos) {
+        // Limpar markers anteriores
+        Object.values(markers).forEach(m => mapa.removeLayer(m));
+        markers = {};
+
+        const todosMarkers = [];
+        todosMarkers.push(L.marker([origemCD.lat, origemCD.lng]));
+
+        rastreamentos.forEach(rastr => {
+            if (!rastr.posicao.latitude || !rastr.posicao.longitude) return;
+
+            // Ícone do caminhão
+            const corTruck = rastr.com_dificuldade ? '#dc3545' :
+                            (rastr.status === 'CHEGOU_DESTINO' ? '#ffc107' : '#28a745');
+
+            const iconeTruck = L.divIcon({
+                html: `<i class="fas fa-truck" style="color: ${corTruck}; font-size: 28px;"></i>`,
+                className: 'custom-marker-truck',
+                iconSize: [35, 35],
+                iconAnchor: [17, 17]
+            });
+
+            const marker = L.marker(
+                [rastr.posicao.latitude, rastr.posicao.longitude],
+                { icon: iconeTruck }
+            ).addTo(mapa);
+
+            // Popup
+            marker.bindPopup(`
+                <strong>🚚 Embarque #${rastr.embarque_numero || rastr.embarque_id}</strong><br>
+                <strong>Transportadora:</strong> ${rastr.transportadora}<br>
+                <strong>NFs:</strong> ${rastr.nfs.length > 0 ? rastr.nfs.join(', ') : 'Sem NF'}<br>
+                <strong>Status:</strong> ${rastr.status}<br>
+                <strong>Bateria:</strong> ${rastr.posicao.bateria || '-'}%<br>
+                <strong>Último ping:</strong> ${rastr.ultimo_ping ? new Date(rastr.ultimo_ping).toLocaleTimeString('pt-BR') : '-'}<br>
+                ${rastr.com_dificuldade ? '<span class="text-danger"><strong>⚠️ > 40 min no cliente!</strong></span><br>' : ''}
+                <a href="/rastreamento/detalhes/${rastr.embarque_id}" class="btn btn-sm btn-primary mt-2">Ver Detalhes</a>
+            `);
+
+            markers[rastr.rastreamento_id] = marker;
+            todosMarkers.push(marker);
+
+            // Adicionar destinos
+            rastr.clientes_pendentes.forEach(cliente => {
+                // Destinos seriam adicionados aqui se tivéssemos coordenadas
+            });
+
+            // Desenhar linha da origem até motorista
+            L.polyline([
+                [origemCD.lat, origemCD.lng],
+                [rastr.posicao.latitude, rastr.posicao.longitude]
+            ], {
+                color: corTruck,
+                weight: 2,
+                opacity: 0.6,
+                dashArray: '5, 10'
+            }).addTo(mapa);
+        });
+
+        // Ajustar zoom
+        if (todosMarkers.length > 1) {
+            const grupo = L.featureGroup(todosMarkers);
+            mapa.fitBounds(grupo.getBounds().pad(0.1));
+        }
+    }
+
+    function atualizarEstatisticas(data) {
+        document.getElementById('statAtivos').textContent = data.total;
+        document.getElementById('statProximos').textContent =
+            data.rastreamentos.filter(r => r.status === 'CHEGOU_DESTINO').length;
+
+        // Atualizar badge de dificuldades
+        document.getElementById('badgeDificuldades').textContent = data.com_dificuldade;
+
+        const alerta = document.getElementById('alertaDificuldade');
+        if (data.com_dificuldade > 0) {
+            alerta.classList.remove('sem-dificuldade');
+            alerta.querySelector('h5').innerHTML = '<i class="fas fa-exclamation-triangle"></i> Entregas com Dificuldade';
+            alerta.querySelector('small').textContent = 'Motoristas > 40min no cliente';
+        } else {
+            alerta.classList.add('sem-dificuldade');
+            alerta.querySelector('h5').innerHTML = '<i class="fas fa-check-circle"></i> Sem Dificuldades';
+            alerta.querySelector('small').textContent = 'Todas entregas fluindo normalmente';
+        }
+    }
+
+    function atualizarLista(rastreamentos) {
+        const lista = document.getElementById('listaRastreamentos');
+        document.getElementById('totalRastreamentos').textContent = rastreamentos.length;
+
+        if (rastreamentos.length === 0) {
+            lista.innerHTML = `
+                <div class="p-4 text-center text-muted">
+                    <i class="fas fa-truck fa-3x mb-3 opacity-50"></i>
+                    <p class="mb-0">Nenhum motorista em rota no momento</p>
+                </div>
+            `;
+            return;
+        }
+
+        lista.innerHTML = rastreamentos.map(rastr => `
+            <div class="item-rastreamento ${rastr.com_dificuldade ? 'bg-danger bg-opacity-10' : ''}"
+                 data-rastreamento-id="${rastr.rastreamento_id}"
+                 onclick="focarNoMapa(${rastr.posicao.latitude}, ${rastr.posicao.longitude})">
+                <div class="header">
+                    <span class="embarque-numero">
+                        <i class="fas fa-truck"></i> #${rastr.embarque_numero || rastr.embarque_id}
+                    </span>
+                    <span class="status-badge ${rastr.com_dificuldade ? 'status-dificuldade' : (rastr.status === 'CHEGOU_DESTINO' ? 'status-proximo' : 'status-ativo')}">
+                        ${rastr.com_dificuldade ? '⚠️ > 40min' : (rastr.status === 'CHEGOU_DESTINO' ? 'Chegando' : 'Em Rota')}
+                    </span>
+                </div>
+                <div class="info-row">
+                    <div class="info-item">
+                        <i class="fas fa-building"></i>
+                        ${rastr.transportadora.substring(0, 15)}...
+                    </div>
+                    <div class="info-item">
+                        <i class="fas fa-clock"></i>
+                        ${rastr.ultimo_ping ? new Date(rastr.ultimo_ping).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'}) : '-'}
+                    </div>
+                    ${rastr.posicao.bateria ? `
+                    <div class="info-item">
+                        <i class="fas fa-battery-${rastr.posicao.bateria > 50 ? 'full' : (rastr.posicao.bateria > 20 ? 'half' : 'empty')}"></i>
+                        ${rastr.posicao.bateria}%
+                    </div>
+                    ` : ''}
+                </div>
+                <div class="clientes">
+                    <i class="fas fa-map-marker-alt text-danger"></i>
+                    ${rastr.clientes_pendentes.slice(0, 2).map(c => c.cliente.substring(0, 20)).join(', ')}
+                    ${rastr.entregas.pendentes > 2 ? '...' : ''}
+                    <small class="text-muted">(${rastr.entregas.pendentes} pendentes)</small>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function focarNoMapa(lat, lng) {
+        if (lat && lng) {
+            mapa.setView([lat, lng], 14);
+        }
+    }
+
+    function iniciarAutoRefresh() {
+        refreshInterval = setInterval(carregarDados, CONFIG.refresh_ms);
+    }
+
+    // ========== MODAL DE DIFICULDADES ==========
+    document.getElementById('modalDificuldades').addEventListener('show.bs.modal', async function() {
+        const container = document.getElementById('listaDificuldades');
+
+        try {
+            const response = await fetch('/rastreamento/api/dificuldades');
+            const data = await response.json();
+
+            if (data.success && data.data.entregas_dificuldade.length > 0) {
+                container.innerHTML = `
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Embarque</th>
+                                <th>Cliente</th>
+                                <th>NF</th>
+                                <th>Tempo</th>
+                                <th>Ação</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.data.entregas_dificuldade.map(e => `
+                                <tr>
+                                    <td><strong>#${e.embarque_numero || e.embarque_id}</strong></td>
+                                    <td>${e.cliente}</td>
+                                    <td>${e.numero_nf || '-'}</td>
+                                    <td class="tempo-cell">${e.tempo_no_cliente_minutos} min</td>
+                                    <td>
+                                        <a href="/rastreamento/detalhes/${e.embarque_id}" class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+            } else {
+                container.innerHTML = `
+                    <div class="text-center py-4 text-success">
+                        <i class="fas fa-check-circle fa-3x mb-3"></i>
+                        <p class="mb-0">Nenhuma entrega com dificuldade no momento!</p>
+                    </div>
+                `;
+            }
+        } catch (error) {
+            container.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Erro ao carregar entregas com dificuldade
+                </div>
+            `;
+        }
+    });
+
+    // Limpar interval ao sair da página
+    window.addEventListener('beforeunload', function() {
+        if (refreshInterval) {
+            clearInterval(refreshInterval);
+        }
+    });
+</script>
+{% endblock %}

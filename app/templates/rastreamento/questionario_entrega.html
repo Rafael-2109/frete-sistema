@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#28a745">
+    <title>Finalizar Entrega - Rastreamento Nacom</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 15px;
+            padding-bottom: 100px;
+        }
+
+        .card-pergunta {
+            background: white;
+            border-radius: 20px;
+            padding: 25px;
+            margin-bottom: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+
+        .card-pergunta h5 {
+            color: #212529;
+            font-weight: 700;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-pergunta h5 .numero {
+            background: #28a745;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+        }
+
+        .btn-opcao {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 15px;
+            background: white;
+            margin-bottom: 10px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            text-align: left;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .btn-opcao:hover {
+            border-color: #28a745;
+            background: #f8f9fa;
+        }
+
+        .btn-opcao.selected {
+            border-color: #28a745;
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .btn-opcao.selected-no {
+            border-color: #dc3545;
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .btn-opcao i {
+            font-size: 1.5rem;
+        }
+
+        .sub-pergunta {
+            display: none;
+            margin-top: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 15px;
+            border-left: 4px solid #28a745;
+        }
+
+        .sub-pergunta.show {
+            display: block;
+            animation: slideDown 0.3s ease;
+        }
+
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .input-valor {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1.2rem;
+            text-align: center;
+        }
+
+        .input-valor:focus {
+            border-color: #28a745;
+            outline: none;
+        }
+
+        .upload-area {
+            border: 3px dashed #28a745;
+            border-radius: 15px;
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #f8f9fa;
+        }
+
+        .upload-area:hover {
+            background: #e9ecef;
+        }
+
+        .upload-area i {
+            font-size: 3rem;
+            color: #28a745;
+            margin-bottom: 10px;
+        }
+
+        .preview-img {
+            max-width: 100%;
+            border-radius: 10px;
+            margin-top: 15px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+        }
+
+        .header-entrega {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .header-entrega h4 {
+            margin: 0;
+            color: #212529;
+        }
+
+        .header-entrega small {
+            color: #6c757d;
+        }
+
+        .btn-finalizar {
+            position: fixed;
+            bottom: 20px;
+            left: 15px;
+            right: 15px;
+            padding: 18px;
+            font-size: 1.2rem;
+            font-weight: 700;
+            border-radius: 15px;
+            border: none;
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            box-shadow: 0 5px 25px rgba(40, 167, 69, 0.4);
+            z-index: 1000;
+        }
+
+        .btn-finalizar:disabled {
+            background: #6c757d;
+            box-shadow: none;
+        }
+
+        .btn-voltar {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+
+        .lista-nfs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+
+        .nf-badge {
+            background: #e7f5ff;
+            color: #0c5460;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255,255,255,0.95);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            flex-direction: column;
+        }
+
+        .loading-overlay.show {
+            display: flex;
+        }
+
+        .select-quantidade {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1rem;
+        }
+
+        .motivo-textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            resize: none;
+            height: 80px;
+        }
+
+        .alerta-info {
+            background: #e7f5ff;
+            border-left: 4px solid #0dcaf0;
+            padding: 12px;
+            border-radius: 0 10px 10px 0;
+            font-size: 0.9rem;
+            color: #055160;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner-border text-success" style="width: 60px; height: 60px;"></div>
+        <p class="mt-3 fw-bold">Enviando dados...</p>
+    </div>
+
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <a href="{{ url_for('rastreamento.rastrear', token=token) }}" class="btn-voltar">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+        <span class="text-white fw-bold">
+            <i class="fas fa-clipboard-check"></i> Finalizar Entrega
+        </span>
+    </div>
+
+    <!-- Cabeçalho da Entrega -->
+    <div class="header-entrega">
+        <h4><i class="fas fa-truck text-success"></i> {{ entrega.cliente }}</h4>
+        <small>{{ entrega.cidade }}/{{ entrega.uf }}</small>
+        <div class="lista-nfs mt-2">
+            <span class="nf-badge">
+                {% if entrega.numero_nf %}
+                    NF {{ entrega.numero_nf }}
+                {% else %}
+                    Pedido {{ entrega.pedido }}
+                {% endif %}
+            </span>
+        </div>
+    </div>
+
+    <form id="formEntrega">
+        <!-- Pergunta 1: Entregue? -->
+        <div class="card-pergunta">
+            <h5>
+                <span class="numero">1</span>
+                A mercadoria foi entregue?
+            </h5>
+            <button type="button" class="btn-opcao" data-pergunta="entregue" data-valor="sim">
+                <i class="fas fa-check-circle text-success"></i>
+                <div>
+                    <strong>SIM</strong>
+                    <small class="d-block text-muted">Entrega realizada com sucesso</small>
+                </div>
+            </button>
+            <button type="button" class="btn-opcao" data-pergunta="entregue" data-valor="nao">
+                <i class="fas fa-times-circle text-danger"></i>
+                <div>
+                    <strong>NÃO</strong>
+                    <small class="d-block text-muted">Não foi possível entregar</small>
+                </div>
+            </button>
+
+            <!-- Sub: Motivo não entrega -->
+            <div class="sub-pergunta" id="subMotivoNaoEntrega">
+                <label class="fw-bold mb-2">Motivo da não entrega:</label>
+                <textarea class="motivo-textarea" id="motivoNaoEntrega" placeholder="Descreva o motivo..."></textarea>
+            </div>
+
+            <!-- Sub: Foto canhoto -->
+            <div class="sub-pergunta" id="subCanhoto">
+                <label class="fw-bold mb-2"><i class="fas fa-camera"></i> Foto do Canhoto Assinado</label>
+                <div class="upload-area" id="uploadCanhoto" onclick="document.getElementById('inputCanhoto').click()">
+                    <i class="fas fa-camera"></i>
+                    <p class="mb-0">Toque para tirar foto</p>
+                    <small class="text-muted">ou selecionar da galeria</small>
+                </div>
+                <input type="file" id="inputCanhoto" accept="image/*" capture="environment" style="display:none">
+                <img id="previewCanhoto" class="preview-img" style="display:none">
+            </div>
+        </div>
+
+        <!-- Pergunta 2: Devolução -->
+        <div class="card-pergunta">
+            <h5>
+                <span class="numero">2</span>
+                Houve devolução de mercadoria?
+            </h5>
+            <button type="button" class="btn-opcao" data-pergunta="devolucao" data-valor="sim">
+                <i class="fas fa-undo text-warning"></i>
+                <div>
+                    <strong>SIM</strong>
+                    <small class="d-block text-muted">O cliente devolveu alguma mercadoria</small>
+                </div>
+            </button>
+            <button type="button" class="btn-opcao" data-pergunta="devolucao" data-valor="nao">
+                <i class="fas fa-box-open text-success"></i>
+                <div>
+                    <strong>NÃO</strong>
+                    <small class="d-block text-muted">Toda mercadoria foi aceita</small>
+                </div>
+            </button>
+
+            <!-- Sub: Número NFD -->
+            <div class="sub-pergunta" id="subDevolucao">
+                <label class="fw-bold mb-2"><i class="fas fa-barcode"></i> Número da NF de Devolução (NFD)</label>
+                <input type="text" class="input-valor" id="numeroNFD" placeholder="Digite ou escaneie o código">
+                <div class="alerta-info mt-2">
+                    <i class="fas fa-info-circle"></i> Se não souber o número, deixe em branco e o comercial irá informar depois.
+                </div>
+            </div>
+        </div>
+
+        <!-- Pergunta 3: Pagamento Descarga -->
+        <div class="card-pergunta">
+            <h5>
+                <span class="numero">3</span>
+                Houve pagamento de descarga?
+            </h5>
+            <button type="button" class="btn-opcao" data-pergunta="descarga" data-valor="sim">
+                <i class="fas fa-money-bill-wave text-success"></i>
+                <div>
+                    <strong>SIM</strong>
+                    <small class="d-block text-muted">Precisei pagar ajudante/descarga</small>
+                </div>
+            </button>
+            <button type="button" class="btn-opcao" data-pergunta="descarga" data-valor="nao">
+                <i class="fas fa-hand-holding-usd text-secondary"></i>
+                <div>
+                    <strong>NÃO</strong>
+                    <small class="d-block text-muted">Não houve custo adicional</small>
+                </div>
+            </button>
+
+            <!-- Sub: Valor e comprovante -->
+            <div class="sub-pergunta" id="subDescarga">
+                <label class="fw-bold mb-2"><i class="fas fa-dollar-sign"></i> Valor pago (R$)</label>
+                <input type="text" class="input-valor" id="valorDescarga" placeholder="0,00" inputmode="decimal">
+
+                <label class="fw-bold mb-2 mt-3"><i class="fas fa-receipt"></i> Foto do Comprovante (opcional)</label>
+                <div class="upload-area" onclick="document.getElementById('inputComprovante').click()">
+                    <i class="fas fa-receipt"></i>
+                    <p class="mb-0">Toque para tirar foto</p>
+                </div>
+                <input type="file" id="inputComprovante" accept="image/*" capture="environment" style="display:none">
+                <img id="previewComprovante" class="preview-img" style="display:none">
+            </div>
+        </div>
+
+        <!-- Pergunta 4: Pallet -->
+        <div class="card-pergunta">
+            <h5>
+                <span class="numero">4</span>
+                O cliente devolveu pallets?
+            </h5>
+            <button type="button" class="btn-opcao" data-pergunta="pallet" data-valor="sim">
+                <i class="fas fa-pallet text-primary"></i>
+                <div>
+                    <strong>SIM</strong>
+                    <small class="d-block text-muted">Recebi pallets de volta</small>
+                </div>
+            </button>
+            <button type="button" class="btn-opcao" data-pergunta="pallet" data-valor="nao">
+                <i class="fas fa-file-invoice text-warning"></i>
+                <div>
+                    <strong>NÃO</strong>
+                    <small class="d-block text-muted">Nenhum pallet devolvido</small>
+                </div>
+            </button>
+
+            <!-- Sub: Quantidade pallets -->
+            <div class="sub-pergunta" id="subPalletSim">
+                <label class="fw-bold mb-2"><i class="fas fa-hashtag"></i> Quantidade de pallets devolvidos</label>
+                <select class="select-quantidade" id="qtdPallets">
+                    <option value="">Selecione...</option>
+                    {% for i in range(1, 51) %}
+                    <option value="{{ i }}">{{ i }} pallet{% if i > 1 %}s{% endif %}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Sub: Vale pallet -->
+            <div class="sub-pergunta" id="subPalletNao">
+                <label class="fw-bold mb-2">O cliente deu vale pallet ou assinou canhoto da NF de pallet?</label>
+                <button type="button" class="btn-opcao btn-sm" data-pergunta="vale_pallet" data-valor="vale">
+                    <i class="fas fa-file-alt text-info"></i>
+                    <span>Sim, recebi VALE PALLET</span>
+                </button>
+                <button type="button" class="btn-opcao btn-sm" data-pergunta="vale_pallet" data-valor="canhoto">
+                    <i class="fas fa-signature text-success"></i>
+                    <span>Sim, assinou canhoto NF pallet</span>
+                </button>
+                <button type="button" class="btn-opcao btn-sm" data-pergunta="vale_pallet" data-valor="nenhum">
+                    <i class="fas fa-minus-circle text-secondary"></i>
+                    <span>Não, nenhum documento</span>
+                </button>
+            </div>
+        </div>
+    </form>
+
+    <!-- Botão Finalizar -->
+    <button type="button" class="btn btn-finalizar" id="btnFinalizar" disabled>
+        <i class="fas fa-paper-plane"></i> Enviar e Finalizar
+    </button>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const TOKEN = "{{ token }}";
+        const ENTREGA_ID = {{ entrega.id }};
+
+        // Estado do formulário
+        const formState = {
+            entregue: null,
+            motivoNaoEntrega: null,
+            canhotoBase64: null,
+            devolucao: { houve: null, numero_nfd: null },
+            descarga: { houve: null, valor: null, comprovante_base64: null },
+            pallet: { devolveu: null, quantidade: null, vale_pallet: null }
+        };
+
+        // Handlers de botões de opção
+        document.querySelectorAll('.btn-opcao').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const pergunta = this.dataset.pergunta;
+                const valor = this.dataset.valor;
+
+                // Desselecionar outros da mesma pergunta
+                document.querySelectorAll(`[data-pergunta="${pergunta}"]`).forEach(b => {
+                    b.classList.remove('selected', 'selected-no');
+                });
+
+                // Selecionar este
+                if (valor === 'nao') {
+                    this.classList.add('selected-no');
+                } else {
+                    this.classList.add('selected');
+                }
+
+                // Processar resposta
+                processarResposta(pergunta, valor);
+            });
+        });
+
+        function processarResposta(pergunta, valor) {
+            // Esconder todas sub-perguntas relacionadas primeiro
+            document.querySelectorAll('.sub-pergunta').forEach(sp => {
+                if (sp.id.includes(pergunta.charAt(0).toUpperCase() + pergunta.slice(1))) {
+                    sp.classList.remove('show');
+                }
+            });
+
+            switch(pergunta) {
+                case 'entregue':
+                    formState.entregue = (valor === 'sim');
+                    if (valor === 'sim') {
+                        document.getElementById('subCanhoto').classList.add('show');
+                        document.getElementById('subMotivoNaoEntrega').classList.remove('show');
+                    } else {
+                        document.getElementById('subMotivoNaoEntrega').classList.add('show');
+                        document.getElementById('subCanhoto').classList.remove('show');
+                    }
+                    break;
+
+                case 'devolucao':
+                    formState.devolucao.houve = (valor === 'sim');
+                    if (valor === 'sim') {
+                        document.getElementById('subDevolucao').classList.add('show');
+                    }
+                    break;
+
+                case 'descarga':
+                    formState.descarga.houve = (valor === 'sim');
+                    if (valor === 'sim') {
+                        document.getElementById('subDescarga').classList.add('show');
+                    }
+                    break;
+
+                case 'pallet':
+                    formState.pallet.devolveu = (valor === 'sim');
+                    if (valor === 'sim') {
+                        document.getElementById('subPalletSim').classList.add('show');
+                        document.getElementById('subPalletNao').classList.remove('show');
+                    } else {
+                        document.getElementById('subPalletNao').classList.add('show');
+                        document.getElementById('subPalletSim').classList.remove('show');
+                    }
+                    break;
+
+                case 'vale_pallet':
+                    formState.pallet.vale_pallet = valor;
+                    break;
+            }
+
+            verificarFormularioCompleto();
+        }
+
+        // Handler de upload de imagem
+        function setupImageUpload(inputId, previewId, base64Key) {
+            const input = document.getElementById(inputId);
+            const preview = document.getElementById(previewId);
+
+            input.addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        preview.src = e.target.result;
+                        preview.style.display = 'block';
+
+                        // Salvar base64
+                        if (base64Key === 'canhoto') {
+                            formState.canhotoBase64 = e.target.result;
+                        } else if (base64Key === 'comprovante') {
+                            formState.descarga.comprovante_base64 = e.target.result;
+                        }
+
+                        verificarFormularioCompleto();
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+        }
+
+        setupImageUpload('inputCanhoto', 'previewCanhoto', 'canhoto');
+        setupImageUpload('inputComprovante', 'previewComprovante', 'comprovante');
+
+        // Verificar se formulário está completo
+        function verificarFormularioCompleto() {
+            let completo = formState.entregue !== null;
+
+            // Se entregue = true, precisa de canhoto
+            if (formState.entregue === true && !formState.canhotoBase64) {
+                completo = false;
+            }
+
+            // Se entregue = false, precisa de motivo
+            if (formState.entregue === false) {
+                formState.motivoNaoEntrega = document.getElementById('motivoNaoEntrega').value;
+                if (!formState.motivoNaoEntrega) {
+                    completo = false;
+                }
+            }
+
+            document.getElementById('btnFinalizar').disabled = !completo;
+        }
+
+        // Listener para campos de texto
+        document.getElementById('motivoNaoEntrega').addEventListener('input', verificarFormularioCompleto);
+        document.getElementById('numeroNFD').addEventListener('input', function() {
+            formState.devolucao.numero_nfd = this.value;
+        });
+        document.getElementById('valorDescarga').addEventListener('input', function() {
+            formState.descarga.valor = parseFloat(this.value.replace(',', '.')) || 0;
+        });
+        document.getElementById('qtdPallets').addEventListener('change', function() {
+            formState.pallet.quantidade = parseInt(this.value) || 0;
+        });
+
+        // Finalizar entrega
+        document.getElementById('btnFinalizar').addEventListener('click', async function() {
+            const btn = this;
+            const loading = document.getElementById('loadingOverlay');
+
+            btn.disabled = true;
+            loading.classList.add('show');
+
+            try {
+                // Obter localização atual
+                let latitude = null, longitude = null;
+                if ('geolocation' in navigator) {
+                    try {
+                        const pos = await new Promise((resolve, reject) => {
+                            navigator.geolocation.getCurrentPosition(resolve, reject, {
+                                enableHighAccuracy: true,
+                                timeout: 5000
+                            });
+                        });
+                        latitude = pos.coords.latitude;
+                        longitude = pos.coords.longitude;
+                    } catch(e) {
+                        console.warn('Não foi possível obter localização');
+                    }
+                }
+
+                // Montar payload
+                const payload = {
+                    token: TOKEN,
+                    entrega_id: ENTREGA_ID,
+                    entregue: formState.entregue,
+                    motivo_nao_entrega: formState.motivoNaoEntrega,
+                    canhoto_base64: formState.canhotoBase64,
+                    latitude: latitude,
+                    longitude: longitude,
+                    devolucao: formState.devolucao,
+                    pagamento_descarga: formState.descarga,
+                    pallet: formState.pallet
+                };
+
+                const response = await fetch('/rastreamento/api/finalizar-entrega', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert(data.message);
+                    window.location.href = data.data.redirect;
+                } else {
+                    alert('Erro: ' + data.message);
+                    btn.disabled = false;
+                }
+
+            } catch (error) {
+                console.error('Erro:', error);
+                alert('Erro ao enviar dados. Verifique sua conexão.');
+                btn.disabled = false;
+            } finally {
+                loading.classList.remove('show');
+            }
+        });
+    </script>
+</body>
+</html>

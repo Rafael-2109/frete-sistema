@@ -1194,7 +1194,8 @@ def depara_fornecedor():
         ).count(),
         'pendentes': ProdutoFornecedorDepara.query.filter_by(
             ativo=True, sincronizado_odoo=False
-        ).count()
+        ).count(),
+        'inativos': ProdutoFornecedorDepara.query.filter_by(ativo=False).count()
     }
 
     return render_template(

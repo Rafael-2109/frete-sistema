@@ -7,12 +7,15 @@ Executa AMBAS as validacoes em PARALELO:
 - Fase 1: Validacao Fiscal
 - Fase 2: Validacao NF x PO
 
-Tambem executa sincronizacao Odoo -> Sistema do De-Para.
+Tambem executa sincronizacoes:
+- De-Para: Odoo -> Sistema (product.supplierinfo)
+- POs Vinculados: Atualiza DFEs que receberam PO no Odoo
 
 Fluxo:
 1. Sync De-Para do Odoo (product.supplierinfo)
-2. Buscar DFEs de compra nao validados no Odoo
-3. Para cada DFE:
+2. Sync POs vinculados (DFEs sem PO -> verifica se Odoo agora tem)
+3. Buscar DFEs de compra nao validados no Odoo
+4. Para cada DFE:
    a) Executar validacao fiscal (Fase 1)
    b) Executar validacao NF x PO (Fase 2)
    c) Ambas devem aprovar para DFE ser liberado
@@ -84,6 +87,7 @@ class ValidacaoRecebimentoJob:
         resultado = {
             'sucesso': True,
             'sync_depara': {},
+            'sync_pos_vinculados': {},
             'fase1_fiscal': {},
             'fase2_nf_po': {},
             'dfes_processados': 0,
@@ -95,11 +99,15 @@ class ValidacaoRecebimentoJob:
             logger.info(f"Janela: {janela} minutos")
 
             # 1. SYNC DE-PARA (Odoo -> Sistema)
-            logger.info("[1/3] Sincronizando De-Para do Odoo...")
+            logger.info("[1/4] Sincronizando De-Para do Odoo...")
             resultado['sync_depara'] = self._sync_depara_odoo()
 
-            # 2. BUSCAR DFEs PENDENTES
-            logger.info("[2/3] Buscando DFEs de compra pendentes...")
+            # 2. SYNC POs VINCULADOS (DFEs sem PO -> verifica se Odoo agora tem)
+            logger.info("[2/4] Sincronizando POs vinculados do Odoo...")
+            resultado['sync_pos_vinculados'] = self._sync_pos_vinculados()
+
+            # 3. BUSCAR DFEs PENDENTES
+            logger.info("[3/4] Buscando DFEs de compra pendentes...")
             dfes = self._buscar_dfes_pendentes(janela)
 
             if not dfes:
@@ -108,8 +116,8 @@ class ValidacaoRecebimentoJob:
 
             logger.info(f"Encontrados {len(dfes)} DFEs para processar")
 
-            # 3. PROCESSAR CADA DFE (Fase 1 + Fase 2)
-            logger.info("[3/3] Processando validacoes...")
+            # 4. PROCESSAR CADA DFE (Fase 1 + Fase 2)
+            logger.info("[4/4] Processando validacoes...")
 
             resultado['fase1_fiscal'] = {
                 'dfes_validados': 0,
@@ -193,6 +201,124 @@ class ValidacaoRecebimentoJob:
 
         except Exception as e:
             logger.error(f"Erro no sync De-Para: {e}")
+            return {'erro': str(e)}
+
+    def _sync_pos_vinculados(self) -> Dict[str, Any]:
+        """
+        Sincroniza POs vinculados do Odoo para DFEs que nao tinham PO.
+
+        Busca:
+        1. ValidacaoNfPoDfe onde odoo_po_vinculado_id IS NULL
+        2. Para cada um, consulta o DFE no Odoo
+        3. Se o DFE agora tem purchase_id ou purchase_fiscal_id, atualiza
+
+        Isso cobre o cenario:
+        - DFE chegou sem PO vinculado
+        - Usuario vinculou PO manualmente no Odoo
+        - Este sync importa essa vinculacao para o sistema
+        """
+        resultado = {
+            'dfes_verificados': 0,
+            'dfes_atualizados': 0,
+            'dfes_sem_po': 0,
+            'erros': 0
+        }
+
+        try:
+            # Buscar validacoes sem PO vinculado
+            validacoes_sem_po = ValidacaoNfPoDfe.query.filter(
+                ValidacaoNfPoDfe.odoo_po_vinculado_id.is_(None),
+                ValidacaoNfPoDfe.odoo_po_fiscal_id.is_(None)
+            ).all()
+
+            if not validacoes_sem_po:
+                logger.info("Sync POs: Nenhum DFE sem PO vinculado")
+                return resultado
+
+            logger.info(f"Sync POs: Verificando {len(validacoes_sem_po)} DFEs sem PO")
+            resultado['dfes_verificados'] = len(validacoes_sem_po)
+
+            # Coletar IDs para consulta em batch no Odoo
+            dfe_ids = [v.odoo_dfe_id for v in validacoes_sem_po]
+
+            # Consultar DFEs no Odoo
+            odoo = self._get_odoo()
+            dfes_odoo = odoo.search_read(
+                'l10n_br_ciel_it_account.dfe',
+                [['id', 'in', dfe_ids]],
+                fields=['id', 'purchase_id', 'purchase_fiscal_id']
+            )
+
+            if not dfes_odoo:
+                logger.info("Sync POs: Nenhum DFE encontrado no Odoo")
+                resultado['dfes_sem_po'] = len(validacoes_sem_po)
+                return resultado
+
+            # Criar mapa de DFE -> dados do Odoo
+            dfe_map = {d['id']: d for d in dfes_odoo}
+
+            # Atualizar validacoes com POs encontrados
+            for validacao in validacoes_sem_po:
+                try:
+                    dfe_data = dfe_map.get(validacao.odoo_dfe_id)
+                    if not dfe_data:
+                        resultado['dfes_sem_po'] += 1
+                        continue
+
+                    # Verificar purchase_id (vem como [id, name] ou False)
+                    purchase_id_data = dfe_data.get('purchase_id')
+                    purchase_fiscal_data = dfe_data.get('purchase_fiscal_id')
+
+                    tem_po = False
+
+                    if purchase_id_data and isinstance(purchase_id_data, (list, tuple)):
+                        validacao.odoo_po_vinculado_id = purchase_id_data[0]
+                        validacao.odoo_po_vinculado_name = (
+                            purchase_id_data[1] if len(purchase_id_data) > 1 else None
+                        )
+                        tem_po = True
+                        logger.info(
+                            f"DFE {validacao.odoo_dfe_id}: PO vinculado encontrado - "
+                            f"{validacao.odoo_po_vinculado_name}"
+                        )
+
+                    if purchase_fiscal_data and isinstance(purchase_fiscal_data, (list, tuple)):
+                        validacao.odoo_po_fiscal_id = purchase_fiscal_data[0]
+                        validacao.odoo_po_fiscal_name = (
+                            purchase_fiscal_data[1] if len(purchase_fiscal_data) > 1 else None
+                        )
+                        tem_po = True
+                        logger.info(
+                            f"DFE {validacao.odoo_dfe_id}: PO fiscal encontrado - "
+                            f"{validacao.odoo_po_fiscal_name}"
+                        )
+
+                    if tem_po:
+                        validacao.pos_vinculados_importados_em = datetime.utcnow()
+                        resultado['dfes_atualizados'] += 1
+                    else:
+                        resultado['dfes_sem_po'] += 1
+
+                except Exception as e:
+                    logger.error(
+                        f"Erro ao processar DFE {validacao.odoo_dfe_id}: {e}"
+                    )
+                    resultado['erros'] += 1
+
+            # Commit das alteracoes
+            db.session.commit()
+
+            logger.info(
+                f"Sync POs: atualizados={resultado['dfes_atualizados']}, "
+                f"sem_po={resultado['dfes_sem_po']}, "
+                f"erros={resultado['erros']}"
+            )
+
+            return resultado
+
+        except Exception as e:
+            logger.error(f"Erro no sync POs vinculados: {e}")
+            db.session.rollback()
             return {'erro': str(e)}
 
     def _buscar_dfes_pendentes(self, minutos_janela: int) -> List[Dict]:

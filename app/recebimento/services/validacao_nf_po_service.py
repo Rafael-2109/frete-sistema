@@ -109,6 +109,9 @@ class ValidacaoNfPoService:
             # Atualizar dados basicos da validacao
             self._atualizar_validacao_com_dfe(validacao, dfe_data)
 
+            # NOVO: Importar POs vinculados do Odoo (se houver)
+            self._importar_pos_vinculados(validacao, dfe_data)
+
             # Buscar linhas do DFE
             dfe_lines = self._buscar_dfe_lines(odoo_dfe_id)
             if not dfe_lines:
@@ -270,7 +273,7 @@ class ValidacaoNfPoService:
     # =========================================================================
 
     def _buscar_dfe(self, odoo_dfe_id: int) -> Optional[Dict[str, Any]]:
-        """Busca dados do DFE no Odoo."""
+        """Busca dados do DFE no Odoo, incluindo POs vinculados."""
         try:
             odoo = get_odoo_connection()
 
@@ -283,7 +286,10 @@ class ValidacaoNfPoService:
                     'nfe_infnfe_ide_nnf', 'nfe_infnfe_ide_serie',
                     'protnfe_infnfe_chnfe', 'nfe_infnfe_ide_dhemi',
                     'nfe_infnfe_total_icmstot_vnf',
-                    'l10n_br_tipo_pedido'
+                    'l10n_br_tipo_pedido',
+                    # Campos de PO vinculado
+                    'purchase_id',        # PO vinculado (many2one)
+                    'purchase_fiscal_id'  # PO fiscal/escrituracao (many2one)
                 ]
             )
 
@@ -292,6 +298,51 @@ class ValidacaoNfPoService:
         except Exception as e:
             logger.error(f"Erro ao buscar DFE {odoo_dfe_id}: {e}")
             return None
+
+    def _importar_pos_vinculados(
+        self,
+        validacao: ValidacaoNfPoDfe,
+        dfe_data: Dict[str, Any]
+    ) -> None:
+        """
+        Importa informacoes dos POs vinculados ao DFE do Odoo.
+
+        O Odoo pode ter vinculado automaticamente o DFE a um PO atraves dos campos:
+        - purchase_id: PO principal
+        - purchase_fiscal_id: PO fiscal (escrituracao)
+
+        Esses dados sao importantes para:
+        1. Manter sincronizacao com o Odoo
+        2. Identificar se o DFE ja foi processado
+        3. Facilitar rastreamento de fluxo documental
+        """
+        try:
+            # purchase_id vem como [id, name] ou False
+            purchase_id_data = dfe_data.get('purchase_id')
+            if purchase_id_data and isinstance(purchase_id_data, (list, tuple)):
+                validacao.odoo_po_vinculado_id = purchase_id_data[0]
+                validacao.odoo_po_vinculado_name = purchase_id_data[1] if len(purchase_id_data) > 1 else None
+                logger.info(
+                    f"DFE {validacao.odoo_dfe_id}: PO vinculado importado - "
+                    f"{validacao.odoo_po_vinculado_name} (ID: {validacao.odoo_po_vinculado_id})"
+                )
+
+            # purchase_fiscal_id vem como [id, name] ou False
+            purchase_fiscal_data = dfe_data.get('purchase_fiscal_id')
+            if purchase_fiscal_data and isinstance(purchase_fiscal_data, (list, tuple)):
+                validacao.odoo_po_fiscal_id = purchase_fiscal_data[0]
+                validacao.odoo_po_fiscal_name = purchase_fiscal_data[1] if len(purchase_fiscal_data) > 1 else None
+                logger.info(
+                    f"DFE {validacao.odoo_dfe_id}: PO fiscal importado - "
+                    f"{validacao.odoo_po_fiscal_name} (ID: {validacao.odoo_po_fiscal_id})"
+                )
+
+            # Marcar data de importacao se algum PO foi encontrado
+            if validacao.odoo_po_vinculado_id or validacao.odoo_po_fiscal_id:
+                validacao.pos_vinculados_importados_em = datetime.utcnow()
+
+        except Exception as e:
+            logger.warning(f"Erro ao importar POs vinculados do DFE {validacao.odoo_dfe_id}: {e}")
 
     def _buscar_dfe_lines(self, odoo_dfe_id: int) -> List[Dict[str, Any]]:
         """Busca linhas do DFE no Odoo."""
@@ -1049,6 +1100,13 @@ class ValidacaoNfPoService:
             'itens_preco_diverge': v.itens_preco_diverge,
             'itens_data_diverge': v.itens_data_diverge,
             'itens_qtd_diverge': v.itens_qtd_diverge,
+            # POs vinculados (importados do Odoo)
+            'odoo_po_vinculado_id': v.odoo_po_vinculado_id,
+            'odoo_po_vinculado_name': v.odoo_po_vinculado_name,
+            'odoo_po_fiscal_id': v.odoo_po_fiscal_id,
+            'odoo_po_fiscal_name': v.odoo_po_fiscal_name,
+            'pos_vinculados_importados_em': v.pos_vinculados_importados_em.isoformat() if v.pos_vinculados_importados_em else None,
+            # Resultado consolidacao
             'po_consolidado_id': v.po_consolidado_id,
             'po_consolidado_name': v.po_consolidado_name,
             'criado_em': v.criado_em.isoformat() if v.criado_em else None,
