@@ -185,14 +185,16 @@ class ReversaoService:
         """
         try:
             # Filtro: out_refund + posted + tem reversed_entry_id
+            # IMPORTANTE: Exclui devoluções de vasilhame (pallet) que são tratadas no módulo de pallet
             filtros = [
                 ('move_type', '=', 'out_refund'),
                 ('state', '=', 'posted'),
                 ('reversed_entry_id', '!=', False),
                 ('invoice_date', '>=', data_corte),
+                ('l10n_br_tipo_pedido', '!=', 'vasilhame'),  # Exclui devoluções de pallet
             ]
 
-            logger.info(f"   Filtro: move_type='out_refund' AND state='posted' AND reversed_entry_id != False AND invoice_date >= {data_corte}")
+            logger.info(f"   Filtro: move_type='out_refund' AND state='posted' AND reversed_entry_id != False AND l10n_br_tipo_pedido != 'vasilhame' AND invoice_date >= {data_corte}")
 
             campos = [
                 'id',

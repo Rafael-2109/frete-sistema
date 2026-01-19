@@ -372,6 +372,71 @@ Referência: .claude/skills/gerindo-expedicao/scripts/criando_separacao_pedidos.
 
 ---
 
+# PALLETS: CÁLCULO TEÓRICO vs CONTROLE FÍSICO
+
+## ⚠️ DOIS CONCEITOS DISTINTOS - NÃO MISTURAR
+
+O sistema possui **dois grupos de campos** de pallet que são **INDEPENDENTES** e não devem ser confundidos:
+
+### GRUPO 1: PALLETS TEÓRICOS (via CadastroPalletizacao)
+
+**Propósito**: Estimativa baseada em pallets padrão (1 produto por pallet)
+**Fonte**: `CadastroPalletizacao.palletizacao` (fator de conversão)
+**Uso**: Impressão de embarque, estimativa inicial para planejamento
+
+| Modelo | Campo | Cálculo |
+|--------|-------|---------|
+| `Separacao` | `pallet` | `qtd_saldo / CadastroPalletizacao.palletizacao` |
+| `EmbarqueItem` | `pallets` | Soma de `Separacao.pallet` do lote |
+| `Embarque` | `pallet_total` | Soma de `EmbarqueItem.pallets` |
+
+**⚠️ LIMITAÇÃO**: O valor TEÓRICO pode divergir da realidade quando:
+- Pallets contêm múltiplos produtos misturados
+- Montagem real difere do padrão cadastrado
+
+**Listener**: `app/separacao/models.py:318-422` sincroniza automaticamente estes campos
+
+### GRUPO 2: PALLETS FÍSICOS (Controle Real - Gestão de Ativos PBR)
+
+**Propósito**: Rastrear pallets físicos reais para faturamento de NF remessa
+**Fonte**: Preenchimento manual pela expedição/logística
+**Uso**: Controle de pallets emprestados, NF de pallet, saldo em terceiros
+
+| Modelo | Campo | Descrição |
+|--------|-------|-----------|
+| `Embarque` | `nf_pallet_transportadora` | NF remessa de pallet para transportadora |
+| `Embarque` | `qtd_pallet_transportadora` | Quantidade na NF remessa |
+| `Embarque` | `qtd_pallets_separados` | Pallets físicos expedidos no carregamento |
+| `Embarque` | `qtd_pallets_trazidos` | Pallets que a transportadora trouxe de volta |
+| `EmbarqueItem` | `nf_pallet_cliente` | NF remessa de pallet para o cliente |
+| `EmbarqueItem` | `qtd_pallet_cliente` | Quantidade na NF para o cliente |
+| `EmbarqueItem` | `nf_pallet_referencia` | Qual NF de pallet cobre esta NF de venda |
+| `EmbarqueItem` | `nf_pallet_origem` | 'EMBARQUE' ou 'ITEM' |
+
+**✅ VALOR REAL**: Campos preenchidos manualmente refletem a realidade da expedição
+
+### REGRA CRÍTICA
+
+```
+GRUPO 1 (Teórico) ≠ GRUPO 2 (Físico)
+
+- O cálculo do GRUPO 1 NÃO afeta os campos do GRUPO 2
+- Os campos são INDEPENDENTES
+- Cada um tem seu propósito específico
+```
+
+### Propriedades Calculadas (GRUPO 2)
+
+```python
+# Embarque.saldo_pallets_pendentes
+# = qtd_pallets_separados - qtd_pallets_trazidos - faturados
+
+# Embarque.pallets_pendentes
+# = True se saldo_pallets_pendentes > 0
+```
+
+---
+
 # REGRAS DE OURO
 
 ### SEMPRE FAZER:

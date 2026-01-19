@@ -50,6 +50,66 @@ def obter_uf_destinatario(cnpj: str) -> str:
     return ''
 
 
+def calcular_qtd_substituida(numero_nf_original: str) -> float:
+    """
+    Calcula a quantidade total já substituída de uma NF original.
+
+    Soma todas as substituições ativas criadas a partir da NF original.
+
+    Args:
+        numero_nf_original: Número da NF original (remessa para transportadora)
+
+    Returns:
+        float: Quantidade total já substituída
+    """
+    if not numero_nf_original:
+        return 0.0
+
+    substituicoes = MovimentacaoEstoque.query.filter(
+        MovimentacaoEstoque.nf_remessa_origem == numero_nf_original,
+        MovimentacaoEstoque.tipo_origem == 'SUBSTITUICAO',
+        MovimentacaoEstoque.ativo == True
+    ).all()
+
+    return sum(float(s.qtd_movimentacao or 0) for s in substituicoes)
+
+
+def obter_substituicoes_por_nf(numeros_nf: list) -> dict:
+    """
+    Busca todas as substituições para uma lista de NFs originais.
+
+    Args:
+        numeros_nf: Lista de números de NF originais
+
+    Returns:
+        dict: {nf_original: {'items': [substituicoes], 'total': qtd_total}}
+    """
+    if not numeros_nf:
+        return {}
+
+    substituicoes = MovimentacaoEstoque.query.filter(
+        MovimentacaoEstoque.nf_remessa_origem.in_(numeros_nf),
+        MovimentacaoEstoque.tipo_origem == 'SUBSTITUICAO',
+        MovimentacaoEstoque.ativo == True
+    ).all()
+
+    resultado = {}
+    for sub in substituicoes:
+        nf_orig = sub.nf_remessa_origem
+        if nf_orig not in resultado:
+            resultado[nf_orig] = {'items': [], 'total': 0}
+        resultado[nf_orig]['items'].append({
+            'id': sub.id,
+            'numero_nf': sub.numero_nf,
+            'qtd': float(sub.qtd_movimentacao or 0),
+            'cliente': sub.nome_destinatario,
+            'data': sub.data_movimentacao
+        })
+        resultado[nf_orig]['total'] += float(sub.qtd_movimentacao or 0)
+
+    return resultado
+
+
 def calcular_prazo_remessa(remessa) -> int:
     """
     Calcula o prazo de cobranca para uma remessa de pallet.
@@ -353,6 +413,14 @@ def listar_movimentos():
             mov.data_vencimento = None
             mov.dias_ate_vencimento = None
 
+    # Buscar substituições por NF original (apenas para remessas de TRANSPORTADORA)
+    # Retorna: {nf_original: {'items': [...], 'total': X}}
+    nfs_transportadora = [
+        m.numero_nf for m in movimentos.items
+        if m.numero_nf and m.tipo_movimentacao == 'REMESSA' and m.tipo_destinatario == 'TRANSPORTADORA'
+    ]
+    substituicoes_por_nf = obter_substituicoes_por_nf(nfs_transportadora)
+
     return render_template('pallet/movimentos.html',
                            movimentos=movimentos,
                            filtro_tipo=filtro_tipo,
@@ -363,7 +431,8 @@ def listar_movimentos():
                            filtro_data_ate=filtro_data_ate,
                            filtro_transportadora=filtro_transportadora,
                            vales_por_nf=vales_por_nf,
-                           transportadoras_por_embarque=transportadoras_por_embarque)
+                           transportadoras_por_embarque=transportadoras_por_embarque,
+                           substituicoes_por_nf=substituicoes_por_nf)
 
 
 @pallet_bp.route('/registrar-saida', methods=['GET', 'POST'])
@@ -408,27 +477,71 @@ def registrar_saida():
 @pallet_bp.route('/registrar-retorno', methods=['GET', 'POST'])
 @login_required
 def registrar_retorno():
-    """Registra um retorno de pallet"""
+    """Registra um retorno de pallet com baixa automatica das remessas"""
     if request.method == 'POST':
         try:
+            cnpj = request.form.get('cnpj_destinatario', '').replace('.', '').replace('-', '').replace('/', '')
+            quantidade_retorno = int(request.form.get('quantidade', 0))
+            usuario = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
+
             movimento = MovimentacaoEstoque(
                 cod_produto=COD_PRODUTO_PALLET,
                 nome_produto=NOME_PRODUTO_PALLET,
                 data_movimentacao=date.today(),
                 tipo_movimentacao='ENTRADA',
                 local_movimentacao='PALLET',
-                qtd_movimentacao=int(request.form.get('quantidade', 0)),
+                qtd_movimentacao=quantidade_retorno,
                 tipo_destinatario=request.form.get('tipo_destinatario'),
-                cnpj_destinatario=request.form.get('cnpj_destinatario', '').replace('.', '').replace('-', '').replace('/', ''),
+                cnpj_destinatario=cnpj,
                 nome_destinatario=request.form.get('nome_destinatario'),
                 numero_nf=request.form.get('numero_nf'),
                 observacao=request.form.get('observacao'),
                 tipo_origem='MANUAL',
-                criado_por=current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
+                criado_por=usuario
             )
             db.session.add(movimento)
+            db.session.flush()  # Para obter o ID do movimento
+
+            # =====================================================================
+            # BAIXA AUTOMATICA: Buscar remessas pendentes do mesmo CNPJ e baixar
+            # =====================================================================
+            baixas_realizadas = 0
+            quantidade_restante = quantidade_retorno
+
+            if cnpj and quantidade_restante > 0:
+                # Buscar remessas pendentes para o mesmo CNPJ (FIFO - mais antigas primeiro)
+                remessas_pendentes = MovimentacaoEstoque.query.filter(
+                    MovimentacaoEstoque.local_movimentacao == 'PALLET',
+                    MovimentacaoEstoque.tipo_movimentacao == 'REMESSA',
+                    MovimentacaoEstoque.baixado == False,
+                    MovimentacaoEstoque.ativo == True,
+                    MovimentacaoEstoque.cnpj_destinatario == cnpj
+                ).order_by(MovimentacaoEstoque.data_movimentacao.asc()).all()
+
+                for remessa in remessas_pendentes:
+                    if quantidade_restante <= 0:
+                        break
+
+                    qtd_remessa = int(remessa.qtd_movimentacao or 0)
+
+                    if qtd_remessa <= quantidade_restante:
+                        # Baixa total da remessa
+                        remessa.baixado = True
+                        remessa.baixado_em = datetime.utcnow()
+                        remessa.baixado_por = usuario
+                        remessa.movimento_baixado_id = movimento.id
+                        remessa.observacao = (remessa.observacao or '') + f'\n[BAIXA AUTOMATICA] Retorno registrado - {quantidade_retorno} pallets'
+                        quantidade_restante -= qtd_remessa
+                        baixas_realizadas += 1
+
             db.session.commit()
-            flash(f'Retorno de {movimento.qtd_movimentacao} pallets registrado com sucesso!', 'success')
+
+            # Mensagem de sucesso com detalhes da baixa
+            if baixas_realizadas > 0:
+                flash(f'Retorno de {quantidade_retorno} pallets registrado com sucesso! {baixas_realizadas} remessa(s) baixada(s) automaticamente.', 'success')
+            else:
+                flash(f'Retorno de {quantidade_retorno} pallets registrado com sucesso!', 'success')
+
             return redirect(url_for('pallet.listar_movimentos'))
         except Exception as e:
             db.session.rollback()
@@ -591,6 +704,49 @@ def api_buscar_destinatario():
                 'nome': t.razao_social,
                 'aceita_nf_pallet': not t.nao_aceita_nf_pallet
             })
+
+    return jsonify(resultados)
+
+
+@pallet_bp.route('/api/nfs-pendentes')
+@login_required
+def api_nfs_pendentes():
+    """Busca NFs de remessa pendentes para criar vale pallet"""
+    termo = request.args.get('q', '')
+
+    # Buscar remessas (tipo REMESSA) não baixadas
+    query = MovimentacaoEstoque.query.filter(
+        MovimentacaoEstoque.local_movimentacao == 'PALLET',
+        MovimentacaoEstoque.tipo_movimentacao == 'REMESSA',
+        MovimentacaoEstoque.baixado == False,
+        MovimentacaoEstoque.ativo == True,
+        MovimentacaoEstoque.numero_nf.isnot(None),
+        MovimentacaoEstoque.numero_nf != ''
+    )
+
+    # Filtrar por número da NF se informado
+    if termo:
+        query = query.filter(MovimentacaoEstoque.numero_nf.ilike(f'%{termo}%'))
+
+    # Ordenar por data mais recente
+    query = query.order_by(MovimentacaoEstoque.data_movimentacao.desc())
+    remessas = query.limit(20).all()
+
+    resultados = []
+    for r in remessas:
+        # Calcular saldo (quantidade - abatida)
+        saldo = int(r.qtd_movimentacao or 0) - int(r.qtd_abatida or 0)
+        if saldo <= 0:
+            continue
+
+        resultados.append({
+            'numero_nf': r.numero_nf,
+            'destinatario': r.nome_destinatario or r.cnpj_destinatario or '-',
+            'data': r.data_movimentacao.strftime('%d/%m/%Y') if r.data_movimentacao else '-',
+            'saldo': saldo,
+            'cnpj_transportadora': r.cnpj_destinatario if r.tipo_destinatario == 'TRANSPORTADORA' else None,
+            'nome_transportadora': r.nome_destinatario if r.tipo_destinatario == 'TRANSPORTADORA' else None
+        })
 
     return jsonify(resultados)
 
@@ -1072,15 +1228,28 @@ def sincronizar_odoo():
 @pallet_bp.route('/substituicao', methods=['GET'])
 @login_required
 def listar_substituicoes():
-    """Lista remessas disponiveis para substituicao"""
+    """Lista remessas disponiveis para substituicao (com saldo disponível)"""
     # Buscar remessas pendentes de transportadoras
-    remessas = MovimentacaoEstoque.query.filter(
+    remessas_raw = MovimentacaoEstoque.query.filter(
         MovimentacaoEstoque.local_movimentacao == 'PALLET',
         MovimentacaoEstoque.tipo_movimentacao == 'REMESSA',
         MovimentacaoEstoque.tipo_destinatario == 'TRANSPORTADORA',
         MovimentacaoEstoque.baixado == False,
         MovimentacaoEstoque.ativo == True
     ).order_by(MovimentacaoEstoque.data_movimentacao.desc()).all()
+
+    # Calcular saldo disponível para cada remessa e filtrar totalmente substituídas
+    remessas = []
+    for rem in remessas_raw:
+        qtd_substituida = calcular_qtd_substituida(rem.numero_nf)
+        saldo_disponivel = float(rem.qtd_movimentacao or 0) - qtd_substituida
+
+        # Só incluir se ainda houver saldo disponível
+        if saldo_disponivel > 0:
+            # Adicionar atributos temporários para o template
+            rem.qtd_substituida = qtd_substituida
+            rem.saldo_disponivel = saldo_disponivel
+            remessas.append(rem)
 
     return render_template('pallet/substituicao_lista.html', remessas=remessas)
 
@@ -1110,6 +1279,15 @@ def registrar_substituicao(remessa_id):
         flash('Esta remessa ja foi baixada!', 'warning')
         return redirect(url_for('pallet.listar_substituicoes'))
 
+    # Calcular saldo disponível para substituição
+    qtd_ja_substituida = calcular_qtd_substituida(remessa_origem.numero_nf)
+    saldo_disponivel = float(remessa_origem.qtd_movimentacao or 0) - qtd_ja_substituida
+
+    # Validar se ainda há saldo disponível
+    if saldo_disponivel <= 0:
+        flash('Esta remessa já foi totalmente substituída!', 'warning')
+        return redirect(url_for('pallet.listar_substituicoes'))
+
     if request.method == 'POST':
         try:
             quantidade = int(request.form.get('quantidade', 0))
@@ -1119,8 +1297,9 @@ def registrar_substituicao(remessa_id):
                 flash('Quantidade deve ser maior que zero!', 'warning')
                 return redirect(url_for('pallet.registrar_substituicao', remessa_id=remessa_id))
 
-            if quantidade > remessa_origem.qtd_movimentacao:
-                flash(f'Quantidade nao pode exceder {int(remessa_origem.qtd_movimentacao)} da remessa original!', 'warning')
+            # Validar contra o SALDO DISPONÍVEL (não a quantidade original)
+            if quantidade > saldo_disponivel:
+                flash(f'Saldo disponível para substituição: {int(saldo_disponivel)} pallets (de {int(remessa_origem.qtd_movimentacao)} originais, {int(qtd_ja_substituida)} já substituídos)', 'warning')
                 return redirect(url_for('pallet.registrar_substituicao', remessa_id=remessa_id))
 
             # Criar nova remessa para o CLIENTE
@@ -1149,15 +1328,19 @@ def registrar_substituicao(remessa_id):
             )
             db.session.add(nova_remessa)
 
-            # Se quantidade da substituicao = quantidade da remessa original, baixar a original
-            if quantidade >= remessa_origem.qtd_movimentacao:
+            # Verificar se após esta substituição o saldo ficará zerado
+            # saldo_disponivel já foi calculado antes do POST
+            saldo_apos_substituicao = saldo_disponivel - quantidade
+
+            if saldo_apos_substituicao <= 0:
+                # Substituição total: baixar a remessa original
                 remessa_origem.baixado = True
                 remessa_origem.baixado_em = datetime.utcnow()
                 remessa_origem.baixado_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
                 remessa_origem.observacao = (remessa_origem.observacao or '') + f'\n[SUBSTITUICAO TOTAL] NF cliente: {request.form.get("numero_nf")}'
             else:
-                # Baixa parcial - ajustar quantidade pendente
-                remessa_origem.observacao = (remessa_origem.observacao or '') + f'\n[SUBSTITUICAO PARCIAL] {quantidade} pallets -> NF cliente: {request.form.get("numero_nf")}'
+                # Substituição parcial - ainda há saldo disponível
+                remessa_origem.observacao = (remessa_origem.observacao or '') + f'\n[SUBSTITUICAO PARCIAL] {quantidade} pallets -> NF cliente: {request.form.get("numero_nf")} (saldo restante: {int(saldo_apos_substituicao)})'
 
             db.session.commit()
 
@@ -1168,7 +1351,11 @@ def registrar_substituicao(remessa_id):
             db.session.rollback()
             flash(f'Erro ao registrar substituicao: {str(e)}', 'danger')
 
-    return render_template('pallet/substituicao.html', remessa=remessa_origem)
+    # Passar saldo para o template
+    return render_template('pallet/substituicao.html',
+                          remessa=remessa_origem,
+                          qtd_ja_substituida=qtd_ja_substituida,
+                          saldo_disponivel=saldo_disponivel)
 
 
 @pallet_bp.route('/vincular-venda/<int:movimento_id>', methods=['GET', 'POST'])

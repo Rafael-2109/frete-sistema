@@ -21,9 +21,14 @@
                         <div class="row mb-4">
                             <div class="col-md-3">
                                 <label class="form-label">NF de Pallet *</label>
-                                <input type="text" name="nf_pallet" class="form-control"
-                                       value="{{ vale.nf_pallet if vale else '' }}" required>
-                                <small class="text-muted">Numero da NF de remessa de pallet</small>
+                                <div class="position-relative">
+                                    <input type="text" name="nf_pallet" class="form-control" id="nfPallet"
+                                           value="{{ vale.nf_pallet if vale else '' }}" required
+                                           placeholder="Digite para buscar..." autocomplete="off">
+                                    <div id="listaNfPallet" class="position-absolute w-100 bg-white border rounded shadow-sm"
+                                         style="display: none; z-index: 1000; max-height: 250px; overflow-y: auto;"></div>
+                                </div>
+                                <small class="text-muted">Busca NFs de remessa pendentes</small>
                             </div>
                             <div class="col-md-3">
                                 <label class="form-label">Tipo do Vale *</label>
@@ -60,16 +65,34 @@
                             <i class="fas fa-building text-info"></i> Cliente que Emitiu o Vale
                         </h5>
                         <div class="row mb-4">
+                            <div class="col-12 mb-3">
+                                <label class="form-label">Buscar Cliente</label>
+                                <div class="position-relative">
+                                    <input type="text" class="form-control" id="buscaCliente"
+                                           placeholder="Digite CNPJ ou nome para buscar..." autocomplete="off"
+                                           value="{{ (vale.nome_cliente ~ ' (' ~ vale.cnpj_cliente ~ ')') if vale and vale.cnpj_cliente else '' }}">
+                                    <div id="listaClientes" class="position-absolute w-100 bg-white border rounded shadow-sm"
+                                         style="display: none; z-index: 1000; max-height: 250px; overflow-y: auto;"></div>
+                                </div>
+                                <small class="text-muted">Busca em clientes cadastrados</small>
+                            </div>
                             <div class="col-md-4">
                                 <label class="form-label">CNPJ do Cliente</label>
-                                <input type="text" name="cnpj_cliente" class="form-control"
-                                       value="{{ vale.cnpj_cliente if vale else '' }}"
-                                       placeholder="00.000.000/0000-00">
+                                <input type="text" name="cnpj_cliente" class="form-control" id="cnpjCliente"
+                                       value="{{ vale.cnpj_cliente if vale else '' }}" readonly
+                                       placeholder="Preenchido automaticamente">
                             </div>
-                            <div class="col-md-8">
+                            <div class="col-md-6">
                                 <label class="form-label">Nome do Cliente</label>
-                                <input type="text" name="nome_cliente" class="form-control"
-                                       value="{{ vale.nome_cliente if vale else '' }}">
+                                <input type="text" name="nome_cliente" class="form-control" id="nomeCliente"
+                                       value="{{ vale.nome_cliente if vale else '' }}" readonly
+                                       placeholder="Preenchido automaticamente">
+                            </div>
+                            <div class="col-md-2 d-flex align-items-end">
+                                <button type="button" class="btn btn-outline-secondary w-100" id="btnLimparCliente"
+                                        style="{{ 'display: block;' if vale and vale.cnpj_cliente else 'display: none;' }}">
+                                    <i class="fas fa-times"></i> Limpar
+                                </button>
                             </div>
                         </div>
 
@@ -79,19 +102,22 @@
                         </h5>
                         <div class="row mb-4">
                             <div class="col-md-6">
-                                <label class="form-label">Transportadora</label>
-                                <select name="cnpj_transportadora" class="form-select" id="select_transportadora">
-                                    <option value="">Selecione...</option>
-                                    {% for t in transportadoras %}
-                                        <option value="{{ t.cnpj }}"
-                                                data-nome="{{ t.razao_social }}"
-                                                {{ 'selected' if vale and vale.cnpj_transportadora == t.cnpj }}>
-                                            {{ t.razao_social }} ({{ t.cnpj }})
-                                        </option>
-                                    {% endfor %}
-                                </select>
-                                <input type="hidden" name="nome_transportadora" id="nome_transportadora"
+                                <label class="form-label">Buscar Transportadora</label>
+                                <div class="position-relative">
+                                    <input type="text" class="form-control" id="buscaTransportadora"
+                                           placeholder="Digite CNPJ ou nome para buscar..." autocomplete="off"
+                                           value="{{ (vale.nome_transportadora ~ ' (' ~ vale.cnpj_transportadora ~ ')') if vale and vale.cnpj_transportadora else '' }}">
+                                    <div id="listaTransportadoras" class="position-absolute w-100 bg-white border rounded shadow-sm"
+                                         style="display: none; z-index: 1000; max-height: 250px; overflow-y: auto;"></div>
+                                </div>
+                                <input type="hidden" name="cnpj_transportadora" id="cnpjTransportadora"
+                                       value="{{ vale.cnpj_transportadora if vale else '' }}">
+                                <input type="hidden" name="nome_transportadora" id="nomeTransportadora"
                                        value="{{ vale.nome_transportadora if vale else '' }}">
+                                <small class="text-muted" id="transportadoraSelecionada" style="{{ 'display: block;' if vale and vale.cnpj_transportadora else 'display: none;' }}">
+                                    Selecionada: <strong id="txtTransportadora">{{ vale.nome_transportadora if vale else '' }}</strong>
+                                    <a href="#" id="btnLimparTransportadora" class="text-danger ms-2"><i class="fas fa-times"></i></a>
+                                </small>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Posse Atual</label>
@@ -216,20 +242,269 @@
 </div>
 
 <script>
-// Atualizar nome da transportadora ao selecionar
-document.getElementById('select_transportadora').addEventListener('change', function() {
-    var selected = this.options[this.selectedIndex];
-    document.getElementById('nome_transportadora').value = selected.dataset.nome || '';
-});
+document.addEventListener('DOMContentLoaded', function() {
+    // =========================================
+    // AUTOCOMPLETE: NF de Pallet (NFs pendentes)
+    // =========================================
+    const nfPallet = document.getElementById('nfPallet');
+    const listaNfPallet = document.getElementById('listaNfPallet');
+    let timeoutNf = null;
 
-// Calcular data de validade automaticamente
-document.getElementById('data_emissao').addEventListener('change', function() {
-    var dataValidade = document.getElementById('data_validade');
-    if (!dataValidade.value && this.value) {
-        var emissao = new Date(this.value);
-        emissao.setDate(emissao.getDate() + {{ prazo_dias }});
-        dataValidade.value = emissao.toISOString().split('T')[0];
+    function buscarNfsPendentes(termo) {
+        fetch(`/pallet/api/nfs-pendentes?q=${encodeURIComponent(termo)}`)
+            .then(response => response.json())
+            .then(data => {
+                listaNfPallet.innerHTML = '';
+                if (data.length === 0) {
+                    listaNfPallet.innerHTML = '<div class="p-3 text-muted text-center">Nenhuma NF pendente encontrada</div>';
+                } else {
+                    data.forEach(item => {
+                        const div = document.createElement('div');
+                        div.className = 'p-2 border-bottom';
+                        div.style.cursor = 'pointer';
+                        div.innerHTML = `
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>NF ${item.numero_nf}</strong>
+                                    <br><small class="text-muted">${item.destinatario} - ${item.data}</small>
+                                </div>
+                                <span class="badge bg-warning text-dark">${item.saldo} pallets</span>
+                            </div>
+                        `;
+                        div.addEventListener('click', function() {
+                            nfPallet.value = item.numero_nf;
+                            listaNfPallet.style.display = 'none';
+                            // Preencher transportadora automaticamente se disponivel
+                            if (item.cnpj_transportadora && item.nome_transportadora) {
+                                selecionarTransportadora({
+                                    cnpj: item.cnpj_transportadora,
+                                    nome: item.nome_transportadora
+                                });
+                            }
+                        });
+                        div.addEventListener('mouseenter', function() { this.style.backgroundColor = '#f8f9fa'; });
+                        div.addEventListener('mouseleave', function() { this.style.backgroundColor = ''; });
+                        listaNfPallet.appendChild(div);
+                    });
+                }
+                listaNfPallet.style.display = 'block';
+            })
+            .catch(error => {
+                console.error('Erro na busca de NFs:', error);
+                listaNfPallet.innerHTML = '<div class="p-3 text-danger text-center">Erro na busca</div>';
+                listaNfPallet.style.display = 'block';
+            });
     }
+
+    nfPallet.addEventListener('input', function() {
+        const termo = this.value.trim();
+        if (timeoutNf) clearTimeout(timeoutNf);
+        if (termo.length < 1) {
+            listaNfPallet.style.display = 'none';
+            return;
+        }
+        timeoutNf = setTimeout(() => buscarNfsPendentes(termo), 300);
+    });
+
+    // =========================================
+    // AUTOCOMPLETE: Cliente
+    // =========================================
+    const buscaCliente = document.getElementById('buscaCliente');
+    const listaClientes = document.getElementById('listaClientes');
+    const cnpjCliente = document.getElementById('cnpjCliente');
+    const nomeCliente = document.getElementById('nomeCliente');
+    const btnLimparCliente = document.getElementById('btnLimparCliente');
+    let timeoutCliente = null;
+    let clienteSelecionado = {{ 'true' if vale and vale.cnpj_cliente else 'false' }};
+
+    function buscarClientes(termo) {
+        fetch(`/pallet/api/buscar-destinatario?q=${encodeURIComponent(termo)}&tipo=CLIENTE`)
+            .then(response => response.json())
+            .then(data => {
+                listaClientes.innerHTML = '';
+                if (data.length === 0) {
+                    listaClientes.innerHTML = '<div class="p-3 text-muted text-center">Nenhum cliente encontrado</div>';
+                } else {
+                    data.forEach(item => {
+                        const div = document.createElement('div');
+                        div.className = 'p-2 border-bottom';
+                        div.style.cursor = 'pointer';
+                        div.innerHTML = `
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>${item.nome}</strong>
+                                    <br><small class="text-muted">${item.cnpj}</small>
+                                </div>
+                                ${!item.aceita_nf_pallet ? '<span class="badge bg-warning text-dark">Nao aceita NF</span>' : ''}
+                            </div>
+                        `;
+                        div.addEventListener('click', function() {
+                            selecionarCliente(item);
+                        });
+                        div.addEventListener('mouseenter', function() { this.style.backgroundColor = '#f8f9fa'; });
+                        div.addEventListener('mouseleave', function() { this.style.backgroundColor = ''; });
+                        listaClientes.appendChild(div);
+                    });
+                }
+                listaClientes.style.display = 'block';
+            })
+            .catch(error => {
+                console.error('Erro na busca:', error);
+                listaClientes.innerHTML = '<div class="p-3 text-danger text-center">Erro na busca</div>';
+                listaClientes.style.display = 'block';
+            });
+    }
+
+    function selecionarCliente(item) {
+        clienteSelecionado = true;
+        cnpjCliente.value = item.cnpj;
+        nomeCliente.value = item.nome;
+        buscaCliente.value = `${item.nome} (${item.cnpj})`;
+        buscaCliente.disabled = true;
+        listaClientes.style.display = 'none';
+        btnLimparCliente.style.display = 'block';
+    }
+
+    function limparCliente() {
+        clienteSelecionado = false;
+        cnpjCliente.value = '';
+        nomeCliente.value = '';
+        buscaCliente.value = '';
+        buscaCliente.disabled = false;
+        btnLimparCliente.style.display = 'none';
+        buscaCliente.focus();
+    }
+
+    // Desabilitar busca se ja tem cliente selecionado (edicao)
+    if (clienteSelecionado) {
+        buscaCliente.disabled = true;
+    }
+
+    buscaCliente.addEventListener('input', function() {
+        const termo = this.value.trim();
+        if (timeoutCliente) clearTimeout(timeoutCliente);
+        if (termo.length < 2) {
+            listaClientes.style.display = 'none';
+            return;
+        }
+        timeoutCliente = setTimeout(() => buscarClientes(termo), 300);
+    });
+
+    btnLimparCliente.addEventListener('click', limparCliente);
+
+    // =========================================
+    // AUTOCOMPLETE: Transportadora
+    // =========================================
+    const buscaTransportadora = document.getElementById('buscaTransportadora');
+    const listaTransportadoras = document.getElementById('listaTransportadoras');
+    const cnpjTransportadora = document.getElementById('cnpjTransportadora');
+    const nomeTransportadora = document.getElementById('nomeTransportadora');
+    const transportadoraSelecionada = document.getElementById('transportadoraSelecionada');
+    const txtTransportadora = document.getElementById('txtTransportadora');
+    const btnLimparTransportadora = document.getElementById('btnLimparTransportadora');
+    let timeoutTransp = null;
+    let transpSelecionada = {{ 'true' if vale and vale.cnpj_transportadora else 'false' }};
+
+    function buscarTransportadoras(termo) {
+        fetch(`/pallet/api/buscar-destinatario?q=${encodeURIComponent(termo)}&tipo=TRANSPORTADORA`)
+            .then(response => response.json())
+            .then(data => {
+                listaTransportadoras.innerHTML = '';
+                if (data.length === 0) {
+                    listaTransportadoras.innerHTML = '<div class="p-3 text-muted text-center">Nenhuma transportadora encontrada</div>';
+                } else {
+                    data.forEach(item => {
+                        const div = document.createElement('div');
+                        div.className = 'p-2 border-bottom';
+                        div.style.cursor = 'pointer';
+                        div.innerHTML = `
+                            <div>
+                                <strong>${item.nome}</strong>
+                                <br><small class="text-muted">${item.cnpj}</small>
+                            </div>
+                        `;
+                        div.addEventListener('click', function() {
+                            selecionarTransportadora(item);
+                        });
+                        div.addEventListener('mouseenter', function() { this.style.backgroundColor = '#f8f9fa'; });
+                        div.addEventListener('mouseleave', function() { this.style.backgroundColor = ''; });
+                        listaTransportadoras.appendChild(div);
+                    });
+                }
+                listaTransportadoras.style.display = 'block';
+            })
+            .catch(error => {
+                console.error('Erro na busca:', error);
+                listaTransportadoras.innerHTML = '<div class="p-3 text-danger text-center">Erro na busca</div>';
+                listaTransportadoras.style.display = 'block';
+            });
+    }
+
+    function selecionarTransportadora(item) {
+        transpSelecionada = true;
+        cnpjTransportadora.value = item.cnpj;
+        nomeTransportadora.value = item.nome;
+        buscaTransportadora.value = `${item.nome} (${item.cnpj})`;
+        buscaTransportadora.disabled = true;
+        listaTransportadoras.style.display = 'none';
+        txtTransportadora.textContent = item.nome;
+        transportadoraSelecionada.style.display = 'block';
+    }
+
+    function limparTransportadora(e) {
+        if (e) e.preventDefault();
+        transpSelecionada = false;
+        cnpjTransportadora.value = '';
+        nomeTransportadora.value = '';
+        buscaTransportadora.value = '';
+        buscaTransportadora.disabled = false;
+        transportadoraSelecionada.style.display = 'none';
+        buscaTransportadora.focus();
+    }
+
+    // Desabilitar busca se ja tem transportadora selecionada (edicao)
+    if (transpSelecionada) {
+        buscaTransportadora.disabled = true;
+    }
+
+    buscaTransportadora.addEventListener('input', function() {
+        const termo = this.value.trim();
+        if (timeoutTransp) clearTimeout(timeoutTransp);
+        if (termo.length < 2) {
+            listaTransportadoras.style.display = 'none';
+            return;
+        }
+        timeoutTransp = setTimeout(() => buscarTransportadoras(termo), 300);
+    });
+
+    btnLimparTransportadora.addEventListener('click', limparTransportadora);
+
+    // =========================================
+    // Fechar listas ao clicar fora
+    // =========================================
+    document.addEventListener('click', function(e) {
+        if (!nfPallet.contains(e.target) && !listaNfPallet.contains(e.target)) {
+            listaNfPallet.style.display = 'none';
+        }
+        if (!buscaCliente.contains(e.target) && !listaClientes.contains(e.target)) {
+            listaClientes.style.display = 'none';
+        }
+        if (!buscaTransportadora.contains(e.target) && !listaTransportadoras.contains(e.target)) {
+            listaTransportadoras.style.display = 'none';
+        }
+    });
+
+    // =========================================
+    // Calcular data de validade automaticamente
+    // =========================================
+    document.getElementById('data_emissao').addEventListener('change', function() {
+        var dataValidade = document.getElementById('data_validade');
+        if (!dataValidade.value && this.value) {
+            var emissao = new Date(this.value);
+            emissao.setDate(emissao.getDate() + {{ prazo_dias }});
+            dataValidade.value = emissao.toISOString().split('T')[0];
+        }
+    });
 });
 </script>
 {% endblock %}

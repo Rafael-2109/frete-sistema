@@ -314,6 +314,12 @@ class PalletSyncService:
                             cnpj = partner_data[0].get('l10n_br_cnpj', '') or ''
                             cnpj = cnpj.replace('.', '').replace('-', '').replace('/', '')
 
+                    # Pular NFs intercompany (Nacom/La Famiglia) - nao controla pallet interno
+                    prefixo_cnpj = cnpj[:8] if cnpj else ''
+                    if prefixo_cnpj in CNPJS_INTERCOMPANY_PREFIXOS:
+                        logger.debug(f"   ⏭️ Venda NF {numero_nf} ignorada (intercompany: {partner_nome})")
+                        continue
+
                     # Data da NF
                     data_nf = nf_data[0].get('invoice_date')
                     if isinstance(data_nf, str):

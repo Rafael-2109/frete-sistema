@@ -30,17 +30,46 @@
                     </div>
                 </div>
 
-                <!-- Dados do destinatario -->
+                <!-- Buscar Destinatario -->
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <label class="form-label">Buscar Destinatario <span class="text-danger">*</span></label>
+                        <div class="position-relative">
+                            <input type="text" class="form-control" id="buscaDestinatario"
+                                   placeholder="Digite CNPJ ou nome para buscar..." autocomplete="off">
+                            <div id="listaResultados" class="position-absolute w-100 bg-white border rounded shadow-sm"
+                                 style="display: none; z-index: 1000; max-height: 300px; overflow-y: auto;"></div>
+                        </div>
+                        <small class="text-muted" id="helpBusca">Buscando em: <strong>Clientes</strong></small>
+                    </div>
+                </div>
+
+                <!-- Dados do destinatario (preenchidos automaticamente) -->
                 <div class="row mb-3">
                     <div class="col-md-4">
-                        <label class="form-label">CNPJ <span class="text-danger">*</span></label>
-                        <input type="text" name="cnpj_destinatario" class="form-control" required
-                               placeholder="00.000.000/0000-00" id="cnpjDestinatario">
+                        <label class="form-label">CNPJ</label>
+                        <input type="text" name="cnpj_destinatario" class="form-control" required readonly
+                               placeholder="Selecione acima" id="cnpjDestinatario">
                     </div>
-                    <div class="col-md-8">
+                    <div class="col-md-6">
                         <label class="form-label">Nome/Razao Social</label>
-                        <input type="text" name="nome_destinatario" class="form-control"
-                               placeholder="Nome do destinatario" id="nomeDestinatario">
+                        <input type="text" name="nome_destinatario" class="form-control" readonly
+                               placeholder="Selecione acima" id="nomeDestinatario">
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="button" class="btn btn-outline-secondary w-100" id="btnLimpar" style="display: none;">
+                            <i class="fas fa-times"></i> Limpar
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Alerta de NF Pallet -->
+                <div class="row mb-3" id="alertaNfPallet" style="display: none;">
+                    <div class="col-12">
+                        <div class="alert alert-warning mb-0">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <strong>Atenção:</strong> Este destinatario <strong>NÃO ACEITA</strong> NF de pallet.
+                        </div>
                     </div>
                 </div>
 
@@ -101,10 +130,151 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Elementos do formulário
     const selectEmbarque = document.getElementById('selectEmbarque');
     const divItensEmbarque = document.getElementById('divItensEmbarque');
     const selectEmbarqueItem = document.getElementById('selectEmbarqueItem');
     const tipoCliente = document.getElementById('tipoCliente');
+    const tipoTransportadora = document.getElementById('tipoTransportadora');
+
+    // Elementos do autocomplete
+    const buscaDestinatario = document.getElementById('buscaDestinatario');
+    const listaResultados = document.getElementById('listaResultados');
+    const cnpjDestinatario = document.getElementById('cnpjDestinatario');
+    const nomeDestinatario = document.getElementById('nomeDestinatario');
+    const btnLimpar = document.getElementById('btnLimpar');
+    const helpBusca = document.getElementById('helpBusca');
+    const alertaNfPallet = document.getElementById('alertaNfPallet');
+
+    let timeoutBusca = null;
+    let destinatarioSelecionado = null;
+
+    // Função para buscar destinatários
+    function buscarDestinatarios(termo) {
+        const tipo = tipoTransportadora.checked ? 'TRANSPORTADORA' : 'CLIENTE';
+        fetch(`/pallet/api/buscar-destinatario?q=${encodeURIComponent(termo)}&tipo=${tipo}`)
+            .then(response => response.json())
+            .then(data => {
+                listaResultados.innerHTML = '';
+                if (data.length === 0) {
+                    listaResultados.innerHTML = '<div class="p-3 text-muted text-center">Nenhum resultado encontrado</div>';
+                } else {
+                    data.forEach(item => {
+                        const div = document.createElement('div');
+                        div.className = 'p-2 border-bottom cursor-pointer hover-bg-light';
+                        div.style.cursor = 'pointer';
+                        div.innerHTML = `
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>${item.nome}</strong><br>
+                                    <small class="text-muted">${item.cnpj}</small>
+                                </div>
+                                ${!item.aceita_nf_pallet ? '<span class="badge bg-warning text-dark">Não aceita NF</span>' : ''}
+                            </div>
+                        `;
+                        div.addEventListener('click', function() {
+                            selecionarDestinatario(item);
+                        });
+                        div.addEventListener('mouseenter', function() {
+                            this.style.backgroundColor = '#f8f9fa';
+                        });
+                        div.addEventListener('mouseleave', function() {
+                            this.style.backgroundColor = '';
+                        });
+                        listaResultados.appendChild(div);
+                    });
+                }
+                listaResultados.style.display = 'block';
+            })
+            .catch(error => {
+                console.error('Erro na busca:', error);
+                listaResultados.innerHTML = '<div class="p-3 text-danger text-center">Erro na busca</div>';
+                listaResultados.style.display = 'block';
+            });
+    }
+
+    // Função para selecionar destinatário
+    function selecionarDestinatario(item) {
+        destinatarioSelecionado = item;
+        cnpjDestinatario.value = item.cnpj;
+        nomeDestinatario.value = item.nome;
+        buscaDestinatario.value = `${item.nome} (${item.cnpj})`;
+        buscaDestinatario.disabled = true;
+        listaResultados.style.display = 'none';
+        btnLimpar.style.display = 'block';
+
+        // Mostrar alerta se não aceita NF pallet
+        if (!item.aceita_nf_pallet) {
+            alertaNfPallet.style.display = 'block';
+        } else {
+            alertaNfPallet.style.display = 'none';
+        }
+    }
+
+    // Função para limpar seleção
+    function limparSelecao() {
+        destinatarioSelecionado = null;
+        cnpjDestinatario.value = '';
+        nomeDestinatario.value = '';
+        buscaDestinatario.value = '';
+        buscaDestinatario.disabled = false;
+        btnLimpar.style.display = 'none';
+        alertaNfPallet.style.display = 'none';
+        buscaDestinatario.focus();
+    }
+
+    // Evento de digitação no campo de busca
+    buscaDestinatario.addEventListener('input', function() {
+        const termo = this.value.trim();
+
+        if (timeoutBusca) {
+            clearTimeout(timeoutBusca);
+        }
+
+        if (termo.length < 2) {
+            listaResultados.style.display = 'none';
+            return;
+        }
+
+        // Debounce de 300ms
+        timeoutBusca = setTimeout(() => {
+            buscarDestinatarios(termo);
+        }, 300);
+    });
+
+    // Fechar lista ao clicar fora
+    document.addEventListener('click', function(e) {
+        if (!buscaDestinatario.contains(e.target) && !listaResultados.contains(e.target)) {
+            listaResultados.style.display = 'none';
+        }
+    });
+
+    // Evento do botão limpar
+    btnLimpar.addEventListener('click', limparSelecao);
+
+    // Atualizar texto de ajuda ao mudar tipo
+    function atualizarHelpBusca() {
+        const tipo = tipoTransportadora.checked ? 'Transportadoras' : 'Clientes';
+        helpBusca.innerHTML = `Buscando em: <strong>${tipo}</strong>`;
+        // Limpar seleção ao mudar tipo
+        if (destinatarioSelecionado) {
+            limparSelecao();
+        }
+    }
+
+    // Eventos de mudança de tipo
+    document.querySelectorAll('input[name="tipo_destinatario"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            atualizarHelpBusca();
+
+            if (this.value === 'TRANSPORTADORA') {
+                divItensEmbarque.style.display = 'none';
+                selectEmbarqueItem.value = '';
+            } else if (selectEmbarque.value) {
+                divItensEmbarque.style.display = 'block';
+            }
+        });
+    });
 
     // Quando selecionar embarque, carregar itens
     selectEmbarque.addEventListener('change', function() {
@@ -132,18 +302,6 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             divItensEmbarque.style.display = 'none';
         }
-    });
-
-    // Quando mudar tipo, esconder itens se for transportadora
-    document.querySelectorAll('input[name="tipo_destinatario"]').forEach(radio => {
-        radio.addEventListener('change', function() {
-            if (this.value === 'TRANSPORTADORA') {
-                divItensEmbarque.style.display = 'none';
-                selectEmbarqueItem.value = '';
-            } else if (selectEmbarque.value) {
-                divItensEmbarque.style.display = 'block';
-            }
-        });
     });
 });
 </script>

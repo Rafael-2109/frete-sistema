@@ -9,6 +9,7 @@
       "Bash(grep:*)",
       "Bash(wc:*)",
       "Bash(find:*)",
+      "Bash(ls:*)",
       "Bash(cut:*)",
       "Bash(xargs -I {} sh -c 'echo \"\"\"\"$(grep -co ''''style=\"\"\"\"[^\"\"\"\"]*\"\"\"\"'''' {}) {}\"\"\"\"')",
       "Bash(xargs:*)",
@@ -31,7 +32,8 @@
       "mcp__render__list_workspaces",
       "mcp__render__list_logs",
       "mcp__render__list_key_value",
-      "mcp__render__get_key_value"
+      "mcp__render__get_key_value",
+      "mcp__render__list_deploys"
     ],
     "deny": []
   },

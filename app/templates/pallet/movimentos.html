@@ -148,7 +148,11 @@
                                     <span class="badge bg-secondary">{{ mov.tipo_movimentacao }}</span>
                                 {% endif %}
                                 {% if mov.nf_remessa_origem %}
-                                    <br><small class="text-muted">Subst. de {{ mov.nf_remessa_origem }}</small>
+                                    <br>
+                                    <a href="{{ url_for('pallet.listar_movimentos', nf_pallet=mov.nf_remessa_origem) }}"
+                                       class="text-muted text-decoration-none" title="Ver NF original">
+                                        <i class="fas fa-link"></i> Subst. de {{ mov.nf_remessa_origem }}
+                                    </a>
                                 {% endif %}
                             </td>
                             <td>
@@ -158,7 +162,7 @@
                                 <small>{{ mov.cnpj_destinatario }}</small><br>
                                 {{ mov.nome_destinatario or '-' }}
                                 {% if mov.cnpj_responsavel and mov.cnpj_responsavel != mov.cnpj_destinatario %}
-                                    <br><small class="text-info"><i class="fas fa-truck"></i> Resp: {{ mov.nome_responsavel or mov.cnpj_responsavel }}</small>
+                                    <br><small class="text-info" title="Transportadora co-responsável pelo retorno"><i class="fas fa-truck"></i> <strong>Transp:</strong> {{ mov.nome_responsavel or mov.cnpj_responsavel }}</small>
                                 {% elif mov.codigo_embarque and transportadoras_por_embarque.get(mov.codigo_embarque) %}
                                     <br><small class="text-info"><i class="fas fa-truck"></i> Transp: {{ transportadoras_por_embarque[mov.codigo_embarque].nome }}</small>
                                 {% endif %}
@@ -178,7 +182,7 @@
                                 {% if mov.tipo_movimentacao == 'REMESSA' %}
                                     {# Saldo fiscal: qtd_abatida por devolucoes #}
                                     {% if mov.qtd_abatida and mov.qtd_abatida > 0 %}
-                                        {% set saldo_fiscal = mov.qtd_movimentacao - mov.qtd_abatida %}
+                                        {% set saldo_fiscal = (mov.qtd_movimentacao|float) - (mov.qtd_abatida|float) %}
                                         <br>
                                         <small class="text-{{ 'success' if saldo_fiscal <= 0 else 'info' }}" title="Abatido por devolucoes">
                                             <i class="fas fa-receipt"></i> {{ mov.qtd_abatida|int }} dev.
@@ -191,7 +195,7 @@
                                     {% if mov.numero_nf and vales_por_nf.get(mov.numero_nf) %}
                                         {% set vale_info = vales_por_nf[mov.numero_nf] %}
                                         {% set cobertura = vale_info.qtd_total %}
-                                        {% set pendente = mov.qtd_movimentacao - cobertura %}
+                                        {% set pendente = (mov.qtd_movimentacao|float) - cobertura %}
                                         {% if cobertura > 0 %}
                                             <br>
                                             <small class="text-{{ 'success' if pendente <= 0 else 'warning' }}">
@@ -202,6 +206,21 @@
                                                 {% endif %}
                                             </small>
                                         {% endif %}
+                                    {% endif %}
+                                    {# Informação de substituições (apenas para TRANSPORTADORA) #}
+                                    {% if mov.tipo_destinatario == 'TRANSPORTADORA' and mov.numero_nf and substituicoes_por_nf.get(mov.numero_nf) %}
+                                        {% set subs = substituicoes_por_nf[mov.numero_nf] %}
+                                        {% set saldo_subst = (mov.qtd_movimentacao|float) - subs.total %}
+                                        <br>
+                                        <small class="text-info" title="Substituído para clientes">
+                                            <i class="fas fa-exchange-alt"></i>
+                                            {{ subs.total|int }} subst.
+                                            {% if saldo_subst <= 0 %}
+                                                <span class="badge bg-success">100% SUBST</span>
+                                            {% else %}
+                                                <span class="text-warning">({{ saldo_subst|int }} disp.)</span>
+                                            {% endif %}
+                                        </small>
                                     {% endif %}
                                 {% endif %}
                             </td>
@@ -238,10 +257,19 @@
                                             <i class="fas fa-ticket-alt"></i>
                                         </a>
                                         {% if mov.tipo_destinatario == 'TRANSPORTADORA' %}
-                                        <a href="{{ url_for('pallet.registrar_substituicao', remessa_id=mov.id) }}"
-                                           class="btn btn-outline-info btn-sm" title="Substituir">
-                                            <i class="fas fa-exchange-alt"></i>
-                                        </a>
+                                            {# Verificar se ainda há saldo para substituição #}
+                                            {% set subs_info = substituicoes_por_nf.get(mov.numero_nf) %}
+                                            {% set saldo_subst = ((mov.qtd_movimentacao|float) - subs_info.total) if subs_info else (mov.qtd_movimentacao|float) %}
+                                            {% if saldo_subst > 0 %}
+                                                <a href="{{ url_for('pallet.registrar_substituicao', remessa_id=mov.id) }}"
+                                                   class="btn btn-outline-info btn-sm" title="Substituir ({{ saldo_subst|int }} disp.)">
+                                                    <i class="fas fa-exchange-alt"></i>
+                                                </a>
+                                            {% else %}
+                                                <span class="badge bg-secondary" title="Totalmente substituído">
+                                                    <i class="fas fa-ban"></i>
+                                                </span>
+                                            {% endif %}
                                         {% endif %}
                                     </div>
                                 {% elif mov.tipo_movimentacao == 'SAIDA' and not mov.baixado %}

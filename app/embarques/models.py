@@ -23,8 +23,14 @@ class Embarque(db.Model):
     cancelado_por = db.Column(db.String(100), nullable=True)  # Usuário que cancelou
     tipo_cotacao = db.Column(db.String(20), default='Automatica')  # 'Automatica' ou 'Manual'
     valor_total = db.Column(db.Float) #Somatória do valor dos itens do embarque
-    pallet_total = db.Column(db.Float) #Somatória do número de pallets dos itens do embarque
     peso_total = db.Column(db.Float) #Somatória do peso dos itens do embarque
+
+    # === GRUPO 1: PALLETS TEÓRICOS (via CadastroPalletizacao) ===
+    # Estimativa baseada em pallets padrão (1 produto por pallet)
+    # ⚠️ PODE DIVERGIR DA REALIDADE quando pallets têm múltiplos produtos misturados
+    # Uso: Impressão de embarque, estimativa inicial para planejamento
+    # Calculado automaticamente via listener em app/separacao/models.py
+    pallet_total = db.Column(db.Float)  # Soma de EmbarqueItem.pallets (TEÓRICO)
     tipo_carga = db.Column(db.String(20))  # 'FRACIONADA' ou 'DIRETA'
 
     criado_em = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
@@ -66,13 +72,14 @@ class Embarque(db.Model):
     icms_destino = db.Column(db.Float)
     transportadora_optante = db.Column(db.Boolean)
 
-    # Campos de NF de Pallet para Transportadora
-    nf_pallet_transportadora = db.Column(db.String(20), nullable=True)
-    qtd_pallet_transportadora = db.Column(db.Float, default=0, nullable=True)
-
-    # Controle de Pallets no Embarque
-    qtd_pallets_separados = db.Column(db.Integer, default=0, nullable=True)  # Total pallets expedidos
-    qtd_pallets_trazidos = db.Column(db.Integer, default=0, nullable=True)   # Pallets trazidos pela transportadora
+    # === GRUPO 2: PALLETS FÍSICOS (Controle Real - Gestão de Ativos PBR) ===
+    # Valores REAIS preenchidos manualmente para controle de NF remessa
+    # NÃO são afetados pelo cálculo teórico via CadastroPalletizacao
+    # Usados para: Faturamento de NF de pallet, controle de saldo em terceiros
+    nf_pallet_transportadora = db.Column(db.String(20), nullable=True)     # NF remessa para transportadora
+    qtd_pallet_transportadora = db.Column(db.Float, default=0, nullable=True)  # Qtd na NF remessa
+    qtd_pallets_separados = db.Column(db.Integer, default=0, nullable=True)    # Pallets físicos expedidos
+    qtd_pallets_trazidos = db.Column(db.Integer, default=0, nullable=True)     # Pallets retornados pela transportadora
 
     # Relacionamentos
     transportadora = db.relationship('Transportadora', backref='embarques')
@@ -256,7 +263,12 @@ class EmbarqueItem(db.Model):
     volumes = db.Column(db.Integer, nullable=True)
     peso = db.Column(db.Float)  # Peso do item
     valor = db.Column(db.Float)  # Valor do item
-    pallets = db.Column(db.Float, nullable=True)  # Quantidade de pallets do item
+
+    # === GRUPO 1: PALLETS TEÓRICOS ===
+    # Soma de Separacao.pallet do lote (calculado automaticamente via listener)
+    # ⚠️ VALOR TEÓRICO - pode divergir da realidade quando pallets têm múltiplos produtos
+    pallets = db.Column(db.Float, nullable=True)  # Pallets TEÓRICOS (via CadastroPalletizacao)
+
     status = db.Column(db.String(20), nullable=False, default='ativo')  # 'ativo' ou 'cancelado'
 
     uf_destino = db.Column(db.String(2), nullable=False)
@@ -292,14 +304,14 @@ class EmbarqueItem(db.Model):
     # Campo para armazenar erros de validação
     erro_validacao = db.Column(db.String(500), nullable=True)  # Armazena erros como "CNPJ_DIFERENTE", etc.
 
-    # Campos de NF de Pallet para Cliente
-    nf_pallet_cliente = db.Column(db.String(20), nullable=True)
-    qtd_pallet_cliente = db.Column(db.Float, default=0, nullable=True)
-
-    # FK para rastrear qual NF de pallet cobre esta NF de venda
-    # Pode vir do Embarque (N:1) ou do próprio item (1:1)
-    nf_pallet_referencia = db.Column(db.String(20), nullable=True)  # NF de pallet que cobre esta NF
-    nf_pallet_origem = db.Column(db.String(10), nullable=True)  # 'EMBARQUE' ou 'ITEM'
+    # === GRUPO 2: PALLETS FÍSICOS (Controle Real) ===
+    # Para rastrear NF de pallet específica do cliente
+    # Preenchidos manualmente, NÃO são afetados pelo cálculo teórico
+    # Usados para: Faturamento de NF de pallet para cliente específico
+    nf_pallet_cliente = db.Column(db.String(20), nullable=True)       # NF remessa para cliente
+    qtd_pallet_cliente = db.Column(db.Float, default=0, nullable=True)  # Qtd na NF cliente
+    nf_pallet_referencia = db.Column(db.String(20), nullable=True)    # Qual NF de pallet cobre esta venda
+    nf_pallet_origem = db.Column(db.String(10), nullable=True)        # 'EMBARQUE' ou 'ITEM'
 
     # Para carga FRACIONADA: Uma cotação -> Um item do embarque
     cotacao = db.relationship('Cotacao', backref='embarque_item', foreign_keys=[cotacao_id])

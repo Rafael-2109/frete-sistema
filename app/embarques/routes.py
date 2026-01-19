@@ -268,6 +268,33 @@ def visualizar_embarque(id):
                 # leiam os valores atualizados do banco, não os antigos
                 db.session.flush()
 
+                # =====================================================================
+                # ✅ SALVAMENTO DOS CAMPOS DE PALLET DO EMBARQUE
+                # =====================================================================
+                # NF Pallet Transportadora
+                embarque.nf_pallet_transportadora = request.form.get('nf_pallet_transportadora', '').strip() or None
+                qtd_pallet_transp = request.form.get('qtd_pallet_transportadora', '').strip()
+                embarque.qtd_pallet_transportadora = int(qtd_pallet_transp) if qtd_pallet_transp else None
+
+                # Controle de pallets separados/trazidos
+                qtd_separados = request.form.get('qtd_pallets_separados', '').strip()
+                qtd_trazidos = request.form.get('qtd_pallets_trazidos', '').strip()
+                embarque.qtd_pallets_separados = int(qtd_separados) if qtd_separados else None
+                embarque.qtd_pallets_trazidos = int(qtd_trazidos) if qtd_trazidos else None
+
+                # NF Pallet de cada item (cliente)
+                for idx, item in enumerate(embarque.itens):
+                    if item.status != 'ativo':
+                        continue
+                    nf_pallet_cliente = request.form.get(f'itens-{idx}-nf_pallet_cliente', '').strip()
+                    qtd_pallet_cliente = request.form.get(f'itens-{idx}-qtd_pallet_cliente', '').strip()
+                    item.nf_pallet_cliente = nf_pallet_cliente if nf_pallet_cliente else None
+                    item.qtd_pallet_cliente = int(qtd_pallet_cliente) if qtd_pallet_cliente else None
+
+                print(f"[PALLET] ✅ Campos de pallet salvos - NF Transp: {embarque.nf_pallet_transportadora}, "
+                      f"Qtd Transp: {embarque.qtd_pallet_transportadora}, "
+                      f"Separados: {embarque.qtd_pallets_separados}, Trazidos: {embarque.qtd_pallets_trazidos}")
+
                 # ✅ NOVA LÓGICA: Remove apenas itens que foram realmente removidos do formulário
                 # (não implementado por enquanto - manter todos os itens existentes)
 

@@ -35,7 +35,8 @@
                             <th>NF Remessa</th>
                             <th>Data</th>
                             <th>Transportadora</th>
-                            <th class="text-center">Qtd Pallets</th>
+                            <th class="text-center">Qtd Original</th>
+                            <th class="text-center">Disponível</th>
                             <th>Embarque</th>
                             <th class="text-center">Acoes</th>
                         </tr>
@@ -50,7 +51,27 @@
                                 <small>{{ rem.cnpj_destinatario }}</small><br>
                                 {{ rem.nome_destinatario or '-' }}
                             </td>
-                            <td class="text-center fw-bold">{{ rem.qtd_movimentacao|int }}</td>
+                            <td class="text-center">
+                                {{ rem.qtd_movimentacao|int }}
+                                {% if rem.qtd_substituida and rem.qtd_substituida > 0 %}
+                                    <br>
+                                    <small class="text-info">
+                                        <i class="fas fa-exchange-alt"></i> {{ rem.qtd_substituida|int }} subst.
+                                    </small>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <span class="badge bg-success fs-6">{{ rem.saldo_disponivel|int }}</span>
+                                {% if rem.qtd_substituida and rem.qtd_substituida > 0 %}
+                                    {% set percentual = (((rem.qtd_substituida|float) / (rem.qtd_movimentacao|float)) * 100)|int %}
+                                    <br>
+                                    <div class="progress mt-1" style="height: 6px; width: 60px; margin: 0 auto;">
+                                        <div class="progress-bar bg-info" role="progressbar"
+                                             style="width: {{ percentual }}%;"
+                                             title="{{ percentual }}% substituído"></div>
+                                    </div>
+                                {% endif %}
+                            </td>
                             <td>
                                 {% if rem.codigo_embarque %}
                                     <a href="{{ url_for('embarques.visualizar_embarque', id=rem.codigo_embarque) }}" target="_blank">
@@ -62,14 +83,14 @@
                             </td>
                             <td class="text-center">
                                 <a href="{{ url_for('pallet.registrar_substituicao', remessa_id=rem.id) }}"
-                                   class="btn btn-sm btn-primary" title="Registrar Substituicao">
+                                   class="btn btn-sm btn-primary" title="Substituir ({{ rem.saldo_disponivel|int }} disponível)">
                                     <i class="fas fa-exchange-alt"></i> Substituir
                                 </a>
                             </td>
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="6" class="text-center text-muted py-4">
+                            <td colspan="7" class="text-center text-muted py-4">
                                 <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
                                 Nenhuma remessa de transportadora pendente disponivel para substituicao
                             </td>
