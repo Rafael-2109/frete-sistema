@@ -54,7 +54,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from app import create_app, db
 from app.recebimento.models import PendenciaFiscalIbsCbs
 from app.recebimento.services.validacao_ibscbs_service import validacao_ibscbs_service
-from app.odoo.models import ConhecimentoTransporte
+from app.fretes.models import ConhecimentoTransporte
 from app.odoo.utils.cte_xml_parser import CTeXMLParser
 
 
