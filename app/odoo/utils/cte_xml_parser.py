@@ -407,6 +407,111 @@ class CTeXMLParser:
         except (ValueError, TypeError):
             return None
 
+    def get_impostos(self) -> Dict:
+        """
+        Extrai informações de impostos (ICMS, PIS, COFINS) do XML do CTe.
+
+        Estrutura esperada no XML do CTe:
+        <imp>
+            <ICMS>
+                <ICMS00> ou <ICMS20> ou <ICMS45> etc
+                    <vBC>100.00</vBC>       <!-- Base de cálculo ICMS -->
+                    <pICMS>12.00</pICMS>    <!-- Alíquota ICMS -->
+                    <vICMS>12.00</vICMS>    <!-- Valor ICMS -->
+                </ICMS00>
+            </ICMS>
+            <vTotTrib>15.00</vTotTrib>      <!-- Total de tributos -->
+        </imp>
+
+        Nota: CTe normalmente NÃO tem PIS/COFINS separados (diferente de NF-e).
+        O campo vTotTrib contém a soma dos tributos federais/estaduais.
+
+        Returns:
+            Dict com dados de impostos:
+            - valor_icms: Valor do ICMS
+            - base_icms: Base de cálculo do ICMS
+            - aliquota_icms: Alíquota do ICMS
+            - valor_pis: Valor do PIS (geralmente None em CTe)
+            - valor_cofins: Valor do COFINS (geralmente None em CTe)
+            - total_tributos: Total de tributos (vTotTrib)
+        """
+        if self.root is None:
+            return {
+                'valor_icms': None,
+                'base_icms': None,
+                'aliquota_icms': None,
+                'valor_pis': None,
+                'valor_cofins': None,
+                'total_tributos': None
+            }
+
+        resultado = {
+            'valor_icms': None,
+            'base_icms': None,
+            'aliquota_icms': None,
+            'valor_pis': None,
+            'valor_cofins': None,
+            'total_tributos': None
+        }
+
+        # Buscar tag imp (impostos)
+        imp_element = self._find_tag('imp')
+        if imp_element is None:
+            logger.debug("Tag <imp> não encontrada no XML")
+            return resultado
+
+        # Buscar ICMS dentro de imp
+        icms_element = self._find_tag('ICMS', root=imp_element)
+        if icms_element is not None:
+            # ICMS pode estar em diversos grupos: ICMS00, ICMS20, ICMS45, ICMS60, ICMS90, etc
+            # Buscar vICMS, vBC, pICMS em qualquer um desses grupos
+            for child in icms_element:
+                local_name = child.tag.split('}')[-1] if '}' in child.tag else child.tag
+
+                # Identificar grupos ICMS (ex: ICMS00, ICMS20, ICMS45, etc)
+                if local_name.startswith('ICMS') or local_name == 'ICMSOutraUF' or local_name == 'ICMSSN':
+                    # Buscar vICMS
+                    vicms = self._find_tag('vICMS', root=child)
+                    if vicms is not None and vicms.text:
+                        resultado['valor_icms'] = self._to_decimal(vicms.text.strip())
+
+                    # Buscar vBC (base de cálculo)
+                    vbc = self._find_tag('vBC', root=child)
+                    if vbc is not None and vbc.text:
+                        resultado['base_icms'] = self._to_decimal(vbc.text.strip())
+
+                    # Buscar pICMS (alíquota)
+                    picms = self._find_tag('pICMS', root=child)
+                    if picms is not None and picms.text:
+                        resultado['aliquota_icms'] = self._to_decimal(picms.text.strip())
+
+                    # Se encontrou valores, parar a busca
+                    if resultado['valor_icms'] is not None:
+                        break
+
+        # Buscar PIS (se existir - raro em CTe)
+        pis_element = self._find_tag('PIS', root=imp_element)
+        if pis_element is not None:
+            vpis = self._find_tag('vPIS', root=pis_element)
+            if vpis is not None and vpis.text:
+                resultado['valor_pis'] = self._to_decimal(vpis.text.strip())
+
+        # Buscar COFINS (se existir - raro em CTe)
+        cofins_element = self._find_tag('COFINS', root=imp_element)
+        if cofins_element is not None:
+            vcofins = self._find_tag('vCOFINS', root=cofins_element)
+            if vcofins is not None and vcofins.text:
+                resultado['valor_cofins'] = self._to_decimal(vcofins.text.strip())
+
+        # Buscar vTotTrib (total de tributos)
+        vtottrib = self._find_tag('vTotTrib', root=imp_element)
+        if vtottrib is not None and vtottrib.text:
+            resultado['total_tributos'] = self._to_decimal(vtottrib.text.strip())
+
+        logger.info(f"✅ Impostos extraídos do XML: ICMS={resultado['valor_icms']}, PIS={resultado['valor_pis']}, COFINS={resultado['valor_cofins']}")
+
+        return resultado
+
     def tem_ibscbs(self) -> bool:
         """
         Verifica se o XML contém a tag IBSCBS
@@ -486,3 +591,17 @@ def extrair_ibscbs(xml_content: str) -> Optional[Dict]:
     """
     parser = CTeXMLParser(xml_content)
     return parser.get_ibscbs()
+
+
+def extrair_impostos(xml_content: str) -> Dict:
+    """
+    Função helper para extrair dados de impostos (ICMS, PIS, COFINS) do XML
+
+    Args:
+        xml_content: Conteúdo XML como string
+
+    Returns:
+        Dict com dados de impostos (ICMS, PIS, COFINS, total_tributos)
+    """
+    parser = CTeXMLParser(xml_content)
+    return parser.get_impostos()

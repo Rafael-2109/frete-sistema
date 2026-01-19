@@ -5,11 +5,21 @@ Servico de Validacao IBS/CBS (Reforma Tributaria 2026)
 Valida se fornecedores nao optantes do Simples Nacional
 estao destacando corretamente IBS/CBS nos documentos fiscais.
 
+REGRA FUNDAMENTAL DA BASE DE CALCULO IBS/CBS:
+=============================================
+A base de calculo do IBS/CBS e o valor do documento MENOS os impostos
+que estao sendo substituidos (ICMS, PIS, COFINS).
+
+Formula: Base IBS/CBS = Valor Total - ICMS - PIS - COFINS
+
+Os valores de ICMS, PIS e COFINS sao extraidos do proprio XML do documento.
+
 REGRAS DE VALIDACAO:
 
 CTe (Aliquotas FIXAS):
 - CST: 000
 - cClassTrib: 000001
+- vBC: valor_total - ICMS - PIS - COFINS
 - pIBSUF: 0.10%
 - pIBSMun: 0.00%
 - pCBS: 0.90%
@@ -18,10 +28,11 @@ CTe (Aliquotas FIXAS):
 NF-e (Aliquotas por NCM - 4 primeiros digitos):
 - CST: cadastrado por NCM
 - cClassTrib: cadastrado por NCM
+- vBC: valor_produto - ICMS - PIS - COFINS (da linha)
 - pIBSUF: cadastrado por NCM
 - pIBSMun: cadastrado por NCM
 - pCBS: cadastrado por NCM
-- pRedAliq: reducao cadastrada por NCM
+- pRedAliq: reducao cadastrada por NCM (aplicada sobre base ja reduzida)
 - pAliqEfet: calculada (aliq * (1 - reducao%))
 
 Regime Tributario (CRT):
@@ -30,7 +41,7 @@ Regime Tributario (CRT):
 - 3 = Regime Normal (DEVE destacar IBS/CBS)
 
 Autor: Sistema de Fretes
-Data: 2026-01-14
+Data: 2026-01-14 (atualizado 2026-01-19 - correcao base IBS/CBS)
 """
 
 import logging
@@ -234,8 +245,12 @@ class ValidacaoIbsCbsService:
             parser = CTeXMLParser(xml_content)
             ibscbs = parser.get_ibscbs()
 
-            # Validar TODOS os campos
-            divergencias = self._validar_campos_cte(ibscbs, cte)
+            # ====== CORREÇÃO: Extrair também impostos (ICMS, PIS, COFINS) do XML ======
+            # A base de cálculo do IBS/CBS deve ser: Valor - ICMS - PIS - COFINS
+            impostos = parser.get_impostos()
+
+            # Validar TODOS os campos (passando os impostos extraidos)
+            divergencias = self._validar_campos_cte(ibscbs, cte, impostos)
 
             if not divergencias:
                 logger.info(f"CTe {cte.numero_cte} possui IBS/CBS destacado corretamente")
@@ -253,14 +268,22 @@ class ValidacaoIbsCbsService:
     def _validar_campos_cte(
         self,
         ibscbs: Optional[Dict],
-        cte: ConhecimentoTransporte
+        cte: ConhecimentoTransporte,
+        impostos: Optional[Dict] = None
     ) -> List[str]:
         """
         Valida TODOS os campos IBS/CBS do CTe contra valores esperados.
 
+        REGRA IMPORTANTE (Reforma Tributária 2026):
+        A base de cálculo do IBS/CBS é o valor do documento MENOS os impostos
+        que estão sendo substituídos (ICMS, PIS, COFINS).
+
+        Fórmula: Base IBS/CBS = Valor Total - ICMS - PIS - COFINS
+
         Args:
-            ibscbs: Dados extraidos do XML
+            ibscbs: Dados IBS/CBS extraidos do XML
             cte: ConhecimentoTransporte
+            impostos: Dados de impostos (ICMS, PIS, COFINS) extraidos do XML
 
         Returns:
             Lista de divergencias encontradas (vazia se OK)
@@ -274,6 +297,31 @@ class ValidacaoIbsCbsService:
 
         valor_cte = Decimal(str(cte.valor_total)) if cte.valor_total else Decimal('0')
 
+        # ====== CALCULAR BASE DE CALCULO ESPERADA DO IBS/CBS ======
+        # Base IBS/CBS = Valor Total - ICMS - PIS - COFINS
+        # Os valores vem do proprio XML do documento
+
+        valor_icms = Decimal('0')
+        valor_pis = Decimal('0')
+        valor_cofins = Decimal('0')
+
+        if impostos:
+            if impostos.get('valor_icms'):
+                valor_icms = Decimal(str(impostos['valor_icms']))
+            if impostos.get('valor_pis'):
+                valor_pis = Decimal(str(impostos['valor_pis']))
+            if impostos.get('valor_cofins'):
+                valor_cofins = Decimal(str(impostos['valor_cofins']))
+        else:
+            # Fallback: usar valor_icms do modelo se impostos nao foram passados
+            if cte.valor_icms:
+                valor_icms = Decimal(str(cte.valor_icms))
+
+        # Base esperada = Valor Total - ICMS - PIS - COFINS
+        base_ibscbs_esperada = (valor_cte - valor_icms - valor_pis - valor_cofins).quantize(Decimal('0.01'), ROUND_HALF_UP)
+
+        logger.info(f"Calculo base IBS/CBS: Valor={valor_cte}, ICMS={valor_icms}, PIS={valor_pis}, COFINS={valor_cofins} => Base esperada={base_ibscbs_esperada}")
+
         # ====== VALIDAR CST ======
         cst_xml = ibscbs.get('cst')
         if cst_xml != AliquotasCTe.CST:
@@ -284,17 +332,18 @@ class ValidacaoIbsCbsService:
         if class_trib_xml != AliquotasCTe.CLASS_TRIB:
             divergencias.append(f"cClassTrib incorreto: esperado={AliquotasCTe.CLASS_TRIB}, encontrado={class_trib_xml}")
 
-        # ====== VALIDAR vBC ======
+        # ====== VALIDAR vBC (Base de Calculo IBS/CBS) ======
+        # CORRECAO: A base deve ser o valor SEM ICMS/PIS/COFINS
         vbc_xml = Decimal(str(ibscbs.get('base_calculo') or 0))
-        if abs(vbc_xml - valor_cte) > TOLERANCIA_VALOR:
-            divergencias.append(f"vBC incorreto: esperado={valor_cte}, encontrado={vbc_xml}")
+        if abs(vbc_xml - base_ibscbs_esperada) > TOLERANCIA_VALOR:
+            divergencias.append(f"vBC incorreto: esperado={base_ibscbs_esperada} (valor-ICMS-PIS-COFINS), encontrado={vbc_xml}")
 
         # ====== VALIDAR pIBSUF ======
         aliq_ibs_uf_xml = Decimal(str(ibscbs.get('ibs_uf_aliquota') or 0))
         if abs(aliq_ibs_uf_xml - AliquotasCTe.ALIQ_IBS_UF) > TOLERANCIA_ALIQUOTA:
             divergencias.append(f"pIBSUF incorreto: esperado={AliquotasCTe.ALIQ_IBS_UF}, encontrado={aliq_ibs_uf_xml}")
 
-        # ====== VALIDAR vIBSUF (calculado) ======
+        # ====== VALIDAR vIBSUF (calculado sobre a base correta) ======
         valor_ibs_uf_xml = Decimal(str(ibscbs.get('ibs_uf_valor') or 0))
         valor_ibs_uf_esperado = (vbc_xml * AliquotasCTe.ALIQ_IBS_UF / 100).quantize(Decimal('0.01'), ROUND_HALF_UP)
         if abs(valor_ibs_uf_xml - valor_ibs_uf_esperado) > TOLERANCIA_VALOR:
@@ -305,7 +354,7 @@ class ValidacaoIbsCbsService:
         if abs(aliq_ibs_mun_xml - AliquotasCTe.ALIQ_IBS_MUN) > TOLERANCIA_ALIQUOTA:
             divergencias.append(f"pIBSMun incorreto: esperado={AliquotasCTe.ALIQ_IBS_MUN}, encontrado={aliq_ibs_mun_xml}")
 
-        # ====== VALIDAR vIBSMun (calculado) ======
+        # ====== VALIDAR vIBSMun (calculado sobre a base correta) ======
         valor_ibs_mun_xml = Decimal(str(ibscbs.get('ibs_mun_valor') or 0))
         valor_ibs_mun_esperado = (vbc_xml * AliquotasCTe.ALIQ_IBS_MUN / 100).quantize(Decimal('0.01'), ROUND_HALF_UP)
         if abs(valor_ibs_mun_xml - valor_ibs_mun_esperado) > TOLERANCIA_VALOR:
@@ -322,7 +371,7 @@ class ValidacaoIbsCbsService:
         if abs(aliq_cbs_xml - AliquotasCTe.ALIQ_CBS) > TOLERANCIA_ALIQUOTA:
             divergencias.append(f"pCBS incorreto: esperado={AliquotasCTe.ALIQ_CBS}, encontrado={aliq_cbs_xml}")
 
-        # ====== VALIDAR vCBS (calculado) ======
+        # ====== VALIDAR vCBS (calculado sobre a base correta) ======
         valor_cbs_xml = Decimal(str(ibscbs.get('cbs_valor') or 0))
         valor_cbs_esperado = (vbc_xml * AliquotasCTe.ALIQ_CBS / 100).quantize(Decimal('0.01'), ROUND_HALF_UP)
         if abs(valor_cbs_xml - valor_cbs_esperado) > TOLERANCIA_VALOR:
@@ -484,15 +533,22 @@ class ValidacaoIbsCbsService:
         ibscbs_valores: Dict,
         valor_produto: Decimal,
         cnpj_fornecedor: str,
-        dados_documento: Dict
+        dados_documento: Dict,
+        impostos_linha: Optional[Dict] = None
     ) -> Tuple[bool, Optional[str], List[str]]:
         """
         Valida IBS/CBS de uma linha de NF-e com aliquotas por NCM.
 
+        REGRA IMPORTANTE (Reforma Tributária 2026):
+        A base de cálculo do IBS/CBS é o valor do produto MENOS os impostos
+        que estão sendo substituídos (ICMS, PIS, COFINS).
+
+        Fórmula: Base IBS/CBS = Valor Produto - ICMS - PIS - COFINS
+
         Campos validados (todos cadastrados por NCM):
         - CST
         - cClassTrib
-        - vBC (= valor do produto)
+        - vBC (= valor do produto - ICMS - PIS - COFINS)
         - pIBSUF
         - pRedAliq (reducao IBS UF)
         - pAliqEfet (calculada: pIBSUF * (1 - pRedAliq/100))
@@ -510,9 +566,10 @@ class ValidacaoIbsCbsService:
         Args:
             ncm: Codigo NCM completo
             ibscbs_valores: Valores IBS/CBS extraidos da linha
-            valor_produto: Valor do produto (vBC esperado)
+            valor_produto: Valor do produto
             cnpj_fornecedor: CNPJ do fornecedor
             dados_documento: Dados do documento (chave, numero, etc)
+            impostos_linha: Dict com valor_icms, valor_pis, valor_cofins da linha (opcional)
 
         Returns:
             Tuple[bool, str, List[str]]:
@@ -553,8 +610,8 @@ class ValidacaoIbsCbsService:
             logger.info(f"NCM {ncm_prefixo} nao cadastrado para validacao IBS/CBS")
             return True, "ncm_nao_cadastrado", [f"NCM {ncm_prefixo} nao cadastrado"]
 
-        # Validar TODOS os campos contra o cadastro
-        divergencias = self._validar_campos_nfe(ibscbs_valores, ncm_cadastro, valor_produto)
+        # Validar TODOS os campos contra o cadastro (passando os impostos da linha)
+        divergencias = self._validar_campos_nfe(ibscbs_valores, ncm_cadastro, valor_produto, impostos_linha)
 
         if not divergencias:
             return True, None, []
@@ -573,15 +630,23 @@ class ValidacaoIbsCbsService:
         self,
         ibscbs: Dict,
         ncm_cadastro: NcmIbsCbsValidado,
-        valor_produto: Decimal
+        valor_produto: Decimal,
+        impostos_linha: Optional[Dict] = None
     ) -> List[str]:
         """
         Valida TODOS os campos IBS/CBS da NF-e contra cadastro do NCM.
 
+        REGRA IMPORTANTE (Reforma Tributária 2026):
+        A base de cálculo do IBS/CBS é o valor do produto MENOS os impostos
+        que estão sendo substituídos (ICMS, PIS, COFINS).
+
+        Fórmula: Base IBS/CBS = Valor Produto - ICMS - PIS - COFINS
+
         Args:
             ibscbs: Dados IBS/CBS extraidos do XML
             ncm_cadastro: Cadastro do NCM com aliquotas esperadas
-            valor_produto: Valor do produto (vBC)
+            valor_produto: Valor do produto
+            impostos_linha: Dict com valor_icms, valor_pis, valor_cofins da linha
 
         Returns:
             Lista de divergencias encontradas
@@ -593,7 +658,28 @@ class ValidacaoIbsCbsService:
             divergencias.append("Tag <IBSCBS> nao encontrada")
             return divergencias
 
-        vbc = Decimal(str(valor_produto)) if valor_produto else Decimal('0')
+        valor_prod = Decimal(str(valor_produto)) if valor_produto else Decimal('0')
+
+        # ====== CALCULAR BASE DE CALCULO ESPERADA DO IBS/CBS ======
+        # Base IBS/CBS = Valor Produto - ICMS - PIS - COFINS
+        # Os valores vem do proprio XML do documento
+
+        valor_icms = Decimal('0')
+        valor_pis = Decimal('0')
+        valor_cofins = Decimal('0')
+
+        if impostos_linha:
+            if impostos_linha.get('valor_icms'):
+                valor_icms = Decimal(str(impostos_linha['valor_icms']))
+            if impostos_linha.get('valor_pis'):
+                valor_pis = Decimal(str(impostos_linha['valor_pis']))
+            if impostos_linha.get('valor_cofins'):
+                valor_cofins = Decimal(str(impostos_linha['valor_cofins']))
+
+        # Base esperada = Valor Produto - ICMS - PIS - COFINS
+        base_ibscbs_esperada = (valor_prod - valor_icms - valor_pis - valor_cofins).quantize(Decimal('0.01'), ROUND_HALF_UP)
+
+        logger.info(f"Calculo base IBS/CBS NF-e: Valor={valor_prod}, ICMS={valor_icms}, PIS={valor_pis}, COFINS={valor_cofins} => Base esperada={base_ibscbs_esperada}")
 
         # ====== VALIDAR CST ======
         if ncm_cadastro.cst_esperado:
@@ -607,10 +693,11 @@ class ValidacaoIbsCbsService:
             if class_trib_xml != ncm_cadastro.class_trib_codigo:
                 divergencias.append(f"cClassTrib incorreto: esperado={ncm_cadastro.class_trib_codigo}, encontrado={class_trib_xml}")
 
-        # ====== VALIDAR vBC ======
+        # ====== VALIDAR vBC (Base de Calculo IBS/CBS) ======
+        # CORRECAO: A base deve ser o valor SEM ICMS/PIS/COFINS
         vbc_xml = Decimal(str(ibscbs.get('base_calculo') or 0))
-        if abs(vbc_xml - vbc) > TOLERANCIA_VALOR:
-            divergencias.append(f"vBC incorreto: esperado={vbc}, encontrado={vbc_xml}")
+        if abs(vbc_xml - base_ibscbs_esperada) > TOLERANCIA_VALOR:
+            divergencias.append(f"vBC incorreto: esperado={base_ibscbs_esperada} (valor-ICMS-PIS-COFINS), encontrado={vbc_xml}")
 
         # Obter reducao cadastrada (ou zero se nao houver)
         reducao = Decimal(str(ncm_cadastro.reducao_aliquota or 0))
