@@ -2677,7 +2677,10 @@ def redespachar():
             pedido_copia.cod_uf = 'SP'
             pedido_copia.nome_cidade = 'Guarulhos'
             pedido_copia.rota = 'CIF'  # Força para não ser RED (que vai para Guarulhos)
-            
+            # ✅ CORREÇÃO: Define atributos normalizados para busca de cidade
+            pedido_copia.cidade_normalizada = 'GUARULHOS'
+            pedido_copia.uf_normalizada = 'SP'
+
             print(f"[DEBUG] 📍 Pedido {pedido_original.num_pedido}: {pedido_original.nome_cidade}/{pedido_original.cod_uf} → Guarulhos/SP")
             
             pedidos_redespacho.append(pedido_copia)
@@ -2926,7 +2929,10 @@ def redespachar_sao_paulo():
             pedido_copia.cod_uf = 'SP'
             pedido_copia.nome_cidade = 'São Paulo'
             pedido_copia.rota = 'CIF'  # Força para não ser RED
-            
+            # ✅ CORREÇÃO: Define atributos normalizados para busca de cidade
+            pedido_copia.cidade_normalizada = 'SAO PAULO'
+            pedido_copia.uf_normalizada = 'SP'
+
             print(f"[DEBUG] 📍 Pedido {pedido_original.num_pedido}: {pedido_original.nome_cidade}/{pedido_original.cod_uf} → SÃO PAULO/SP")
             
             pedidos_redespacho.append(pedido_copia)

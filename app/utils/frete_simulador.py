@@ -359,9 +359,23 @@ def normalizar_dados_pedido(pedido):
             ).update(update_data)
             db.session.commit()
     
-    # ✅ IMPORTANTE: NÃO atribuir diretamente ao pedido para evitar UPDATE na VIEW
-    # Os valores já foram salvos na tabela Separacao acima
-    # Se precisar usar os valores normalizados, leia direto dos atributos ou use getattr
+    # ✅ IMPORTANTE: Atribuir diretamente no objeto APENAS se não estiver attached à sessão
+    # Objetos carregados do banco (VIEW Pedido) não podem receber atribuição direta
+    # Objetos criados em memória (cópias para redespacho) podem receber
+    from sqlalchemy import inspect
+    from app import db
+
+    try:
+        insp = inspect(pedido)
+        is_detached_or_transient = insp.detached or insp.transient
+    except Exception:
+        # Se não conseguir inspecionar, assume que é seguro atribuir (objeto não-ORM)
+        is_detached_or_transient = True
+
+    if is_detached_or_transient:
+        # Objeto não está na sessão, seguro atribuir
+        pedido.cidade_normalizada = cidade_normalizada
+        pedido.uf_normalizada = uf_normalizada
 
 
 def calcular_frete_por_cnpj(pedidos, veiculo_forcado=None):
