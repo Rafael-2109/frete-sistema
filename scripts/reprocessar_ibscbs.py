@@ -4,8 +4,24 @@ Script para reprocessar validacao IBS/CBS com nova regra de base de calculo.
 
 CONTEXTO:
 =========
-A base de calculo do IBS/CBS foi corrigida para:
-    Base IBS/CBS = Valor Total - ICMS - PIS - COFINS
+A base de calculo do IBS/CBS foi corrigida para CTe:
+    Base IBS/CBS = (vBC_ICMS - vICMS) × (1 - PIS/COFINS%)
+
+No CTe, PIS e COFINS NAO aparecem como tags separadas no XML.
+Portanto, testamos AMBOS os regimes tributarios:
+    - Lucro Presumido: 3,65% (fator 0,9635)
+    - Lucro Real: 9,25% (fator 0,9075)
+
+Se o vBC do IBSCBS bater com QUALQUER um dos dois, considera VALIDO.
+
+EXEMPLO:
+    vBC_ICMS = 1333.78
+    vICMS = 93.36
+    Base apos ICMS = 1333.78 - 93.36 = 1240.42
+    Presumido: 1240.42 × 0.9635 = 1195.14
+    Real:      1240.42 × 0.9075 = 1125.68
+
+    Se vBC do XML = 1195.15 → MATCH com Lucro Presumido ✓
 
 Este script reprocessa todos os CTes que:
 1. Ja foram validados anteriormente
@@ -40,7 +56,7 @@ python scripts/reprocessar_ibscbs.py --executar
 python scripts/reprocessar_ibscbs.py --apenas-cte --executar --verbose
 
 Autor: Sistema de Fretes
-Data: 2026-01-19
+Data: 2026-01-19 (atualizado - teste duplo PIS/COFINS)
 """
 
 import sys
@@ -156,7 +172,13 @@ def reprocessar_ctes(dry_run: bool = True, limite: int = None, verbose: bool = F
             impostos = parser.get_impostos()
 
             if verbose:
-                print(f"  Impostos extraidos: TotalTributos={impostos.get('total_tributos')}, ICMS={impostos.get('valor_icms')}")
+                base_icms = impostos.get('base_icms') or 0
+                valor_icms = impostos.get('valor_icms') or 0
+                base_apos_icms = base_icms - valor_icms
+                print(f"  Impostos extraidos: vBC_ICMS={base_icms}, vICMS={valor_icms}")
+                print(f"  Base apos ICMS: {base_icms} - {valor_icms} = {base_apos_icms}")
+                print(f"  Lucro Presumido (3,65%): {base_apos_icms} × 0,9635 = {base_apos_icms * 0.9635:.2f}")
+                print(f"  Lucro Real (9,25%):      {base_apos_icms} × 0,9075 = {base_apos_icms * 0.9075:.2f}")
 
             # Validar com impostos
             divergencias = validacao_ibscbs_service._validar_campos_cte(ibscbs, cte, impostos)
@@ -181,7 +203,7 @@ def reprocessar_ctes(dry_run: bool = True, limite: int = None, verbose: bool = F
                     # Marcar como resolvido ao inves de deletar (para historico)
                     pendencia.status = 'aprovado'
                     pendencia.resolucao = 'reprocessamento_regra_corrigida'
-                    pendencia.justificativa = f"Reprocessado em {datetime.now().strftime('%Y-%m-%d %H:%M')} - Base IBS/CBS corrigida para Valor - ICMS - PIS - COFINS"
+                    pendencia.justificativa = f"Reprocessado em {datetime.now().strftime('%Y-%m-%d %H:%M')} - Base IBS/CBS com teste duplo: (vBC_ICMS - vICMS) × (0.9635 ou 0.9075)"
                     pendencia.resolvido_por = 'sistema_reprocessamento'
                     pendencia.resolvido_em = datetime.utcnow()
             else:

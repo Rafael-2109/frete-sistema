@@ -10,8 +10,16 @@ REGRA FUNDAMENTAL DA BASE DE CALCULO IBS/CBS:
 A base de calculo do IBS/CBS e o valor do documento MENOS os impostos
 que estao sendo substituidos (ICMS, PIS, COFINS).
 
-CTe: Base IBS/CBS = Valor Total - vTotTrib (total dos tributos)
-     No CTe, o vTotTrib ja contem ICMS+PIS+COFINS embutidos (sem tags separadas)
+CTe: Base IBS/CBS = (vBC_ICMS - vICMS) × (1 - PIS/COFINS%)
+     No CTe, PIS e COFINS NAO aparecem como tags separadas.
+     Testamos AMBOS os regimes para validar:
+     - Lucro Presumido: 3,65% (PIS 0,65% + COFINS 3,00%) → fator 0,9635
+     - Lucro Real: 9,25% (PIS 1,65% + COFINS 7,60%) → fator 0,9075
+
+     Exemplo: vBC_ICMS=1333.78, vICMS=93.36
+              Base apos ICMS = 1333.78 - 93.36 = 1240.42
+              Presumido: 1240.42 × 0.9635 = 1195.14
+              Real:      1240.42 × 0.9075 = 1125.68
 
 NF-e: Base IBS/CBS = Valor Produto - ICMS - PIS - COFINS (tags separadas)
 
@@ -22,7 +30,7 @@ REGRAS DE VALIDACAO:
 CTe (Aliquotas FIXAS):
 - CST: 000
 - cClassTrib: 000001
-- vBC: valor_total - vTotTrib (total tributos = ICMS+PIS+COFINS embutidos)
+- vBC: (vBC_ICMS - vICMS) × (0.9635 ou 0.9075) - testamos ambos
 - pIBSUF: 0.10%
 - pIBSMun: 0.00%
 - pCBS: 0.90%
@@ -44,7 +52,7 @@ Regime Tributario (CRT):
 - 3 = Regime Normal (DEVE destacar IBS/CBS)
 
 Autor: Sistema de Fretes
-Data: 2026-01-14 (atualizado 2026-01-19 - correcao base IBS/CBS)
+Data: 2026-01-14 (atualizado 2026-01-19 - teste duplo PIS/COFINS para CTe)
 """
 
 import logging
@@ -75,6 +83,28 @@ class AliquotasCTe:
 
     # CTe nao tem reducao
     REDUCAO = Decimal('0.00')
+
+
+class AliquotasPISCOFINS:
+    """
+    Aliquotas PIS/COFINS por regime tributario.
+
+    No CTe, PIS e COFINS nao aparecem como tags separadas no XML.
+    Precisamos testar ambos os regimes para validar a base de calculo.
+
+    Formula: Base IBS/CBS = (vBC_ICMS - vICMS) x (1 - aliquota_PIS_COFINS)
+    """
+    # Lucro Presumido (regime cumulativo)
+    PIS_PRESUMIDO = Decimal('0.65')       # 0,65%
+    COFINS_PRESUMIDO = Decimal('3.00')    # 3,00%
+    TOTAL_PRESUMIDO = Decimal('3.65')     # 3,65%
+    FATOR_PRESUMIDO = Decimal('0.9635')   # 1 - 3,65% = 96,35%
+
+    # Lucro Real (regime nao-cumulativo)
+    PIS_REAL = Decimal('1.65')            # 1,65%
+    COFINS_REAL = Decimal('7.60')         # 7,60%
+    TOTAL_REAL = Decimal('9.25')          # 9,25%
+    FATOR_REAL = Decimal('0.9075')        # 1 - 9,25% = 90,75%
 
 
 # Tolerancia para comparacao de valores calculados (centavos)
@@ -281,13 +311,17 @@ class ValidacaoIbsCbsService:
         A base de cálculo do IBS/CBS é o valor do documento MENOS os impostos
         que estão sendo substituídos (ICMS, PIS, COFINS).
 
-        Para CTe: Base IBS/CBS = Valor Total - vTotTrib
-        No CTe, o vTotTrib já contém ICMS+PIS+COFINS embutidos (sem tags separadas).
+        Para CTe: Base IBS/CBS = (vBC_ICMS - vICMS) × (1 - PIS/COFINS%)
+
+        Como não sabemos se a transportadora é Lucro Presumido ou Lucro Real,
+        testamos AMBAS as alíquotas:
+        - Lucro Presumido: PIS 0,65% + COFINS 3,00% = 3,65% → fator 0,9635
+        - Lucro Real: PIS 1,65% + COFINS 7,60% = 9,25% → fator 0,9075
 
         Args:
             ibscbs: Dados IBS/CBS extraidos do XML
             cte: ConhecimentoTransporte
-            impostos: Dados de impostos extraidos do XML (usa total_tributos)
+            impostos: Dados de impostos extraidos do XML (base_icms e valor_icms)
 
         Returns:
             Lista de divergencias encontradas (vazia se OK)
@@ -299,31 +333,37 @@ class ValidacaoIbsCbsService:
             divergencias.append("Tag <IBSCBS> nao encontrada no XML")
             return divergencias
 
-        valor_cte = Decimal(str(cte.valor_total)) if cte.valor_total else Decimal('0')
-
         # ====== CALCULAR BASE DE CALCULO ESPERADA DO IBS/CBS ======
-        # Para CTe: Base IBS/CBS = Valor Total - vTotTrib (total dos tributos)
-        # No CTe, o vTotTrib contem ICMS + PIS + COFINS embutidos (sem tags separadas)
-        # Diferente de NF-e onde PIS/COFINS aparecem separadamente
+        # Formula: Base IBS/CBS = (vBC_ICMS - vICMS) × (1 - PIS/COFINS%)
+        # No CTe, PIS e COFINS NAO aparecem como tags separadas
+        # Portanto, testamos AMBOS os regimes (Presumido e Real)
 
-        total_tributos = Decimal('0')
+        base_icms = Decimal('0')
+        valor_icms = Decimal('0')
 
         if impostos:
-            if impostos.get('total_tributos'):
-                # CTe: usar vTotTrib que ja contem ICMS+PIS+COFINS
-                total_tributos = Decimal(str(impostos['total_tributos']))
-            elif impostos.get('valor_icms'):
-                # Fallback: se nao tiver vTotTrib, usar apenas ICMS
-                total_tributos = Decimal(str(impostos['valor_icms']))
-        else:
-            # Fallback: usar valor_icms do modelo se impostos nao foram passados
-            if cte.valor_icms:
-                total_tributos = Decimal(str(cte.valor_icms))
+            if impostos.get('base_icms'):
+                base_icms = Decimal(str(impostos['base_icms']))
+            if impostos.get('valor_icms'):
+                valor_icms = Decimal(str(impostos['valor_icms']))
 
-        # Base esperada = Valor Total - Total dos Tributos (ICMS+PIS+COFINS)
-        base_ibscbs_esperada = (valor_cte - total_tributos).quantize(Decimal('0.01'), ROUND_HALF_UP)
+        # Se nao conseguiu extrair do XML, tentar usar valores do modelo
+        if base_icms == 0 and cte.valor_total:
+            # Fallback: usar valor total como base aproximada
+            base_icms = Decimal(str(cte.valor_total))
+        if valor_icms == 0 and cte.valor_icms:
+            valor_icms = Decimal(str(cte.valor_icms))
 
-        logger.info(f"Calculo base IBS/CBS CTe: Valor={valor_cte}, TotalTributos(vTotTrib)={total_tributos} => Base esperada={base_ibscbs_esperada}")
+        # Base apos ICMS = vBC_ICMS - vICMS
+        base_apos_icms = (base_icms - valor_icms).quantize(Decimal('0.01'), ROUND_HALF_UP)
+
+        # Calcular duas bases possiveis (Lucro Presumido e Lucro Real)
+        base_presumido = (base_apos_icms * AliquotasPISCOFINS.FATOR_PRESUMIDO).quantize(Decimal('0.01'), ROUND_HALF_UP)
+        base_real = (base_apos_icms * AliquotasPISCOFINS.FATOR_REAL).quantize(Decimal('0.01'), ROUND_HALF_UP)
+
+        logger.info(f"Calculo base IBS/CBS CTe: vBC_ICMS={base_icms}, vICMS={valor_icms}, Base apos ICMS={base_apos_icms}")
+        logger.info(f"  -> Lucro Presumido (3,65%): {base_apos_icms} × 0,9635 = {base_presumido}")
+        logger.info(f"  -> Lucro Real (9,25%):      {base_apos_icms} × 0,9075 = {base_real}")
 
         # ====== VALIDAR CST ======
         cst_xml = ibscbs.get('cst')
@@ -335,11 +375,27 @@ class ValidacaoIbsCbsService:
         if class_trib_xml != AliquotasCTe.CLASS_TRIB:
             divergencias.append(f"cClassTrib incorreto: esperado={AliquotasCTe.CLASS_TRIB}, encontrado={class_trib_xml}")
 
-        # ====== VALIDAR vBC (Base de Calculo IBS/CBS) ======
-        # CORRECAO: A base deve ser o valor SEM ICMS/PIS/COFINS
+        # ====== VALIDAR vBC (Base de Calculo IBS/CBS) - TESTE DUPLO ======
+        # Testar se bate com Lucro Presumido (3,65%) OU Lucro Real (9,25%)
         vbc_xml = Decimal(str(ibscbs.get('base_calculo') or 0))
-        if abs(vbc_xml - base_ibscbs_esperada) > TOLERANCIA_VALOR:
-            divergencias.append(f"vBC incorreto: esperado={base_ibscbs_esperada} (valor-ICMS-PIS-COFINS), encontrado={vbc_xml}")
+
+        match_presumido = abs(vbc_xml - base_presumido) <= TOLERANCIA_VALOR
+        match_real = abs(vbc_xml - base_real) <= TOLERANCIA_VALOR
+
+        regime_detectado = None
+        if match_presumido:
+            regime_detectado = 'Lucro Presumido (3,65%)'
+            logger.info(f"  -> MATCH com Lucro Presumido: vBC XML={vbc_xml} ≈ {base_presumido}")
+        elif match_real:
+            regime_detectado = 'Lucro Real (9,25%)'
+            logger.info(f"  -> MATCH com Lucro Real: vBC XML={vbc_xml} ≈ {base_real}")
+        else:
+            # Nenhum dos dois bateu - divergencia
+            divergencias.append(
+                f"vBC incorreto: encontrado={vbc_xml}, esperado Presumido={base_presumido} ou Real={base_real} "
+                f"(formula: (vBC_ICMS={base_icms} - vICMS={valor_icms}) × fator)"
+            )
+            logger.warning(f"  -> NENHUM MATCH: vBC XML={vbc_xml} ≠ Presumido={base_presumido} ≠ Real={base_real}")
 
         # ====== VALIDAR pIBSUF ======
         aliq_ibs_uf_xml = Decimal(str(ibscbs.get('ibs_uf_aliquota') or 0))

@@ -755,6 +755,13 @@
         const municipioTrunc = truncarTexto(item.municipio || '', 20);
         const nomeProdutoTrunc = truncarTexto(item.nome_produto || '', 50);
 
+        // 🆕 ÍCONES PARA SEPARAÇÃO (observação e tags)
+        const iconeObservacao = item.observ_ped_1
+            ? `<span class="icone-info icone-obs" title="${escapeHtml(item.observ_ped_1)}"
+                   data-bs-toggle="tooltip" data-bs-placement="top">📝</span>`
+            : '';
+        const iconeTags = montarIconeTags(item.tags_pedido);
+
         // 🆕 CORES BASEADAS EM STATUS - USANDO CLASSES BOOTSTRAP
         let classesCor = '';
 
@@ -796,17 +803,23 @@
                 <td>${item.pedido_cliente || ''}</td>
                 <td>${item.data_pedido ? new Date(item.data_pedido + 'T00:00:00').toLocaleDateString('pt-BR') : ''}</td>
                 <td>${item.data_entrega_pedido ? new Date(item.data_entrega_pedido + 'T00:00:00').toLocaleDateString('pt-BR') : ''}</td>
-                <td>${item.cnpj_cpf}</td>
+                <td title="Equipe: ${item.equipe_vendas || 'N/A'}">${item.cnpj_cpf}</td>
                 <td>
-                    <span class="truncate-tooltip" title="${item.raz_social_red || ''}">
-                        ${razaoSocialTrunc}
-                    </span>
+                    <div class="d-flex align-items-center gap-1">
+                        <span class="truncate-tooltip" title="${item.raz_social_red || ''}">
+                            ${razaoSocialTrunc}
+                        </span>
+                        ${iconeTags}
+                    </div>
                 </td>
                 <td>${item.estado || ''}</td>
                 <td>
-                    <span class="truncate-tooltip" title="${item.municipio || ''}">
-                        ${municipioTrunc}
-                    </span>
+                    <div class="d-flex align-items-center gap-1">
+                        <span class="truncate-tooltip" title="${item.municipio || ''}">
+                            ${municipioTrunc}
+                        </span>
+                        ${iconeObservacao}
+                    </div>
                 </td>
                 <td>
                     <span class="cod-produto-clicavel" data-cod-produto="${item.cod_produto}"
@@ -975,20 +988,23 @@
                 <td>${item.pedido_cliente || ''}</td>
                 <td>${item.data_pedido ? new Date(item.data_pedido + 'T00:00:00').toLocaleDateString('pt-BR') : ''}</td>
                 <td>${item.data_entrega_pedido ? new Date(item.data_entrega_pedido + 'T00:00:00').toLocaleDateString('pt-BR') : ''}</td>
-                <td>${item.cnpj_cpf}</td>
+                <td title="Equipe: ${item.equipe_vendas || 'N/A'}">${item.cnpj_cpf}</td>
                 <td>
                     <div class="d-flex align-items-center gap-1">
                         <span class="truncate-tooltip" title="${item.raz_social_red || ''}">
                             ${razaoSocialTrunc}
                         </span>
-                        ${iconeObservacao}${iconeTags}
+                        ${iconeTags}
                     </div>
                 </td>
                 <td>${item.estado || ''}</td>
                 <td>
-                    <span class="truncate-tooltip" title="${item.municipio || ''}">
-                        ${municipioTrunc}
-                    </span>
+                    <div class="d-flex align-items-center gap-1">
+                        <span class="truncate-tooltip" title="${item.municipio || ''}">
+                            ${municipioTrunc}
+                        </span>
+                        ${iconeObservacao}
+                    </div>
                 </td>
                 <td>
                     <span class="cod-produto-clicavel" data-cod-produto="${item.cod_produto}"

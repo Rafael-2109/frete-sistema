@@ -40,7 +40,10 @@ class Pedido(db.Model):
     agendamento = db.Column(db.Date) #Vem de Separacao.agendamento
     protocolo = db.Column(db.String(50)) #Vem de Separacao.protocolo
     agendamento_confirmado = db.Column(db.Boolean, default=False) #Vem de Separacao.agendamento_confirmado
-    
+
+    # Campo de equipe de vendas (via JOIN com CarteiraPrincipal na VIEW)
+    equipe_vendas = db.Column(db.String(100), nullable=True) #Vem de CarteiraPrincipal.equipe_vendas
+
     # Campos de transporte (virão NULL da VIEW, precisam JOIN com cotacao)
     transportadora = db.Column(db.String(100))
     valor_frete = db.Column(db.Float)

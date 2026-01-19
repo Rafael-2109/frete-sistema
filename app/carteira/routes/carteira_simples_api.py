@@ -700,7 +700,8 @@ def obter_dados():
                         'programacao': estoque_info['programacao'],  # ✅ NOVO: Programação para front-end
                         # 🆕 OBSERVAÇÕES E TAGS PARA CARTEIRA SIMPLES
                         'observ_ped_1': produto.observ_ped_1[:200] if produto.observ_ped_1 else None,  # Truncado para tooltip
-                        'tags_pedido': produto.tags_pedido  # JSON string das tags do Odoo
+                        'tags_pedido': produto.tags_pedido,  # JSON string das tags do Odoo
+                        'equipe_vendas': produto.equipe_vendas or ''  # Equipe de vendas para tooltip no CNPJ
                     })
 
                 # 2️⃣ ADICIONAR TODAS AS SEPARAÇÕES DO PEDIDO, AGRUPADAS POR LOTE
@@ -787,7 +788,11 @@ def obter_dados():
                             'palletizacao': palletizacao_sep,
                             'peso_bruto': peso_bruto_sep,
                             'estoque_atual': estoque_info_sep['estoque_atual'],
-                            'programacao': estoque_info_sep['programacao']  # ✅ NOVO: Programação para front-end
+                            'programacao': estoque_info_sep['programacao'],  # ✅ NOVO: Programação para front-end
+                            # 🆕 CAMPOS PARA ÍCONES NA CARTEIRA SIMPLES
+                            'observ_ped_1': sep.observ_ped_1[:200] if sep.observ_ped_1 else None,  # Observação da separação
+                            'tags_pedido': produto_ref.tags_pedido if produto_ref else None,  # Tags do pedido original
+                            'equipe_vendas': produto_ref.equipe_vendas if produto_ref else ''  # Equipe de vendas
                         })
         tempos['montar_resposta'] = time.time() - t1
 
