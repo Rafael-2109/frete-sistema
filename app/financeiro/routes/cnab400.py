@@ -1,0 +1,439 @@
+"""
+Rotas para processamento de arquivos CNAB400 (Retorno Bancário).
+
+Funcionalidades:
+- Upload de arquivos .ret
+- Visualização de lotes e itens
+- Matching automático com Contas a Receber
+- Execução de baixas
+- Análise de itens sem match
+"""
+
+from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify
+from flask_login import login_required, current_user
+from werkzeug.utils import secure_filename
+from datetime import datetime
+
+from app import db
+from app.financeiro.models import CnabRetornoLote, CnabRetornoItem, ContasAReceber
+from app.financeiro.services.cnab400_processor_service import Cnab400ProcessorService
+
+
+cnab400_bp = Blueprint('cnab400', __name__, url_prefix='/cnab400')
+
+
+# =============================================================================
+# VIEWS HTML
+# =============================================================================
+
+@cnab400_bp.route('/')
+@login_required
+def index():
+    """Hub principal de CNAB400 - Lista de lotes"""
+    lotes = CnabRetornoLote.query.order_by(
+        CnabRetornoLote.data_processamento.desc()
+    ).limit(50).all()
+
+    # Estatísticas gerais
+    stats = {
+        'total_lotes': CnabRetornoLote.query.count(),
+        'lotes_pendentes': CnabRetornoLote.query.filter(
+            CnabRetornoLote.status.in_(['IMPORTADO', 'AGUARDANDO_REVISAO', 'APROVADO'])
+        ).count(),
+        'lotes_concluidos': CnabRetornoLote.query.filter(
+            CnabRetornoLote.status == 'CONCLUIDO'
+        ).count(),
+    }
+
+    return render_template(
+        'financeiro/cnab400_hub.html',
+        lotes=lotes,
+        stats=stats
+    )
+
+
+@cnab400_bp.route('/upload', methods=['GET', 'POST'])
+@login_required
+def upload():
+    """Upload de arquivo CNAB400"""
+    if request.method == 'POST':
+        # Verifica se arquivo foi enviado
+        if 'arquivo' not in request.files:
+            flash('Nenhum arquivo selecionado', 'error')
+            return redirect(request.url)
+
+        arquivo = request.files['arquivo']
+
+        if arquivo.filename == '':
+            flash('Nenhum arquivo selecionado', 'error')
+            return redirect(request.url)
+
+        # Verifica extensão
+        if not arquivo.filename.lower().endswith('.ret'):
+            flash('Arquivo deve ter extensão .ret', 'error')
+            return redirect(request.url)
+
+        try:
+            # Lê conteúdo com encoding latin-1 (padrão CNAB)
+            conteudo = arquivo.read().decode('latin-1')
+
+            # Processa arquivo
+            processor = Cnab400ProcessorService()
+            lote = processor.processar_arquivo(
+                arquivo_conteudo=conteudo,
+                arquivo_nome=secure_filename(arquivo.filename),
+                usuario=current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
+            )
+
+            flash(
+                f'Arquivo processado com sucesso! '
+                f'{lote.total_registros} registros importados, '
+                f'{lote.registros_com_match} com match, '
+                f'{lote.registros_sem_match} sem match.',
+                'success'
+            )
+            return redirect(url_for('cnab400.lote_detalhe', lote_id=lote.id))
+
+        except Exception as e:
+            flash(f'Erro ao processar arquivo: {str(e)}', 'error')
+            return redirect(request.url)
+
+    return render_template('financeiro/cnab400_upload.html')
+
+
+@cnab400_bp.route('/lote/<int:lote_id>')
+@login_required
+def lote_detalhe(lote_id):
+    """Detalhes de um lote processado"""
+    lote = CnabRetornoLote.query.get_or_404(lote_id)
+
+    # Buscar itens agrupados por status
+    itens = CnabRetornoItem.query.filter_by(lote_id=lote_id).order_by(
+        CnabRetornoItem.numero_linha
+    ).all()
+
+    # Estatísticas locais
+    stats = {
+        'total': len(itens),
+        'liquidados': sum(1 for i in itens if i.codigo_ocorrencia == '06'),
+        'confirmados': sum(1 for i in itens if i.codigo_ocorrencia == '02'),
+        'baixados': sum(1 for i in itens if i.codigo_ocorrencia in ('09', '10')),
+        'com_match': sum(1 for i in itens if i.status_match == 'MATCH_ENCONTRADO'),
+        'sem_match': sum(1 for i in itens if i.status_match == 'SEM_MATCH'),
+        'ja_pagos': sum(1 for i in itens if i.status_match == 'JA_PAGO'),
+        'nao_aplicavel': sum(1 for i in itens if i.status_match == 'NAO_APLICAVEL'),
+        'processados': sum(1 for i in itens if i.processado),
+        'valor_liquidado': sum(
+            float(i.valor_pago or i.valor_titulo or 0)
+            for i in itens if i.codigo_ocorrencia == '06' and i.status_match == 'MATCH_ENCONTRADO'
+        ),
+    }
+
+    return render_template(
+        'financeiro/cnab400_lote_detalhe.html',
+        lote=lote,
+        itens=itens,
+        stats=stats
+    )
+
+
+@cnab400_bp.route('/lote/<int:lote_id>/sem-match')
+@login_required
+def lote_sem_match(lote_id):
+    """Lista itens sem match para análise"""
+    lote = CnabRetornoLote.query.get_or_404(lote_id)
+
+    processor = Cnab400ProcessorService()
+    itens = processor.obter_itens_sem_match(lote_id)
+
+    return render_template(
+        'financeiro/cnab400_sem_match.html',
+        lote=lote,
+        itens=itens
+    )
+
+
+# =============================================================================
+# APIs JSON
+# =============================================================================
+
+@cnab400_bp.route('/api/lotes')
+@login_required
+def api_listar_lotes():
+    """API: Lista lotes com paginação"""
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+
+    query = CnabRetornoLote.query.order_by(CnabRetornoLote.data_processamento.desc())
+
+    # Filtros opcionais
+    status = request.args.get('status')
+    if status:
+        query = query.filter(CnabRetornoLote.status == status)
+
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+
+    return jsonify({
+        'success': True,
+        'lotes': [lote.to_dict() for lote in pagination.items],
+        'total': pagination.total,
+        'pages': pagination.pages,
+        'page': page,
+    })
+
+
+@cnab400_bp.route('/api/lote/<int:lote_id>')
+@login_required
+def api_lote_detalhe(lote_id):
+    """API: Detalhes de um lote"""
+    lote = CnabRetornoLote.query.get_or_404(lote_id)
+
+    processor = Cnab400ProcessorService()
+    stats = processor.obter_estatisticas_lote(lote)
+
+    return jsonify({
+        'success': True,
+        'data': stats
+    })
+
+
+@cnab400_bp.route('/api/lote/<int:lote_id>/itens')
+@login_required
+def api_lote_itens(lote_id):
+    """API: Itens de um lote"""
+    lote = CnabRetornoLote.query.get_or_404(lote_id)
+
+    # Filtros
+    status_match = request.args.get('status_match')
+    codigo_ocorrencia = request.args.get('codigo_ocorrencia')
+
+    query = CnabRetornoItem.query.filter_by(lote_id=lote_id)
+
+    if status_match:
+        query = query.filter(CnabRetornoItem.status_match == status_match)
+    if codigo_ocorrencia:
+        query = query.filter(CnabRetornoItem.codigo_ocorrencia == codigo_ocorrencia)
+
+    itens = query.order_by(CnabRetornoItem.numero_linha).all()
+
+    return jsonify({
+        'success': True,
+        'itens': [item.to_dict() for item in itens],
+        'total': len(itens)
+    })
+
+
+@cnab400_bp.route('/api/lote/<int:lote_id>/baixar', methods=['POST'])
+@login_required
+def api_baixar_lote(lote_id):
+    """API: Executa baixa de todos os itens com match do lote"""
+    lote = CnabRetornoLote.query.get_or_404(lote_id)
+
+    # Verifica status
+    if lote.status not in ('IMPORTADO', 'AGUARDANDO_REVISAO', 'APROVADO'):
+        return jsonify({
+            'success': False,
+            'error': f'Lote com status {lote.status} não pode ser processado'
+        }), 400
+
+    try:
+        processor = Cnab400ProcessorService()
+        stats = processor.baixar_lote(lote)
+
+        return jsonify({
+            'success': True,
+            'message': f'Processamento concluído: {stats["sucesso"]} baixas, {stats["erros"]} erros',
+            'stats': stats,
+            'lote': lote.to_dict()
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@cnab400_bp.route('/api/lote/<int:lote_id>/reprocessar-matching', methods=['POST'])
+@login_required
+def api_reprocessar_matching(lote_id):
+    """API: Reprocessa matching dos itens sem match"""
+    lote = CnabRetornoLote.query.get_or_404(lote_id)
+
+    try:
+        processor = Cnab400ProcessorService()
+        stats = processor.reprocessar_matching(lote)
+
+        return jsonify({
+            'success': True,
+            'message': f'{stats["novos_matches"]} novos matches encontrados',
+            'stats': stats,
+            'lote': lote.to_dict()
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@cnab400_bp.route('/api/item/<int:item_id>/baixar', methods=['POST'])
+@login_required
+def api_baixar_item(item_id):
+    """API: Executa baixa de um item específico"""
+    item = CnabRetornoItem.query.get_or_404(item_id)
+
+    if item.status_match != 'MATCH_ENCONTRADO':
+        return jsonify({
+            'success': False,
+            'error': f'Item com status {item.status_match} não pode ser baixado'
+        }), 400
+
+    try:
+        processor = Cnab400ProcessorService()
+        sucesso = processor.baixar_titulo(item)
+
+        if sucesso:
+            return jsonify({
+                'success': True,
+                'message': 'Baixa executada com sucesso',
+                'item': item.to_dict()
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': item.erro_mensagem or 'Erro desconhecido'
+            }), 400
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@cnab400_bp.route('/api/item/<int:item_id>/vincular', methods=['POST'])
+@login_required
+def api_vincular_item(item_id):
+    """API: Vincula manualmente um item a um título"""
+    item = CnabRetornoItem.query.get_or_404(item_id)
+
+    data = request.get_json()
+    titulo_id = data.get('titulo_id')
+
+    if not titulo_id:
+        return jsonify({
+            'success': False,
+            'error': 'titulo_id é obrigatório'
+        }), 400
+
+    titulo = ContasAReceber.query.get(titulo_id)
+    if not titulo:
+        return jsonify({
+            'success': False,
+            'error': 'Título não encontrado'
+        }), 404
+
+    try:
+        item.conta_a_receber_id = titulo_id
+        item.status_match = 'MATCH_ENCONTRADO'
+        item.match_score = 100
+        item.match_criterio = 'VINCULACAO_MANUAL'
+        item.erro_mensagem = None
+
+        # Atualizar estatísticas do lote
+        item.lote.atualizar_estatisticas()
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': 'Item vinculado com sucesso',
+            'item': item.to_dict()
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@cnab400_bp.route('/api/buscar-titulos')
+@login_required
+def api_buscar_titulos():
+    """API: Busca títulos para vinculação manual"""
+    nf = request.args.get('nf', '').strip()
+    parcela = request.args.get('parcela', '').strip()
+    cnpj = request.args.get('cnpj', '').strip()
+    valor = request.args.get('valor', type=float)
+
+    query = ContasAReceber.query.filter(ContasAReceber.parcela_paga == False)
+
+    if nf:
+        query = query.filter(ContasAReceber.titulo_nf.ilike(f'%{nf}%'))
+    if parcela:
+        query = query.filter(ContasAReceber.parcela == parcela)
+    if cnpj:
+        cnpj_limpo = ''.join(filter(str.isdigit, cnpj))
+        query = query.filter(ContasAReceber.cnpj.ilike(f'%{cnpj_limpo}%'))
+    if valor:
+        # Tolerância de 1%
+        tolerancia = valor * 0.01
+        query = query.filter(
+            ContasAReceber.valor_titulo.between(valor - tolerancia, valor + tolerancia)
+        )
+
+    titulos = query.limit(50).all()
+
+    return jsonify({
+        'success': True,
+        'titulos': [
+            {
+                'id': t.id,
+                'empresa': t.empresa,
+                'titulo_nf': t.titulo_nf,
+                'parcela': t.parcela,
+                'cnpj': t.cnpj,
+                'raz_social_red': t.raz_social_red,
+                'valor_titulo': float(t.valor_titulo) if t.valor_titulo else None,
+                'vencimento': t.vencimento.isoformat() if t.vencimento else None,
+            }
+            for t in titulos
+        ],
+        'total': len(titulos)
+    })
+
+
+@cnab400_bp.route('/api/lote/<int:lote_id>/excluir', methods=['DELETE'])
+@login_required
+def api_excluir_lote(lote_id):
+    """API: Exclui um lote e seus itens"""
+    lote = CnabRetornoLote.query.get_or_404(lote_id)
+
+    # Verifica se pode excluir (não pode excluir se já tem itens processados)
+    itens_processados = CnabRetornoItem.query.filter_by(
+        lote_id=lote_id,
+        processado=True
+    ).count()
+
+    if itens_processados > 0:
+        return jsonify({
+            'success': False,
+            'error': f'Não é possível excluir: {itens_processados} itens já foram processados'
+        }), 400
+
+    try:
+        # O cascade delete cuida dos itens
+        db.session.delete(lote)
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': 'Lote excluído com sucesso'
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500

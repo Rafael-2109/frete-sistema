@@ -64,6 +64,9 @@ class ValidacaoNfPoService:
 
     def __init__(self):
         self.depara_service = DeparaService()
+        # OTIMIZACAO: Cache local de produtos durante validacao
+        # Evita N+1 queries ao Odoo (buscar mesmo produto varias vezes)
+        self._product_cache: Dict[str, Optional[int]] = {}
 
     # =========================================================================
     # MAIN VALIDATION FLOW
@@ -94,6 +97,9 @@ class ValidacaoNfPoService:
         """
         try:
             logger.info(f"Iniciando validacao NF x PO do DFE {odoo_dfe_id}")
+
+            # OTIMIZACAO: Limpar cache de produtos no inicio da validacao
+            self._limpar_cache_produtos()
 
             # Criar ou atualizar registro de validacao
             validacao = self._get_or_create_validacao(odoo_dfe_id)
@@ -165,16 +171,10 @@ class ValidacaoNfPoService:
             MatchNfPoItem.query.filter_by(validacao_id=validacao.id).delete()
             DivergenciaNfPo.query.filter_by(validacao_id=validacao.id).delete()
 
-            # ETAPA 1: Converter todos os itens
-            itens_convertidos = []
-            itens_sem_depara = []
-
-            for line in dfe_lines:
-                conversao = self._converter_item_dfe(line, dfe_data)
-                if conversao['tem_depara']:
-                    itens_convertidos.append(conversao)
-                else:
-                    itens_sem_depara.append(conversao)
+            # ETAPA 1: Converter todos os itens (OTIMIZADO com batch)
+            itens_convertidos, itens_sem_depara = self._converter_itens_dfe_batch(
+                dfe_lines, dfe_data
+            )
 
             # Se algum item nao tem De-Para, ja bloqueia
             if itens_sem_depara:
@@ -235,11 +235,13 @@ class ValidacaoNfPoService:
 
             for cod_interno, item_agrupado in itens_agrupados.items():
                 # Filtrar candidatos validos (preco e data OK)
+                # OTIMIZACAO: Passar odoo_product_id para evitar busca duplicada
                 candidatos = self._filtrar_pos_candidatos_por_item(
                     cod_interno,
                     item_agrupado['preco_medio'],
                     data_nf,
-                    pos_candidatos
+                    pos_candidatos,
+                    odoo_product_id=item_agrupado.get('odoo_product_id')
                 )
 
                 if not candidatos:
@@ -358,6 +360,11 @@ class ValidacaoNfPoService:
                 'mensagem': str(e)
             }
 
+        finally:
+            # OTIMIZACAO: Limpar cache de produtos no final da validacao
+            # Garante que nao acumula dados entre validacoes
+            self._limpar_cache_produtos()
+
     # =========================================================================
     # DFE DATA FETCHING
     # =========================================================================
@@ -468,6 +475,84 @@ class ValidacaoNfPoService:
     # CONVERSION
     # =========================================================================
 
+    def _converter_itens_dfe_batch(
+        self,
+        dfe_lines: List[Dict[str, Any]],
+        dfe_data: Dict[str, Any]
+    ) -> tuple:
+        """
+        OTIMIZACAO: Converte todos os itens do DFE em BATCH.
+
+        Ao inves de N queries ao BD (uma por item), faz apenas 1 query
+        usando converter_lote() do DeparaService.
+
+        Args:
+            dfe_lines: Lista de linhas do DFE
+            dfe_data: Dados do DFE (cabecalho)
+
+        Returns:
+            Tuple (itens_convertidos, itens_sem_depara)
+        """
+        cnpj = self._limpar_cnpj(dfe_data.get('nfe_infnfe_emit_cnpj', ''))
+
+        # Extrair todos os codigos de produto do fornecedor
+        cod_produtos = [line.get('det_prod_cprod', '') for line in dfe_lines]
+        cod_produtos = [c for c in cod_produtos if c]  # Remover vazios
+
+        # OTIMIZACAO: Uma unica query para todos os De-Para
+        deparas_cache = self.depara_service.converter_lote(cnpj, cod_produtos)
+
+        logger.debug(
+            f"De-Para batch: {len(deparas_cache)} encontrados para {len(cod_produtos)} codigos"
+        )
+
+        itens_convertidos = []
+        itens_sem_depara = []
+
+        for line in dfe_lines:
+            cod_forn = line.get('det_prod_cprod', '')
+
+            # Buscar no cache (O(1) ao inves de query ao BD)
+            depara = deparas_cache.get(cod_forn)
+
+            if not depara:
+                itens_sem_depara.append({
+                    'tem_depara': False,
+                    'dfe_line_id': line['id'],
+                    'cod_produto_fornecedor': cod_forn,
+                    'nome_produto': line.get('det_prod_xprod', ''),
+                    'qtd_original': Decimal(str(line.get('det_prod_qcom', 0) or 0)),
+                    'um_nf': line.get('det_prod_ucom', ''),
+                    'preco_original': Decimal(str(line.get('det_prod_vuncom', 0) or 0))
+                })
+                continue
+
+            fator = Decimal(str(depara.get('fator_conversao', 1)))
+            qtd_original = Decimal(str(line.get('det_prod_qcom', 0) or 0))
+            preco_original = Decimal(str(line.get('det_prod_vuncom', 0) or 0))
+
+            # Converter quantidade e preco
+            qtd_convertida = self.depara_service.converter_quantidade(qtd_original, fator)
+            preco_convertido = self.depara_service.converter_preco(preco_original, fator)
+
+            itens_convertidos.append({
+                'tem_depara': True,
+                'dfe_line_id': line['id'],
+                'cod_produto_fornecedor': cod_forn,
+                'cod_produto_interno': depara['cod_produto_interno'],
+                'odoo_product_id': depara.get('odoo_product_id'),
+                'nome_produto': line.get('det_prod_xprod', ''),
+                'qtd_original': qtd_original,
+                'qtd_convertida': qtd_convertida,
+                'um_nf': line.get('det_prod_ucom', ''),
+                'um_interna': depara.get('um_interna', 'UNITS'),
+                'preco_original': preco_original,
+                'preco_convertido': preco_convertido,
+                'fator_conversao': fator
+            })
+
+        return itens_convertidos, itens_sem_depara
+
     def _converter_item_dfe(
         self,
         dfe_line: Dict[str, Any],
@@ -556,11 +641,13 @@ class ValidacaoNfPoService:
             partner_id = partner_ids[0]
 
             # Buscar POs com status purchase ou done (nao cancelados)
+            # EXCLUIR POs que ja possuem NF vinculada (dfe_id preenchido)
             po_ids = odoo.search(
                 'purchase.order',
                 [
                     ('partner_id', '=', partner_id),
-                    ('state', 'in', ['purchase', 'done'])
+                    ('state', 'in', ['purchase', 'done']),
+                    ('dfe_id', '=', False)  # Apenas POs SEM NF vinculada
                 ],
                 order='amount_total desc'  # Ordenar por maior valor
             )
@@ -568,37 +655,53 @@ class ValidacaoNfPoService:
             if not po_ids:
                 return []
 
-            # Ler dados dos POs
+            # Ler dados dos POs (campos minimos necessarios)
             pos = odoo.read(
                 'purchase.order',
                 po_ids,
                 [
-                    'id', 'name', 'partner_id', 'date_order', 'date_planned',
-                    'state', 'amount_total', 'order_line'
+                    'id', 'name', 'date_planned', 'order_line'
                 ]
             )
 
-            # Para cada PO, buscar linhas com saldo
-            for po in pos:
-                line_ids = po.get('order_line', [])
-                if line_ids:
-                    lines = odoo.read(
-                        'purchase.order.line',
-                        line_ids,
-                        [
-                            'id', 'order_id', 'product_id', 'name',
-                            'product_qty', 'qty_received', 'qty_invoiced',
-                            'product_uom', 'price_unit', 'price_subtotal',
-                            'date_planned'
-                        ]
-                    )
-                    # Filtrar linhas com saldo (qty > received)
-                    po['lines'] = [
-                        line for line in lines
-                        if (line.get('product_qty', 0) or 0) > (line.get('qty_received', 0) or 0)
+            # OTIMIZACAO: Batch read de TODAS as linhas de PO em UMA UNICA chamada
+            # Ao inves de N chamadas (uma por PO), faz apenas 1 chamada
+            all_line_ids = []
+            line_id_to_po_idx = {}  # Mapear line_id -> indice do PO
+
+            for po_idx, po in enumerate(pos):
+                po['lines'] = []  # Inicializar lista vazia
+                for line_id in po.get('order_line', []):
+                    all_line_ids.append(line_id)
+                    line_id_to_po_idx[line_id] = po_idx
+
+            if all_line_ids:
+                # UMA UNICA chamada para TODAS as linhas (campos minimos)
+                all_lines = odoo.read(
+                    'purchase.order.line',
+                    all_line_ids,
+                    [
+                        'id', 'order_id', 'product_id',
+                        'product_qty', 'qty_received',
+                        'price_unit', 'date_planned'
                     ]
-                else:
-                    po['lines'] = []
+                )
+
+                # Distribuir linhas de volta para cada PO (em memoria)
+                for line in all_lines:
+                    line_id = line['id']
+                    po_idx = line_id_to_po_idx.get(line_id)
+                    if po_idx is not None:
+                        # Filtrar apenas linhas com saldo (qty > received)
+                        qtd = line.get('product_qty', 0) or 0
+                        recebido = line.get('qty_received', 0) or 0
+                        if qtd > recebido:
+                            pos[po_idx]['lines'].append(line)
+
+                logger.debug(
+                    f"PO Lines batch: {len(all_lines)} linhas lidas em 1 chamada "
+                    f"(antes: {len(pos)} chamadas)"
+                )
 
             # Filtrar POs que tem pelo menos uma linha com saldo
             pos_com_saldo = [p for p in pos if p.get('lines')]
@@ -649,22 +752,16 @@ class ValidacaoNfPoService:
                 'item': item
             }
 
-        # Buscar produto no Odoo pelo codigo interno
-        odoo = get_odoo_connection()
-        product_ids = odoo.search(
-            'product.product',
-            [('default_code', '=', cod_interno)],
-            limit=1
-        )
+        # OTIMIZACAO: Buscar produto usando cache local
+        # Evita N+1 queries ao Odoo (mesmo produto buscado apenas 1 vez)
+        product_id = self._obter_product_id(cod_interno)
 
-        if not product_ids:
+        if not product_id:
             return {
                 'status': 'sem_po',
                 'motivo': f'Produto {cod_interno} nao encontrado no Odoo',
                 'item': item
             }
-
-        product_id = product_ids[0]
 
         # Procurar linha de PO com este produto
         melhor_match = None
@@ -1279,7 +1376,8 @@ class ValidacaoNfPoService:
         cod_produto_interno: str,
         preco_nf: Decimal,
         data_nf: date,
-        pos_fornecedor: List[Dict[str, Any]]
+        pos_fornecedor: List[Dict[str, Any]],
+        odoo_product_id: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         """
         Filtra POs candidatos para um produto especifico.
@@ -1287,29 +1385,28 @@ class ValidacaoNfPoService:
         Validacoes aplicadas (somente linhas que passam sao candidatas):
         1. Produto: linha do PO deve ter o mesmo produto
         2. Preco: 0% tolerancia (4 casas decimais)
-        3. Data: +/- 2 dias uteis (~3 dias corridos)
+        3. Data: tolerancia assimetrica (3 dias antes, 7 dias depois)
+
+        Args:
+            cod_produto_interno: Codigo interno do produto
+            preco_nf: Preco do item na NF
+            data_nf: Data de emissao da NF
+            pos_fornecedor: Lista de POs do fornecedor
+            odoo_product_id: ID do produto no Odoo (opcional, evita busca se fornecido)
 
         Retorna lista de linhas de PO validas, ORDENADAS por data ASC (mais antigo primeiro).
         """
         candidatos = []
 
-        # Buscar product_id pelo codigo interno
-        try:
-            odoo = get_odoo_connection()
-            product_ids = odoo.search(
-                'product.product',
-                [('default_code', '=', cod_produto_interno)],
-                limit=1
-            )
+        # OTIMIZACAO: Se ja tem o product_id, nao busca novamente
+        # Isso elimina chamadas redundantes quando o ID ja foi obtido antes
+        if odoo_product_id is not None:
+            product_id = odoo_product_id
+        else:
+            product_id = self._obter_product_id(cod_produto_interno)
 
-            if not product_ids:
-                logger.warning(f"Produto {cod_produto_interno} nao encontrado no Odoo")
-                return []
-
-            product_id = product_ids[0]
-
-        except Exception as e:
-            logger.error(f"Erro ao buscar produto {cod_produto_interno} no Odoo: {e}")
+        if not product_id:
+            logger.warning(f"Produto {cod_produto_interno} nao encontrado no Odoo (cache)")
             return []
 
         for po in pos_fornecedor:
@@ -1573,6 +1670,51 @@ class ValidacaoNfPoService:
                 continue
 
         return None
+
+    def _obter_product_id(self, cod_interno: str) -> Optional[int]:
+        """
+        Busca product_id no Odoo pelo codigo interno COM CACHE.
+
+        OTIMIZACAO: Evita N+1 queries ao Odoo.
+        Se a NF tem 20 itens mas apenas 5 produtos unicos,
+        faz apenas 5 chamadas ao inves de 20.
+
+        Args:
+            cod_interno: Codigo interno do produto (default_code no Odoo)
+
+        Returns:
+            ID do produto no Odoo ou None se nao encontrado
+        """
+        # Verificar cache primeiro
+        if cod_interno in self._product_cache:
+            return self._product_cache[cod_interno]
+
+        try:
+            odoo = get_odoo_connection()
+            product_ids = odoo.search(
+                'product.product',
+                [('default_code', '=', cod_interno)],
+                limit=1
+            )
+
+            result = product_ids[0] if product_ids else None
+            self._product_cache[cod_interno] = result
+
+            if result:
+                logger.debug(f"Produto {cod_interno} encontrado: ID {result} (cached)")
+            else:
+                logger.debug(f"Produto {cod_interno} NAO encontrado no Odoo (cached)")
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Erro ao buscar produto {cod_interno} no Odoo: {e}")
+            self._product_cache[cod_interno] = None
+            return None
+
+    def _limpar_cache_produtos(self):
+        """Limpa o cache de produtos. Chamar no inicio/fim de cada validacao."""
+        self._product_cache = {}
 
     # =========================================================================
     # QUERY METHODS

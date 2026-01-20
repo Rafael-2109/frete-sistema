@@ -1,0 +1,905 @@
+{% extends "base.html" %}
+
+{% block title %}Lote #{{ lote.id }} - CNAB400{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ================================================================== */
+/* CNAB400 LOTE DETALHE STYLES */
+/* ================================================================== */
+.lote-container {
+    padding: 1.5rem;
+    max-width: 1800px;
+    margin: 0 auto;
+}
+
+.lote-header {
+    margin-bottom: 1.5rem;
+}
+
+.lote-header__back {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-muted, #6c757d);
+    text-decoration: none;
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+    transition: color 0.2s;
+}
+
+.lote-header__back:hover {
+    color: var(--primary-color, #4a6cf7);
+}
+
+.lote-header__row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1.5rem;
+}
+
+.lote-header__title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--text-color, #1a1a2e);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.lote-header__title i {
+    color: var(--primary-color, #4a6cf7);
+}
+
+.lote-header__meta {
+    display: flex;
+    gap: 1.5rem;
+    margin-top: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.lote-meta-item {
+    font-size: 0.9rem;
+    color: var(--text-muted, #6c757d);
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.lote-meta-item i {
+    color: var(--primary-color, #4a6cf7);
+}
+
+.lote-header__actions {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+/* Status Badge */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.85rem;
+    border-radius: 50px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.status-badge--importado { background: rgba(108, 117, 125, 0.1); color: #6c757d; }
+.status-badge--aguardando_revisao { background: rgba(255, 193, 7, 0.15); color: #d39e00; }
+.status-badge--aprovado { background: rgba(23, 162, 184, 0.15); color: #117a8b; }
+.status-badge--processando { background: rgba(0, 123, 255, 0.15); color: #0056b3; }
+.status-badge--concluido { background: rgba(40, 167, 69, 0.15); color: #28a745; }
+.status-badge--parcial { background: rgba(255, 193, 7, 0.15); color: #d39e00; }
+.status-badge--erro { background: rgba(220, 53, 69, 0.15); color: #dc3545; }
+
+/* Stats Row */
+.lote-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.lote-stat {
+    background: var(--card-bg, #fff);
+    border-radius: 12px;
+    padding: 1rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    border: 1px solid var(--border-color, #e0e0e0);
+    text-align: center;
+}
+
+.lote-stat__value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-color, #1a1a2e);
+    line-height: 1;
+}
+
+.lote-stat__value--success { color: #28a745; }
+.lote-stat__value--warning { color: #ffc107; }
+.lote-stat__value--danger { color: #dc3545; }
+.lote-stat__value--info { color: #17a2b8; }
+
+.lote-stat__label {
+    font-size: 0.8rem;
+    color: var(--text-muted, #6c757d);
+    margin-top: 0.35rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+/* Tabs */
+.lote-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    border-bottom: 2px solid var(--border-color, #e0e0e0);
+    padding-bottom: 0;
+}
+
+.lote-tab {
+    padding: 0.75rem 1.25rem;
+    border: none;
+    background: transparent;
+    color: var(--text-muted, #6c757d);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.lote-tab:hover {
+    color: var(--primary-color, #4a6cf7);
+}
+
+.lote-tab.active {
+    color: var(--primary-color, #4a6cf7);
+    border-bottom-color: var(--primary-color, #4a6cf7);
+}
+
+.lote-tab__badge {
+    background: var(--badge-bg, #e0e0e0);
+    color: var(--text-muted, #6c757d);
+    padding: 0.15rem 0.5rem;
+    border-radius: 50px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.lote-tab.active .lote-tab__badge {
+    background: var(--primary-color, #4a6cf7);
+    color: #fff;
+}
+
+/* Section Card */
+.lote-section {
+    background: var(--card-bg, #fff);
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    border: 1px solid var(--border-color, #e0e0e0);
+    overflow: hidden;
+}
+
+.lote-section__header {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border-color, #e0e0e0);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--card-header-bg, #f8f9fa);
+}
+
+.lote-section__title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-color, #1a1a2e);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Table */
+.lote-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.lote-table th,
+.lote-table td {
+    padding: 0.75rem 0.875rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color, #e0e0e0);
+}
+
+.lote-table th {
+    background: var(--table-header-bg, #f8f9fa);
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: var(--text-muted, #6c757d);
+    letter-spacing: 0.5px;
+    position: sticky;
+    top: 0;
+}
+
+.lote-table tbody tr {
+    transition: background 0.15s;
+}
+
+.lote-table tbody tr:hover {
+    background: var(--table-hover-bg, rgba(74, 108, 247, 0.04));
+}
+
+.lote-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* Table Scroll Container */
+.table-scroll {
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+/* Match Status Badge */
+.match-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: 50px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.match-badge--encontrado { background: rgba(40, 167, 69, 0.15); color: #28a745; }
+.match-badge--sem_match { background: rgba(220, 53, 69, 0.15); color: #dc3545; }
+.match-badge--ja_pago { background: rgba(108, 117, 125, 0.15); color: #6c757d; }
+.match-badge--nao_aplicavel { background: rgba(108, 117, 125, 0.1); color: #adb5bd; }
+.match-badge--formato_invalido { background: rgba(255, 193, 7, 0.15); color: #d39e00; }
+.match-badge--pendente { background: rgba(0, 123, 255, 0.15); color: #0056b3; }
+.match-badge--processado { background: rgba(40, 167, 69, 0.2); color: #155724; }
+.match-badge--erro { background: rgba(220, 53, 69, 0.2); color: #721c24; }
+
+/* Occurrence Badge */
+.ocorrencia-badge {
+    display: inline-block;
+    padding: 0.3rem 0.6rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.ocorrencia-badge--06 { background: rgba(40, 167, 69, 0.12); color: #28a745; } /* Liquidação */
+.ocorrencia-badge--09,
+.ocorrencia-badge--10 { background: rgba(108, 117, 125, 0.12); color: #6c757d; } /* Baixado */
+.ocorrencia-badge--17 { background: rgba(40, 167, 69, 0.12); color: #28a745; } /* Liquidação após baixa */
+
+/* Valor Display */
+.valor-display {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 500;
+}
+
+.valor-display--positive { color: #28a745; }
+.valor-display--highlight { background: rgba(40, 167, 69, 0.08); padding: 0.2rem 0.4rem; border-radius: 4px; }
+
+/* Buttons */
+.btn-lote {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.2s;
+    border: none;
+    cursor: pointer;
+}
+
+.btn-lote--primary {
+    background: linear-gradient(135deg, #4a6cf7 0%, #3a5bd9 100%);
+    color: #fff;
+}
+
+.btn-lote--primary:hover:not(:disabled) {
+    background: linear-gradient(135deg, #3a5bd9 0%, #2a4bc9 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(74, 108, 247, 0.3);
+}
+
+.btn-lote--success {
+    background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+    color: #fff;
+}
+
+.btn-lote--success:hover:not(:disabled) {
+    background: linear-gradient(135deg, #218838 0%, #1e7e34 100%);
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+}
+
+.btn-lote--outline {
+    background: transparent;
+    border: 1px solid var(--border-color, #dee2e6);
+    color: var(--text-color, #1a1a2e);
+}
+
+.btn-lote--outline:hover {
+    background: var(--table-hover-bg, #f8f9fa);
+    border-color: var(--primary-color, #4a6cf7);
+    color: var(--primary-color, #4a6cf7);
+}
+
+.btn-lote--sm {
+    padding: 0.35rem 0.65rem;
+    font-size: 0.8rem;
+}
+
+.btn-lote:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Alert Box */
+.alert-box {
+    padding: 1rem 1.25rem;
+    border-radius: 10px;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+}
+
+.alert-box--warning {
+    background: rgba(255, 193, 7, 0.1);
+    border: 1px solid rgba(255, 193, 7, 0.3);
+    color: #856404;
+}
+
+.alert-box--success {
+    background: rgba(40, 167, 69, 0.1);
+    border: 1px solid rgba(40, 167, 69, 0.3);
+    color: #155724;
+}
+
+.alert-box__icon {
+    font-size: 1.25rem;
+}
+
+.alert-box__content {
+    flex: 1;
+}
+
+.alert-box__title {
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
+/* Error Tooltip */
+.error-tooltip {
+    position: relative;
+    cursor: help;
+}
+
+.error-tooltip__icon {
+    color: #ffc107;
+}
+
+.error-tooltip__text {
+    display: none;
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #333;
+    color: #fff;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    z-index: 100;
+    margin-bottom: 0.5rem;
+}
+
+.error-tooltip:hover .error-tooltip__text {
+    display: block;
+}
+
+/* Dark Mode */
+[data-theme="dark"] {
+    --card-bg: #1e1e2d;
+    --card-header-bg: #252536;
+    --table-header-bg: #252536;
+    --table-hover-bg: rgba(74, 108, 247, 0.08);
+    --badge-bg: #2d2d3f;
+    --border-color: #2d2d3f;
+    --text-color: #e0e0e0;
+    --text-muted: #a0a0a0;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="lote-container">
+    <!-- ================================================================== -->
+    <!-- HEADER -->
+    <!-- ================================================================== -->
+    <header class="lote-header">
+        <a href="{{ url_for('cnab400.index') }}" class="lote-header__back">
+            <i class="fas fa-arrow-left"></i>
+            Voltar para CNAB400
+        </a>
+        <div class="lote-header__row">
+            <div>
+                <h1 class="lote-header__title">
+                    <i class="fas fa-file-invoice-dollar"></i>
+                    Lote #{{ lote.id }} - {{ lote.arquivo_nome }}
+                </h1>
+                <div class="lote-header__meta">
+                    <span class="lote-meta-item">
+                        <i class="fas fa-university"></i>
+                        {{ lote.banco_codigo }} - {{ lote.banco_nome or 'N/D' }}
+                    </span>
+                    <span class="lote-meta-item">
+                        <i class="fas fa-calendar"></i>
+                        {% if lote.data_arquivo %}
+                            {{ lote.data_arquivo.strftime('%d/%m/%Y') }}
+                        {% else %}
+                            N/D
+                        {% endif %}
+                    </span>
+                    <span class="lote-meta-item">
+                        <i class="fas fa-user"></i>
+                        {{ lote.processado_por or 'Sistema' }}
+                    </span>
+                    {% set status_class = lote.status|lower|replace('_', '_') %}
+                    <span class="status-badge status-badge--{{ status_class }}">
+                        {{ lote.status }}
+                    </span>
+                </div>
+            </div>
+            <div class="lote-header__actions">
+                {% if stats.sem_match > 0 %}
+                <a href="{{ url_for('cnab400.lote_sem_match', lote_id=lote.id) }}"
+                   class="btn-lote btn-lote--outline">
+                    <i class="fas fa-search"></i>
+                    Analisar Sem Match ({{ stats.sem_match }})
+                </a>
+                {% endif %}
+                {% if lote.status in ['IMPORTADO', 'AGUARDANDO_REVISAO', 'APROVADO'] %}
+                <button class="btn-lote btn-lote--primary" id="btnReprocessar" title="Reprocessar matching">
+                    <i class="fas fa-sync-alt"></i>
+                    Reprocessar
+                </button>
+                <button class="btn-lote btn-lote--success" id="btnBaixar"
+                        {% if stats.com_match == 0 %}disabled{% endif %}>
+                    <i class="fas fa-check-double"></i>
+                    Executar Baixas ({{ stats.com_match }})
+                </button>
+                {% endif %}
+            </div>
+        </div>
+    </header>
+
+    <!-- ================================================================== -->
+    <!-- ALERTS -->
+    <!-- ================================================================== -->
+    {% if stats.sem_match > 0 and lote.status == 'AGUARDANDO_REVISAO' %}
+    <div class="alert-box alert-box--warning">
+        <div class="alert-box__icon">
+            <i class="fas fa-exclamation-triangle"></i>
+        </div>
+        <div class="alert-box__content">
+            <div class="alert-box__title">Atenção: {{ stats.sem_match }} itens sem match</div>
+            <div>Alguns títulos não foram encontrados no sistema. Analise os itens sem match ou execute as baixas dos títulos já vinculados.</div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if lote.status == 'CONCLUIDO' %}
+    <div class="alert-box alert-box--success">
+        <div class="alert-box__icon">
+            <i class="fas fa-check-circle"></i>
+        </div>
+        <div class="alert-box__content">
+            <div class="alert-box__title">Lote concluído com sucesso!</div>
+            <div>Todas as baixas foram executadas. Valor total liquidado: R$ {{ stats.valor_liquidado|numero_br(2) }}</div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- ================================================================== -->
+    <!-- STATS -->
+    <!-- ================================================================== -->
+    <div class="lote-stats">
+        <div class="lote-stat">
+            <div class="lote-stat__value">{{ stats.total }}</div>
+            <div class="lote-stat__label">Total</div>
+        </div>
+        <div class="lote-stat">
+            <div class="lote-stat__value lote-stat__value--success">{{ stats.liquidados }}</div>
+            <div class="lote-stat__label">Liquidados</div>
+        </div>
+        <div class="lote-stat">
+            <div class="lote-stat__value lote-stat__value--info">{{ stats.confirmados }}</div>
+            <div class="lote-stat__label">Confirmados</div>
+        </div>
+        <div class="lote-stat">
+            <div class="lote-stat__value">{{ stats.baixados }}</div>
+            <div class="lote-stat__label">Baixados</div>
+        </div>
+        <div class="lote-stat">
+            <div class="lote-stat__value lote-stat__value--success">{{ stats.com_match }}</div>
+            <div class="lote-stat__label">Com Match</div>
+        </div>
+        <div class="lote-stat">
+            <div class="lote-stat__value lote-stat__value--danger">{{ stats.sem_match }}</div>
+            <div class="lote-stat__label">Sem Match</div>
+        </div>
+        <div class="lote-stat">
+            <div class="lote-stat__value lote-stat__value--warning">{{ stats.ja_pagos }}</div>
+            <div class="lote-stat__label">Já Pagos</div>
+        </div>
+        <div class="lote-stat">
+            <div class="lote-stat__value">{{ stats.processados }}</div>
+            <div class="lote-stat__label">Processados</div>
+        </div>
+    </div>
+
+    <!-- ================================================================== -->
+    <!-- TABELA DE ITENS -->
+    <!-- ================================================================== -->
+    <div class="lote-section">
+        <div class="lote-section__header">
+            <h2 class="lote-section__title">
+                <i class="fas fa-list"></i>
+                Itens do Lote
+            </h2>
+            <div>
+                <span class="text-muted">Valor liquidado: </span>
+                <span class="valor-display valor-display--positive valor-display--highlight">
+                    R$ {{ stats.valor_liquidado|numero_br(2) }}
+                </span>
+            </div>
+        </div>
+        <div class="table-scroll">
+            <table class="lote-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Ocorrência</th>
+                        <th>Seu Número</th>
+                        <th>NF/Parcela</th>
+                        <th>CNPJ Pagador</th>
+                        <th>Data Ocorr.</th>
+                        <th>Vencimento</th>
+                        <th>Valor Título</th>
+                        <th>Valor Pago</th>
+                        <th>Status Match</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in itens %}
+                    {# Ignorar entradas (código 02) para não poluir a tela #}
+                    {% if item.codigo_ocorrencia != '02' %}
+                    <tr>
+                        <td>{{ item.numero_linha }}</td>
+                        <td>
+                            <span class="ocorrencia-badge ocorrencia-badge--{{ item.codigo_ocorrencia }}">
+                                {{ item.codigo_ocorrencia }} - {{ item.descricao_ocorrencia }}
+                            </span>
+                        </td>
+                        <td><code>{{ item.seu_numero or '-' }}</code></td>
+                        <td>
+                            {% if item.nf_extraida and item.parcela_extraida %}
+                                <strong>{{ item.nf_extraida }}</strong> / {{ item.parcela_extraida }}
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <small>{{ item.cnpj_pagador or '-' }}</small>
+                        </td>
+                        <td>
+                            {% if item.data_ocorrencia %}
+                                {{ item.data_ocorrencia.strftime('%d/%m/%Y') }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.data_vencimento %}
+                                {{ item.data_vencimento.strftime('%d/%m/%Y') }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td class="valor-display">
+                            {% if item.valor_titulo %}
+                                R$ {{ item.valor_titulo|numero_br(2) }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td class="valor-display valor-display--positive">
+                            {% if item.valor_pago %}
+                                R$ {{ item.valor_pago|numero_br(2) }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% set match_class = {
+                                'MATCH_ENCONTRADO': 'encontrado',
+                                'SEM_MATCH': 'sem_match',
+                                'JA_PAGO': 'ja_pago',
+                                'NAO_APLICAVEL': 'nao_aplicavel',
+                                'FORMATO_INVALIDO': 'formato_invalido',
+                                'PENDENTE': 'pendente',
+                                'PROCESSADO': 'processado',
+                                'ERRO': 'erro'
+                            } %}
+                            <span class="match-badge match-badge--{{ match_class.get(item.status_match, 'pendente') }}">
+                                {% if item.status_match == 'MATCH_ENCONTRADO' %}
+                                    <i class="fas fa-check"></i>
+                                {% elif item.status_match == 'SEM_MATCH' %}
+                                    <i class="fas fa-times"></i>
+                                {% elif item.status_match == 'PROCESSADO' %}
+                                    <i class="fas fa-check-double"></i>
+                                {% endif %}
+                                {{ item.status_match|replace('_', ' ') }}
+                            </span>
+                            {% if item.erro_mensagem %}
+                            <span class="error-tooltip">
+                                <i class="fas fa-info-circle error-tooltip__icon"></i>
+                                <span class="error-tooltip__text">{{ item.erro_mensagem }}</span>
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.status_match == 'MATCH_ENCONTRADO' and not item.processado %}
+                            <button class="btn-lote btn-lote--sm btn-lote--outline btn-baixar-item"
+                                    data-item-id="{{ item.id }}"
+                                    title="Baixar este título">
+                                <i class="fas fa-check"></i>
+                            </button>
+                            {% elif item.status_match == 'SEM_MATCH' %}
+                            <button class="btn-lote btn-lote--sm btn-lote--outline btn-vincular-item"
+                                    data-item-id="{{ item.id }}"
+                                    title="Vincular manualmente">
+                                <i class="fas fa-link"></i>
+                            </button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Vinculação Manual -->
+<div class="modal fade" id="modalVincular" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Vincular Título Manualmente</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Buscar título</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="buscaNf" placeholder="Número da NF">
+                        <input type="text" class="form-control" id="buscaParcela" placeholder="Parcela">
+                        <button class="btn btn-primary" type="button" id="btnBuscarTitulo">
+                            <i class="fas fa-search"></i> Buscar
+                        </button>
+                    </div>
+                </div>
+                <div id="resultadosBusca"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const loteId = {{ lote.id }};
+
+    // Reprocessar matching
+    const btnReprocessar = document.getElementById('btnReprocessar');
+    if (btnReprocessar) {
+        btnReprocessar.addEventListener('click', async function() {
+            if (!confirm('Reprocessar matching de todos os itens sem match?')) return;
+
+            this.disabled = true;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+
+            try {
+                const response = await fetch(`/cnab400/api/lote/${loteId}/reprocessar-matching`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    alert(`Reprocessamento concluído!\n${data.stats.novos_matches} novos matches encontrados.`);
+                    location.reload();
+                } else {
+                    alert('Erro: ' + data.error);
+                }
+            } catch (err) {
+                alert('Erro ao reprocessar: ' + err.message);
+            } finally {
+                this.disabled = false;
+                this.innerHTML = '<i class="fas fa-sync-alt"></i> Reprocessar';
+            }
+        });
+    }
+
+    // Executar baixas
+    const btnBaixar = document.getElementById('btnBaixar');
+    if (btnBaixar) {
+        btnBaixar.addEventListener('click', async function() {
+            if (!confirm('Executar baixa de todos os títulos com match encontrado?')) return;
+
+            this.disabled = true;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+
+            try {
+                const response = await fetch(`/cnab400/api/lote/${loteId}/baixar`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    alert(`Processamento concluído!\n${data.stats.sucesso} baixas executadas, ${data.stats.erros} erros.`);
+                    location.reload();
+                } else {
+                    alert('Erro: ' + data.error);
+                }
+            } catch (err) {
+                alert('Erro ao executar baixas: ' + err.message);
+            } finally {
+                this.disabled = false;
+                this.innerHTML = '<i class="fas fa-check-double"></i> Executar Baixas';
+            }
+        });
+    }
+
+    // Baixar item individual
+    document.querySelectorAll('.btn-baixar-item').forEach(btn => {
+        btn.addEventListener('click', async function() {
+            const itemId = this.dataset.itemId;
+            if (!confirm('Baixar este título?')) return;
+
+            this.disabled = true;
+
+            try {
+                const response = await fetch(`/cnab400/api/item/${itemId}/baixar`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Erro: ' + data.error);
+                    this.disabled = false;
+                }
+            } catch (err) {
+                alert('Erro: ' + err.message);
+                this.disabled = false;
+            }
+        });
+    });
+
+    // Vincular item manualmente
+    let currentItemId = null;
+    const modal = document.getElementById('modalVincular');
+
+    document.querySelectorAll('.btn-vincular-item').forEach(btn => {
+        btn.addEventListener('click', function() {
+            currentItemId = this.dataset.itemId;
+            const bsModal = new bootstrap.Modal(modal);
+            bsModal.show();
+        });
+    });
+
+    // Buscar títulos para vinculação
+    document.getElementById('btnBuscarTitulo')?.addEventListener('click', async function() {
+        const nf = document.getElementById('buscaNf').value;
+        const parcela = document.getElementById('buscaParcela').value;
+
+        if (!nf) {
+            alert('Informe o número da NF');
+            return;
+        }
+
+        const resultados = document.getElementById('resultadosBusca');
+        resultados.innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Buscando...</div>';
+
+        try {
+            const params = new URLSearchParams({ nf, parcela });
+            const response = await fetch(`/cnab400/api/buscar-titulos?${params}`);
+            const data = await response.json();
+
+            if (data.success && data.titulos.length > 0) {
+                let html = '<table class="table table-sm table-hover"><thead><tr>';
+                html += '<th>NF</th><th>Parcela</th><th>Cliente</th><th>Valor</th><th>Venc.</th><th></th>';
+                html += '</tr></thead><tbody>';
+
+                data.titulos.forEach(t => {
+                    html += `<tr>
+                        <td>${t.titulo_nf}</td>
+                        <td>${t.parcela}</td>
+                        <td>${t.raz_social_red || '-'}</td>
+                        <td>R$ ${t.valor_titulo?.toFixed(2) || '-'}</td>
+                        <td>${t.vencimento || '-'}</td>
+                        <td><button class="btn btn-sm btn-success btn-selecionar-titulo" data-titulo-id="${t.id}">
+                            <i class="fas fa-check"></i>
+                        </button></td>
+                    </tr>`;
+                });
+
+                html += '</tbody></table>';
+                resultados.innerHTML = html;
+
+                // Adicionar eventos aos botões
+                resultados.querySelectorAll('.btn-selecionar-titulo').forEach(btn => {
+                    btn.addEventListener('click', async function() {
+                        const tituloId = this.dataset.tituloId;
+
+                        try {
+                            const response = await fetch(`/cnab400/api/item/${currentItemId}/vincular`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ titulo_id: tituloId })
+                            });
+                            const data = await response.json();
+
+                            if (data.success) {
+                                alert('Vinculação realizada com sucesso!');
+                                location.reload();
+                            } else {
+                                alert('Erro: ' + data.error);
+                            }
+                        } catch (err) {
+                            alert('Erro: ' + err.message);
+                        }
+                    });
+                });
+            } else {
+                resultados.innerHTML = '<div class="alert alert-warning">Nenhum título encontrado</div>';
+            }
+        } catch (err) {
+            resultados.innerHTML = `<div class="alert alert-danger">Erro: ${err.message}</div>`;
+        }
+    });
+});
+</script>
+{% endblock %}

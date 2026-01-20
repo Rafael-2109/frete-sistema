@@ -300,6 +300,20 @@
                   <i class="fas fa-clipboard-list text-warning"></i> Pendências IBS/CBS
                 </a></li>
               {% endif %}
+
+              {# ================================================================= #}
+              {# CONCILIAÇÃO BANCÁRIA - CNAB400 e Retornos                        #}
+              {# ================================================================= #}
+              {% if current_user.tem_permissao('financeiro') or current_user.pode_acessar_financeiro() or
+              current_user.perfil == 'administrador' %}
+              <li><hr class="dropdown-divider"></li>
+              <li>
+                <h6 class="dropdown-header">💳 Conciliação Bancária</h6>
+              </li>
+              <li><a class="dropdown-item" href="{{ url_for('cnab400.index') }}">
+                  <i class="fas fa-file-invoice-dollar text-success"></i> CNAB400 - Retorno Bancário
+                </a></li>
+              {% endif %}
             </ul>
           </li>
           {% endif %}

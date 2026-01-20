@@ -23,7 +23,7 @@ Referencia: .claude/references/CONVERSAO_UOM_ODOO.md
 
 import logging
 from decimal import Decimal
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from datetime import datetime
 
 from app import db
@@ -650,6 +650,72 @@ class DeparaService:
                 f"Erro ao converter De-Para {cnpj_fornecedor}/{cod_produto_fornecedor}: {e}"
             )
             return None
+
+    def converter_lote(
+        self,
+        cnpj_fornecedor: str,
+        cod_produtos_fornecedor: list
+    ) -> Dict[str, Optional[Dict[str, Any]]]:
+        """
+        OTIMIZACAO: Converte multiplos codigos de produto em UMA UNICA QUERY.
+
+        Evita N+1 queries ao BD. Ao inves de 20 queries (uma por item),
+        faz apenas 1 query com IN() e retorna todos os resultados.
+
+        Args:
+            cnpj_fornecedor: CNPJ do fornecedor
+            cod_produtos_fornecedor: Lista de codigos de produtos do fornecedor
+
+        Returns:
+            Dict onde chave = cod_produto_fornecedor e valor = dados de conversao
+            (mesmo formato do metodo converter())
+            Ex: {
+                'PROD001': {'cod_produto_interno': 'INT001', ...},
+                'PROD002': None,  # Nao encontrado
+                'PROD003': {'cod_produto_interno': 'INT003', ...}
+            }
+        """
+        if not cod_produtos_fornecedor:
+            return {}
+
+        try:
+            cnpj_limpo = self._limpar_cnpj(cnpj_fornecedor)
+
+            # UMA UNICA QUERY com IN() ao inves de N queries
+            itens = db.session.query(ProdutoFornecedorDepara).filter(
+                ProdutoFornecedorDepara.cnpj_fornecedor == cnpj_limpo,
+                ProdutoFornecedorDepara.cod_produto_fornecedor.in_(cod_produtos_fornecedor),
+                ProdutoFornecedorDepara.ativo == True
+            ).all()
+
+            # Montar dict de resultados
+            resultado = {}
+            for item in itens:
+                resultado[item.cod_produto_fornecedor] = {
+                    'cod_produto_interno': item.cod_produto_interno,
+                    'nome_produto_interno': item.nome_produto_interno,
+                    'odoo_product_id': item.odoo_product_id,
+                    'um_fornecedor': item.um_fornecedor,
+                    'um_interna': item.um_interna,
+                    'fator_conversao': float(item.fator_conversao) if item.fator_conversao else 1.0
+                }
+
+            # Para codigos nao encontrados, adicionar como None
+            for cod in cod_produtos_fornecedor:
+                if cod not in resultado:
+                    resultado[cod] = None
+
+            logger.debug(
+                f"De-Para batch: {len(itens)} encontrados de {len(cod_produtos_fornecedor)} "
+                f"codigos para CNPJ {cnpj_limpo}"
+            )
+
+            return resultado
+
+        except Exception as e:
+            logger.error(f"Erro ao converter De-Para em lote para {cnpj_fornecedor}: {e}")
+            # Em caso de erro, retornar dict vazio (fallback para consultas individuais)
+            return {}
 
     def converter_quantidade(
         self,

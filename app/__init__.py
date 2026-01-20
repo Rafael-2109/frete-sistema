@@ -667,6 +667,7 @@ def create_app(config_name=None):
     from app.fretes.email_routes import emails_bp
     from app.fretes.cte_routes import cte_bp
     from app.financeiro.routes import financeiro_bp
+    from app.financeiro.routes.cnab400 import cnab400_bp  # CNAB400 - Retorno Bancário
     from app.cadastros_agendamento.routes import cadastros_agendamento_bp
     from app.separacao.routes import separacao_bp
     from app.pedidos.routes import pedidos_bp
@@ -729,6 +730,7 @@ def create_app(config_name=None):
     app.register_blueprint(emails_bp)
     app.register_blueprint(cte_bp)
     app.register_blueprint(financeiro_bp)
+    app.register_blueprint(cnab400_bp)  # CNAB400 - Retorno Bancário
     app.register_blueprint(cadastros_agendamento_bp)
     app.register_blueprint(separacao_bp)
     app.register_blueprint(pedidos_bp)

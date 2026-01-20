@@ -2244,3 +2244,241 @@ class ContasAPagar(db.Model):
 # =============================================================================
 # FIM CONTAS A PAGAR
 # =============================================================================
+
+
+# =============================================================================
+# CNAB400 - RETORNO BANCÁRIO
+# =============================================================================
+
+class CnabRetornoLote(db.Model):
+    """
+    Lote de arquivo CNAB400 importado.
+
+    Representa um arquivo .ret processado, contendo múltiplos registros
+    de cobrança bancária (liquidações, confirmações, baixas).
+    """
+    __tablename__ = 'cnab_retorno_lote'
+
+    id = db.Column(db.Integer, primary_key=True)
+    arquivo_nome = db.Column(db.String(255), nullable=False)
+    banco_codigo = db.Column(db.String(3), nullable=False)  # 274 = BMP
+    banco_nome = db.Column(db.String(100))
+    data_arquivo = db.Column(db.Date)
+    data_processamento = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Estatísticas
+    total_registros = db.Column(db.Integer, default=0)
+    registros_liquidados = db.Column(db.Integer, default=0)
+    registros_confirmados = db.Column(db.Integer, default=0)
+    registros_baixados = db.Column(db.Integer, default=0)
+    registros_com_match = db.Column(db.Integer, default=0)
+    registros_sem_match = db.Column(db.Integer, default=0)
+    registros_ja_pagos = db.Column(db.Integer, default=0)
+    valor_total_liquidado = db.Column(db.Numeric(15, 2), default=0)
+
+    # Status do lote
+    status = db.Column(db.String(30), default='IMPORTADO', index=True)
+    # IMPORTADO           → Arquivo lido e registros criados
+    # AGUARDANDO_REVISAO  → Aguardando revisão dos itens sem match
+    # APROVADO            → Todos os matches foram aprovados
+    # PROCESSANDO         → Executando baixas
+    # CONCLUIDO           → Todas as baixas executadas
+    # PARCIAL             → Algumas baixas com erro
+    # ERRO                → Falha geral no processamento
+
+    processado_por = db.Column(db.String(100))
+    erro_mensagem = db.Column(db.Text)
+
+    # Auditoria
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relacionamento
+    itens = db.relationship('CnabRetornoItem', backref='lote', lazy='dynamic',
+                           cascade='all, delete-orphan')
+
+    def __repr__(self):
+        return f'<CnabRetornoLote {self.id} - {self.arquivo_nome}>'
+
+    def atualizar_estatisticas(self):
+        """Recalcula estatísticas do lote baseado nos itens"""
+        itens = self.itens.all()
+
+        self.total_registros = len(itens)
+        self.registros_liquidados = sum(1 for i in itens if i.codigo_ocorrencia == '06')
+        self.registros_confirmados = sum(1 for i in itens if i.codigo_ocorrencia == '02')
+        self.registros_baixados = sum(1 for i in itens if i.codigo_ocorrencia in ('09', '10'))
+        self.registros_com_match = sum(1 for i in itens if i.status_match == 'MATCH_ENCONTRADO')
+        self.registros_sem_match = sum(1 for i in itens if i.status_match == 'SEM_MATCH')
+        self.registros_ja_pagos = sum(1 for i in itens if i.status_match == 'JA_PAGO')
+
+        # Soma valor dos liquidados com match
+        self.valor_total_liquidado = sum(
+            float(i.valor_pago or i.valor_titulo or 0)
+            for i in itens
+            if i.codigo_ocorrencia == '06' and i.status_match == 'MATCH_ENCONTRADO'
+        )
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'arquivo_nome': self.arquivo_nome,
+            'banco_codigo': self.banco_codigo,
+            'banco_nome': self.banco_nome,
+            'data_arquivo': self.data_arquivo.isoformat() if self.data_arquivo else None,
+            'data_processamento': self.data_processamento.isoformat() if self.data_processamento else None,
+            'total_registros': self.total_registros,
+            'registros_liquidados': self.registros_liquidados,
+            'registros_confirmados': self.registros_confirmados,
+            'registros_baixados': self.registros_baixados,
+            'registros_com_match': self.registros_com_match,
+            'registros_sem_match': self.registros_sem_match,
+            'registros_ja_pagos': self.registros_ja_pagos,
+            'valor_total_liquidado': float(self.valor_total_liquidado) if self.valor_total_liquidado else 0,
+            'status': self.status,
+            'processado_por': self.processado_por,
+            'erro_mensagem': self.erro_mensagem,
+        }
+
+
+class CnabRetornoItem(db.Model):
+    """
+    Linha individual do arquivo CNAB400 (registro tipo 1 - detalhe).
+
+    Cada item representa uma transação de cobrança (liquidação, confirmação,
+    baixa, etc.) extraída do arquivo de retorno bancário.
+    """
+    __tablename__ = 'cnab_retorno_item'
+
+    id = db.Column(db.Integer, primary_key=True)
+    lote_id = db.Column(db.Integer, db.ForeignKey('cnab_retorno_lote.id', ondelete='CASCADE'),
+                       nullable=False, index=True)
+
+    # Dados do CNAB (posições fixas do layout)
+    tipo_registro = db.Column(db.String(1))  # 0=Header, 1=Detalhe, 9=Trailer
+    nosso_numero = db.Column(db.String(20), index=True)  # Identificação no banco
+    seu_numero = db.Column(db.String(25), index=True)    # Identificação da empresa (NF/Parcela)
+    cnpj_pagador = db.Column(db.String(20), index=True)  # CNPJ do sacado/pagador
+
+    # Ocorrência
+    codigo_ocorrencia = db.Column(db.String(2), index=True)  # 02, 06, 10, etc.
+    descricao_ocorrencia = db.Column(db.String(100))         # Descrição do código
+    data_ocorrencia = db.Column(db.Date)
+
+    # Valores (em centavos no CNAB, convertidos para decimal)
+    valor_titulo = db.Column(db.Numeric(15, 2))
+    valor_pago = db.Column(db.Numeric(15, 2))
+    valor_juros = db.Column(db.Numeric(15, 2))
+    valor_desconto = db.Column(db.Numeric(15, 2))
+    valor_abatimento = db.Column(db.Numeric(15, 2))
+
+    # Datas
+    data_vencimento = db.Column(db.Date)
+    data_credito = db.Column(db.Date)
+
+    # Dados extraídos do Seu Número (parse NF/Parcela)
+    nf_extraida = db.Column(db.String(20))
+    parcela_extraida = db.Column(db.String(10))
+
+    # Vinculação com Contas a Receber
+    conta_a_receber_id = db.Column(db.Integer, db.ForeignKey('contas_a_receber.id'), index=True)
+    conta_a_receber = db.relationship('ContasAReceber', foreign_keys=[conta_a_receber_id])
+
+    # Status de matching
+    status_match = db.Column(db.String(30), default='PENDENTE', index=True)
+    # PENDENTE         → Aguardando processamento
+    # MATCH_ENCONTRADO → Título encontrado (score 100)
+    # SEM_MATCH        → Título não existe no sistema
+    # JA_PAGO          → Título existe mas já estava pago
+    # FORMATO_INVALIDO → Seu Número não tem formato NF/Parcela
+    # NAO_APLICAVEL    → Código ocorrência não é liquidação/baixa (02, 03, etc.)
+    # PROCESSADO       → Baixa executada com sucesso
+    # ERRO             → Erro ao processar baixa
+
+    match_score = db.Column(db.Integer)           # 100 = match exato por NF/Parcela
+    match_criterio = db.Column(db.String(100))    # NF_PARCELA_EXATO
+
+    # Resultado do processamento
+    processado = db.Column(db.Boolean, default=False, index=True)
+    data_processamento = db.Column(db.DateTime)
+    erro_mensagem = db.Column(db.Text)
+
+    # Linha original (para debug e auditoria)
+    linha_original = db.Column(db.Text)
+    numero_linha = db.Column(db.Integer)
+
+    # Auditoria
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index('idx_cnab_item_lote_status', 'lote_id', 'status_match'),
+        Index('idx_cnab_item_seu_numero', 'seu_numero'),
+    )
+
+    def __repr__(self):
+        return f'<CnabRetornoItem {self.id} - {self.seu_numero} - {self.status_match}>'
+
+    @property
+    def ocorrencia_display(self):
+        """Retorna descrição legível da ocorrência"""
+        OCORRENCIAS = {
+            '02': '✅ Entrada Confirmada',
+            '03': '❌ Entrada Rejeitada',
+            '06': '💰 Liquidação Normal',
+            '09': '📤 Baixado Automaticamente',
+            '10': '📤 Baixado conf. Instruções',
+            '11': 'Títulos em Ser',
+            '14': '📅 Alteração de Vencimento',
+            '17': '💰 Liquidação após Baixa',
+            '23': '⚠️ Encaminhado a Protesto',
+        }
+        return OCORRENCIAS.get(self.codigo_ocorrencia, f'Código {self.codigo_ocorrencia}')
+
+    @property
+    def status_match_display(self):
+        """Retorna descrição legível do status de match"""
+        STATUS = {
+            'PENDENTE': '⏳ Pendente',
+            'MATCH_ENCONTRADO': '✅ Match Encontrado',
+            'SEM_MATCH': '❌ Sem Match',
+            'JA_PAGO': '💵 Já Pago',
+            'FORMATO_INVALIDO': '⚠️ Formato Inválido',
+            'NAO_APLICAVEL': '➖ Não Aplicável',
+            'PROCESSADO': '✅ Processado',
+            'ERRO': '❌ Erro',
+        }
+        return STATUS.get(self.status_match, self.status_match)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'lote_id': self.lote_id,
+            'tipo_registro': self.tipo_registro,
+            'nosso_numero': self.nosso_numero,
+            'seu_numero': self.seu_numero,
+            'cnpj_pagador': self.cnpj_pagador,
+            'codigo_ocorrencia': self.codigo_ocorrencia,
+            'descricao_ocorrencia': self.descricao_ocorrencia,
+            'ocorrencia_display': self.ocorrencia_display,
+            'data_ocorrencia': self.data_ocorrencia.isoformat() if self.data_ocorrencia else None,
+            'valor_titulo': float(self.valor_titulo) if self.valor_titulo else None,
+            'valor_pago': float(self.valor_pago) if self.valor_pago else None,
+            'valor_juros': float(self.valor_juros) if self.valor_juros else None,
+            'valor_desconto': float(self.valor_desconto) if self.valor_desconto else None,
+            'valor_abatimento': float(self.valor_abatimento) if self.valor_abatimento else None,
+            'data_vencimento': self.data_vencimento.isoformat() if self.data_vencimento else None,
+            'nf_extraida': self.nf_extraida,
+            'parcela_extraida': self.parcela_extraida,
+            'conta_a_receber_id': self.conta_a_receber_id,
+            'status_match': self.status_match,
+            'status_match_display': self.status_match_display,
+            'match_score': self.match_score,
+            'match_criterio': self.match_criterio,
+            'processado': self.processado,
+            'erro_mensagem': self.erro_mensagem,
+            'numero_linha': self.numero_linha,
+        }
+
+
+# =============================================================================
+# FIM CNAB400
+# =============================================================================

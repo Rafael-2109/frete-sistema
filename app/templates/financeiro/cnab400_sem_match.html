@@ -1,0 +1,673 @@
+{% extends "base.html" %}
+
+{% block title %}Itens Sem Match - Lote #{{ lote.id }}{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ================================================================== */
+/* CNAB400 SEM MATCH STYLES */
+/* ================================================================== */
+.sem-match-container {
+    padding: 1.5rem;
+    max-width: 1600px;
+    margin: 0 auto;
+}
+
+.sem-match-header {
+    margin-bottom: 1.5rem;
+}
+
+.sem-match-header__back {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-muted, #6c757d);
+    text-decoration: none;
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+    transition: color 0.2s;
+}
+
+.sem-match-header__back:hover {
+    color: var(--primary-color, #4a6cf7);
+}
+
+.sem-match-header__row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1.5rem;
+}
+
+.sem-match-header__title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--text-color, #1a1a2e);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.sem-match-header__title i {
+    color: #dc3545;
+}
+
+.sem-match-header__subtitle {
+    color: var(--text-muted, #6c757d);
+    font-size: 0.9rem;
+    margin-top: 0.25rem;
+}
+
+/* Info Card */
+.info-card {
+    background: rgba(255, 193, 7, 0.1);
+    border: 1px solid rgba(255, 193, 7, 0.3);
+    border-radius: 12px;
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+}
+
+.info-card__header {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+}
+
+.info-card__icon {
+    color: #d39e00;
+    font-size: 1.5rem;
+}
+
+.info-card__title {
+    font-weight: 600;
+    color: #856404;
+    margin-bottom: 0.5rem;
+}
+
+.info-card__text {
+    color: #856404;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.info-card__list {
+    margin-top: 0.75rem;
+    padding-left: 1.25rem;
+}
+
+.info-card__list li {
+    color: #856404;
+    font-size: 0.85rem;
+    margin-bottom: 0.25rem;
+}
+
+/* Section Card */
+.sem-match-section {
+    background: var(--card-bg, #fff);
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    border: 1px solid var(--border-color, #e0e0e0);
+    overflow: hidden;
+}
+
+.sem-match-section__header {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border-color, #e0e0e0);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--card-header-bg, #f8f9fa);
+}
+
+.sem-match-section__title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-color, #1a1a2e);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.sem-match-section__title i {
+    color: #dc3545;
+}
+
+.sem-match-section__badge {
+    background: rgba(220, 53, 69, 0.15);
+    color: #dc3545;
+    padding: 0.25rem 0.75rem;
+    border-radius: 50px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+/* Table */
+.sem-match-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.sem-match-table th,
+.sem-match-table td {
+    padding: 0.875rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color, #e0e0e0);
+}
+
+.sem-match-table th {
+    background: var(--table-header-bg, #f8f9fa);
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: var(--text-muted, #6c757d);
+    letter-spacing: 0.5px;
+}
+
+.sem-match-table tbody tr {
+    transition: background 0.15s;
+}
+
+.sem-match-table tbody tr:hover {
+    background: var(--table-hover-bg, rgba(74, 108, 247, 0.04));
+}
+
+.sem-match-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* Status Badge */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: 50px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.status-badge--sem_match { background: rgba(220, 53, 69, 0.15); color: #dc3545; }
+.status-badge--formato_invalido { background: rgba(255, 193, 7, 0.15); color: #d39e00; }
+
+/* Occurrence Badge */
+.ocorrencia-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.3rem 0.6rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    background: rgba(40, 167, 69, 0.12);
+    color: #28a745;
+}
+
+/* Valor Display */
+.valor-display {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 500;
+}
+
+/* Error Message */
+.error-message {
+    font-size: 0.8rem;
+    color: #dc3545;
+    max-width: 250px;
+}
+
+/* Buttons */
+.btn-sem-match {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.2s;
+    border: none;
+    cursor: pointer;
+}
+
+.btn-sem-match--primary {
+    background: linear-gradient(135deg, #4a6cf7 0%, #3a5bd9 100%);
+    color: #fff;
+}
+
+.btn-sem-match--primary:hover {
+    background: linear-gradient(135deg, #3a5bd9 0%, #2a4bc9 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(74, 108, 247, 0.3);
+}
+
+.btn-sem-match--outline {
+    background: transparent;
+    border: 1px solid var(--border-color, #dee2e6);
+    color: var(--text-color, #1a1a2e);
+}
+
+.btn-sem-match--outline:hover {
+    background: var(--table-hover-bg, #f8f9fa);
+    border-color: var(--primary-color, #4a6cf7);
+    color: var(--primary-color, #4a6cf7);
+}
+
+.btn-sem-match--sm {
+    padding: 0.35rem 0.65rem;
+    font-size: 0.8rem;
+}
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: 3rem 1.5rem;
+    color: var(--text-muted, #6c757d);
+}
+
+.empty-state__icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    color: #28a745;
+}
+
+.empty-state__title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-color, #1a1a2e);
+    margin-bottom: 0.5rem;
+}
+
+/* Dark Mode */
+[data-theme="dark"] {
+    --card-bg: #1e1e2d;
+    --card-header-bg: #252536;
+    --table-header-bg: #252536;
+    --table-hover-bg: rgba(74, 108, 247, 0.08);
+    --border-color: #2d2d3f;
+    --text-color: #e0e0e0;
+    --text-muted: #a0a0a0;
+}
+
+[data-theme="dark"] .info-card {
+    background: rgba(255, 193, 7, 0.05);
+    border-color: rgba(255, 193, 7, 0.2);
+}
+
+[data-theme="dark"] .info-card__title,
+[data-theme="dark"] .info-card__text,
+[data-theme="dark"] .info-card__list li {
+    color: #ffc107;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="sem-match-container">
+    <!-- ================================================================== -->
+    <!-- HEADER -->
+    <!-- ================================================================== -->
+    <header class="sem-match-header">
+        <a href="{{ url_for('cnab400.lote_detalhe', lote_id=lote.id) }}" class="sem-match-header__back">
+            <i class="fas fa-arrow-left"></i>
+            Voltar para Lote #{{ lote.id }}
+        </a>
+        <div class="sem-match-header__row">
+            <div>
+                <h1 class="sem-match-header__title">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Itens Sem Match
+                </h1>
+                <p class="sem-match-header__subtitle">
+                    Lote #{{ lote.id }} - {{ lote.arquivo_nome }}
+                </p>
+            </div>
+        </div>
+    </header>
+
+    <!-- ================================================================== -->
+    <!-- INFO CARD -->
+    <!-- ================================================================== -->
+    <div class="info-card">
+        <div class="info-card__header">
+            <div class="info-card__icon">
+                <i class="fas fa-lightbulb"></i>
+            </div>
+            <div>
+                <div class="info-card__title">Por que alguns itens ficam sem match?</div>
+                <div class="info-card__text">
+                    O sistema busca títulos em Contas a Receber usando NF e Parcela extraídos do campo "Seu Número".
+                    Itens podem ficar sem match pelos seguintes motivos:
+                </div>
+                <ul class="info-card__list">
+                    <li><strong>Título não existe:</strong> NF/Parcela não cadastrada no sistema</li>
+                    <li><strong>Formato inválido:</strong> Campo "Seu Número" não segue padrão NF/Parcela</li>
+                    <li><strong>Empresa diferente:</strong> Título pode estar em outra empresa</li>
+                    <li><strong>Dados divergentes:</strong> NF ou Parcela com erro de digitação</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================================================================== -->
+    <!-- TABELA -->
+    <!-- ================================================================== -->
+    <div class="sem-match-section">
+        <div class="sem-match-section__header">
+            <h2 class="sem-match-section__title">
+                <i class="fas fa-list"></i>
+                Itens para Análise
+            </h2>
+            <span class="sem-match-section__badge">{{ itens|length }} itens</span>
+        </div>
+
+        {% if itens %}
+        <table class="sem-match-table">
+            <thead>
+                <tr>
+                    <th>Linha</th>
+                    <th>Ocorrência</th>
+                    <th>Seu Número</th>
+                    <th>NF Extraída</th>
+                    <th>Parcela</th>
+                    <th>CNPJ Pagador</th>
+                    <th>Valor</th>
+                    <th>Vencimento</th>
+                    <th>Status</th>
+                    <th>Motivo</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in itens %}
+                <tr>
+                    <td>{{ item.numero_linha }}</td>
+                    <td>
+                        <span class="ocorrencia-badge">
+                            {{ item.codigo_ocorrencia }} - {{ item.descricao_ocorrencia[:15] }}...
+                        </span>
+                    </td>
+                    <td>
+                        <code style="background: #f8f9fa; padding: 0.2rem 0.4rem; border-radius: 4px;">
+                            {{ item.seu_numero or '-' }}
+                        </code>
+                    </td>
+                    <td>
+                        {% if item.nf_extraida %}
+                            <strong>{{ item.nf_extraida }}</strong>
+                        {% else %}
+                            <span class="text-muted">Não extraída</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.parcela_extraida %}
+                            {{ item.parcela_extraida }}
+                        {% else %}
+                            <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <small>{{ item.cnpj_pagador or '-' }}</small>
+                    </td>
+                    <td class="valor-display">
+                        {% if item.valor_pago %}
+                            R$ {{ item.valor_pago|numero_br(2) }}
+                        {% elif item.valor_titulo %}
+                            R$ {{ item.valor_titulo|numero_br(2) }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.data_vencimento %}
+                            {{ item.data_vencimento.strftime('%d/%m/%Y') }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.status_match == 'SEM_MATCH' %}
+                            <span class="status-badge status-badge--sem_match">
+                                <i class="fas fa-times"></i> Sem Match
+                            </span>
+                        {% elif item.status_match == 'FORMATO_INVALIDO' %}
+                            <span class="status-badge status-badge--formato_invalido">
+                                <i class="fas fa-exclamation"></i> Formato Inválido
+                            </span>
+                        {% else %}
+                            <span class="status-badge">{{ item.status_match }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="error-message">
+                            {{ item.erro_mensagem or '-' }}
+                        </div>
+                    </td>
+                    <td>
+                        <button class="btn-sem-match btn-sem-match--sm btn-sem-match--outline btn-vincular"
+                                data-item-id="{{ item.id }}"
+                                data-seu-numero="{{ item.seu_numero }}"
+                                data-valor="{{ item.valor_pago or item.valor_titulo }}"
+                                title="Vincular manualmente">
+                            <i class="fas fa-link"></i>
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-state__icon">
+                <i class="fas fa-check-circle"></i>
+            </div>
+            <h3 class="empty-state__title">Nenhum item sem match!</h3>
+            <p>Todos os itens do lote foram vinculados com sucesso.</p>
+            <a href="{{ url_for('cnab400.lote_detalhe', lote_id=lote.id) }}" class="btn-sem-match btn-sem-match--primary" style="margin-top: 1rem;">
+                <i class="fas fa-arrow-left"></i>
+                Voltar para o Lote
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Modal de Vinculação Manual -->
+<div class="modal fade" id="modalVincular" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-link"></i>
+                    Vincular Título Manualmente
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info mb-3">
+                    <strong>Item CNAB:</strong>
+                    <span id="infoSeuNumero">-</span> |
+                    <strong>Valor:</strong>
+                    <span id="infoValor">-</span>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Buscar título no sistema</label>
+                    <div class="row g-2">
+                        <div class="col-md-4">
+                            <input type="text" class="form-control" id="buscaNf" placeholder="Número da NF">
+                        </div>
+                        <div class="col-md-3">
+                            <input type="text" class="form-control" id="buscaParcela" placeholder="Parcela">
+                        </div>
+                        <div class="col-md-3">
+                            <input type="text" class="form-control" id="buscaCnpj" placeholder="CNPJ (opcional)">
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-primary w-100" type="button" id="btnBuscar">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="resultadosBusca">
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-search fa-2x mb-2"></i>
+                        <p>Use os filtros acima para buscar títulos</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let currentItemId = null;
+    const modal = document.getElementById('modalVincular');
+    const bsModal = new bootstrap.Modal(modal);
+
+    // Abrir modal de vinculação
+    document.querySelectorAll('.btn-vincular').forEach(btn => {
+        btn.addEventListener('click', function() {
+            currentItemId = this.dataset.itemId;
+            document.getElementById('infoSeuNumero').textContent = this.dataset.seuNumero || '-';
+            document.getElementById('infoValor').textContent = this.dataset.valor ? 'R$ ' + parseFloat(this.dataset.valor).toFixed(2) : '-';
+
+            // Limpar busca anterior
+            document.getElementById('buscaNf').value = '';
+            document.getElementById('buscaParcela').value = '';
+            document.getElementById('buscaCnpj').value = '';
+            document.getElementById('resultadosBusca').innerHTML = `
+                <div class="text-center text-muted py-4">
+                    <i class="fas fa-search fa-2x mb-2"></i>
+                    <p>Use os filtros acima para buscar títulos</p>
+                </div>
+            `;
+
+            bsModal.show();
+        });
+    });
+
+    // Buscar títulos
+    document.getElementById('btnBuscar').addEventListener('click', async function() {
+        const nf = document.getElementById('buscaNf').value.trim();
+        const parcela = document.getElementById('buscaParcela').value.trim();
+        const cnpj = document.getElementById('buscaCnpj').value.trim();
+
+        if (!nf && !cnpj) {
+            alert('Informe pelo menos NF ou CNPJ para buscar');
+            return;
+        }
+
+        const resultados = document.getElementById('resultadosBusca');
+        resultados.innerHTML = '<div class="text-center py-4"><i class="fas fa-spinner fa-spin fa-2x"></i><p class="mt-2">Buscando...</p></div>';
+
+        try {
+            const params = new URLSearchParams();
+            if (nf) params.append('nf', nf);
+            if (parcela) params.append('parcela', parcela);
+            if (cnpj) params.append('cnpj', cnpj);
+
+            const response = await fetch(`/cnab400/api/buscar-titulos?${params}`);
+            const data = await response.json();
+
+            if (data.success && data.titulos.length > 0) {
+                let html = `
+                    <div class="alert alert-success mb-2">
+                        <i class="fas fa-check-circle"></i>
+                        ${data.titulos.length} título(s) encontrado(s)
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Empresa</th>
+                                    <th>NF</th>
+                                    <th>Parcela</th>
+                                    <th>Cliente</th>
+                                    <th>CNPJ</th>
+                                    <th>Valor</th>
+                                    <th>Vencimento</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+
+                data.titulos.forEach(t => {
+                    html += `
+                        <tr>
+                            <td>${t.empresa}</td>
+                            <td><strong>${t.titulo_nf}</strong></td>
+                            <td>${t.parcela}</td>
+                            <td>${t.raz_social_red || '-'}</td>
+                            <td><small>${t.cnpj || '-'}</small></td>
+                            <td>R$ ${t.valor_titulo?.toFixed(2) || '-'}</td>
+                            <td>${t.vencimento ? new Date(t.vencimento).toLocaleDateString('pt-BR') : '-'}</td>
+                            <td>
+                                <button class="btn btn-sm btn-success btn-selecionar" data-titulo-id="${t.id}">
+                                    <i class="fas fa-check"></i> Vincular
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                html += '</tbody></table></div>';
+                resultados.innerHTML = html;
+
+                // Eventos de seleção
+                resultados.querySelectorAll('.btn-selecionar').forEach(btn => {
+                    btn.addEventListener('click', async function() {
+                        const tituloId = this.dataset.tituloId;
+
+                        if (!confirm('Confirma a vinculação deste título?')) return;
+
+                        this.disabled = true;
+                        this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+                        try {
+                            const response = await fetch(`/cnab400/api/item/${currentItemId}/vincular`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ titulo_id: tituloId })
+                            });
+                            const data = await response.json();
+
+                            if (data.success) {
+                                alert('Vinculação realizada com sucesso!');
+                                location.reload();
+                            } else {
+                                alert('Erro: ' + data.error);
+                                this.disabled = false;
+                                this.innerHTML = '<i class="fas fa-check"></i> Vincular';
+                            }
+                        } catch (err) {
+                            alert('Erro: ' + err.message);
+                            this.disabled = false;
+                            this.innerHTML = '<i class="fas fa-check"></i> Vincular';
+                        }
+                    });
+                });
+            } else {
+                resultados.innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        Nenhum título encontrado com os critérios informados.
+                        <br><small>Verifique se o título existe no sistema e tente novamente.</small>
+                    </div>
+                `;
+            }
+        } catch (err) {
+            resultados.innerHTML = `<div class="alert alert-danger">Erro ao buscar: ${err.message}</div>`;
+        }
+    });
+});
+</script>
+{% endblock %}
