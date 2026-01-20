@@ -426,8 +426,13 @@ class DeparaService:
                     )
                     resultado['odoo_sync'] = {'sucesso': False, 'erro': str(sync_error)}
 
-            # Reprocessar divergencias se mudou o mapeamento ou foi reativado
-            if cod_produto_interno is not None or ativo is True:
+            # SEMPRE reprocessar após atualização se o item estiver ativo
+            # Justificativa: Qualquer mudança pode afetar validações pendentes
+            # - cod_produto_interno: muda o produto interno vinculado
+            # - fator_conversao: muda calculo de qtd/preco
+            # - um_fornecedor/um_interna: muda unidades de medida
+            # - ativo: reativação do De-Para
+            if item.ativo:
                 try:
                     reprocess = self._reprocessar_divergencias_relacionadas(
                         item.cnpj_fornecedor, item.cod_produto_fornecedor
