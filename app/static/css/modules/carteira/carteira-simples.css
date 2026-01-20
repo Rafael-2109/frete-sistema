@@ -691,3 +691,66 @@
     border-color: var(--bs-border-color);
     color: var(--bs-body-color);
 }
+
+/* ==========================================================================
+   AUTOCOMPLETE DE PRODUTO
+   ========================================================================== */
+.autocomplete-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 1050;
+    max-height: 250px;
+    overflow-y: auto;
+    background-color: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    display: none;
+}
+
+.autocomplete-dropdown.show {
+    display: block;
+}
+
+.autocomplete-item {
+    padding: 6px 10px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--bs-border-color);
+    transition: background-color 0.15s ease;
+}
+
+.autocomplete-item:last-child {
+    border-bottom: none;
+}
+
+.autocomplete-item:hover,
+.autocomplete-item.active {
+    background-color: var(--bs-tertiary-bg);
+}
+
+.autocomplete-item .produto-codigo {
+    font-weight: 600;
+    font-size: 11px;
+    color: var(--bs-body-color);
+}
+
+.autocomplete-item .produto-nome {
+    font-size: 10px;
+    color: var(--bs-secondary-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+}
+
+.autocomplete-item.text-muted {
+    cursor: default;
+    font-style: italic;
+}
+
+.autocomplete-item.text-muted:hover {
+    background-color: transparent;
+}

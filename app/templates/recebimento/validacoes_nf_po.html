@@ -23,35 +23,45 @@
 
     <!-- Cards de Estatisticas -->
     <div class="row mb-4">
-        <div class="col-md-3">
+        <div class="col">
             <div class="card border-left-secondary">
-                <div class="card-body">
-                    <h6 class="text-muted text-uppercase small">Pendentes</h6>
-                    <h2 class="mb-0 text-secondary">{{ stats.pendente }}</h2>
+                <div class="card-body py-2">
+                    <h6 class="text-muted text-uppercase small mb-1">Pendentes</h6>
+                    <h3 class="mb-0 text-secondary">{{ stats.pendente }}</h3>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col">
             <div class="card border-left-success">
-                <div class="card-body">
-                    <h6 class="text-muted text-uppercase small">Aprovados</h6>
-                    <h2 class="mb-0 text-success">{{ stats.aprovado }}</h2>
+                <div class="card-body py-2">
+                    <h6 class="text-muted text-uppercase small mb-1">Aprovados</h6>
+                    <h3 class="mb-0 text-success">{{ stats.aprovado }}</h3>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col">
             <div class="card border-left-warning">
-                <div class="card-body">
-                    <h6 class="text-muted text-uppercase small">Bloqueados</h6>
-                    <h2 class="mb-0 text-warning">{{ stats.bloqueado }}</h2>
+                <div class="card-body py-2">
+                    <h6 class="text-muted text-uppercase small mb-1">Bloqueados</h6>
+                    <h3 class="mb-0 text-warning">{{ stats.bloqueado }}</h3>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col">
             <div class="card border-left-info">
-                <div class="card-body">
-                    <h6 class="text-muted text-uppercase small">Consolidados</h6>
-                    <h2 class="mb-0 text-info">{{ stats.consolidado }}</h2>
+                <div class="card-body py-2">
+                    <h6 class="text-muted text-uppercase small mb-1">Consolidados</h6>
+                    <h3 class="mb-0 text-info">{{ stats.consolidado }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card border-left-dark">
+                <div class="card-body py-2">
+                    <h6 class="text-muted text-uppercase small mb-1">
+                        <i class="fas fa-check-circle"></i> Finaliz. Odoo
+                    </h6>
+                    <h3 class="mb-0 text-dark">{{ stats.finalizado_odoo }}</h3>
                 </div>
             </div>
         </div>
@@ -157,6 +167,10 @@
                                 <span class="badge bg-warning text-dark">Bloqueado</span>
                                 {% elif item.status == 'consolidado' %}
                                 <span class="badge bg-primary">Consolidado</span>
+                                {% elif item.status == 'finalizado_odoo' %}
+                                <span class="badge bg-dark" title="DFE ja possui PO vinculado no Odoo">
+                                    <i class="fas fa-check-circle me-1"></i>Finalizado Odoo
+                                </span>
                                 {% elif item.status == 'erro' %}
                                 <span class="badge bg-danger">Erro</span>
                                 {% else %}
@@ -169,6 +183,16 @@
                                 {% if item.consolidado_em %}
                                 <br><small class="text-muted">{{ item.consolidado_em.strftime('%d/%m %H:%M') }}</small>
                                 {% endif %}
+                                {% elif item.status == 'finalizado_odoo' and item.odoo_po_vinculado_name %}
+                                <span class="text-dark fw-bold" title="PO vinculado no Odoo">
+                                    <i class="fas fa-link me-1"></i>{{ item.odoo_po_vinculado_name }}
+                                </span>
+                                <br><small class="text-muted">Vinculado no Odoo</small>
+                                {% elif item.status == 'finalizado_odoo' and item.odoo_po_fiscal_name %}
+                                <span class="text-dark fw-bold" title="PO fiscal vinculado no Odoo">
+                                    <i class="fas fa-link me-1"></i>{{ item.odoo_po_fiscal_name }}
+                                </span>
+                                <br><small class="text-muted">PO Fiscal (Odoo)</small>
                                 {% else %}
                                 <span class="text-muted">-</span>
                                 {% endif %}
@@ -193,6 +217,10 @@
                                         title="Reverter">
                                     <i class="fas fa-undo"></i>
                                 </button>
+                                {% elif item.status == 'finalizado_odoo' %}
+                                <span class="text-muted" title="DFE finalizado - nao requer acao">
+                                    <i class="fas fa-check-double"></i>
+                                </span>
                                 {% endif %}
                             </td>
                         </tr>
@@ -311,8 +339,30 @@ function renderizarDetalhes(data) {
                 </table>
             </div>
         </div>
+    `;
 
-        <h6>Resultado do Match (${matches.length} itens)</h6>
+    // Mostrar informacao especial se status for finalizado_odoo
+    if (v.status === 'finalizado_odoo') {
+        html += `
+            <div class="alert alert-dark mb-4">
+                <h6 class="mb-2"><i class="fas fa-check-circle me-2"></i>DFE Finalizado no Odoo</h6>
+                <p class="mb-0">Este DFE ja possui PO vinculado diretamente no Odoo e nao requer validacao manual.</p>
+                <table class="table table-sm table-borderless mt-2 mb-0">
+                    ${v.odoo_po_vinculado_name ? `<tr><td><strong>PO Vinculado:</strong></td><td>${v.odoo_po_vinculado_name} (ID: ${v.odoo_po_vinculado_id})</td></tr>` : ''}
+                    ${v.odoo_po_fiscal_name ? `<tr><td><strong>PO Fiscal:</strong></td><td>${v.odoo_po_fiscal_name} (ID: ${v.odoo_po_fiscal_id})</td></tr>` : ''}
+                    ${v.pos_vinculados_importados_em ? `<tr><td><strong>Importado em:</strong></td><td>${v.pos_vinculados_importados_em}</td></tr>` : ''}
+                </table>
+            </div>
+        `;
+
+        // Nao mostrar tabela de matches se nao houver
+        if (matches.length === 0) {
+            document.getElementById('modalDetalhesBody').innerHTML = html;
+            return;
+        }
+    }
+
+    html += `<h6>Resultado do Match (${matches.length} itens)</h6>
         <table class="table table-sm table-bordered">
             <thead class="table-light">
                 <tr>

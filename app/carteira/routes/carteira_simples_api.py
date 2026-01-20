@@ -966,6 +966,66 @@ def calcular_saidas_nao_visiveis(
         return {cod_prod: [] for cod_prod in codigos_produtos}
 
 
+@carteira_simples_bp.route('/api/autocomplete-produtos')
+def autocomplete_produtos():
+    """
+    Autocomplete para busca de produtos na carteira.
+    Busca APENAS produtos que existem na carteira ativa (com saldo > 0).
+
+    Query params:
+    - termo: string (min 2 caracteres)
+    - limit: int (default 20)
+
+    Returns:
+    - Lista de {cod_produto, nome_produto}
+    """
+    try:
+        from sqlalchemy import or_, func
+
+        termo = request.args.get('termo', '').strip()
+        limit = int(request.args.get('limit', 20))
+
+        # Mínimo 2 caracteres para buscar
+        if not termo or len(termo) < 2:
+            return jsonify([])
+
+        # Buscar produtos DISTINTOS da CarteiraPrincipal onde tem saldo > 0
+        # Usando subquery para pegar o nome do primeiro registro de cada código
+        subquery = db.session.query(
+            CarteiraPrincipal.cod_produto,
+            func.min(CarteiraPrincipal.nome_produto).label('nome_produto')
+        ).filter(
+            CarteiraPrincipal.ativo == True,
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0,
+            or_(
+                CarteiraPrincipal.cod_produto.ilike(f'%{termo}%'),
+                CarteiraPrincipal.nome_produto.ilike(f'%{termo}%')
+            )
+        ).group_by(
+            CarteiraPrincipal.cod_produto
+        ).order_by(
+            # Priorizar códigos que começam com o termo
+            func.case(
+                (CarteiraPrincipal.cod_produto.ilike(f'{termo}%'), 0),
+                else_=1
+            ),
+            CarteiraPrincipal.cod_produto
+        ).limit(limit).all()
+
+        resultado = [{
+            'cod_produto': row.cod_produto,
+            'nome_produto': row.nome_produto
+        } for row in subquery]
+
+        logger.debug(f"[AUTOCOMPLETE] Termo: '{termo}' → {len(resultado)} produtos encontrados")
+
+        return jsonify(resultado)
+
+    except Exception as e:
+        logger.error(f"[AUTOCOMPLETE] Erro ao buscar produtos: {e}", exc_info=True)
+        return jsonify({'erro': str(e)}), 500
+
+
 @carteira_simples_bp.route('/api/estoque-projetado')
 def obter_estoque_projetado():
     """

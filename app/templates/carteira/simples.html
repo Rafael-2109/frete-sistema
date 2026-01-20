@@ -17,14 +17,27 @@
         <div class="card">
             <div class="card-body py-1">
                 <div class="row align-items-center g-1">
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <div class="input-group input-group-sm">
                             <span class="input-group-text">
                                 <i class="fas fa-search"></i>
                             </span>
                             <input type="text" class="form-control" id="filtro-busca"
-                                placeholder="Buscar pedido, cliente, CNPJ...">
+                                placeholder="Pedido, cliente, CNPJ...">
                         </div>
+                    </div>
+
+                    <!-- Filtro de Produto com Autocomplete -->
+                    <div class="col-md-2 position-relative">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text">
+                                <i class="fas fa-box"></i>
+                            </span>
+                            <input type="text" class="form-control" id="filtro-produto"
+                                placeholder="Produto (cód/nome)" autocomplete="off">
+                            <input type="hidden" id="filtro-produto-codigo" value="">
+                        </div>
+                        <div id="autocomplete-produto-dropdown" class="autocomplete-dropdown"></div>
                     </div>
 
                     <div class="col-md-1" style="max-width: 70px;">

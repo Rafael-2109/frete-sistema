@@ -106,6 +106,180 @@
         if (checkboxPdd) {
             checkboxPdd.addEventListener('change', aplicarFiltroTipo);
         }
+
+        // 🆕 FUNCIONALIDADE: Autocomplete de Produto
+        inicializarAutocompleteProduto();
+    }
+
+    // ==============================================
+    // AUTOCOMPLETE DE PRODUTO
+    // ==============================================
+
+    let autocompleteProdutoTimeout = null;
+
+    function inicializarAutocompleteProduto() {
+        const inputProduto = document.getElementById('filtro-produto');
+        const dropdown = document.getElementById('autocomplete-produto-dropdown');
+
+        if (!inputProduto || !dropdown) {
+            console.warn('⚠️ Elementos de autocomplete de produto não encontrados');
+            return;
+        }
+
+        // Event listener para digitação com debounce
+        inputProduto.addEventListener('input', function(e) {
+            const termo = e.target.value.trim();
+
+            // Limpar timeout anterior
+            if (autocompleteProdutoTimeout) {
+                clearTimeout(autocompleteProdutoTimeout);
+            }
+
+            // Se menos de 2 caracteres, fechar dropdown
+            if (termo.length < 2) {
+                fecharDropdownProduto();
+                // Limpar código selecionado se usuário apagou o texto
+                document.getElementById('filtro-produto-codigo').value = '';
+                return;
+            }
+
+            // Debounce de 300ms
+            autocompleteProdutoTimeout = setTimeout(() => {
+                buscarProdutosAutocomplete(termo);
+            }, 300);
+        });
+
+        // Enter no input de produto aplica filtros
+        inputProduto.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                fecharDropdownProduto();
+                aplicarFiltros();
+            }
+        });
+
+        // Fechar dropdown ao clicar fora
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('#filtro-produto') && !e.target.closest('#autocomplete-produto-dropdown')) {
+                fecharDropdownProduto();
+            }
+        });
+
+        // Navegação por teclado no dropdown
+        inputProduto.addEventListener('keydown', function(e) {
+            const items = dropdown.querySelectorAll('.autocomplete-item');
+            const activeItem = dropdown.querySelector('.autocomplete-item.active');
+            let currentIndex = -1;
+
+            if (activeItem) {
+                currentIndex = Array.from(items).indexOf(activeItem);
+            }
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (currentIndex < items.length - 1) {
+                    if (activeItem) activeItem.classList.remove('active');
+                    items[currentIndex + 1].classList.add('active');
+                    items[currentIndex + 1].scrollIntoView({ block: 'nearest' });
+                }
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (currentIndex > 0) {
+                    if (activeItem) activeItem.classList.remove('active');
+                    items[currentIndex - 1].classList.add('active');
+                    items[currentIndex - 1].scrollIntoView({ block: 'nearest' });
+                }
+            } else if (e.key === 'Enter' && activeItem) {
+                e.preventDefault();
+                activeItem.click();
+            } else if (e.key === 'Escape') {
+                fecharDropdownProduto();
+            }
+        });
+
+        console.log('✅ Autocomplete de produto inicializado');
+    }
+
+    async function buscarProdutosAutocomplete(termo) {
+        const dropdown = document.getElementById('autocomplete-produto-dropdown');
+
+        try {
+            const response = await fetch(`/carteira/simples/api/autocomplete-produtos?termo=${encodeURIComponent(termo)}&limit=20`);
+            const produtos = await response.json();
+
+            if (produtos.erro) {
+                console.error('Erro no autocomplete:', produtos.erro);
+                fecharDropdownProduto();
+                return;
+            }
+
+            renderizarDropdownProdutos(produtos);
+
+        } catch (erro) {
+            console.error('Erro ao buscar produtos:', erro);
+            fecharDropdownProduto();
+        }
+    }
+
+    function renderizarDropdownProdutos(produtos) {
+        const dropdown = document.getElementById('autocomplete-produto-dropdown');
+
+        if (!produtos || produtos.length === 0) {
+            dropdown.innerHTML = '<div class="autocomplete-item text-muted"><em>Nenhum produto encontrado</em></div>';
+            dropdown.classList.add('show');
+            return;
+        }
+
+        let html = '';
+        produtos.forEach((produto, index) => {
+            html += `
+                <div class="autocomplete-item${index === 0 ? ' active' : ''}"
+                     data-cod="${produto.cod_produto}"
+                     data-nome="${produto.nome_produto || ''}">
+                    <div class="produto-codigo">${produto.cod_produto}</div>
+                    <div class="produto-nome">${produto.nome_produto || ''}</div>
+                </div>
+            `;
+        });
+
+        dropdown.innerHTML = html;
+        dropdown.classList.add('show');
+
+        // Event listeners para os itens
+        dropdown.querySelectorAll('.autocomplete-item').forEach(item => {
+            item.addEventListener('click', function() {
+                const cod = this.dataset.cod;
+                const nome = this.dataset.nome;
+                selecionarProduto(cod, nome);
+            });
+
+            item.addEventListener('mouseenter', function() {
+                dropdown.querySelectorAll('.autocomplete-item').forEach(i => i.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+    }
+
+    function selecionarProduto(cod, nome) {
+        const inputProduto = document.getElementById('filtro-produto');
+        const inputCodigo = document.getElementById('filtro-produto-codigo');
+
+        // Preencher input visível com código - nome
+        inputProduto.value = nome ? `${cod} - ${nome}` : cod;
+
+        // Preencher campo hidden com código
+        inputCodigo.value = cod;
+
+        fecharDropdownProduto();
+
+        console.log(`✅ Produto selecionado: ${cod}`);
+    }
+
+    function fecharDropdownProduto() {
+        const dropdown = document.getElementById('autocomplete-produto-dropdown');
+        if (dropdown) {
+            dropdown.classList.remove('show');
+            dropdown.innerHTML = '';
+        }
     }
 
     // ==============================================
@@ -170,6 +344,7 @@
             // ✅ Coletar APENAS filtros com valores não vazios
             const filtrosTemp = {
                 busca_geral: document.getElementById('filtro-busca')?.value.trim() || '',  // 🆕 Busca em múltiplos campos
+                cod_produto: document.getElementById('filtro-produto-codigo')?.value.trim() || '',  // 🆕 Filtro de produto
                 estado: document.getElementById('filtro-estado')?.value.trim() || '',
                 municipio: document.getElementById('filtro-municipio')?.value.trim() || '',
                 rota: document.getElementById('filtro-rota')?.value.trim() || '',
@@ -215,7 +390,8 @@
     function limparFiltros() {
         try {
             const filtroIds = [
-                'filtro-busca', 'filtro-estado', 'filtro-municipio', 'filtro-rota', 'filtro-sub-rota',
+                'filtro-busca', 'filtro-produto', 'filtro-produto-codigo',  // 🆕 Filtro de produto
+                'filtro-estado', 'filtro-municipio', 'filtro-rota', 'filtro-sub-rota',
                 'filtro-data-pedido-de', 'filtro-data-pedido-ate',
                 'filtro-data-entrega-de', 'filtro-data-entrega-ate'
             ];
@@ -272,6 +448,7 @@
                 const mapeamento = {
                     'busca_geral': 'filtro-busca',  // 🆕 Busca geral
                     'num_pedido': 'filtro-busca',   // Compatibilidade com filtros antigos
+                    'cod_produto': 'filtro-produto-codigo',  // 🆕 Filtro de produto (campo hidden)
                     'estado': 'filtro-estado',
                     'municipio': 'filtro-municipio',
                     'rota': 'filtro-rota',
@@ -287,6 +464,14 @@
                     const input = document.getElementById(inputId);
                     if (input) {
                         input.value = valor;
+
+                        // 🆕 Se for filtro de produto, também preencher o input visível
+                        if (key === 'cod_produto' && valor) {
+                            const inputVisivel = document.getElementById('filtro-produto');
+                            if (inputVisivel) {
+                                inputVisivel.value = valor;  // Mostra o código (nome será carregado após busca)
+                            }
+                        }
                     }
                 }
             });

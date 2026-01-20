@@ -1700,7 +1700,8 @@ def validacoes_nf_po():
         'pendente': db.session.query(ValidacaoNfPoDfe).filter_by(status='pendente').count(),
         'aprovado': db.session.query(ValidacaoNfPoDfe).filter_by(status='aprovado').count(),
         'bloqueado': db.session.query(ValidacaoNfPoDfe).filter_by(status='bloqueado').count(),
-        'consolidado': db.session.query(ValidacaoNfPoDfe).filter_by(status='consolidado').count()
+        'consolidado': db.session.query(ValidacaoNfPoDfe).filter_by(status='consolidado').count(),
+        'finalizado_odoo': db.session.query(ValidacaoNfPoDfe).filter_by(status='finalizado_odoo').count()
     }
 
     # Status para filtro
@@ -1710,6 +1711,7 @@ def validacoes_nf_po():
         {'valor': 'aprovado', 'label': 'Aprovado'},
         {'valor': 'bloqueado', 'label': 'Bloqueado'},
         {'valor': 'consolidado', 'label': 'Consolidado'},
+        {'valor': 'finalizado_odoo', 'label': 'Finalizado Odoo'},
         {'valor': 'erro', 'label': 'Erro'}
     ]
 

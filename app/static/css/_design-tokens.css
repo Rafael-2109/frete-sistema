@@ -599,6 +599,7 @@ a:hover { filter: brightness(1.1); }
 .border-left-danger { border-left: 3px solid var(--semantic-danger) !important; }
 .border-left-warning { border-left: 3px solid var(--amber-50) !important; }
 .border-left-info, .border-left-secondary { border-left: 3px solid var(--border) !important; }
+.border-left-dark { border-left: 3px solid #343a40 !important; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    VARIÁVEIS LEGADAS - Para compatibilidade com arquivos não migrados

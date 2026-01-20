@@ -593,9 +593,11 @@ class ValidacaoNfPoDfe(db.Model):
     - aprovado: 100% itens com match (pronto para consolidar)
     - bloqueado: <100% itens com match (divergencias pendentes)
     - consolidado: POs foram ajustados/consolidados
+    - finalizado_odoo: DFE ja possui PO vinculado no Odoo (nao precisa validar)
     - erro: Falha no processamento
 
     IMPORTANTE: So executa acoes nos POs se status = 'aprovado' (100% match)
+    IMPORTANTE: DFEs com status 'finalizado_odoo' sao ignorados na validacao
     """
     __tablename__ = 'validacao_nf_po_dfe'
 
@@ -788,6 +790,72 @@ class MatchNfPoItem(db.Model):
             'data_po': self.data_po.isoformat() if self.data_po else None,
             'status_match': self.status_match,
             'motivo_bloqueio': self.motivo_bloqueio,
+            'criado_em': self.criado_em.isoformat() if self.criado_em else None,
+            # Incluir alocacoes se existirem
+            'alocacoes': [a.to_dict() for a in self.alocacoes] if hasattr(self, 'alocacoes') and self.alocacoes else []
+        }
+
+
+class MatchAlocacao(db.Model):
+    """
+    Registra alocacao de quantidade de um item da NF para uma linha de PO.
+
+    Permite SPLIT: um item da NF pode ter multiplas alocacoes em POs diferentes.
+
+    Cenario de uso:
+    - NF com 1000 un de Produto A
+    - PO001 tem 400 un, PO002 tem 500 un, PO003 tem 200 un
+    - Cria 3 alocacoes: PO001=400, PO002=500, PO003=100
+
+    Relacionamento:
+    - MatchNfPoItem (1) -> MatchAlocacao (N)
+    """
+    __tablename__ = 'match_nf_po_alocacao'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Referencia ao match do item
+    match_item_id = db.Column(db.Integer, db.ForeignKey('match_nf_po_item.id',
+                              ondelete='CASCADE'), nullable=False, index=True)
+
+    # PO alocado
+    odoo_po_id = db.Column(db.Integer, nullable=False, index=True)
+    odoo_po_name = db.Column(db.String(50), nullable=True)
+    odoo_po_line_id = db.Column(db.Integer, nullable=False, index=True)
+
+    # Quantidade alocada desta linha de PO
+    qtd_alocada = db.Column(db.Numeric(15, 3), nullable=False)
+
+    # Preco e data do PO (para auditoria)
+    preco_po = db.Column(db.Numeric(15, 4), nullable=True)
+    data_po = db.Column(db.Date, nullable=True)
+
+    # Ordem de alocacao (1 = primeiro PO usado, ordem por data ASC)
+    ordem = db.Column(db.Integer, default=1)
+
+    # Auditoria
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relacionamento com MatchNfPoItem
+    match_item = db.relationship('MatchNfPoItem', backref=db.backref(
+        'alocacoes', lazy='dynamic', cascade='all, delete-orphan'
+    ))
+
+    def __repr__(self):
+        return f'<MatchAlocacao {self.odoo_po_name} qtd={self.qtd_alocada}>'
+
+    def to_dict(self):
+        """Serializa para dicionario"""
+        return {
+            'id': self.id,
+            'match_item_id': self.match_item_id,
+            'odoo_po_id': self.odoo_po_id,
+            'odoo_po_name': self.odoo_po_name,
+            'odoo_po_line_id': self.odoo_po_line_id,
+            'qtd_alocada': float(self.qtd_alocada) if self.qtd_alocada else 0,
+            'preco_po': float(self.preco_po) if self.preco_po else None,
+            'data_po': self.data_po.isoformat() if self.data_po else None,
+            'ordem': self.ordem,
             'criado_em': self.criado_em.isoformat() if self.criado_em else None
         }
 

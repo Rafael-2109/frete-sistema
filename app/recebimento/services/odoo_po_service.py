@@ -34,7 +34,7 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime
 
 from app import db
-from app.recebimento.models import ValidacaoNfPoDfe
+from app.recebimento.models import ValidacaoNfPoDfe, MatchNfPoItem, MatchAlocacao
 from app.odoo.utils.connection import get_odoo_connection
 
 logger = logging.getLogger(__name__)
@@ -54,10 +54,10 @@ class OdooPoService:
         Simula a SPLIT/CONSOLIDACAO sem executar nada no Odoo.
         Retorna preview de todas as acoes que serao executadas.
 
-        ## NOVA LÓGICA (16/01/2026)
+        ## ATUALIZADO (19/01/2026) - Suporte a Multi-PO Split
 
-        SEMPRE mostra a criacao de um PO Conciliador novo.
-        Os POs originais ficam como saldo.
+        Agora processa MatchAlocacao ao inves de MatchNfPoItem direto.
+        Um item da NF pode ter multiplas alocacoes em POs diferentes.
 
         Args:
             validacao_id: ID da validacao
@@ -69,10 +69,8 @@ class OdooPoService:
             - acoes: Lista de acoes detalhadas
             - resumo: Totais
         """
-        from app.recebimento.models import MatchNfPoItem
-
         try:
-            validacao = db.session.get(ValidacaoNfPoDfe,validacao_id) if validacao_id else None
+            validacao = db.session.get(ValidacaoNfPoDfe, validacao_id) if validacao_id else None
             if not validacao:
                 raise ValueError(f"Validacao {validacao_id} nao encontrada")
 
@@ -89,49 +87,90 @@ class OdooPoService:
                     'acoes': []
                 }
 
-            # Agrupar por PO Original
+            # Agrupar por PO Original - PROCESSANDO ALOCACOES
             pos_originais = {}
             itens_conciliador = []
             valor_total_conciliador = Decimal('0')
 
             for match in matches:
-                if not match.odoo_po_id:
-                    continue
+                # Buscar alocacoes do match (suporte a multi-PO split)
+                alocacoes = db.session.query(MatchAlocacao).filter_by(
+                    match_item_id=match.id
+                ).order_by(MatchAlocacao.ordem).all()
 
-                qtd_nf = Decimal(str(match.qtd_nf or 0))
-                qtd_po = Decimal(str(match.qtd_po or 0))
-                preco = Decimal(str(match.preco_nf or 0))
-                saldo = qtd_po - qtd_nf
+                if alocacoes:
+                    # NOVO: Processar cada alocacao (split multi-PO)
+                    for aloc in alocacoes:
+                        qtd_alocada = Decimal(str(aloc.qtd_alocada or 0))
+                        preco = Decimal(str(aloc.preco_po or match.preco_nf or 0))
 
-                # Dados para o PO Conciliador
-                item_conciliador = {
-                    'match_id': match.id,
-                    'cod_produto': match.cod_produto_interno,
-                    'nome_produto': match.nome_produto,
-                    'qtd': float(qtd_nf),
-                    'preco': float(preco),
-                    'valor': float(qtd_nf * preco),
-                    'po_origem': match.odoo_po_name
-                }
-                itens_conciliador.append(item_conciliador)
-                valor_total_conciliador += qtd_nf * preco
+                        # Dados para o PO Conciliador
+                        item_conciliador = {
+                            'match_id': match.id,
+                            'alocacao_id': aloc.id,
+                            'cod_produto': match.cod_produto_interno,
+                            'nome_produto': match.nome_produto,
+                            'qtd': float(qtd_alocada),
+                            'preco': float(preco),
+                            'valor': float(qtd_alocada * preco),
+                            'po_origem': aloc.odoo_po_name
+                        }
+                        itens_conciliador.append(item_conciliador)
+                        valor_total_conciliador += qtd_alocada * preco
 
-                # Agrupar dados do PO Original (ficará como saldo)
-                if match.odoo_po_id not in pos_originais:
-                    pos_originais[match.odoo_po_id] = {
-                        'po_id': match.odoo_po_id,
-                        'po_name': match.odoo_po_name,
-                        'itens': []
+                        # Agrupar dados do PO Original (ficará como saldo)
+                        if aloc.odoo_po_id not in pos_originais:
+                            pos_originais[aloc.odoo_po_id] = {
+                                'po_id': aloc.odoo_po_id,
+                                'po_name': aloc.odoo_po_name,
+                                'itens': []
+                            }
+
+                        # Buscar saldo real da linha do PO no Odoo (qtd - recebido - alocado)
+                        # Por enquanto, assumimos que qtd_alocada foi calculada corretamente
+                        pos_originais[aloc.odoo_po_id]['itens'].append({
+                            'cod_produto': match.cod_produto_interno,
+                            'nome_produto': match.nome_produto,
+                            'po_line_id': aloc.odoo_po_line_id,
+                            'qtd_alocada': float(qtd_alocada),
+                            'preco': float(preco)
+                        })
+
+                elif match.odoo_po_id:
+                    # FALLBACK: Sem alocacoes, usar dados do match diretamente
+                    qtd_nf = Decimal(str(match.qtd_nf or 0))
+                    qtd_po = Decimal(str(match.qtd_po or 0))
+                    preco = Decimal(str(match.preco_nf or 0))
+                    saldo = qtd_po - qtd_nf
+
+                    item_conciliador = {
+                        'match_id': match.id,
+                        'cod_produto': match.cod_produto_interno,
+                        'nome_produto': match.nome_produto,
+                        'qtd': float(qtd_nf),
+                        'preco': float(preco),
+                        'valor': float(qtd_nf * preco),
+                        'po_origem': match.odoo_po_name
                     }
+                    itens_conciliador.append(item_conciliador)
+                    valor_total_conciliador += qtd_nf * preco
 
-                pos_originais[match.odoo_po_id]['itens'].append({
-                    'cod_produto': match.cod_produto_interno,
-                    'nome_produto': match.nome_produto,
-                    'qtd_original': float(qtd_po),
-                    'qtd_usada': float(qtd_nf),
-                    'qtd_saldo': float(saldo) if saldo > 0 else 0,
-                    'preco': float(preco)
-                })
+                    if match.odoo_po_id not in pos_originais:
+                        pos_originais[match.odoo_po_id] = {
+                            'po_id': match.odoo_po_id,
+                            'po_name': match.odoo_po_name,
+                            'itens': []
+                        }
+
+                    pos_originais[match.odoo_po_id]['itens'].append({
+                        'cod_produto': match.cod_produto_interno,
+                        'nome_produto': match.nome_produto,
+                        'po_line_id': match.odoo_po_line_id,
+                        'qtd_original': float(qtd_po),
+                        'qtd_usada': float(qtd_nf),
+                        'qtd_saldo': float(saldo) if saldo > 0 else 0,
+                        'preco': float(preco)
+                    })
 
             if not itens_conciliador:
                 return {
@@ -170,33 +209,51 @@ class OdooPoService:
             for po_id, po_info in pos_originais.items():
                 tem_saldo = False
                 for item in po_info['itens']:
-                    if item['qtd_saldo'] > 0:
-                        tem_saldo = True
+                    # Verificar se tem qtd_saldo (formato antigo) ou qtd_alocada (novo formato)
+                    if 'qtd_saldo' in item:
+                        # FORMATO ANTIGO (fallback)
+                        if item['qtd_saldo'] > 0:
+                            tem_saldo = True
+                            acoes.append({
+                                'tipo': 'ajustar_saldo_original',
+                                'descricao': f"Reduzir {item['nome_produto'] or item['cod_produto']} em {po_info['po_name']}: {item['qtd_original']:.0f} → {item['qtd_saldo']:.0f} un (SALDO)",
+                                'po_id': po_id,
+                                'po_name': po_info['po_name'],
+                                'qtd_original': item['qtd_original'],
+                                'qtd_saldo': item['qtd_saldo'],
+                                'icone': 'fas fa-minus-circle',
+                                'cor': 'warning'
+                            })
+                        else:
+                            acoes.append({
+                                'tipo': 'zerar_linha_original',
+                                'descricao': f"Zerar {item['nome_produto'] or item['cod_produto']} em {po_info['po_name']}: {item['qtd_original']:.0f} → 0 un",
+                                'po_id': po_id,
+                                'po_name': po_info['po_name'],
+                                'icone': 'fas fa-times',
+                                'cor': 'secondary'
+                            })
+                    else:
+                        # NOVO FORMATO (alocacoes): Mostrar qtd sendo consumida
+                        qtd_alocada = item.get('qtd_alocada', 0)
                         acoes.append({
-                            'tipo': 'ajustar_saldo_original',
-                            'descricao': f"Reduzir {item['nome_produto'] or item['cod_produto']} em {po_info['po_name']}: {item['qtd_original']:.0f} → {item['qtd_saldo']:.0f} un (SALDO)",
+                            'tipo': 'consumir_saldo_original',
+                            'descricao': f"Consumir {qtd_alocada:.0f} un de {item['nome_produto'] or item['cod_produto']} de {po_info['po_name']}",
                             'po_id': po_id,
                             'po_name': po_info['po_name'],
-                            'qtd_original': item['qtd_original'],
-                            'qtd_saldo': item['qtd_saldo'],
+                            'po_line_id': item.get('po_line_id'),
+                            'qtd_consumida': qtd_alocada,
                             'icone': 'fas fa-minus-circle',
                             'cor': 'warning'
                         })
-                    else:
-                        acoes.append({
-                            'tipo': 'zerar_linha_original',
-                            'descricao': f"Zerar {item['nome_produto'] or item['cod_produto']} em {po_info['po_name']}: {item['qtd_original']:.0f} → 0 un",
-                            'po_id': po_id,
-                            'po_name': po_info['po_name'],
-                            'icone': 'fas fa-times',
-                            'cor': 'secondary'
-                        })
+                        # No novo formato, assumimos que sempre pode haver saldo
+                        tem_saldo = True
 
                 if tem_saldo:
                     pos_com_saldo.append({
                         'po_id': po_id,
                         'po_name': po_info['po_name'],
-                        'itens_saldo': [i for i in po_info['itens'] if i['qtd_saldo'] > 0]
+                        'itens': po_info['itens']
                     })
 
             # Acao 4: Confirmar PO Conciliador
@@ -286,8 +343,6 @@ class OdooPoService:
         Returns:
             Dict com resultado da consolidacao
         """
-        from app.recebimento.models import MatchNfPoItem
-
         try:
             # Buscar validacao
             validacao = db.session.get(ValidacaoNfPoDfe,validacao_id) if validacao_id else None
@@ -356,8 +411,8 @@ class OdooPoService:
 
             # =================================================================
             # PASSO 3: Para cada item da NF com match
+            # ATUALIZADO: Processa MatchAlocacao para suporte a multi-PO split
             # =================================================================
-            # Buscar matches diretamente da tabela para ter todos os dados
             matches = db.session.query(MatchNfPoItem).filter_by(
                 validacao_id=validacao_id,
                 status_match='match'
@@ -367,73 +422,150 @@ class OdooPoService:
             linhas_ajustadas_originais = []
             pos_com_saldo = set()
 
+            # Cache de linhas ja processadas para evitar duplicidade
+            linhas_processadas = {}  # {po_line_id: qtd_total_consumida}
+
             for match in matches:
-                if not match.odoo_po_line_id:
-                    logger.warning(f"Match {match.id} sem po_line_id, pulando")
-                    continue
+                # Buscar alocacoes do match (suporte a multi-PO split)
+                alocacoes = db.session.query(MatchAlocacao).filter_by(
+                    match_item_id=match.id
+                ).order_by(MatchAlocacao.ordem).all()
 
-                qtd_nf = Decimal(str(match.qtd_nf or 0))
-                qtd_po = Decimal(str(match.qtd_po or 0))
-                preco_nf = float(match.preco_nf or 0)
+                if alocacoes:
+                    # NOVO FLUXO: Processar cada alocacao (multi-PO split)
+                    for aloc in alocacoes:
+                        if not aloc.odoo_po_line_id:
+                            logger.warning(f"Alocacao {aloc.id} sem po_line_id, pulando")
+                            continue
 
-                # Buscar product_id da linha original
-                linha_original = odoo.read(
-                    'purchase.order.line',
-                    [match.odoo_po_line_id],
-                    ['product_id']
-                )
+                        qtd_alocada = Decimal(str(aloc.qtd_alocada or 0))
+                        preco = float(aloc.preco_po or match.preco_nf or 0)
 
-                if not linha_original or not linha_original[0].get('product_id'):
-                    logger.warning(
-                        f"Linha {match.odoo_po_line_id} sem produto, pulando"
+                        # Buscar product_id da linha original
+                        linha_original = odoo.read(
+                            'purchase.order.line',
+                            [aloc.odoo_po_line_id],
+                            ['product_id', 'product_qty', 'qty_received']
+                        )
+
+                        if not linha_original or not linha_original[0].get('product_id'):
+                            logger.warning(
+                                f"Linha {aloc.odoo_po_line_id} sem produto, pulando"
+                            )
+                            continue
+
+                        product_id = linha_original[0]['product_id'][0]
+                        qtd_po_original = Decimal(str(linha_original[0].get('product_qty', 0) or 0))
+                        qtd_recebida = Decimal(str(linha_original[0].get('qty_received', 0) or 0))
+
+                        # ---------------------------------------------------------
+                        # 3a) Criar linha no PO Conciliador
+                        # ---------------------------------------------------------
+                        nova_linha_id = self._criar_linha_po_conciliador(
+                            odoo,
+                            po_conciliador_id,
+                            product_id,
+                            float(qtd_alocada),
+                            preco,
+                            aloc.odoo_po_line_id
+                        )
+
+                        if nova_linha_id:
+                            linhas_criadas_conciliador.append({
+                                'linha_id': nova_linha_id,
+                                'produto': match.cod_produto_interno,
+                                'nome': match.nome_produto,
+                                'qtd': float(qtd_alocada),
+                                'preco': preco,
+                                'po_origem': aloc.odoo_po_name,
+                                'alocacao_id': aloc.id
+                            })
+
+                        # ---------------------------------------------------------
+                        # 3b) Ajustar quantidade no PO Original
+                        # Acumular consumo se mesma linha usada por multiplos itens
+                        # ---------------------------------------------------------
+                        consumo_anterior = linhas_processadas.get(aloc.odoo_po_line_id, Decimal('0'))
+                        consumo_total = consumo_anterior + qtd_alocada
+                        linhas_processadas[aloc.odoo_po_line_id] = consumo_total
+
+                        # Calcular novo saldo: qtd_original - qtd_recebida - qtd_alocada_total
+                        saldo_apos_alocacao = qtd_po_original - qtd_recebida - consumo_total
+                        nova_qtd = float(saldo_apos_alocacao) if saldo_apos_alocacao > 0 else 0
+
+                        self._ajustar_quantidade_linha(
+                            odoo, aloc.odoo_po_line_id, nova_qtd
+                        )
+
+                        linhas_ajustadas_originais.append({
+                            'po_id': aloc.odoo_po_id,
+                            'po_name': aloc.odoo_po_name,
+                            'linha_id': aloc.odoo_po_line_id,
+                            'produto': match.cod_produto_interno,
+                            'qtd_consumida': float(qtd_alocada),
+                            'qtd_saldo': nova_qtd
+                        })
+
+                        # Registrar que este PO foi usado
+                        if nova_qtd > 0:
+                            pos_com_saldo.add((aloc.odoo_po_id, aloc.odoo_po_name))
+
+                elif match.odoo_po_line_id:
+                    # FALLBACK: Sem alocacoes, usar dados do match diretamente
+                    qtd_nf = Decimal(str(match.qtd_nf or 0))
+                    qtd_po = Decimal(str(match.qtd_po or 0))
+                    preco_nf = float(match.preco_nf or 0)
+
+                    linha_original = odoo.read(
+                        'purchase.order.line',
+                        [match.odoo_po_line_id],
+                        ['product_id']
                     )
-                    continue
 
-                product_id = linha_original[0]['product_id'][0]  # type: ignore
+                    if not linha_original or not linha_original[0].get('product_id'):
+                        logger.warning(
+                            f"Linha {match.odoo_po_line_id} sem produto, pulando"
+                        )
+                        continue
 
-                # -------------------------------------------------------------
-                # 3a) Criar linha no PO Conciliador
-                # -------------------------------------------------------------
-                nova_linha_id = self._criar_linha_po_conciliador(
-                    odoo,
-                    po_conciliador_id,
-                    product_id,
-                    float(qtd_nf),
-                    preco_nf,
-                    match.odoo_po_line_id
-                )
+                    product_id = linha_original[0]['product_id'][0]
 
-                if nova_linha_id:
-                    linhas_criadas_conciliador.append({
-                        'linha_id': nova_linha_id,
+                    nova_linha_id = self._criar_linha_po_conciliador(
+                        odoo,
+                        po_conciliador_id,
+                        product_id,
+                        float(qtd_nf),
+                        preco_nf,
+                        match.odoo_po_line_id
+                    )
+
+                    if nova_linha_id:
+                        linhas_criadas_conciliador.append({
+                            'linha_id': nova_linha_id,
+                            'produto': match.cod_produto_interno,
+                            'nome': match.nome_produto,
+                            'qtd': float(qtd_nf),
+                            'preco': preco_nf
+                        })
+
+                    saldo = qtd_po - qtd_nf
+                    nova_qtd_original = float(saldo) if saldo > 0 else 0
+
+                    self._ajustar_quantidade_linha(
+                        odoo, match.odoo_po_line_id, nova_qtd_original
+                    )
+
+                    linhas_ajustadas_originais.append({
+                        'po_id': match.odoo_po_id,
+                        'po_name': match.odoo_po_name,
+                        'linha_id': match.odoo_po_line_id,
                         'produto': match.cod_produto_interno,
-                        'nome': match.nome_produto,
-                        'qtd': float(qtd_nf),
-                        'preco': preco_nf
+                        'qtd_original': float(qtd_po),
+                        'qtd_saldo': nova_qtd_original
                     })
 
-                # -------------------------------------------------------------
-                # 3b) Reduzir quantidade no PO Original (fica como saldo)
-                # -------------------------------------------------------------
-                saldo = qtd_po - qtd_nf
-                nova_qtd_original = float(saldo) if saldo > 0 else 0
-
-                self._ajustar_quantidade_linha(
-                    odoo, match.odoo_po_line_id, nova_qtd_original
-                )
-
-                linhas_ajustadas_originais.append({
-                    'po_id': match.odoo_po_id,
-                    'po_name': match.odoo_po_name,
-                    'linha_id': match.odoo_po_line_id,
-                    'produto': match.cod_produto_interno,
-                    'qtd_original': float(qtd_po),
-                    'qtd_saldo': nova_qtd_original
-                })
-
-                # Registrar que este PO tem saldo
-                if nova_qtd_original > 0:
-                    pos_com_saldo.add((match.odoo_po_id, match.odoo_po_name))
+                    if nova_qtd_original > 0:
+                        pos_com_saldo.add((match.odoo_po_id, match.odoo_po_name))
 
             # =================================================================
             # PASSO 4: Confirmar PO Conciliador
