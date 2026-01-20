@@ -245,6 +245,16 @@ class DeparaService:
                             )
                             resultado['odoo_sync'] = {'sucesso': False, 'erro': str(sync_error)}
 
+                    # Reprocessar divergencias pendentes apos reativar De-Para
+                    try:
+                        reprocess = self._reprocessar_divergencias_relacionadas(
+                            cnpj_limpo, cod_produto_fornecedor
+                        )
+                        resultado['reprocessamento'] = reprocess
+                    except Exception as e:
+                        logger.warning(f"Erro ao reprocessar divergencias: {e}")
+                        resultado['reprocessamento'] = {'erro': str(e)}
+
                     resultado['reativado'] = True
                     return resultado
 
@@ -299,6 +309,16 @@ class DeparaService:
                         f"Nao foi possivel sincronizar De-Para {novo.id} com Odoo: {sync_error}"
                     )
                     resultado['odoo_sync'] = {'sucesso': False, 'erro': str(sync_error)}
+
+            # Reprocessar divergencias pendentes apos criar De-Para
+            try:
+                reprocess = self._reprocessar_divergencias_relacionadas(
+                    cnpj_limpo, cod_produto_fornecedor
+                )
+                resultado['reprocessamento'] = reprocess
+            except Exception as e:
+                logger.warning(f"Erro ao reprocessar divergencias: {e}")
+                resultado['reprocessamento'] = {'erro': str(e)}
 
             return resultado
 
@@ -406,6 +426,17 @@ class DeparaService:
                     )
                     resultado['odoo_sync'] = {'sucesso': False, 'erro': str(sync_error)}
 
+            # Reprocessar divergencias se mudou o mapeamento ou foi reativado
+            if cod_produto_interno is not None or ativo is True:
+                try:
+                    reprocess = self._reprocessar_divergencias_relacionadas(
+                        item.cnpj_fornecedor, item.cod_produto_fornecedor
+                    )
+                    resultado['reprocessamento'] = reprocess
+                except Exception as e:
+                    logger.warning(f"Erro ao reprocessar divergencias: {e}")
+                    resultado['reprocessamento'] = {'erro': str(e)}
+
             return resultado
 
         except ValueError:
@@ -477,6 +508,58 @@ class DeparaService:
             db.session.rollback()
             logger.error(f"Erro ao excluir De-Para {depara_id}: {e}")
             raise
+
+    def _reprocessar_divergencias_relacionadas(
+        self, cnpj: str, cod_prod_forn: str
+    ) -> Dict[str, Any]:
+        """
+        Busca DFEs com divergencias 'sem_depara' pendentes e dispara revalidacao.
+        Chamado apos criar/atualizar/reativar De-Para.
+
+        Args:
+            cnpj: CNPJ do fornecedor
+            cod_prod_forn: Codigo do produto no fornecedor
+
+        Returns:
+            Dict com quantidade de DFEs revalidados e resultados
+        """
+        from app.recebimento.models import DivergenciaNfPo
+        from app.recebimento.services.validacao_nf_po_service import ValidacaoNfPoService
+
+        cnpj_limpo = self._limpar_cnpj(cnpj)
+
+        divergencias = DivergenciaNfPo.query.filter_by(
+            cnpj_fornecedor=cnpj_limpo,
+            cod_produto_fornecedor=cod_prod_forn,
+            tipo_divergencia='sem_depara',
+            status='pendente'
+        ).all()
+
+        if not divergencias:
+            logger.info(f"Nenhuma divergencia pendente para {cnpj_limpo}/{cod_prod_forn}")
+            return {'revalidados': 0, 'resultados': []}
+
+        dfe_ids = set([d.odoo_dfe_id for d in divergencias])
+        logger.info(
+            f"Reprocessando {len(dfe_ids)} DFE(s) para De-Para {cnpj_limpo}/{cod_prod_forn}"
+        )
+
+        validacao_service = ValidacaoNfPoService()
+        resultados = []
+
+        for dfe_id in dfe_ids:
+            try:
+                resultado = validacao_service.validar_dfe(dfe_id)
+                resultados.append({
+                    'dfe_id': dfe_id,
+                    'status': resultado.get('status')
+                })
+                logger.info(f"DFE {dfe_id} revalidado: {resultado.get('status')}")
+            except Exception as e:
+                logger.error(f"Erro ao revalidar DFE {dfe_id}: {e}")
+                resultados.append({'dfe_id': dfe_id, 'erro': str(e)})
+
+        return {'revalidados': len(dfe_ids), 'resultados': resultados}
 
     def _excluir_supplierinfo_odoo(self, supplierinfo_id: int) -> Dict[str, Any]:
         """

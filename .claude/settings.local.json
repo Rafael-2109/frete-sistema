@@ -33,7 +33,8 @@
       "mcp__render__list_logs",
       "mcp__render__list_key_value",
       "mcp__render__get_key_value",
-      "mcp__render__list_deploys"
+      "mcp__render__list_deploys",
+      "mcp__render__query_render_postgres"
     ],
     "deny": []
   },

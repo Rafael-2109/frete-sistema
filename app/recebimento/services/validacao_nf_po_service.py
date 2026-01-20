@@ -96,6 +96,16 @@ class ValidacaoNfPoService:
             # Criar ou atualizar registro de validacao
             validacao = self._get_or_create_validacao(odoo_dfe_id)
             validacao.status = 'validando'
+            # CORRECAO BUG: Resetar contadores antes de revalidar
+            # Sem isso, ao revalidar um DFE apos criar/reativar De-Para,
+            # os contadores antigos permanecem e o status fica incorreto
+            validacao.itens_sem_depara = 0
+            validacao.itens_sem_po = 0
+            validacao.itens_preco_diverge = 0
+            validacao.itens_data_diverge = 0
+            validacao.itens_qtd_diverge = 0
+            validacao.itens_match = 0
+            validacao.total_itens = 0
             db.session.commit()
 
             # Buscar dados do DFE

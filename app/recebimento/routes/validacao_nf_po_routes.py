@@ -307,6 +307,25 @@ def reativar_depara(depara_id):
         else:
             resultado['odoo_sync'] = None
 
+        # Reprocessar divergencias relacionadas a este De-Para
+        try:
+            service = DeparaService()
+            reprocess = service._reprocessar_divergencias_relacionadas(
+                item.cnpj_fornecedor,
+                item.cod_produto_fornecedor
+            )
+            resultado['reprocessamento'] = reprocess
+            if reprocess.get('revalidados', 0) > 0:
+                logger.info(
+                    f"De-Para {depara_id} reativado - "
+                    f"{reprocess['revalidados']} DFE(s) revalidados"
+                )
+        except Exception as e:
+            logger.warning(
+                f"Erro ao reprocessar divergencias para De-Para {depara_id}: {e}"
+            )
+            resultado['reprocessamento'] = {'erro': str(e)}
+
         return jsonify(resultado)
 
     except Exception as e:
