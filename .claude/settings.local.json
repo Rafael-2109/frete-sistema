@@ -36,7 +36,9 @@
       "mcp__render__list_deploys",
       "mcp__render__query_render_postgres",
       "Skill(superpowers:brainstorming)",
-      "Skill(superpowers:brainstorming:*)"
+      "Skill(superpowers:brainstorming:*)",
+      "Skill(superpowers:systematic-debugging)",
+      "Skill(superpowers:systematic-debugging:*)"
     ],
     "deny": []
   },

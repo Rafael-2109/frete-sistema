@@ -20,8 +20,30 @@ from app.fretes.models import (
     DespesaExtra, Frete, ConhecimentoTransporte, LancamentoFreteOdooAuditoria
 )
 from app.utils.timezone import agora_brasil
+from app.utils.cnpj_utils import normalizar_cnpj
 
 logger = logging.getLogger(__name__)
+
+
+def _limpar_prefixo_cnpj(prefixo: str) -> str:
+    """
+    Remove formatação do prefixo de CNPJ para comparação com banco.
+
+    Args:
+        prefixo: Prefixo do CNPJ (pode estar formatado)
+
+    Returns:
+        Prefixo contendo apenas dígitos
+
+    Exemplos:
+        '61.748.293' -> '61748293'
+        '61748293' -> '61748293'
+        '04.108.518/0001' -> '041085180001'
+    """
+    if not prefixo:
+        return ''
+    import re
+    return re.sub(r'\D', '', str(prefixo))
 
 
 class DespesaCteService:
@@ -424,12 +446,14 @@ class DespesaCteService:
             resultado['frete'] = frete
 
             # Usar valores padrão do frete se não informados
-            # CNPJ formatado: XX.XXX.XXX/XXXX-XX → 10 primeiros chars = 8 dígitos do prefixo
+            # Normaliza e pega os 8 primeiros dígitos (prefixo do CNPJ)
             if not prefixo_cnpj_transportadora and frete.transportadora and frete.transportadora.cnpj:
-                prefixo_cnpj_transportadora = frete.transportadora.cnpj[:10]
+                cnpj_transp_limpo = normalizar_cnpj(frete.transportadora.cnpj)
+                prefixo_cnpj_transportadora = cnpj_transp_limpo[:8] if cnpj_transp_limpo else None
 
             if not prefixo_cnpj_cliente and frete.cnpj_cliente:
-                prefixo_cnpj_cliente = frete.cnpj_cliente[:10]
+                cnpj_cliente_limpo = normalizar_cnpj(frete.cnpj_cliente)
+                prefixo_cnpj_cliente = cnpj_cliente_limpo[:8] if cnpj_cliente_limpo else None
 
             # Registrar filtros aplicados
             resultado['filtros_aplicados'] = {
@@ -447,31 +471,39 @@ class DespesaCteService:
             # Construir query base
             query = ConhecimentoTransporte.query
 
-            # Filtro por número do CTe (busca prioritária)
+            # TODOS os filtros são acumulativos (AND)
+            filtros = []
+
+            # Filtro por número do CTe
             if numero_cte:
-                query = query.filter(
+                filtros.append(
                     ConhecimentoTransporte.numero_cte.ilike(f'%{numero_cte}%')
                 )
-            else:
-                # Filtros por CNPJ apenas se não houver filtro por número
-                filtros = []
 
-                if prefixo_cnpj_transportadora:
+            # Filtro por CNPJ da transportadora (emitente do CTe)
+            if prefixo_cnpj_transportadora:
+                # Limpa o prefixo para comparar com banco (que armazena CNPJ limpo)
+                prefixo_limpo = _limpar_prefixo_cnpj(prefixo_cnpj_transportadora)
+                if prefixo_limpo:
                     filtros.append(
-                        ConhecimentoTransporte.cnpj_emitente.like(f'{prefixo_cnpj_transportadora}%')
+                        ConhecimentoTransporte.cnpj_emitente.like(f'{prefixo_limpo}%')
                     )
 
-                if prefixo_cnpj_cliente:
-                    # Cliente pode ser remetente ou destinatário
+            # Filtro por CNPJ do cliente (remetente ou destinatário)
+            if prefixo_cnpj_cliente:
+                # Limpa o prefixo para comparar com banco (que armazena CNPJ limpo)
+                prefixo_limpo = _limpar_prefixo_cnpj(prefixo_cnpj_cliente)
+                if prefixo_limpo:
                     filtros.append(
                         or_(
-                            ConhecimentoTransporte.cnpj_remetente.like(f'{prefixo_cnpj_cliente}%'),
-                            ConhecimentoTransporte.cnpj_destinatario.like(f'{prefixo_cnpj_cliente}%')
+                            ConhecimentoTransporte.cnpj_remetente.like(f'{prefixo_limpo}%'),
+                            ConhecimentoTransporte.cnpj_destinatario.like(f'{prefixo_limpo}%')
                         )
                     )
 
-                if filtros:
-                    query = query.filter(and_(*filtros))
+            # Aplica todos os filtros com AND
+            if filtros:
+                query = query.filter(and_(*filtros))
 
             # Ordenar por data de emissão (mais recentes primeiro) e limitar
             ctes = query.order_by(

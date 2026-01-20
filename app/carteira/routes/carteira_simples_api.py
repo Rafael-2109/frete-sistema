@@ -980,7 +980,7 @@ def autocomplete_produtos():
     - Lista de {cod_produto, nome_produto}
     """
     try:
-        from sqlalchemy import or_, func
+        from sqlalchemy import or_, func, case
 
         termo = request.args.get('termo', '').strip()
         limit = int(request.args.get('limit', 20))
@@ -1005,7 +1005,7 @@ def autocomplete_produtos():
             CarteiraPrincipal.cod_produto
         ).order_by(
             # Priorizar códigos que começam com o termo
-            func.case(
+            case(
                 (CarteiraPrincipal.cod_produto.ilike(f'{termo}%'), 0),
                 else_=1
             ),
