@@ -722,6 +722,21 @@ class PedidoComprasServiceOtimizado:
         """
         alterado = False
 
+        # ✅ CORREÇÃO: Preencher CNPJ se estava vazio (registros antigos)
+        if not pedido_existente.cnpj_fornecedor:
+            partner_id = pedido_odoo.get('partner_id')
+            if partner_id:
+                parceiro_id = partner_id[0] if isinstance(partner_id, list) else partner_id
+                fornecedor = self._fornecedores_cache.get(parceiro_id)
+                if fornecedor:
+                    novo_cnpj = fornecedor.get('l10n_br_cnpj')
+                    if novo_cnpj:
+                        pedido_existente.cnpj_fornecedor = novo_cnpj
+                        alterado = True
+                        self.logger.info(
+                            f"   ✅ CNPJ preenchido: {pedido_existente.num_pedido} -> {novo_cnpj}"
+                        )
+
         # Verificar mudanças em quantidade
         nova_qtd = Decimal(str(linha_odoo.get('product_qty', 0)))
         if pedido_existente.qtd_produto_pedido != nova_qtd:

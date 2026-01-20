@@ -127,6 +127,10 @@ def lote_detalhe(lote_id):
             float(i.valor_pago or i.valor_titulo or 0)
             for i in itens if i.codigo_ocorrencia == '06' and i.status_match == 'MATCH_ENCONTRADO'
         ),
+        # Estatísticas de extrato (Fase 2)
+        'extrato_vinculados': sum(1 for i in itens if i.status_match_extrato == 'MATCH_ENCONTRADO'),
+        'extrato_sem_match': sum(1 for i in itens if i.status_match_extrato == 'SEM_MATCH'),
+        'extrato_conciliados': sum(1 for i in itens if i.status_match_extrato == 'CONCILIADO'),
     }
 
     return render_template(
@@ -226,7 +230,14 @@ def api_lote_itens(lote_id):
 @cnab400_bp.route('/api/lote/<int:lote_id>/baixar', methods=['POST'])
 @login_required
 def api_baixar_lote(lote_id):
-    """API: Executa baixa de todos os itens com match do lote"""
+    """
+    API: Executa baixa UNIFICADA de todos os itens com match do lote.
+
+    Esta versão estendida (Fase 2) executa:
+    1. Baixa de títulos (ContasAReceber.parcela_paga = True)
+    2. Conciliação de extrato (ExtratoItem.status = 'CONCILIADO')
+    3. Reconciliação no Odoo (se disponível)
+    """
     lote = CnabRetornoLote.query.get_or_404(lote_id)
 
     # Verifica status
@@ -238,11 +249,51 @@ def api_baixar_lote(lote_id):
 
     try:
         processor = Cnab400ProcessorService()
-        stats = processor.baixar_lote(lote)
+        usuario = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
+
+        # Usa versão unificada que baixa título + extrato + Odoo
+        stats = processor.baixar_lote_unificado(lote, usuario=usuario)
+
+        # Mensagem detalhada
+        mensagem_partes = [f'{stats["sucesso"]} baixas']
+        if stats.get('extratos_conciliados', 0) > 0:
+            mensagem_partes.append(f'{stats["extratos_conciliados"]} extratos conciliados')
+        if stats.get('odoo_reconciliados', 0) > 0:
+            mensagem_partes.append(f'{stats["odoo_reconciliados"]} reconciliados no Odoo')
+        if stats['erros'] > 0:
+            mensagem_partes.append(f'{stats["erros"]} erros')
 
         return jsonify({
             'success': True,
-            'message': f'Processamento concluído: {stats["sucesso"]} baixas, {stats["erros"]} erros',
+            'message': f'Processamento concluído: {", ".join(mensagem_partes)}',
+            'stats': stats,
+            'lote': lote.to_dict()
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@cnab400_bp.route('/api/lote/<int:lote_id>/matching-extrato', methods=['POST'])
+@login_required
+def api_matching_extrato_lote(lote_id):
+    """
+    API: Executa matching com extrato para todos os itens do lote.
+
+    Deve ser chamado APÓS o matching de títulos.
+    Vincula itens CNAB com linhas de ExtratoItem por Data + Valor + CNPJ.
+    """
+    lote = CnabRetornoLote.query.get_or_404(lote_id)
+
+    try:
+        processor = Cnab400ProcessorService()
+        stats = processor.executar_matching_extrato_lote(lote)
+
+        return jsonify({
+            'success': True,
+            'message': f'{stats["com_match"]} extratos vinculados, {stats["sem_match"]} sem match',
             'stats': stats,
             'lote': lote.to_dict()
         })
@@ -279,7 +330,14 @@ def api_reprocessar_matching(lote_id):
 @cnab400_bp.route('/api/item/<int:item_id>/baixar', methods=['POST'])
 @login_required
 def api_baixar_item(item_id):
-    """API: Executa baixa de um item específico"""
+    """
+    API: Executa baixa UNIFICADA de um item específico.
+
+    Esta versão estendida (Fase 2) executa:
+    1. Baixa do título (ContasAReceber.parcela_paga = True)
+    2. Conciliação do extrato vinculado (se houver)
+    3. Reconciliação no Odoo (se disponível)
+    """
     item = CnabRetornoItem.query.get_or_404(item_id)
 
     if item.status_match != 'MATCH_ENCONTRADO':
@@ -290,18 +348,31 @@ def api_baixar_item(item_id):
 
     try:
         processor = Cnab400ProcessorService()
-        sucesso = processor.baixar_titulo(item)
+        usuario = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
 
-        if sucesso:
+        # Usa versão unificada que baixa título + extrato + Odoo
+        resultado = processor.baixar_titulo_e_extrato(item, usuario=usuario)
+
+        if resultado['success']:
+            # Mensagem detalhada
+            detalhes = []
+            if resultado['titulo']:
+                detalhes.append('título baixado')
+            if resultado['extrato']:
+                detalhes.append('extrato conciliado')
+            if resultado['odoo']:
+                detalhes.append('Odoo reconciliado')
+
             return jsonify({
                 'success': True,
-                'message': 'Baixa executada com sucesso',
+                'message': f'Baixa executada: {", ".join(detalhes)}',
+                'resultado': resultado,
                 'item': item.to_dict()
             })
         else:
             return jsonify({
                 'success': False,
-                'error': item.erro_mensagem or 'Erro desconhecido'
+                'error': resultado.get('mensagem', 'Erro desconhecido')
             }), 400
 
     except Exception as e:

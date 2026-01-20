@@ -2383,6 +2383,16 @@ class CnabRetornoItem(db.Model):
     conta_a_receber_id = db.Column(db.Integer, db.ForeignKey('contas_a_receber.id'), index=True)
     conta_a_receber = db.relationship('ContasAReceber', foreign_keys=[conta_a_receber_id])
 
+    # Vinculação com Extrato Bancário (opcional - se encontrado)
+    extrato_item_id = db.Column(db.Integer, db.ForeignKey('extrato_item.id'), nullable=True, index=True)
+    extrato_item = db.relationship('ExtratoItem', foreign_keys=[extrato_item_id])
+
+    # Status do match com extrato
+    status_match_extrato = db.Column(db.String(30), default='PENDENTE')
+    # PENDENTE, MATCH_ENCONTRADO, SEM_MATCH, NAO_APLICAVEL, CONCILIADO, ERRO
+    match_score_extrato = db.Column(db.Integer)
+    match_criterio_extrato = db.Column(db.String(100))  # DATA+VALOR+CNPJ_EXATO, etc.
+
     # Status de matching
     status_match = db.Column(db.String(30), default='PENDENTE', index=True)
     # PENDENTE         → Aguardando processamento
@@ -2473,6 +2483,12 @@ class CnabRetornoItem(db.Model):
             'status_match_display': self.status_match_display,
             'match_score': self.match_score,
             'match_criterio': self.match_criterio,
+            # Campos de extrato
+            'extrato_item_id': self.extrato_item_id,
+            'status_match_extrato': self.status_match_extrato,
+            'match_score_extrato': self.match_score_extrato,
+            'match_criterio_extrato': self.match_criterio_extrato,
+            # Processamento
             'processado': self.processado,
             'erro_mensagem': self.erro_mensagem,
             'numero_linha': self.numero_linha,

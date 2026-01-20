@@ -45,6 +45,7 @@ from app.recebimento.models import (
 )
 from app.recebimento.services.depara_service import DeparaService
 from app.odoo.utils.connection import get_odoo_connection
+from app.manufatura.models import PedidoCompras
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +73,7 @@ class ValidacaoNfPoService:
     # MAIN VALIDATION FLOW
     # =========================================================================
 
-    def validar_dfe(self, odoo_dfe_id: int) -> Dict[str, Any]:
+    def validar_dfe(self, odoo_dfe_id: int, usar_dados_locais: bool = True) -> Dict[str, Any]:
         """
         Executa validacao completa de um DFE (NF-e) contra POs.
 
@@ -86,6 +87,8 @@ class ValidacaoNfPoService:
 
         Args:
             odoo_dfe_id: ID do DFE no Odoo
+            usar_dados_locais: Se True (padrao), busca POs na tabela local
+                               pedido_compras em vez de chamar Odoo (muito mais rapido)
 
         Returns:
             Dict com resultado da validacao:
@@ -195,7 +198,12 @@ class ValidacaoNfPoService:
 
             # ETAPA 2: Buscar POs candidatos para cada item
             cnpj_fornecedor = self._limpar_cnpj(dfe_data.get('nfe_infnfe_emit_cnpj', ''))
-            pos_candidatos = self._buscar_pos_fornecedor(cnpj_fornecedor)
+
+            # 🚀 OTIMIZACAO: Usar dados locais por padrao (muito mais rapido)
+            if usar_dados_locais:
+                pos_candidatos = self._buscar_pos_fornecedor_local(cnpj_fornecedor)
+            else:
+                pos_candidatos = self._buscar_pos_fornecedor(cnpj_fornecedor)
 
             if not pos_candidatos:
                 # Nenhum PO do fornecedor
@@ -235,14 +243,23 @@ class ValidacaoNfPoService:
 
             for cod_interno, item_agrupado in itens_agrupados.items():
                 # Filtrar candidatos validos (preco e data OK)
-                # OTIMIZACAO: Passar odoo_product_id para evitar busca duplicada
-                candidatos = self._filtrar_pos_candidatos_por_item(
-                    cod_interno,
-                    item_agrupado['preco_medio'],
-                    data_nf,
-                    pos_candidatos,
-                    odoo_product_id=item_agrupado.get('odoo_product_id')
-                )
+                # 🚀 OTIMIZACAO: Usar versao local quando usar_dados_locais=True
+                if usar_dados_locais:
+                    candidatos = self._filtrar_pos_candidatos_por_item_local(
+                        cod_interno,
+                        item_agrupado['preco_medio'],
+                        data_nf,
+                        pos_candidatos
+                    )
+                else:
+                    # Versao original com odoo_product_id
+                    candidatos = self._filtrar_pos_candidatos_por_item(
+                        cod_interno,
+                        item_agrupado['preco_medio'],
+                        data_nf,
+                        pos_candidatos,
+                        odoo_product_id=item_agrupado.get('odoo_product_id')
+                    )
 
                 if not candidatos:
                     # Nenhum PO candidato para este produto
@@ -642,14 +659,14 @@ class ValidacaoNfPoService:
 
             # Buscar POs com status purchase ou done (nao cancelados)
             # EXCLUIR POs que ja possuem NF vinculada (dfe_id preenchido)
+            # NOTA: order nao e suportado no search, usa-se search_read para ordenar
             po_ids = odoo.search(
                 'purchase.order',
                 [
                     ('partner_id', '=', partner_id),
                     ('state', 'in', ['purchase', 'done']),
                     ('dfe_id', '=', False)  # Apenas POs SEM NF vinculada
-                ],
-                order='amount_total desc'  # Ordenar por maior valor
+                ]
             )
 
             if not po_ids:
@@ -715,6 +732,103 @@ class ValidacaoNfPoService:
 
         except Exception as e:
             logger.error(f"Erro ao buscar POs do fornecedor {cnpj_fornecedor}: {e}")
+            return []
+
+    def _buscar_pos_fornecedor_local(self, cnpj_fornecedor: str) -> List[Dict[str, Any]]:
+        """
+        🚀 OTIMIZAÇÃO: Busca POs do fornecedor na tabela LOCAL pedido_compras.
+
+        Substitui chamadas ao Odoo por query local, reduzindo drasticamente
+        o tempo de resposta (de segundos para milissegundos).
+
+        Criterios:
+        - CNPJ igual ao fornecedor da NF
+        - Status Odoo = 'purchase' ou 'done' (confirmados)
+        - dfe_id vazio (sem NF vinculada)
+        - Saldo disponivel > 0 (qtd_produto_pedido - qtd_recebida)
+
+        Retorna lista de POs formatada compativel com o metodo original.
+        """
+        try:
+            # Limpar CNPJ (remover pontuacao)
+            cnpj_limpo = ''.join(c for c in cnpj_fornecedor if c.isdigit())
+
+            # Query local - SEM chamada ao Odoo!
+            pos_local = PedidoCompras.query.filter(
+                # CNPJ do fornecedor (limpar pontuacao para comparacao)
+                db.func.regexp_replace(PedidoCompras.cnpj_fornecedor, '[^0-9]', '', 'g') == cnpj_limpo,
+                # Status confirmado
+                PedidoCompras.status_odoo.in_(['purchase', 'done']),
+                # Sem NF vinculada
+                db.or_(
+                    PedidoCompras.dfe_id.is_(None),
+                    PedidoCompras.dfe_id == ''
+                ),
+                # Saldo disponivel > 0
+                (PedidoCompras.qtd_produto_pedido - db.func.coalesce(PedidoCompras.qtd_recebida, 0)) > 0
+            ).order_by(
+                PedidoCompras.num_pedido,
+                PedidoCompras.cod_produto
+            ).all()
+
+            if not pos_local:
+                logger.info(f"Nenhum PO local com saldo para fornecedor {cnpj_fornecedor}")
+                return []
+
+            # Agrupar por numero do pedido (cada PO pode ter multiplas linhas/produtos)
+            pos_agrupados = defaultdict(lambda: {
+                'id': None,
+                'name': None,
+                'date_planned': None,
+                'lines': []
+            })
+
+            for po in pos_local:
+                num_pedido = po.num_pedido
+
+                # Atualizar dados do header (pega do primeiro registro)
+                if pos_agrupados[num_pedido]['id'] is None:
+                    pos_agrupados[num_pedido]['id'] = po.odoo_id  # ID da linha no Odoo
+                    pos_agrupados[num_pedido]['name'] = po.num_pedido
+                    pos_agrupados[num_pedido]['date_planned'] = (
+                        po.data_pedido_previsao.strftime('%Y-%m-%d') if po.data_pedido_previsao else None
+                    )
+
+                # Calcular saldo
+                qtd_pedido = po.qtd_produto_pedido or Decimal('0')
+                qtd_recebida = po.qtd_recebida or Decimal('0')
+                saldo = qtd_pedido - qtd_recebida
+
+                # Adicionar linha do PO (formato compativel com Odoo)
+                pos_agrupados[num_pedido]['lines'].append({
+                    'id': int(po.odoo_id) if po.odoo_id else po.id,  # ID da linha
+                    'order_id': [None, po.num_pedido],  # [id, name] - formato Odoo
+                    'product_id': [None, po.cod_produto],  # [id, default_code]
+                    'product_qty': float(qtd_pedido),
+                    'qty_received': float(qtd_recebida),
+                    'price_unit': float(po.preco_produto_pedido or 0),
+                    'date_planned': (
+                        po.data_pedido_previsao.strftime('%Y-%m-%d %H:%M:%S')
+                        if po.data_pedido_previsao else None
+                    ),
+                    # Campos extras para match local
+                    '_cod_produto_interno': po.cod_produto,
+                    '_saldo': float(saldo),
+                    '_local_id': po.id
+                })
+
+            # Converter para lista
+            pos_lista = list(pos_agrupados.values())
+
+            logger.info(
+                f"🚀 [LOCAL] Encontrados {len(pos_lista)} POs com saldo para "
+                f"fornecedor {cnpj_fornecedor} ({sum(len(p['lines']) for p in pos_lista)} linhas)"
+            )
+
+            return pos_lista
+
+        except Exception as e:
+            logger.error(f"Erro ao buscar POs locais do fornecedor {cnpj_fornecedor}: {e}")
             return []
 
     # =========================================================================
@@ -1464,6 +1578,94 @@ class ValidacaoNfPoService:
 
         return candidatos
 
+    def _filtrar_pos_candidatos_por_item_local(
+        self,
+        cod_produto_interno: str,
+        preco_nf: Decimal,
+        data_nf: date,
+        pos_fornecedor: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """
+        🚀 VERSÃO LOCAL: Filtra POs candidatos usando codigo interno do produto.
+
+        Diferente da versao original que usa product_id do Odoo, esta versao
+        compara diretamente pelo codigo interno (cod_produto), eliminando
+        completamente a necessidade de chamadas ao Odoo.
+
+        Validacoes aplicadas:
+        1. Produto: cod_produto_interno deve ser igual ao cod_produto do PO
+        2. Preco: 0% tolerancia (4 casas decimais)
+        3. Data: tolerancia assimetrica (3 dias antes, 7 dias depois)
+
+        Retorna lista de linhas de PO validas, ORDENADAS por data ASC.
+        """
+        candidatos = []
+
+        for po in pos_fornecedor:
+            for line in po.get('lines', []):
+                # COMPARACAO LOCAL: Usar _cod_produto_interno (inserido por _buscar_pos_fornecedor_local)
+                line_cod_produto = line.get('_cod_produto_interno')
+
+                # Fallback: extrair do product_id se nao tiver campo extra
+                if not line_cod_produto and line.get('product_id'):
+                    # product_id pode ser [id, default_code] ou apenas id
+                    product_id_val = line.get('product_id')
+                    if isinstance(product_id_val, list) and len(product_id_val) > 1:
+                        line_cod_produto = product_id_val[1]
+
+                if line_cod_produto != cod_produto_interno:
+                    continue
+
+                # Validar PRECO
+                preco_po = Decimal(str(line.get('price_unit', 0) or 0))
+                if not self._validar_preco(preco_nf, preco_po):
+                    logger.debug(
+                        f"PO {po['name']} linha {line['id']}: preco diverge "
+                        f"(NF={preco_nf:.4f}, PO={preco_po:.4f})"
+                    )
+                    continue
+
+                # Validar DATA
+                data_po = self._parse_date(
+                    line.get('date_planned', '') or po.get('date_planned', '')
+                )
+                if not self._validar_data(data_nf, data_po):
+                    logger.debug(
+                        f"PO {po['name']} linha {line['id']}: data diverge "
+                        f"(NF={data_nf}, PO={data_po})"
+                    )
+                    continue
+
+                # Saldo (pode vir pre-calculado ou calcular)
+                saldo = line.get('_saldo')
+                if saldo is None:
+                    qtd_po = Decimal(str(line.get('product_qty', 0) or 0))
+                    qtd_recebida = Decimal(str(line.get('qty_received', 0) or 0))
+                    saldo = float(qtd_po - qtd_recebida)
+
+                if saldo <= 0:
+                    continue
+
+                candidatos.append({
+                    'po_id': po['id'],
+                    'po_name': po['name'],
+                    'po_line_id': line['id'],
+                    'saldo_disponivel': Decimal(str(saldo)),
+                    'preco_po': preco_po,
+                    'data_po': data_po,
+                    'qtd_original': Decimal(str(line.get('product_qty', 0) or 0)),
+                    '_local_id': line.get('_local_id')  # ID local para referencia
+                })
+
+        # Ordenar por data (mais antigo primeiro)
+        candidatos.sort(key=lambda x: x['data_po'] or date.max)
+
+        logger.info(
+            f"🚀 [LOCAL] Produto {cod_produto_interno}: {len(candidatos)} POs candidatos"
+        )
+
+        return candidatos
+
     def _fazer_match_com_split(
         self,
         item_agrupado: Dict[str, Any],
@@ -1654,6 +1856,10 @@ class ValidacaoNfPoService:
         if not date_str:
             return None
 
+        # Se ja for um objeto date, retornar diretamente
+        if isinstance(date_str, date):
+            return date_str
+
         # Tentar varios formatos
         formatos = [
             '%Y-%m-%d %H:%M:%S',
@@ -1665,10 +1871,11 @@ class ValidacaoNfPoService:
         for fmt in formatos:
             try:
                 return datetime.strptime(str(date_str)[:19], fmt).date()
-            except Exception as e:
-                logger.error(f"Erro ao parsear data {date_str}: {e}")
+            except ValueError:
                 continue
 
+        # Apenas logar se nenhum formato funcionou
+        logger.warning(f"Nao foi possivel parsear data: {date_str}")
         return None
 
     def _obter_product_id(self, cod_interno: str) -> Optional[int]:

@@ -273,6 +273,25 @@
 .match-badge--pendente { background: rgba(0, 123, 255, 0.15); color: #0056b3; }
 .match-badge--processado { background: rgba(40, 167, 69, 0.2); color: #155724; }
 .match-badge--erro { background: rgba(220, 53, 69, 0.2); color: #721c24; }
+.match-badge--conciliado { background: rgba(23, 162, 184, 0.2); color: #117a8b; }
+
+/* Extrato Badge (similar ao match-badge) */
+.extrato-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 50px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.extrato-badge--match { background: rgba(23, 162, 184, 0.15); color: #117a8b; }
+.extrato-badge--sem_match { background: rgba(255, 193, 7, 0.12); color: #d39e00; }
+.extrato-badge--pendente { background: rgba(108, 117, 125, 0.1); color: #adb5bd; }
+.extrato-badge--conciliado { background: rgba(40, 167, 69, 0.15); color: #28a745; }
+.extrato-badge--nao_aplicavel { background: transparent; color: #ccc; }
 
 /* Occurrence Badge */
 .ocorrencia-badge {
@@ -483,9 +502,14 @@
                 </a>
                 {% endif %}
                 {% if lote.status in ['IMPORTADO', 'AGUARDANDO_REVISAO', 'APROVADO'] %}
-                <button class="btn-lote btn-lote--primary" id="btnReprocessar" title="Reprocessar matching">
+                <button class="btn-lote btn-lote--primary" id="btnReprocessar" title="Reprocessar matching de títulos">
                     <i class="fas fa-sync-alt"></i>
                     Reprocessar
+                </button>
+                <button class="btn-lote btn-lote--outline" id="btnMatchingExtrato" title="Vincular com linhas de extrato bancário"
+                        {% if stats.com_match == 0 %}disabled{% endif %}>
+                    <i class="fas fa-file-invoice"></i>
+                    Matching Extrato
                 </button>
                 <button class="btn-lote btn-lote--success" id="btnBaixar"
                         {% if stats.com_match == 0 %}disabled{% endif %}>
@@ -591,7 +615,8 @@
                         <th>Vencimento</th>
                         <th>Valor Título</th>
                         <th>Valor Pago</th>
-                        <th>Status Match</th>
+                        <th>Match Título</th>
+                        <th>Extrato</th>
                         <th>Ações</th>
                     </tr>
                 </thead>
@@ -674,6 +699,33 @@
                             {% endif %}
                         </td>
                         <td>
+                            {# Status do match com extrato bancário #}
+                            {% set extrato_status = item.status_match_extrato or 'PENDENTE' %}
+                            {% set extrato_class = {
+                                'MATCH_ENCONTRADO': 'match',
+                                'SEM_MATCH': 'sem_match',
+                                'NAO_APLICAVEL': 'nao_aplicavel',
+                                'PENDENTE': 'pendente',
+                                'CONCILIADO': 'conciliado'
+                            } %}
+                            <span class="extrato-badge extrato-badge--{{ extrato_class.get(extrato_status, 'pendente') }}">
+                                {% if extrato_status == 'MATCH_ENCONTRADO' %}
+                                    <i class="fas fa-link"></i> Vinculado
+                                {% elif extrato_status == 'CONCILIADO' %}
+                                    <i class="fas fa-check"></i> Conciliado
+                                {% elif extrato_status == 'SEM_MATCH' %}
+                                    <i class="fas fa-unlink"></i> S/ Extrato
+                                {% elif extrato_status == 'NAO_APLICAVEL' %}
+                                    -
+                                {% else %}
+                                    <i class="fas fa-clock"></i> Pendente
+                                {% endif %}
+                            </span>
+                            {% if item.match_score_extrato %}
+                            <small class="text-muted d-block">Score: {{ item.match_score_extrato }}</small>
+                            {% endif %}
+                        </td>
+                        <td>
                             {% if item.status_match == 'MATCH_ENCONTRADO' and not item.processado %}
                             <button class="btn-lote btn-lote--sm btn-lote--outline btn-baixar-item"
                                     data-item-id="{{ item.id }}"
@@ -723,10 +775,13 @@
 </div>
 {% endblock %}
 
-{% block extra_js %}
+{% block scripts %}
 <script>
+console.log('=== CNAB400 Lote Detalhe JS INICIADO ===');
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOMContentLoaded disparado');
     const loteId = {{ lote.id }};
+    console.log('Lote ID:', loteId);
 
     // Reprocessar matching
     const btnReprocessar = document.getElementById('btnReprocessar');
@@ -759,11 +814,61 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Executar baixas
+    // Matching com Extrato
+    const btnMatchingExtrato = document.getElementById('btnMatchingExtrato');
+    console.log('btnMatchingExtrato encontrado:', btnMatchingExtrato);
+    if (btnMatchingExtrato) {
+        console.log('Adicionando event listener ao btnMatchingExtrato');
+        btnMatchingExtrato.addEventListener('click', async function(e) {
+            e.preventDefault();
+            console.log('Botão Matching Extrato clicado');
+
+            if (this.disabled) {
+                console.log('Botão está desabilitado');
+                return;
+            }
+
+            if (!confirm('Vincular itens CNAB com linhas de extrato bancário?\n\nSerá feita busca por Data + Valor + CNPJ.')) {
+                console.log('Usuário cancelou');
+                return;
+            }
+
+            this.disabled = true;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Vinculando...';
+            console.log('Fazendo requisição para:', `/cnab400/api/lote/${loteId}/matching-extrato`);
+
+            try {
+                const response = await fetch(`/cnab400/api/lote/${loteId}/matching-extrato`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                console.log('Response status:', response.status);
+                const data = await response.json();
+                console.log('Response data:', data);
+
+                if (data.success) {
+                    alert(`Matching com extrato concluído!\n${data.stats.com_match} extratos vinculados, ${data.stats.sem_match} sem extrato.`);
+                    location.reload();
+                } else {
+                    alert('Erro: ' + (data.error || 'Erro desconhecido'));
+                }
+            } catch (err) {
+                console.error('Erro na requisição:', err);
+                alert('Erro ao executar matching extrato: ' + err.message);
+            } finally {
+                this.disabled = false;
+                this.innerHTML = '<i class="fas fa-file-invoice"></i> Matching Extrato';
+            }
+        });
+    } else {
+        console.log('btnMatchingExtrato NÃO encontrado no DOM');
+    }
+
+    // Executar baixas (UNIFICADA: Título + Extrato + Odoo)
     const btnBaixar = document.getElementById('btnBaixar');
     if (btnBaixar) {
         btnBaixar.addEventListener('click', async function() {
-            if (!confirm('Executar baixa de todos os títulos com match encontrado?')) return;
+            if (!confirm('Executar baixa UNIFICADA de todos os títulos com match?\n\nSerá executado:\n• Baixa de títulos (Contas a Receber)\n• Conciliação de extratos vinculados\n• Reconciliação no Odoo (se disponível)')) return;
 
             this.disabled = true;
             this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
@@ -776,7 +881,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 const data = await response.json();
 
                 if (data.success) {
-                    alert(`Processamento concluído!\n${data.stats.sucesso} baixas executadas, ${data.stats.erros} erros.`);
+                    let msg = `Processamento concluído!\n\n`;
+                    msg += `• ${data.stats.titulos_baixados || data.stats.sucesso} títulos baixados\n`;
+                    if (data.stats.extratos_conciliados > 0) {
+                        msg += `• ${data.stats.extratos_conciliados} extratos conciliados\n`;
+                    }
+                    if (data.stats.odoo_reconciliados > 0) {
+                        msg += `• ${data.stats.odoo_reconciliados} reconciliados no Odoo\n`;
+                    }
+                    if (data.stats.erros > 0) {
+                        msg += `• ${data.stats.erros} erros`;
+                    }
+                    alert(msg);
                     location.reload();
                 } else {
                     alert('Erro: ' + data.error);
