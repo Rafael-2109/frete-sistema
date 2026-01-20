@@ -508,3 +508,92 @@ def api_excluir_lote(lote_id):
             'success': False,
             'error': str(e)
         }), 500
+
+
+# =============================================================================
+# SINCRONIZAÇÃO DE EXTRATOS
+# =============================================================================
+
+@cnab400_bp.route('/api/sincronizar-extratos', methods=['POST'])
+@login_required
+def api_sincronizar_extratos():
+    """
+    API: Sincroniza extratos pendentes com baixas já realizadas (CNAB/Odoo).
+
+    Parâmetros JSON (opcionais):
+        janela_minutos: Janela de tempo para buscar extratos (default 120)
+        limite: Limite de registros (default 500)
+
+    Retorna:
+        JSON com estatísticas da sincronização
+    """
+    from app.financeiro.services.sincronizacao_extratos_service import SincronizacaoExtratosService
+
+    try:
+        data = request.get_json() or {}
+        janela_minutos = data.get('janela_minutos', 120)
+        limite = data.get('limite', 500)
+
+        service = SincronizacaoExtratosService()
+        resultado = service.sincronizar_extratos_pendentes(
+            janela_minutos=janela_minutos,
+            limite=limite
+        )
+
+        return jsonify(resultado)
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@cnab400_bp.route('/api/lote/<int:lote_id>/sincronizar-extratos', methods=['POST'])
+@login_required
+def api_sincronizar_extratos_lote(lote_id):
+    """
+    API: Sincroniza extratos especificamente para itens de um lote CNAB.
+
+    Útil após processar baixas para garantir que extratos
+    correspondentes sejam atualizados.
+    """
+    from app.financeiro.services.sincronizacao_extratos_service import SincronizacaoExtratosService
+
+    try:
+        lote = CnabRetornoLote.query.get_or_404(lote_id)
+
+        service = SincronizacaoExtratosService()
+        resultado = service.sincronizar_extratos_por_cnab(lote_id=lote_id)
+
+        return jsonify(resultado)
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@cnab400_bp.route('/api/revalidar-extratos', methods=['POST'])
+@login_required
+def api_revalidar_extratos():
+    """
+    API: Revalida TODOS os extratos pendentes (sem limite de janela).
+
+    ⚠️ CUIDADO: Pode ser lento em bases grandes.
+    Use apenas em situações de manutenção ou primeira execução.
+    """
+    from app.financeiro.services.sincronizacao_extratos_service import SincronizacaoExtratosService
+
+    try:
+        service = SincronizacaoExtratosService()
+        resultado = service.revalidar_todos_extratos_pendentes()
+
+        return jsonify(resultado)
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500

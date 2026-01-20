@@ -2289,6 +2289,9 @@ class CnabRetornoLote(db.Model):
     processado_por = db.Column(db.String(100))
     erro_mensagem = db.Column(db.Text)
 
+    # Hash para verificação de duplicação (SHA256)
+    hash_arquivo = db.Column(db.String(64), unique=True, index=True)
+
     # Auditoria
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
 

@@ -146,6 +146,22 @@ class ValidacaoNfPoService:
                     f"Marcando como finalizado_odoo."
                 )
 
+                # BUGFIX: Limpar matches/divergencias anteriores ao finalizar
+                # Sem isso, divergencias criadas antes do vinculo com PO permaneciam
+                # como 'pendentes' mesmo apos o DFE ser finalizado no Odoo
+                divergencias_limpas = DivergenciaNfPo.query.filter_by(
+                    validacao_id=validacao.id
+                ).delete()
+                matches_limpos = MatchNfPoItem.query.filter_by(
+                    validacao_id=validacao.id
+                ).delete()
+
+                if divergencias_limpas > 0 or matches_limpos > 0:
+                    logger.info(
+                        f"DFE {odoo_dfe_id} finalizado_odoo: limpas {divergencias_limpas} "
+                        f"divergencias e {matches_limpos} matches anteriores"
+                    )
+
                 validacao.status = 'finalizado_odoo'
                 validacao.validado_em = datetime.utcnow()
                 validacao.atualizado_em = datetime.utcnow()
@@ -157,7 +173,9 @@ class ValidacaoNfPoService:
                     'odoo_po_vinculado_id': validacao.odoo_po_vinculado_id,
                     'odoo_po_vinculado_name': validacao.odoo_po_vinculado_name,
                     'odoo_po_fiscal_id': validacao.odoo_po_fiscal_id,
-                    'odoo_po_fiscal_name': validacao.odoo_po_fiscal_name
+                    'odoo_po_fiscal_name': validacao.odoo_po_fiscal_name,
+                    'divergencias_limpas': divergencias_limpas,
+                    'matches_limpos': matches_limpos
                 }
 
             # Buscar linhas do DFE

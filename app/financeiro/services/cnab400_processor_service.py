@@ -20,6 +20,7 @@ Uso:
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 import re
+import hashlib
 
 from app import db
 from app.financeiro.models import (
@@ -54,14 +55,53 @@ class Cnab400ProcessorService:
 
         Returns:
             CnabRetornoLote criado com todos os itens processados
+
+        Raises:
+            ValueError: Se arquivo inválido ou já importado anteriormente
         """
-        # 1. Parse do arquivo
+        # =====================================================
+        # CORREÇÃO #3: VERIFICAÇÃO DE DUPLICAÇÃO
+        # Evita importar o mesmo arquivo múltiplas vezes
+        # =====================================================
+
+        # 1. Calcular hash SHA256 do conteúdo
+        hash_arquivo = hashlib.sha256(arquivo_conteudo.encode('latin-1', errors='replace')).hexdigest()
+
+        # 2. Verificar se já existe lote com mesmo hash
+        lote_existente_hash = CnabRetornoLote.query.filter(
+            CnabRetornoLote.hash_arquivo == hash_arquivo
+        ).first()
+
+        if lote_existente_hash:
+            raise ValueError(
+                f"Arquivo com mesmo conteúdo já foi importado anteriormente. "
+                f"Lote #{lote_existente_hash.id} - "
+                f"{lote_existente_hash.arquivo_nome} em "
+                f"{lote_existente_hash.data_processamento.strftime('%d/%m/%Y %H:%M') if lote_existente_hash.data_processamento else 'N/D'}"
+            )
+
+        # 3. Parse do arquivo
         dados = self.parser.parse_arquivo(arquivo_conteudo)
 
         if not dados['header']:
             raise ValueError("Arquivo inválido: header não encontrado")
 
-        # 2. Criar lote
+        # 4. Verificar se já existe lote com mesmo nome + banco + data
+        # (verificação secundária para casos onde hash possa diferir por encoding)
+        lote_existente_nome = CnabRetornoLote.query.filter(
+            CnabRetornoLote.arquivo_nome == arquivo_nome,
+            CnabRetornoLote.banco_codigo == dados['header']['codigo_banco'],
+            CnabRetornoLote.data_arquivo == dados['header']['data_arquivo'],
+        ).first()
+
+        if lote_existente_nome:
+            raise ValueError(
+                f"Arquivo '{arquivo_nome}' já foi importado para este banco/data. "
+                f"Lote #{lote_existente_nome.id} em "
+                f"{lote_existente_nome.data_processamento.strftime('%d/%m/%Y %H:%M') if lote_existente_nome.data_processamento else 'N/D'}"
+            )
+
+        # 5. Criar lote (com hash para futuras verificações)
         lote = CnabRetornoLote(
             arquivo_nome=arquivo_nome,
             banco_codigo=dados['header']['codigo_banco'],
@@ -69,20 +109,21 @@ class Cnab400ProcessorService:
             data_arquivo=dados['header']['data_arquivo'],
             total_registros=len(dados['detalhes']),
             processado_por=usuario,
-            status='IMPORTADO'
+            status='IMPORTADO',
+            hash_arquivo=hash_arquivo  # Hash para verificação de duplicação
         )
         db.session.add(lote)
         db.session.flush()  # Gera ID do lote
 
-        # 3. Processar cada detalhe
+        # 6. Processar cada detalhe
         for detalhe in dados['detalhes']:
             item = self._criar_item(lote, detalhe)
             self._executar_matching(item)
 
-        # 4. Atualizar estatísticas do lote
+        # 7. Atualizar estatísticas do lote
         lote.atualizar_estatisticas()
 
-        # 5. Definir status baseado nos resultados
+        # 8. Definir status baseado nos resultados
         if lote.registros_sem_match > 0:
             lote.status = 'AGUARDANDO_REVISAO'
         else:
@@ -175,17 +216,25 @@ class Cnab400ProcessorService:
             return
 
         # 5. Verificar se já está pago
+        # =====================================================
+        # FASE 4: RASTREABILIDADE COMPLETA
+        # Mesmo quando título já pago, NÃO retornamos aqui.
+        # Continuamos para buscar extrato e criar vínculos para rastreabilidade.
+        # O vínculo CNAB ↔ Título ↔ Extrato é REAL independente da ordem de importação.
+        # =====================================================
         if titulo.parcela_paga:
             item.status_match = 'JA_PAGO'
             item.conta_a_receber_id = titulo.id
+            item.match_score = 100
+            item.match_criterio = 'NF_PARCELA_EXATO'
             item.erro_mensagem = 'Título já estava pago anteriormente'
-            return
-
-        # 6. Match encontrado!
-        item.status_match = 'MATCH_ENCONTRADO'
-        item.conta_a_receber_id = titulo.id
-        item.match_score = 100
-        item.match_criterio = 'NF_PARCELA_EXATO'
+            # NÃO RETORNA - continua para buscar extrato vinculado para rastreabilidade
+        else:
+            # 6. Match encontrado! (título ainda não pago)
+            item.status_match = 'MATCH_ENCONTRADO'
+            item.conta_a_receber_id = titulo.id
+            item.match_score = 100
+            item.match_criterio = 'NF_PARCELA_EXATO'
 
         # 7. Validação adicional: verificar se valor confere
         if titulo.valor_titulo and item.valor_titulo:
@@ -508,29 +557,122 @@ class Cnab400ProcessorService:
         # Terceiro: Apenas data + valor (sem filtro de CNPJ)
         return query.first()
 
+    def _buscar_extrato_correspondente_para_rastreabilidade(
+        self,
+        item: CnabRetornoItem
+    ) -> Optional[ExtratoItem]:
+        """
+        Busca extrato correspondente para rastreabilidade.
+        INCLUI extratos já conciliados pois o vínculo é REAL.
+
+        Esta versão é usada quando o título já foi pago (status_match == 'JA_PAGO').
+        Como queremos manter a rastreabilidade completa (CNAB ↔ Título ↔ Extrato),
+        precisamos encontrar o extrato mesmo que já tenha sido conciliado anteriormente.
+
+        Prioridade de busca:
+        1. Extrato que já tem o mesmo título vinculado (titulo_receber_id)
+        2. Extrato com mesmo CNPJ + Data + Valor
+        3. Extrato com Data + Valor (sem CNPJ)
+
+        Args:
+            item: CnabRetornoItem para buscar correspondência
+
+        Returns:
+            ExtratoItem encontrado ou None
+        """
+        # Só busca para liquidações (códigos 06, 10, 17)
+        if item.codigo_ocorrencia not in ('06', '10', '17'):
+            return None
+
+        # Verifica se há data de ocorrência
+        if not item.data_ocorrencia:
+            return None
+
+        # Tolerância de valor: R$ 0,02
+        valor_cnab = float(item.valor_pago or 0)
+        tolerancia = 0.02
+
+        # Query base: mesma data + mesmo valor aproximado
+        # DIFERENÇA: NÃO filtra por status != 'CONCILIADO'
+        query = db.session.query(ExtratoItem).join(ExtratoLote).filter(
+            ExtratoItem.data_transacao == item.data_ocorrencia,
+            ExtratoItem.valor.between(valor_cnab - tolerancia, valor_cnab + tolerancia),
+            # SEM: ExtratoItem.status != 'CONCILIADO' - inclui conciliados para rastreabilidade
+            ExtratoLote.tipo_transacao == 'entrada',  # Apenas recebimentos
+        )
+
+        # PRIORIDADE 1: Se título está vinculado, buscar extrato que tem esse título
+        # Este é o critério mais confiável pois o vínculo já existe
+        if item.conta_a_receber_id:
+            extrato = query.filter(
+                ExtratoItem.titulo_receber_id == item.conta_a_receber_id
+            ).first()
+            if extrato:
+                return extrato
+
+        # PRIORIDADE 2: Buscar por CNPJ
+        cnpj_cnab = self._normalizar_cnpj(item.cnpj_pagador)
+
+        if cnpj_cnab and len(cnpj_cnab) >= 8:
+            # CNPJ exato
+            extrato = query.filter(
+                db.func.regexp_replace(ExtratoItem.cnpj_pagador, '[^0-9]', '', 'g') == cnpj_cnab
+            ).first()
+
+            if extrato:
+                return extrato
+
+            # CNPJ raiz (8 primeiros dígitos - grupo empresarial)
+            raiz_cnpj = cnpj_cnab[:8]
+            extrato = query.filter(
+                db.func.left(
+                    db.func.regexp_replace(ExtratoItem.cnpj_pagador, '[^0-9]', '', 'g'),
+                    8
+                ) == raiz_cnpj
+            ).first()
+
+            if extrato:
+                return extrato
+
+        # PRIORIDADE 3: Apenas data + valor (sem filtro de CNPJ)
+        return query.first()
+
     def _executar_matching_extrato(self, item: CnabRetornoItem) -> None:
         """
         Tenta vincular item CNAB com linha de extrato bancário.
 
+        =====================================================
+        FASE 4: RASTREABILIDADE COMPLETA
+        Agora aceita tanto MATCH_ENCONTRADO quanto JA_PAGO.
+        Para JA_PAGO, busca incluindo extratos já conciliados,
+        mantendo a rastreabilidade completa independente da ordem.
+        =====================================================
+
         Pré-requisitos:
-        - Item deve ter match com título (status_match == 'MATCH_ENCONTRADO')
+        - Item deve ter match com título (MATCH_ENCONTRADO ou JA_PAGO)
         - Item não deve estar processado
 
         Args:
             item: CnabRetornoItem para processar
         """
-        # Só processa se já tem match com título
-        if item.status_match != 'MATCH_ENCONTRADO':
+        # Só processa se tem match com título (ENCONTRADO ou JA_PAGO)
+        # FASE 4: Agora aceita JA_PAGO para manter rastreabilidade
+        if item.status_match not in ('MATCH_ENCONTRADO', 'JA_PAGO'):
             item.status_match_extrato = 'NAO_APLICAVEL'
             return
 
-        # Buscar extrato correspondente
-        extrato = self._buscar_extrato_correspondente(item)
+        # Escolher função de busca apropriada baseada no status
+        if item.status_match == 'JA_PAGO':
+            # Para títulos já pagos, busca INCLUINDO extratos conciliados
+            # pois o vínculo é REAL independente de quando foi feita a baixa
+            extrato = self._buscar_extrato_correspondente_para_rastreabilidade(item)
+        else:
+            # Para títulos pendentes, busca apenas extratos não conciliados
+            extrato = self._buscar_extrato_correspondente(item)
 
         if extrato:
             # Vinculação encontrada
             item.extrato_item_id = extrato.id
-            item.status_match_extrato = 'MATCH_ENCONTRADO'
 
             # Calcular score baseado no critério de match
             cnpj_cnab = self._normalizar_cnpj(item.cnpj_pagador)
@@ -549,6 +691,26 @@ class Cnab400ProcessorService:
             else:
                 item.match_score_extrato = 85
                 item.match_criterio_extrato = 'DATA+VALOR_SEM_CNPJ'
+
+            # =====================================================
+            # FASE 4: VINCULAÇÃO BIDIRECIONAL COM TRATAMENTO DE
+            # EXTRATOS JÁ CONCILIADOS
+            # =====================================================
+            if extrato.status == 'CONCILIADO':
+                # Extrato já conciliado - apenas vincula para rastreabilidade
+                # NÃO altera status do extrato (já está CONCILIADO)
+                item.status_match_extrato = 'VINCULADO_RASTREABILIDADE'
+                item.match_criterio_extrato = f'EXTRATO_JA_CONCILIADO+{item.match_criterio_extrato}'
+                # Não altera extrato.status_match pois já está finalizado
+            else:
+                # Extrato pendente - vincula e prepara para conciliação
+                item.status_match_extrato = 'MATCH_ENCONTRADO'
+
+                # CORREÇÃO #1: VINCULAÇÃO BIDIRECIONAL
+                # Atualiza o ExtratoItem para registrar que foi vinculado via CNAB
+                extrato.status_match = 'MATCH_ENCONTRADO'
+                extrato.match_criterio = f'VIA_CNAB_{item.match_criterio_extrato}'
+                extrato.match_score = item.match_score_extrato
         else:
             # Nenhum extrato encontrado
             item.status_match_extrato = 'SEM_MATCH'
@@ -640,8 +802,14 @@ class Cnab400ProcessorService:
 
                     resultado['extrato'] = True
 
-                    # 3. Reconciliar no Odoo (se tiver IDs necessários)
-                    if extrato.statement_line_id and titulo and getattr(titulo, 'move_line_id', None):
+                    # =====================================================
+                    # CORREÇÃO #2: REMOVER CONDIÇÃO IMPOSSÍVEL move_line_id
+                    # ContasAReceber NÃO possui campo move_line_id.
+                    # O ExtratoConciliacaoService já busca o move_line_id
+                    # no Odoo usando NF+Parcela, então basta ter o statement_line_id.
+                    # =====================================================
+                    # 3. Reconciliar no Odoo (se tiver statement_line_id)
+                    if extrato.statement_line_id and titulo:
                         try:
                             from app.financeiro.services.extrato_conciliacao_service import ExtratoConciliacaoService
                             conciliador = ExtratoConciliacaoService()
@@ -761,19 +929,36 @@ class Cnab400ProcessorService:
         """
         Executa matching com extrato para todos os itens do lote que têm título vinculado.
 
+        =====================================================
+        FASE 4: RASTREABILIDADE COMPLETA
+        Agora também processa itens JA_PAGO para manter rastreabilidade.
+        Novo contador 'vinculado_rastreabilidade' para extratos já conciliados.
+        =====================================================
+
         Deve ser chamado APÓS o matching de títulos.
 
         Args:
             lote: CnabRetornoLote
 
         Returns:
-            Dict com estatísticas: {'com_match': N, 'sem_match': N, 'nao_aplicavel': N}
+            Dict com estatísticas: {
+                'com_match': N,
+                'sem_match': N,
+                'nao_aplicavel': N,
+                'vinculado_rastreabilidade': N  # NOVO: extratos já conciliados vinculados
+            }
         """
-        stats = {'com_match': 0, 'sem_match': 0, 'nao_aplicavel': 0}
+        stats = {
+            'com_match': 0,
+            'sem_match': 0,
+            'nao_aplicavel': 0,
+            'vinculado_rastreabilidade': 0  # FASE 4: Novo contador
+        }
 
+        # FASE 4: Agora também processa itens JA_PAGO para rastreabilidade
         itens = CnabRetornoItem.query.filter(
             CnabRetornoItem.lote_id == lote.id,
-            CnabRetornoItem.status_match == 'MATCH_ENCONTRADO',
+            CnabRetornoItem.status_match.in_(['MATCH_ENCONTRADO', 'JA_PAGO']),  # Inclui JA_PAGO
             CnabRetornoItem.processado == False,
         ).all()
 
@@ -782,6 +967,8 @@ class Cnab400ProcessorService:
 
             if item.status_match_extrato == 'MATCH_ENCONTRADO':
                 stats['com_match'] += 1
+            elif item.status_match_extrato == 'VINCULADO_RASTREABILIDADE':
+                stats['vinculado_rastreabilidade'] += 1
             elif item.status_match_extrato == 'SEM_MATCH':
                 stats['sem_match'] += 1
             else:

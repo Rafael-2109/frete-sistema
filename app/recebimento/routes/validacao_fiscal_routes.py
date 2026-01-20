@@ -318,6 +318,384 @@ def listar_perfis_fiscais():
 
 
 # =============================================================================
+# IMPORTACAO EXCEL DE PERFIS FISCAIS
+# =============================================================================
+
+@validacao_fiscal_bp.route('/perfil-fiscal/importar-excel', methods=['POST'])
+@login_required
+def importar_perfil_fiscal_excel():
+    """
+    Importa perfis fiscais de um arquivo Excel.
+
+    Colunas obrigatorias:
+    - cod_produto: Codigo interno do produto
+    - cnpj_fornecedor: CNPJ do fornecedor (14 digitos)
+    - ncm_esperado: NCM do produto (8 digitos)
+    - cfop_esperados: CFOPs validos separados por virgula (ex: "5101,6101")
+
+    Colunas opcionais:
+    - cst_icms_esperado, aliquota_icms_esperada
+    - aliquota_icms_st_esperada, aliquota_ipi_esperada
+    - cst_pis_esperado, aliquota_pis_esperada
+    - cst_cofins_esperado, aliquota_cofins_esperada
+
+    Retorna:
+    - criados: quantidade de perfis criados
+    - atualizados: quantidade de perfis atualizados
+    - erros: lista de erros por linha
+    """
+    import pandas as pd
+    from decimal import Decimal, InvalidOperation
+    from datetime import datetime, timezone
+    import json
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        # 1. Validar arquivo enviado
+        if 'arquivo' not in request.files:
+            return jsonify({
+                'sucesso': False,
+                'erro': 'Nenhum arquivo enviado'
+            }), 400
+
+        arquivo = request.files['arquivo']
+
+        if arquivo.filename == '':
+            return jsonify({
+                'sucesso': False,
+                'erro': 'Nenhum arquivo selecionado'
+            }), 400
+
+        # 2. Validar extensao
+        if not arquivo.filename.lower().endswith(('.xlsx', '.xls')):
+            return jsonify({
+                'sucesso': False,
+                'erro': 'Arquivo deve ser Excel (.xlsx ou .xls)'
+            }), 400
+
+        # 3. Ler Excel
+        try:
+            df = pd.read_excel(arquivo, dtype=str)
+            df = df.fillna('')  # Substituir NaN por string vazia
+        except Exception as e:
+            return jsonify({
+                'sucesso': False,
+                'erro': f'Erro ao ler arquivo Excel: {str(e)}'
+            }), 400
+
+        # 4. Validar colunas obrigatorias
+        colunas_obrigatorias = ['cod_produto', 'cnpj_fornecedor', 'ncm_esperado', 'cfop_esperados']
+        colunas_faltando = [c for c in colunas_obrigatorias if c not in df.columns]
+
+        if colunas_faltando:
+            return jsonify({
+                'sucesso': False,
+                'erro': f'Colunas obrigatorias faltando: {", ".join(colunas_faltando)}',
+                'colunas_encontradas': list(df.columns),
+                'colunas_esperadas': colunas_obrigatorias
+            }), 400
+
+        # 5. Processar linha por linha
+        from app import db
+
+        criados = 0
+        atualizados = 0
+        erros = []
+        usuario = current_user.nome if hasattr(current_user, 'nome') else 'IMPORT_EXCEL'
+
+        for idx, row in df.iterrows():
+            linha_num = idx + 2  # +2 porque Excel comeca em 1 e tem header
+
+            try:
+                # 5.1 Validar campos obrigatorios
+                cod_produto = str(row.get('cod_produto', '')).strip()
+                cnpj_raw = str(row.get('cnpj_fornecedor', '')).strip()
+                ncm = str(row.get('ncm_esperado', '')).strip()
+                cfops_raw = str(row.get('cfop_esperados', '')).strip()
+
+                if not cod_produto:
+                    erros.append({'linha': linha_num, 'erro': 'cod_produto vazio'})
+                    continue
+
+                if not cnpj_raw:
+                    erros.append({'linha': linha_num, 'erro': 'cnpj_fornecedor vazio'})
+                    continue
+
+                # 5.2 Limpar CNPJ (aceita formatado: 52.502.978/0001-55 ou apenas digitos)
+                cnpj = ''.join(c for c in cnpj_raw if c.isdigit())
+
+                # Verificar se Excel converteu para notacao cientifica (ex: 5.25E+13)
+                if 'E' in cnpj_raw.upper() or 'e' in cnpj_raw:
+                    erros.append({
+                        'linha': linha_num,
+                        'erro': f'CNPJ em notacao cientifica: {cnpj_raw}. Formate a coluna como TEXTO no Excel.'
+                    })
+                    continue
+
+                if len(cnpj) != 14:
+                    erros.append({
+                        'linha': linha_num,
+                        'erro': f'CNPJ invalido: {cnpj_raw} (encontrado {len(cnpj)} digitos, esperado 14). Aceita formatado (52.502.978/0001-55) ou apenas numeros.'
+                    })
+                    continue
+
+                # 5.3 Validar NCM
+                ncm_limpo = ''.join(c for c in ncm if c.isdigit())
+                if len(ncm_limpo) != 8:
+                    erros.append({'linha': linha_num, 'erro': f'NCM invalido: {ncm} (deve ter 8 digitos)'})
+                    continue
+
+                # 5.4 Converter CFOPs para JSON
+                cfops_list = [c.strip() for c in cfops_raw.split(',') if c.strip()]
+                for cfop in cfops_list:
+                    cfop_limpo = ''.join(c for c in cfop if c.isdigit())
+                    if len(cfop_limpo) != 4:
+                        erros.append({'linha': linha_num, 'erro': f'CFOP invalido: {cfop} (deve ter 4 digitos)'})
+                        continue
+                cfops_json = json.dumps(cfops_list)
+
+                # 5.5 Converter aliquotas opcionais
+                def parse_decimal(valor, campo):
+                    if not valor or valor == '':
+                        return None
+                    try:
+                        # Substituir virgula por ponto
+                        valor_limpo = str(valor).replace(',', '.').strip()
+                        return Decimal(valor_limpo)
+                    except (InvalidOperation, ValueError):
+                        raise ValueError(f'{campo} invalido: {valor}')
+
+                try:
+                    aliq_icms = parse_decimal(row.get('aliquota_icms_esperada', ''), 'aliquota_icms_esperada')
+                    aliq_icms_st = parse_decimal(row.get('aliquota_icms_st_esperada', ''), 'aliquota_icms_st_esperada')
+                    aliq_ipi = parse_decimal(row.get('aliquota_ipi_esperada', ''), 'aliquota_ipi_esperada')
+                    aliq_pis = parse_decimal(row.get('aliquota_pis_esperada', ''), 'aliquota_pis_esperada')
+                    aliq_cofins = parse_decimal(row.get('aliquota_cofins_esperada', ''), 'aliquota_cofins_esperada')
+                except ValueError as ve:
+                    erros.append({'linha': linha_num, 'erro': str(ve)})
+                    continue
+
+                # 5.6 Campos CST opcionais
+                cst_icms = str(row.get('cst_icms_esperado', '')).strip() or None
+                cst_pis = str(row.get('cst_pis_esperado', '')).strip() or None
+                cst_cofins = str(row.get('cst_cofins_esperado', '')).strip() or None
+
+                # 5.7 Buscar ou criar perfil
+                perfil = PerfilFiscalProdutoFornecedor.query.filter_by(
+                    cod_produto=cod_produto,
+                    cnpj_fornecedor=cnpj
+                ).first()
+
+                if perfil:
+                    # Atualizar existente
+                    perfil.ncm_esperado = ncm_limpo
+                    perfil.cfop_esperados = cfops_json
+                    perfil.cst_icms_esperado = cst_icms
+                    perfil.aliquota_icms_esperada = aliq_icms
+                    perfil.aliquota_icms_st_esperada = aliq_icms_st
+                    perfil.aliquota_ipi_esperada = aliq_ipi
+                    perfil.cst_pis_esperado = cst_pis
+                    perfil.aliquota_pis_esperada = aliq_pis
+                    perfil.cst_cofins_esperado = cst_cofins
+                    perfil.aliquota_cofins_esperada = aliq_cofins
+                    perfil.atualizado_por = usuario
+                    perfil.atualizado_em = datetime.now(timezone.utc)
+                    perfil.ativo = True
+                    atualizados += 1
+                else:
+                    # Criar novo
+                    perfil = PerfilFiscalProdutoFornecedor(
+                        cod_produto=cod_produto,
+                        cnpj_fornecedor=cnpj,
+                        ncm_esperado=ncm_limpo,
+                        cfop_esperados=cfops_json,
+                        cst_icms_esperado=cst_icms,
+                        aliquota_icms_esperada=aliq_icms,
+                        aliquota_icms_st_esperada=aliq_icms_st,
+                        aliquota_ipi_esperada=aliq_ipi,
+                        cst_pis_esperado=cst_pis,
+                        aliquota_pis_esperada=aliq_pis,
+                        cst_cofins_esperado=cst_cofins,
+                        aliquota_cofins_esperada=aliq_cofins,
+                        criado_por=usuario,
+                        criado_em=datetime.now(timezone.utc),
+                        ativo=True
+                    )
+                    db.session.add(perfil)
+                    criados += 1
+
+            except Exception as e:
+                erros.append({'linha': linha_num, 'erro': str(e)})
+                continue
+
+        # 6. Commit
+        db.session.commit()
+
+        logger.info(
+            f"Importacao de perfis fiscais: {criados} criados, {atualizados} atualizados, "
+            f"{len(erros)} erros - Usuario: {usuario}"
+        )
+
+        return jsonify({
+            'sucesso': True,
+            'criados': criados,
+            'atualizados': atualizados,
+            'total_processados': criados + atualizados,
+            'erros': erros[:50]  # Limitar a 50 erros para nao sobrecarregar resposta
+        })
+
+    except Exception as e:
+        from app import db
+        db.session.rollback()
+        logger.error(f"Erro na importacao de perfis fiscais: {e}")
+        return jsonify({
+            'sucesso': False,
+            'erro': str(e)
+        }), 500
+
+
+@validacao_fiscal_bp.route('/perfil-fiscal/template-excel', methods=['GET'])
+@login_required
+def baixar_template_perfil_fiscal():
+    """
+    Gera e retorna um template Excel para importacao de perfis fiscais.
+
+    Inclui:
+    - Aba "PerfisFiscais" com exemplo de dados
+    - Aba "Instrucoes" com explicacao de cada campo
+    """
+    import pandas as pd
+    import io
+    from flask import send_file
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        # Dados de exemplo
+        dados_exemplo = [
+            {
+                'cod_produto': '206030034',
+                'cnpj_fornecedor': '52502978000155',
+                'ncm_esperado': '73241000',
+                'cfop_esperados': '5101,6101',
+                'cst_icms_esperado': '00',
+                'aliquota_icms_esperada': '18.00',
+                'aliquota_icms_st_esperada': '0.00',
+                'aliquota_ipi_esperada': '0.00',
+                'cst_pis_esperado': '01',
+                'aliquota_pis_esperada': '1.65',
+                'cst_cofins_esperado': '01',
+                'aliquota_cofins_esperada': '7.60'
+            },
+            {
+                'cod_produto': '207030609',
+                'cnpj_fornecedor': '47950361000162',
+                'ncm_esperado': '20089900',
+                'cfop_esperados': '6101',
+                'cst_icms_esperado': '00',
+                'aliquota_icms_esperada': '12.00',
+                'aliquota_icms_st_esperada': '0.00',
+                'aliquota_ipi_esperada': '5.00',
+                'cst_pis_esperado': '01',
+                'aliquota_pis_esperada': '1.65',
+                'cst_cofins_esperado': '01',
+                'aliquota_cofins_esperada': '7.60'
+            },
+            # Linha vazia para usuario preencher
+            {
+                'cod_produto': '',
+                'cnpj_fornecedor': '',
+                'ncm_esperado': '',
+                'cfop_esperados': '',
+                'cst_icms_esperado': '',
+                'aliquota_icms_esperada': '',
+                'aliquota_icms_st_esperada': '',
+                'aliquota_ipi_esperada': '',
+                'cst_pis_esperado': '',
+                'aliquota_pis_esperada': '',
+                'cst_cofins_esperado': '',
+                'aliquota_cofins_esperada': ''
+            }
+        ]
+
+        df = pd.DataFrame(dados_exemplo)
+
+        # Criar Excel em memoria
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='PerfisFiscais')
+
+            # Aba de instrucoes
+            instrucoes = pd.DataFrame([
+                ['INSTRUCOES DE PREENCHIMENTO - PERFIS FISCAIS'],
+                [''],
+                ['Este arquivo serve para cadastrar os dados fiscais esperados por produto/fornecedor.'],
+                ['Com esses dados, as NFs desses produtos NAO cairao em "Primeira Compra".'],
+                [''],
+                ['================================================================================'],
+                ['COLUNAS DE IDENTIFICACAO (OBRIGATORIAS):'],
+                ['================================================================================'],
+                ['- cod_produto: Codigo interno do produto (ex: 206030034)'],
+                ['- cnpj_fornecedor: CNPJ do fornecedor (aceita formatado: 52.502.978/0001-55 ou apenas numeros)'],
+                [''],
+                ['================================================================================'],
+                ['COLUNAS VALIDADAS NA NF (preencher para evitar divergencias):'],
+                ['================================================================================'],
+                ['- ncm_esperado: NCM do produto, 8 digitos (ex: 73241000) -> COMPARADO COM NF'],
+                ['- cfop_esperados: CFOPs validos separados por virgula (ex: 5101,6101) -> COMPARADO COM NF'],
+                ['- aliquota_icms_esperada: Aliquota ICMS % (ex: 18.00) -> COMPARADO COM NF'],
+                [''],
+                ['================================================================================'],
+                ['COLUNAS ARMAZENADAS (para referencia futura, nao comparadas atualmente):'],
+                ['================================================================================'],
+                ['- cst_icms_esperado: CST do ICMS (ex: 00, 10, 20, 60)'],
+                ['- aliquota_icms_st_esperada: Aliquota ICMS ST % (ex: 0.00)'],
+                ['- aliquota_ipi_esperada: Aliquota IPI % (ex: 5.00)'],
+                ['- cst_pis_esperado: CST do PIS (ex: 01, 04, 06)'],
+                ['- aliquota_pis_esperada: Aliquota PIS % (ex: 1.65)'],
+                ['- cst_cofins_esperado: CST do COFINS (ex: 01, 04, 06)'],
+                ['- aliquota_cofins_esperada: Aliquota COFINS % (ex: 7.60)'],
+                [''],
+                ['================================================================================'],
+                ['IMPORTANTE - FORMATACAO:'],
+                ['================================================================================'],
+                ['- CNPJ: Formate a coluna como TEXTO antes de colar para evitar notacao cientifica'],
+                ['- Use ponto ou virgula como separador decimal (1.65 ou 1,65)'],
+                ['- Se o produto/fornecedor ja existir, sera ATUALIZADO'],
+                ['- Se nao existir, sera CRIADO'],
+                ['- Linhas com erro serao ignoradas e listadas no resultado'],
+                [''],
+                ['================================================================================'],
+                ['CFOPs COMUNS (COMPRA):'],
+                ['================================================================================'],
+                ['- 1101/2101: Compra para industrializacao (dentro/fora estado)'],
+                ['- 1102/2102: Compra para comercializacao (dentro/fora estado)'],
+                ['- 1403/2403: Compra para comercializacao com ST (dentro/fora estado)'],
+                ['- 1556/2556: Compra de material para uso/consumo (dentro/fora estado)'],
+            ], columns=[''])
+            instrucoes.to_excel(writer, index=False, sheet_name='Instrucoes', header=False)
+
+        output.seek(0)
+
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name='template_perfis_fiscais.xlsx'
+        )
+
+    except Exception as e:
+        logger.error(f"Erro ao gerar template Excel de perfis fiscais: {e}")
+        return jsonify({
+            'sucesso': False,
+            'erro': str(e)
+        }), 500
+
+
+# =============================================================================
 # ACESSO AO PDF DA NF
 # =============================================================================
 
