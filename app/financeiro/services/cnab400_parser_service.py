@@ -169,7 +169,7 @@ class Cnab400ParserService:
         - 63-70: Zeros
         - 71-82: Nosso número
         - 109-110: Código ocorrência
-        - 111-116: Data ocorrência (DDMMAA)
+        - 111-116: Data ocorrência (DDMMAA) - data da liquidação
         - 117-126: Seu número (NF/Parcela)
         - 147-152: Data vencimento (DDMMAA)
         - 153-165: Valor título (13 dígitos, 2 decimais implícitos)
@@ -178,6 +178,7 @@ class Cnab400ParserService:
         - 241-253: Desconto
         - 254-266: Valor pago
         - 267-279: Juros mora
+        - 296-301: Data crédito (DDMMAA) - data do crédito na conta
         - 395-400: Sequencial
         """
         codigo_ocorrencia = linha[108:110]
@@ -192,6 +193,7 @@ class Cnab400ParserService:
             'codigo_ocorrencia': codigo_ocorrencia,
             'descricao_ocorrencia': self.OCORRENCIAS.get(codigo_ocorrencia, 'Desconhecida'),
             'data_ocorrencia': self._parse_data_ddmmaa(linha[110:116]),
+            'data_credito': self._parse_data_ddmmaa(linha[295:301]),  # Data do crédito na conta
             'seu_numero': linha[116:126].strip(),
             'data_vencimento': self._parse_data_ddmmaa(linha[146:152]),
             'valor_titulo': self._parse_valor(linha[152:165]),

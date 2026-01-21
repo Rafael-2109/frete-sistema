@@ -765,41 +765,46 @@
             `;
 
             // Se tem valores encontrados, mostrar comparacao
+            // Normalizar valores para comparacao (null/undefined -> 0)
+            const ibsUfAliq = normalizar(ibs.ibs_uf_aliq);
+            const ibsMunAliq = normalizar(ibs.ibs_mun_aliq);
+            const cbsAliq = normalizar(ibs.cbs_aliq);
+
             if (temIbsCbsEncontrado) {
                 html += `
                     <div class="row">
                         <div class="col-md-4">
-                            <div class="card ${ibs.ibs_uf_aliq == 0.10 ? 'border-success' : 'border-danger'}">
-                                <div class="card-header ${ibs.ibs_uf_aliq == 0.10 ? 'bg-success' : 'bg-danger'} text-white py-1 px-2">
-                                    <small>IBS UF ${ibs.ibs_uf_aliq == 0.10 ? '✓' : '✗'}</small>
+                            <div class="card ${ibsUfAliq == 0.10 ? 'border-success' : 'border-danger'}">
+                                <div class="card-header ${ibsUfAliq == 0.10 ? 'bg-success' : 'bg-danger'} text-white py-1 px-2">
+                                    <small>IBS UF ${ibsUfAliq == 0.10 ? '✓' : '✗'}</small>
                                 </div>
                                 <div class="card-body p-2 text-center">
                                     <small class="text-muted">Esperado: 0,10%</small>
-                                    <div class="fw-bold ${ibs.ibs_uf_aliq == 0.10 ? 'text-success' : 'text-danger'}">${formatarNumero(ibs.ibs_uf_aliq)}%</div>
+                                    <div class="fw-bold ${ibsUfAliq == 0.10 ? 'text-success' : 'text-danger'}">${formatarNumero(ibsUfAliq)}%</div>
                                     <small class="text-muted">R$ ${formatarNumero(ibs.ibs_uf_valor)}</small>
                                 </div>
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <div class="card ${ibs.ibs_mun_aliq == 0.00 ? 'border-success' : 'border-danger'}">
-                                <div class="card-header ${ibs.ibs_mun_aliq == 0.00 ? 'bg-success' : 'bg-danger'} text-white py-1 px-2">
-                                    <small>IBS Mun ${ibs.ibs_mun_aliq == 0.00 ? '✓' : '✗'}</small>
+                            <div class="card ${ibsMunAliq == 0.00 ? 'border-success' : 'border-danger'}">
+                                <div class="card-header ${ibsMunAliq == 0.00 ? 'bg-success' : 'bg-danger'} text-white py-1 px-2">
+                                    <small>IBS Mun ${ibsMunAliq == 0.00 ? '✓' : '✗'}</small>
                                 </div>
                                 <div class="card-body p-2 text-center">
                                     <small class="text-muted">Esperado: 0,00%</small>
-                                    <div class="fw-bold ${ibs.ibs_mun_aliq == 0.00 ? 'text-success' : 'text-danger'}">${formatarNumero(ibs.ibs_mun_aliq)}%</div>
+                                    <div class="fw-bold ${ibsMunAliq == 0.00 ? 'text-success' : 'text-danger'}">${formatarNumero(ibsMunAliq)}%</div>
                                     <small class="text-muted">R$ ${formatarNumero(ibs.ibs_mun_valor)}</small>
                                 </div>
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <div class="card ${ibs.cbs_aliq == 0.90 ? 'border-success' : 'border-danger'}">
-                                <div class="card-header ${ibs.cbs_aliq == 0.90 ? 'bg-success' : 'bg-danger'} text-white py-1 px-2">
-                                    <small>CBS ${ibs.cbs_aliq == 0.90 ? '✓' : '✗'}</small>
+                            <div class="card ${cbsAliq == 0.90 ? 'border-success' : 'border-danger'}">
+                                <div class="card-header ${cbsAliq == 0.90 ? 'bg-success' : 'bg-danger'} text-white py-1 px-2">
+                                    <small>CBS ${cbsAliq == 0.90 ? '✓' : '✗'}</small>
                                 </div>
                                 <div class="card-body p-2 text-center">
                                     <small class="text-muted">Esperado: 0,90%</small>
-                                    <div class="fw-bold ${ibs.cbs_aliq == 0.90 ? 'text-success' : 'text-danger'}">${formatarNumero(ibs.cbs_aliq)}%</div>
+                                    <div class="fw-bold ${cbsAliq == 0.90 ? 'text-success' : 'text-danger'}">${formatarNumero(cbsAliq)}%</div>
                                     <small class="text-muted">R$ ${formatarNumero(ibs.cbs_valor)}</small>
                                 </div>
                             </div>
@@ -1006,8 +1011,16 @@
 
     // Funcoes auxiliares para formatacao
     function formatarNumero(value) {
-        if (value === null || value === undefined) return '-';
+        // Tratar null/undefined como 0 para evitar desmatch entre "-" e "0"
+        if (value === null || value === undefined) {
+            value = 0;
+        }
         return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+    }
+
+    // Helper para normalizar valor: null/undefined -> 0
+    function normalizar(value) {
+        return (value === null || value === undefined) ? 0 : value;
     }
 
     function formatarCnpj(cnpj) {

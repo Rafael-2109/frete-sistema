@@ -337,32 +337,64 @@ class ExtratoConciliacaoService:
                 move = titulo_odoo.get('move_id')
                 move_name = move[1] if isinstance(move, (list, tuple)) else str(move)
 
-                # Usar o valor do extrato (pode ser diferente do título em caso de parcial)
-                valor_payment = min(item.valor, saldo_titulo)
+                # Calcular juros: diferença entre valor do extrato e saldo do título
+                valor_extrato = float(item.valor)
+                valor_principal = min(valor_extrato, saldo_titulo)
+                valor_juros = valor_extrato - valor_principal if valor_extrato > saldo_titulo else 0
 
-                # Criar payment na empresa do TÍTULO (reutiliza BaixaTitulosService)
-                logger.info(f"  Criando payment: R$ {valor_payment:.2f}")
-                payment_id, payment_name = self.baixa_service._criar_pagamento(
-                    partner_id=partner_id_num,
-                    valor=valor_payment,
-                    journal_id=883,  # GRAFENO
-                    ref=move_name,
-                    data=item.data_transacao or datetime.now().date(),
-                    company_id=titulo_company_id
-                )
-                logger.info(f"  Payment criado: {payment_name} (ID {payment_id})")
+                # Criar payment COM ou SEM juros dependendo da diferença
+                if valor_juros > 0.01:  # Tolerância de 1 centavo
+                    # =========================================================
+                    # CASO COM JUROS: Usar wizard com Write-Off
+                    # O método _criar_pagamento_com_writeoff_juros() já:
+                    # - Cria o payment com valor total (principal + juros)
+                    # - Posta automaticamente
+                    # - Reconcilia com o título automaticamente
+                    # - Contabiliza juros na conta de receita financeira
+                    # =========================================================
+                    logger.info(
+                        f"  Criando payment COM juros: "
+                        f"Principal R$ {valor_principal:.2f} + Juros R$ {valor_juros:.2f}"
+                    )
+                    payment_id, payment_name = self.baixa_service._criar_pagamento_com_writeoff_juros(
+                        titulo_id=titulo_odoo_id,  # ID da linha do título (account.move.line)
+                        partner_id=partner_id_num,
+                        valor_pagamento=valor_principal,  # Valor que abate do título
+                        valor_juros=valor_juros,          # Valor que vai para receita financeira
+                        journal_id=883,  # GRAFENO
+                        ref=move_name,
+                        data=item.data_transacao or datetime.now().date(),
+                        company_id=titulo_company_id
+                    )
+                    logger.info(f"  Payment com Write-Off criado: {payment_name} (ID {payment_id})")
+                    # O wizard já postou e reconciliou com título - não chamar novamente!
 
-                # Postar payment (reutiliza BaixaTitulosService)
-                self.baixa_service._postar_pagamento(payment_id)
-                logger.info(f"  Payment postado")
+                else:
+                    # =========================================================
+                    # CASO SEM JUROS: Fluxo original
+                    # =========================================================
+                    logger.info(f"  Criando payment: R$ {valor_principal:.2f}")
+                    payment_id, payment_name = self.baixa_service._criar_pagamento(
+                        partner_id=partner_id_num,
+                        valor=valor_principal,
+                        journal_id=883,  # GRAFENO
+                        ref=move_name,
+                        data=item.data_transacao or datetime.now().date(),
+                        company_id=titulo_company_id
+                    )
+                    logger.info(f"  Payment criado: {payment_name} (ID {payment_id})")
 
-                # Buscar linha de crédito do payment e reconciliar com título
-                credit_line_id = self.baixa_service._buscar_linha_credito(payment_id)
-                if credit_line_id:
-                    self._executar_reconcile(credit_line_id, titulo_odoo_id)
-                    logger.info(f"  Título reconciliado com payment")
+                    # Postar payment (só para caso sem juros)
+                    self.baixa_service._postar_pagamento(payment_id)
+                    logger.info(f"  Payment postado")
 
-                # Buscar linha PENDENTES do payment e reconciliar com extrato
+                    # Buscar linha de crédito do payment e reconciliar com título (só para caso sem juros)
+                    credit_line_id = self.baixa_service._buscar_linha_credito(payment_id)
+                    if credit_line_id:
+                        self._executar_reconcile(credit_line_id, titulo_odoo_id)
+                        logger.info(f"  Título reconciliado com payment")
+
+                # Buscar linha PENDENTES do payment e reconciliar com extrato (SEMPRE - com ou sem juros)
                 payment_pendente_line = self._buscar_linha_pendentes_payment(payment_id)
                 if payment_pendente_line:
                     payment_pendente_line_id = payment_pendente_line['id']
@@ -405,6 +437,7 @@ class ExtratoConciliacaoService:
         logger.info(f"  ✅ OK - Saldo: {item.titulo_saldo_antes} -> {item.titulo_saldo_depois}")
 
         return {
+            'success': True,  # ADICIONADO: Sinaliza sucesso para _executar_baixa_automatica()
             'item_id': item.id,
             'titulo_id': titulo_odoo_id,
             'saldo_antes': item.titulo_saldo_antes,
@@ -1016,6 +1049,7 @@ class ExtratoConciliacaoService:
         )
 
         return {
+            'success': True,  # ADICIONADO: Sinaliza sucesso para _executar_baixa_automatica()
             'item_id': item.id,
             'titulo_id': titulo_odoo_id,
             'saldo_antes': item.titulo_saldo_antes,
@@ -1145,6 +1179,7 @@ class ExtratoConciliacaoService:
         )
 
         return {
+            'success': True,  # ADICIONADO: Sinaliza sucesso para _executar_baixa_automatica()
             'item_id': item.id,
             'titulo_id': titulo_odoo_id,
             'saldo_antes': 0,
@@ -1247,6 +1282,7 @@ class ExtratoConciliacaoService:
         logger.info(f"{'=' * 60}")
 
         return {
+            'success': todos_ok,  # ADICIONADO: True só se TODOS os títulos foram conciliados
             'item_id': item.id,
             'status': item.status,
             'total_titulos': len(vinculos),

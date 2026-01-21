@@ -103,6 +103,10 @@
                             <small class="text-muted text-uppercase">Pendentes</small>
                         </div>
                         <div class="text-center">
+                            <div class="h4 mb-0 font-mono fw-bold text-info">{{ stats.via_cnab }}</div>
+                            <small class="text-muted text-uppercase">Via CNAB</small>
+                        </div>
+                        <div class="text-center">
                             <div class="h4 mb-0 font-mono fw-bold text-primary">{{ stats.aprovados }}</div>
                             <small class="text-muted text-uppercase">Aprovados</small>
                         </div>
@@ -149,6 +153,10 @@
                                     <a href="{{ url_for('financeiro.extrato_lote_detalhe', lote_id=lote.id, status_match='PENDENTE', per_page=per_page, cnpj=filtro_cnpj, data_inicio=filtro_data_inicio, data_fim=filtro_data_fim) }}"
                                        class="btn btn-outline-secondary {{ 'active' if request.args.get('status_match') == 'PENDENTE' }}">
                                         Pendentes
+                                    </a>
+                                    <a href="{{ url_for('financeiro.extrato_lote_detalhe', lote_id=lote.id, status_match='MATCH_CNAB_PENDENTE', per_page=per_page, cnpj=filtro_cnpj, data_inicio=filtro_data_inicio, data_fim=filtro_data_fim) }}"
+                                       class="btn btn-outline-info {{ 'active' if request.args.get('status_match') == 'MATCH_CNAB_PENDENTE' }}">
+                                        Via CNAB
                                     </a>
                                 </div>
                             </div>
@@ -734,6 +742,23 @@
                                 <p class="small mb-2">Múltiplos encontrados</p>
                                 <button class="btn btn-sm btn-warning" onclick="buscarCandidatos({{ item.id }})">
                                     <i class="fas fa-list me-1"></i>Selecionar
+                                </button>
+                            </div>
+                            {% elif item.status_match == 'MATCH_CNAB_PENDENTE' %}
+                            {# Status de match via CNAB sem título local - precisa vincular manualmente #}
+                            <div class="fin-titulo-empty fin-titulo-empty--info">
+                                <div class="fin-titulo-empty__icon">
+                                    <i class="fas fa-file-import text-info"></i>
+                                </div>
+                                <p class="small mb-1 text-info">
+                                    <strong>Match via CNAB</strong>
+                                </p>
+                                <p class="small text-muted mb-2">
+                                    Título não sincronizado localmente.<br>
+                                    Vincule manualmente ou sincronize.
+                                </p>
+                                <button class="btn btn-sm btn-info" onclick="buscarCandidatos({{ item.id }})">
+                                    <i class="fas fa-search me-1"></i>Buscar Título
                                 </button>
                             </div>
                             {% endif %}

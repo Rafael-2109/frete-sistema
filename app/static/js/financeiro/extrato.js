@@ -107,13 +107,6 @@ function toggleTheme() {
 const ExtratoApp = {
     // Estado
     selectedLotes: new Set(),
-    selectedStatements: new Set(),
-    selectedRecebimentos: new Set(),
-    selectedPagamentos: new Set(),
-    statementsData: [],
-    statementsRecebimentos: [],
-    statementsPagamentos: [],
-    journalsData: [],
 
     // Elementos (serão populados no init)
     elements: {},
@@ -136,7 +129,6 @@ document.addEventListener('DOMContentLoaded', function() {
 ExtratoApp.init = function() {
     this.cacheElements();
     this.bindEvents();
-    this.loadStatements();
     this.initFilters();
 };
 
@@ -144,18 +136,12 @@ ExtratoApp.cacheElements = function() {
     this.elements = {
         // Seções
         lotesSection: document.getElementById('lotesSection'),
-        pendentesSection: document.getElementById('pendentesSection'),
 
         // Tabelas
         lotesTable: document.getElementById('lotesTableBody'),
-        pendentesTable: document.getElementById('pendentesTableBody'),
 
         // Checkboxes
         selectAllLotes: document.getElementById('selectAllLotes'),
-        selectAllPendentes: document.getElementById('selectAllPendentes'),
-
-        // Badges
-        badgePendentesTotal: document.getElementById('badgePendentesTotal'),
 
         // Bulk actions
         bulkActionsBar: document.getElementById('bulkActionsBar'),
@@ -188,13 +174,6 @@ ExtratoApp.bindEvents = function() {
     if (this.elements.selectAllLotes) {
         this.elements.selectAllLotes.addEventListener('change', (e) => {
             this.toggleAllLotes(e.target.checked);
-        });
-    }
-
-    // Select all pendentes (unificado)
-    if (this.elements.selectAllPendentes) {
-        this.elements.selectAllPendentes.addEventListener('change', (e) => {
-            this.toggleAllPendentes(e.target.checked);
         });
     }
 
@@ -401,48 +380,11 @@ ExtratoApp.updateSelectAllState = function(type) {
 };
 
 // =============================================================================
-// SELEÇÃO DE STATEMENTS (PENDENTES)
-// =============================================================================
-
-ExtratoApp.toggleStatement = function(checkbox, statementId) {
-    if (checkbox.checked) {
-        this.selectedStatements.add(statementId);
-    } else {
-        this.selectedStatements.delete(statementId);
-    }
-
-    const row = checkbox.closest('tr');
-    row.classList.toggle('selected', checkbox.checked);
-
-    this.updateSelectAllState('pendentes');
-    this.updateBulkActions();
-};
-
-ExtratoApp.toggleAllPendentes = function(checked) {
-    document.querySelectorAll('.statement-checkbox').forEach(cb => {
-        cb.checked = checked;
-        const statementId = parseInt(cb.value);
-        const row = cb.closest('tr');
-
-        if (checked) {
-            this.selectedStatements.add(statementId);
-            row.classList.add('selected');
-        } else {
-            this.selectedStatements.delete(statementId);
-            row.classList.remove('selected');
-        }
-    });
-
-    this.updateBulkActions();
-};
-
-// =============================================================================
 // BULK ACTIONS
 // =============================================================================
 
 ExtratoApp.updateBulkActions = function() {
-    const totalStatements = this.selectedStatements.size;
-    const totalSelected = this.selectedLotes.size + totalStatements;
+    const totalSelected = this.selectedLotes.size;
 
     if (this.elements.bulkActionsBar) {
         this.elements.bulkActionsBar.classList.toggle('visible', totalSelected > 0);
@@ -452,44 +394,20 @@ ExtratoApp.updateBulkActions = function() {
         }
 
         if (this.elements.bulkText) {
-            const partes = [];
-
-            if (this.selectedLotes.size > 0) {
-                partes.push(`${this.selectedLotes.size} lote(s)`);
-            }
-            if (totalStatements > 0) {
-                // Mostrar detalhes de quantos tem rec/pag
-                const temRec = this.selectedRecebimentos.size > 0;
-                const temPag = this.selectedPagamentos.size > 0;
-                let detalhe = `${totalStatements} pendente(s)`;
-                if (temRec && temPag) {
-                    detalhe += ' (rec+pag)';
-                } else if (temRec) {
-                    detalhe += ' (rec)';
-                } else if (temPag) {
-                    detalhe += ' (pag)';
-                }
-                partes.push(detalhe);
-            }
-
-            this.elements.bulkText.textContent = partes.join(' + ') || 'selecionado(s)';
+            this.elements.bulkText.textContent = `${totalSelected} lote(s) selecionado(s)`;
         }
     }
 };
 
 ExtratoApp.clearSelection = function() {
     this.selectedLotes.clear();
-    this.selectedStatements.clear();
-    this.selectedRecebimentos.clear();
-    this.selectedPagamentos.clear();
 
-    document.querySelectorAll('.lote-checkbox, .statement-checkbox').forEach(cb => {
+    document.querySelectorAll('.lote-checkbox').forEach(cb => {
         cb.checked = false;
         cb.closest('tr')?.classList.remove('selected');
     });
 
     if (this.elements.selectAllLotes) this.elements.selectAllLotes.checked = false;
-    if (this.elements.selectAllPendentes) this.elements.selectAllPendentes.checked = false;
 
     this.updateBulkActions();
 };
@@ -502,387 +420,6 @@ ExtratoApp.verLotesSelecionados = function() {
 
     const loteIds = Array.from(this.selectedLotes).join(',');
     window.location.href = `${this.config.apiBaseUrl}/lotes-detalhe?lotes=${loteIds}`;
-};
-
-// =============================================================================
-// CARREGAMENTO DE STATEMENTS (AJAX) - UNIFICADO
-// =============================================================================
-
-ExtratoApp.loadStatements = function() {
-    const tbody = this.elements.pendentesTable;
-    if (!tbody) return;
-
-    // Mostrar loading
-    tbody.innerHTML = `
-        <tr>
-            <td colspan="6">
-                <div class="extrato-loading">
-                    <div class="extrato-loading__spinner"></div>
-                    <div class="extrato-loading__text">Buscando extratos do Odoo...</div>
-                </div>
-            </td>
-        </tr>
-    `;
-
-    // Buscar AMBOS os tipos de uma vez
-    fetch(`${this.config.apiBaseUrl}/api/statements?tipo=ambos`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                this.statementsRecebimentos = data.statements_entrada || [];
-                this.statementsPagamentos = data.statements_saida || [];
-                this.renderPendentesUnificado();
-                this.updateStatsFromStatements();
-            } else {
-                this.showPendentesError(data.error || 'Erro ao buscar dados');
-            }
-        })
-        .catch(error => {
-            this.showPendentesError(error.message);
-        });
-};
-
-ExtratoApp.renderPendentesUnificado = function() {
-    const tbody = this.elements.pendentesTable;
-    if (!tbody) return;
-
-    // Filtrar pendentes de cada tipo
-    const recPendentes = this.statementsRecebimentos.filter(st => st.pendentes_odoo > 0 && !st.importado);
-    const pagPendentes = this.statementsPagamentos.filter(st => st.pendentes_odoo > 0 && !st.importado);
-
-    // Mesclar por statement_id (mesmo extrato pode ter rec + pag)
-    const merged = new Map();
-
-    recPendentes.forEach(st => {
-        merged.set(st.statement_id, {
-            ...st,
-            rec: st,
-            pag: null
-        });
-    });
-
-    pagPendentes.forEach(st => {
-        if (merged.has(st.statement_id)) {
-            merged.get(st.statement_id).pag = st;
-        } else {
-            merged.set(st.statement_id, {
-                ...st,
-                rec: null,
-                pag: st
-            });
-        }
-    });
-
-    const pendentes = Array.from(merged.values());
-    const totalPendentes = pendentes.length;
-
-    // Atualizar badge
-    if (this.elements.badgePendentesTotal) {
-        this.elements.badgePendentesTotal.textContent = totalPendentes;
-    }
-
-    if (totalPendentes === 0) {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="6">
-                    <div class="extrato-empty">
-                        <div class="extrato-empty__icon"><i class="fas fa-check-circle" style="color: var(--fin-accent-success);"></i></div>
-                        <div class="extrato-empty__title">Nenhum extrato pendente</div>
-                        <div class="extrato-empty__text">Todos os extratos do Odoo foram importados</div>
-                    </div>
-                </td>
-            </tr>
-        `;
-        return;
-    }
-
-    let html = '';
-    pendentes.forEach(item => {
-        const st = item.rec || item.pag;
-        const recLinhas = item.rec ? item.rec.pendentes_odoo : 0;
-        const pagLinhas = item.pag ? item.pag.pendentes_odoo : 0;
-        const totalLinhas = recLinhas + pagLinhas;
-
-        html += `
-            <tr data-statement-id="${st.statement_id}">
-                <td>
-                    <label class="fin-sr-only" for="stmt-${st.statement_id}">Selecionar extrato ${st.statement_id}</label>
-                    <input type="checkbox" id="stmt-${st.statement_id}" class="extrato-checkbox statement-checkbox"
-                           value="${st.statement_id}"
-                           data-rec-pendentes="${recLinhas}"
-                           data-pag-pendentes="${pagLinhas}"
-                           onchange="ExtratoApp.toggleStatement(this, ${st.statement_id})">
-                </td>
-                <td>
-                    <div class="fin-text-mono">${this.escapeHtml(st.name)}</div>
-                    <small class="text-muted">
-                        <span class="journal-badge">${this.escapeHtml(st.journal_code || 'N/A')}</span>
-                        ID: ${st.statement_id}
-                    </small>
-                </td>
-                <td class="fin-text-mono">${st.date || '-'}</td>
-                <!-- RECEBIMENTO -->
-                <td class="fin-td-macro fin-td-macro--rec fin-text-center">
-                    ${recLinhas > 0 ? `<strong class="fin-stat-unified__label--rec">${recLinhas}</strong>` : `<span class="fin-na">-</span>`}
-                </td>
-                <!-- PAGAMENTO -->
-                <td class="fin-td-macro fin-td-macro--pag fin-text-center">
-                    ${pagLinhas > 0 ? `<strong class="fin-stat-unified__label--pag">${pagLinhas}</strong>` : `<span class="fin-na">-</span>`}
-                </td>
-                <!-- AÇÃO ÚNICA -->
-                <td class="fin-text-center">
-                    <button class="btn-ext btn-ext--primary btn-ext--sm"
-                            onclick="ExtratoApp.importarStatementCompleto(${st.statement_id}, ${recLinhas}, ${pagLinhas})"
-                            title="Importar extrato completo (${totalLinhas} linhas)">
-                        <i class="fas fa-download"></i> Importar
-                    </button>
-                </td>
-            </tr>
-        `;
-    });
-
-    tbody.innerHTML = html;
-};
-
-ExtratoApp.showPendentesError = function(message) {
-    const tbody = this.elements.pendentesTable;
-    if (!tbody) return;
-
-    tbody.innerHTML = `
-        <tr>
-            <td colspan="6">
-                <div class="extrato-empty">
-                    <div class="extrato-empty__icon"><i class="fas fa-exclamation-triangle" style="color: var(--fin-accent-danger);"></i></div>
-                    <div class="extrato-empty__title">Erro ao carregar extratos</div>
-                    <div class="extrato-empty__text">${this.escapeHtml(message)}</div>
-                    <button class="btn-ext btn-ext--ghost" onclick="ExtratoApp.loadStatements()" style="margin-top: 1rem;">
-                        <i class="fas fa-redo"></i> Tentar novamente
-                    </button>
-                </div>
-            </td>
-        </tr>
-    `;
-};
-
-ExtratoApp.updateStatsFromStatements = function() {
-    // Recebimentos pendentes
-    const recebimentosPendentes = this.statementsRecebimentos
-        .filter(st => st.pendentes_odoo > 0 && !st.importado)
-        .reduce((sum, st) => sum + (st.pendentes_odoo || 0), 0);
-    const elRecebimentos = document.getElementById('statPendentesRecebimentos');
-    if (elRecebimentos) {
-        elRecebimentos.textContent = recebimentosPendentes;
-    }
-
-    // Pagamentos pendentes
-    const pagamentosPendentes = this.statementsPagamentos
-        .filter(st => st.pendentes_odoo > 0 && !st.importado)
-        .reduce((sum, st) => sum + (st.pendentes_odoo || 0), 0);
-    const elPagamentos = document.getElementById('statPendentesPagamentos');
-    if (elPagamentos) {
-        elPagamentos.textContent = pagamentosPendentes;
-    }
-};
-
-// Toggle de seleção unificado para statements
-ExtratoApp.toggleStatement = function(checkbox, statementId) {
-    const recPendentes = parseInt(checkbox.dataset.recPendentes) || 0;
-    const pagPendentes = parseInt(checkbox.dataset.pagPendentes) || 0;
-
-    if (checkbox.checked) {
-        this.selectedStatements.add(statementId);
-        // Também adicionar nos sets específicos se houver pendentes
-        if (recPendentes > 0) this.selectedRecebimentos.add(statementId);
-        if (pagPendentes > 0) this.selectedPagamentos.add(statementId);
-    } else {
-        this.selectedStatements.delete(statementId);
-        this.selectedRecebimentos.delete(statementId);
-        this.selectedPagamentos.delete(statementId);
-    }
-
-    const row = checkbox.closest('tr');
-    row.classList.toggle('selected', checkbox.checked);
-
-    this.updateBulkActions();
-};
-
-ExtratoApp.toggleAllPendentes = function(checked) {
-    document.querySelectorAll('.statement-checkbox').forEach(cb => {
-        cb.checked = checked;
-        const statementId = parseInt(cb.value);
-        const recPendentes = parseInt(cb.dataset.recPendentes) || 0;
-        const pagPendentes = parseInt(cb.dataset.pagPendentes) || 0;
-        const row = cb.closest('tr');
-
-        if (checked) {
-            this.selectedStatements.add(statementId);
-            if (recPendentes > 0) this.selectedRecebimentos.add(statementId);
-            if (pagPendentes > 0) this.selectedPagamentos.add(statementId);
-            row.classList.add('selected');
-        } else {
-            this.selectedStatements.delete(statementId);
-            this.selectedRecebimentos.delete(statementId);
-            this.selectedPagamentos.delete(statementId);
-            row.classList.remove('selected');
-        }
-    });
-
-    this.updateBulkActions();
-};
-
-// =============================================================================
-// IMPORTAÇÃO
-// =============================================================================
-
-ExtratoApp.importarStatement = function(statementId, tipo = 'entrada') {
-    const tipoLabel = tipo === 'entrada' ? 'recebimentos' : 'pagamentos';
-    if (!confirm(`Importar ${tipoLabel} deste extrato?`)) return;
-
-    // Criar form e submeter
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = `${this.config.apiBaseUrl}/importar-statement/${statementId}?tipo=${tipo}`;
-
-    // Adicionar campo hidden para o tipo
-    const tipoInput = document.createElement('input');
-    tipoInput.type = 'hidden';
-    tipoInput.name = 'tipo';
-    tipoInput.value = tipo;
-    form.appendChild(tipoInput);
-
-    document.body.appendChild(form);
-    form.submit();
-};
-
-// Importar extrato completo (recebimentos + pagamentos)
-ExtratoApp.importarStatementCompleto = function(statementId, recLinhas, pagLinhas) {
-    const totalLinhas = recLinhas + pagLinhas;
-    let detalhes = [];
-    if (recLinhas > 0) detalhes.push(`${recLinhas} receb.`);
-    if (pagLinhas > 0) detalhes.push(`${pagLinhas} pagam.`);
-
-    if (!confirm(`Importar extrato completo?\n\n${detalhes.join(' + ')} = ${totalLinhas} linha(s)`)) return;
-
-    this.showToast('Importando extrato...', 'info');
-
-    // Importar ambos os tipos em paralelo
-    const promessas = [];
-
-    if (recLinhas > 0) {
-        promessas.push(
-            fetch(`${this.config.apiBaseUrl}/importar-multiplos`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    statement_ids: [statementId],
-                    tipo: 'entrada'
-                })
-            }).then(r => r.json())
-        );
-    }
-
-    if (pagLinhas > 0) {
-        promessas.push(
-            fetch(`${this.config.apiBaseUrl}/importar-multiplos`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    statement_ids: [statementId],
-                    tipo: 'saida'
-                })
-            }).then(r => r.json())
-        );
-    }
-
-    Promise.all(promessas)
-        .then(resultados => {
-            const linhasImportadas = resultados.reduce((sum, r) => sum + (r.total_linhas || 0), 0);
-            const erros = resultados.filter(r => !r.success);
-
-            if (erros.length === 0) {
-                this.showToast(`Extrato importado: ${linhasImportadas} linhas`, 'success');
-            } else {
-                this.showToast('Importado com alguns erros', 'warning');
-            }
-
-            setTimeout(() => window.location.reload(), 1500);
-        })
-        .catch(error => {
-            this.showToast('Erro: ' + error.message, 'error');
-        });
-};
-
-ExtratoApp.importarSelecionados = function() {
-    const totalStatements = this.selectedStatements.size;
-    const temRecebimentos = this.selectedRecebimentos.size > 0;
-    const temPagamentos = this.selectedPagamentos.size > 0;
-
-    if (totalStatements === 0) {
-        this.showToast('Selecione ao menos um extrato pendente', 'warning');
-        return;
-    }
-
-    let msg = `Importar ${totalStatements} extrato(s)`;
-    if (temRecebimentos && temPagamentos) {
-        msg += ' (recebimentos + pagamentos)';
-    } else if (temRecebimentos) {
-        msg += ' (recebimentos)';
-    } else {
-        msg += ' (pagamentos)';
-    }
-    msg += '?';
-
-    if (!confirm(msg)) return;
-
-    // Mostrar loading
-    this.showToast('Importando extratos...', 'info');
-
-    // Importar por tipo
-    const promessas = [];
-
-    if (temRecebimentos) {
-        promessas.push(
-            fetch(`${this.config.apiBaseUrl}/importar-multiplos`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    statement_ids: Array.from(this.selectedRecebimentos),
-                    tipo: 'entrada'
-                })
-            }).then(r => r.json())
-        );
-    }
-
-    if (temPagamentos) {
-        promessas.push(
-            fetch(`${this.config.apiBaseUrl}/importar-multiplos`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    statement_ids: Array.from(this.selectedPagamentos),
-                    tipo: 'saida'
-                })
-            }).then(r => r.json())
-        );
-    }
-
-    Promise.all(promessas)
-        .then(resultados => {
-            const importados = resultados.reduce((sum, r) => sum + (r.importados || 0), 0);
-            const linhas = resultados.reduce((sum, r) => sum + (r.total_linhas || 0), 0);
-            const erros = resultados.filter(r => !r.success).length;
-
-            if (erros === 0) {
-                this.showToast(`${importados} extrato(s) importado(s) com ${linhas} linhas`, 'success');
-            } else {
-                this.showToast(`Importado(s) ${importados} com alguns erros`, 'warning');
-            }
-
-            setTimeout(() => window.location.reload(), 1500);
-        })
-        .catch(error => {
-            this.showToast('Erro na requisição: ' + error.message, 'error');
-        });
 };
 
 // =============================================================================
@@ -969,10 +506,6 @@ function toggleLote(checkbox, loteId) {
 
 function verLotesSelecionados() {
     ExtratoApp.verLotesSelecionados();
-}
-
-function importarSelecionados() {
-    ExtratoApp.importarSelecionados();
 }
 
 function clearSelection() {

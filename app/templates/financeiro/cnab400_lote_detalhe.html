@@ -494,28 +494,22 @@
                 </div>
             </div>
             <div class="lote-header__actions">
+                {# SIMPLIFICAÇÃO 21/01/2026: Removidos botões de ação manual #}
+                {# Baixa é automática durante importação CNAB #}
+                {# Reprocessamento é automático na sync de títulos e importação de extrato #}
                 {% if stats.sem_match > 0 %}
                 <a href="{{ url_for('cnab400.lote_sem_match', lote_id=lote.id) }}"
-                   class="btn-lote btn-lote--outline">
-                    <i class="fas fa-search"></i>
-                    Analisar Sem Match ({{ stats.sem_match }})
+                   class="btn-lote btn-lote--outline"
+                   title="Itens aguardando título ou extrato para match automático">
+                    <i class="fas fa-clock"></i>
+                    Pendentes ({{ stats.sem_match }})
                 </a>
                 {% endif %}
-                {% if lote.status in ['IMPORTADO', 'AGUARDANDO_REVISAO', 'APROVADO'] %}
-                <button class="btn-lote btn-lote--primary" id="btnReprocessar" title="Reprocessar matching de títulos">
-                    <i class="fas fa-sync-alt"></i>
-                    Reprocessar
-                </button>
-                <button class="btn-lote btn-lote--outline" id="btnMatchingExtrato" title="Vincular com linhas de extrato bancário"
-                        {% if stats.com_match == 0 %}disabled{% endif %}>
-                    <i class="fas fa-file-invoice"></i>
-                    Matching Extrato
-                </button>
-                <button class="btn-lote btn-lote--success" id="btnBaixar"
-                        {% if stats.com_match == 0 %}disabled{% endif %}>
+                {% if stats.processados > 0 %}
+                <span class="btn-lote btn-lote--success" style="cursor: default;">
                     <i class="fas fa-check-double"></i>
-                    Executar Baixas ({{ stats.com_match }})
-                </button>
+                    {{ stats.processados }} Baixados Automaticamente
+                </span>
                 {% endif %}
             </div>
         </div>
@@ -530,8 +524,13 @@
             <i class="fas fa-exclamation-triangle"></i>
         </div>
         <div class="alert-box__content">
-            <div class="alert-box__title">Atenção: {{ stats.sem_match }} itens sem match</div>
-            <div>Alguns títulos não foram encontrados no sistema. Analise os itens sem match ou execute as baixas dos títulos já vinculados.</div>
+            <div class="alert-box__title">{{ stats.sem_match }} itens aguardando processamento</div>
+            <div>Estes itens serão processados automaticamente quando:
+                <ul style="margin: 0.5rem 0 0 1rem; padding: 0;">
+                    <li>Títulos forem sincronizados do Odoo (itens sem título)</li>
+                    <li>Extrato bancário for importado (itens sem extrato)</li>
+                </ul>
+            </div>
         </div>
     </div>
     {% endif %}
@@ -610,20 +609,20 @@
                         <th>Ocorrência</th>
                         <th>Seu Número</th>
                         <th>NF/Parcela</th>
-                        <th>CNPJ Pagador</th>
+                        <th>CNPJ Cliente</th>
                         <th>Data Ocorr.</th>
                         <th>Vencimento</th>
                         <th>Valor Título</th>
                         <th>Valor Pago</th>
                         <th>Match Título</th>
                         <th>Extrato</th>
-                        <th>Ações</th>
+                        <th>Status</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for item in itens %}
-                    {# Ignorar entradas (código 02) para não poluir a tela #}
-                    {% if item.codigo_ocorrencia != '02' %}
+                    {# Ignorar entradas (código 02) e baixas sem valor (código 10 sem valor_pago) #}
+                    {% if item.codigo_ocorrencia != '02' and not (item.codigo_ocorrencia == '10' and not item.valor_pago) %}
                     <tr>
                         <td>{{ item.numero_linha }}</td>
                         <td>
@@ -640,7 +639,13 @@
                             {% endif %}
                         </td>
                         <td>
-                            <small>{{ item.cnpj_pagador or '-' }}</small>
+                            {% if item.cnpj_cliente %}
+                                <small title="{{ item.nome_cliente or 'Cliente' }}">{{ item.cnpj_cliente }}</small>
+                            {% elif item.cnpj_pagador %}
+                                <small class="text-muted" title="CNPJ do arquivo CNAB (empresa)">{{ item.cnpj_pagador }}</small>
+                            {% else %}
+                                <small class="text-muted">-</small>
+                            {% endif %}
                         </td>
                         <td>
                             {% if item.data_ocorrencia %}
@@ -726,18 +731,25 @@
                             {% endif %}
                         </td>
                         <td>
-                            {% if item.status_match == 'MATCH_ENCONTRADO' and not item.processado %}
-                            <button class="btn-lote btn-lote--sm btn-lote--outline btn-baixar-item"
-                                    data-item-id="{{ item.id }}"
-                                    title="Baixar este título">
-                                <i class="fas fa-check"></i>
-                            </button>
+                            {# SIMPLIFICAÇÃO 21/01/2026: Status em vez de botões de ação #}
+                            {% if item.processado %}
+                            <span class="match-badge match-badge--processado" title="Baixado automaticamente">
+                                <i class="fas fa-check-double"></i> Baixado
+                            </span>
+                            {% elif item.status_match == 'MATCH_ENCONTRADO' and item.extrato_item_id %}
+                            <span class="match-badge match-badge--pendente" title="Aguardando próxima importação">
+                                <i class="fas fa-clock"></i> Aguardando
+                            </span>
                             {% elif item.status_match == 'SEM_MATCH' %}
-                            <button class="btn-lote btn-lote--sm btn-lote--outline btn-vincular-item"
-                                    data-item-id="{{ item.id }}"
-                                    title="Vincular manualmente">
-                                <i class="fas fa-link"></i>
-                            </button>
+                            <span class="match-badge match-badge--sem_match" title="Sincronize títulos do Odoo">
+                                <i class="fas fa-sync"></i> S/ Título
+                            </span>
+                            {% elif item.status_match == 'MATCH_ENCONTRADO' and not item.extrato_item_id %}
+                            <span class="match-badge match-badge--pendente" title="Importe extrato para vincular">
+                                <i class="fas fa-file-invoice"></i> S/ Extrato
+                            </span>
+                            {% else %}
+                            <span class="text-muted">-</span>
                             {% endif %}
                         </td>
                     </tr>
@@ -749,273 +761,37 @@
     </div>
 </div>
 
-<!-- Modal de Vinculação Manual -->
-<div class="modal fade" id="modalVincular" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Vincular Título Manualmente</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="mb-3">
-                    <label class="form-label">Buscar título</label>
-                    <div class="input-group">
-                        <input type="text" class="form-control" id="buscaNf" placeholder="Número da NF">
-                        <input type="text" class="form-control" id="buscaParcela" placeholder="Parcela">
-                        <button class="btn btn-primary" type="button" id="btnBuscarTitulo">
-                            <i class="fas fa-search"></i> Buscar
-                        </button>
-                    </div>
-                </div>
-                <div id="resultadosBusca"></div>
-            </div>
-        </div>
-    </div>
-</div>
+{# Modal de vinculação manual REMOVIDO (21/01/2026) #}
+{# Fluxo simplificado: matching e baixa são automáticos #}
 {% endblock %}
 
 {% block scripts %}
 <script>
-console.log('=== CNAB400 Lote Detalhe JS INICIADO ===');
+/**
+ * CNAB400 Lote Detalhe - JavaScript
+ *
+ * SIMPLIFICAÇÃO (21/01/2026):
+ * - Removidos botões de ação manual (Reprocessar, Matching Extrato, Executar Baixas)
+ * - Removidos botões individuais (Baixar Item, Vincular Item)
+ * - Removido modal de vinculação manual
+ *
+ * O fluxo agora é 100% automático:
+ * - Baixa automática durante importação CNAB
+ * - Reprocessamento automático na sync de títulos
+ * - Vinculação automática na importação de extrato
+ *
+ * Este script agora é apenas para exibição de dados.
+ */
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOMContentLoaded disparado');
+    console.log('CNAB400 Lote Detalhe - Modo visualização (fluxo automático)');
     const loteId = {{ lote.id }};
     console.log('Lote ID:', loteId);
 
-    // Reprocessar matching
-    const btnReprocessar = document.getElementById('btnReprocessar');
-    if (btnReprocessar) {
-        btnReprocessar.addEventListener('click', async function() {
-            if (!confirm('Reprocessar matching de todos os itens sem match?')) return;
-
-            this.disabled = true;
-            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
-
-            try {
-                const response = await fetch(`/cnab400/api/lote/${loteId}/reprocessar-matching`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                const data = await response.json();
-
-                if (data.success) {
-                    alert(`Reprocessamento concluído!\n${data.stats.novos_matches} novos matches encontrados.`);
-                    location.reload();
-                } else {
-                    alert('Erro: ' + data.error);
-                }
-            } catch (err) {
-                alert('Erro ao reprocessar: ' + err.message);
-            } finally {
-                this.disabled = false;
-                this.innerHTML = '<i class="fas fa-sync-alt"></i> Reprocessar';
-            }
-        });
+    // Tooltips (se houver Bootstrap)
+    if (typeof bootstrap !== 'undefined') {
+        const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+        tooltipTriggerList.forEach(el => new bootstrap.Tooltip(el));
     }
-
-    // Matching com Extrato
-    const btnMatchingExtrato = document.getElementById('btnMatchingExtrato');
-    console.log('btnMatchingExtrato encontrado:', btnMatchingExtrato);
-    if (btnMatchingExtrato) {
-        console.log('Adicionando event listener ao btnMatchingExtrato');
-        btnMatchingExtrato.addEventListener('click', async function(e) {
-            e.preventDefault();
-            console.log('Botão Matching Extrato clicado');
-
-            if (this.disabled) {
-                console.log('Botão está desabilitado');
-                return;
-            }
-
-            if (!confirm('Vincular itens CNAB com linhas de extrato bancário?\n\nSerá feita busca por Data + Valor + CNPJ.')) {
-                console.log('Usuário cancelou');
-                return;
-            }
-
-            this.disabled = true;
-            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Vinculando...';
-            console.log('Fazendo requisição para:', `/cnab400/api/lote/${loteId}/matching-extrato`);
-
-            try {
-                const response = await fetch(`/cnab400/api/lote/${loteId}/matching-extrato`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                console.log('Response status:', response.status);
-                const data = await response.json();
-                console.log('Response data:', data);
-
-                if (data.success) {
-                    alert(`Matching com extrato concluído!\n${data.stats.com_match} extratos vinculados, ${data.stats.sem_match} sem extrato.`);
-                    location.reload();
-                } else {
-                    alert('Erro: ' + (data.error || 'Erro desconhecido'));
-                }
-            } catch (err) {
-                console.error('Erro na requisição:', err);
-                alert('Erro ao executar matching extrato: ' + err.message);
-            } finally {
-                this.disabled = false;
-                this.innerHTML = '<i class="fas fa-file-invoice"></i> Matching Extrato';
-            }
-        });
-    } else {
-        console.log('btnMatchingExtrato NÃO encontrado no DOM');
-    }
-
-    // Executar baixas (UNIFICADA: Título + Extrato + Odoo)
-    const btnBaixar = document.getElementById('btnBaixar');
-    if (btnBaixar) {
-        btnBaixar.addEventListener('click', async function() {
-            if (!confirm('Executar baixa UNIFICADA de todos os títulos com match?\n\nSerá executado:\n• Baixa de títulos (Contas a Receber)\n• Conciliação de extratos vinculados\n• Reconciliação no Odoo (se disponível)')) return;
-
-            this.disabled = true;
-            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
-
-            try {
-                const response = await fetch(`/cnab400/api/lote/${loteId}/baixar`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                const data = await response.json();
-
-                if (data.success) {
-                    let msg = `Processamento concluído!\n\n`;
-                    msg += `• ${data.stats.titulos_baixados || data.stats.sucesso} títulos baixados\n`;
-                    if (data.stats.extratos_conciliados > 0) {
-                        msg += `• ${data.stats.extratos_conciliados} extratos conciliados\n`;
-                    }
-                    if (data.stats.odoo_reconciliados > 0) {
-                        msg += `• ${data.stats.odoo_reconciliados} reconciliados no Odoo\n`;
-                    }
-                    if (data.stats.erros > 0) {
-                        msg += `• ${data.stats.erros} erros`;
-                    }
-                    alert(msg);
-                    location.reload();
-                } else {
-                    alert('Erro: ' + data.error);
-                }
-            } catch (err) {
-                alert('Erro ao executar baixas: ' + err.message);
-            } finally {
-                this.disabled = false;
-                this.innerHTML = '<i class="fas fa-check-double"></i> Executar Baixas';
-            }
-        });
-    }
-
-    // Baixar item individual
-    document.querySelectorAll('.btn-baixar-item').forEach(btn => {
-        btn.addEventListener('click', async function() {
-            const itemId = this.dataset.itemId;
-            if (!confirm('Baixar este título?')) return;
-
-            this.disabled = true;
-
-            try {
-                const response = await fetch(`/cnab400/api/item/${itemId}/baixar`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                const data = await response.json();
-
-                if (data.success) {
-                    location.reload();
-                } else {
-                    alert('Erro: ' + data.error);
-                    this.disabled = false;
-                }
-            } catch (err) {
-                alert('Erro: ' + err.message);
-                this.disabled = false;
-            }
-        });
-    });
-
-    // Vincular item manualmente
-    let currentItemId = null;
-    const modal = document.getElementById('modalVincular');
-
-    document.querySelectorAll('.btn-vincular-item').forEach(btn => {
-        btn.addEventListener('click', function() {
-            currentItemId = this.dataset.itemId;
-            const bsModal = new bootstrap.Modal(modal);
-            bsModal.show();
-        });
-    });
-
-    // Buscar títulos para vinculação
-    document.getElementById('btnBuscarTitulo')?.addEventListener('click', async function() {
-        const nf = document.getElementById('buscaNf').value;
-        const parcela = document.getElementById('buscaParcela').value;
-
-        if (!nf) {
-            alert('Informe o número da NF');
-            return;
-        }
-
-        const resultados = document.getElementById('resultadosBusca');
-        resultados.innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Buscando...</div>';
-
-        try {
-            const params = new URLSearchParams({ nf, parcela });
-            const response = await fetch(`/cnab400/api/buscar-titulos?${params}`);
-            const data = await response.json();
-
-            if (data.success && data.titulos.length > 0) {
-                let html = '<table class="table table-sm table-hover"><thead><tr>';
-                html += '<th>NF</th><th>Parcela</th><th>Cliente</th><th>Valor</th><th>Venc.</th><th></th>';
-                html += '</tr></thead><tbody>';
-
-                data.titulos.forEach(t => {
-                    html += `<tr>
-                        <td>${t.titulo_nf}</td>
-                        <td>${t.parcela}</td>
-                        <td>${t.raz_social_red || '-'}</td>
-                        <td>R$ ${t.valor_titulo?.toFixed(2) || '-'}</td>
-                        <td>${t.vencimento || '-'}</td>
-                        <td><button class="btn btn-sm btn-success btn-selecionar-titulo" data-titulo-id="${t.id}">
-                            <i class="fas fa-check"></i>
-                        </button></td>
-                    </tr>`;
-                });
-
-                html += '</tbody></table>';
-                resultados.innerHTML = html;
-
-                // Adicionar eventos aos botões
-                resultados.querySelectorAll('.btn-selecionar-titulo').forEach(btn => {
-                    btn.addEventListener('click', async function() {
-                        const tituloId = this.dataset.tituloId;
-
-                        try {
-                            const response = await fetch(`/cnab400/api/item/${currentItemId}/vincular`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ titulo_id: tituloId })
-                            });
-                            const data = await response.json();
-
-                            if (data.success) {
-                                alert('Vinculação realizada com sucesso!');
-                                location.reload();
-                            } else {
-                                alert('Erro: ' + data.error);
-                            }
-                        } catch (err) {
-                            alert('Erro: ' + err.message);
-                        }
-                    });
-                });
-            } else {
-                resultados.innerHTML = '<div class="alert alert-warning">Nenhum título encontrado</div>';
-            }
-        } catch (err) {
-            resultados.innerHTML = `<div class="alert alert-danger">Erro: ${err.message}</div>`;
-        }
-    });
 });
 </script>
 {% endblock %}

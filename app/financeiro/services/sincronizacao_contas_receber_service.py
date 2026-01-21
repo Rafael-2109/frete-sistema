@@ -16,7 +16,8 @@ from typing import Dict, Optional
 from app import db
 from app.financeiro.services.contas_receber_service import ContasReceberService
 from app.financeiro.models import (
-    ContasAReceber, ContasAReceberSnapshot, LiberacaoAntecipacao
+    ContasAReceber, ContasAReceberSnapshot, LiberacaoAntecipacao,
+    CnabRetornoItem
 )
 from app.monitoramento.models import EntregaMonitorada
 
@@ -148,6 +149,12 @@ class SincronizacaoContasReceberService:
             self._enriquecer_dados_locais()
             db.session.commit()
 
+            # 5. Reprocessar CNABs sem match (SIMPLIFICAÇÃO FLUXO 21/01/2026)
+            logger.info("\n[5/5] Reprocessando CNABs sem match...")
+            cnabs_reprocessados = self._reprocessar_cnabs_sem_match()
+            self.estatisticas['cnabs_reprocessados'] = cnabs_reprocessados
+            db.session.commit()
+
             self.estatisticas['sucesso'] = True
 
         except Exception as e:
@@ -163,7 +170,8 @@ class SincronizacaoContasReceberService:
         logger.info(f"📊 Atualizados: {self.estatisticas['atualizados']}")
         logger.info(f"📊 Enriquecidos: {self.estatisticas['enriquecidos']}")
         logger.info(f"📊 Snapshots: {self.estatisticas['snapshots_criados']}")
-        logger.info(f"�� Erros: {self.estatisticas['erros']}")
+        logger.info(f"📊 CNABs reprocessados: {self.estatisticas.get('cnabs_reprocessados', 0)}")
+        logger.info(f"❌ Erros: {self.estatisticas['erros']}")
 
         return self.estatisticas
 
@@ -440,3 +448,71 @@ class SincronizacaoContasReceberService:
 
             # nf_cancelada é obtido dinamicamente via property no modelo
             # (busca em FaturamentoProduto.status_nf = 'Cancelado')
+
+    def _reprocessar_cnabs_sem_match(self) -> int:
+        """
+        Reprocessa CNABs que estavam sem match após sincronização de títulos.
+
+        SIMPLIFICAÇÃO DO FLUXO CNAB (21/01/2026):
+        Quando títulos são sincronizados do Odoo, CNABs que estavam
+        com status_match = 'SEM_MATCH' são reprocessados automaticamente.
+        Se encontrar título agora, faz o match e baixa automática.
+
+        Returns:
+            int: Quantidade de CNABs reprocessados com sucesso
+        """
+        # Importar o processor aqui para evitar import circular
+        from app.financeiro.services.cnab400_processor_service import Cnab400ProcessorService
+
+        # Buscar CNABs pendentes (sem match e não processados)
+        cnabs_pendentes = CnabRetornoItem.query.filter(
+            CnabRetornoItem.status_match == 'SEM_MATCH',
+            CnabRetornoItem.processado == False
+        ).all()
+
+        if not cnabs_pendentes:
+            logger.info("   ℹ️ Nenhum CNAB pendente para reprocessar")
+            return 0
+
+        logger.info(f"   📋 {len(cnabs_pendentes)} CNABs pendentes encontrados")
+
+        processor = Cnab400ProcessorService()
+        reprocessados = 0
+        baixados = 0
+
+        for item in cnabs_pendentes:
+            try:
+                # Tentar fazer match com título agora
+                status_anterior = item.status_match
+                processor._executar_matching(item)
+
+                if item.status_match == 'MATCH_ENCONTRADO':
+                    reprocessados += 1
+                    logger.info(
+                        f"   ✓ CNAB {item.id} NF {item.nf_extraida}/{item.parcela_extraida}: "
+                        f"{status_anterior} → {item.status_match}"
+                    )
+
+                    # Tentar vincular com extrato
+                    processor._executar_matching_extrato(item)
+
+                    # Se tem título E extrato, fazer baixa automática
+                    if item.conta_a_receber_id and item.extrato_item_id:
+                        if processor._executar_baixa_automatica(item, 'SISTEMA_SYNC_AUTO'):
+                            baixados += 1
+                            logger.info(
+                                f"   ✓ [BAIXA_AUTO] CNAB {item.id} baixado automaticamente"
+                            )
+
+            except Exception as e:
+                logger.warning(
+                    f"   ⚠️ CNAB {item.id}: Erro no reprocessamento: {e}"
+                )
+                continue
+
+        if reprocessados > 0:
+            logger.info(
+                f"   ✅ {reprocessados} CNABs reprocessados, {baixados} baixados automaticamente"
+            )
+
+        return reprocessados

@@ -214,12 +214,12 @@ class ValidacaoIbsCbsService:
         xml_content: Optional[str] = None
     ) -> Tuple[bool, Optional[PendenciaFiscalIbsCbs], str]:
         """
-        Valida IBS/CBS de um CTe com aliquotas FIXAS.
+        Valida IBS/CBS de um CTe com aliquotas FIXAS para CTEs.
 
         Campos validados:
         - CST: deve ser 000
         - cClassTrib: deve ser 000001
-        - vBC: deve ser igual ao valor total do CTe
+        - vBC: deve ser igual ao valor total deduzindo os impostos (ICMS, PIS, COFINS)
         - pIBSUF: deve ser 0.10%
         - vIBSUF: deve ser vBC * 0.10%
         - pIBSMun: deve ser 0.00%

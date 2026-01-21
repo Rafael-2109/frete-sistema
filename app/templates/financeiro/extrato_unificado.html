@@ -61,13 +61,6 @@
                 <small class="fin-stat-unified__detail-text">{{ pct_rec }}% concil.</small>
             </div>
         </div>
-        <div class="fin-stat-unified">
-            <div class="fin-stat-unified__value fin-stat-unified__value--compact" id="statPendentesRecebimentos">
-                <i class="fas fa-spinner fa-spin"></i>
-            </div>
-            <div class="fin-stat-unified__title">No Odoo</div>
-        </div>
-
         <!-- PAGAMENTOS (3 cards) -->
         <div class="fin-stat-unified fin-stat-unified--pag">
             <div class="fin-stat-unified__header">
@@ -87,12 +80,6 @@
                 {% set pct_pag = ((stats_pagamentos.linhas_conciliadas or 0) / (stats_pagamentos.total_linhas or 1) * 100)|int %}
                 <small class="fin-stat-unified__detail-text">{{ pct_pag }}% concil.</small>
             </div>
-        </div>
-        <div class="fin-stat-unified">
-            <div class="fin-stat-unified__value fin-stat-unified__value--compact" id="statPendentesPagamentos">
-                <i class="fas fa-spinner fa-spin"></i>
-            </div>
-            <div class="fin-stat-unified__title">No Odoo</div>
         </div>
     </div>
 
@@ -415,56 +402,6 @@
     </section>
 
     <!-- ================================================================== -->
-    <!-- SEÇÃO: EXTRATOS PENDENTES DE IMPORTAÇÃO (UNIFICADA) -->
-    <!-- ================================================================== -->
-    <section class="extrato-section reveal" id="pendentesSection">
-        <div class="extrato-section__header">
-            <h2 class="extrato-section__title">
-                <i class="fas fa-cloud-download-alt"></i>
-                Extratos Pendentes de Importação
-                <span class="extrato-section__badge" id="badgePendentesTotal">-</span>
-            </h2>
-            <i class="fas fa-chevron-down extrato-section__toggle"></i>
-        </div>
-
-        <div class="extrato-section__content">
-            <div class="fin-pendentes-wrapper">
-                <table class="extrato-table">
-                    <thead>
-                        <tr>
-                            <th class="fin-th-checkbox">
-                                <label class="fin-sr-only" for="selectAllPendentes">Selecionar todos os pendentes</label>
-                                <input type="checkbox" id="selectAllPendentes" class="extrato-checkbox"
-                                       title="Selecionar todos">
-                            </th>
-                            <th>Extrato / Journal</th>
-                            <th>Data</th>
-                            <th class="fin-th-macro fin-th-macro--rec">
-                                <i class="fas fa-arrow-down"></i> Rec.
-                            </th>
-                            <th class="fin-th-macro fin-th-macro--pag">
-                                <i class="fas fa-arrow-up"></i> Pag.
-                            </th>
-                            <th class="fin-th-actions">Ação</th>
-                        </tr>
-                    </thead>
-                    <tbody id="pendentesTableBody">
-                        <!-- Carregado via AJAX -->
-                        <tr>
-                            <td colspan="6">
-                                <div class="extrato-loading">
-                                    <div class="extrato-loading__spinner"></div>
-                                    <div class="extrato-loading__text">Buscando extratos do Odoo...</div>
-                                </div>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </section>
-
-    <!-- ================================================================== -->
     <!-- BULK ACTIONS BAR -->
     <!-- ================================================================== -->
     <div class="bulk-actions-bar glass pulse-glow" id="bulkActionsBar" role="toolbar" aria-label="Ações em lote">
@@ -484,10 +421,6 @@
             <button class="btn-ext btn-ext--danger btn-shine shadow-glow--danger" onclick="ExtratoApp.conciliarPagamentos()" id="btnConciliarPag">
                 <i class="fas fa-arrow-up icon-morph"></i>
                 Conciliar Pagamentos
-            </button>
-            <button class="btn-ext btn-ext--primary btn-shine shadow-glow" onclick="importarSelecionados()">
-                <i class="fas fa-download icon-morph"></i>
-                Importar Selecionados
             </button>
         </div>
     </div>

@@ -423,7 +423,7 @@ class SincronizacaoBaixasService:
             return None
         try:
             if isinstance(valor, str):
-                return datetime.strptime(valor, '%Y-%m-%d').date()
+                return datetime.strptime(valor, '%Y-%m-%d').date() # type: ignore
             return valor
         except Exception:
             return None
@@ -439,7 +439,7 @@ class SincronizacaoBaixasService:
                         return datetime.strptime(valor, fmt)
                     except ValueError:
                         continue
-            return valor
+            return valor # type: ignore
         except Exception:
             return None
 

@@ -715,6 +715,7 @@ class SincronizacaoExtratosService:
             'conciliados_no_odoo': 0,
             'nao_conciliados_no_odoo': 0,
             'statement_line_nao_encontrado': 0,
+            'sem_statement_line_id': 0,
             'ja_conciliados_sistema': 0,
             'atualizados': 0,
             'erros': 0,
@@ -727,6 +728,19 @@ class SincronizacaoExtratosService:
             conn = get_odoo_connection()
             if not conn.authenticate():
                 raise Exception("Falha na autenticação com Odoo")
+
+            # Contar extratos pendentes SEM statement_line_id (para informar)
+            extratos_sem_stmt = ExtratoItem.query.filter(
+                ExtratoItem.status.in_(['PENDENTE', 'MATCH_ENCONTRADO', 'APROVADO']),
+                ExtratoItem.statement_line_id.is_(None)
+            ).count()
+
+            stats['sem_statement_line_id'] = extratos_sem_stmt
+            if extratos_sem_stmt > 0:
+                logger.warning(
+                    f"[SYNC_EXTRATOS_ODOO_FULL] ⚠️  {extratos_sem_stmt} extratos pendentes SEM statement_line_id "
+                    "(não podem ser verificados no Odoo - verifique importação)"
+                )
 
             # Buscar TODOS os extratos pendentes que têm statement_line_id
             extratos_pendentes = ExtratoItem.query.filter(
@@ -835,3 +849,294 @@ class SincronizacaoExtratosService:
                 'error': str(e),
                 'stats': stats
             }
+
+    # =========================================================================
+    # MÉTODOS DE IMPORTAÇÃO AUTOMÁTICA E VINCULAÇÃO CNAB↔EXTRATO
+    # =========================================================================
+
+    def importar_extratos_automatico(
+        self,
+        journals: List[str] = None,
+        dias_retroativos: int = 7,
+        limite: int = 500
+    ) -> Dict[str, Any]:
+        """
+        Importa extratos novos do Odoo para o sistema local automaticamente.
+
+        Este método é usado pelo scheduler para importar novos extratos que
+        existem no Odoo mas ainda não foram importados no sistema local.
+
+        Fluxo:
+        1. Para cada journal configurado, busca statement lines não conciliadas
+        2. Filtra as que já existem localmente (via statement_line_id)
+        3. Importa as novas via ExtratoService.importar_extrato()
+
+        Args:
+            journals: Lista de códigos de journal (GRA1, SIC, BRAD, etc.)
+                      Se None, usa ['GRA1'] como padrão
+            dias_retroativos: Quantos dias para trás buscar (default: 7)
+            limite: Limite de registros por journal (default: 500)
+
+        Returns:
+            Dict com estatísticas de importação
+        """
+        import os
+        from datetime import date
+
+        if journals is None:
+            # Configurável via variável de ambiente
+            journals_env = os.environ.get('JOURNALS_EXTRATO', 'GRA1')
+            journals = [j.strip() for j in journals_env.split(',')]
+
+        stats = {
+            'inicio': datetime.utcnow().isoformat(),
+            'journals_processados': 0,
+            'total_importados': 0,
+            'total_ja_existentes': 0,
+            'total_erros': 0,
+            'detalhes_por_journal': {}
+        }
+
+        logger.info(f"[IMPORT_EXTRATOS_AUTO] Iniciando importação automática: journals={journals}, dias={dias_retroativos}")
+
+        try:
+            from app.financeiro.services.extrato_service import ExtratoService
+
+            data_inicio = date.today() - timedelta(days=dias_retroativos)
+            data_fim = date.today()
+
+            for journal_code in journals:
+                try:
+                    logger.info(f"[IMPORT_EXTRATOS_AUTO] Processando journal: {journal_code}")
+
+                    extrato_service = ExtratoService()
+
+                    # Importar extrato usando o service existente
+                    lote = extrato_service.importar_extrato(
+                        journal_code=journal_code,
+                        data_inicio=data_inicio,
+                        data_fim=data_fim,
+                        limit=limite,
+                        criado_por='SCHEDULER_AUTO'
+                    )
+
+                    stats['journals_processados'] += 1
+                    stats['total_importados'] += extrato_service.estatisticas.get('importados', 0)
+                    stats['detalhes_por_journal'][journal_code] = {
+                        'lote_id': lote.id if lote else None,
+                        'importados': extrato_service.estatisticas.get('importados', 0),
+                        'com_cnpj': extrato_service.estatisticas.get('com_cnpj', 0),
+                        'sem_cnpj': extrato_service.estatisticas.get('sem_cnpj', 0),
+                        'erros': extrato_service.estatisticas.get('erros', 0)
+                    }
+
+                    logger.info(
+                        f"[IMPORT_EXTRATOS_AUTO] Journal {journal_code}: "
+                        f"{extrato_service.estatisticas.get('importados', 0)} importados"
+                    )
+
+                except Exception as e:
+                    logger.error(f"[IMPORT_EXTRATOS_AUTO] Erro no journal {journal_code}: {e}")
+                    stats['total_erros'] += 1
+                    stats['detalhes_por_journal'][journal_code] = {
+                        'erro': str(e)
+                    }
+
+            db.session.commit()
+
+            stats['fim'] = datetime.utcnow().isoformat()
+            logger.info(f"[IMPORT_EXTRATOS_AUTO] Importação concluída: {stats['total_importados']} extratos importados")
+
+            return {
+                'success': True,
+                'stats': stats
+            }
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"[IMPORT_EXTRATOS_AUTO] Erro geral: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'stats': stats
+            }
+
+    def vincular_cnab_extratos_pendentes(self) -> Dict[str, Any]:
+        """
+        Busca CNABs processados sem extrato vinculado e tenta fazer match
+        com extratos existentes. Atualiza status do extrato se CNAB já baixou título.
+
+        Este método resolve o problema de ordem de importação:
+        - Quando CNAB é importado ANTES do extrato
+        - O match não acontece no momento do CNAB
+        - Quando extrato é importado depois, este método vincula retroativamente
+
+        Critérios de match (mesmos do _buscar_extrato_correspondente do CNAB):
+        1. Data ocorrência (CNAB) = Data transação (Extrato)
+        2. Valor pago ≈ Valor (tolerância ±R$0.02)
+        3. CNPJ pagador (opcional, aumenta score)
+
+        Returns:
+            Dict com estatísticas:
+            {
+                'cnabs_verificados': N,
+                'matches_encontrados': N,
+                'extratos_atualizados': N,
+                'odoo_reconciliados': N,
+                'erros': N
+            }
+        """
+        stats = {
+            'inicio': datetime.utcnow().isoformat(),
+            'cnabs_verificados': 0,
+            'matches_encontrados': 0,
+            'extratos_atualizados': 0,
+            'odoo_reconciliados': 0,
+            'erros': 0
+        }
+
+        logger.info("[VINCULAR_CNAB_EXTRATO] Iniciando vinculação retroativa CNAB↔Extrato")
+
+        try:
+            # Buscar CNABs processados sem extrato vinculado (liquidações)
+            cnabs_sem_extrato = CnabRetornoItem.query.filter(
+                CnabRetornoItem.processado == True,
+                CnabRetornoItem.extrato_item_id.is_(None),
+                CnabRetornoItem.codigo_ocorrencia.in_(['06', '10', '17']),  # Liquidações
+                CnabRetornoItem.conta_a_receber_id.isnot(None)  # Tem título vinculado
+            ).all()
+
+            logger.info(f"[VINCULAR_CNAB_EXTRATO] {len(cnabs_sem_extrato)} CNABs sem extrato encontrados")
+
+            for cnab in cnabs_sem_extrato:
+                stats['cnabs_verificados'] += 1
+
+                try:
+                    # Buscar extrato correspondente
+                    extrato = self._buscar_extrato_para_cnab(cnab)
+
+                    if extrato:
+                        stats['matches_encontrados'] += 1
+
+                        # Vincular CNAB ao extrato
+                        cnab.extrato_item_id = extrato.id
+                        cnab.status_match_extrato = 'VINCULADO_POSTERIOR'
+
+                        # Atualizar extrato se ainda não estiver conciliado
+                        if extrato.status not in ['CONCILIADO']:
+                            extrato.status = 'CONCILIADO'
+                            extrato.status_match = 'VIA_CNAB_RETROATIVO'
+                            extrato.aprovado = True
+                            extrato.aprovado_por = 'VINCULAR_CNAB_AUTO'
+                            extrato.aprovado_em = datetime.utcnow()
+                            extrato.processado_em = datetime.utcnow()
+                            extrato.mensagem = f"Conciliado retroativamente via CNAB item {cnab.id}"
+
+                            # Vincular título se não tiver
+                            if not extrato.titulo_receber_id and cnab.conta_a_receber_id:
+                                titulo = cnab.conta_a_receber
+                                extrato.titulo_receber_id = cnab.conta_a_receber_id
+                                if titulo:
+                                    extrato.titulo_nf = titulo.titulo_nf
+                                    extrato.titulo_parcela = titulo.parcela
+                                    extrato.titulo_valor = float(titulo.valor_titulo) if titulo.valor_titulo else None
+                                    extrato.titulo_cliente = titulo.raz_social_red or titulo.raz_social
+                                    extrato.titulo_cnpj = titulo.cnpj
+
+                            stats['extratos_atualizados'] += 1
+
+                            # Tentar reconciliar no Odoo se tiver statement_line_id
+                            if extrato.statement_line_id:
+                                try:
+                                    from app.financeiro.services.extrato_conciliacao_service import ExtratoConciliacaoService
+                                    conciliador = ExtratoConciliacaoService()
+                                    odoo_result = conciliador.conciliar_item(extrato.id, usuario='VINCULAR_CNAB_AUTO')
+                                    if odoo_result.get('success'):
+                                        stats['odoo_reconciliados'] += 1
+                                except Exception as odoo_err:
+                                    logger.warning(f"[VINCULAR_CNAB_EXTRATO] Erro Odoo para extrato {extrato.id}: {odoo_err}")
+
+                except Exception as e:
+                    logger.error(f"[VINCULAR_CNAB_EXTRATO] Erro no CNAB {cnab.id}: {e}")
+                    stats['erros'] += 1
+
+            db.session.commit()
+
+            stats['fim'] = datetime.utcnow().isoformat()
+            logger.info(
+                f"[VINCULAR_CNAB_EXTRATO] Concluído: "
+                f"{stats['matches_encontrados']} matches, "
+                f"{stats['extratos_atualizados']} extratos atualizados, "
+                f"{stats['odoo_reconciliados']} reconciliados no Odoo"
+            )
+
+            return {
+                'success': True,
+                'stats': stats
+            }
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"[VINCULAR_CNAB_EXTRATO] Erro geral: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'stats': stats
+            }
+
+    def _buscar_extrato_para_cnab(self, cnab: CnabRetornoItem) -> Optional[ExtratoItem]:
+        """
+        Busca extrato correspondente a um item CNAB.
+
+        Critérios de match:
+        1. Data ocorrência = Data transação
+        2. Valor pago ≈ Valor (tolerância ±R$0.02)
+        3. CNPJ pagador (opcional)
+        4. Status não conciliado
+
+        Args:
+            cnab: CnabRetornoItem para buscar correspondência
+
+        Returns:
+            ExtratoItem encontrado ou None
+        """
+        if not cnab.data_ocorrencia:
+            return None
+
+        valor_cnab = float(cnab.valor_pago or 0)
+        tolerancia = 0.02
+
+        # Query base
+        query = db.session.query(ExtratoItem).join(ExtratoLote).filter(
+            ExtratoItem.data_transacao == cnab.data_ocorrencia,
+            ExtratoItem.valor.between(valor_cnab - tolerancia, valor_cnab + tolerancia),
+            ExtratoItem.status.in_(['PENDENTE', 'MATCH_ENCONTRADO', 'APROVADO']),
+            ExtratoLote.tipo_transacao == 'entrada'  # Apenas recebimentos
+        )
+
+        # Normalizar CNPJ
+        cnpj_cnab = ''.join(filter(str.isdigit, str(cnab.cnpj_pagador or '')))
+
+        if cnpj_cnab and len(cnpj_cnab) >= 8:
+            # Tentar match por CNPJ exato
+            extrato = query.filter(
+                db.func.regexp_replace(ExtratoItem.cnpj_pagador, '[^0-9]', '', 'g') == cnpj_cnab
+            ).first()
+
+            if extrato:
+                return extrato
+
+            # Tentar match por raiz do CNPJ (8 primeiros dígitos)
+            raiz_cnpj = cnpj_cnab[:8]
+            extrato = query.filter(
+                db.func.left(
+                    db.func.regexp_replace(ExtratoItem.cnpj_pagador, '[^0-9]', '', 'g'),
+                    8
+                ) == raiz_cnpj
+            ).first()
+
+            if extrato:
+                return extrato
+
+        # Match apenas por data + valor
+        return query.first()

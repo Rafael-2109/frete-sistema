@@ -774,7 +774,7 @@ input[type="date"].fin-input::-webkit-calendar-picker-indicator {
 
 .fin-section__content,
 .extrato-section__content {
-    max-height: 2000px;
+    max-height: 10000px;  /* Suporta 100+ linhas de tabela */
     overflow: hidden;
     transition: max-height var(--bs-transition-slow);
 }
@@ -2593,6 +2593,10 @@ input[type="date"].fin-input::-webkit-calendar-picker-indicator {
 
 .fin-titulo-empty--danger {
     color: var(--bs-danger);
+}
+
+.fin-titulo-empty--info {
+    color: var(--bs-info);
 }
 
 /* ============================================================================= */

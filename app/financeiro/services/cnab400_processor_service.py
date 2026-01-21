@@ -21,8 +21,11 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 import re
 import hashlib
+import logging
 
 from app import db
+
+logger = logging.getLogger(__name__)
 from app.financeiro.models import (
     CnabRetornoLote,
     CnabRetornoItem,
@@ -30,6 +33,7 @@ from app.financeiro.models import (
     ExtratoItem,
     ExtratoLote
 )
+from app.faturamento.models import FaturamentoProduto
 from app.financeiro.services.cnab400_parser_service import Cnab400ParserService
 
 
@@ -120,6 +124,20 @@ class Cnab400ProcessorService:
             item = self._criar_item(lote, detalhe)
             self._executar_matching(item)
 
+            # CORREÇÃO #5: Também executar match com extrato automaticamente
+            # Isso garante que o vínculo CNAB↔Extrato acontece durante a importação
+            # NOTA: SEM_MATCH já é tratado dentro de _executar_matching() via
+            # _executar_matching_extrato_sem_titulo() - NÃO chamar aqui para
+            # evitar sobrescrever o status_match_extrato já definido
+            if item.status_match in ('MATCH_ENCONTRADO', 'JA_PAGO'):
+                self._executar_matching_extrato(item)
+
+                # SIMPLIFICAÇÃO DO FLUXO (21/01/2026):
+                # Baixa automática se título E extrato estão vinculados
+                # Isso elimina necessidade de botões manuais na tela
+                if item.conta_a_receber_id and item.extrato_item_id:
+                    self._executar_baixa_automatica(item, usuario)
+
         # 7. Atualizar estatísticas do lote
         lote.atualizar_estatisticas()
 
@@ -155,6 +173,7 @@ class Cnab400ProcessorService:
             codigo_ocorrencia=detalhe.get('codigo_ocorrencia'),
             descricao_ocorrencia=detalhe.get('descricao_ocorrencia'),
             data_ocorrencia=detalhe.get('data_ocorrencia'),
+            data_credito=detalhe.get('data_credito'),  # Data do crédito na conta (usada para match)
             valor_titulo=detalhe.get('valor_titulo'),
             valor_pago=detalhe.get('valor_pago'),
             valor_juros=detalhe.get('valor_juros'),
@@ -213,6 +232,9 @@ class Cnab400ProcessorService:
         if not titulo:
             item.status_match = 'SEM_MATCH'
             item.erro_mensagem = f'Título não encontrado: NF {item.nf_extraida} Parcela {item.parcela_extraida}'
+            # CORREÇÃO #7: Mesmo sem título local, tentar vincular com extrato
+            # para manter rastreabilidade e permitir conciliação manual
+            self._executar_matching_extrato_sem_titulo(item)
             return
 
         # 5. Verificar se já está pago
@@ -490,19 +512,59 @@ class Cnab400ProcessorService:
             return ''
         return ''.join(filter(str.isdigit, str(cnpj)))
 
+    def _buscar_cnpj_cliente(self, item: CnabRetornoItem) -> Optional[str]:
+        """
+        Busca CNPJ do cliente com fallback.
+
+        CORREÇÃO #11: O CNAB BMP 274 contém CNPJ da empresa, não do cliente.
+        Precisamos buscar o CNPJ do cliente de outras fontes.
+
+        Ordem de busca:
+        1. ContasAReceber (via conta_a_receber_id) - título vinculado
+        2. FaturamentoProduto (via nf_extraida) - fallback por NF
+
+        Args:
+            item: CnabRetornoItem para buscar CNPJ do cliente
+
+        Returns:
+            CNPJ normalizado (apenas dígitos) ou None
+        """
+        # FASE 1: Buscar em ContasAReceber (título vinculado) - mais confiável
+        if item.conta_a_receber_id:
+            titulo = db.session.get(ContasAReceber, item.conta_a_receber_id)
+            if titulo and titulo.cnpj:
+                return self._normalizar_cnpj(titulo.cnpj)
+
+        # FASE 2: Fallback para FaturamentoProduto (por NF)
+        # Útil quando título não existe localmente mas temos a NF
+        if item.nf_extraida:
+            faturamento = FaturamentoProduto.query.filter(
+                FaturamentoProduto.numero_nf == item.nf_extraida,
+                FaturamentoProduto.status_nf != 'Cancelado'
+            ).first()
+            if faturamento and faturamento.cnpj_cliente:
+                return self._normalizar_cnpj(faturamento.cnpj_cliente)
+
+        return None
+
     def _buscar_extrato_correspondente(self, item: CnabRetornoItem) -> Optional[ExtratoItem]:
         """
         Busca linha de extrato que corresponde ao item CNAB.
 
-        Critérios de Match (em ordem de prioridade):
-        1. Data ocorrência = Data transação
-        2. Valor pago ≈ Valor (tolerância ±R$0.02)
-        3. CNPJ pagador (se disponível em ambos)
+        CORREÇÃO #10 e #11:
+        - Usa data_credito (data do crédito na conta) para match com extrato
+        - Busca CNPJ do cliente via título ou FaturamentoProduto (fallback)
+        - O CNAB BMP 274 NÃO contém CNPJ do pagador (contém o da empresa)
+
+        Prioridade de Busca:
+        1. Extrato que já tem o MESMO título vinculado (mais confiável)
+        2. DATA_CREDITO + VALOR + CNPJ do cliente
+        3. DATA_CREDITO + VALOR apenas (se único candidato)
 
         Score de Confiança:
-        - 100: Data + Valor + CNPJ exato
-        - 95: Data + Valor + CNPJ raiz (8 primeiros dígitos)
-        - 85: Data + Valor (sem CNPJ ou CNPJ não disponível)
+        - 100: Match via título já vinculado
+        - 95: Data crédito + Valor + CNPJ do cliente
+        - 85: Data crédito + Valor apenas (único candidato)
 
         Args:
             item: CnabRetornoItem para buscar correspondência
@@ -514,36 +576,63 @@ class Cnab400ProcessorService:
         if item.codigo_ocorrencia not in ('06', '10', '17'):
             return None
 
-        # Verifica se há data de ocorrência
-        if not item.data_ocorrencia:
+        # CORREÇÃO #10: Usar data_credito (data do crédito na conta)
+        # Fallback para data_ocorrencia se data_credito não estiver disponível
+        data_match = item.data_credito or item.data_ocorrencia
+        if not data_match:
             return None
 
         # Tolerância de valor: R$ 0,02
         valor_cnab = float(item.valor_pago or 0)
         tolerancia = 0.02
 
-        # Query base: mesma data + mesmo valor aproximado + não conciliado
+        # =====================================================
+        # FASE 1: Buscar extrato que já tem o MESMO título vinculado
+        # Este é o match mais confiável pois o vínculo já existe
+        # =====================================================
+        if item.conta_a_receber_id:
+            extrato = db.session.query(ExtratoItem).join(ExtratoLote).filter(
+                ExtratoItem.titulo_receber_id == item.conta_a_receber_id,
+                ExtratoItem.status != 'CONCILIADO',
+                ExtratoLote.tipo_transacao == 'entrada',
+            ).first()
+            if extrato:
+                return extrato
+
+        # =====================================================
+        # FASE 2: DATA_CREDITO + VALOR + CNPJ do CLIENTE
+        # CORREÇÃO #11: Busca CNPJ via método com fallback
+        # =====================================================
+        cnpj_cliente = self._buscar_cnpj_cliente(item)
+
+        # Query base: mesma data de crédito + mesmo valor aproximado + não conciliado
+        # CORREÇÃO #12: Excluir extratos já vinculados a outros CNABs
+        # Isso previne que 2 CNABs encontrem o mesmo extrato quando há 2 disponíveis
+        subquery_vinculados = db.session.query(CnabRetornoItem.extrato_item_id).filter(
+            CnabRetornoItem.extrato_item_id.isnot(None),
+            CnabRetornoItem.id != item.id  # Permite encontrar extrato que o próprio item já tem
+        ).scalar_subquery()
+
         query = db.session.query(ExtratoItem).join(ExtratoLote).filter(
-            ExtratoItem.data_transacao == item.data_ocorrencia,
+            ExtratoItem.data_transacao == data_match,
             ExtratoItem.valor.between(valor_cnab - tolerancia, valor_cnab + tolerancia),
             ExtratoItem.status != 'CONCILIADO',
-            ExtratoLote.tipo_transacao == 'entrada',  # Apenas recebimentos
+            ExtratoLote.tipo_transacao == 'entrada',
+            ~ExtratoItem.id.in_(subquery_vinculados),  # Excluir já vinculados a outros CNABs
         )
 
-        # Filtrar por CNPJ se disponível
-        cnpj_cnab = self._normalizar_cnpj(item.cnpj_pagador)
-
-        if cnpj_cnab and len(cnpj_cnab) >= 8:
-            # Primeiro: CNPJ exato
+        # Se temos CNPJ do cliente (via título), filtrar por ele
+        if cnpj_cliente and len(cnpj_cliente) >= 8:
+            # CNPJ exato
             extrato = query.filter(
-                db.func.regexp_replace(ExtratoItem.cnpj_pagador, '[^0-9]', '', 'g') == cnpj_cnab
+                db.func.regexp_replace(ExtratoItem.cnpj_pagador, '[^0-9]', '', 'g') == cnpj_cliente
             ).first()
 
             if extrato:
                 return extrato
 
-            # Segundo: CNPJ raiz (8 primeiros dígitos - grupo empresarial)
-            raiz_cnpj = cnpj_cnab[:8]
+            # CNPJ raiz (8 primeiros dígitos - grupo empresarial)
+            raiz_cnpj = cnpj_cliente[:8]
             extrato = query.filter(
                 db.func.left(
                     db.func.regexp_replace(ExtratoItem.cnpj_pagador, '[^0-9]', '', 'g'),
@@ -554,8 +643,23 @@ class Cnab400ProcessorService:
             if extrato:
                 return extrato
 
-        # Terceiro: Apenas data + valor (sem filtro de CNPJ)
-        return query.first()
+        # =====================================================
+        # FASE 3: Fallback - apenas DATA + VALOR
+        # Só aceita se houver ÚNICO candidato (evita match ambíguo)
+        # =====================================================
+        candidatos = query.all()
+        if len(candidatos) == 1:
+            return candidatos[0]
+        elif len(candidatos) > 1:
+            # Múltiplos candidatos - NÃO vincular para evitar erro
+            logger.warning(
+                f"CNAB {item.id} NF {item.nf_extraida}/{item.parcela_extraida}: "
+                f"{len(candidatos)} extratos candidatos (data={item.data_ocorrencia}, "
+                f"valor={valor_cnab}) - match ambíguo, não vinculando"
+            )
+            return None
+
+        return None
 
     def _buscar_extrato_correspondente_para_rastreabilidade(
         self,
@@ -569,10 +673,14 @@ class Cnab400ProcessorService:
         Como queremos manter a rastreabilidade completa (CNAB ↔ Título ↔ Extrato),
         precisamos encontrar o extrato mesmo que já tenha sido conciliado anteriormente.
 
+        CORREÇÃO #10 e #11:
+        - Usa data_credito (data do crédito na conta) para match
+        - Busca CNPJ do cliente via título ou FaturamentoProduto (fallback)
+
         Prioridade de busca:
         1. Extrato que já tem o mesmo título vinculado (titulo_receber_id)
-        2. Extrato com mesmo CNPJ + Data + Valor
-        3. Extrato com Data + Valor (sem CNPJ)
+        2. Extrato com mesmo CNPJ do cliente + Data crédito + Valor
+        3. Extrato com Data crédito + Valor (sem CNPJ)
 
         Args:
             item: CnabRetornoItem para buscar correspondência
@@ -584,21 +692,30 @@ class Cnab400ProcessorService:
         if item.codigo_ocorrencia not in ('06', '10', '17'):
             return None
 
-        # Verifica se há data de ocorrência
-        if not item.data_ocorrencia:
+        # CORREÇÃO #10: Usar data_credito (data do crédito na conta)
+        # Fallback para data_ocorrencia se data_credito não estiver disponível
+        data_match = item.data_credito or item.data_ocorrencia
+        if not data_match:
             return None
 
         # Tolerância de valor: R$ 0,02
         valor_cnab = float(item.valor_pago or 0)
         tolerancia = 0.02
 
-        # Query base: mesma data + mesmo valor aproximado
+        # Query base: mesma data de crédito + mesmo valor aproximado
         # DIFERENÇA: NÃO filtra por status != 'CONCILIADO'
+        # CORREÇÃO #12: Excluir extratos já vinculados a outros CNABs
+        subquery_vinculados = db.session.query(CnabRetornoItem.extrato_item_id).filter(
+            CnabRetornoItem.extrato_item_id.isnot(None),
+            CnabRetornoItem.id != item.id  # Permite encontrar extrato que o próprio item já tem
+        ).scalar_subquery()
+
         query = db.session.query(ExtratoItem).join(ExtratoLote).filter(
-            ExtratoItem.data_transacao == item.data_ocorrencia,
+            ExtratoItem.data_transacao == data_match,
             ExtratoItem.valor.between(valor_cnab - tolerancia, valor_cnab + tolerancia),
             # SEM: ExtratoItem.status != 'CONCILIADO' - inclui conciliados para rastreabilidade
             ExtratoLote.tipo_transacao == 'entrada',  # Apenas recebimentos
+            ~ExtratoItem.id.in_(subquery_vinculados),  # Excluir já vinculados a outros CNABs
         )
 
         # PRIORIDADE 1: Se título está vinculado, buscar extrato que tem esse título
@@ -610,20 +727,21 @@ class Cnab400ProcessorService:
             if extrato:
                 return extrato
 
-        # PRIORIDADE 2: Buscar por CNPJ
-        cnpj_cnab = self._normalizar_cnpj(item.cnpj_pagador)
+        # PRIORIDADE 2: Buscar por CNPJ do cliente
+        # CORREÇÃO #11: Usa método com fallback (título → FaturamentoProduto)
+        cnpj_cliente = self._buscar_cnpj_cliente(item)
 
-        if cnpj_cnab and len(cnpj_cnab) >= 8:
+        if cnpj_cliente and len(cnpj_cliente) >= 8:
             # CNPJ exato
             extrato = query.filter(
-                db.func.regexp_replace(ExtratoItem.cnpj_pagador, '[^0-9]', '', 'g') == cnpj_cnab
+                db.func.regexp_replace(ExtratoItem.cnpj_pagador, '[^0-9]', '', 'g') == cnpj_cliente
             ).first()
 
             if extrato:
                 return extrato
 
             # CNPJ raiz (8 primeiros dígitos - grupo empresarial)
-            raiz_cnpj = cnpj_cnab[:8]
+            raiz_cnpj = cnpj_cliente[:8]
             extrato = query.filter(
                 db.func.left(
                     db.func.regexp_replace(ExtratoItem.cnpj_pagador, '[^0-9]', '', 'g'),
@@ -634,7 +752,7 @@ class Cnab400ProcessorService:
             if extrato:
                 return extrato
 
-        # PRIORIDADE 3: Apenas data + valor (sem filtro de CNPJ)
+        # PRIORIDADE 3: Apenas data de crédito + valor (sem filtro de CNPJ)
         return query.first()
 
     def _executar_matching_extrato(self, item: CnabRetornoItem) -> None:
@@ -671,7 +789,26 @@ class Cnab400ProcessorService:
             extrato = self._buscar_extrato_correspondente(item)
 
         if extrato:
-            # Vinculação encontrada
+            # =====================================================
+            # CORREÇÃO #2: VERIFICAR DUPLICATA ANTES DE VINCULAR
+            # Impede match 2:1 (2 CNABs → 1 Extrato)
+            # =====================================================
+            cnab_existente = CnabRetornoItem.query.filter(
+                CnabRetornoItem.extrato_item_id == extrato.id,
+                CnabRetornoItem.id != item.id
+            ).first()
+
+            if cnab_existente:
+                # Extrato já vinculado a outro CNAB - NÃO vincular novamente
+                item.status_match_extrato = 'ERRO_MATCH_DUPLICADO'
+                item.match_criterio_extrato = f'EXTRATO_JA_VINCULADO_CNAB_{cnab_existente.id}'
+                logger.warning(
+                    f"CNAB {item.id} NF {item.nf_extraida}/{item.parcela_extraida}: "
+                    f"Extrato {extrato.id} já vinculado ao CNAB {cnab_existente.id} - match negado"
+                )
+                return
+
+            # Vinculação encontrada e permitida
             item.extrato_item_id = extrato.id
 
             # Calcular score baseado no critério de match
@@ -711,9 +848,299 @@ class Cnab400ProcessorService:
                 extrato.status_match = 'MATCH_ENCONTRADO'
                 extrato.match_criterio = f'VIA_CNAB_{item.match_criterio_extrato}'
                 extrato.match_score = item.match_score_extrato
+
+                # =====================================================
+                # CORREÇÃO #13: COPIAR INFORMAÇÕES DO TÍTULO PARA EXTRATO
+                # Quando CNAB tem título vinculado, copiar dados para o extrato
+                # para que a tela de extrato mostre o título corretamente.
+                # NOTA: Campos do modelo ContasAReceber:
+                # - valor_titulo (não 'valor')
+                # - vencimento (não 'data_vencimento')
+                # - parcela é VARCHAR mas extrato.titulo_parcela é INTEGER
+                # =====================================================
+                if item.conta_a_receber_id:
+                    titulo = db.session.get(ContasAReceber, item.conta_a_receber_id)
+                    if titulo:
+                        extrato.titulo_receber_id = titulo.id
+                        extrato.titulo_nf = titulo.titulo_nf
+                        extrato.titulo_parcela = int(titulo.parcela) if titulo.parcela else None
+                        extrato.titulo_valor = float(titulo.valor_titulo) if titulo.valor_titulo else None
+                        extrato.titulo_vencimento = titulo.vencimento
+                        extrato.titulo_cliente = titulo.raz_social
+                        extrato.titulo_cnpj = titulo.cnpj
+                        logger.info(
+                            f"CNAB {item.id}: Título {titulo.id} (NF {titulo.titulo_nf}/{titulo.parcela}) "
+                            f"copiado para Extrato {extrato.id}"
+                        )
         else:
             # Nenhum extrato encontrado
             item.status_match_extrato = 'SEM_MATCH'
+
+    def _executar_matching_extrato_sem_titulo(self, item: CnabRetornoItem) -> None:
+        """
+        Tenta vincular CNAB com extrato mesmo quando título não existe localmente.
+
+        CORREÇÃO #7: Usado para manter rastreabilidade quando título não foi
+        sincronizado do Odoo mas extrato existe.
+
+        CORREÇÃO #10: Usa data_credito (data do crédito na conta) para match.
+
+        Critérios de match:
+        - DATA_CREDITO EXATA (data_credito == data_transacao)
+        - VALOR aproximado (±R$0,02)
+        - CNPJ do cliente via FaturamentoProduto (fallback - se disponível)
+        - Só aceita se houver ÚNICO candidato (evita match ambíguo)
+
+        Score de confiança: 60 (baixo - sem título para validar)
+
+        Args:
+            item: CnabRetornoItem para processar
+        """
+        # Só processa liquidações (códigos 06, 10, 17)
+        if item.codigo_ocorrencia not in ('06', '10', '17'):
+            item.status_match_extrato = 'NAO_APLICAVEL'
+            return
+
+        # CORREÇÃO #10: Usar data_credito (data do crédito na conta)
+        # Fallback para data_ocorrencia se data_credito não estiver disponível
+        data_match = item.data_credito or item.data_ocorrencia
+        if not data_match or not item.valor_pago:
+            item.status_match_extrato = 'NAO_APLICAVEL'
+            return
+
+        # Tolerância de valor: R$ 0,02
+        valor_cnab = float(item.valor_pago)
+        tolerancia = 0.02
+
+        # CORREÇÃO #11: Tentar obter CNPJ do cliente via FaturamentoProduto
+        cnpj_cliente = self._buscar_cnpj_cliente(item)
+
+        # Buscar extratos por DATA_CREDITO + VALOR
+        # CORREÇÃO #12: Excluir extratos já vinculados a outros CNABs
+        subquery_vinculados = db.session.query(CnabRetornoItem.extrato_item_id).filter(
+            CnabRetornoItem.extrato_item_id.isnot(None),
+            CnabRetornoItem.id != item.id
+        ).scalar_subquery()
+
+        query = db.session.query(ExtratoItem).join(ExtratoLote).filter(
+            ExtratoItem.data_transacao == data_match,
+            ExtratoItem.valor.between(valor_cnab - tolerancia, valor_cnab + tolerancia),
+            ExtratoItem.status != 'CONCILIADO',
+            ExtratoLote.tipo_transacao == 'entrada',  # Apenas recebimentos
+            ~ExtratoItem.id.in_(subquery_vinculados),  # Excluir já vinculados
+        )
+
+        # Se temos CNPJ do cliente (via FaturamentoProduto), filtrar por ele primeiro
+        if cnpj_cliente and len(cnpj_cliente) >= 8:
+            candidatos_cnpj = query.filter(
+                db.func.regexp_replace(ExtratoItem.cnpj_pagador, '[^0-9]', '', 'g') == cnpj_cliente
+            ).all()
+            if len(candidatos_cnpj) == 1:
+                # Match único com CNPJ - mais confiável
+                candidatos = candidatos_cnpj
+            else:
+                # Fallback: todos os candidatos por data+valor
+                candidatos = query.all()
+        else:
+            candidatos = query.all()
+
+        if len(candidatos) == 1:
+            extrato = candidatos[0]
+
+            # =====================================================
+            # VERIFICAR DUPLICATA: Extrato já vinculado a outro CNAB?
+            # =====================================================
+            cnab_existente = CnabRetornoItem.query.filter(
+                CnabRetornoItem.extrato_item_id == extrato.id,
+                CnabRetornoItem.id != item.id
+            ).first()
+
+            if cnab_existente:
+                item.status_match_extrato = 'ERRO_MATCH_DUPLICADO'
+                item.match_criterio_extrato = f'EXTRATO_JA_VINCULADO_CNAB_{cnab_existente.id}'
+                logger.warning(
+                    f"CNAB {item.id} NF {item.nf_extraida}/{item.parcela_extraida}: "
+                    f"Extrato {extrato.id} já vinculado ao CNAB {cnab_existente.id} - match negado"
+                )
+                return
+
+            # Vincular com score baixo (sem título para validar)
+            item.extrato_item_id = extrato.id
+            item.status_match_extrato = 'MATCH_SEM_TITULO'
+            item.match_score_extrato = 60  # Score baixo - sem validação de título
+            item.match_criterio_extrato = 'DATA+VALOR_SEM_TITULO_LOCAL'
+
+            # Atualizar extrato para indicar que tem match pendente
+            extrato.status_match = 'MATCH_CNAB_PENDENTE'
+            extrato.match_criterio = 'VIA_CNAB_SEM_TITULO'
+            extrato.match_score = 60
+
+            logger.info(
+                f"CNAB {item.id} NF {item.nf_extraida}/{item.parcela_extraida}: "
+                f"Match com extrato {extrato.id} SEM título local "
+                f"(data={item.data_ocorrencia}, valor={valor_cnab}) - requer validação manual"
+            )
+
+        elif len(candidatos) > 1:
+            # Múltiplos candidatos - NÃO vincular (ambíguo)
+            item.status_match_extrato = 'SEM_MATCH'
+            item.match_criterio_extrato = f'MATCH_AMBIGUO_{len(candidatos)}_CANDIDATOS'
+            logger.warning(
+                f"CNAB {item.id} NF {item.nf_extraida}/{item.parcela_extraida}: "
+                f"{len(candidatos)} extratos candidatos (data={item.data_ocorrencia}, "
+                f"valor={valor_cnab}) - match ambíguo SEM título, não vinculando"
+            )
+        else:
+            # Nenhum extrato encontrado
+            item.status_match_extrato = 'SEM_MATCH'
+            item.match_criterio_extrato = 'EXTRATO_NAO_ENCONTRADO_SEM_TITULO'
+
+    def _executar_baixa_automatica(self, item: CnabRetornoItem, usuario: str = None) -> bool:
+        """
+        Executa baixa automática quando CNAB tem título E extrato vinculados.
+
+        SIMPLIFICAÇÃO DO FLUXO (21/01/2026):
+        - Baixa automática durante importação CNAB
+        - Gera log para auditoria
+        - Não requer intervenção manual
+
+        CORREÇÃO 21/01/2026 (Bug extrato sem conciliação Odoo):
+        - Ordem corrigida: Odoo PRIMEIRO, status local DEPOIS
+        - Se Odoo falhar, NÃO marca como CONCILIADO/processado
+        - Permite reprocessamento posterior
+
+        Operações (ORDEM CORRIGIDA):
+        1. Carrega título e extrato
+        2. Vincular título ao extrato (se necessário)
+        3. PRIMEIRO: Reconcilia no Odoo (se disponível)
+        4. SÓ SE ODOO OK: Marca título como pago
+        5. SÓ SE ODOO OK: Marca extrato como CONCILIADO
+        6. SÓ SE ODOO OK: Marca item CNAB como processado
+        7. Gera log para auditoria
+
+        Args:
+            item: CnabRetornoItem com título e extrato vinculados
+            usuario: Nome do usuário/sistema executando
+
+        Returns:
+            bool: True se baixa foi executada com sucesso (incluindo Odoo)
+        """
+        # Validações - só baixa automaticamente se tiver título E extrato
+        if not item.conta_a_receber_id or not item.extrato_item_id:
+            return False
+
+        if item.processado:
+            return False  # Já foi processado
+
+        try:
+            # 1. Carregar título e extrato
+            titulo = db.session.get(ContasAReceber, item.conta_a_receber_id)
+            extrato = db.session.get(ExtratoItem, item.extrato_item_id)
+
+            if not titulo or not extrato:
+                logger.warning(
+                    f"[BAIXA_AUTO] CNAB {item.id}: Título ou Extrato não encontrado"
+                )
+                return False
+
+            # 2. Vincular título ao extrato (se não estiver) - isso pode ser feito antes do Odoo
+            if not extrato.titulo_receber_id:
+                extrato.titulo_receber_id = titulo.id
+                extrato.titulo_nf = titulo.titulo_nf
+                extrato.titulo_parcela = int(titulo.parcela) if titulo.parcela else None
+                extrato.titulo_valor = float(titulo.valor_titulo) if titulo.valor_titulo else None
+                extrato.titulo_vencimento = titulo.vencimento
+                extrato.titulo_cliente = titulo.raz_social_red or titulo.raz_social
+                extrato.titulo_cnpj = titulo.cnpj
+
+            # 3. PRIMEIRO: Reconciliar no Odoo (se disponível)
+            odoo_ok = False
+            odoo_error = None
+
+            if extrato.statement_line_id:
+                # Tem linha de extrato no Odoo - DEVE reconciliar
+                try:
+                    from app.financeiro.services.extrato_conciliacao_service import ExtratoConciliacaoService
+                    conciliador = ExtratoConciliacaoService()
+                    result = conciliador.conciliar_item(extrato)
+                    odoo_ok = result.get('success', False)
+
+                    if not odoo_ok:
+                        odoo_error = result.get('error', 'Reconciliação retornou success=False')
+                        logger.warning(
+                            f"[BAIXA_AUTO] CNAB {item.id} NF {item.nf_extraida}/{item.parcela_extraida}: "
+                            f"Reconciliação Odoo falhou: {odoo_error}"
+                        )
+                        # NÃO marcar como processado - permitir reprocessamento
+                        item.erro_mensagem = f'Odoo falhou: {odoo_error}'
+                        return False
+
+                except Exception as e:
+                    odoo_error = str(e)
+                    logger.error(
+                        f"[BAIXA_AUTO] CNAB {item.id} NF {item.nf_extraida}/{item.parcela_extraida}: "
+                        f"Erro ao reconciliar Odoo: {e}"
+                    )
+                    # NÃO marcar como processado - permitir reprocessamento
+                    item.erro_mensagem = f'Erro Odoo: {odoo_error}'
+                    return False
+            else:
+                # Sem statement_line_id - extrato não veio do Odoo, OK prosseguir
+                odoo_ok = True  # Considera OK pois não precisa reconciliar
+                logger.info(
+                    f"[BAIXA_AUTO] CNAB {item.id}: Extrato sem statement_line_id - pulando Odoo"
+                )
+
+            # 4. SÓ SE ODOO OK: Baixar título (ContasAReceber)
+            if not titulo.parcela_paga:
+                titulo.parcela_paga = True
+                titulo.status_pagamento_odoo = 'PAGO_CNAB_AUTO'
+
+                # Observação para auditoria
+                obs_parts = [
+                    "[BAIXA_AUTO] Via CNAB400",
+                    f"Ocorrência: {item.codigo_ocorrencia}",
+                    f"Data Crédito: {item.data_credito.strftime('%d/%m/%Y') if item.data_credito else 'N/D'}",
+                ]
+                if item.valor_pago:
+                    obs_parts.append(f"Valor: R$ {item.valor_pago:,.2f}")
+                if item.lote:
+                    obs_parts.append(f"Arquivo: {item.lote.arquivo_nome}")
+
+                titulo.observacao = ' | '.join(obs_parts)
+
+            # 5. SÓ SE ODOO OK: Marcar extrato como conciliado
+            if extrato.status != 'CONCILIADO':
+                extrato.status = 'CONCILIADO'
+                extrato.status_match = 'MATCH_ENCONTRADO'
+                extrato.match_score = item.match_score_extrato or 100
+                extrato.match_criterio = 'BAIXA_AUTO_VIA_CNAB'
+                extrato.aprovado = True
+                extrato.aprovado_por = usuario or 'SISTEMA_CNAB_AUTO'
+                extrato.aprovado_em = datetime.utcnow()
+                extrato.processado_em = datetime.utcnow()
+                extrato.mensagem = f"[BAIXA_AUTO] Conciliado via CNAB400 - Lote {item.lote_id}"
+
+            # 6. SÓ SE ODOO OK: Marcar item CNAB como processado
+            item.processado = True
+            item.data_processamento = datetime.utcnow()
+            item.erro_mensagem = None  # Limpar erro anterior se houver
+
+            # 7. Log para auditoria
+            logger.info(
+                f"[BAIXA_AUTO] CNAB {item.id} NF {item.nf_extraida}/{item.parcela_extraida}: "
+                f"Título {titulo.id} baixado, Extrato {extrato.id} conciliado, Odoo reconciliado"
+            )
+
+            return True
+
+        except Exception as e:
+            logger.error(
+                f"[BAIXA_AUTO] CNAB {item.id} NF {item.nf_extraida}/{item.parcela_extraida}: "
+                f"Erro na baixa automática: {e}"
+            )
+            item.erro_mensagem = f'Erro baixa automática: {str(e)}'
+            return False
 
     def baixar_titulo_e_extrato(self, item: CnabRetornoItem, usuario: str = None) -> Dict[str, Any]:
         """
@@ -810,16 +1237,68 @@ class Cnab400ProcessorService:
                     # =====================================================
                     # 3. Reconciliar no Odoo (se tiver statement_line_id)
                     if extrato.statement_line_id and titulo:
+                        # =====================================================
+                        # CORREÇÃO #3: GARANTIR DADOS COMPLETOS ANTES DE RECONCILIAR
+                        # O ExtratoConciliacaoService.conciliar_item() requer:
+                        # - titulo_receber_id (para buscar título no Odoo)
+                        # - titulo_nf + titulo_parcela (para buscar move_line)
+                        # - credit_line_id (para fazer a reconciliação)
+                        # =====================================================
+
+                        # Garantir que extrato tem título vinculado
+                        if not extrato.titulo_receber_id:
+                            extrato.titulo_receber_id = item.conta_a_receber_id
+                        if not extrato.titulo_nf and titulo:
+                            extrato.titulo_nf = titulo.titulo_nf
+                        if not extrato.titulo_parcela and titulo:
+                            extrato.titulo_parcela = titulo.parcela
+
+                        # Se não tem credit_line_id, tentar buscar no Odoo
+                        if not extrato.credit_line_id and extrato.move_id:
+                            try:
+                                from app.financeiro.services.extrato_service import ExtratoService
+                                extrato_svc = ExtratoService()
+                                credit_line = extrato_svc._buscar_linha_credito(extrato.move_id)
+                                if credit_line:
+                                    extrato.credit_line_id = credit_line
+                            except Exception as credit_err:
+                                import logging
+                                logger = logging.getLogger(__name__)
+                                logger.warning(f"Não foi possível buscar credit_line_id para extrato {extrato.id}: {credit_err}")
+
                         try:
                             from app.financeiro.services.extrato_conciliacao_service import ExtratoConciliacaoService
+                            import logging
+                            logger = logging.getLogger(__name__)
+
+                            # Log de diagnóstico
+                            logger.info(
+                                f"[CNAB→ODOO] Tentando reconciliar extrato {extrato.id}: "
+                                f"statement_line_id={extrato.statement_line_id}, "
+                                f"credit_line_id={extrato.credit_line_id}, "
+                                f"titulo_receber_id={extrato.titulo_receber_id}, "
+                                f"titulo_nf={extrato.titulo_nf}, "
+                                f"titulo_parcela={extrato.titulo_parcela}"
+                            )
+
                             conciliador = ExtratoConciliacaoService()
-                            odoo_result = conciliador.conciliar_item(extrato.id, usuario=usuario)
+                            # CORREÇÃO: Passar objeto ExtratoItem, não ID
+                            odoo_result = conciliador.conciliar_item(extrato)
                             resultado['odoo'] = odoo_result.get('success', False)
+
+                            if not odoo_result.get('success'):
+                                logger.warning(f"[CNAB→ODOO] Falha ao reconciliar extrato {extrato.id}: {odoo_result}")
+                            else:
+                                logger.info(f"[CNAB→ODOO] Extrato {extrato.id} reconciliado com sucesso no Odoo")
+
                         except ImportError:
                             # Service não disponível
                             pass
                         except Exception as e:
                             # Erro no Odoo não bloqueia a baixa local
+                            import logging
+                            logger = logging.getLogger(__name__)
+                            logger.error(f"[CNAB→ODOO] Erro ao reconciliar extrato {extrato.id} no Odoo: {e}")
                             item.erro_mensagem = f"Erro Odoo (não crítico): {str(e)}"
 
             # 4. Marcar CNAB como processado

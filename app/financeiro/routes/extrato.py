@@ -509,6 +509,7 @@ def extrato_lote_detalhe(lote_id):
         func.sum(case((ExtratoItem.status_match == 'MULTIPLOS_VINCULADOS', 1), else_=0)).label('vinculados'),
         func.sum(case((ExtratoItem.status_match == 'SEM_MATCH', 1), else_=0)).label('sem_match'),
         func.sum(case((ExtratoItem.status_match == 'PENDENTE', 1), else_=0)).label('pendentes'),
+        func.sum(case((ExtratoItem.status_match == 'MATCH_CNAB_PENDENTE', 1), else_=0)).label('via_cnab'),
         func.sum(case((ExtratoItem.aprovado == True, 1), else_=0)).label('aprovados'),
         func.sum(case((ExtratoItem.status == 'CONCILIADO', 1), else_=0)).label('conciliados'),
     ).filter(ExtratoItem.lote_id == lote_id).first()
@@ -523,6 +524,7 @@ def extrato_lote_detalhe(lote_id):
         'vinculados': stats_query.vinculados or 0 if stats_query else 0,
         'sem_match': stats_query.sem_match or 0 if stats_query else 0,
         'pendentes': stats_query.pendentes or 0 if stats_query else 0,
+        'via_cnab': stats_query.via_cnab or 0 if stats_query else 0,
         'aprovados': stats_query.aprovados or 0 if stats_query else 0,
         'conciliados': stats_query.conciliados or 0 if stats_query else 0,
     }

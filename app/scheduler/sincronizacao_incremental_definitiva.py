@@ -771,42 +771,62 @@ def executar_sincronizacao():
         except Exception as e:
             pass
 
-        # 9️⃣.5️⃣ SINCRONIZAÇÃO DE EXTRATOS VIA ODOO - com retry
+        # 9️⃣.5️⃣ SINCRONIZAÇÃO COMPLETA DE EXTRATOS - IMPORTAÇÃO + SYNC + VINCULAÇÃO CNAB
         sucesso_extratos = False
         for tentativa in range(1, MAX_RETRIES + 1):
             try:
-                logger.info(f"📊 Sincronizando Extratos via Odoo (tentativa {tentativa}/{MAX_RETRIES})...")
+                logger.info(f"📊 Sincronização Completa de Extratos (tentativa {tentativa}/{MAX_RETRIES})...")
                 logger.info(f"   Janela: {JANELA_EXTRATOS} minutos")
 
-                # Usar service já instanciado
+                # =====================================================
+                # PASSO 1: IMPORTAR NOVOS EXTRATOS DO ODOO
+                # =====================================================
+                logger.info("   [1/3] Importando novos extratos do Odoo...")
+                resultado_importacao = extratos_service.importar_extratos_automatico(
+                    dias_retroativos=7  # Últimos 7 dias
+                )
+                if resultado_importacao.get("success"):
+                    stats_imp = resultado_importacao.get('stats', {})
+                    logger.info(f"   ✅ Importados: {stats_imp.get('total_importados', 0)} novos extratos")
+                else:
+                    logger.warning(f"   ⚠️ Erro na importação: {resultado_importacao.get('error', 'Desconhecido')}")
+
+                # =====================================================
+                # PASSO 2: SINCRONIZAR STATUS VIA ODOO (write_date)
+                # =====================================================
+                logger.info("   [2/3] Sincronizando status via Odoo...")
                 resultado_extratos = extratos_service.sincronizar_via_odoo(
                     janela_minutos=JANELA_EXTRATOS
                 )
 
                 if resultado_extratos.get("success"):
-                    sucesso_extratos = True
                     stats_ext = resultado_extratos.get('stats', {})
-                    logger.info("✅ Extratos sincronizados com sucesso!")
-                    logger.info(f"   - Linhas Odoo verificadas: {stats_ext.get('linhas_odoo_verificadas', 0)}")
-                    logger.info(f"   - Extratos atualizados: {stats_ext.get('extratos_atualizados', 0)}")
-                    logger.info(f"   - Já conciliados: {stats_ext.get('ja_conciliados', 0)}")
-                    logger.info(f"   - Não encontrados: {stats_ext.get('extratos_nao_encontrados', 0)}")
-                    logger.info(f"   - Erros: {stats_ext.get('erros', 0)}")
+                    logger.info(f"   ✅ Status sync: {stats_ext.get('extratos_atualizados', 0)} atualizados")
 
-                    db.session.commit()
-                    break
+                # =====================================================
+                # PASSO 3: VINCULAR CNABs PENDENTES COM EXTRATOS
+                # =====================================================
+                logger.info("   [3/3] Vinculando CNABs a extratos...")
+                resultado_vinc = extratos_service.vincular_cnab_extratos_pendentes()
+                if resultado_vinc.get("success"):
+                    stats_vinc = resultado_vinc.get('stats', {})
+                    logger.info(
+                        f"   ✅ Vinculação: {stats_vinc.get('matches_encontrados', 0)} matches, "
+                        f"{stats_vinc.get('extratos_atualizados', 0)} extratos atualizados, "
+                        f"{stats_vinc.get('odoo_reconciliados', 0)} reconciliados no Odoo"
+                    )
                 else:
-                    erro = resultado_extratos.get('error', 'Erro desconhecido')
-                    logger.error(f"❌ Erro Extratos: {erro}")
+                    logger.warning(f"   ⚠️ Erro na vinculação: {resultado_vinc.get('error', 'Desconhecido')}")
 
-                    if tentativa < MAX_RETRIES:
-                        logger.info(f"🔄 Aguardando {RETRY_DELAY}s antes de tentar novamente...")
-                        sleep(RETRY_DELAY)
-                        # Reinicializar service
-                        from app.financeiro.services.sincronizacao_extratos_service import SincronizacaoExtratosService
-                        extratos_service = SincronizacaoExtratosService()
-                    else:
-                        break
+                # Resumo final
+                sucesso_extratos = True
+                logger.info("✅ Sincronização completa de extratos concluída!")
+                logger.info(f"   - Importados: {resultado_importacao.get('stats', {}).get('total_importados', 0)}")
+                logger.info(f"   - Status atualizados: {resultado_extratos.get('stats', {}).get('extratos_atualizados', 0)}")
+                logger.info(f"   - CNABs vinculados: {resultado_vinc.get('stats', {}).get('matches_encontrados', 0)}")
+
+                db.session.commit()
+                break
 
             except Exception as e:
                 logger.error(f"❌ Erro ao sincronizar Extratos: {e}")

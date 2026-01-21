@@ -187,8 +187,17 @@ def _exibir_resultado_odoo_completo(resultado):
         stats = resultado.get('stats', {})
         print(f"✅ Revalidação via Odoo concluída!")
         print()
-        print(f"  Total extratos no sistema: {stats.get('total_extratos_sistema', 0)}")
-        print(f"  Total verificados: {stats.get('total_verificados', 0)}")
+        print(f"  Total extratos pendentes COM statement_line_id: {stats.get('total_extratos_sistema', 0)}")
+        print(f"  Total verificados no Odoo: {stats.get('total_verificados', 0)}")
+
+        # Mostrar alerta se houver extratos sem statement_line_id
+        sem_stmt = stats.get('sem_statement_line_id', 0)
+        if sem_stmt > 0:
+            print()
+            print(f"  ⚠️  ATENÇÃO: {sem_stmt} extratos pendentes SEM statement_line_id")
+            print("      (Esses extratos não puderam ser verificados no Odoo)")
+            print("      (Possível causa: importação incompleta ou extrato manual)")
+
         print()
         print("  --- Status no Odoo ---")
         print(f"      Conciliados no Odoo: {stats.get('conciliados_no_odoo', 0)}")

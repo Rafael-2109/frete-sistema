@@ -2425,6 +2425,9 @@ class CnabRetornoItem(db.Model):
     __table_args__ = (
         Index('idx_cnab_item_lote_status', 'lote_id', 'status_match'),
         Index('idx_cnab_item_seu_numero', 'seu_numero'),
+        # CONSTRAINT: Cada extrato só pode ter 1 CNAB vinculado (impede match 2:1)
+        # Adicionada via migration: scripts/migrations/fix_cnab_extrato_duplicates.py
+        db.UniqueConstraint('extrato_item_id', name='uq_cnab_extrato_item_unique'),
     )
 
     def __repr__(self):
@@ -2460,6 +2463,67 @@ class CnabRetornoItem(db.Model):
             'ERRO': '❌ Erro',
         }
         return STATUS.get(self.status_match, self.status_match)
+
+    @property
+    def cnpj_cliente(self):
+        """
+        Retorna o CNPJ correto do cliente (não o da empresa).
+
+        O arquivo CNAB BMP 274 coloca o CNPJ da empresa na posição do pagador,
+        então precisamos buscar o CNPJ real do cliente de outras fontes:
+        1. ContasAReceber (título vinculado) - mais confiável
+        2. FaturamentoProduto (fallback por NF)
+
+        Returns:
+            CNPJ formatado do cliente ou None
+        """
+        # FASE 1: Buscar do título vinculado
+        if self.conta_a_receber_id and self.conta_a_receber:
+            cnpj = self.conta_a_receber.cnpj
+            if cnpj:
+                return cnpj
+
+        # FASE 2: Fallback para FaturamentoProduto (lazy import para evitar circular)
+        if self.nf_extraida:
+            from app.faturamento.models import FaturamentoProduto
+            faturamento = FaturamentoProduto.query.filter(
+                FaturamentoProduto.numero_nf == self.nf_extraida,
+                FaturamentoProduto.status_nf != 'Cancelado'
+            ).first()
+            if faturamento and faturamento.cnpj_cliente:
+                return faturamento.cnpj_cliente
+
+        return None
+
+    @property
+    def nome_cliente(self):
+        """
+        Retorna o nome do cliente vinculado ao título.
+
+        Fontes:
+        1. ContasAReceber (título vinculado)
+        2. FaturamentoProduto (fallback por NF)
+
+        Returns:
+            Nome/Razão Social do cliente ou None
+        """
+        # FASE 1: Buscar do título vinculado
+        if self.conta_a_receber_id and self.conta_a_receber:
+            nome = self.conta_a_receber.raz_social
+            if nome:
+                return nome
+
+        # FASE 2: Fallback para FaturamentoProduto
+        if self.nf_extraida:
+            from app.faturamento.models import FaturamentoProduto
+            faturamento = FaturamentoProduto.query.filter(
+                FaturamentoProduto.numero_nf == self.nf_extraida,
+                FaturamentoProduto.status_nf != 'Cancelado'
+            ).first()
+            if faturamento and faturamento.nome_cliente:
+                return faturamento.nome_cliente
+
+        return None
 
     def to_dict(self):
         return {

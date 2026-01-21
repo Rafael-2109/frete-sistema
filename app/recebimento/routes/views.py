@@ -655,14 +655,15 @@ def pendencia_ibscbs_detalhes(pendencia_id):
         'ibscbs': {
             'cst': pendencia.ibscbs_cst,
             'class_trib': pendencia.ibscbs_class_trib,
-            'base': float(pendencia.ibscbs_base) if pendencia.ibscbs_base else None,
-            'ibs_uf_aliq': float(pendencia.ibs_uf_aliq) if pendencia.ibs_uf_aliq else None,
-            'ibs_uf_valor': float(pendencia.ibs_uf_valor) if pendencia.ibs_uf_valor else None,
-            'ibs_mun_aliq': float(pendencia.ibs_mun_aliq) if pendencia.ibs_mun_aliq else None,
-            'ibs_mun_valor': float(pendencia.ibs_mun_valor) if pendencia.ibs_mun_valor else None,
-            'ibs_total': float(pendencia.ibs_total) if pendencia.ibs_total else None,
-            'cbs_aliq': float(pendencia.cbs_aliq) if pendencia.cbs_aliq else None,
-            'cbs_valor': float(pendencia.cbs_valor) if pendencia.cbs_valor else None
+            # Normalizar valores numericos: None -> 0 para evitar desmatch no frontend
+            'base': float(pendencia.ibscbs_base) if pendencia.ibscbs_base else 0,
+            'ibs_uf_aliq': float(pendencia.ibs_uf_aliq) if pendencia.ibs_uf_aliq else 0,
+            'ibs_uf_valor': float(pendencia.ibs_uf_valor) if pendencia.ibs_uf_valor else 0,
+            'ibs_mun_aliq': float(pendencia.ibs_mun_aliq) if pendencia.ibs_mun_aliq else 0,
+            'ibs_mun_valor': float(pendencia.ibs_mun_valor) if pendencia.ibs_mun_valor else 0,
+            'ibs_total': float(pendencia.ibs_total) if pendencia.ibs_total else 0,
+            'cbs_aliq': float(pendencia.cbs_aliq) if pendencia.cbs_aliq else 0,
+            'cbs_valor': float(pendencia.cbs_valor) if pendencia.cbs_valor else 0
         },
         'impostos': None,
         'calculo_base': None

@@ -22,7 +22,7 @@ from datetime import datetime, date
 from typing import Dict, List, Optional, Tuple
 
 from app import db
-from app.financeiro.models import ExtratoLote, ExtratoItem
+from app.financeiro.models import ExtratoLote, ExtratoItem, CnabRetornoItem
 
 logger = logging.getLogger(__name__)
 
@@ -765,6 +765,13 @@ class ExtratoService:
 
         db.session.commit()
 
+        # SIMPLIFICAÇÃO DO FLUXO CNAB (21/01/2026):
+        # Vincular CNABs que estavam aguardando extrato
+        if tipo_transacao == 'entrada':
+            cnabs_vinculados = self._vincular_cnabs_pendentes(lote)
+            self.estatisticas['cnabs_vinculados'] = cnabs_vinculados
+            db.session.commit()
+
         logger.info(f"Importação concluída: {self.estatisticas}")
 
         return lote
@@ -800,6 +807,75 @@ class ExtratoService:
             domain,
             fields=fields
         )
+
+
+    def _vincular_cnabs_pendentes(self, lote: ExtratoLote) -> int:
+        """
+        Após importar extrato, vincula CNABs que estavam aguardando.
+
+        SIMPLIFICAÇÃO DO FLUXO CNAB (21/01/2026):
+        CNABs com título vinculado mas sem extrato são reprocessados
+        quando novos extratos são importados.
+
+        Args:
+            lote: Lote de extrato recém importado
+
+        Returns:
+            int: Quantidade de CNABs vinculados
+        """
+        # Importar o processor aqui para evitar import circular
+        from app.financeiro.services.cnab400_processor_service import Cnab400ProcessorService
+
+        # Buscar CNABs com título mas sem extrato (não processados)
+        cnabs_sem_extrato = CnabRetornoItem.query.filter(
+            CnabRetornoItem.conta_a_receber_id.isnot(None),  # Tem título
+            CnabRetornoItem.extrato_item_id.is_(None),       # Sem extrato
+            CnabRetornoItem.processado == False
+        ).all()
+
+        if not cnabs_sem_extrato:
+            logger.info("   ℹ️ Nenhum CNAB aguardando extrato")
+            return 0
+
+        logger.info(f"   📋 {len(cnabs_sem_extrato)} CNABs aguardando extrato")
+
+        processor = Cnab400ProcessorService()
+        vinculados = 0
+        baixados = 0
+
+        for item in cnabs_sem_extrato:
+            try:
+                # Tentar vincular com extrato agora
+                status_anterior = item.status_match_extrato
+                processor._executar_matching_extrato(item)
+
+                if item.extrato_item_id:
+                    vinculados += 1
+                    logger.info(
+                        f"   ✓ CNAB {item.id} NF {item.nf_extraida}/{item.parcela_extraida}: "
+                        f"Vinculado ao extrato {item.extrato_item_id}"
+                    )
+
+                    # Se tem título E extrato, fazer baixa automática
+                    if item.conta_a_receber_id and item.extrato_item_id:
+                        if processor._executar_baixa_automatica(item, 'SISTEMA_EXTRATO_AUTO'):
+                            baixados += 1
+                            logger.info(
+                                f"   ✓ [BAIXA_AUTO] CNAB {item.id} baixado automaticamente"
+                            )
+
+            except Exception as e:
+                logger.warning(
+                    f"   ⚠️ CNAB {item.id}: Erro na vinculação: {e}"
+                )
+                continue
+
+        if vinculados > 0:
+            logger.info(
+                f"   ✅ {vinculados} CNABs vinculados a extratos, {baixados} baixados automaticamente"
+            )
+
+        return vinculados
 
 
 def importar_extrato_comando(journal_code: str, limit: int = 500):
