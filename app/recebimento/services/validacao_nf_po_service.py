@@ -26,7 +26,7 @@ Regras de Negocio:
 - Preco divergente: BLOQUEIA
 - Data fora tolerancia: BLOQUEIA
 
-Referencia: .claude/plans/wiggly-plotting-newt.md
+Referencia: "/home/rafaelnascimento/.claude/plans/wiggly-plotting-newt.md"
 """
 
 import logging
@@ -37,7 +37,6 @@ from collections import defaultdict
 
 from app import db
 from app.recebimento.models import (
-    ProdutoFornecedorDepara,
     ValidacaoNfPoDfe,
     MatchNfPoItem,
     MatchAlocacao,
@@ -415,6 +414,7 @@ class ValidacaoNfPoService:
                 [
                     'id', 'name', 'l10n_br_status',
                     'nfe_infnfe_emit_cnpj', 'nfe_infnfe_emit_xnome',
+                    'nfe_infnfe_dest_cnpj', 'nfe_infnfe_dest_xnome',  # Empresa compradora
                     'nfe_infnfe_ide_nnf', 'nfe_infnfe_ide_serie',
                     'protnfe_infnfe_chnfe', 'nfe_infnfe_ide_dhemi',
                     'nfe_infnfe_total_icmstot_vnf',
@@ -1053,6 +1053,8 @@ class ValidacaoNfPoService:
         """Registra divergencias para itens sem De-Para."""
         cnpj = self._limpar_cnpj(dfe_data.get('nfe_infnfe_emit_cnpj', ''))
         razao = dfe_data.get('nfe_infnfe_emit_xnome', '')
+        cnpj_empresa = self._limpar_cnpj(dfe_data.get('nfe_infnfe_dest_cnpj', ''))
+        razao_empresa = dfe_data.get('nfe_infnfe_dest_xnome', '')
 
         for item in itens:
             div = DivergenciaNfPo(
@@ -1061,6 +1063,8 @@ class ValidacaoNfPoService:
                 odoo_dfe_line_id=item.get('dfe_line_id'),
                 cnpj_fornecedor=cnpj,
                 razao_fornecedor=razao,
+                cnpj_empresa_compradora=cnpj_empresa,
+                razao_empresa_compradora=razao_empresa,
                 cod_produto_fornecedor=item.get('cod_produto_fornecedor'),
                 nome_produto=item.get('nome_produto'),
                 tipo_divergencia='sem_depara',
@@ -1081,6 +1085,8 @@ class ValidacaoNfPoService:
         """Registra divergencias para itens sem PO correspondente."""
         cnpj = self._limpar_cnpj(dfe_data.get('nfe_infnfe_emit_cnpj', ''))
         razao = dfe_data.get('nfe_infnfe_emit_xnome', '')
+        cnpj_empresa = self._limpar_cnpj(dfe_data.get('nfe_infnfe_dest_cnpj', ''))
+        razao_empresa = dfe_data.get('nfe_infnfe_dest_xnome', '')
 
         for item in itens:
             # Criar divergência
@@ -1090,6 +1096,8 @@ class ValidacaoNfPoService:
                 odoo_dfe_line_id=item.get('dfe_line_id'),
                 cnpj_fornecedor=cnpj,
                 razao_fornecedor=razao,
+                cnpj_empresa_compradora=cnpj_empresa,
+                razao_empresa_compradora=razao_empresa,
                 cod_produto_fornecedor=item.get('cod_produto_fornecedor'),
                 cod_produto_interno=item.get('cod_produto_interno'),
                 nome_produto=item.get('nome_produto'),
@@ -1129,6 +1137,8 @@ class ValidacaoNfPoService:
         """Registra divergencias para itens que nao fizeram match."""
         cnpj = self._limpar_cnpj(dfe_data.get('nfe_infnfe_emit_cnpj', ''))
         razao = dfe_data.get('nfe_infnfe_emit_xnome', '')
+        cnpj_empresa = self._limpar_cnpj(dfe_data.get('nfe_infnfe_dest_cnpj', ''))
+        razao_empresa = dfe_data.get('nfe_infnfe_dest_xnome', '')
 
         for resultado in itens_falha:
             item = resultado.get('item', {})
@@ -1178,6 +1188,8 @@ class ValidacaoNfPoService:
                 odoo_dfe_line_id=item.get('dfe_line_id'),
                 cnpj_fornecedor=cnpj,
                 razao_fornecedor=razao,
+                cnpj_empresa_compradora=cnpj_empresa,
+                razao_empresa_compradora=razao_empresa,
                 cod_produto_fornecedor=item.get('cod_produto_fornecedor'),
                 cod_produto_interno=item.get('cod_produto_interno'),
                 nome_produto=item.get('nome_produto'),
@@ -1210,6 +1222,8 @@ class ValidacaoNfPoService:
         """
         cnpj = self._limpar_cnpj(dfe_data.get('nfe_infnfe_emit_cnpj', ''))
         razao = dfe_data.get('nfe_infnfe_emit_xnome', '')
+        cnpj_empresa = self._limpar_cnpj(dfe_data.get('nfe_infnfe_dest_cnpj', ''))
+        razao_empresa = dfe_data.get('nfe_infnfe_dest_xnome', '')
 
         for resultado in itens_falha:
             item_agrupado = resultado.get('item_agrupado', {})
@@ -1266,6 +1280,8 @@ class ValidacaoNfPoService:
                 odoo_dfe_line_id=item_original.get('dfe_line_id'),
                 cnpj_fornecedor=cnpj,
                 razao_fornecedor=razao,
+                cnpj_empresa_compradora=cnpj_empresa,
+                razao_empresa_compradora=razao_empresa,
                 cod_produto_fornecedor=item_original.get('cod_produto_fornecedor'),
                 cod_produto_interno=item_agrupado.get('cod_produto_interno'),
                 nome_produto=item_agrupado.get('nome_produto'),
@@ -1349,6 +1365,10 @@ class ValidacaoNfPoService:
             dfe_data.get('nfe_infnfe_emit_cnpj', '')
         )
         validacao.razao_fornecedor = dfe_data.get('nfe_infnfe_emit_xnome')
+        validacao.cnpj_empresa_compradora = self._limpar_cnpj(
+            dfe_data.get('nfe_infnfe_dest_cnpj', '')
+        )
+        validacao.razao_empresa_compradora = dfe_data.get('nfe_infnfe_dest_xnome')
         validacao.data_nf = self._parse_date(dfe_data.get('nfe_infnfe_ide_dhemi', ''))
         validacao.valor_total_nf = dfe_data.get('nfe_infnfe_total_icmstot_vnf')
 

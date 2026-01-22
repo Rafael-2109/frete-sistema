@@ -111,9 +111,9 @@
                 <table class="table table-bordered table-hover align-middle mb-0">
                     <thead class="table-light">
                         <tr>
-                            <th style="width: 100px;">NF</th>
+                            <th class="text-center" style="width: 100px;">Data / NF</th>
+                            <th>Empresa</th>
                             <th>Fornecedor</th>
-                            <th class="text-center">Data NF</th>
                             <th class="text-end">Valor</th>
                             <th class="text-center">Itens</th>
                             <th class="text-center">Status</th>
@@ -124,18 +124,17 @@
                     <tbody>
                         {% for item in items %}
                         <tr data-id="{{ item.id }}">
+                            <td class="text-center">
+                                <small class="text-muted">{{ item.data_nf.strftime('%d/%m/%Y') if item.data_nf else 'N/A' }}</small>
+                                <br><strong class="text-primary">{{ item.numero_nf or item.odoo_dfe_id }}</strong>
+                            </td>
                             <td>
-                                <strong class="text-primary">{{ item.numero_nf or item.odoo_dfe_id }}</strong>
-                                {% if item.serie_nf %}
-                                <br><small class="text-muted">Serie: {{ item.serie_nf }}</small>
-                                {% endif %}
+                                <strong>{{ (item.razao_empresa_compradora or 'N/A')|truncate(25) }}</strong>
+                                <br><small class="text-muted">{{ item.cnpj_empresa_compradora|formatar_cnpj if item.cnpj_empresa_compradora else '-' }}</small>
                             </td>
                             <td>
                                 <strong>{{ item.razao_fornecedor or 'N/A' }}</strong>
-                                <br><small class="text-muted">{{ item.cnpj_fornecedor }}</small>
-                            </td>
-                            <td class="text-center">
-                                {{ item.data_nf.strftime('%d/%m/%Y') if item.data_nf else 'N/A' }}
+                                <br><small class="text-muted">{{ item.cnpj_fornecedor|formatar_cnpj if item.cnpj_fornecedor else '-' }}</small>
                             </td>
                             <td class="text-end">
                                 {% if item.valor_total_nf %}

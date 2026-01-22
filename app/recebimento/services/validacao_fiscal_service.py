@@ -72,6 +72,12 @@ class ValidacaoFiscalService:
             'field_dfe': 'det_imposto_icms_picms',
             'field_perfil': 'aliquota_icms_esperada'
         },
+        'reducao_bc_icms': {
+            'label': 'Red. BC ICMS',
+            'tipo': 'exato',
+            'field_dfe': 'det_imposto_icms_predbc',
+            'field_perfil': 'reducao_bc_icms_esperada'
+        },
         # NOTA: det_imposto_icms_picmsst nao existe no Odoo
         # ICMS ST sera calculado a partir de vicmsst/vbcst quando necessario
         'aliq_icms_st': {
@@ -186,6 +192,12 @@ class ValidacaoFiscalService:
             cnpj = self._extrair_cnpj(dfe)
             razao = dfe.get('nfe_infnfe_emit_xnome', '')
 
+            # 3.0.1. Extrair empresa compradora (destinatario da NF)
+            cnpj_empresa_compradora = dfe.get('nfe_infnfe_dest_cnpj', '')
+            if cnpj_empresa_compradora:
+                cnpj_empresa_compradora = ''.join(c for c in cnpj_empresa_compradora if c.isdigit())
+            razao_empresa_compradora = dfe.get('nfe_infnfe_dest_xnome', '')
+
             # 3.1. Extrair dados da NF
             crt = dfe.get('nfe_infnfe_emit_crt')
             dados_nf = {
@@ -194,7 +206,9 @@ class ValidacaoFiscalService:
                 'chave_nfe': dfe.get('protnfe_infnfe_chnfe'),
                 'uf_fornecedor': dfe.get('nfe_infnfe_emit_uf'),
                 'cidade_fornecedor': None,  # Sera buscado do partner
-                'regime_tributario': str(crt) if crt and crt is not False else None
+                'regime_tributario': str(crt) if crt and crt is not False else None,
+                'cnpj_empresa_compradora': cnpj_empresa_compradora,
+                'razao_empresa_compradora': razao_empresa_compradora
             }
 
             # 3.2. Buscar cidade do fornecedor (do partner_id)
@@ -227,10 +241,11 @@ class ValidacaoFiscalService:
                     logger.warning(f"Linha {linha.get('id')} sem product_id, pulando...")
                     continue
 
-                # Buscar perfil fiscal (baseline)
+                # Buscar perfil fiscal (baseline) - chave: empresa + fornecedor + produto
                 perfil = PerfilFiscalProdutoFornecedor.query.filter_by(
-                    cod_produto=cod_produto,
+                    cnpj_empresa_compradora=cnpj_empresa_compradora,
                     cnpj_fornecedor=cnpj,
+                    cod_produto=cod_produto,
                     ativo=True
                 ).first()
 
@@ -411,6 +426,7 @@ class ValidacaoFiscalService:
             perfil = self._criar_perfil_automatico(
                 cod_produto=cod_produto,
                 cnpj_fornecedor=cnpj,
+                cnpj_empresa_compradora=dados_nf.get('cnpj_empresa_compradora') if dados_nf else None,
                 dados=dados_consistentes,
                 dfe_ids=[h['dfe_id'] for h in historico]
             )
@@ -642,6 +658,7 @@ class ValidacaoFiscalService:
         self,
         cod_produto: str,
         cnpj_fornecedor: str,
+        cnpj_empresa_compradora: str,
         dados: Dict,
         dfe_ids: List[int]
     ) -> PerfilFiscalProdutoFornecedor:
@@ -651,6 +668,7 @@ class ValidacaoFiscalService:
         Args:
             cod_produto: Codigo do produto
             cnpj_fornecedor: CNPJ do fornecedor
+            cnpj_empresa_compradora: CNPJ da empresa compradora (destinatario)
             dados: Dados fiscais consistentes do historico
             dfe_ids: IDs dos DFEs usados para criar o perfil
 
@@ -658,12 +676,14 @@ class ValidacaoFiscalService:
             PerfilFiscalProdutoFornecedor criado
         """
         perfil = PerfilFiscalProdutoFornecedor(
+            cnpj_empresa_compradora=cnpj_empresa_compradora,
             cod_produto=cod_produto,
             cnpj_fornecedor=cnpj_fornecedor,
             ncm_esperado=dados.get('ncm'),
             cfop_esperados=json.dumps(dados.get('cfops', [])),
             cst_icms_esperado=dados.get('cst_icms'),
             aliquota_icms_esperada=dados.get('aliq_icms'),
+            reducao_bc_icms_esperada=dados.get('reducao_bc_icms'),
             aliquota_icms_st_esperada=dados.get('aliq_icms_st'),
             aliquota_ipi_esperada=dados.get('aliq_ipi'),
             # PIS
@@ -731,6 +751,9 @@ class ValidacaoFiscalService:
             nome_produto=nome_produto,
             cnpj_fornecedor=cnpj,
             razao_fornecedor=razao,
+            # Empresa compradora (destinatario da NF)
+            cnpj_empresa_compradora=dados_nf.get('cnpj_empresa_compradora'),
+            razao_empresa_compradora=dados_nf.get('razao_empresa_compradora'),
             # Localizacao do fornecedor
             uf_fornecedor=dados_nf.get('uf_fornecedor'),
             cidade_fornecedor=dados_nf.get('cidade_fornecedor'),
@@ -746,6 +769,7 @@ class ValidacaoFiscalService:
             cfop=linha.get('det_prod_cfop'),
             # ICMS
             aliquota_icms=self._to_decimal(linha.get('det_imposto_icms_picms')),
+            reducao_bc_icms=self._to_decimal(linha.get('det_imposto_icms_predbc')),
             valor_icms=self._to_decimal(linha.get('det_imposto_icms_vicms')),
             bc_icms=self._to_decimal(linha.get('det_imposto_icms_vbc')),
             # ICMS ST
@@ -838,6 +862,22 @@ class ValidacaoFiscalService:
                     campo='aliq_icms',
                     valor_esperado=str(perfil.aliquota_icms_esperada),
                     valor_encontrado=str(aliq_icms_nf),
+                    razao=razao,
+                    dados_nf=dados_nf
+                )
+                divergencias.append(div)
+
+        # % Reducao BC ICMS
+        reducao_bc_icms_nf = self._to_decimal(linha.get('det_imposto_icms_predbc'))
+        if reducao_bc_icms_nf is not None and perfil.reducao_bc_icms_esperada is not None:
+            if reducao_bc_icms_nf != perfil.reducao_bc_icms_esperada:
+                div = self._criar_divergencia(
+                    odoo_dfe_id=odoo_dfe_id,
+                    linha=linha,
+                    perfil=perfil,
+                    campo='reducao_bc_icms',
+                    valor_esperado=str(perfil.reducao_bc_icms_esperada),
+                    valor_encontrado=str(reducao_bc_icms_nf),
                     razao=razao,
                     dados_nf=dados_nf
                 )
@@ -985,6 +1025,9 @@ class ValidacaoFiscalService:
             nome_produto=nome_produto,
             cnpj_fornecedor=perfil.cnpj_fornecedor,
             razao_fornecedor=razao,
+            # Empresa compradora (destinatario da NF)
+            cnpj_empresa_compradora=dados_nf.get('cnpj_empresa_compradora'),
+            razao_empresa_compradora=dados_nf.get('razao_empresa_compradora'),
             # Localizacao do fornecedor
             uf_fornecedor=dados_nf.get('uf_fornecedor'),
             cidade_fornecedor=dados_nf.get('cidade_fornecedor'),

@@ -99,13 +99,13 @@
                 <table class="table table-bordered table-hover align-middle mb-0">
                     <thead class="table-light">
                         <tr>
-                            <th class="text-center">NF/DFE</th>
+                            <th class="text-center">Data / NF</th>
+                            <th>Empresa</th>
                             <th>Fornecedor</th>
                             <th>Produto</th>
                             <th class="text-center">Qtd</th>
                             <th class="text-center">Preco</th>
                             <th class="text-center">Valor</th>
-                            <th class="text-center">UM</th>
                             <th class="text-center">Tipo/Status</th>
                             <th>NF vs PO</th>
                             <th class="text-center" style="width: 180px;">Acoes</th>
@@ -127,9 +127,10 @@
                             data-valor-nf="{{ item.valor_nf or '' }}"
                             data-valor-po="{{ item.valor_po or '' }}"
                             data-odoo-po-name="{{ item.odoo_po_name or '' }}">
-                            <!-- NF/DFE (NF em cima, botoes embaixo) -->
+                            <!-- Data / NF -->
                             <td class="text-center">
-                                <strong class="text-primary">{{ item.numero_nf or '-' }}</strong>
+                                <small class="text-muted">{{ item.data_nf.strftime('%d/%m/%Y') if item.data_nf else 'N/A' }}</small>
+                                <br><strong class="text-primary">{{ item.numero_nf or '-' }}</strong>
                                 <br>
                                 <div class="btn-group btn-group-sm">
                                     <a href="{{ odoo_base_url }}#id={{ item.odoo_dfe_id }}&model=l10n_br_ciel_it_account.dfe&view_type=form"
@@ -152,10 +153,15 @@
                                     </button>
                                 </div>
                             </td>
+                            <!-- Empresa Compradora -->
+                            <td>
+                                <strong>{{ (item.razao_empresa_compradora or 'N/A')|truncate(20) }}</strong>
+                                <br><small class="text-muted">{{ item.cnpj_empresa_compradora|formatar_cnpj if item.cnpj_empresa_compradora else '-' }}</small>
+                            </td>
                             <!-- Fornecedor -->
                             <td>
-                                <strong>{{ item.razao_fornecedor or 'N/A' }}</strong>
-                                <br><small class="text-muted">{{ item.cnpj_fornecedor }}</small>
+                                <strong>{{ (item.razao_fornecedor or 'N/A')|truncate(20) }}</strong>
+                                <br><small class="text-muted">{{ item.cnpj_fornecedor|formatar_cnpj if item.cnpj_fornecedor else '-' }}</small>
                             </td>
                             <!-- Produto -->
                             <td>
@@ -205,14 +211,6 @@
                                 {# Valor total = qtd original NF * preco original NF #}
                                 {# Se tem fator: (qtd_nf/fator) * (preco_nf*fator) = qtd_nf * preco_nf #}
                                 <strong class="text-primary">R$ {{ (item.qtd_nf * item.preco_nf)|numero_br(2) }}</strong>
-                                {% else %}
-                                <span class="text-muted">-</span>
-                                {% endif %}
-                            </td>
-                            <!-- UM Fornecedor -->
-                            <td class="text-center">
-                                {% if item.um_nf %}
-                                <span class="badge bg-secondary">{{ item.um_nf }}</span>
                                 {% else %}
                                 <span class="text-muted">-</span>
                                 {% endif %}
@@ -537,13 +535,13 @@
                     </div>
                     <div class="card-body">
                         <div class="row">
-                            <div class="col-md-4">
+                            <div class="col-md-3">
+                                <small class="text-muted">Comprado por:</small>
+                                <p class="fw-bold mb-0" id="posEmpresa">-</p>
+                            </div>
+                            <div class="col-md-3">
                                 <small class="text-muted">Fornecedor:</small>
                                 <p class="fw-bold mb-0" id="posFornecedor">-</p>
-                            </div>
-                            <div class="col-md-2">
-                                <small class="text-muted">CNPJ:</small>
-                                <p class="fw-bold mb-0" id="posCnpj">-</p>
                             </div>
                             <div class="col-md-2">
                                 <small class="text-muted">Data Emissao:</small>

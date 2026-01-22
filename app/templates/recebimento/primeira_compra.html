@@ -109,15 +109,16 @@
                     <thead class="table-light">
                         <tr>
                             <th style="width: 100px;">NF</th>
-                            <th>Produto</th>
+                            <th>Empresa</th>
                             <th>Fornecedor</th>
-                            <th class="text-end" style="width: 100px;">Qtd</th>
-                            <th class="text-end" style="width: 120px;">Valor Total</th>
+                            <th>Produto</th>
+                            <th class="text-end" style="width: 90px;">Qtd</th>
+                            <th class="text-end" style="width: 110px;">Valor Total</th>
                             <th class="text-center" style="width: 90px;">NCM</th>
                             <th class="text-center" style="width: 60px;">CFOP</th>
-                            <th class="text-center" style="width: 80px;">ICMS</th>
+                            <th class="text-center" style="width: 110px;">ICMS</th>
                             <th class="text-center" style="width: 90px;">Status</th>
-                            <th class="text-center" style="width: 140px;">Acoes</th>
+                            <th class="text-center" style="width: 130px;">Acoes</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -126,7 +127,7 @@
                         {% if item.odoo_dfe_id != ns.last_dfe_id %}
                             {% if not ns.is_first %}
                             <!-- Linha separadora entre NFs -->
-                            <tr class="nf-separator"><td colspan="10" style="height: 8px; background: linear-gradient(to bottom, #dee2e6, #f8f9fa); padding: 0; border: none;"></td></tr>
+                            <tr class="nf-separator"><td colspan="11" style="height: 8px; background: linear-gradient(to bottom, #dee2e6, #f8f9fa); padding: 0; border: none;"></td></tr>
                             {% endif %}
                             {% set ns.color_idx = (ns.color_idx + 1) % 2 %}
                             {% set ns.last_dfe_id = item.odoo_dfe_id %}
@@ -143,11 +144,11 @@
                                 {% endif %}
                             </td>
                             <td>
-                                <strong>{{ item.cod_produto }}</strong>
-                                <br><small class="text-muted" title="{{ item.nome_produto }}">{{ item.nome_produto }}</small>
+                                <small class="text-muted">{{ item.razao_empresa_compradora|truncate(25) if item.razao_empresa_compradora else 'N/A' }}</small>
+                                <br><small class="text-muted">{{ item.cnpj_empresa_compradora|formatar_cnpj if item.cnpj_empresa_compradora else '-' }}</small>
                             </td>
                             <td>
-                                <span title="{{ item.razao_fornecedor }}">{{ item.razao_fornecedor }}</span>
+                                <span title="{{ item.razao_fornecedor }}">{{ item.razao_fornecedor|truncate(30) }}</span>
                                 <br><small class="text-muted">{{ item.cnpj_fornecedor|formatar_cnpj }} -
                                     {% if item.regime_tributario == '1' or item.regime_tributario == '2' %}
                                     <span class="badge bg-info">Simples</span>
@@ -157,6 +158,10 @@
                                     <span class="text-muted">N/I</span>
                                     {% endif %}
                                 </small>
+                            </td>
+                            <td>
+                                <strong>{{ item.cod_produto }}</strong>
+                                <br><small class="text-muted" title="{{ item.nome_produto }}">{{ item.nome_produto|truncate(30) }}</small>
                             </td>
                             <td class="text-end">
                                 {% if item.quantidade %}
@@ -175,11 +180,14 @@
                             </td>
                             <td class="text-center"><code>{{ item.ncm or '-' }}</code></td>
                             <td class="text-center"><code>{{ item.cfop or '-' }}</code></td>
-                            <td class="text-center">
+                            <td class="text-center small">
                                 {% if item.aliquota_icms is not none %}
-                                <span class="badge bg-secondary">{{ item.aliquota_icms }}%</span>
+                                <div><span class="badge bg-secondary">{{ item.aliquota_icms }}%</span></div>
+                                {% if item.reducao_bc_icms %}
+                                <div class="text-info" title="Redução BC ICMS">Red: {{ item.reducao_bc_icms }}%</div>
+                                {% endif %}
                                 {% if item.valor_icms %}
-                                <br><small class="text-success">R$ {{ item.valor_icms|numero_br(2) }}</small>
+                                <div class="text-success">R$ {{ item.valor_icms|numero_br(2) }}</div>
                                 {% endif %}
                                 {% else %}
                                 -
@@ -222,7 +230,7 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="10" class="text-center py-4">
+                            <td colspan="11" class="text-center py-4">
                                 <i class="fas fa-inbox fa-3x text-muted mb-3 d-block"></i>
                                 <span class="text-muted">Nenhum registro de primeira compra encontrado</span>
                             </td>
@@ -430,12 +438,17 @@
                         </div>
                         <div class="card-body py-2">
                             <div class="row align-items-center">
-                                <div class="col-md-3 border-end">
+                                <div class="col-md-2 border-end">
                                     <small class="text-muted d-block">NF</small>
                                     <strong class="fs-5">${item.numero_nf || item.odoo_dfe_id}</strong>
                                     ${item.serie_nf ? '<small class="text-muted"> (Série ' + item.serie_nf + ')</small>' : ''}
                                 </div>
-                                <div class="col-md-5 border-end">
+                                <div class="col-md-3 border-end">
+                                    <small class="text-muted d-block">Comprado por</small>
+                                    <strong>${item.razao_empresa_compradora || 'N/A'}</strong>
+                                    <small class="d-block text-muted">${formatarCnpj(item.cnpj_empresa_compradora)}</small>
+                                </div>
+                                <div class="col-md-4 border-end">
                                     <small class="text-muted d-block">Fornecedor</small>
                                     <strong>${item.razao_fornecedor || '-'}</strong>
                                     <small class="d-block">${formatarCnpj(item.cnpj_fornecedor)}
@@ -443,7 +456,7 @@
                                         ${formatarRegime(item.regime_tributario)}
                                     </small>
                                 </div>
-                                <div class="col-md-4">
+                                <div class="col-md-3">
                                     <small class="text-muted d-block">Produto</small>
                                     <code class="fs-5">${item.cod_produto}</code>
                                     <small class="d-block text-muted">${item.nome_produto || ''}</small>
@@ -486,25 +499,31 @@
                             </div>
                             <!-- Linha 2: Aliquotas -->
                             <div class="row text-center">
-                                <div class="col-md-3">
+                                <div class="col">
                                     <div class="border rounded p-2">
                                         <small class="text-muted d-block">ICMS</small>
                                         <span class="badge bg-primary fs-4">${formatarValor(item.aliquota_icms)}%</span>
                                     </div>
                                 </div>
-                                <div class="col-md-3">
+                                <div class="col">
+                                    <div class="border rounded p-2">
+                                        <small class="text-muted d-block">Red. BC ICMS</small>
+                                        <span class="badge bg-info fs-4">${item.reducao_bc_icms ? formatarValor(item.reducao_bc_icms) + '%' : '-'}</span>
+                                    </div>
+                                </div>
+                                <div class="col">
                                     <div class="border rounded p-2">
                                         <small class="text-muted d-block">ICMS ST</small>
                                         <span class="badge bg-secondary fs-4">${formatarValor(item.aliquota_icms_st)}%</span>
                                     </div>
                                 </div>
-                                <div class="col-md-3">
+                                <div class="col">
                                     <div class="border rounded p-2">
                                         <small class="text-muted d-block">IPI</small>
-                                        <span class="badge bg-info fs-4">${formatarValor(item.aliquota_ipi)}%</span>
+                                        <span class="badge bg-warning text-dark fs-4">${formatarValor(item.aliquota_ipi)}%</span>
                                     </div>
                                 </div>
-                                <div class="col-md-3">
+                                <div class="col">
                                     <div class="border rounded p-2">
                                         <small class="text-muted d-block">PIS/COFINS</small>
                                         <span class="badge bg-secondary fs-6">${formatarValor(item.aliquota_pis)}% / ${formatarValor(item.aliquota_cofins)}%</span>
@@ -586,6 +605,17 @@
                                             <td class="text-end">R$ ${formatarValor(item.bc_icms)}</td>
                                             <td class="text-end text-danger fw-bold">R$ ${formatarValor(item.valor_icms)}</td>
                                         </tr>
+                                        ${item.reducao_bc_icms ? `
+                                        <tr class="table-info">
+                                            <th class="text-info ps-4">↳ Red. BC ICMS</th>
+                                            <td>-</td>
+                                            <td class="text-center"><span class="badge bg-info">${formatarValor(item.reducao_bc_icms)}%</span></td>
+                                            <td class="text-end">-</td>
+                                            <td class="text-end text-muted">
+                                                ICMS Final: ${formatarValor(item.aliquota_icms * (1 - item.reducao_bc_icms/100))}%
+                                            </td>
+                                        </tr>
+                                        ` : ''}
                                         <tr>
                                             <th>ICMS ST</th>
                                             <td>-</td>

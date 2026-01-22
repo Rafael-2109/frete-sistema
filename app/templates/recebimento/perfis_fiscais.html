@@ -96,11 +96,13 @@
                 <table class="table table-bordered table-hover align-middle mb-0">
                     <thead class="table-light">
                         <tr>
-                            <th>Produto</th>
+                            <th>Empresa</th>
                             <th>Fornecedor</th>
+                            <th>Produto</th>
                             <th>NCM</th>
                             <th>CFOP</th>
                             <th>ICMS</th>
+                            <th>Red. BC</th>
                             <th>ICMS ST</th>
                             <th>IPI</th>
                             <th>PIS</th>
@@ -113,10 +115,13 @@
                         {% for item in paginacao.items %}
                         <tr>
                             <td>
-                                <code>{{ item.cod_produto }}</code>
+                                <small class="text-muted">{{ item.cnpj_empresa_compradora|formatar_cnpj if item.cnpj_empresa_compradora else '-' }}</small>
                             </td>
                             <td>
                                 <small class="text-muted">{{ item.cnpj_fornecedor|formatar_cnpj }}</small>
+                            </td>
+                            <td>
+                                <code>{{ item.cod_produto }}</code>
                             </td>
                             <td><code>{{ item.ncm_esperado or '-' }}</code></td>
                             <td>
@@ -130,6 +135,13 @@
                             <td>
                                 {% if item.aliquota_icms_esperada is not none %}
                                 <code>{{ item.aliquota_icms_esperada }}%</code>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if item.reducao_bc_icms_esperada is not none %}
+                                <code>{{ item.reducao_bc_icms_esperada }}%</code>
                                 {% else %}
                                 -
                                 {% endif %}
@@ -188,7 +200,7 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="11" class="text-center py-4">
+                            <td colspan="13" class="text-center py-4">
                                 <i class="fas fa-inbox fa-3x text-muted mb-3 d-block"></i>
                                 <span class="text-muted">Nenhum perfil fiscal encontrado</span>
                             </td>
@@ -285,8 +297,9 @@
                     <!-- Identificacao -->
                     <p class="mb-1"><strong><i class="fas fa-key text-primary me-1"></i>Identificacao (obrigatorias):</strong></p>
                     <ul class="small mb-2">
-                        <li><code>cod_produto</code> - Codigo interno do produto</li>
+                        <li><code>cnpj_empresa_compradora</code> - CNPJ da empresa compradora (ex: 61.724.241/0001-78)</li>
                         <li><code>cnpj_fornecedor</code> - CNPJ do fornecedor (aceita formatado: 52.502.978/0001-55)</li>
+                        <li><code>cod_produto</code> - Codigo interno do produto</li>
                     </ul>
 
                     <!-- Campos de Validacao -->
@@ -295,6 +308,7 @@
                         <li><code>ncm_esperado</code> - NCM (8 digitos) - <span class="text-danger">Comparado com NF</span></li>
                         <li><code>cfop_esperados</code> - CFOPs validos separados por virgula (ex: 5101,6101) - <span class="text-danger">Comparado com NF</span></li>
                         <li><code>aliquota_icms_esperada</code> - Aliquota ICMS % (ex: 18.00) - <span class="text-danger">Comparado com NF</span></li>
+                        <li><code>reducao_bc_icms_esperada</code> - Reducao BC ICMS % (ex: 33.33) - <span class="text-danger">Comparado com NF</span></li>
                     </ul>
 
                     <!-- Campos Armazenados -->
@@ -306,7 +320,7 @@
 
                     <div class="alert alert-warning py-2 small mb-0">
                         <i class="fas fa-exclamation-triangle me-1"></i>
-                        <strong>Dica Excel:</strong> Formate a coluna CNPJ como <strong>Texto</strong> antes de colar os dados para evitar conversao em notacao cientifica.
+                        <strong>Dica Excel:</strong> Formate as colunas de CNPJ (empresa compradora e fornecedor) como <strong>Texto</strong> antes de colar os dados para evitar conversao em notacao cientifica.
                     </div>
                 </div>
 

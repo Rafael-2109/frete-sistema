@@ -1273,6 +1273,7 @@ def buscar_pos_candidatos_dfe(dfe_id):
             [
                 'id', 'name', 'nfe_infnfe_ide_nnf', 'nfe_infnfe_ide_serie',
                 'nfe_infnfe_emit_cnpj', 'nfe_infnfe_emit_xnome',
+                'nfe_infnfe_dest_cnpj', 'nfe_infnfe_dest_xnome',  # Empresa compradora
                 'nfe_infnfe_ide_dhemi', 'nfe_infnfe_total_icmstot_vnf',
                 'lines_ids'  # Campo correto para linhas do DFE
             ]
@@ -1505,6 +1506,9 @@ def buscar_pos_candidatos_dfe(dfe_id):
             'valor_total_pos': sum(po['valor_total'] for po in pos_candidatos)
         }
 
+        # Extrair CNPJ da empresa compradora
+        cnpj_empresa_compradora = ''.join(c for c in (dfe.get('nfe_infnfe_dest_cnpj') or '') if c.isdigit())
+
         return jsonify({
             'sucesso': True,
             'dfe': {
@@ -1513,6 +1517,8 @@ def buscar_pos_candidatos_dfe(dfe_id):
                 'serie': dfe.get('nfe_infnfe_ide_serie'),
                 'cnpj_fornecedor': cnpj_fornecedor,
                 'razao_fornecedor': dfe.get('nfe_infnfe_emit_xnome'),
+                'cnpj_empresa_compradora': cnpj_empresa_compradora,
+                'razao_empresa_compradora': dfe.get('nfe_infnfe_dest_xnome'),
                 'data_emissao': dfe.get('nfe_infnfe_ide_dhemi', '')[:10] if dfe.get('nfe_infnfe_ide_dhemi') else None,
                 'valor_total': float(dfe.get('nfe_infnfe_total_icmstot_vnf') or 0)
             },

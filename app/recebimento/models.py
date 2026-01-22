@@ -33,7 +33,8 @@ class PerfilFiscalProdutoFornecedor(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
 
-    # Identificacao (chave composta)
+    # Identificacao (chave composta: empresa + fornecedor + produto)
+    cnpj_empresa_compradora = db.Column(db.String(20), nullable=True, index=True)
     cod_produto = db.Column(db.String(50), nullable=False, index=True)
     cnpj_fornecedor = db.Column(db.String(20), nullable=False, index=True)
 
@@ -42,6 +43,7 @@ class PerfilFiscalProdutoFornecedor(db.Model):
     cfop_esperados = db.Column(db.Text, nullable=True)  # JSON: ["5101", "6101"]
     cst_icms_esperado = db.Column(db.String(5), nullable=True)
     aliquota_icms_esperada = db.Column(db.Numeric(5, 2), nullable=True)
+    reducao_bc_icms_esperada = db.Column(db.Numeric(5, 2), nullable=True)  # % reducao BC ICMS
     aliquota_icms_st_esperada = db.Column(db.Numeric(5, 2), nullable=True)
     aliquota_ipi_esperada = db.Column(db.Numeric(5, 2), nullable=True)
 
@@ -68,9 +70,10 @@ class PerfilFiscalProdutoFornecedor(db.Model):
     atualizado_em = db.Column(db.DateTime, onupdate=datetime.utcnow)
     ativo = db.Column(db.Boolean, default=True)
 
-    # Unique constraint
+    # Unique constraint: empresa compradora + fornecedor + produto
     __table_args__ = (
-        db.UniqueConstraint('cod_produto', 'cnpj_fornecedor', name='uq_perfil_fiscal_produto_fornecedor'),
+        db.UniqueConstraint('cnpj_empresa_compradora', 'cnpj_fornecedor', 'cod_produto',
+                            name='uq_perfil_fiscal_empresa_fornecedor_produto'),
     )
 
     def __repr__(self):
@@ -106,6 +109,10 @@ class DivergenciaFiscal(db.Model):
     nome_produto = db.Column(db.String(255), nullable=True)
     cnpj_fornecedor = db.Column(db.String(20), nullable=False)
     razao_fornecedor = db.Column(db.String(255), nullable=True)
+
+    # Empresa compradora (destinatario da NF)
+    cnpj_empresa_compradora = db.Column(db.String(20), nullable=True, index=True)
+    razao_empresa_compradora = db.Column(db.String(255), nullable=True)
 
     # Localizacao do fornecedor
     uf_fornecedor = db.Column(db.String(2), nullable=True)
@@ -171,6 +178,8 @@ class DivergenciaFiscal(db.Model):
             'nome_produto': self.nome_produto,
             'cnpj_fornecedor': self.cnpj_fornecedor,
             'razao_fornecedor': self.razao_fornecedor,
+            'cnpj_empresa_compradora': self.cnpj_empresa_compradora,
+            'razao_empresa_compradora': self.razao_empresa_compradora,
             'uf_fornecedor': self.uf_fornecedor,
             'cidade_fornecedor': self.cidade_fornecedor,
             'regime_tributario': self.regime_tributario,
@@ -213,6 +222,10 @@ class CadastroPrimeiraCompra(db.Model):
     cnpj_fornecedor = db.Column(db.String(20), nullable=False)
     razao_fornecedor = db.Column(db.String(255), nullable=True)
 
+    # Empresa compradora (destinatario da NF)
+    cnpj_empresa_compradora = db.Column(db.String(20), nullable=True, index=True)
+    razao_empresa_compradora = db.Column(db.String(255), nullable=True)
+
     # Localizacao do fornecedor
     uf_fornecedor = db.Column(db.String(2), nullable=True)
     cidade_fornecedor = db.Column(db.String(100), nullable=True)
@@ -235,6 +248,7 @@ class CadastroPrimeiraCompra(db.Model):
     cfop = db.Column(db.String(10), nullable=True)
     cst_icms = db.Column(db.String(5), nullable=True)
     aliquota_icms = db.Column(db.Numeric(5, 2), nullable=True)
+    reducao_bc_icms = db.Column(db.Numeric(5, 2), nullable=True)  # % reducao BC ICMS
     aliquota_icms_st = db.Column(db.Numeric(5, 2), nullable=True)
     aliquota_ipi = db.Column(db.Numeric(5, 2), nullable=True)
     bc_icms = db.Column(db.Numeric(15, 2), nullable=True)
@@ -296,6 +310,10 @@ class ValidacaoFiscalDfe(db.Model):
     # Fornecedor
     cnpj_fornecedor = db.Column(db.String(20), nullable=True, index=True)
     razao_fornecedor = db.Column(db.String(255), nullable=True)
+
+    # Empresa compradora (destinatario da NF)
+    cnpj_empresa_compradora = db.Column(db.String(20), nullable=True, index=True)
+    razao_empresa_compradora = db.Column(db.String(255), nullable=True)
 
     # Status da validacao
     status = db.Column(db.String(20), default='pendente', nullable=False, index=True)
@@ -613,6 +631,10 @@ class ValidacaoNfPoDfe(db.Model):
     cnpj_fornecedor = db.Column(db.String(20), nullable=True, index=True)
     razao_fornecedor = db.Column(db.String(255), nullable=True)
 
+    # Empresa Compradora (destinatário da NF)
+    cnpj_empresa_compradora = db.Column(db.String(20), nullable=True, index=True)
+    razao_empresa_compradora = db.Column(db.String(255), nullable=True)
+
     # Dados da NF
     data_nf = db.Column(db.Date, nullable=True)
     valor_total_nf = db.Column(db.Numeric(15, 2), nullable=True)
@@ -685,6 +707,8 @@ class ValidacaoNfPoDfe(db.Model):
             'chave_nfe': self.chave_nfe,
             'cnpj_fornecedor': self.cnpj_fornecedor,
             'razao_fornecedor': self.razao_fornecedor,
+            'cnpj_empresa_compradora': self.cnpj_empresa_compradora,
+            'razao_empresa_compradora': self.razao_empresa_compradora,
             'data_nf': self.data_nf.isoformat() if self.data_nf else None,
             'valor_total_nf': float(self.valor_total_nf) if self.valor_total_nf else None,
             'status': self.status,
@@ -895,6 +919,8 @@ class DivergenciaNfPo(db.Model):
     # Identificacao
     cnpj_fornecedor = db.Column(db.String(20), nullable=True)
     razao_fornecedor = db.Column(db.String(255), nullable=True)
+    cnpj_empresa_compradora = db.Column(db.String(20), nullable=True, index=True)
+    razao_empresa_compradora = db.Column(db.String(255), nullable=True)
     cod_produto_fornecedor = db.Column(db.String(50), nullable=True)
     cod_produto_interno = db.Column(db.String(50), nullable=True)
     nome_produto = db.Column(db.String(255), nullable=True)
@@ -933,6 +959,8 @@ class DivergenciaNfPo(db.Model):
             'odoo_dfe_line_id': self.odoo_dfe_line_id,
             'cnpj_fornecedor': self.cnpj_fornecedor,
             'razao_fornecedor': self.razao_fornecedor,
+            'cnpj_empresa_compradora': self.cnpj_empresa_compradora,
+            'razao_empresa_compradora': self.razao_empresa_compradora,
             'cod_produto_fornecedor': self.cod_produto_fornecedor,
             'cod_produto_interno': self.cod_produto_interno,
             'nome_produto': self.nome_produto,

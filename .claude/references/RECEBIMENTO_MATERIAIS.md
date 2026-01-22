@@ -1,8 +1,8 @@
 # Recebimento de Materiais - Documentacao de Referencia
 
-**Versao**: 1.0
-**Status**: FASE 1 - Validacao Fiscal
-**Atualizado**: 13/01/2025
+**Versao**: 1.1
+**Status**: FASE 1 - Validacao Fiscal (com Empresa Compradora + Red. BC ICMS)
+**Atualizado**: 22/01/2026
 
 ---
 
@@ -29,6 +29,22 @@ Sistema de validacao e recebimento de materiais integrado com Odoo.
 Validar campos fiscais de NFs de compra comparando com baseline historico.
 **BLOQUEIA** recebimento ate resolucao de divergencias.
 
+### Chave de Perfil Fiscal
+
+A chave unica de um perfil fiscal e composta por:
+- **CNPJ Empresa Compradora** (destino da NF)
+- **CNPJ Fornecedor** (emitente da NF)
+- **Codigo do Produto**
+
+**Empresas Compradoras Cadastradas:**
+
+| Empresa | ID Odoo | CNPJ |
+|---------|---------|------|
+| NACOM GOYA - CD | 34 | 61.724.241/0003-30 |
+| NACOM GOYA - FB | 1 | 61.724.241/0001-78 |
+| NACOM GOYA - SC | 33 | 61.724.241/0002-59 |
+| LA FAMIGLIA - LF | 35 | 18.467.441/0001-63 |
+
 ### Campos Validados
 
 | Campo | Tipo | Tolerancia |
@@ -37,11 +53,25 @@ Validar campos fiscais de NFs de compra comparando com baseline historico.
 | CFOP | Lista | 0% (pode ter multiplos) |
 | CST ICMS | Exato | 0% |
 | % ICMS | Exato | 0% |
+| % Red. BC ICMS | Exato | 0% |
 | % ICMS ST | Exato | 0% |
 | % IPI | Exato | 0% |
 | BC ICMS | Percentual | 2% (configuravel) |
 | BC ICMS ST | Percentual | 2% (configuravel) |
 | Tributos Aprox | Percentual | 5% (configuravel) |
+
+### Calculo ICMS Final
+
+Quando ha reducao de base de calculo:
+
+```
+ICMS Final % = Aliq. ICMS % × (1 - Red. BC ICMS % / 100)
+
+Exemplo:
+- Aliq. ICMS: 18%
+- Red. BC ICMS: 33.33%
+- ICMS Final: 18% × (1 - 0.3333) = 12%
+```
 
 ### Fluxo de Validacao
 
@@ -111,29 +141,33 @@ Validar campos fiscais de NFs de compra comparando com baseline historico.
 
 ### perfil_fiscal_produto_fornecedor
 
-**Proposito**: Armazena baseline fiscal por produto/fornecedor.
+**Proposito**: Armazena baseline fiscal por empresa/fornecedor/produto.
+
+**Chave Unica**: `(cnpj_empresa_compradora, cnpj_fornecedor, cod_produto)`
 
 ```sql
 CREATE TABLE perfil_fiscal_produto_fornecedor (
     id SERIAL PRIMARY KEY,
-    cod_produto VARCHAR(50) NOT NULL,
+    cnpj_empresa_compradora VARCHAR(20),     -- CNPJ do destinatario (empresa compradora)
     cnpj_fornecedor VARCHAR(20) NOT NULL,
+    cod_produto VARCHAR(50) NOT NULL,
     ncm_esperado VARCHAR(10),
-    cfop_esperados TEXT,                    -- JSON: ["5101", "6101"]
+    cfop_esperados TEXT,                     -- JSON: ["5101", "6101"]
     cst_icms_esperado VARCHAR(5),
     aliquota_icms_esperada NUMERIC(5,2),
+    reducao_bc_icms_esperada NUMERIC(5,2),   -- Reducao da BC ICMS %
     aliquota_icms_st_esperada NUMERIC(5,2),
     aliquota_ipi_esperada NUMERIC(5,2),
     tolerancia_bc_icms_pct NUMERIC(5,2) DEFAULT 2.0,
     tolerancia_bc_icms_st_pct NUMERIC(5,2) DEFAULT 2.0,
     tolerancia_tributos_pct NUMERIC(5,2) DEFAULT 5.0,
-    ultimas_nfs_ids TEXT,                   -- JSON: [dfe_id1, dfe_id2, dfe_id3]
+    ultimas_nfs_ids TEXT,                    -- JSON: [dfe_id1, dfe_id2, dfe_id3]
     criado_por VARCHAR(100),
     criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     atualizado_por VARCHAR(100),
     atualizado_em TIMESTAMP,
     ativo BOOLEAN DEFAULT TRUE,
-    UNIQUE(cod_produto, cnpj_fornecedor)
+    UNIQUE(cnpj_empresa_compradora, cnpj_fornecedor, cod_produto)
 );
 ```
 
@@ -151,15 +185,17 @@ CREATE TABLE divergencia_fiscal (
     nome_produto VARCHAR(255),
     cnpj_fornecedor VARCHAR(20) NOT NULL,
     razao_fornecedor VARCHAR(255),
-    campo VARCHAR(50) NOT NULL,             -- ncm, cfop, aliq_icms, etc
-    campo_label VARCHAR(100),               -- "NCM", "% ICMS", etc
+    cnpj_empresa_compradora VARCHAR(20),     -- CNPJ do destinatario
+    razao_empresa_compradora VARCHAR(255),   -- Razao social da empresa compradora
+    campo VARCHAR(50) NOT NULL,              -- ncm, cfop, aliq_icms, reducao_bc_icms, etc
+    campo_label VARCHAR(100),                -- "NCM", "% ICMS", "Red. BC ICMS", etc
     valor_esperado VARCHAR(100),
     valor_encontrado VARCHAR(100),
     diferenca_percentual NUMERIC(10,2),
     analise_ia TEXT,
     contexto_ia TEXT,
-    status VARCHAR(20) DEFAULT 'pendente',  -- pendente, aprovada, rejeitada
-    resolucao VARCHAR(50),                  -- aprovar_manter, aprovar_atualizar, rejeitar
+    status VARCHAR(20) DEFAULT 'pendente',   -- pendente, aprovada, rejeitada
+    resolucao VARCHAR(50),                   -- aprovar_manter, aprovar_atualizar, rejeitar
     atualizar_baseline BOOLEAN DEFAULT FALSE,
     justificativa TEXT,
     resolvido_por VARCHAR(100),
@@ -181,17 +217,20 @@ CREATE TABLE cadastro_primeira_compra (
     nome_produto VARCHAR(255),
     cnpj_fornecedor VARCHAR(20) NOT NULL,
     razao_fornecedor VARCHAR(255),
+    cnpj_empresa_compradora VARCHAR(20),     -- CNPJ do destinatario
+    razao_empresa_compradora VARCHAR(255),   -- Razao social da empresa compradora
     ncm VARCHAR(10),
     cfop VARCHAR(10),
     cst_icms VARCHAR(5),
     aliquota_icms NUMERIC(5,2),
+    reducao_bc_icms NUMERIC(5,2),            -- Reducao da BC ICMS %
     aliquota_icms_st NUMERIC(5,2),
     aliquota_ipi NUMERIC(5,2),
     bc_icms NUMERIC(15,2),
     bc_icms_st NUMERIC(15,2),
     valor_tributos_aprox NUMERIC(15,2),
     info_complementar TEXT,
-    status VARCHAR(20) DEFAULT 'pendente',  -- pendente, validado, rejeitado
+    status VARCHAR(20) DEFAULT 'pendente',   -- pendente, validado, rejeitado
     validado_por VARCHAR(100),
     validado_em TIMESTAMP,
     observacao TEXT,
@@ -211,6 +250,8 @@ CREATE TABLE validacao_fiscal_dfe (
     chave_nfe VARCHAR(44),
     cnpj_fornecedor VARCHAR(20),
     razao_fornecedor VARCHAR(255),
+    cnpj_empresa_compradora VARCHAR(20),     -- CNPJ do destinatario
+    razao_empresa_compradora VARCHAR(255),   -- Razao social da empresa compradora
     status VARCHAR(20) DEFAULT 'pendente',
     total_linhas INTEGER DEFAULT 0,
     linhas_aprovadas INTEGER DEFAULT 0,
@@ -235,8 +276,10 @@ CREATE TABLE validacao_fiscal_dfe (
 | `name` | Nome/referencia |
 | `l10n_br_tipo_pedido` | Tipo: 'compra', 'devolucao_compra', etc |
 | `state` | Estado: 'done' = processado |
-| `nfe_infnfe_emit_cnpj` | CNPJ do fornecedor |
+| `nfe_infnfe_emit_cnpj` | CNPJ do fornecedor (emitente) |
 | `nfe_infnfe_emit_xnome` | Razao social do fornecedor |
+| `nfe_infnfe_dest_cnpj` | **CNPJ da empresa compradora (destinatario)** |
+| `nfe_infnfe_dest_xnome` | **Razao social da empresa compradora** |
 | `nfe_infnfe_ide_nnf` | Numero da NF |
 | `protnfe_infnfe_chnfe` | Chave NF-e (44 digitos) |
 | `nfe_infnfe_ide_dhemi` | Data de emissao |
@@ -254,6 +297,7 @@ CREATE TABLE validacao_fiscal_dfe (
 | `det_prod_cfop` | CFOP |
 | `det_imposto_icms_cst` | CST ICMS |
 | `det_imposto_icms_picms` | % ICMS |
+| `det_imposto_icms_predbc` | **% Reducao da Base de Calculo do ICMS** |
 | `det_imposto_icms_picmsst` | % ICMS ST |
 | `det_imposto_icms_vbc` | Base ICMS |
 | `det_imposto_icms_vbcst` | Base ICMS ST |
@@ -277,8 +321,10 @@ CREATE TABLE validacao_fiscal_dfe (
 - `app/recebimento/routes/validacao_fiscal_routes.py` - API endpoints
 
 ### Migrations
-- `scripts/migrations/criar_tabelas_validacao_fiscal.py` - Script Python
-- `scripts/migrations/sql/validacao_fiscal.sql` - Script SQL
+- `scripts/migrations/criar_tabelas_validacao_fiscal.py` - Script Python (criacao inicial)
+- `scripts/migrations/sql/validacao_fiscal.sql` - Script SQL (criacao inicial)
+- `scripts/migrations/adicionar_empresa_compradora_reducao_bc.py` - Script Python (v1.1 - Empresa Compradora + Red. BC)
+- `scripts/migrations/sql/adicionar_empresa_compradora_reducao_bc.sql` - Script SQL (v1.1 - Empresa Compradora + Red. BC)
 
 ---
 

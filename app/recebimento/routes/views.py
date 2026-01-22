@@ -1360,6 +1360,8 @@ def divergencias_nf_po():
             'odoo_dfe_line_id': div.odoo_dfe_line_id,
             'cnpj_fornecedor': formatar_cnpj(div.cnpj_fornecedor),
             'razao_fornecedor': div.razao_fornecedor,
+            'cnpj_empresa_compradora': formatar_cnpj(div.cnpj_empresa_compradora),
+            'razao_empresa_compradora': div.razao_empresa_compradora,
             'cod_produto_fornecedor': div.cod_produto_fornecedor,
             'cod_produto_interno': div.cod_produto_interno,
             'nome_produto': div.nome_produto,

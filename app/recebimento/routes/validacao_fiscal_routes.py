@@ -328,13 +328,14 @@ def importar_perfil_fiscal_excel():
     Importa perfis fiscais de um arquivo Excel.
 
     Colunas obrigatorias:
-    - cod_produto: Codigo interno do produto
+    - cnpj_empresa_compradora: CNPJ da empresa compradora (14 digitos)
     - cnpj_fornecedor: CNPJ do fornecedor (14 digitos)
+    - cod_produto: Codigo interno do produto
     - ncm_esperado: NCM do produto (8 digitos)
     - cfop_esperados: CFOPs validos separados por virgula (ex: "5101,6101")
 
     Colunas opcionais:
-    - cst_icms_esperado, aliquota_icms_esperada
+    - cst_icms_esperado, aliquota_icms_esperada, reducao_bc_icms_esperada
     - aliquota_icms_st_esperada, aliquota_ipi_esperada
     - cst_pis_esperado, aliquota_pis_esperada
     - cst_cofins_esperado, aliquota_cofins_esperada
@@ -386,7 +387,7 @@ def importar_perfil_fiscal_excel():
             }), 400
 
         # 4. Validar colunas obrigatorias
-        colunas_obrigatorias = ['cod_produto', 'cnpj_fornecedor', 'ncm_esperado', 'cfop_esperados']
+        colunas_obrigatorias = ['cnpj_empresa_compradora', 'cnpj_fornecedor', 'cod_produto', 'ncm_esperado', 'cfop_esperados']
         colunas_faltando = [c for c in colunas_obrigatorias if c not in df.columns]
 
         if colunas_faltando:
@@ -410,44 +411,91 @@ def importar_perfil_fiscal_excel():
 
             try:
                 # 5.1 Validar campos obrigatorios
-                cod_produto = str(row.get('cod_produto', '')).strip()
+                empresa_compradora_raw = str(row.get('cnpj_empresa_compradora', '')).strip()
                 cnpj_raw = str(row.get('cnpj_fornecedor', '')).strip()
+                cod_produto = str(row.get('cod_produto', '')).strip()
                 ncm = str(row.get('ncm_esperado', '')).strip()
                 cfops_raw = str(row.get('cfop_esperados', '')).strip()
 
-                if not cod_produto:
-                    erros.append({'linha': linha_num, 'erro': 'cod_produto vazio'})
+                if not empresa_compradora_raw:
+                    erros.append({'linha': linha_num, 'erro': 'cnpj_empresa_compradora vazio'})
                     continue
 
                 if not cnpj_raw:
                     erros.append({'linha': linha_num, 'erro': 'cnpj_fornecedor vazio'})
                     continue
 
-                # 5.2 Limpar CNPJ (aceita formatado: 52.502.978/0001-55 ou apenas digitos)
+                if not cod_produto:
+                    erros.append({'linha': linha_num, 'erro': 'cod_produto vazio'})
+                    continue
+
+                # 5.2 Converter empresa compradora (aceita nome ou CNPJ)
+                # Mapeamento de nomes para CNPJs
+                EMPRESAS_COMPRADORAS = {
+                    'NACOM GOYA - CD': '61724241000330',
+                    'NACOM GOYA - FB': '61724241000178',
+                    'NACOM GOYA - SC': '61724241000259',
+                    'LA FAMIGLIA - LF': '18467441000163',
+                    # Aliases adicionais
+                    'CD': '61724241000330',
+                    'FB': '61724241000178',
+                    'SC': '61724241000259',
+                    'LF': '18467441000163',
+                }
+
+                # Verificar se e um nome de empresa
+                empresa_upper = empresa_compradora_raw.upper()
+                if empresa_upper in [k.upper() for k in EMPRESAS_COMPRADORAS.keys()]:
+                    # Buscar o CNPJ correspondente (case-insensitive)
+                    cnpj_empresa = None
+                    for nome, cnpj_val in EMPRESAS_COMPRADORAS.items():
+                        if nome.upper() == empresa_upper:
+                            cnpj_empresa = cnpj_val
+                            break
+                else:
+                    # Tentar tratar como CNPJ
+                    cnpj_empresa = ''.join(c for c in empresa_compradora_raw if c.isdigit())
+
+                    # Verificar se Excel converteu para notacao cientifica (ex: 6.17E+13)
+                    if 'E' in empresa_compradora_raw.upper() and any(c.isdigit() for c in empresa_compradora_raw):
+                        erros.append({
+                            'linha': linha_num,
+                            'erro': f'CNPJ Empresa em notacao cientifica: {empresa_compradora_raw}. Formate a coluna como TEXTO no Excel ou use o nome da empresa (ex: NACOM GOYA - CD).'
+                        })
+                        continue
+
+                    if len(cnpj_empresa) != 14:
+                        erros.append({
+                            'linha': linha_num,
+                            'erro': f'Empresa compradora invalida: {empresa_compradora_raw}. Use o nome (NACOM GOYA - CD, FB, SC ou LA FAMIGLIA - LF) ou CNPJ formatado/apenas numeros.'
+                        })
+                        continue
+
+                # 5.3 Limpar CNPJ fornecedor (aceita formatado: 52.502.978/0001-55 ou apenas digitos)
                 cnpj = ''.join(c for c in cnpj_raw if c.isdigit())
 
                 # Verificar se Excel converteu para notacao cientifica (ex: 5.25E+13)
                 if 'E' in cnpj_raw.upper() or 'e' in cnpj_raw:
                     erros.append({
                         'linha': linha_num,
-                        'erro': f'CNPJ em notacao cientifica: {cnpj_raw}. Formate a coluna como TEXTO no Excel.'
+                        'erro': f'CNPJ Fornecedor em notacao cientifica: {cnpj_raw}. Formate a coluna como TEXTO no Excel.'
                     })
                     continue
 
                 if len(cnpj) != 14:
                     erros.append({
                         'linha': linha_num,
-                        'erro': f'CNPJ invalido: {cnpj_raw} (encontrado {len(cnpj)} digitos, esperado 14). Aceita formatado (52.502.978/0001-55) ou apenas numeros.'
+                        'erro': f'CNPJ Fornecedor invalido: {cnpj_raw} (encontrado {len(cnpj)} digitos, esperado 14). Aceita formatado (52.502.978/0001-55) ou apenas numeros.'
                     })
                     continue
 
-                # 5.3 Validar NCM
+                # 5.4 Validar NCM
                 ncm_limpo = ''.join(c for c in ncm if c.isdigit())
                 if len(ncm_limpo) != 8:
                     erros.append({'linha': linha_num, 'erro': f'NCM invalido: {ncm} (deve ter 8 digitos)'})
                     continue
 
-                # 5.4 Converter CFOPs para JSON
+                # 5.5 Converter CFOPs para JSON
                 cfops_list = [c.strip() for c in cfops_raw.split(',') if c.strip()]
                 for cfop in cfops_list:
                     cfop_limpo = ''.join(c for c in cfop if c.isdigit())
@@ -456,7 +504,7 @@ def importar_perfil_fiscal_excel():
                         continue
                 cfops_json = json.dumps(cfops_list)
 
-                # 5.5 Converter aliquotas opcionais
+                # 5.6 Converter aliquotas opcionais
                 def parse_decimal(valor, campo):
                     if not valor or valor == '':
                         return None
@@ -469,6 +517,7 @@ def importar_perfil_fiscal_excel():
 
                 try:
                     aliq_icms = parse_decimal(row.get('aliquota_icms_esperada', ''), 'aliquota_icms_esperada')
+                    reducao_bc_icms = parse_decimal(row.get('reducao_bc_icms_esperada', ''), 'reducao_bc_icms_esperada')
                     aliq_icms_st = parse_decimal(row.get('aliquota_icms_st_esperada', ''), 'aliquota_icms_st_esperada')
                     aliq_ipi = parse_decimal(row.get('aliquota_ipi_esperada', ''), 'aliquota_ipi_esperada')
                     aliq_pis = parse_decimal(row.get('aliquota_pis_esperada', ''), 'aliquota_pis_esperada')
@@ -477,15 +526,16 @@ def importar_perfil_fiscal_excel():
                     erros.append({'linha': linha_num, 'erro': str(ve)})
                     continue
 
-                # 5.6 Campos CST opcionais
+                # 5.7 Campos CST opcionais
                 cst_icms = str(row.get('cst_icms_esperado', '')).strip() or None
                 cst_pis = str(row.get('cst_pis_esperado', '')).strip() or None
                 cst_cofins = str(row.get('cst_cofins_esperado', '')).strip() or None
 
-                # 5.7 Buscar ou criar perfil
+                # 5.8 Buscar ou criar perfil (chave: empresa + fornecedor + produto)
                 perfil = PerfilFiscalProdutoFornecedor.query.filter_by(
-                    cod_produto=cod_produto,
-                    cnpj_fornecedor=cnpj
+                    cnpj_empresa_compradora=cnpj_empresa,
+                    cnpj_fornecedor=cnpj,
+                    cod_produto=cod_produto
                 ).first()
 
                 if perfil:
@@ -494,6 +544,7 @@ def importar_perfil_fiscal_excel():
                     perfil.cfop_esperados = cfops_json
                     perfil.cst_icms_esperado = cst_icms
                     perfil.aliquota_icms_esperada = aliq_icms
+                    perfil.reducao_bc_icms_esperada = reducao_bc_icms
                     perfil.aliquota_icms_st_esperada = aliq_icms_st
                     perfil.aliquota_ipi_esperada = aliq_ipi
                     perfil.cst_pis_esperado = cst_pis
@@ -507,12 +558,14 @@ def importar_perfil_fiscal_excel():
                 else:
                     # Criar novo
                     perfil = PerfilFiscalProdutoFornecedor(
-                        cod_produto=cod_produto,
+                        cnpj_empresa_compradora=cnpj_empresa,
                         cnpj_fornecedor=cnpj,
+                        cod_produto=cod_produto,
                         ncm_esperado=ncm_limpo,
                         cfop_esperados=cfops_json,
                         cst_icms_esperado=cst_icms,
                         aliquota_icms_esperada=aliq_icms,
+                        reducao_bc_icms_esperada=reducao_bc_icms,
                         aliquota_icms_st_esperada=aliq_icms_st,
                         aliquota_ipi_esperada=aliq_ipi,
                         cst_pis_esperado=cst_pis,
@@ -577,12 +630,14 @@ def baixar_template_perfil_fiscal():
         # Dados de exemplo
         dados_exemplo = [
             {
-                'cod_produto': '206030034',
+                'cnpj_empresa_compradora': 'NACOM GOYA - FB',
                 'cnpj_fornecedor': '52502978000155',
+                'cod_produto': '206030034',
                 'ncm_esperado': '73241000',
                 'cfop_esperados': '5101,6101',
                 'cst_icms_esperado': '00',
                 'aliquota_icms_esperada': '18.00',
+                'reducao_bc_icms_esperada': '',
                 'aliquota_icms_st_esperada': '0.00',
                 'aliquota_ipi_esperada': '0.00',
                 'cst_pis_esperado': '01',
@@ -591,12 +646,14 @@ def baixar_template_perfil_fiscal():
                 'aliquota_cofins_esperada': '7.60'
             },
             {
-                'cod_produto': '207030609',
+                'cnpj_empresa_compradora': 'NACOM GOYA - CD',
                 'cnpj_fornecedor': '47950361000162',
+                'cod_produto': '207030609',
                 'ncm_esperado': '20089900',
                 'cfop_esperados': '6101',
-                'cst_icms_esperado': '00',
-                'aliquota_icms_esperada': '12.00',
+                'cst_icms_esperado': '20',
+                'aliquota_icms_esperada': '18.00',
+                'reducao_bc_icms_esperada': '33.33',
                 'aliquota_icms_st_esperada': '0.00',
                 'aliquota_ipi_esperada': '5.00',
                 'cst_pis_esperado': '01',
@@ -604,14 +661,32 @@ def baixar_template_perfil_fiscal():
                 'cst_cofins_esperado': '01',
                 'aliquota_cofins_esperada': '7.60'
             },
+            {
+                'cnpj_empresa_compradora': 'LA FAMIGLIA - LF',
+                'cnpj_fornecedor': '12345678000199',
+                'cod_produto': '208040123',
+                'ncm_esperado': '20089900',
+                'cfop_esperados': '5102',
+                'cst_icms_esperado': '00',
+                'aliquota_icms_esperada': '12.00',
+                'reducao_bc_icms_esperada': '',
+                'aliquota_icms_st_esperada': '0.00',
+                'aliquota_ipi_esperada': '0.00',
+                'cst_pis_esperado': '01',
+                'aliquota_pis_esperada': '1.65',
+                'cst_cofins_esperado': '01',
+                'aliquota_cofins_esperada': '7.60'
+            },
             # Linha vazia para usuario preencher
             {
-                'cod_produto': '',
+                'cnpj_empresa_compradora': '',
                 'cnpj_fornecedor': '',
+                'cod_produto': '',
                 'ncm_esperado': '',
                 'cfop_esperados': '',
                 'cst_icms_esperado': '',
                 'aliquota_icms_esperada': '',
+                'reducao_bc_icms_esperada': '',
                 'aliquota_icms_st_esperada': '',
                 'aliquota_ipi_esperada': '',
                 'cst_pis_esperado': '',
@@ -632,14 +707,19 @@ def baixar_template_perfil_fiscal():
             instrucoes = pd.DataFrame([
                 ['INSTRUCOES DE PREENCHIMENTO - PERFIS FISCAIS'],
                 [''],
-                ['Este arquivo serve para cadastrar os dados fiscais esperados por produto/fornecedor.'],
+                ['Este arquivo serve para cadastrar os dados fiscais esperados por empresa/fornecedor/produto.'],
                 ['Com esses dados, as NFs desses produtos NAO cairao em "Primeira Compra".'],
                 [''],
                 ['================================================================================'],
                 ['COLUNAS DE IDENTIFICACAO (OBRIGATORIAS):'],
                 ['================================================================================'],
-                ['- cod_produto: Codigo interno do produto (ex: 206030034)'],
+                ['- cnpj_empresa_compradora: Empresa que recebe a NF (aceita nome ou CNPJ):'],
+                ['    * NACOM GOYA - CD (ou apenas CD) -> 61.724.241/0003-30'],
+                ['    * NACOM GOYA - FB (ou apenas FB) -> 61.724.241/0001-78'],
+                ['    * NACOM GOYA - SC (ou apenas SC) -> 61.724.241/0002-59'],
+                ['    * LA FAMIGLIA - LF (ou apenas LF) -> 18.467.441/0001-63'],
                 ['- cnpj_fornecedor: CNPJ do fornecedor (aceita formatado: 52.502.978/0001-55 ou apenas numeros)'],
+                ['- cod_produto: Codigo interno do produto (ex: 206030034)'],
                 [''],
                 ['================================================================================'],
                 ['COLUNAS VALIDADAS NA NF (preencher para evitar divergencias):'],
@@ -647,6 +727,9 @@ def baixar_template_perfil_fiscal():
                 ['- ncm_esperado: NCM do produto, 8 digitos (ex: 73241000) -> COMPARADO COM NF'],
                 ['- cfop_esperados: CFOPs validos separados por virgula (ex: 5101,6101) -> COMPARADO COM NF'],
                 ['- aliquota_icms_esperada: Aliquota ICMS % (ex: 18.00) -> COMPARADO COM NF'],
+                ['- reducao_bc_icms_esperada: Reducao da BC do ICMS % (ex: 33.33) -> COMPARADO COM NF'],
+                ['    * Deixe vazio se nao houver reducao'],
+                ['    * ICMS Final = Aliq ICMS * (1 - Red BC / 100). Ex: 18% * (1 - 33.33%) = 12%'],
                 [''],
                 ['================================================================================'],
                 ['COLUNAS ARMAZENADAS (para referencia futura, nao comparadas atualmente):'],
@@ -663,8 +746,9 @@ def baixar_template_perfil_fiscal():
                 ['IMPORTANTE - FORMATACAO:'],
                 ['================================================================================'],
                 ['- CNPJ: Formate a coluna como TEXTO antes de colar para evitar notacao cientifica'],
+                ['    * Ou use o nome da empresa (ex: NACOM GOYA - CD)'],
                 ['- Use ponto ou virgula como separador decimal (1.65 ou 1,65)'],
-                ['- Se o produto/fornecedor ja existir, sera ATUALIZADO'],
+                ['- Se o perfil (empresa+fornecedor+produto) ja existir, sera ATUALIZADO'],
                 ['- Se nao existir, sera CRIADO'],
                 ['- Linhas com erro serao ignoradas e listadas no resultado'],
                 [''],

@@ -82,8 +82,8 @@ function verPosCandidatos(dfeId) {
 
             // Preencher dados da NF
             document.getElementById('posNfNumero').textContent = `NF ${data.dfe.numero_nf || '-'}`;
+            document.getElementById('posEmpresa').textContent = data.dfe.razao_empresa_compradora || '-';
             document.getElementById('posFornecedor').textContent = data.dfe.razao_fornecedor || '-';
-            document.getElementById('posCnpj').textContent = formatarCnpj(data.dfe.cnpj_fornecedor || '');
             document.getElementById('posDataEmissao').textContent = data.dfe.data_emissao || '-';
             document.getElementById('posValorTotal').textContent = formatarMoeda(data.dfe.valor_total);
             document.getElementById('posQtdItens').textContent = data.itens_nf.length;
