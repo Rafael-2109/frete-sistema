@@ -414,7 +414,7 @@ class ValidacaoNfPoService:
                 [
                     'id', 'name', 'l10n_br_status',
                     'nfe_infnfe_emit_cnpj', 'nfe_infnfe_emit_xnome',
-                    'nfe_infnfe_dest_cnpj', 'nfe_infnfe_dest_xnome',  # Empresa compradora
+                    'nfe_infnfe_dest_cnpj',  # CNPJ empresa compradora (dest_xnome não existe no Odoo)
                     'nfe_infnfe_ide_nnf', 'nfe_infnfe_ide_serie',
                     'protnfe_infnfe_chnfe', 'nfe_infnfe_ide_dhemi',
                     'nfe_infnfe_total_icmstot_vnf',
@@ -2096,3 +2096,338 @@ class ValidacaoNfPoService:
             'resolvido_em': d.resolvido_em.isoformat() if d.resolvido_em else None,
             'criado_em': d.criado_em.isoformat() if d.criado_em else None
         }
+
+    # =========================================================================
+    # PREVIEW DE POs CANDIDATOS (REFATORADO)
+    # =========================================================================
+
+    def buscar_preview_pos_candidatos(self, odoo_dfe_id: int) -> Dict[str, Any]:
+        """
+        Preview de POs candidatos - 100% LOCAL (sem Odoo).
+
+        Usa:
+        - ValidacaoNfPoDfe: cabecalho DFE (dados ja importados)
+        - MatchNfPoItem: itens ja convertidos (com De-Para aplicado)
+        - _buscar_pos_fornecedor_local(): POs da tabela pedido_compras
+        """
+        try:
+            logger.info(f"[PREVIEW] Buscando POs candidatos para DFE {odoo_dfe_id} (100% local)")
+
+            # 1. Buscar dados do DFE LOCAL (sem Odoo!)
+            validacao = ValidacaoNfPoDfe.query.filter_by(odoo_dfe_id=odoo_dfe_id).first()
+            if not validacao:
+                return {'sucesso': False, 'erro': f'DFE {odoo_dfe_id} nao encontrado localmente'}
+
+            cnpj_fornecedor = self._limpar_cnpj(validacao.cnpj_fornecedor or '')
+
+            # 2. Buscar itens JA CONVERTIDOS do MatchNfPoItem (sem Odoo!)
+            itens_match = MatchNfPoItem.query.filter_by(validacao_id=validacao.id).all()
+
+            if not itens_match:
+                return {
+                    'sucesso': True,
+                    'dfe': self._montar_dfe_local(validacao, cnpj_fornecedor),
+                    'itens_nf': [],
+                    'pos_candidatos': [],
+                    'resumo': {'itens_nf': 0, 'itens_com_depara': 0, 'itens_sem_depara': 0,
+                               'itens_com_po': 0, 'itens_sem_po': 0, 'pos_candidatos': 0, 'valor_total_pos': 0}
+                }
+
+            # 3. Separar itens com/sem De-Para (dados locais!)
+            itens_convertidos = []
+            itens_sem_depara = []
+
+            for item in itens_match:
+                if item.cod_produto_interno:  # Tem De-Para
+                    fator = Decimal(str(item.fator_conversao or 1))
+                    qtd_convertida = Decimal(str(item.qtd_nf or 0))
+                    preco_convertido = Decimal(str(item.preco_nf or 0))
+
+                    itens_convertidos.append({
+                        'tem_depara': True,
+                        'dfe_line_id': item.odoo_dfe_line_id,
+                        'cod_produto_fornecedor': item.cod_produto_fornecedor,
+                        'cod_produto_interno': item.cod_produto_interno,
+                        'nome_produto': item.nome_produto,
+                        'qtd_original': qtd_convertida / fator if fator else qtd_convertida,
+                        'qtd_convertida': qtd_convertida,
+                        'um_nf': item.um_nf or '',
+                        'preco_original': preco_convertido * fator if fator else preco_convertido,
+                        'preco_convertido': preco_convertido,
+                        'fator_conversao': fator
+                    })
+                else:  # Sem De-Para
+                    itens_sem_depara.append({
+                        'tem_depara': False,
+                        'dfe_line_id': item.odoo_dfe_line_id,
+                        'cod_produto_fornecedor': item.cod_produto_fornecedor,
+                        'nome_produto': item.nome_produto,
+                        'qtd_original': Decimal(str(item.qtd_nf or 0)),
+                        'um_nf': item.um_nf or '',
+                        'preco_original': Decimal(str(item.preco_nf or 0))
+                    })
+
+            # 4. Buscar POs LOCAIS (ja e local, sem Odoo)
+            pos_local = self._buscar_pos_fornecedor_local(cnpj_fornecedor)
+
+            logger.info(
+                f"[PREVIEW] DFE {odoo_dfe_id}: {len(itens_convertidos)} itens com De-Para, "
+                f"{len(itens_sem_depara)} sem De-Para, {len(pos_local)} POs locais"
+            )
+
+            # 5. Data da NF para validacao de data
+            data_nf = validacao.data_nf  # Ja e date, nao precisa parse
+
+            # 6. Calcular matches
+            pos_candidatos = self._calcular_preview_matches(
+                itens_convertidos, itens_sem_depara, pos_local, data_nf
+            )
+
+            # 7. Montar resposta
+            itens_nf = self._formatar_itens_para_preview(itens_convertidos, itens_sem_depara)
+            resumo = self._calcular_resumo_preview(itens_nf, pos_candidatos)
+
+            return {
+                'sucesso': True,
+                'dfe': self._montar_dfe_local(validacao, cnpj_fornecedor),
+                'itens_nf': itens_nf,
+                'pos_candidatos': pos_candidatos,
+                'resumo': resumo
+            }
+
+        except Exception as e:
+            logger.error(f"Erro ao buscar preview POs candidatos: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {'sucesso': False, 'erro': str(e)}
+
+    def _montar_dfe_local(self, validacao: ValidacaoNfPoDfe, cnpj_fornecedor: str) -> Dict[str, Any]:
+        """Monta dados do DFE a partir da tabela local ValidacaoNfPoDfe."""
+        return {
+            'id': validacao.odoo_dfe_id,
+            'numero_nf': validacao.numero_nf,
+            'serie': validacao.serie_nf,
+            'cnpj_fornecedor': cnpj_fornecedor,
+            'razao_fornecedor': validacao.razao_fornecedor,
+            'cnpj_empresa_compradora': validacao.cnpj_empresa_compradora,
+            'razao_empresa_compradora': validacao.razao_empresa_compradora,
+            'data_emissao': validacao.data_nf.isoformat() if validacao.data_nf else None,
+            'valor_total': float(validacao.valor_total_nf or 0)
+        }
+
+    def _calcular_preview_matches(
+        self,
+        itens_convertidos: List[Dict[str, Any]],
+        itens_sem_depara: List[Dict[str, Any]],
+        pos_local: List[Dict[str, Any]],
+        data_nf: Optional[date] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Calcula matches e divergências para preview.
+
+        REGRAS:
+        - Apenas linhas cujo PRODUTO existe nos itens da NF são incluídas
+          (linhas sem possibilidade de match são excluídas)
+        - Usa as constantes CENTRALIZADAS de tolerância:
+          - TOLERANCIA_QTD_PERCENTUAL (10%)
+          - TOLERANCIA_PRECO_PERCENTUAL (0%)
+        - Valida DATA usando _validar_data() (mesma lógica da validação real)
+        """
+        # Mapear códigos internos dos itens da NF
+        codigos_nf = {
+            item['cod_produto_interno']: item
+            for item in itens_convertidos
+            if item.get('cod_produto_interno')
+        }
+
+        pos_candidatos = []
+
+        for po in pos_local:
+            po_info = {
+                'po_id': po.get('id'),
+                'po_name': po.get('name'),
+                'data_pedido': po.get('date_planned'),
+                'data_prevista': po.get('date_planned'),
+                'estado': 'purchase',
+                'valor_total': 0.0,
+                'linhas': [],
+                'qtd_linhas_match': 0
+            }
+
+            for line in po.get('lines', []):
+                cod_interno = line.get('_cod_produto_interno')
+                saldo = Decimal(str(line.get('_saldo', 0)))
+                preco_po = Decimal(str(line.get('price_unit', 0)))
+                qtd_pedida = Decimal(str(line.get('product_qty', 0)))
+                qtd_recebida = Decimal(str(line.get('qty_received', 0)))
+
+                # FILTRO: Só incluir linhas cujo produto existe nos itens da NF
+                match_item = codigos_nf.get(cod_interno) if cod_interno else None
+                if not match_item:
+                    continue  # Produto não está na NF → não é candidato
+
+                # Calcular divergências
+                qtd_nf = match_item.get('qtd_convertida', Decimal('0'))
+                preco_nf = match_item.get('preco_convertido', Decimal('0'))
+
+                # Data da linha do PO
+                data_po = self._parse_date(
+                    line.get('date_planned', '') or po.get('date_planned', '')
+                )
+
+                divergencias = self._calcular_divergencias_preview(
+                    qtd_nf, saldo, preco_nf, preco_po, data_nf, data_po
+                )
+                po_info['qtd_linhas_match'] += 1
+
+                # Nome do produto
+                product_info = line.get('product_id', [None, cod_interno or 'N/A'])
+                if isinstance(product_info, list) and len(product_info) > 1:
+                    nome_produto = product_info[1]
+                else:
+                    nome_produto = cod_interno or 'N/A'
+
+                linha_info = {
+                    'line_id': line.get('id'),
+                    'product_id': product_info[0] if isinstance(product_info, list) else None,
+                    'cod_interno': cod_interno,
+                    'nome': nome_produto[:60] + '...' if len(str(nome_produto)) > 60 else nome_produto,
+                    'qtd_pedida': float(qtd_pedida),
+                    'qtd_recebida': float(qtd_recebida),
+                    'saldo': float(saldo),
+                    'preco': float(preco_po),
+                    'valor_linha': float(preco_po * saldo),
+                    'data_prevista': line.get('date_planned'),
+                    'tem_saldo': saldo > 0,
+                    'match_item_nf': match_item.get('cod_produto_fornecedor'),
+                    'divergencias': divergencias
+                }
+
+                po_info['linhas'].append(linha_info)
+                po_info['valor_total'] += linha_info['valor_linha']
+
+            # Incluir apenas POs que têm linhas candidatas (com match de produto)
+            if po_info['linhas']:
+                pos_candidatos.append(po_info)
+
+        return pos_candidatos
+
+    def _calcular_divergencias_preview(
+        self,
+        qtd_nf: Decimal,
+        saldo_po: Decimal,
+        preco_nf: Decimal,
+        preco_po: Decimal,
+        data_nf: Optional[date] = None,
+        data_po: Optional[date] = None
+    ) -> Dict[str, Any]:
+        """
+        Calcula divergências usando tolerâncias CENTRALIZADAS.
+
+        IMPORTANTE: Usa as mesmas regras da validação real!
+        - Quantidade: TOLERANCIA_QTD_PERCENTUAL (10% para cima)
+        - Preço: TOLERANCIA_PRECO_PERCENTUAL (0% - exato)
+        - Data: _validar_data() (5 dias antecipado / 10 dias atrasado)
+        """
+        # Divergência de quantidade (NF vs Saldo PO)
+        if saldo_po > 0:
+            dif_qtd = qtd_nf - saldo_po
+            dif_qtd_pct = ((qtd_nf - saldo_po) / saldo_po * Decimal('100'))
+        else:
+            dif_qtd = qtd_nf
+            dif_qtd_pct = Decimal('100')
+
+        # Divergência de preço
+        if preco_po > 0:
+            dif_preco = preco_nf - preco_po
+            dif_preco_pct = ((preco_nf - preco_po) / preco_po * Decimal('100'))
+        else:
+            dif_preco = preco_nf
+            dif_preco_pct = Decimal('100') if preco_nf > 0 else Decimal('0')
+
+        # Validação de data (mesma lógica de _validar_data)
+        data_ok = self._validar_data(data_nf, data_po) if data_nf else True
+
+        return {
+            'qtd_nf': float(qtd_nf),
+            'preco_nf': float(preco_nf),
+            'dif_qtd': round(float(dif_qtd), 3),
+            'dif_qtd_pct': round(float(dif_qtd_pct), 2),
+            'dif_preco': round(float(dif_preco), 4),
+            'dif_preco_pct': round(float(dif_preco_pct), 2),
+            'data_nf': str(data_nf) if data_nf else None,
+            'data_po': str(data_po) if data_po else None,
+            # Usa constantes centralizadas e métodos reais
+            'qtd_ok': dif_qtd_pct <= TOLERANCIA_QTD_PERCENTUAL,
+            'preco_ok': abs(dif_preco_pct) <= TOLERANCIA_PRECO_PERCENTUAL,
+            'data_ok': data_ok
+        }
+
+    def _formatar_itens_para_preview(
+        self,
+        itens_convertidos: List[Dict[str, Any]],
+        itens_sem_depara: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Formata itens para resposta JSON do preview."""
+        itens_nf = []
+
+        for item in itens_convertidos:
+            itens_nf.append({
+                'dfe_line_id': item['dfe_line_id'],
+                'nitem': item.get('nitem'),
+                'cod_produto_fornecedor': item['cod_produto_fornecedor'],
+                'nome_produto': item['nome_produto'],
+                'qtd_nf': float(item['qtd_original']),
+                'preco_nf': float(item['preco_original']),
+                'um_nf': item.get('um_nf', ''),
+                'tem_depara': True,
+                'cod_produto_interno': item['cod_produto_interno'],
+                'fator_conversao': float(item['fator_conversao']),
+                'qtd_convertida': float(item['qtd_convertida']),
+                'preco_convertido': float(item['preco_convertido'])
+            })
+
+        for item in itens_sem_depara:
+            itens_nf.append({
+                'dfe_line_id': item['dfe_line_id'],
+                'nitem': item.get('nitem'),
+                'cod_produto_fornecedor': item['cod_produto_fornecedor'],
+                'nome_produto': item['nome_produto'],
+                'qtd_nf': float(item['qtd_original']),
+                'preco_nf': float(item['preco_original']),
+                'um_nf': item.get('um_nf', ''),
+                'tem_depara': False,
+                'cod_produto_interno': None,
+                'fator_conversao': 1,
+                'qtd_convertida': float(item['qtd_original']),
+                'preco_convertido': float(item['preco_original'])
+            })
+
+        return itens_nf
+
+    def _calcular_resumo_preview(
+        self,
+        itens_nf: List[Dict[str, Any]],
+        pos_candidatos: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """Calcula estatísticas do preview."""
+        # Contar itens com PO (que têm match em algum PO candidato)
+        itens_com_po = sum(
+            1 for item in itens_nf
+            if item.get('cod_produto_interno') and
+            any(
+                any(l.get('match_item_nf') == item['cod_produto_fornecedor'] for l in po['linhas'])
+                for po in pos_candidatos
+            )
+        )
+
+        return {
+            'itens_nf': len(itens_nf),
+            'itens_com_depara': sum(1 for i in itens_nf if i.get('tem_depara')),
+            'itens_sem_depara': sum(1 for i in itens_nf if not i.get('tem_depara')),
+            'itens_com_po': itens_com_po,
+            'itens_sem_po': len(itens_nf) - itens_com_po,
+            'pos_candidatos': len(pos_candidatos),
+            'valor_total_pos': sum(po.get('valor_total', 0) for po in pos_candidatos)
+        }
+
