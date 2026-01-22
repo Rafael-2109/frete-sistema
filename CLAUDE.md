@@ -639,6 +639,7 @@ Usuario: "Como fazer bulk insert com SQLAlchemy?"
 | Skill | Diretorio | Descricao |
 |-------|-----------|-----------|
 | `rastreando-odoo` | `.claude/skills/rastreando-odoo/` | Rastreia fluxos documentais completos (NF compra/venda, PO, SO, titulos, conciliacao) |
+| `executando-odoo-financeiro` | `.claude/skills/executando-odoo-financeiro/` | EXECUTA operacoes financeiras: criar pagamentos, reconciliar extratos, baixar titulos |
 | `descobrindo-odoo-estrutura` | `.claude/skills/descobrindo-odoo-estrutura/` | Explorar campos/modelos nao mapeados |
 | `integracao-odoo` | `.claude/skills/integracao-odoo/` | Criar novas integracoes, lancamentos fiscais |
 

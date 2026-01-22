@@ -41,7 +41,10 @@ from app import db
 from app.financeiro.models import (
     ExtratoLote, ExtratoItem, ContasAReceber, ContasAPagar, ExtratoItemTitulo
 )
-from app.financeiro.services.baixa_titulos_service import BaixaTitulosService
+from app.financeiro.services.baixa_titulos_service import (
+    BaixaTitulosService,
+    JOURNAL_GRAFENO_ID,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -342,6 +345,10 @@ class ExtratoConciliacaoService:
                 valor_principal = min(valor_extrato, saldo_titulo)
                 valor_juros = valor_extrato - valor_principal if valor_extrato > saldo_titulo else 0
 
+                # Obter journal_id do lote do extrato (ou usar GRAFENO como padrão)
+                # FLUXO TESTADO (22/01/2026): Retorno CNAB Grafeno (banco 274)
+                journal_id = item.lote.journal_id if item.lote and item.lote.journal_id else JOURNAL_GRAFENO_ID
+
                 # Criar payment COM ou SEM juros dependendo da diferença
                 if valor_juros > 0.01:  # Tolerância de 1 centavo
                     # =========================================================
@@ -361,7 +368,7 @@ class ExtratoConciliacaoService:
                         partner_id=partner_id_num,
                         valor_pagamento=valor_principal,  # Valor que abate do título
                         valor_juros=valor_juros,          # Valor que vai para receita financeira
-                        journal_id=883,  # GRAFENO
+                        journal_id=journal_id,
                         ref=move_name,
                         data=item.data_transacao or datetime.now().date(),
                         company_id=titulo_company_id
@@ -377,7 +384,7 @@ class ExtratoConciliacaoService:
                     payment_id, payment_name = self.baixa_service._criar_pagamento(
                         partner_id=partner_id_num,
                         valor=valor_principal,
-                        journal_id=883,  # GRAFENO
+                        journal_id=journal_id,
                         ref=move_name,
                         data=item.data_transacao or datetime.now().date(),
                         company_id=titulo_company_id
@@ -1363,13 +1370,14 @@ class ExtratoConciliacaoService:
             }
 
         # =========================================================================
-        # CENÁRIO 2: Título com saldo - criar payment parcial
+        # CENÁRIO 2: Título com saldo - criar payment (com ou sem juros)
         # =========================================================================
+        # CORREÇÃO 14 (22/01/2026): Separar juros quando valor_alocado > saldo_titulo
+        # Se cliente pagou mais que o saldo (juros), usar wizard com Write-Off
         if saldo_titulo > 0:
-            # Determinar valor do payment (menor entre alocado e saldo)
-            valor_payment = min(valor_alocado, saldo_titulo)
-
-            logger.info(f"    Criando payment de R$ {valor_payment:.2f}")
+            # Calcular valores: principal (abate título) e juros (receita financeira)
+            valor_principal = min(valor_alocado, saldo_titulo)
+            valor_juros = valor_alocado - valor_principal if valor_alocado > saldo_titulo else 0
 
             # Extrair dados do título
             partner_id = titulo_odoo.get('partner_id')
@@ -1378,26 +1386,59 @@ class ExtratoConciliacaoService:
             move = titulo_odoo.get('move_id')
             move_name = move[1] if isinstance(move, (list, tuple)) else str(move)
 
-            # Criar payment na empresa do título
-            payment_id, payment_name = self.baixa_service._criar_pagamento(
-                partner_id=partner_id_num,
-                valor=valor_payment,
-                journal_id=883,  # GRAFENO
-                ref=f"{move_name} (Extrato {item.id})",
-                data=item.data_transacao or datetime.now().date(),
-                company_id=titulo_company_id
-            )
-            logger.info(f"    Payment criado: {payment_name} (ID {payment_id})")
+            # Obter journal_id do lote do extrato (ou usar GRAFENO como padrão)
+            # FLUXO TESTADO (22/01/2026): Retorno CNAB Grafeno (banco 274)
+            journal_id = item.lote.journal_id if item.lote and item.lote.journal_id else JOURNAL_GRAFENO_ID
 
-            # Postar payment
-            self.baixa_service._postar_pagamento(payment_id)
-            logger.info(f"    Payment postado")
+            # Tolerância de 1 centavo para considerar juros
+            if valor_juros > 0.01:
+                # =====================================================================
+                # CASO COM JUROS: Usar wizard account.payment.register com Write-Off
+                # =====================================================================
+                # O wizard já faz: criar payment + postar + reconciliar título + contabilizar juros
+                logger.info(
+                    f"    Criando payment COM JUROS: Principal R$ {valor_principal:.2f} + "
+                    f"Juros R$ {valor_juros:.2f} = Total R$ {valor_alocado:.2f}"
+                )
 
-            # Buscar linha de crédito do payment e reconciliar com título
-            credit_line_id = self.baixa_service._buscar_linha_credito(payment_id)
-            if credit_line_id:
-                self._executar_reconcile(credit_line_id, titulo_odoo_id)
-                logger.info(f"    Título reconciliado com payment")
+                payment_id, payment_name = self.baixa_service._criar_pagamento_com_writeoff_juros(
+                    titulo_id=titulo_odoo_id,
+                    partner_id=partner_id_num,
+                    valor_pagamento=valor_principal,
+                    valor_juros=valor_juros,
+                    journal_id=journal_id,
+                    ref=f"{move_name} (Extrato {item.id})",
+                    data=item.data_transacao or datetime.now().date(),
+                    company_id=titulo_company_id
+                )
+                logger.info(f"    Payment com Write-Off criado: {payment_name} (ID {payment_id})")
+
+                # O wizard já postou e reconciliou - não chamar _postar_pagamento nem _executar_reconcile
+            else:
+                # =====================================================================
+                # CASO SEM JUROS: Fluxo original (criar payment simples)
+                # =====================================================================
+                logger.info(f"    Criando payment SEM juros: R$ {valor_principal:.2f}")
+
+                payment_id, payment_name = self.baixa_service._criar_pagamento(
+                    partner_id=partner_id_num,
+                    valor=valor_principal,
+                    journal_id=journal_id,
+                    ref=f"{move_name} (Extrato {item.id})",
+                    data=item.data_transacao or datetime.now().date(),
+                    company_id=titulo_company_id
+                )
+                logger.info(f"    Payment criado: {payment_name} (ID {payment_id})")
+
+                # Postar payment (só para caso sem juros)
+                self.baixa_service._postar_pagamento(payment_id)
+                logger.info(f"    Payment postado")
+
+                # Buscar linha de crédito do payment e reconciliar com título (só para caso sem juros)
+                credit_line_id = self.baixa_service._buscar_linha_credito(payment_id)
+                if credit_line_id:
+                    self._executar_reconcile(credit_line_id, titulo_odoo_id)
+                    logger.info(f"    Título reconciliado com payment")
 
             # Salvar IDs de referência
             vinculo.payment_id = payment_id
@@ -1418,11 +1459,13 @@ class ExtratoConciliacaoService:
                 'titulo_id': titulo_odoo_id,
                 'payment_id': payment_id,
                 'payment_name': payment_name,
-                'valor_payment': valor_payment,
+                'valor_principal': valor_principal,
+                'valor_juros': valor_juros,
+                'valor_total': valor_alocado,
                 'saldo_antes': saldo_titulo,
                 'saldo_depois': vinculo.titulo_saldo_depois,
                 'partial_reconcile_id': vinculo.partial_reconcile_id,
-                'mensagem': f'Payment criado: {payment_name}'
+                'mensagem': f'Payment criado: {payment_name}' + (f' (juros R$ {valor_juros:.2f})' if valor_juros > 0.01 else '')
             }
 
         # =========================================================================

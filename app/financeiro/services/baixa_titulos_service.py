@@ -59,6 +59,60 @@ CONTA_JUROS_RECEBIMENTOS_POR_COMPANY = {
     5: 26629,  # LA FAMIGLIA - LF
 }
 
+# =============================================================================
+# MAPEAMENTO DE BANCOS CNAB PARA JOURNALS ODOO
+# =============================================================================
+# Usado para identificar o journal_id quando processando retorno CNAB.
+# Chave: codigo do banco no arquivo CNAB (posição 77-79 do header)
+# Valor: dict com journal_id, code e nome
+#
+# FLUXO TESTADO (22/01/2026): Banco Grafeno (274) com journal GRAFENO (883)
+CNAB_BANCO_PARA_JOURNAL = {
+    '274': {  # BMP Money Plus / Banco Grafeno
+        'journal_id': 883,
+        'journal_code': 'GRAFENO',
+        'journal_name': 'Banco Grafeno',
+    },
+    # Adicionar outros bancos conforme configurados:
+    # '001': {'journal_id': ???, 'journal_code': 'BB', 'journal_name': 'Banco do Brasil'},
+    # '341': {'journal_id': ???, 'journal_code': 'ITAU', 'journal_name': 'Itaú'},
+    # '237': {'journal_id': ???, 'journal_code': 'BRAD', 'journal_name': 'Bradesco'},
+}
+
+# Journal padrão quando não houver mapeamento (usar GRAFENO como fallback)
+JOURNAL_GRAFENO_ID = 883
+JOURNAL_GRAFENO_CODE = 'GRAFENO'
+
+
+def obter_journal_por_banco_cnab(banco_codigo: str) -> dict:
+    """
+    Retorna informações do journal Odoo baseado no código do banco CNAB.
+
+    Args:
+        banco_codigo: Código do banco no arquivo CNAB (ex: '274' para Grafeno)
+
+    Returns:
+        Dict com journal_id, journal_code e journal_name
+        Retorna GRAFENO como padrão se banco não mapeado
+
+    Exemplo:
+        >>> obter_journal_por_banco_cnab('274')
+        {'journal_id': 883, 'journal_code': 'GRAFENO', 'journal_name': 'Banco Grafeno'}
+    """
+    if banco_codigo in CNAB_BANCO_PARA_JOURNAL:
+        return CNAB_BANCO_PARA_JOURNAL[banco_codigo]
+
+    # Fallback para GRAFENO (log warning)
+    logger.warning(
+        f"Banco CNAB '{banco_codigo}' não mapeado. Usando GRAFENO como padrão. "
+        f"Adicione mapeamento em CNAB_BANCO_PARA_JOURNAL se necessário."
+    )
+    return {
+        'journal_id': JOURNAL_GRAFENO_ID,
+        'journal_code': JOURNAL_GRAFENO_CODE,
+        'journal_name': 'Banco Grafeno (fallback)',
+    }
+
 
 # Campos criticos para snapshot do titulo
 CAMPOS_SNAPSHOT_TITULO = [
