@@ -616,6 +616,7 @@ Usuario: "Como fazer bulk insert com SQLAlchemy?"
 | Exportar dados | `exportando-arquivos` | "exporta em Excel" |
 | Analise P1-P7 | `analise-carteira` | "analisa a carteira" |
 | Explorar Odoo | `descobrindo-odoo-estrutura` | "campos do res.partner" |
+| Validacao NF x PO | `validacao-nf-po` | "erro ao validar DFE", "modal POs nao abre" |
 
 ## Skills de Desenvolvimento
 
@@ -642,6 +643,7 @@ Usuario: "Como fazer bulk insert com SQLAlchemy?"
 | `executando-odoo-financeiro` | `.claude/skills/executando-odoo-financeiro/` | EXECUTA operacoes financeiras: criar pagamentos, reconciliar extratos, baixar titulos |
 | `descobrindo-odoo-estrutura` | `.claude/skills/descobrindo-odoo-estrutura/` | Explorar campos/modelos nao mapeados |
 | `integracao-odoo` | `.claude/skills/integracao-odoo/` | Criar novas integracoes, lancamentos fiscais |
+| `validacao-nf-po` | `.claude/skills/validacao-nf-po/` | Validacao NF x PO (Fase 2): match, De-Para, divergencias, preview local |
 
 ## Skills Utilitarias
 | Skill | Diretorio | Descricao |

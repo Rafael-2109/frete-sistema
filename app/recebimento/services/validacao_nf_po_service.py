@@ -26,7 +26,7 @@ Regras de Negocio:
 - Preco divergente: BLOQUEIA
 - Data fora tolerancia: BLOQUEIA
 
-Referencia: "/home/rafaelnascimento/.claude/plans/wiggly-plotting-newt.md"
+Referencia: "/home/rafaelnascimento/.claude/plans/plano-validacao-nf-po.md"
 """
 
 import logging
