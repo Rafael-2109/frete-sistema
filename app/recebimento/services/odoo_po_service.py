@@ -592,7 +592,7 @@ class OdooPoService:
             # PASSO 4: Confirmar PO Conciliador
             # =================================================================
             try:
-                odoo.execute(
+                odoo.execute_kw(
                     'purchase.order',
                     'button_confirm',
                     [po_conciliador_id]
@@ -787,60 +787,78 @@ class OdooPoService:
         po_referencia_id: int
     ) -> Optional[Dict[str, Any]]:
         """
-        Cria um novo PO Conciliador que irá casar 100% com a NF.
+        Cria PO Conciliador duplicando o PO de referencia via copy() do Odoo.
 
-        O PO Conciliador é criado vazio e as linhas são adicionadas posteriormente.
+        Usa o metodo copy() nativo do Odoo que duplica TODOS os campos do PO
+        (empresa, condicao pgto, campos fiscais, etc.) e sobrescreve apenas
+        os valores especificados em 'default'.
+
+        O PO Conciliador e criado vazio (sem linhas) e as linhas sao
+        adicionadas posteriormente via _criar_linha_po_conciliador().
 
         Args:
             odoo: Conexao Odoo
             fornecedor_id: ID do partner (fornecedor) no Odoo
             validacao: Objeto ValidacaoNfPoDfe com dados da NF
-            po_referencia_id: ID de um PO existente para copiar configuracoes
+            po_referencia_id: ID de um PO existente para duplicar
 
         Returns:
             Dict com info do PO conciliador ou None se falhou
         """
         try:
-            # Ler dados do PO de referencia para copiar configuracoes
-            po_ref = odoo.read(
+            # Usar copy() nativo do Odoo - duplica o PO inteiro e sobrescreve
+            # campos especificados. Isso garante que TODOS os campos obrigatorios
+            # (empresa, condicao pgto, fiscal_position, picking_type, etc.)
+            # sejam copiados automaticamente.
+            novo_po_id = odoo.execute_kw(
                 'purchase.order',
+                'copy',
                 [po_referencia_id],
-                ['picking_type_id', 'company_id', 'currency_id', 'fiscal_position_id']
+                {
+                    'default': {
+                        'partner_id': fornecedor_id,
+                        'date_order': validacao.data_nf.isoformat() if validacao.data_nf else datetime.utcnow().isoformat(),
+                        'origin': f'Conciliacao NF {validacao.numero_nf or validacao.odoo_dfe_id}',
+                        'state': 'draft',
+                        'order_line': False,  # Limpar linhas - serao criadas manualmente depois
+                    }
+                }
             )
 
-            po_ref_data = po_ref[0] if po_ref else {}
-
-            # Criar novo PO Conciliador
-            novo_po_data = {
-                'partner_id': fornecedor_id,
-                'date_order': validacao.data_nf.isoformat() if validacao.data_nf else datetime.utcnow().isoformat(),
-                'origin': f'Conciliacao NF {validacao.numero_nf or validacao.odoo_dfe_id}',
-                'state': 'draft',  # Comeca como rascunho
-            }
-
-            # Copiar configuracoes do PO de referencia
-            if po_ref_data.get('picking_type_id'):
-                novo_po_data['picking_type_id'] = po_ref_data['picking_type_id'][0]
-            if po_ref_data.get('company_id'):
-                novo_po_data['company_id'] = po_ref_data['company_id'][0]
-            if po_ref_data.get('currency_id'):
-                novo_po_data['currency_id'] = po_ref_data['currency_id'][0]
-            if po_ref_data.get('fiscal_position_id'):
-                novo_po_data['fiscal_position_id'] = po_ref_data['fiscal_position_id'][0]
-
-            # Criar PO
-            novo_po_id = odoo.create('purchase.order', novo_po_data)
-
             if not novo_po_id:
-                logger.error("Falha ao criar PO Conciliador")
+                logger.error("Falha ao duplicar PO via copy()")
                 return None
+
+            # Verificar se copy() criou linhas indesejadas (fallback)
+            # Em algumas versoes do Odoo, order_line=False pode nao funcionar
+            linhas_existentes = odoo.search(
+                'purchase.order.line',
+                [[('order_id', '=', novo_po_id)]]
+            )
+            if linhas_existentes:
+                logger.warning(
+                    f"copy() criou {len(linhas_existentes)} linhas indesejadas, removendo..."
+                )
+                try:
+                    odoo.execute_kw(
+                        'purchase.order.line',
+                        'unlink',
+                        [linhas_existentes]
+                    )
+                    logger.info(f"Linhas indesejadas removidas do PO Conciliador")
+                except Exception as e_del:
+                    logger.warning(
+                        f"Nao foi possivel remover linhas indesejadas: {e_del}. "
+                        f"Linhas serao sobrescritas pelas novas."
+                    )
 
             # Buscar nome do novo PO
             novo_po = odoo.read('purchase.order', [novo_po_id], ['name'])
             novo_po_name = novo_po[0]['name'] if novo_po else str(novo_po_id)
 
             logger.info(
-                f"PO Conciliador {novo_po_name} criado para NF {validacao.numero_nf}"
+                f"PO Conciliador {novo_po_name} criado via copy() "
+                f"(baseado em PO {po_referencia_id}) para NF {validacao.numero_nf}"
             )
 
             return {
@@ -849,7 +867,9 @@ class OdooPoService:
             }
 
         except Exception as e:
-            logger.error(f"Erro ao criar PO Conciliador: {e}")
+            logger.error(f"Erro ao criar PO Conciliador via copy(): {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return None
 
     def _criar_linha_po_conciliador(
@@ -862,7 +882,11 @@ class OdooPoService:
         linha_referencia_id: int
     ) -> Optional[int]:
         """
-        Cria uma linha no PO Conciliador com os dados da NF.
+        Cria linha no PO Conciliador duplicando a linha de referencia via copy().
+
+        Usa o metodo copy() nativo do Odoo para duplicar a linha original,
+        copiando TODOS os campos (CFOP, impostos, UOM, operacao fiscal, etc.)
+        e sobrescrevendo apenas order_id, product_qty e price_unit.
 
         Args:
             odoo: Conexao Odoo
@@ -870,51 +894,38 @@ class OdooPoService:
             produto_id: ID do produto no Odoo
             quantidade: Quantidade da NF
             preco_unitario: Preco unitario da NF
-            linha_referencia_id: ID de uma linha de PO existente para copiar config
+            linha_referencia_id: ID de uma linha de PO existente para duplicar
 
         Returns:
             ID da linha criada ou None se falhou
         """
         try:
-            # Ler dados da linha de referencia
-            linha_ref = odoo.read(
+            # Duplicar a linha via copy() - copia CFOP, impostos, UOM,
+            # operacao fiscal e todos os demais campos automaticamente
+            nova_linha_id = odoo.execute_kw(
                 'purchase.order.line',
+                'copy',
                 [linha_referencia_id],
-                ['name', 'product_uom', 'date_planned', 'taxes_id']
+                {
+                    'default': {
+                        'order_id': po_conciliador_id,
+                        'product_id': produto_id,
+                        'product_qty': quantidade,
+                        'price_unit': preco_unitario,
+                    }
+                }
             )
 
-            linha_ref_data = linha_ref[0] if linha_ref else {}
-
-            # Criar nova linha
-            nova_linha_data = {
-                'order_id': po_conciliador_id,
-                'product_id': produto_id,
-                'name': linha_ref_data.get('name', 'Item da NF'),
-                'product_qty': quantidade,
-                'price_unit': preco_unitario,
-                'date_planned': linha_ref_data.get('date_planned') or datetime.utcnow().isoformat(),
-            }
-
-            # Copiar UOM se existir
-            if linha_ref_data.get('product_uom'):
-                nova_linha_data['product_uom'] = linha_ref_data['product_uom'][0]
-
-            # Copiar impostos se existirem
-            if linha_ref_data.get('taxes_id'):
-                nova_linha_data['taxes_id'] = [(6, 0, linha_ref_data['taxes_id'])]
-
-            linha_id = odoo.create('purchase.order.line', nova_linha_data)
-
-            if linha_id:
+            if nova_linha_id:
                 logger.debug(
-                    f"Linha criada no PO Conciliador: produto {produto_id}, "
-                    f"qtd {quantidade}, preco {preco_unitario}"
+                    f"Linha criada no PO Conciliador via copy(): "
+                    f"produto {produto_id}, qtd {quantidade}, preco {preco_unitario}"
                 )
 
-            return linha_id
+            return nova_linha_id
 
         except Exception as e:
-            logger.error(f"Erro ao criar linha no PO Conciliador: {e}")
+            logger.error(f"Erro ao criar linha no PO Conciliador via copy(): {e}")
             return None
 
     def _ajustar_quantidade_linha(
@@ -999,7 +1010,7 @@ class OdooPoService:
         """
         try:
             # Chamar button_cancel
-            odoo.execute(
+            odoo.execute_kw(
                 'purchase.order',
                 'button_cancel',
                 [po_id]

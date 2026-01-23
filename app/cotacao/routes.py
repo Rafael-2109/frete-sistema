@@ -245,6 +245,134 @@ def calcular_otimizacoes_pedido(pedido, pedidos_atuais, modalidade, veiculos, fr
     
     return otimizacoes if otimizacoes else None
 
+
+@cotacao_bp.route("/verificar_nf_cd", methods=["POST"])
+@login_required
+def verificar_nf_cd():
+    """
+    Verifica bidirecionalmente se existem pedidos pendentes dos mesmos CNPJs:
+    - Selecionou normais (sincronizado_nf=False, nf_cd=False) → busca nf_cd=True não selecionados
+    - Selecionou nf_cd=True → busca normais (sincronizado_nf=False, nf_cd=False) não selecionados
+    """
+    from sqlalchemy import and_, distinct
+
+    data = request.get_json()
+    if not data:
+        return jsonify({"success": False, "message": "Dados não recebidos"}), 400
+
+    lotes_selecionados = data.get("separacao_lote_ids", [])
+
+    if not lotes_selecionados:
+        return jsonify({"success": False, "message": "Nenhum lote selecionado"}), 400
+
+    # 1. Classificar os lotes selecionados em GRUPO A (normais) e GRUPO B (nf_cd)
+    lotes_info = db.session.query(
+        Separacao.separacao_lote_id,
+        Separacao.cnpj_cpf,
+        Separacao.nf_cd,
+        Separacao.sincronizado_nf
+    ).filter(
+        Separacao.separacao_lote_id.in_(lotes_selecionados)
+    ).distinct(Separacao.separacao_lote_id).all()
+
+    cnpjs_grupo_a = set()  # CNPJs dos pedidos normais selecionados
+    cnpjs_grupo_b = set()  # CNPJs dos pedidos nf_cd selecionados
+
+    for info in lotes_info:
+        if info.nf_cd:
+            if info.cnpj_cpf:
+                cnpjs_grupo_b.add(info.cnpj_cpf)
+        elif not info.sincronizado_nf:
+            if info.cnpj_cpf:
+                cnpjs_grupo_a.add(info.cnpj_cpf)
+
+    pendentes_nf_cd = []
+    pendentes_normais = []
+
+    # Campos para agrupamento e seleção
+    campos_group = [
+        Separacao.separacao_lote_id,
+        Separacao.num_pedido,
+        Separacao.cnpj_cpf,
+        Separacao.raz_social_red,
+        Separacao.nome_cidade,
+        Separacao.cod_uf,
+        Separacao.expedicao,
+        Separacao.agendamento,
+        Separacao.agendamento_confirmado,
+        Separacao.protocolo,
+        Separacao.numero_nf,
+        Separacao.status
+    ]
+
+    campos_select = campos_group + [
+        func.sum(Separacao.valor_saldo).label('valor_saldo'),
+        func.sum(Separacao.peso).label('peso'),
+        func.sum(Separacao.pallet).label('pallet')
+    ]
+
+    # 2. Direção 1: CNPJs do GRUPO A → buscar nf_cd=True não selecionados
+    if cnpjs_grupo_a:
+        resultado_nf_cd = db.session.query(*campos_select).filter(
+            Separacao.cnpj_cpf.in_(list(cnpjs_grupo_a)),
+            Separacao.nf_cd == True,
+            Separacao.separacao_lote_id.notin_(lotes_selecionados)
+        ).group_by(*campos_group).all()
+
+        pendentes_nf_cd = [_serializar_pedido_verificacao(r) for r in resultado_nf_cd]
+
+    # 3. Direção 2: CNPJs do GRUPO B → buscar normais não selecionados
+    if cnpjs_grupo_b:
+        resultado_normais = db.session.query(*campos_select).filter(
+            Separacao.cnpj_cpf.in_(list(cnpjs_grupo_b)),
+            Separacao.sincronizado_nf == False,
+            Separacao.nf_cd == False,
+            Separacao.separacao_lote_id.notin_(lotes_selecionados)
+        ).group_by(*campos_group).all()
+
+        pendentes_normais = [_serializar_pedido_verificacao(r) for r in resultado_normais]
+
+    # 4. Se não há pendentes em nenhuma direção, sem modal
+    if not pendentes_nf_cd and not pendentes_normais:
+        return jsonify({"success": True, "tem_pendentes": False})
+
+    # 5. Buscar dados dos selecionados para exibir no modal
+    resultado_selecionados = db.session.query(*campos_select).filter(
+        Separacao.separacao_lote_id.in_(lotes_selecionados)
+    ).group_by(*campos_group).all()
+
+    selecionados = [_serializar_pedido_verificacao(r) for r in resultado_selecionados]
+
+    return jsonify({
+        "success": True,
+        "tem_pendentes": True,
+        "selecionados": selecionados,
+        "pendentes_nf_cd": pendentes_nf_cd,
+        "pendentes_normais": pendentes_normais
+    })
+
+
+def _serializar_pedido_verificacao(row):
+    """Serializa um registro de Separacao agrupado para a verificação NF CD."""
+    return {
+        "separacao_lote_id": row.separacao_lote_id,
+        "num_pedido": row.num_pedido,
+        "cnpj_cpf": row.cnpj_cpf,
+        "raz_social_red": row.raz_social_red,
+        "nome_cidade": row.nome_cidade,
+        "cod_uf": row.cod_uf,
+        "expedicao": row.expedicao.strftime("%d/%m/%Y") if row.expedicao else None,
+        "agendamento": row.agendamento.strftime("%d/%m/%Y") if row.agendamento else None,
+        "agendamento_confirmado": bool(row.agendamento_confirmado) if row.agendamento_confirmado else False,
+        "protocolo": row.protocolo,
+        "numero_nf": row.numero_nf,
+        "status": row.status,
+        "valor_saldo": float(row.valor_saldo or 0),
+        "peso": float(row.peso or 0),
+        "pallet": float(row.pallet or 0)
+    }
+
+
 @cotacao_bp.route("/iniciar", methods=["POST"])
 @login_required
 def iniciar_cotacao():
