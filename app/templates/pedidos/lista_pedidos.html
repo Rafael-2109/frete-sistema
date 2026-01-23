@@ -1840,7 +1840,11 @@ function prosseguirCotacao() {
 
 function submeterFormCotacao() {
     // Submeter sem revalidar (remove onsubmit para evitar loop)
-    var form = document.querySelector('form[action*="iniciar_cotacao"]');
+    var form = document.querySelector('form[action*="/cotacao/iniciar"]');
+    if (!form) {
+        alert('Erro: formulário de cotação não encontrado.');
+        return;
+    }
     form.removeAttribute('onsubmit');
     form.submit();
 }

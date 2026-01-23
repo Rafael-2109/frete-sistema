@@ -120,7 +120,6 @@ def visualizar_embarque(id):
             dados_portaria = obter_dados_portaria_embarque(embarque.id)
             
             # Buscar dados de impressão
-            from app.pedidos.models import Pedido
             pedidos_impressos = {}
             for item in embarque.itens:
                 if item.separacao_lote_id:
@@ -403,11 +402,31 @@ def visualizar_embarque(id):
                 flash("Erros na validação do formulário.", "danger")
                 # Log form.errors se quiser
             dados_portaria = obter_dados_portaria_embarque(embarque.id)
-            return render_template('embarques/visualizar_embarque.html', form=form, embarque=embarque, dados_portaria=dados_portaria)
+            pedidos_impressos = {}
+            for item in embarque.itens:
+                if item.separacao_lote_id:
+                    pedido = Pedido.query.filter_by(separacao_lote_id=item.separacao_lote_id).first()
+                    if pedido:
+                        pedidos_impressos[item.separacao_lote_id] = {
+                            'impresso': pedido.separacao_impressa,
+                            'impresso_em': pedido.separacao_impressa_em,
+                            'impresso_por': pedido.separacao_impressa_por
+                        }
+            return render_template('embarques/visualizar_embarque.html', form=form, embarque=embarque, dados_portaria=dados_portaria, pedidos_impressos=pedidos_impressos)
 
         # Se chegou aqui e nao match action => exibe a página
         dados_portaria = obter_dados_portaria_embarque(embarque.id)
-        return render_template('embarques/visualizar_embarque.html', form=form, embarque=embarque, dados_portaria=dados_portaria)
+        pedidos_impressos = {}
+        for item in embarque.itens:
+            if item.separacao_lote_id:
+                pedido = Pedido.query.filter_by(separacao_lote_id=item.separacao_lote_id).first()
+                if pedido:
+                    pedidos_impressos[item.separacao_lote_id] = {
+                        'impresso': pedido.separacao_impressa,
+                        'impresso_em': pedido.separacao_impressa_em,
+                        'impresso_por': pedido.separacao_impressa_por
+                    }
+        return render_template('embarques/visualizar_embarque.html', form=form, embarque=embarque, dados_portaria=dados_portaria, pedidos_impressos=pedidos_impressos)
 
     else:
         # GET
@@ -481,7 +500,6 @@ def visualizar_embarque(id):
         dados_portaria = obter_dados_portaria_embarque(embarque.id)
         
         # Buscar dados de impressão dos pedidos
-        from app.pedidos.models import Pedido
         pedidos_impressos = {}
         for item in embarque.itens:
             if item.separacao_lote_id:

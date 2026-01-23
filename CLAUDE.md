@@ -617,6 +617,7 @@ Usuario: "Como fazer bulk insert com SQLAlchemy?"
 | Analise P1-P7 | `analise-carteira` | "analisa a carteira" |
 | Explorar Odoo | `descobrindo-odoo-estrutura` | "campos do res.partner" |
 | Validacao NF x PO | `validacao-nf-po` | "erro ao validar DFE", "modal POs nao abre" |
+| Conciliar PO/Split | `conciliando-odoo-po` | "consolide POs", "crie PO conciliador", "execute split" |
 
 ## Skills de Desenvolvimento
 
@@ -644,6 +645,7 @@ Usuario: "Como fazer bulk insert com SQLAlchemy?"
 | `descobrindo-odoo-estrutura` | `.claude/skills/descobrindo-odoo-estrutura/` | Explorar campos/modelos nao mapeados |
 | `integracao-odoo` | `.claude/skills/integracao-odoo/` | Criar novas integracoes, lancamentos fiscais |
 | `validacao-nf-po` | `.claude/skills/validacao-nf-po/` | Validacao NF x PO (Fase 2): match, De-Para, divergencias, preview local |
+| `conciliando-odoo-po` | `.claude/skills/conciliando-odoo-po/` | EXECUTA split/consolidacao de POs: criar PO Conciliador, ajustar saldos, vincular DFe |
 
 ## Skills Utilitarias
 | Skill | Diretorio | Descricao |
