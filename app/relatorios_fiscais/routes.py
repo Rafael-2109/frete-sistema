@@ -156,3 +156,126 @@ def status_conexao_odoo():
             'success': False,
             'message': f'Erro: {str(e)}'
         }), 500
+
+
+# ================================================================
+# RAZÃO GERAL (General Ledger)
+# ================================================================
+
+@relatorios_fiscais_bp.route('/razao-geral')
+@login_required
+def razao_geral():
+    """
+    Página principal do relatório Razão Geral.
+
+    Exibe formulário com filtros: período, empresa e conta contábil.
+    """
+    from app.relatorios_fiscais.services.razao_geral_service import EMPRESAS_RAZAO_GERAL
+
+    # Datas padrão: último mês
+    data_fim = datetime.now().date()
+    data_ini = data_fim - timedelta(days=30)
+
+    return render_template(
+        'relatorios_fiscais/razao_geral.html',
+        data_ini=data_ini.strftime('%Y-%m-%d'),
+        data_fim=data_fim.strftime('%Y-%m-%d'),
+        empresas=EMPRESAS_RAZAO_GERAL,
+        titulo='Razão Geral (General Ledger)'
+    )
+
+
+@relatorios_fiscais_bp.route('/razao-geral/gerar', methods=['POST'])
+@login_required
+def gerar_razao_geral():
+    """
+    Gera o relatório Razão Geral e retorna Excel para download.
+
+    Recebe filtros do formulário:
+    - data_ini / data_fim: período
+    - company_ids[]: empresas selecionadas
+    - conta_contabil: código parcial da conta (opcional)
+    """
+    try:
+        from app.odoo.utils.connection import get_odoo_connection
+        from app.relatorios_fiscais.services.razao_geral_service import (
+            buscar_movimentos_razao,
+            gerar_excel_razao
+        )
+
+        # Obter parâmetros do formulário
+        data_ini_str = request.form.get('data_ini')
+        data_fim_str = request.form.get('data_fim')
+        company_ids_str = request.form.getlist('company_ids')
+        conta_contabil = request.form.get('conta_contabil', '').strip()
+
+        # Validar datas
+        if not data_ini_str or not data_fim_str:
+            flash('Datas inicial e final são obrigatórias', 'error')
+            return redirect(url_for('relatorios_fiscais.razao_geral'))
+
+        data_ini = datetime.strptime(data_ini_str, '%Y-%m-%d').date()
+        data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date()
+
+        if data_ini > data_fim:
+            flash('Data inicial não pode ser maior que data final', 'error')
+            return redirect(url_for('relatorios_fiscais.razao_geral'))
+
+        # Validar empresas
+        company_ids = [int(cid) for cid in company_ids_str if cid.isdigit()]
+        if not company_ids:
+            flash('Selecione pelo menos uma empresa', 'error')
+            return redirect(url_for('relatorios_fiscais.razao_geral'))
+
+        logger.info(
+            f"📊 Gerando Razão Geral: {data_ini} a {data_fim} "
+            f"| Empresas: {company_ids} | Conta: {conta_contabil or 'Todas'} "
+            f"| Usuário: {current_user.nome}"
+        )
+
+        # Conectar ao Odoo
+        connection = get_odoo_connection()
+        if not connection.authenticate():
+            flash('Falha na conexão com o Odoo. Tente novamente.', 'error')
+            return redirect(url_for('relatorios_fiscais.razao_geral'))
+
+        # Buscar movimentos
+        registros, contas_info, saldos_iniciais = buscar_movimentos_razao(
+            connection,
+            data_ini=data_ini_str,
+            data_fim=data_fim_str,
+            company_ids=company_ids,
+            conta_filter=conta_contabil if conta_contabil else None
+        )
+
+        if not registros:
+            flash('Nenhum dado encontrado para os filtros selecionados', 'warning')
+            return redirect(url_for('relatorios_fiscais.razao_geral'))
+
+        # Gerar Excel
+        excel_buffer = gerar_excel_razao(
+            registros, contas_info, saldos_iniciais,
+            data_ini=data_ini_str, data_fim=data_fim_str, company_ids=company_ids
+        )
+
+        # Retornar arquivo para download
+        nome_arquivo = f"razao_geral_{data_ini.strftime('%Y%m%d')}_{data_fim.strftime('%Y%m%d')}.xlsx"
+
+        logger.info(f"✅ Razão Geral gerado: {nome_arquivo} ({len(registros)} linhas)")
+
+        return send_file(
+            excel_buffer,
+            as_attachment=True,
+            download_name=nome_arquivo,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+
+    except ValueError as e:
+        logger.error(f"Erro de validação no Razão Geral: {e}")
+        flash(f'Erro de validação: {str(e)}', 'error')
+        return redirect(url_for('relatorios_fiscais.razao_geral'))
+
+    except Exception as e:
+        logger.error(f"Erro ao gerar Razão Geral: {e}")
+        flash(f'Erro ao gerar relatório: {str(e)}', 'error')
+        return redirect(url_for('relatorios_fiscais.razao_geral'))

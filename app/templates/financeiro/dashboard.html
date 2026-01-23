@@ -64,6 +64,11 @@
     color: #7c3aed;
 }
 
+.fin-section-card__icon--contabil {
+    background: linear-gradient(135deg, #e0e7ff, #c7d2fe);
+    color: #4338ca;
+}
+
 .fin-section-card__title {
     font-size: 1.1rem;
     font-weight: 600;
@@ -417,6 +422,31 @@
                         <div class="fin-section-link__title">Pagamentos e Baixas</div>
                         <div class="fin-section-link__subtitle">Matching automatico</div>
                     </div>
+                </a>
+            </div>
+        </div>
+
+        <!-- RELATORIOS CONTABEIS -->
+        <div class="fin-section-card">
+            <div class="fin-section-card__header">
+                <div class="fin-section-card__icon fin-section-card__icon--contabil">
+                    <i class="fas fa-book"></i>
+                </div>
+                <div>
+                    <h3 class="fin-section-card__title">Relatorios Contabeis</h3>
+                    <p class="fin-section-card__desc">Razao Geral e relatorios do Odoo</p>
+                </div>
+            </div>
+            <div class="fin-section-links">
+                <a href="{{ url_for('relatorios_fiscais.razao_geral') }}" class="fin-section-link">
+                    <div class="fin-section-link__icon">
+                        <i class="fas fa-book-open"></i>
+                    </div>
+                    <div class="fin-section-link__text">
+                        <div class="fin-section-link__title">Razao Geral</div>
+                        <div class="fin-section-link__subtitle">General Ledger - Exportar Excel</div>
+                    </div>
+                    <span class="fin-section-link__badge fin-section-link__badge--new">NOVO</span>
                 </a>
             </div>
         </div>

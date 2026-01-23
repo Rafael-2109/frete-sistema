@@ -1,0 +1,279 @@
+{% extends "base.html" %}
+{% set active_page = "relatorios_fiscais" %}
+
+{% block title %}{{ titulo }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">
+                <i class="fas fa-book text-primary me-2"></i>
+                {{ titulo }}
+            </h1>
+            <p class="text-muted">Exportação do relatório contábil Razão Geral do Odoo</p>
+        </div>
+        <div>
+            <span id="status-odoo" class="badge bg-secondary">
+                <i class="fas fa-circle-notch fa-spin me-1"></i>
+                Verificando conexão...
+            </span>
+        </div>
+    </div>
+
+    <!-- Formulário de Filtros -->
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-filter me-2"></i>
+                        Filtros do Relatório
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('relatorios_fiscais.gerar_razao_geral') }}" id="form-razao-geral">
+
+                        <!-- Período -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <label for="data_ini" class="form-label">
+                                    <i class="fas fa-calendar-alt me-1"></i>
+                                    Data Inicial
+                                </label>
+                                <input type="date"
+                                       class="form-control"
+                                       id="data_ini"
+                                       name="data_ini"
+                                       value="{{ data_ini }}"
+                                       required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="data_fim" class="form-label">
+                                    <i class="fas fa-calendar-alt me-1"></i>
+                                    Data Final
+                                </label>
+                                <input type="date"
+                                       class="form-control"
+                                       id="data_fim"
+                                       name="data_fim"
+                                       value="{{ data_fim }}"
+                                       required>
+                            </div>
+                        </div>
+
+                        <!-- Empresas -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <label class="form-label">
+                                    <i class="fas fa-building me-1"></i>
+                                    Empresas
+                                </label>
+                            </div>
+                            {% for empresa in empresas %}
+                            <div class="col-md-6 col-lg-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox"
+                                           id="company_{{ empresa.id }}"
+                                           name="company_ids"
+                                           value="{{ empresa.id }}" checked>
+                                    <label class="form-check-label" for="company_{{ empresa.id }}">
+                                        <span class="badge bg-{{ 'primary' if 'NACOM' in empresa.nome else 'success' }} me-1">
+                                            {{ empresa.sigla }}
+                                        </span>
+                                        {{ empresa.nome }}
+                                    </label>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+
+                        <!-- Conta Contábil (Opcional) -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <label for="conta_contabil" class="form-label">
+                                    <i class="fas fa-search me-1"></i>
+                                    Conta Contábil <small class="text-muted">(opcional)</small>
+                                </label>
+                                <input type="text"
+                                       class="form-control"
+                                       id="conta_contabil"
+                                       name="conta_contabil"
+                                       placeholder="Ex: 1010 ou 3201"
+                                       maxlength="20">
+                                <small class="form-text text-muted">
+                                    Filtra contas pelo código. Deixe vazio para todas as contas.
+                                </small>
+                            </div>
+                        </div>
+
+                        <!-- Botões -->
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <small class="text-muted">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    O relatório será gerado em formato Excel (.xlsx).
+                                    Pode levar alguns minutos dependendo do período.
+                                </small>
+                            </div>
+                            <div>
+                                <button type="submit" class="btn btn-primary btn-lg" id="btn-gerar">
+                                    <i class="fas fa-download me-2"></i>
+                                    Gerar Relatório Excel
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Informações -->
+        <div class="col-lg-4">
+            <!-- Card de Informações -->
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Sobre este Relatório
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p class="small">
+                        O <strong>Razão Geral</strong> é o relatório contábil que lista todos os
+                        lançamentos organizados por conta contábil, com saldo acumulado progressivo.
+                    </p>
+                    <p class="small">
+                        Para contas <strong>patrimoniais</strong> (ativo, passivo, PL), o relatório
+                        inclui o <em>saldo inicial</em> calculado a partir de todos os movimentos
+                        anteriores ao período selecionado.
+                    </p>
+
+                    <hr>
+
+                    <h6 class="font-weight-bold text-primary">
+                        <i class="fas fa-columns me-1"></i>
+                        Colunas do Excel:
+                    </h6>
+                    <ul class="small mb-0">
+                        <li>Conta Contábil</li>
+                        <li>Data</li>
+                        <li>Lançamento</li>
+                        <li>Diário</li>
+                        <li>Parceiro</li>
+                        <li>Referência</li>
+                        <li>Label</li>
+                        <li>Débito / Crédito</li>
+                        <li>Saldo Acumulado</li>
+                        <li>Conciliação</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Card de Atalhos de Período -->
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-success">
+                        <i class="fas fa-clock me-2"></i>
+                        Atalhos de Período
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-outline-secondary btn-sm" onclick="setPeriodo('mes_atual')">
+                            <i class="fas fa-calendar-day me-1"></i> Mês Atual
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="setPeriodo('mes_anterior')">
+                            <i class="fas fa-calendar-minus me-1"></i> Mês Anterior
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="setPeriodo('trimestre')">
+                            <i class="fas fa-calendar-week me-1"></i> Último Trimestre
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="setPeriodo('ano_atual')">
+                            <i class="fas fa-calendar me-1"></i> Ano Atual
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Verificar conexão com Odoo
+    fetch('{{ url_for("relatorios_fiscais.status_conexao_odoo") }}')
+        .then(response => response.json())
+        .then(data => {
+            const badge = document.getElementById('status-odoo');
+            if (data.success) {
+                badge.className = 'badge bg-success';
+                badge.innerHTML = '<i class="fas fa-check-circle me-1"></i> Odoo Conectado';
+            } else {
+                badge.className = 'badge bg-danger';
+                badge.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i> Odoo Offline';
+            }
+        })
+        .catch(error => {
+            const badge = document.getElementById('status-odoo');
+            badge.className = 'badge bg-warning';
+            badge.innerHTML = '<i class="fas fa-question-circle me-1"></i> Status desconhecido';
+        });
+
+    // Feedback ao submeter formulário
+    document.getElementById('form-razao-geral').addEventListener('submit', function(e) {
+        // Validar pelo menos uma empresa selecionada
+        const checkboxes = document.querySelectorAll('input[name="company_ids"]:checked');
+        if (checkboxes.length === 0) {
+            e.preventDefault();
+            alert('Selecione pelo menos uma empresa.');
+            return;
+        }
+
+        const btn = document.getElementById('btn-gerar');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Gerando... (pode levar alguns minutos)';
+
+        // Re-habilitar após 5 minutos (timeout de segurança)
+        setTimeout(function() {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-download me-2"></i> Gerar Relatório Excel';
+        }, 300000);
+    });
+});
+
+// Atalhos de período
+function setPeriodo(tipo) {
+    const dataIni = document.getElementById('data_ini');
+    const dataFim = document.getElementById('data_fim');
+    const hoje = new Date();
+
+    let inicio, fim;
+
+    switch (tipo) {
+        case 'mes_atual':
+            inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+            fim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+            break;
+        case 'mes_anterior':
+            inicio = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+            fim = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
+            break;
+        case 'trimestre':
+            inicio = new Date(hoje.getFullYear(), hoje.getMonth() - 3, 1);
+            fim = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
+            break;
+        case 'ano_atual':
+            inicio = new Date(hoje.getFullYear(), 0, 1);
+            fim = hoje;
+            break;
+    }
+
+    dataIni.value = inicio.toISOString().split('T')[0];
+    dataFim.value = fim.toISOString().split('T')[0];
+}
+</script>
+{% endblock %}
