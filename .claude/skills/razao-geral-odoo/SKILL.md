@@ -16,7 +16,7 @@ Skill para **exportação do relatório Razão Geral** a partir do Odoo via XML-
 ## Tela Web
 
 **URL**: `/relatorios-fiscais/razao-geral`
-**Menu**: Financeiro → Central Fiscal → Razão Geral
+**Menu**: Financeiro → Central Financeira → Relatórios Contábeis → Razão Geral
 **Blueprint**: `relatorios_fiscais`
 
 ## Script Standalone
@@ -38,10 +38,9 @@ source .venv/bin/activate && python scripts/exportar_razao_geral.py
 
 | Função | Descrição | Retorno |
 |--------|-----------|---------|
-| `buscar_paginado(conn, model, domain, fields)` | Busca com paginação offset | `list[dict]` |
 | `calcular_saldos_iniciais(conn, acc_ids, data_ini, company_ids)` | Saldos via read_group | `dict` |
-| `buscar_movimentos_razao(conn, data_ini, data_fim, company_ids, conta_filter)` | Orquestra busca completa | `tuple(registros, contas_info, saldos)` |
-| `gerar_excel_razao(registros, contas_info, saldos, ...)` | Gera Excel em memória | `BytesIO` |
+| `buscar_movimentos_razao(conn, data_ini, data_fim, company_ids, conta_filter)` | Busca com ID-cursor + transformação inline | `tuple(dados_agrupados, contas_info, saldos, total)` |
+| `gerar_excel_razao(dados_agrupados, contas_info, saldos, ...)` | Gera Excel via xlsxwriter | `BytesIO` |
 
 ### Exemplo de Uso
 
@@ -54,7 +53,7 @@ from app.relatorios_fiscais.services.razao_geral_service import (
 connection = get_odoo_connection()
 connection.authenticate()
 
-registros, contas_info, saldos = buscar_movimentos_razao(
+dados_agrupados, contas_info, saldos, total = buscar_movimentos_razao(
     connection,
     data_ini='2024-08-01',
     data_fim='2024-08-31',
@@ -63,7 +62,7 @@ registros, contas_info, saldos = buscar_movimentos_razao(
 )
 
 excel = gerar_excel_razao(
-    registros, contas_info, saldos,
+    dados_agrupados, contas_info, saldos,
     data_ini='2024-08-01', data_fim='2024-08-31', company_ids=[4, 1, 3]
 )
 
@@ -157,22 +156,26 @@ Cada linha representa um débito ou crédito individual.
 
 ## Padrões Técnicos Utilizados
 
-### Paginação com offset
+### Paginação com ID-cursor
 
-O `search_read` padrão do OdooConnection não suporta offset. Para paginar, usa-se `execute_kw` diretamente:
+Usa cursor baseado em ID para performance constante O(1) por batch (sem degradação por offset):
 
 ```python
-kwargs = {
-    'fields': campos,
-    'limit': 3000,
-    'offset': offset,
-    'order': 'account_id, date, id'
-}
-lote = connection.execute_kw(
-    'account.move.line', 'search_read', [domain], kwargs,
-    timeout_override=120
-)
+last_id = 0
+while True:
+    domain_cursor = domain + [['id', '>', last_id]]
+    lote = connection.execute_kw(
+        'account.move.line', 'search_read', [domain_cursor],
+        {'fields': campos, 'limit': 3000, 'order': 'id asc'},
+        timeout_override=120
+    )
+    if not lote:
+        break
+    last_id = lote[-1]['id']
+    # transformar inline...
 ```
+
+> **Nota**: Os dados são ordenados por `(date, move_name)` dentro de cada conta no momento da geração do Excel.
 
 ### Saldo Inicial via read_group
 
@@ -232,7 +235,8 @@ valor = reg.get('ref') or '' if reg.get('ref') is not False else ''
 |---------|----------|--------|--------|------------------|
 | Agosto/2024 | 3 (FB, SC, CD) | 133.526 | 249 | R$ 324.569.925,49 |
 
-**Tempo de execução**: ~3 minutos (paginação + saldo inicial)
+**Tempo de execução estimado**: ~100s (ID-cursor ~90s + Excel xlsxwriter ~8s)
+**Pico de memória**: ~40MB (transformação inline sem duplicação)
 
 ---
 

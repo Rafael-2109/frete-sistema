@@ -129,6 +129,21 @@ class RecebimentoFisicoService:
                     'status_local': status_local,
                 })
 
+            # Validacao cross-phase: verificar fases 1→2→3 para cada picking
+            from app.recebimento.services.cross_phase_validation_service import CrossPhaseValidationService
+            validation_service = CrossPhaseValidationService()
+            phase_statuses = validation_service.validar_fases_batch(pickings)
+
+            for item in resultado:
+                picking_id = item['id']
+                phase = phase_statuses.get(picking_id)
+                item['fase_validacao'] = {
+                    'pode_receber': phase.pode_receber if phase else True,
+                    'tipo_liberacao': phase.tipo_liberacao if phase else 'legacy',
+                    'bloqueio_resumo': phase.bloqueio_motivo if phase and not phase.pode_receber else None,
+                    'fase3_status': phase.fase3_status if phase else None,
+                }
+
             logger.info(f"Encontrados {len(resultado)} pickings no cache local para company_id={company_id}")
             return {
                 'pickings': resultado,
@@ -222,6 +237,17 @@ class RecebimentoFisicoService:
                     'tolerance_max': float(qc.tolerance_max) if qc.tolerance_max else 0,
                 })
 
+            # Validacao cross-phase: diagnostico completo para o operador
+            from app.recebimento.services.cross_phase_validation_service import CrossPhaseValidationService
+            validation_service = CrossPhaseValidationService()
+            phase_status = validation_service.validar_fases_picking(
+                picking_local.odoo_purchase_order_id,
+                picking_local.origin,
+            )
+
+            # Se encontrou validacao_id, incluir para auto-preenchimento
+            validacao_id_auto = phase_status.fase2_validacao_id if phase_status else None
+
             return {
                 'picking': {
                     'id': picking_local.odoo_picking_id,
@@ -238,6 +264,8 @@ class RecebimentoFisicoService:
                 },
                 'produtos': produtos_resultado,
                 'quality_checks': checks_resultado,
+                'validacao_fases': phase_status.to_dict() if phase_status else None,
+                'validacao_id_sugerido': validacao_id_auto,
             }
 
         except Exception as e:
@@ -315,6 +343,26 @@ class RecebimentoFisicoService:
                     f"Ja existe recebimento {existente.status} para picking "
                     f"{dados.get('picking_name', dados['picking_id'])} (ID local: {existente.id})"
                 )
+
+            # VALIDACAO CROSS-PHASE (BLOQUEANTE)
+            # Verifica se Fases 1→2→3 foram concluidas antes de permitir Fase 4
+            if dados.get('purchase_order_id'):
+                from app.recebimento.services.cross_phase_validation_service import CrossPhaseValidationService
+                validation_service = CrossPhaseValidationService()
+                phase_status = validation_service.validar_fases_picking(
+                    dados['purchase_order_id'],
+                    dados.get('origin'),
+                )
+
+                if not phase_status.pode_receber:
+                    raise ValueError(
+                        f"Recebimento bloqueado - {phase_status.bloqueio_motivo}. "
+                        f"Contato para resolver: {phase_status.contato_resolucao}"
+                    )
+
+                # Auto-preencher validacao_id se encontrou e nao foi informado
+                if phase_status.fase2_validacao_id and not dados.get('validacao_id'):
+                    dados['validacao_id'] = phase_status.fase2_validacao_id
 
             # Criar recebimento
             recebimento = RecebimentoFisico(

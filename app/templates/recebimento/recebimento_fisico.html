@@ -113,6 +113,37 @@
 
                 <hr>
 
+                <!-- Barra de validacao de fases -->
+                <div id="faseValidacaoBar" class="card mb-3" style="display: none;">
+                    <div class="card-body py-2 px-3">
+                        <div class="fase-bar">
+                            <div class="fase-step" id="faseStep1">
+                                <div class="fase-icon"><i class="fas fa-file-invoice"></i></div>
+                                <span class="fase-label">Fiscal</span>
+                            </div>
+                            <div class="fase-connector"><i class="fas fa-chevron-right"></i></div>
+                            <div class="fase-step" id="faseStep2">
+                                <div class="fase-icon"><i class="fas fa-exchange-alt"></i></div>
+                                <span class="fase-label">NF x PO</span>
+                            </div>
+                            <div class="fase-connector"><i class="fas fa-chevron-right"></i></div>
+                            <div class="fase-step" id="faseStep3">
+                                <div class="fase-icon"><i class="fas fa-compress-alt"></i></div>
+                                <span class="fase-label">Consolidação</span>
+                            </div>
+                            <div class="fase-connector"><i class="fas fa-chevron-right"></i></div>
+                            <div class="fase-step fase-atual" id="faseStep4">
+                                <div class="fase-icon"><i class="fas fa-dolly"></i></div>
+                                <span class="fase-label">Recebimento</span>
+                            </div>
+                        </div>
+                        <!-- Diagnostico para operador -->
+                        <div id="faseDiagnostico" class="mt-2 p-2 bg-light rounded small" style="display: none;"></div>
+                        <!-- Alerta de bloqueio -->
+                        <div id="faseBloqueioAlert" class="alert alert-danger mt-2 mb-0 small py-2" style="display: none;"></div>
+                    </div>
+                </div>
+
                 <!-- Loading detalhes -->
                 <div id="loadingDetalhes" class="text-center py-4">
                     <div class="spinner-border text-success" role="status"></div>
@@ -216,6 +247,49 @@
     }
     .card-picking.em-processamento {
         border-left-color: var(--bs-warning);
+    }
+    .card-picking.fase-bloqueado {
+        border-left-color: var(--bs-danger);
+        opacity: 0.85;
+    }
+
+    /* Barra de fases no modal */
+    .fase-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem 0;
+    }
+    .fase-step {
+        text-align: center;
+        flex: 1;
+        position: relative;
+    }
+    .fase-step .fase-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.9rem;
+        margin-bottom: 0.25rem;
+    }
+    .fase-step .fase-label {
+        font-size: 0.7rem;
+        display: block;
+        color: var(--bs-secondary);
+    }
+    .fase-step.fase-ok .fase-icon { background-color: #d1e7dd; color: #0f5132; }
+    .fase-step.fase-pendente .fase-icon { background-color: #f8d7da; color: #842029; }
+    .fase-step.fase-aguardando .fase-icon { background-color: #fff3cd; color: #664d03; }
+    .fase-step.fase-atual .fase-icon { background-color: #cfe2ff; color: #084298; }
+    .fase-step.fase-inativo .fase-icon { background-color: #e2e3e5; color: #6c757d; }
+    .fase-connector {
+        flex: 0 0 30px;
+        text-align: center;
+        color: var(--bs-secondary);
+        font-size: 0.7rem;
     }
 
     .produto-card {
@@ -357,6 +431,7 @@ function renderPickings(pickings) {
     pickings.forEach(p => {
         let statusClass = '';
         let statusBadge = '';
+        let faseBadge = '';
         let onClick = `abrirRecebimento(${p.id})`;
 
         if (p.status_local === 'processado') {
@@ -367,6 +442,28 @@ function renderPickings(pickings) {
             statusClass = 'em-processamento';
             statusBadge = `<span class="badge bg-warning text-dark">${p.status_local}</span>`;
             onClick = '';
+        }
+
+        // Badge de validacao de fases
+        if (p.fase_validacao) {
+            if (!p.fase_validacao.pode_receber) {
+                statusClass += ' fase-bloqueado';
+                faseBadge = `<span class="badge bg-danger" title="${p.fase_validacao.bloqueio_resumo || 'Fases anteriores pendentes'}">
+                    <i class="fas fa-lock me-1"></i>Bloqueado
+                </span>`;
+            } else if (p.fase_validacao.tipo_liberacao === 'legacy') {
+                faseBadge = `<span class="badge bg-warning text-dark" title="Picking anterior ao sistema de validação">
+                    <i class="fas fa-exclamation-triangle me-1"></i>Legado
+                </span>`;
+            } else if (p.fase_validacao.tipo_liberacao === 'finalizado_odoo') {
+                faseBadge = `<span class="badge bg-info" title="PO vinculado pelo Odoo automaticamente">
+                    <i class="fas fa-link me-1"></i>Odoo
+                </span>`;
+            } else {
+                faseBadge = `<span class="badge bg-success" title="Consolidação executada">
+                    <i class="fas fa-check-double me-1"></i>Consolidado
+                </span>`;
+            }
         }
 
         const dataFormatada = p.scheduled_date ?
@@ -392,7 +489,10 @@ function renderPickings(pickings) {
                             <small class="text-muted">
                                 <i class="fas fa-calendar me-1"></i>${dataFormatada}
                             </small>
-                            <span class="badge bg-info">${p.qtd_produtos} produtos</span>
+                            <div>
+                                ${faseBadge}
+                                <span class="badge bg-info ms-1">${p.qtd_produtos} prod.</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -412,7 +512,12 @@ function abrirRecebimento(pickingId) {
     // Reset modal
     document.getElementById('loadingDetalhes').style.display = 'block';
     document.getElementById('conteudoRecebimento').style.display = 'none';
+    document.getElementById('faseValidacaoBar').style.display = 'none';
     document.getElementById('btnSalvar').disabled = false;
+    document.getElementById('btnSalvar').classList.remove('btn-secondary');
+    document.getElementById('btnSalvar').classList.add('btn-success');
+    document.getElementById('btnSalvar').innerHTML = '<i class="fas fa-save"></i> Salvar Recebimento';
+    window._validacaoIdSugerido = null;
 
     const modal = new bootstrap.Modal(document.getElementById('modalRecebimento'));
     modal.show();
@@ -448,6 +553,16 @@ function renderDetalhes(data) {
     document.getElementById('modalData').textContent = picking.scheduled_date ?
         new Date(picking.scheduled_date).toLocaleDateString('pt-BR') : '-';
 
+    // Validacao de fases - barra de progresso + bloqueio
+    renderFaseValidacao(data.validacao_fases);
+
+    // Salvar validacao_id para enviar no POST
+    if (data.validacao_id_sugerido) {
+        window._validacaoIdSugerido = data.validacao_id_sugerido;
+    } else {
+        window._validacaoIdSugerido = null;
+    }
+
     // Produtos
     renderProdutos(produtos);
 
@@ -461,6 +576,75 @@ function renderDetalhes(data) {
 
     document.getElementById('loadingDetalhes').style.display = 'none';
     document.getElementById('conteudoRecebimento').style.display = 'block';
+}
+
+function renderFaseValidacao(validacaoFases) {
+    const bar = document.getElementById('faseValidacaoBar');
+    const diagnosticoDiv = document.getElementById('faseDiagnostico');
+    const bloqueioAlert = document.getElementById('faseBloqueioAlert');
+    const btnSalvar = document.getElementById('btnSalvar');
+
+    // Reset
+    diagnosticoDiv.style.display = 'none';
+    bloqueioAlert.style.display = 'none';
+    btnSalvar.disabled = false;
+    btnSalvar.classList.remove('btn-secondary');
+    btnSalvar.classList.add('btn-success');
+    btnSalvar.innerHTML = '<i class="fas fa-save"></i> Salvar Recebimento';
+
+    if (!validacaoFases) {
+        bar.style.display = 'none';
+        return;
+    }
+
+    bar.style.display = 'block';
+
+    // Atualizar cada fase
+    const fases = validacaoFases.fases;
+    if (fases) {
+        atualizarFaseStep('faseStep1', fases.fase1);
+        atualizarFaseStep('faseStep2', fases.fase2);
+        atualizarFaseStep('faseStep3', fases.fase3);
+    }
+
+    // Diagnostico
+    if (validacaoFases.diagnostico && validacaoFases.diagnostico.length > 0) {
+        diagnosticoDiv.innerHTML = validacaoFases.diagnostico.join('<br>');
+        diagnosticoDiv.style.display = 'block';
+    }
+
+    // Bloqueio
+    if (!validacaoFases.pode_receber) {
+        btnSalvar.disabled = true;
+        btnSalvar.classList.remove('btn-success');
+        btnSalvar.classList.add('btn-secondary');
+        btnSalvar.title = validacaoFases.bloqueio_motivo || 'Fases anteriores pendentes';
+
+        bloqueioAlert.innerHTML = `
+            <i class="fas fa-lock me-1"></i>
+            <strong>Recebimento bloqueado:</strong> ${validacaoFases.bloqueio_motivo || 'Fases anteriores pendentes'}<br>
+            <strong>Contato:</strong> ${validacaoFases.contato_resolucao || '-'}
+        `;
+        bloqueioAlert.style.display = 'block';
+    }
+}
+
+function atualizarFaseStep(elementId, faseData) {
+    const step = document.getElementById(elementId);
+    if (!step || !faseData) return;
+
+    // Remover classes anteriores
+    step.classList.remove('fase-ok', 'fase-pendente', 'fase-aguardando', 'fase-atual', 'fase-inativo');
+
+    if (faseData.aprovado) {
+        step.classList.add('fase-ok');
+    } else if (faseData.cor === 'warning') {
+        step.classList.add('fase-aguardando');
+    } else if (faseData.status) {
+        step.classList.add('fase-pendente');
+    } else {
+        step.classList.add('fase-inativo');
+    }
 }
 
 // =====================================================
@@ -821,6 +1005,7 @@ function salvarRecebimento() {
             partner_name: picking.partner_name,
             company_id: parseInt(document.getElementById('filtroEmpresa').value),
             numero_nf: picking.origin || '',
+            validacao_id: window._validacaoIdSugerido || null,
             lotes: lotes,
             quality_checks: qualityChecks,
         };

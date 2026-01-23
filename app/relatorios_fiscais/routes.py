@@ -239,8 +239,8 @@ def gerar_razao_geral():
             flash('Falha na conexão com o Odoo. Tente novamente.', 'error')
             return redirect(url_for('relatorios_fiscais.razao_geral'))
 
-        # Buscar movimentos
-        registros, contas_info, saldos_iniciais = buscar_movimentos_razao(
+        # Buscar movimentos (ID-cursor + transformacao inline)
+        dados_agrupados, contas_info, saldos_iniciais, total_registros = buscar_movimentos_razao(
             connection,
             data_ini=data_ini_str,
             data_fim=data_fim_str,
@@ -248,20 +248,20 @@ def gerar_razao_geral():
             conta_filter=conta_contabil if conta_contabil else None
         )
 
-        if not registros:
+        if not total_registros:
             flash('Nenhum dado encontrado para os filtros selecionados', 'warning')
             return redirect(url_for('relatorios_fiscais.razao_geral'))
 
-        # Gerar Excel
+        # Gerar Excel (xlsxwriter constant_memory)
         excel_buffer = gerar_excel_razao(
-            registros, contas_info, saldos_iniciais,
+            dados_agrupados, contas_info, saldos_iniciais,
             data_ini=data_ini_str, data_fim=data_fim_str, company_ids=company_ids
         )
 
         # Retornar arquivo para download
         nome_arquivo = f"razao_geral_{data_ini.strftime('%Y%m%d')}_{data_fim.strftime('%Y%m%d')}.xlsx"
 
-        logger.info(f"✅ Razão Geral gerado: {nome_arquivo} ({len(registros)} linhas)")
+        logger.info(f"✅ Razão Geral gerado: {nome_arquivo} ({total_registros} linhas)")
 
         return send_file(
             excel_buffer,

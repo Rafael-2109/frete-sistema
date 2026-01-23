@@ -56,24 +56,24 @@ def main():
                 return
             print("   ✓ Conectado ao Odoo")
 
-            # 2. Buscar movimentos do período
+            # 2. Buscar movimentos do período (ID-cursor + transformacao inline)
             print(f"\n[2/4] Buscando movimentos contábeis...")
-            registros, contas_info, saldos_iniciais = buscar_movimentos_razao(
+            dados_agrupados, contas_info, saldos_iniciais, total_registros = buscar_movimentos_razao(
                 connection, DATA_INICIO, DATA_FIM, COMPANY_IDS
             )
 
-            if not registros:
+            if not total_registros:
                 print("   ⚠️  Nenhum registro encontrado para o período.")
                 return
 
-            print(f"   ✓ {len(registros)} linhas contábeis encontradas")
+            print(f"   ✓ {total_registros} linhas contábeis encontradas")
             print(f"   ✓ {len(contas_info)} contas com movimentos")
             print(f"   ✓ {len(saldos_iniciais)} contas com saldo inicial")
 
-            # 3. Gerar Excel
+            # 3. Gerar Excel (xlsxwriter constant_memory)
             print(f"\n[3/4] Gerando arquivo Excel...")
             excel_buffer = gerar_excel_razao(
-                registros, contas_info, saldos_iniciais,
+                dados_agrupados, contas_info, saldos_iniciais,
                 data_ini=DATA_INICIO, data_fim=DATA_FIM, company_ids=COMPANY_IDS
             )
 
@@ -95,7 +95,7 @@ def main():
             print("\n" + "=" * 60)
             print("✅ EXPORTAÇÃO CONCLUÍDA!")
             print(f"   - Período: {DATA_INICIO} a {DATA_FIM}")
-            print(f"   - Linhas contábeis: {len(registros)}")
+            print(f"   - Linhas contábeis: {total_registros}")
             print(f"   - Contas: {len(contas_info)}")
             print(f"\n📁 Arquivo: {os.path.abspath(filepath)}")
             print("=" * 60)

@@ -202,6 +202,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Verificar conexão com Odoo
@@ -223,25 +224,99 @@ document.addEventListener('DOMContentLoaded', function() {
             badge.innerHTML = '<i class="fas fa-question-circle me-1"></i> Status desconhecido';
         });
 
-    // Feedback ao submeter formulário
+    // Submit via fetch + SweetAlert2 bloqueante
     document.getElementById('form-razao-geral').addEventListener('submit', function(e) {
+        e.preventDefault();
+
         // Validar pelo menos uma empresa selecionada
         const checkboxes = document.querySelectorAll('input[name="company_ids"]:checked');
         if (checkboxes.length === 0) {
-            e.preventDefault();
-            alert('Selecione pelo menos uma empresa.');
+            Swal.fire({
+                icon: 'warning',
+                title: 'Atenção',
+                text: 'Selecione pelo menos uma empresa.'
+            });
             return;
         }
 
-        const btn = document.getElementById('btn-gerar');
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Gerando... (pode levar alguns minutos)';
+        // Mostrar loading bloqueante
+        Swal.fire({
+            title: 'Gerando Razão Geral...',
+            html: '<p>Buscando movimentos contábeis do Odoo.</p><small class="text-muted">Pode levar alguns minutos dependendo do período.</small>',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showConfirmButton: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
 
-        // Re-habilitar após 5 minutos (timeout de segurança)
-        setTimeout(function() {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-download me-2"></i> Gerar Relatório Excel';
-        }, 300000);
+        // Submeter via fetch (receber blob)
+        const formData = new FormData(this);
+
+        fetch(this.action, {
+            method: 'POST',
+            body: formData,
+            redirect: 'manual'
+        })
+        .then(response => {
+            if (response.type === 'opaqueredirect' || response.redirected) {
+                // Redirect = flash de erro/warning do backend
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Sem dados',
+                    text: 'Nenhum dado encontrado para os filtros selecionados.',
+                    confirmButtonText: 'OK'
+                });
+                return null;
+            }
+            if (!response.ok) {
+                throw new Error('Erro ' + response.status);
+            }
+            return response.blob().then(blob => ({blob, response}));
+        })
+        .then(result => {
+            if (!result) return;
+
+            const {blob, response} = result;
+
+            // Extrair nome do arquivo do header Content-Disposition
+            const disposition = response.headers.get('Content-Disposition');
+            let filename = 'razao_geral.xlsx';
+            if (disposition) {
+                const match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                if (match) filename = match[1].replace(/['"]/g, '');
+            }
+
+            // Disparar download via link temporario
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            a.remove();
+
+            // Sucesso
+            Swal.fire({
+                icon: 'success',
+                title: 'Relatório Gerado!',
+                text: 'O download do arquivo Excel foi iniciado.',
+                timer: 3000,
+                showConfirmButton: true,
+                confirmButtonText: 'OK'
+            });
+        })
+        .catch(error => {
+            Swal.fire({
+                icon: 'error',
+                title: 'Erro ao gerar relatório',
+                text: 'Ocorreu um erro durante a geração. Tente novamente.',
+                confirmButtonText: 'OK'
+            });
+            console.error('Erro Razão Geral:', error);
+        });
     });
 });
 

@@ -270,13 +270,90 @@ Worker:
   4. button_validate
 ```
 
+## Validacao Cross-Phase (Pipeline Obrigatorio)
+
+A Fase 4 (Recebimento Fisico) e a etapa FINAL de um pipeline sequencial obrigatorio:
+
+```
+Fase 1 (Fiscal) → Fase 2 (Match NF×PO) → Fase 3 (Consolidacao PO) → Fase 4 (Recebimento)
+```
+
+### Service: CrossPhaseValidationService
+
+**Arquivo**: `app/recebimento/services/cross_phase_validation_service.py`
+
+```python
+from app.recebimento.services.cross_phase_validation_service import CrossPhaseValidationService
+
+service = CrossPhaseValidationService()
+
+# Validar 1 picking
+phase_status = service.validar_fases_picking(purchase_order_id, origin)
+# → PhaseStatus: pode_receber, tipo_liberacao, bloqueio_motivo, contato_resolucao, diagnostico
+
+# Validar batch (lista de pickings, 2 queries max)
+results = service.validar_fases_batch(pickings)
+# → Dict: {odoo_picking_id: PhaseStatus}
+```
+
+### Tipos de Liberacao
+
+| tipo_liberacao | Significado | Quando |
+|----------------|-------------|--------|
+| `'full'` | Consolidacao executada (Fase 3 manual) | `ValidacaoNfPoDfe.status='consolidado'` |
+| `'finalizado_odoo'` | Odoo ja vinculou PO correto | `ValidacaoNfPoDfe.status='finalizado_odoo'` |
+| `'legacy'` | Picking anterior ao sistema | Sem DFE ou sem PO |
+
+### Bloqueios Possiveis
+
+| Bloqueio | Causa | Contato |
+|----------|-------|---------|
+| Fase 1 bloqueada | Divergencia fiscal | Fiscal |
+| Fase 1 nao executada | Scheduler nao rodou | Sistema |
+| Fase 1 primeira compra | Cadastro pendente | Fiscal |
+| Fase 2 bloqueada | Match NF×PO incompleto | Compras |
+| Fase 3 aguardando | Match 100% OK mas consolidacao nao executada | Compras |
+| Fase 3 pendente | Fases anteriores nao concluiram | Compras |
+
+### REGRA CRITICA: status='aprovado' NAO e pass-through
+
+`ValidacaoNfPoDfe.status='aprovado'` significa "pronto para consolidar" — a Fase 3 AINDA NAO foi executada.
+A consolidacao SEMPRE cria um PO Conciliador novo. Pular causa: NF desvinculada, estoque duplicado.
+
+### Pontos de Integracao
+
+| Metodo | Tipo | Efeito |
+|--------|------|--------|
+| `buscar_pickings_disponiveis()` | Badge na lista | Campo `fase_validacao` em cada picking |
+| `buscar_detalhes_picking()` | Diagnostico completo | Campos `validacao_fases` + `validacao_id_sugerido` |
+| `salvar_recebimento()` | **HARD BLOCK** | Raise ValueError se `pode_receber=False` |
+
+### Lookup Chain
+
+```
+PickingRecebimento.odoo_purchase_order_id
+    → ValidacaoNfPoDfe.odoo_po_vinculado_id (ou po_consolidado_id)
+        → ValidacaoFiscalDfe.odoo_dfe_id
+```
+
+### Indice de Performance
+
+```sql
+CREATE INDEX idx_validacao_nf_po_po_consolidado
+ON validacao_nf_po_dfe (po_consolidado_id)
+WHERE po_consolidado_id IS NOT NULL;
+```
+
+Script de migration: `scripts/add_index_po_consolidado.py`
+
 ## Pre-requisitos para Processar
 
-1. Picking com `state='assigned'`
-2. `picking_type_code='incoming'`
-3. Soma dos lotes == `product_uom_qty` do move
-4. TODOS os quality checks com resultado definido
-5. Conexao Odoo funcional
+1. **Validacao cross-phase aprovada** (Fases 1→2→3 concluidas)
+2. Picking com `state='assigned'`
+3. `picking_type_code='incoming'`
+4. Soma dos lotes == `product_uom_qty` do move
+5. TODOS os quality checks com resultado definido
+6. Conexao Odoo funcional
 
 ## Referencia Cruzada com Outras Skills
 
