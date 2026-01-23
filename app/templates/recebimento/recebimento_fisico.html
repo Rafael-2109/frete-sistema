@@ -39,12 +39,20 @@
                     <input type="text" id="filtroNf" class="form-control form-control-sm"
                            placeholder="Numero NF ou PO...">
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label class="form-label">Fornecedor</label>
                     <input type="text" id="filtroFornecedor" class="form-control form-control-sm"
                            placeholder="Nome do fornecedor...">
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
+                    <div class="form-check mt-4">
+                        <input type="checkbox" class="form-check-input" id="filtroSemNf" checked>
+                        <label class="form-check-label" for="filtroSemNf">
+                            Ocultar S/NF
+                        </label>
+                    </div>
+                </div>
+                <div class="col-md-2">
                     <button class="btn btn-primary btn-sm w-100" onclick="buscarPickings()">
                         <i class="fas fa-search"></i> Buscar
                     </button>
@@ -90,7 +98,8 @@
             <div class="modal-header bg-success text-white">
                 <h5 class="modal-title">
                     <i class="fas fa-clipboard-check me-2"></i>
-                    Recebimento: <span id="modalPickingName"></span>
+                    Recebimento: <span id="modalNfVinculada" class="fw-bold"></span>
+                    <small id="modalPickingName" class="ms-2 opacity-75"></small>
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
@@ -113,35 +122,17 @@
 
                 <hr>
 
-                <!-- Barra de validacao de fases -->
-                <div id="faseValidacaoBar" class="card mb-3" style="display: none;">
-                    <div class="card-body py-2 px-3">
-                        <div class="fase-bar">
-                            <div class="fase-step" id="faseStep1">
-                                <div class="fase-icon"><i class="fas fa-file-invoice"></i></div>
-                                <span class="fase-label">Fiscal</span>
-                            </div>
-                            <div class="fase-connector"><i class="fas fa-chevron-right"></i></div>
-                            <div class="fase-step" id="faseStep2">
-                                <div class="fase-icon"><i class="fas fa-exchange-alt"></i></div>
-                                <span class="fase-label">NF x PO</span>
-                            </div>
-                            <div class="fase-connector"><i class="fas fa-chevron-right"></i></div>
-                            <div class="fase-step" id="faseStep3">
-                                <div class="fase-icon"><i class="fas fa-compress-alt"></i></div>
-                                <span class="fase-label">Consolidação</span>
-                            </div>
-                            <div class="fase-connector"><i class="fas fa-chevron-right"></i></div>
-                            <div class="fase-step fase-atual" id="faseStep4">
-                                <div class="fase-icon"><i class="fas fa-dolly"></i></div>
-                                <span class="fase-label">Recebimento</span>
-                            </div>
-                        </div>
-                        <!-- Diagnostico para operador -->
-                        <div id="faseDiagnostico" class="mt-2 p-2 bg-light rounded small" style="display: none;"></div>
-                        <!-- Alerta de bloqueio -->
-                        <div id="faseBloqueioAlert" class="alert alert-danger mt-2 mb-0 small py-2" style="display: none;"></div>
-                    </div>
+                <!-- Alerta de BLOQUEIO simplificado -->
+                <div id="faseBloqueioSimples" class="alert alert-danger mb-3 py-2" style="display: none;">
+                    <i class="fas fa-lock me-2"></i>
+                    <strong id="bloqueioMensagem"></strong>
+                    <span id="bloqueioContato" class="ms-2"></span>
+                </div>
+
+                <!-- Alerta LIBERADO discreto -->
+                <div id="faseOk" class="alert alert-success mb-3 py-2" style="display: none;">
+                    <i class="fas fa-check-circle me-2"></i>
+                    <strong>Liberado para recebimento</strong>
                 </div>
 
                 <!-- Loading detalhes -->
@@ -252,44 +243,15 @@
         border-left-color: var(--bs-danger);
         opacity: 0.85;
     }
+    .card-picking.sem-nf {
+        border-left-color: var(--bs-secondary);
+        opacity: 0.6;
+    }
 
-    /* Barra de fases no modal */
-    .fase-bar {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 0.75rem 0;
-    }
-    .fase-step {
-        text-align: center;
-        flex: 1;
-        position: relative;
-    }
-    .fase-step .fase-icon {
-        width: 36px;
-        height: 36px;
-        border-radius: 50%;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.9rem;
-        margin-bottom: 0.25rem;
-    }
-    .fase-step .fase-label {
-        font-size: 0.7rem;
-        display: block;
-        color: var(--bs-secondary);
-    }
-    .fase-step.fase-ok .fase-icon { background-color: #d1e7dd; color: #0f5132; }
-    .fase-step.fase-pendente .fase-icon { background-color: #f8d7da; color: #842029; }
-    .fase-step.fase-aguardando .fase-icon { background-color: #fff3cd; color: #664d03; }
-    .fase-step.fase-atual .fase-icon { background-color: #cfe2ff; color: #084298; }
-    .fase-step.fase-inativo .fase-icon { background-color: #e2e3e5; color: #6c757d; }
-    .fase-connector {
-        flex: 0 0 30px;
-        text-align: center;
-        color: var(--bs-secondary);
-        font-size: 0.7rem;
+    .nf-destaque {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--bs-primary);
     }
 
     .produto-card {
@@ -369,6 +331,28 @@
 // =====================================================
 let pickingAtual = null;
 let detalhesPickingAtual = null;
+let pickingsCarregados = []; // Cache para filtro S/NF client-side
+
+// =====================================================
+// UTILITARIOS
+// =====================================================
+function formatarQtd(valor) {
+    if (valor === null || valor === undefined || isNaN(valor)) return '0';
+    const num = parseFloat(valor);
+    if (Number.isInteger(num)) return num.toLocaleString('pt-BR');
+    return num.toLocaleString('pt-BR', {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 3,
+    });
+}
+
+function formatarNumero(valor, decimais) {
+    if (valor === null || valor === undefined || isNaN(valor)) return '0';
+    return parseFloat(valor).toLocaleString('pt-BR', {
+        minimumFractionDigits: decimais,
+        maximumFractionDigits: decimais,
+    });
+}
 
 // =====================================================
 // BUSCAR PICKINGS
@@ -415,7 +399,9 @@ function buscarPickings() {
                 return;
             }
 
-            renderPickings(data.pickings);
+            // Guardar pickings no cache global
+            pickingsCarregados = data.pickings;
+            renderPickings();
         })
         .catch(err => {
             document.getElementById('loadingPickings').style.display = 'none';
@@ -424,9 +410,28 @@ function buscarPickings() {
         });
 }
 
-function renderPickings(pickings) {
+function renderPickings() {
     const container = document.getElementById('listaPickings');
     container.innerHTML = '';
+
+    const ocultarSemNf = document.getElementById('filtroSemNf').checked;
+
+    // Filtrar: se checkbox marcado, ocultar pickings sem NF
+    let pickings = pickingsCarregados;
+    if (ocultarSemNf) {
+        pickings = pickings.filter(p => p.fase_validacao && p.fase_validacao.tem_nf);
+    }
+
+    if (pickings.length === 0) {
+        container.innerHTML = `
+            <div class="col-12 text-center py-4 text-muted">
+                <i class="fas fa-filter fa-2x mb-2"></i>
+                <p>Nenhum picking com NF vinculada. Desmarque "Ocultar S/NF" para ver todos.</p>
+            </div>
+        `;
+        container.style.display = 'flex';
+        return;
+    }
 
     pickings.forEach(p => {
         let statusClass = '';
@@ -446,25 +451,32 @@ function renderPickings(pickings) {
 
         // Badge de validacao de fases
         if (p.fase_validacao) {
-            if (!p.fase_validacao.pode_receber) {
+            if (!p.fase_validacao.tem_nf) {
+                statusClass += ' sem-nf';
+                faseBadge = '<span class="badge bg-secondary">S/NF</span>';
+            } else if (!p.fase_validacao.pode_receber) {
                 statusClass += ' fase-bloqueado';
-                faseBadge = `<span class="badge bg-danger" title="${p.fase_validacao.bloqueio_resumo || 'Fases anteriores pendentes'}">
+                faseBadge = `<span class="badge bg-danger" title="${p.fase_validacao.bloqueio_motivo || 'Bloqueado'}">
                     <i class="fas fa-lock me-1"></i>Bloqueado
                 </span>`;
-            } else if (p.fase_validacao.tipo_liberacao === 'legacy') {
-                faseBadge = `<span class="badge bg-warning text-dark" title="Picking anterior ao sistema de validação">
-                    <i class="fas fa-exclamation-triangle me-1"></i>Legado
-                </span>`;
             } else if (p.fase_validacao.tipo_liberacao === 'finalizado_odoo') {
-                faseBadge = `<span class="badge bg-info" title="PO vinculado pelo Odoo automaticamente">
-                    <i class="fas fa-link me-1"></i>Odoo
+                faseBadge = `<span class="badge bg-success" title="Liberado via Odoo">
+                    <i class="fas fa-check me-1"></i>Liberado
                 </span>`;
             } else {
                 faseBadge = `<span class="badge bg-success" title="Consolidação executada">
-                    <i class="fas fa-check-double me-1"></i>Consolidado
+                    <i class="fas fa-check me-1"></i>Liberado
                 </span>`;
             }
         }
+
+        // NF com destaque (maior que picking name)
+        const nfDisplay = p.fase_validacao && p.fase_validacao.numero_nf
+            ? `<span class="nf-destaque">NF ${p.fase_validacao.numero_nf}</span>`
+            : `<span class="badge bg-secondary">S/NF</span>`;
+
+        // Picking name menor
+        const pickingName = `<small class="text-muted d-block">${p.name}</small>`;
 
         const dataFormatada = p.scheduled_date ?
             new Date(p.scheduled_date).toLocaleDateString('pt-BR') : '-';
@@ -473,11 +485,12 @@ function renderPickings(pickings) {
             <div class="col-md-4 col-lg-3">
                 <div class="card card-picking ${statusClass}" ${onClick ? `onclick="${onClick}"` : ''}>
                     <div class="card-body py-3">
-                        <div class="d-flex justify-content-between align-items-start mb-2">
-                            <h6 class="mb-0 text-success">${p.name}</h6>
-                            ${statusBadge}
+                        <div class="d-flex justify-content-between align-items-start mb-1">
+                            ${nfDisplay}
+                            ${statusBadge || faseBadge}
                         </div>
-                        <p class="mb-1 small">
+                        ${pickingName}
+                        <p class="mb-1 small mt-2">
                             <i class="fas fa-building me-1 text-muted"></i>
                             ${p.partner_name}
                         </p>
@@ -489,10 +502,7 @@ function renderPickings(pickings) {
                             <small class="text-muted">
                                 <i class="fas fa-calendar me-1"></i>${dataFormatada}
                             </small>
-                            <div>
-                                ${faseBadge}
-                                <span class="badge bg-info ms-1">${p.qtd_produtos} prod.</span>
-                            </div>
+                            <span class="badge bg-info">${p.qtd_produtos} prod.</span>
                         </div>
                     </div>
                 </div>
@@ -512,7 +522,8 @@ function abrirRecebimento(pickingId) {
     // Reset modal
     document.getElementById('loadingDetalhes').style.display = 'block';
     document.getElementById('conteudoRecebimento').style.display = 'none';
-    document.getElementById('faseValidacaoBar').style.display = 'none';
+    document.getElementById('faseBloqueioSimples').style.display = 'none';
+    document.getElementById('faseOk').style.display = 'none';
     document.getElementById('btnSalvar').disabled = false;
     document.getElementById('btnSalvar').classList.remove('btn-secondary');
     document.getElementById('btnSalvar').classList.add('btn-success');
@@ -546,14 +557,18 @@ function renderDetalhes(data) {
     const produtos = data.produtos;
     const checks = data.quality_checks;
 
-    // Header
-    document.getElementById('modalPickingName').textContent = picking.name;
+    // Header: NF como titulo principal, picking name secundario
+    const nfVinculada = picking.numero_nf_vinculada;
+    document.getElementById('modalNfVinculada').textContent = nfVinculada ? `NF ${nfVinculada}` : 'S/NF';
+    document.getElementById('modalPickingName').textContent = `(${picking.name})`;
+
+    // Info picking
     document.getElementById('modalFornecedor').textContent = picking.partner_name || '-';
     document.getElementById('modalPO').textContent = picking.purchase_order_name || picking.origin || '-';
     document.getElementById('modalData').textContent = picking.scheduled_date ?
         new Date(picking.scheduled_date).toLocaleDateString('pt-BR') : '-';
 
-    // Validacao de fases - barra de progresso + bloqueio
+    // Validacao de fases - alerta simplificado
     renderFaseValidacao(data.validacao_fases);
 
     // Salvar validacao_id para enviar no POST
@@ -579,71 +594,38 @@ function renderDetalhes(data) {
 }
 
 function renderFaseValidacao(validacaoFases) {
-    const bar = document.getElementById('faseValidacaoBar');
-    const diagnosticoDiv = document.getElementById('faseDiagnostico');
-    const bloqueioAlert = document.getElementById('faseBloqueioAlert');
+    const bloqueioDiv = document.getElementById('faseBloqueioSimples');
+    const okDiv = document.getElementById('faseOk');
     const btnSalvar = document.getElementById('btnSalvar');
 
     // Reset
-    diagnosticoDiv.style.display = 'none';
-    bloqueioAlert.style.display = 'none';
+    bloqueioDiv.style.display = 'none';
+    okDiv.style.display = 'none';
     btnSalvar.disabled = false;
     btnSalvar.classList.remove('btn-secondary');
     btnSalvar.classList.add('btn-success');
     btnSalvar.innerHTML = '<i class="fas fa-save"></i> Salvar Recebimento';
 
     if (!validacaoFases) {
-        bar.style.display = 'none';
         return;
     }
 
-    bar.style.display = 'block';
-
-    // Atualizar cada fase
-    const fases = validacaoFases.fases;
-    if (fases) {
-        atualizarFaseStep('faseStep1', fases.fase1);
-        atualizarFaseStep('faseStep2', fases.fase2);
-        atualizarFaseStep('faseStep3', fases.fase3);
-    }
-
-    // Diagnostico
-    if (validacaoFases.diagnostico && validacaoFases.diagnostico.length > 0) {
-        diagnosticoDiv.innerHTML = validacaoFases.diagnostico.join('<br>');
-        diagnosticoDiv.style.display = 'block';
-    }
-
-    // Bloqueio
     if (!validacaoFases.pode_receber) {
+        // BLOQUEADO: alerta vermelho com mensagem direta
+        document.getElementById('bloqueioMensagem').textContent =
+            validacaoFases.bloqueio_motivo || 'Bloqueado';
+        document.getElementById('bloqueioContato').textContent =
+            validacaoFases.contato_resolucao ? `(${validacaoFases.contato_resolucao})` : '';
+        bloqueioDiv.style.display = 'block';
+
+        // Desabilitar botao salvar
         btnSalvar.disabled = true;
         btnSalvar.classList.remove('btn-success');
         btnSalvar.classList.add('btn-secondary');
-        btnSalvar.title = validacaoFases.bloqueio_motivo || 'Fases anteriores pendentes';
-
-        bloqueioAlert.innerHTML = `
-            <i class="fas fa-lock me-1"></i>
-            <strong>Recebimento bloqueado:</strong> ${validacaoFases.bloqueio_motivo || 'Fases anteriores pendentes'}<br>
-            <strong>Contato:</strong> ${validacaoFases.contato_resolucao || '-'}
-        `;
-        bloqueioAlert.style.display = 'block';
-    }
-}
-
-function atualizarFaseStep(elementId, faseData) {
-    const step = document.getElementById(elementId);
-    if (!step || !faseData) return;
-
-    // Remover classes anteriores
-    step.classList.remove('fase-ok', 'fase-pendente', 'fase-aguardando', 'fase-atual', 'fase-inativo');
-
-    if (faseData.aprovado) {
-        step.classList.add('fase-ok');
-    } else if (faseData.cor === 'warning') {
-        step.classList.add('fase-aguardando');
-    } else if (faseData.status) {
-        step.classList.add('fase-pendente');
+        btnSalvar.title = validacaoFases.bloqueio_motivo || 'Bloqueado';
     } else {
-        step.classList.add('fase-inativo');
+        // LIBERADO: alerta verde discreto
+        okDiv.style.display = 'block';
     }
 }
 
@@ -661,7 +643,7 @@ function renderProdutos(produtos) {
                 ? '<span class="badge bg-danger badge-tracking">Serial obrigatório</span>'
                 : '<span class="badge bg-secondary badge-tracking">Sem tracking</span>';
 
-        const qtdFormatada = formatarNumero(prod.qtd_esperada, 3);
+        const qtdFormatada = formatarQtd(prod.qtd_esperada);
         const moveLineId = (prod.move_lines && prod.move_lines.length > 0) ? prod.move_lines[0].id : null;
 
         let lotesHtml = '';
@@ -768,7 +750,6 @@ function validarSomaLotes(prodIdx) {
     const container = document.getElementById(`lotes-${prodIdx}`);
     const prodCard = container.closest('.produto-card');
     const qtdEsperada = parseFloat(prodCard.dataset.qtdEsperada);
-    const uom = prodCard.querySelector('.small.text-muted')?.textContent.split(' ').pop() || 'UN';
 
     const inputs = container.querySelectorAll('.lote-qtd');
     let soma = 0;
@@ -777,8 +758,8 @@ function validarSomaLotes(prodIdx) {
     });
 
     const divValidacao = document.getElementById(`validacao-${prodIdx}`);
-    const somaFormatada = formatarNumero(soma, 3);
-    const esperadaFormatada = formatarNumero(qtdEsperada, 3);
+    const somaFormatada = formatarQtd(soma);
+    const esperadaFormatada = formatarQtd(qtdEsperada);
 
     const diff = Math.abs(soma - qtdEsperada);
     if (diff < 0.001) {
@@ -786,7 +767,8 @@ function validarSomaLotes(prodIdx) {
         divValidacao.innerHTML = `<i class="fas fa-check"></i> Soma: ${somaFormatada} / ${esperadaFormatada}`;
     } else {
         divValidacao.className = 'validacao-qtd mt-1 erro';
-        divValidacao.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Soma: ${somaFormatada} / ${esperadaFormatada} (diferença: ${formatarNumero(soma - qtdEsperada, 3)})`;
+        const diffFormatada = formatarQtd(soma - qtdEsperada);
+        divValidacao.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Soma: ${somaFormatada} / ${esperadaFormatada} (diferença: ${diffFormatada})`;
     }
 }
 
@@ -818,12 +800,12 @@ function renderQualityChecks(checks) {
                     <button type="button" class="btn btn-outline-success btn-sm qc-btn"
                             data-resultado="pass" data-check-id="${qc.id}" data-check-idx="${idx}"
                             onclick="selecionarQC(this, 'pass')">
-                        <i class="fas fa-check"></i> Pass
+                        <i class="fas fa-check"></i> Aprovado
                     </button>
                     <button type="button" class="btn btn-outline-danger btn-sm qc-btn"
                             data-resultado="fail" data-check-id="${qc.id}" data-check-idx="${idx}"
                             onclick="selecionarQC(this, 'fail')">
-                        <i class="fas fa-times"></i> Fail
+                        <i class="fas fa-times"></i> Reprovado
                     </button>
                 </div>
             `;
@@ -919,7 +901,7 @@ function salvarRecebimento() {
             // Validar soma
             if (Math.abs(somaLotes - qtdEsperada) >= 0.001) {
                 lotesValidos = false;
-                toastr.error(`Soma dos lotes (${formatarNumero(somaLotes, 3)}) ≠ qtd esperada (${formatarNumero(qtdEsperada, 3)}) para: ${productName}`);
+                toastr.error(`Soma dos lotes (${formatarQtd(somaLotes)}) ≠ qtd esperada (${formatarQtd(qtdEsperada)}) para: ${productName}`);
             }
         });
 
@@ -1004,7 +986,7 @@ function salvarRecebimento() {
             partner_id: picking.partner_id,
             partner_name: picking.partner_name,
             company_id: parseInt(document.getElementById('filtroEmpresa').value),
-            numero_nf: picking.origin || '',
+            numero_nf: picking.numero_nf_vinculada || picking.origin || '',
             validacao_id: window._validacaoIdSugerido || null,
             lotes: lotes,
             quality_checks: qualityChecks,
@@ -1048,17 +1030,6 @@ function salvarRecebimento() {
         btnSalvar.disabled = false;
         btnSalvar.innerHTML = '<i class="fas fa-save"></i> Salvar Recebimento';
     }
-}
-
-// =====================================================
-// UTILITÁRIOS
-// =====================================================
-function formatarNumero(valor, decimais) {
-    if (valor === null || valor === undefined || isNaN(valor)) return '0';
-    return parseFloat(valor).toLocaleString('pt-BR', {
-        minimumFractionDigits: decimais,
-        maximumFractionDigits: decimais,
-    });
 }
 
 // =====================================================
@@ -1135,7 +1106,7 @@ function executarSyncManual() {
     });
 }
 
-// Permitir buscar com Enter nos campos de filtro
+// Permitir buscar com Enter nos campos de filtro + re-render ao mudar checkbox
 document.addEventListener('DOMContentLoaded', function() {
     ['filtroNf', 'filtroFornecedor'].forEach(id => {
         document.getElementById(id)?.addEventListener('keypress', function(e) {
@@ -1144,6 +1115,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 buscarPickings();
             }
         });
+    });
+
+    // Checkbox S/NF: re-render sem nova request
+    document.getElementById('filtroSemNf')?.addEventListener('change', function() {
+        if (pickingsCarregados.length > 0) {
+            renderPickings();
+        }
     });
 
     // Inicializar datas do modal de sync

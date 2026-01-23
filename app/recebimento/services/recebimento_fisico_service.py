@@ -138,10 +138,12 @@ class RecebimentoFisicoService:
                 picking_id = item['id']
                 phase = phase_statuses.get(picking_id)
                 item['fase_validacao'] = {
-                    'pode_receber': phase.pode_receber if phase else True,
-                    'tipo_liberacao': phase.tipo_liberacao if phase else 'legacy',
-                    'bloqueio_resumo': phase.bloqueio_motivo if phase and not phase.pode_receber else None,
-                    'fase3_status': phase.fase3_status if phase else None,
+                    'pode_receber': phase.pode_receber if phase else False,
+                    'tem_nf': phase.tem_nf if phase else False,
+                    'numero_nf': phase.numero_nf if phase else None,
+                    'bloqueio_motivo': phase.bloqueio_motivo if phase else 'Erro no sistema',
+                    'fase_bloqueio': phase.fase_bloqueio if phase else 0,
+                    'tipo_liberacao': phase.tipo_liberacao if phase else None,
                 }
 
             logger.info(f"Encontrados {len(resultado)} pickings no cache local para company_id={company_id}")
@@ -261,6 +263,7 @@ class RecebimentoFisicoService:
                     'company_id': picking_local.company_id,
                     'location_id': picking_local.location_id,
                     'location_dest_id': picking_local.location_dest_id,
+                    'numero_nf_vinculada': phase_status.numero_nf if phase_status else None,
                 },
                 'produtos': produtos_resultado,
                 'quality_checks': checks_resultado,

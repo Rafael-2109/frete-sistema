@@ -6,13 +6,13 @@ Verifica se as Fases 1, 2 e 3 do recebimento de materiais foram
 concluidas antes de permitir a Fase 4 (Recebimento Fisico).
 
 Pipeline obrigatorio:
-    Fase 1 (Fiscal) → Fase 2 (Match NF×PO) → Fase 3 (Consolidacao) → Fase 4 (Recebimento)
+    Fase 0 (NF no sistema) → Fase 1 (Fiscal) → Fase 2 (Match NF×PO) → Fase 3 (Consolidacao) → Fase 4 (Recebimento)
 
 Regras:
-    - Fase 4 so pode executar se Fase 3 completou (status='consolidado' ou 'finalizado_odoo')
+    - TODO picking deve ter PO vinculado a uma NF no sistema para prosseguir.
+    - Pickings sem PO ou sem NF no sistema = BLOQUEADO (fase_bloqueio=0).
     - status='aprovado' NAO e pass-through! Requer consolidacao explicita.
-    - Pickings antigos sem DFE no sistema sao liberados como 'legacy' (com warning).
-    - Operador recebe diagnostico detalhado com contato para resolucao.
+    - Operador recebe mensagem curta e direta com contato para resolucao.
 """
 
 import logging
@@ -30,30 +30,24 @@ class PhaseStatus:
     def __init__(self):
         # Veredicto
         self.pode_receber = False
-        self.tipo_liberacao = None  # 'full', 'finalizado_odoo', 'legacy'
-        self.bloqueio_motivo = None
+        self.tipo_liberacao = None    # 'full', 'finalizado_odoo'
+        self.bloqueio_motivo = None   # Mensagem curta para operador
         self.contato_resolucao = None
 
-        # Fase 1 (Validacao Fiscal)
-        self.fase1_status = None
-        self.fase1_numero_nf = None
+        # NF vinculada (extraida do DFe via PO)
+        self.numero_nf = None         # Numero da NF para exibicao
+        self.tem_nf = False           # Se tem NF vinculada no sistema
+
+        # Fases (simplificado)
         self.fase1_aprovado = False
-
-        # Fase 2 (Match NF x PO)
-        self.fase2_status = None
-        self.fase2_validacao_id = None
-        self.fase2_numero_nf = None
-        self.fase2_percentual_match = None
-        self.fase2_po_vinculado = None
         self.fase2_aprovado = False
-
-        # Fase 3 (Consolidacao)
-        self.fase3_status = None  # 'consolidado', 'finalizado_odoo', 'aguardando_consolidacao', 'pendente'
-        self.fase3_po_consolidado = None
         self.fase3_aprovado = False
+        self.fase_bloqueio = None     # 0, 1, 2 ou 3 (qual fase bloqueia)
 
-        # Diagnostico
-        self.diagnostico = []
+        # Info para modal (detalhes)
+        self.fase2_validacao_id = None
+        self.fase3_status = None
+        self.fase3_po_consolidado = None
 
     def to_dict(self):
         """Serializa para enviar ao frontend."""
@@ -62,34 +56,15 @@ class PhaseStatus:
             'tipo_liberacao': self.tipo_liberacao,
             'bloqueio_motivo': self.bloqueio_motivo,
             'contato_resolucao': self.contato_resolucao,
-            'fases': {
-                'fase1': {
-                    'nome': 'Validacao Fiscal',
-                    'status': self.fase1_status,
-                    'aprovado': self.fase1_aprovado,
-                    'numero_nf': self.fase1_numero_nf,
-                    'icone': 'check-circle' if self.fase1_aprovado else ('times-circle' if self.fase1_status else 'question-circle'),
-                    'cor': 'success' if self.fase1_aprovado else ('danger' if self.fase1_status else 'secondary'),
-                },
-                'fase2': {
-                    'nome': 'Match NF x PO',
-                    'status': self.fase2_status,
-                    'aprovado': self.fase2_aprovado,
-                    'percentual_match': self.fase2_percentual_match,
-                    'po_vinculado': self.fase2_po_vinculado,
-                    'icone': 'check-circle' if self.fase2_aprovado else ('times-circle' if self.fase2_status else 'question-circle'),
-                    'cor': 'success' if self.fase2_aprovado else ('danger' if self.fase2_status else 'secondary'),
-                },
-                'fase3': {
-                    'nome': 'Consolidacao PO',
-                    'status': self.fase3_status,
-                    'aprovado': self.fase3_aprovado,
-                    'po_consolidado': self.fase3_po_consolidado,
-                    'icone': 'check-circle' if self.fase3_aprovado else ('clock' if self.fase3_status == 'aguardando_consolidacao' else 'times-circle'),
-                    'cor': 'success' if self.fase3_aprovado else ('warning' if self.fase3_status == 'aguardando_consolidacao' else 'danger'),
-                },
-            },
-            'diagnostico': self.diagnostico,
+            'numero_nf': self.numero_nf,
+            'tem_nf': self.tem_nf,
+            'fase_bloqueio': self.fase_bloqueio,
+            'fase1_aprovado': self.fase1_aprovado,
+            'fase2_aprovado': self.fase2_aprovado,
+            'fase3_aprovado': self.fase3_aprovado,
+            'fase2_validacao_id': self.fase2_validacao_id,
+            'fase3_status': self.fase3_status,
+            'fase3_po_consolidado': self.fase3_po_consolidado,
         }
 
 
@@ -120,40 +95,25 @@ class CrossPhaseValidationService:
         'erro': 7,
     }
 
-    # Contatos por tipo de bloqueio
-    CONTATOS = {
-        'fase1_pendente': 'Sistema (validacao fiscal nao executada - aguardar scheduler)',
-        'fase1_nao_executada': 'Sistema (validacao fiscal nao executada - aguardar scheduler)',
-        'fase1_validando': 'Sistema (validacao fiscal em processamento - aguardar)',
-        'fase1_bloqueado': 'Fiscal (divergencia fiscal pendente)',
-        'fase1_primeira_compra': 'Fiscal (cadastro de primeira compra)',
-        'fase1_erro': 'TI (erro na validacao fiscal)',
-        'fase2_pendente': 'Sistema (validacao NF x PO nao executada - aguardar)',
-        'fase2_validando': 'Sistema (validacao NF x PO em processamento - aguardar)',
-        'fase2_bloqueado': 'Compras (divergencia NF x PO - match incompleto)',
-        'fase2_erro': 'TI (erro na validacao NF x PO)',
-        'fase3_pendente': 'Compras (consolidacao de PO pendente)',
-        'fase3_aguardando_consolidacao': 'Compras (match 100% identificado - executar consolidacao na Central Fiscal)',
-    }
-
     def validar_fases_picking(self, purchase_order_id, origin=None):
         """
         Valida todas as fases para um picking.
 
         Args:
             purchase_order_id: ID do PO no Odoo (de PickingRecebimento.odoo_purchase_order_id)
-            origin: Campo origin do picking (pode conter numero da NF)
+            origin: Campo origin do picking (nao utilizado atualmente)
 
         Returns:
-            PhaseStatus com veredicto e diagnostico
+            PhaseStatus com veredicto e mensagem simplificada
         """
         status = PhaseStatus()
 
         if not purchase_order_id:
-            # Picking sem PO - caso raro, liberar como legacy
-            status.pode_receber = True
-            status.tipo_liberacao = 'legacy'
-            status.diagnostico.append('Picking sem PO vinculado - liberado como legado.')
+            # Picking sem PO = BLOQUEADO (sem NF vinculada)
+            status.pode_receber = False
+            status.tem_nf = False
+            status.fase_bloqueio = 0
+            status.bloqueio_motivo = 'Picking sem NF vinculada'
             return status
 
         try:
@@ -161,24 +121,22 @@ class CrossPhaseValidationService:
             validacao = self._buscar_validacao_nf_po(purchase_order_id)
 
             if not validacao:
-                # Sem DFE no sistema - pode ser picking antigo
-                status.pode_receber = True
-                status.tipo_liberacao = 'legacy'
-                status.diagnostico.append(
-                    'NF nao registrada no sistema de validacao. '
-                    'Picking liberado como legado (anterior ao sistema).'
-                )
+                # PO existe mas sem DFe no sistema = BLOQUEADO
+                status.pode_receber = False
+                status.tem_nf = False
+                status.fase_bloqueio = 0
+                status.bloqueio_motivo = 'NF nao encontrada no sistema'
                 return status
 
+            # NF encontrada no sistema
+            status.tem_nf = True
+            status.numero_nf = validacao.numero_nf
+
             # 2. Preencher info Fase 2
-            status.fase2_status = validacao.status
             status.fase2_validacao_id = validacao.id
-            status.fase2_numero_nf = validacao.numero_nf
-            status.fase2_percentual_match = validacao.percentual_match
-            status.fase2_po_vinculado = validacao.odoo_po_vinculado_name
             status.fase2_aprovado = validacao.status in self.STATUSES_FASE2_OK
 
-            # 3. Buscar ValidacaoFiscalDfe pela DFE
+            # 3. Buscar ValidacaoFiscalDfe pela DFE (Fase 1)
             fiscal = None
             if validacao.odoo_dfe_id:
                 fiscal = ValidacaoFiscalDfe.query.filter_by(
@@ -186,18 +144,11 @@ class CrossPhaseValidationService:
                 ).first()
 
             if fiscal:
-                status.fase1_status = fiscal.status
-                status.fase1_numero_nf = fiscal.numero_nf
                 status.fase1_aprovado = (fiscal.status == 'aprovado')
             else:
-                # DFE existe na Fase 2 mas Fase 1 nao rodou
-                status.fase1_status = 'nao_executada'
                 status.fase1_aprovado = False
 
             # 4. Avaliar Fase 3 (Consolidacao)
-            # IMPORTANTE: 'aprovado' NAO e pass-through!
-            # 'aprovado' = "pronto para consolidar" = Fase 3 PENDENTE
-            # So 'consolidado' ou 'finalizado_odoo' significam Fase 3 completa
             if validacao.status == 'consolidado':
                 status.fase3_status = 'consolidado'
                 status.fase3_po_consolidado = validacao.po_consolidado_name
@@ -211,24 +162,22 @@ class CrossPhaseValidationService:
                 status.fase3_status = 'aguardando_consolidacao'
                 status.fase3_aprovado = False
             else:
-                # bloqueado, pendente, validando, erro
                 status.fase3_status = 'pendente'
                 status.fase3_aprovado = False
 
             # 5. Veredicto final (ordem de prioridade: Fase 1 → Fase 2 → Fase 3)
-            self._definir_veredicto(status, fiscal)
-
-            # 6. Construir diagnostico
-            status.diagnostico = self._construir_diagnostico(status)
+            self._definir_veredicto(status, fiscal, validacao)
 
             return status
 
         except Exception as e:
             logger.error(f"Erro na validacao cross-phase para PO {purchase_order_id}: {e}")
-            # Em caso de erro interno, liberar como legacy para nao bloquear operacao
-            status.pode_receber = True
-            status.tipo_liberacao = 'legacy'
-            status.diagnostico.append(f'Erro na validacao de fases: {str(e)}. Liberado como legado.')
+            # Em caso de erro interno, BLOQUEAR (nao liberar)
+            status.pode_receber = False
+            status.tem_nf = False
+            status.fase_bloqueio = 0
+            status.bloqueio_motivo = 'Erro no sistema - Falar com Logistica'
+            status.contato_resolucao = 'Logistica'
             return status
 
     def validar_fases_batch(self, pickings):
@@ -244,8 +193,10 @@ class CrossPhaseValidationService:
         po_ids = [p.odoo_purchase_order_id for p in pickings if p.odoo_purchase_order_id]
 
         if not po_ids:
-            # Todos sem PO - todos legacy
-            return {p.odoo_picking_id: self._make_legacy_status('Picking sem PO') for p in pickings}
+            # Todos sem PO = BLOQUEADOS
+            return {p.odoo_picking_id: self._make_blocked_status(
+                'Picking sem NF vinculada', fase=0
+            ) for p in pickings}
 
         try:
             # Query 1: Todas as ValidacaoNfPoDfe que matcham algum PO
@@ -279,13 +230,15 @@ class CrossPhaseValidationService:
             for p in pickings:
                 po_id = p.odoo_purchase_order_id
                 if not po_id:
-                    results[p.odoo_picking_id] = self._make_legacy_status('Picking sem PO')
+                    results[p.odoo_picking_id] = self._make_blocked_status(
+                        'Picking sem NF vinculada', fase=0
+                    )
                     continue
 
                 validacao = po_to_validacao.get(po_id)
                 if not validacao:
-                    results[p.odoo_picking_id] = self._make_legacy_status(
-                        'NF nao registrada no sistema de validacao'
+                    results[p.odoo_picking_id] = self._make_blocked_status(
+                        'NF nao encontrada no sistema', fase=0
                     )
                     continue
 
@@ -296,8 +249,10 @@ class CrossPhaseValidationService:
 
         except Exception as e:
             logger.error(f"Erro no batch de validacao cross-phase: {e}")
-            # Em caso de erro, liberar todos como legacy
-            return {p.odoo_picking_id: self._make_legacy_status(f'Erro: {e}') for p in pickings}
+            # Em caso de erro, BLOQUEAR todos
+            return {p.odoo_picking_id: self._make_blocked_status(
+                'Erro no sistema - Falar com Logistica', fase=0, contato='Logistica'
+            ) for p in pickings}
 
     # ===== Metodos Privados =====
 
@@ -318,98 +273,82 @@ class CrossPhaseValidationService:
             ValidacaoNfPoDfe.validado_em.desc()
         ).first()
 
-    def _definir_veredicto(self, status, fiscal):
+    def _definir_veredicto(self, status, fiscal, validacao):
         """Define pode_receber, bloqueio_motivo e contato_resolucao."""
-        if not status.fase1_aprovado and fiscal:
+
+        # Fase 1 nao aprovada
+        if not status.fase1_aprovado:
             status.pode_receber = False
-            status.bloqueio_motivo = f'Fase 1 (Fiscal) bloqueada: {status.fase1_status}'
-            status.contato_resolucao = self.CONTATOS.get(
-                f'fase1_{status.fase1_status}', 'Fiscal'
-            )
-        elif not status.fase1_aprovado and not fiscal:
-            status.pode_receber = False
-            status.bloqueio_motivo = 'Fase 1 (Fiscal) nao executada para esta NF'
-            status.contato_resolucao = self.CONTATOS['fase1_nao_executada']
-        elif not status.fase2_aprovado:
-            status.pode_receber = False
-            status.bloqueio_motivo = f'Fase 2 (Match NF x PO) bloqueada: {status.fase2_status}'
-            status.contato_resolucao = self.CONTATOS.get(
-                f'fase2_{status.fase2_status}', 'Compras'
-            )
-        elif not status.fase3_aprovado:
-            if status.fase3_status == 'aguardando_consolidacao':
-                status.pode_receber = False
-                status.bloqueio_motivo = (
-                    'Fase 3 (Consolidacao PO) nao executada. '
-                    'Match 100% identificado, mas consolidacao precisa ser executada.'
-                )
-                status.contato_resolucao = self.CONTATOS['fase3_aguardando_consolidacao']
+            if fiscal:
+                fase1_status = fiscal.status
+                if fase1_status == 'primeira_compra':
+                    status.bloqueio_motivo = 'Aguardando Fiscal cadastrar - Falar com Fiscal'
+                    status.contato_resolucao = 'Fiscal'
+                elif fase1_status in ('bloqueado', 'divergencia'):
+                    status.bloqueio_motivo = 'Divergencia fiscal - Falar com Fiscal'
+                    status.contato_resolucao = 'Fiscal'
+                elif fase1_status == 'erro':
+                    status.bloqueio_motivo = 'Erro no sistema - Falar com Logistica'
+                    status.contato_resolucao = 'Logistica'
+                else:
+                    # pendente, validando, nao_executada
+                    status.bloqueio_motivo = 'Aguardando validacao fiscal'
+                    status.contato_resolucao = None
             else:
-                status.pode_receber = False
-                status.bloqueio_motivo = 'Fase 3 (Consolidacao PO) pendente'
-                status.contato_resolucao = self.CONTATOS['fase3_pendente']
+                status.bloqueio_motivo = 'Aguardando validacao fiscal'
+                status.contato_resolucao = None
+            status.fase_bloqueio = 1
+            return
+
+        # Fase 2 nao aprovada
+        if not status.fase2_aprovado:
+            status.pode_receber = False
+            validacao_status = validacao.status if validacao else 'pendente'
+            if validacao_status in ('bloqueado', 'divergencia'):
+                status.bloqueio_motivo = 'Divergencia na NF c/ Pedido - Falar com Compras'
+                status.contato_resolucao = 'Compras'
+            elif validacao_status == 'erro':
+                status.bloqueio_motivo = 'Erro no sistema - Falar com Logistica'
+                status.contato_resolucao = 'Logistica'
+            else:
+                # pendente, validando
+                status.bloqueio_motivo = 'Validacao Compras - Falar com Compras'
+                status.contato_resolucao = 'Compras'
+            status.fase_bloqueio = 2
+            return
+
+        # Fase 3 nao aprovada
+        if not status.fase3_aprovado:
+            status.pode_receber = False
+            status.bloqueio_motivo = 'Falta arrumar o Pedido - Falar com Compras'
+            status.contato_resolucao = 'Compras'
+            status.fase_bloqueio = 3
+            return
+
+        # Todas as fases OK
+        status.pode_receber = True
+        status.fase_bloqueio = None
+        if status.fase3_status == 'finalizado_odoo':
+            status.tipo_liberacao = 'finalizado_odoo'
         else:
-            status.pode_receber = True
-            if status.fase3_status == 'finalizado_odoo':
-                status.tipo_liberacao = 'finalizado_odoo'
-            else:
-                status.tipo_liberacao = 'full'
-
-    def _construir_diagnostico(self, status):
-        """Constroi lista de mensagens de diagnostico para o operador."""
-        msgs = []
-
-        # Fase 1
-        if status.fase1_aprovado:
-            nf_info = f' (NF {status.fase1_numero_nf})' if status.fase1_numero_nf else ''
-            msgs.append(f'✅ Fase 1 - Validacao Fiscal: Aprovada{nf_info}')
-        elif status.fase1_status == 'nao_executada':
-            msgs.append('❌ Fase 1 - Validacao Fiscal: Nao executada (aguardar processamento automatico)')
-        elif status.fase1_status:
-            msgs.append(f'❌ Fase 1 - Validacao Fiscal: {status.fase1_status.replace("_", " ").title()}')
-
-        # Fase 2
-        if status.fase2_aprovado:
-            match_info = f' ({status.fase2_percentual_match}% match)' if status.fase2_percentual_match else ''
-            po_info = f' - PO: {status.fase2_po_vinculado}' if status.fase2_po_vinculado else ''
-            msgs.append(f'✅ Fase 2 - Match NF x PO: {status.fase2_status.title()}{match_info}{po_info}')
-        elif status.fase2_status:
-            match_info = f' ({status.fase2_percentual_match}% match)' if status.fase2_percentual_match else ''
-            msgs.append(f'❌ Fase 2 - Match NF x PO: {status.fase2_status.replace("_", " ").title()}{match_info}')
-
-        # Fase 3
-        if status.fase3_aprovado:
-            po_info = f' - PO: {status.fase3_po_consolidado}' if status.fase3_po_consolidado else ''
-            if status.fase3_status == 'finalizado_odoo':
-                msgs.append(f'✅ Fase 3 - Consolidacao: PO vinculado pelo Odoo{po_info}')
-            else:
-                msgs.append(f'✅ Fase 3 - Consolidacao: Executada{po_info}')
-        elif status.fase3_status == 'aguardando_consolidacao':
-            msgs.append('⏳ Fase 3 - Consolidacao: Match 100% OK, aguardando execucao da consolidacao')
-        elif status.fase3_status:
-            msgs.append(f'❌ Fase 3 - Consolidacao: {status.fase3_status.replace("_", " ").title()}')
-
-        return msgs
+            status.tipo_liberacao = 'full'
 
     def _build_phase_status(self, validacao, fiscal):
         """Constroi PhaseStatus a partir de validacao e fiscal encontrados."""
         status = PhaseStatus()
 
+        # NF
+        status.tem_nf = True
+        status.numero_nf = validacao.numero_nf
+
         # Fase 2
-        status.fase2_status = validacao.status
         status.fase2_validacao_id = validacao.id
-        status.fase2_numero_nf = validacao.numero_nf
-        status.fase2_percentual_match = validacao.percentual_match
-        status.fase2_po_vinculado = validacao.odoo_po_vinculado_name
         status.fase2_aprovado = validacao.status in self.STATUSES_FASE2_OK
 
         # Fase 1
         if fiscal:
-            status.fase1_status = fiscal.status
-            status.fase1_numero_nf = fiscal.numero_nf
             status.fase1_aprovado = (fiscal.status == 'aprovado')
         else:
-            status.fase1_status = 'nao_executada'
             status.fase1_aprovado = False
 
         # Fase 3
@@ -429,19 +368,18 @@ class CrossPhaseValidationService:
             status.fase3_aprovado = False
 
         # Veredicto
-        self._definir_veredicto(status, fiscal)
-
-        # Diagnostico
-        status.diagnostico = self._construir_diagnostico(status)
+        self._definir_veredicto(status, fiscal, validacao)
 
         return status
 
-    def _make_legacy_status(self, motivo='Picking anterior ao sistema'):
-        """Cria PhaseStatus para pickings legados (sem DFE no sistema)."""
+    def _make_blocked_status(self, motivo, fase=0, contato=None):
+        """Cria PhaseStatus bloqueado (sem NF ou sem PO)."""
         status = PhaseStatus()
-        status.pode_receber = True
-        status.tipo_liberacao = 'legacy'
-        status.diagnostico.append(f'{motivo}. Liberado como legado.')
+        status.pode_receber = False
+        status.tem_nf = False
+        status.fase_bloqueio = fase
+        status.bloqueio_motivo = motivo
+        status.contato_resolucao = contato
         return status
 
     def _prioridade(self, status_str):
