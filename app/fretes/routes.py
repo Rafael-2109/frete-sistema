@@ -5455,7 +5455,7 @@ def _extract_job_args(job):
                     if fatura:
                         resultado["fatura_numero"] = fatura.numero_fatura
                         resultado["transportadora"] = (
-                            fatura.transportadora.nome_curto if fatura.transportadora else None
+                            fatura.transportadora.razao_social if fatura.transportadora else None
                         )
                         resultado["total_fretes"] = len(fatura.fretes) if fatura.fretes else 0
                 except Exception:

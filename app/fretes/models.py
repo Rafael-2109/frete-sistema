@@ -508,7 +508,7 @@ class ContaCorrenteTransportadora(db.Model):
     frete_compensacao = db.relationship('Frete', foreign_keys=[compensacao_frete_id])
 
     def __repr__(self):
-        return f'<ContaCorrente {self.transportadora.nome if self.transportadora else "N/A"} - {self.tipo_movimentacao} R$ {abs(self.valor_diferenca)}>'
+        return f'<ContaCorrente {self.transportadora.razao_social if self.transportadora else "N/A"} - {self.tipo_movimentacao} R$ {abs(self.valor_diferenca)}>'
 
 
 class AprovacaoFrete(db.Model):

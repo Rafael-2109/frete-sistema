@@ -38,7 +38,8 @@
       "Skill(superpowers:brainstorming)",
       "Skill(superpowers:brainstorming:*)",
       "Skill(superpowers:systematic-debugging)",
-      "Skill(superpowers:systematic-debugging:*)"
+      "Skill(superpowers:systematic-debugging:*)",
+      "mcp__render__list_postgres_instances"
     ],
     "deny": []
   },

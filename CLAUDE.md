@@ -86,6 +86,7 @@ app/templates/base.html
 | Fretes | Dashboard Fretes, Listar, Lancar CTe, Aprovacoes, Faturas | base.html > Financeiro > Fretes |
 | Recebimento (Fase 1) | Divergencias Fiscais, Primeira Compra, Perfis Fiscais | base.html > Financeiro > Central Fiscal |
 | Recebimento (Fase 2) | Validacoes NF×PO, Divergencias NF×PO, De-Para Fornecedor, Preview Consolidacao | base.html > Financeiro > Central Fiscal |
+| Recebimento (Fase 4) | Recebimento Fisico, Status Recebimentos | base.html > Financeiro > Central Fiscal |
 | Fiscal IBS/CBS | Documentos C/ IBS/CBS, Cadastro NCM IBS/CBS, Pendencias IBS/CBS | base.html > Financeiro > Central Fiscal |
 | Carteira | Dashboard, Agrupados Balanceado | base.html > Operacional |
 | Separacao | Lista, Card, Agendamento | base.html > Operacional |
@@ -618,6 +619,7 @@ Usuario: "Como fazer bulk insert com SQLAlchemy?"
 | Explorar Odoo | `descobrindo-odoo-estrutura` | "campos do res.partner" |
 | Validacao NF x PO | `validacao-nf-po` | "erro ao validar DFE", "modal POs nao abre" |
 | Conciliar PO/Split | `conciliando-odoo-po` | "consolide POs", "crie PO conciliador", "execute split" |
+| Recebimento Fisico | `recebimento-fisico-odoo` | "lote nao criou", "quality check falhou", "picking nao validou" |
 
 ## Skills de Desenvolvimento
 
@@ -646,6 +648,7 @@ Usuario: "Como fazer bulk insert com SQLAlchemy?"
 | `integracao-odoo` | `.claude/skills/integracao-odoo/` | Criar novas integracoes, lancamentos fiscais |
 | `validacao-nf-po` | `.claude/skills/validacao-nf-po/` | Validacao NF x PO (Fase 2): match, De-Para, divergencias, preview local |
 | `conciliando-odoo-po` | `.claude/skills/conciliando-odoo-po/` | EXECUTA split/consolidacao de POs: criar PO Conciliador, ajustar saldos, vincular DFe |
+| `recebimento-fisico-odoo` | `.claude/skills/recebimento-fisico-odoo/` | Recebimento Fisico (Fase 4): lotes, quality checks, processamento assincrono via RQ |
 
 ## Skills Utilitarias
 | Skill | Diretorio | Descricao |

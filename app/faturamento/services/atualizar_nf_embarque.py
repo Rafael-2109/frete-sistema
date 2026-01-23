@@ -256,7 +256,7 @@ def buscar_preview_nf_pendentes():
                 'embarque': {
                     'id': item.embarque.id,
                     'data_embarque': item.embarque.data_embarque.isoformat() if item.embarque.data_embarque else None,
-                    'transportadora': item.embarque.transportadora.nome if hasattr(item.embarque.transportadora, 'nome') else str(item.embarque.transportadora)
+                    'transportadora': item.embarque.transportadora.razao_social if hasattr(item.embarque.transportadora, 'razao_social') else str(item.embarque.transportadora)
                 }
             })
             

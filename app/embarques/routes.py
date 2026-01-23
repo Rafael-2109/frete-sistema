@@ -399,8 +399,10 @@ def visualizar_embarque(id):
                 flash("✅ Embarque atualizado com sucesso!", "success")
                 return redirect(url_for('embarques.visualizar_embarque', id=embarque.id))
             else:
+                logger.warning(f"[EMBARQUE #{embarque.numero}] ❌ Validação falhou: {form.errors}")
+                for field_name, errors in form.errors.items():
+                    logger.warning(f"  Campo '{field_name}': {errors}")
                 flash("Erros na validação do formulário.", "danger")
-                # Log form.errors se quiser
             dados_portaria = obter_dados_portaria_embarque(embarque.id)
             pedidos_impressos = {}
             for item in embarque.itens:
@@ -434,20 +436,27 @@ def visualizar_embarque(id):
 
         # Popular cabeçalho - ✅ READONLY: string com nome ao invés de ID
         # Tratamento seguro para datas que podem vir como string ou date
+        # ✅ PROTEÇÃO: Detecta datas corrompidas (ano < 1900 ou > 2100)
         if embarque.data_embarque:
             if hasattr(embarque.data_embarque, 'strftime'):
-                form.data_embarque.data = embarque.data_embarque.strftime('%d/%m/%Y')
+                if hasattr(embarque.data_embarque, 'year') and (embarque.data_embarque.year < 1900 or embarque.data_embarque.year > 2100):
+                    form.data_embarque.data = ''
+                    logger.warning(f"[EMBARQUE #{embarque.numero}] Data embarque corrompida ignorada: {embarque.data_embarque}")
+                else:
+                    form.data_embarque.data = embarque.data_embarque.strftime('%d/%m/%Y')
             else:
-                # Se já é string, usa como está
                 form.data_embarque.data = str(embarque.data_embarque)
         else:
             form.data_embarque.data = ''
-            
+
         if embarque.data_prevista_embarque:
             if hasattr(embarque.data_prevista_embarque, 'strftime'):
-                form.data_prevista_embarque.data = embarque.data_prevista_embarque.strftime('%d/%m/%Y')
+                if hasattr(embarque.data_prevista_embarque, 'year') and (embarque.data_prevista_embarque.year < 1900 or embarque.data_prevista_embarque.year > 2100):
+                    form.data_prevista_embarque.data = ''
+                    logger.warning(f"[EMBARQUE #{embarque.numero}] Data prevista corrompida ignorada: {embarque.data_prevista_embarque}")
+                else:
+                    form.data_prevista_embarque.data = embarque.data_prevista_embarque.strftime('%d/%m/%Y')
             else:
-                # Se já é string, usa como está
                 form.data_prevista_embarque.data = str(embarque.data_prevista_embarque)
         else:
             form.data_prevista_embarque.data = ''

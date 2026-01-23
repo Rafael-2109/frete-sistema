@@ -1183,32 +1183,40 @@ def sincronizar_odoo():
             from app.odoo.utils.connection import get_odoo_connection
             from app.pallet.services import PalletSyncService
 
-            dias = int(request.form.get('dias', 30))
+            data_de = request.form.get('data_de', '').strip() or None
+            data_ate = request.form.get('data_ate', '').strip() or None
             tipo_sync = request.form.get('tipo', 'tudo')
 
             odoo = get_odoo_connection()
             service = PalletSyncService(odoo)
 
+            # Parametros de data passados para os metodos
+            kwargs = {}
+            if data_de:
+                kwargs['data_de'] = data_de
+            if data_ate:
+                kwargs['data_ate'] = data_ate
+
             if tipo_sync == 'remessas':
-                resumo = service.sincronizar_remessas(dias)
+                resumo = service.sincronizar_remessas(**kwargs)
                 flash(f'Remessas sincronizadas: {resumo.get("novos", 0)} novas', 'success')
             elif tipo_sync == 'vendas':
-                resumo = service.sincronizar_vendas_pallet(dias)
+                resumo = service.sincronizar_vendas_pallet(**kwargs)
                 flash(f'Vendas sincronizadas: {resumo.get("novos", 0)} novas', 'success')
             elif tipo_sync == 'devolucoes':
-                resumo = service.sincronizar_devolucoes(dias)
+                resumo = service.sincronizar_devolucoes(**kwargs)
                 msg = f'Devolucoes sincronizadas: {resumo.get("novos", 0)} novas'
                 if resumo.get('baixas_realizadas', 0) > 0:
                     msg += f', {resumo.get("baixas_realizadas")} baixas automaticas'
                 flash(msg, 'success')
             elif tipo_sync == 'recusas':
-                resumo = service.sincronizar_recusas(dias)
+                resumo = service.sincronizar_recusas(**kwargs)
                 msg = f'Recusas sincronizadas: {resumo.get("novos", 0)} novas'
                 if resumo.get('baixas_realizadas', 0) > 0:
                     msg += f', {resumo.get("baixas_realizadas")} baixas automaticas'
                 flash(msg, 'success')
             else:
-                resumo = service.sincronizar_tudo(dias)
+                resumo = service.sincronizar_tudo(**kwargs)
                 msg = f'Sincronizacao completa: {resumo.get("total_novos", 0)} novos registros'
                 if resumo.get('total_baixas', 0) > 0:
                     msg += f', {resumo.get("total_baixas")} baixas automaticas'
@@ -1220,7 +1228,14 @@ def sincronizar_odoo():
             flash(f'Erro na sincronizacao: {str(e)}', 'danger')
             return redirect(url_for('pallet.sincronizar_odoo'))
 
-    return render_template('pallet/sincronizar.html')
+    # Defaults para o template
+    hoje = date.today()
+    data_de_default = (hoje - timedelta(days=30)).strftime('%Y-%m-%d')
+    data_ate_default = hoje.strftime('%Y-%m-%d')
+
+    return render_template('pallet/sincronizar.html',
+                           data_de_default=data_de_default,
+                           data_ate_default=data_ate_default)
 
 
 # ========== SUBSTITUICAO DE NF ==========

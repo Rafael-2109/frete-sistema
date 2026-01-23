@@ -16,6 +16,17 @@ FASE 2 - Vinculacao NF x PO:
 - DivergenciaNfPo: Divergencias NF x PO para resolucao manual
 - ValidacaoNfPoDfe: Controle de status de validacao NF x PO
 
+FASE 4 - Recebimento Fisico:
+- RecebimentoFisico: Registro principal (picking + status worker)
+- RecebimentoLote: Lotes + quantidades por produto
+- RecebimentoQualityCheck: Quality checks preenchidos localmente
+
+CACHE DE PICKINGS (Sync Odoo -> Local via APScheduler):
+- PickingRecebimento: Cache de pickings incoming com purchase_id
+- PickingRecebimentoProduto: Produtos (stock.move) do picking
+- PickingRecebimentoMoveLine: Move lines (stock.move.line)
+- PickingRecebimentoQualityCheck: Quality checks do picking
+
 Referencia: .claude/references/RECEBIMENTO_MATERIAIS.md
 """
 
@@ -978,4 +989,409 @@ class DivergenciaNfPo(db.Model):
             'resolvido_por': self.resolvido_por,
             'resolvido_em': self.resolvido_em.isoformat() if self.resolvido_em else None,
             'criado_em': self.criado_em.isoformat() if self.criado_em else None
+        }
+
+
+# =====================================================
+# FASE 4 - RECEBIMENTO FISICO
+# =====================================================
+
+
+class RecebimentoFisico(db.Model):
+    """
+    Registro principal de recebimento fisico.
+    Salvo localmente e processado no Odoo via worker RQ (fire-and-forget).
+
+    Status flow: pendente -> processando -> processado (ou erro)
+    """
+    __tablename__ = 'recebimento_fisico'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Vinculo com Odoo
+    odoo_picking_id = db.Column(db.Integer, nullable=False, index=True)
+    odoo_picking_name = db.Column(db.String(50), nullable=True)
+    odoo_purchase_order_id = db.Column(db.Integer, nullable=True)
+    odoo_purchase_order_name = db.Column(db.String(50), nullable=True)
+    odoo_partner_id = db.Column(db.Integer, nullable=True)
+    odoo_partner_name = db.Column(db.String(255), nullable=True)
+    company_id = db.Column(db.Integer, nullable=False)
+
+    # Vinculo com Validacao NF x PO (Fase 2) - opcional
+    validacao_id = db.Column(db.Integer, db.ForeignKey('validacao_nf_po_dfe.id'), nullable=True)
+    numero_nf = db.Column(db.String(50), nullable=True)
+
+    # Status do processamento
+    status = db.Column(db.String(20), default='pendente', nullable=False, index=True)
+    # Valores: 'pendente', 'processando', 'processado', 'erro', 'cancelado'
+    erro_mensagem = db.Column(db.Text, nullable=True)
+    tentativas = db.Column(db.Integer, default=0, nullable=False)
+    max_tentativas = db.Column(db.Integer, default=3, nullable=False)
+
+    # Job RQ
+    job_id = db.Column(db.String(100), nullable=True)
+
+    # Timestamps
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    processado_em = db.Column(db.DateTime, nullable=True)
+    usuario = db.Column(db.String(100), nullable=True)
+
+    # Relacionamentos
+    lotes = db.relationship('RecebimentoLote', backref='recebimento',
+                            lazy='dynamic', cascade='all, delete-orphan')
+    quality_checks = db.relationship('RecebimentoQualityCheck', backref='recebimento',
+                                     lazy='dynamic', cascade='all, delete-orphan')
+
+    def __repr__(self):
+        return f'<RecebimentoFisico {self.id} - {self.odoo_picking_name} ({self.status})>'
+
+    def to_dict(self):
+        """Serializa para dicionario"""
+        return {
+            'id': self.id,
+            'odoo_picking_id': self.odoo_picking_id,
+            'odoo_picking_name': self.odoo_picking_name,
+            'odoo_purchase_order_id': self.odoo_purchase_order_id,
+            'odoo_purchase_order_name': self.odoo_purchase_order_name,
+            'odoo_partner_id': self.odoo_partner_id,
+            'odoo_partner_name': self.odoo_partner_name,
+            'company_id': self.company_id,
+            'validacao_id': self.validacao_id,
+            'numero_nf': self.numero_nf,
+            'status': self.status,
+            'erro_mensagem': self.erro_mensagem,
+            'tentativas': self.tentativas,
+            'job_id': self.job_id,
+            'criado_em': self.criado_em.isoformat() if self.criado_em else None,
+            'processado_em': self.processado_em.isoformat() if self.processado_em else None,
+            'usuario': self.usuario,
+            'lotes': [l.to_dict() for l in self.lotes.all()],
+            'quality_checks': [qc.to_dict() for qc in self.quality_checks.all()],
+        }
+
+
+class RecebimentoLote(db.Model):
+    """
+    Lote + quantidade para cada produto do recebimento.
+    Um produto pode ter N lotes (soma das qtds = qtd do PO).
+    """
+    __tablename__ = 'recebimento_lote'
+
+    id = db.Column(db.Integer, primary_key=True)
+    recebimento_id = db.Column(db.Integer, db.ForeignKey('recebimento_fisico.id'), nullable=False)
+
+    # Produto
+    odoo_product_id = db.Column(db.Integer, nullable=False)
+    odoo_product_name = db.Column(db.String(255), nullable=True)
+    odoo_move_line_id = db.Column(db.Integer, nullable=True)
+    odoo_move_id = db.Column(db.Integer, nullable=True)
+
+    # Lote
+    lote_nome = db.Column(db.String(100), nullable=False)
+    quantidade = db.Column(db.Numeric(15, 3), nullable=False)
+    data_validade = db.Column(db.Date, nullable=True)
+
+    # Tracking
+    produto_tracking = db.Column(db.String(20), default='lot')
+
+    # Status de processamento individual
+    processado = db.Column(db.Boolean, default=False, nullable=False)
+    odoo_lot_id = db.Column(db.Integer, nullable=True)
+    odoo_move_line_criado_id = db.Column(db.Integer, nullable=True)
+
+    def __repr__(self):
+        return f'<RecebimentoLote {self.id} - {self.lote_nome} ({self.quantidade})>'
+
+    def to_dict(self):
+        """Serializa para dicionario"""
+        return {
+            'id': self.id,
+            'recebimento_id': self.recebimento_id,
+            'odoo_product_id': self.odoo_product_id,
+            'odoo_product_name': self.odoo_product_name,
+            'odoo_move_line_id': self.odoo_move_line_id,
+            'odoo_move_id': self.odoo_move_id,
+            'lote_nome': self.lote_nome,
+            'quantidade': float(self.quantidade) if self.quantidade else 0,
+            'data_validade': self.data_validade.isoformat() if self.data_validade else None,
+            'produto_tracking': self.produto_tracking,
+            'processado': self.processado,
+            'odoo_lot_id': self.odoo_lot_id,
+            'odoo_move_line_criado_id': self.odoo_move_line_criado_id,
+        }
+
+
+class RecebimentoQualityCheck(db.Model):
+    """
+    Quality check preenchido localmente para envio ao Odoo.
+    Suporta dois tipos: passfail (toggle) e measure (valor numerico).
+    """
+    __tablename__ = 'recebimento_quality_check'
+
+    id = db.Column(db.Integer, primary_key=True)
+    recebimento_id = db.Column(db.Integer, db.ForeignKey('recebimento_fisico.id'), nullable=False)
+
+    # Referencia ao check do Odoo
+    odoo_check_id = db.Column(db.Integer, nullable=False)
+    odoo_point_id = db.Column(db.Integer, nullable=True)
+    odoo_product_id = db.Column(db.Integer, nullable=True)
+
+    # Tipo do check
+    test_type = db.Column(db.String(20), nullable=False)  # 'passfail' ou 'measure'
+    titulo = db.Column(db.String(255), nullable=True)
+
+    # Resultado
+    resultado = db.Column(db.String(10), nullable=False)  # 'pass' ou 'fail'
+
+    # Para tipo 'measure'
+    valor_medido = db.Column(db.Numeric(15, 4), nullable=True)
+    unidade = db.Column(db.String(20), nullable=True)
+    tolerancia_min = db.Column(db.Numeric(15, 4), nullable=True)
+    tolerancia_max = db.Column(db.Numeric(15, 4), nullable=True)
+
+    # Status
+    processado = db.Column(db.Boolean, default=False, nullable=False)
+
+    def __repr__(self):
+        return f'<RecebimentoQualityCheck {self.id} - {self.test_type} ({self.resultado})>'
+
+    def to_dict(self):
+        """Serializa para dicionario"""
+        return {
+            'id': self.id,
+            'recebimento_id': self.recebimento_id,
+            'odoo_check_id': self.odoo_check_id,
+            'odoo_point_id': self.odoo_point_id,
+            'odoo_product_id': self.odoo_product_id,
+            'test_type': self.test_type,
+            'titulo': self.titulo,
+            'resultado': self.resultado,
+            'valor_medido': float(self.valor_medido) if self.valor_medido else None,
+            'unidade': self.unidade,
+            'tolerancia_min': float(self.tolerancia_min) if self.tolerancia_min else None,
+            'tolerancia_max': float(self.tolerancia_max) if self.tolerancia_max else None,
+            'processado': self.processado,
+        }
+
+
+# =====================================================
+# CACHE DE PICKINGS DE RECEBIMENTO (Sync Odoo → Local)
+# =====================================================
+# Tabelas normalizadas sincronizadas via APScheduler (30 min)
+# Padrao: mesmo de PedidoCompras, FaturamentoProduto, etc.
+
+
+class PickingRecebimento(db.Model):
+    """
+    Cache local de pickings de recebimento do Odoo.
+    Sincronizado a cada 30 min pelo APScheduler.
+    Filtro: picking_type_code=incoming, purchase_id != False.
+    """
+    __tablename__ = 'picking_recebimento'
+
+    id = db.Column(db.Integer, primary_key=True)
+    odoo_picking_id = db.Column(db.Integer, nullable=False, unique=True, index=True)
+    odoo_picking_name = db.Column(db.String(50), nullable=False)
+    state = db.Column(db.String(20), nullable=False)
+    picking_type_code = db.Column(db.String(20), nullable=True)
+    odoo_partner_id = db.Column(db.Integer, nullable=True)
+    odoo_partner_name = db.Column(db.String(255), nullable=True)
+    origin = db.Column(db.String(100), nullable=True)
+    odoo_purchase_order_id = db.Column(db.Integer, nullable=True)
+    odoo_purchase_order_name = db.Column(db.String(50), nullable=True)
+    company_id = db.Column(db.Integer, nullable=False)
+    scheduled_date = db.Column(db.DateTime, nullable=True)
+    create_date = db.Column(db.DateTime, nullable=True)
+    write_date = db.Column(db.DateTime, nullable=True)
+    location_id = db.Column(db.Integer, nullable=True)
+    location_dest_id = db.Column(db.Integer, nullable=True)
+    sincronizado_em = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    atualizado_em = db.Column(db.DateTime, nullable=True)
+
+    # Relacionamentos
+    produtos = db.relationship(
+        'PickingRecebimentoProduto', backref='picking',
+        lazy='dynamic', cascade='all, delete-orphan'
+    )
+    move_lines = db.relationship(
+        'PickingRecebimentoMoveLine', backref='picking',
+        lazy='dynamic', cascade='all, delete-orphan'
+    )
+    quality_checks = db.relationship(
+        'PickingRecebimentoQualityCheck', backref='picking',
+        lazy='dynamic', cascade='all, delete-orphan'
+    )
+
+    __table_args__ = (
+        db.Index('idx_picking_rec_company', 'company_id', 'state'),
+        db.Index('idx_picking_rec_partner', 'odoo_partner_name'),
+        db.Index('idx_picking_rec_origin', 'origin'),
+        db.Index('idx_picking_rec_po', 'odoo_purchase_order_id'),
+        db.Index('idx_picking_rec_write', 'write_date'),
+    )
+
+    def __repr__(self):
+        return f'<PickingRecebimento {self.odoo_picking_name} ({self.state})>'
+
+    def to_dict(self):
+        """Serializa para dicionario."""
+        return {
+            'id': self.id,
+            'odoo_picking_id': self.odoo_picking_id,
+            'odoo_picking_name': self.odoo_picking_name,
+            'state': self.state,
+            'odoo_partner_id': self.odoo_partner_id,
+            'odoo_partner_name': self.odoo_partner_name,
+            'origin': self.origin,
+            'odoo_purchase_order_id': self.odoo_purchase_order_id,
+            'odoo_purchase_order_name': self.odoo_purchase_order_name,
+            'company_id': self.company_id,
+            'scheduled_date': self.scheduled_date.isoformat() if self.scheduled_date else None,
+            'create_date': self.create_date.isoformat() if self.create_date else None,
+            'write_date': self.write_date.isoformat() if self.write_date else None,
+            'location_id': self.location_id,
+            'location_dest_id': self.location_dest_id,
+            'sincronizado_em': self.sincronizado_em.isoformat() if self.sincronizado_em else None,
+            'qtd_produtos': self.produtos.count(),
+        }
+
+
+class PickingRecebimentoProduto(db.Model):
+    """
+    Produtos (stock.move) de um picking de recebimento.
+    1 linha por produto/move.
+    """
+    __tablename__ = 'picking_recebimento_produto'
+
+    id = db.Column(db.Integer, primary_key=True)
+    picking_recebimento_id = db.Column(
+        db.Integer, db.ForeignKey('picking_recebimento.id', ondelete='CASCADE'), nullable=False
+    )
+    odoo_move_id = db.Column(db.Integer, nullable=False)
+    odoo_product_id = db.Column(db.Integer, nullable=False)
+    odoo_product_name = db.Column(db.String(255), nullable=True)
+    product_uom_qty = db.Column(db.Numeric(15, 3), nullable=True)
+    product_uom = db.Column(db.String(20), nullable=True)
+    tracking = db.Column(db.String(20), default='none')
+    use_expiration_date = db.Column(db.Boolean, default=False)
+
+    # Relacionamento
+    move_lines = db.relationship(
+        'PickingRecebimentoMoveLine', backref='produto',
+        lazy='dynamic', cascade='all, delete-orphan'
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint('picking_recebimento_id', 'odoo_move_id',
+                            name='uq_picking_rec_prod'),
+    )
+
+    def __repr__(self):
+        return f'<PickingRecebimentoProduto {self.odoo_product_name} (move={self.odoo_move_id})>'
+
+    def to_dict(self):
+        """Serializa para dicionario."""
+        return {
+            'id': self.id,
+            'move_id': self.odoo_move_id,
+            'product_id': self.odoo_product_id,
+            'product_name': self.odoo_product_name,
+            'qtd_esperada': float(self.product_uom_qty) if self.product_uom_qty else 0,
+            'product_uom': self.product_uom,
+            'tracking': self.tracking,
+            'use_expiration_date': self.use_expiration_date,
+            'move_lines': [ml.to_dict() for ml in self.move_lines.all()],
+        }
+
+
+class PickingRecebimentoMoveLine(db.Model):
+    """
+    Move lines (stock.move.line) de um picking de recebimento.
+    1 linha por move_line (lote/reserva).
+    """
+    __tablename__ = 'picking_recebimento_move_line'
+
+    id = db.Column(db.Integer, primary_key=True)
+    picking_recebimento_id = db.Column(
+        db.Integer, db.ForeignKey('picking_recebimento.id', ondelete='CASCADE'), nullable=False
+    )
+    produto_id = db.Column(
+        db.Integer, db.ForeignKey('picking_recebimento_produto.id', ondelete='CASCADE'), nullable=False
+    )
+    odoo_move_line_id = db.Column(db.Integer, nullable=False)
+    odoo_move_id = db.Column(db.Integer, nullable=True)
+    lot_id = db.Column(db.Integer, nullable=True)
+    lot_name = db.Column(db.String(100), nullable=True)
+    quantity = db.Column(db.Numeric(15, 3), default=0)
+    reserved_uom_qty = db.Column(db.Numeric(15, 3), default=0)
+    location_id = db.Column(db.Integer, nullable=True)
+    location_dest_id = db.Column(db.Integer, nullable=True)
+
+    __table_args__ = (
+        db.UniqueConstraint('picking_recebimento_id', 'odoo_move_line_id',
+                            name='uq_picking_rec_ml'),
+    )
+
+    def __repr__(self):
+        return f'<PickingRecebimentoMoveLine {self.odoo_move_line_id} (lot={self.lot_name})>'
+
+    def to_dict(self):
+        """Serializa para dicionario."""
+        return {
+            'id': self.id,
+            'move_line_id': self.odoo_move_line_id,
+            'move_id': self.odoo_move_id,
+            'lot_id': self.lot_id,
+            'lot_name': self.lot_name or '',
+            'quantity': float(self.quantity) if self.quantity else 0,
+            'reserved_qty': float(self.reserved_uom_qty) if self.reserved_uom_qty else 0,
+            'location_id': self.location_id,
+            'location_dest_id': self.location_dest_id,
+        }
+
+
+class PickingRecebimentoQualityCheck(db.Model):
+    """
+    Quality checks de um picking de recebimento.
+    1 linha por quality.check.
+    """
+    __tablename__ = 'picking_recebimento_quality_check'
+
+    id = db.Column(db.Integer, primary_key=True)
+    picking_recebimento_id = db.Column(
+        db.Integer, db.ForeignKey('picking_recebimento.id', ondelete='CASCADE'), nullable=False
+    )
+    odoo_check_id = db.Column(db.Integer, nullable=False)
+    odoo_point_id = db.Column(db.Integer, nullable=True)
+    odoo_product_id = db.Column(db.Integer, nullable=True)
+    odoo_product_name = db.Column(db.String(255), nullable=True)
+    quality_state = db.Column(db.String(20), nullable=True)
+    test_type = db.Column(db.String(20), nullable=True)
+    title = db.Column(db.String(255), nullable=True)
+    norm_unit = db.Column(db.String(20), nullable=True)
+    tolerance_min = db.Column(db.Numeric(15, 4), nullable=True)
+    tolerance_max = db.Column(db.Numeric(15, 4), nullable=True)
+
+    __table_args__ = (
+        db.UniqueConstraint('picking_recebimento_id', 'odoo_check_id',
+                            name='uq_picking_rec_qc'),
+    )
+
+    def __repr__(self):
+        return f'<PickingRecebimentoQualityCheck {self.odoo_check_id} ({self.test_type})>'
+
+    def to_dict(self):
+        """Serializa para dicionario."""
+        return {
+            'id': self.id,
+            'check_id': self.odoo_check_id,
+            'point_id': self.odoo_point_id,
+            'product_id': self.odoo_product_id,
+            'product_name': self.odoo_product_name or 'Operacao',
+            'quality_state': self.quality_state,
+            'test_type': self.test_type or 'passfail',
+            'title': self.title or '',
+            'norm_unit': self.norm_unit or '',
+            'tolerance_min': float(self.tolerance_min) if self.tolerance_min else 0,
+            'tolerance_max': float(self.tolerance_max) if self.tolerance_max else 0,
         }

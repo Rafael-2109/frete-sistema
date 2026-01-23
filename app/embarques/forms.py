@@ -57,7 +57,9 @@ class EmbarqueItemForm(FlaskForm):
     def validate_data_agenda(self, field):
         if field.data:
             try:
-                datetime.strptime(field.data, '%d/%m/%Y')
+                dt = datetime.strptime(field.data, '%d/%m/%Y')
+                if dt.year < 1900 or dt.year > 2100:
+                    raise ValidationError('Ano inválido. Use uma data entre 1900 e 2100.')
             except ValueError:
                 raise ValidationError('Use o formato dd/mm/aaaa')
 
@@ -99,14 +101,18 @@ class EmbarqueForm(FlaskForm):
     def validate_data_embarque(self, field):
         if field.data:
             try:
-                datetime.strptime(field.data, '%d/%m/%Y')
+                dt = datetime.strptime(field.data, '%d/%m/%Y')
+                if dt.year < 1900 or dt.year > 2100:
+                    raise ValidationError('Ano inválido. Use uma data entre 1900 e 2100.')
             except ValueError:
                 raise ValidationError('Use o formato dd/mm/aaaa')
 
     def validate_data_prevista_embarque(self, field):
         if field.data:
             try:
-                datetime.strptime(field.data, '%d/%m/%Y')
+                dt = datetime.strptime(field.data, '%d/%m/%Y')
+                if dt.year < 1900 or dt.year > 2100:
+                    raise ValidationError('Ano inválido. Use uma data entre 1900 e 2100.')
             except ValueError:
                 raise ValidationError('Use o formato dd/mm/aaaa')
 

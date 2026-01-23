@@ -1,0 +1,968 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-boxes text-success me-2"></i>Recebimento Físico</h2>
+            <p class="text-muted mb-0">Preencher lotes, quantidades e verificações de qualidade</p>
+        </div>
+        <div>
+            <button class="btn btn-outline-primary me-2" data-bs-toggle="modal" data-bs-target="#modalSync">
+                <i class="fas fa-sync-alt"></i> Sincronizar
+            </button>
+            <a href="{{ url_for('recebimento_fisico_views.status') }}" class="btn btn-outline-info">
+                <i class="fas fa-tasks"></i> Status Recebimentos
+            </a>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h6 class="mb-0"><i class="fas fa-filter me-2"></i>Filtrar Pickings</h6>
+        </div>
+        <div class="card-body">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label">Empresa</label>
+                    <select id="filtroEmpresa" class="form-select form-select-sm">
+                        <option value="1">NACOM GOYA - FB</option>
+                        <option value="3">NACOM GOYA - SC</option>
+                        <option value="4">NACOM GOYA - CD</option>
+                        <option value="5">LA FAMIGLIA - LF</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Filtro NF / PO</label>
+                    <input type="text" id="filtroNf" class="form-control form-control-sm"
+                           placeholder="Numero NF ou PO...">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Fornecedor</label>
+                    <input type="text" id="filtroFornecedor" class="form-control form-control-sm"
+                           placeholder="Nome do fornecedor...">
+                </div>
+                <div class="col-md-3">
+                    <button class="btn btn-primary btn-sm w-100" onclick="buscarPickings()">
+                        <i class="fas fa-search"></i> Buscar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Info sincronizacao -->
+    <div id="infoSync" class="mb-2" style="display: none;">
+        <small class="text-muted">
+            <i class="fas fa-sync-alt me-1"></i>
+            Última sincronização: <span id="ultimaSync">-</span>
+        </small>
+    </div>
+
+    <!-- Resultado: Lista de Pickings -->
+    <div id="listaPickings" class="row g-3" style="display: none;">
+        <!-- Cards inseridos via JS -->
+    </div>
+
+    <!-- Estado vazio -->
+    <div id="estadoVazio" class="text-center py-5 text-muted">
+        <i class="fas fa-truck-loading fa-3x mb-3"></i>
+        <p>Selecione a empresa e clique em Buscar para listar os pickings disponíveis.</p>
+    </div>
+
+    <!-- Loading -->
+    <div id="loadingPickings" class="text-center py-5" style="display: none;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Carregando...</span>
+        </div>
+        <p class="mt-2">Buscando pickings disponíveis...</p>
+    </div>
+</div>
+
+<!-- =====================================================
+     MODAL: Detalhes do Picking + Preenchimento de Lotes
+     ===================================================== -->
+<div class="modal fade" id="modalRecebimento" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-clipboard-check me-2"></i>
+                    Recebimento: <span id="modalPickingName"></span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Info do Picking -->
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <small class="text-muted">Fornecedor</small>
+                        <div id="modalFornecedor" class="fw-bold"></div>
+                    </div>
+                    <div class="col-md-4">
+                        <small class="text-muted">Pedido de Compra</small>
+                        <div id="modalPO" class="fw-bold"></div>
+                    </div>
+                    <div class="col-md-4">
+                        <small class="text-muted">Data Prevista</small>
+                        <div id="modalData" class="fw-bold"></div>
+                    </div>
+                </div>
+
+                <hr>
+
+                <!-- Loading detalhes -->
+                <div id="loadingDetalhes" class="text-center py-4">
+                    <div class="spinner-border text-success" role="status"></div>
+                    <p class="mt-2">Carregando produtos e quality checks...</p>
+                </div>
+
+                <!-- Conteudo do formulario -->
+                <div id="conteudoRecebimento" style="display: none;">
+                    <!-- Secao: Produtos e Lotes -->
+                    <h6 class="mb-3 text-success">
+                        <i class="fas fa-cubes me-1"></i> Produtos e Lotes
+                    </h6>
+                    <div id="listaProdutos">
+                        <!-- Produtos inseridos via JS -->
+                    </div>
+
+                    <!-- Secao: Quality Checks -->
+                    <div id="secaoQualityChecks" style="display: none;">
+                        <hr>
+                        <h6 class="mb-3 text-info">
+                            <i class="fas fa-vial me-1"></i> Verificações de Qualidade
+                        </h6>
+                        <div id="listaQualityChecks">
+                            <!-- Checks inseridos via JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-success" id="btnSalvar" onclick="salvarRecebimento()">
+                    <i class="fas fa-save"></i> Salvar Recebimento
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- =====================================================
+     MODAL: Sincronizacao Manual
+     ===================================================== -->
+<div class="modal fade" id="modalSync" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-sync-alt me-2"></i>Sincronizar Pickings
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small mb-3">
+                    Busca pickings de recebimento no Odoo dentro do período selecionado.
+                    A sincronização automática ocorre a cada 30 minutos.
+                </p>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">De</label>
+                        <input type="date" id="syncDataDe" class="form-control">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Até</label>
+                        <input type="date" id="syncDataAte" class="form-control">
+                    </div>
+                </div>
+                <div class="alert alert-info mt-3 mb-0 small">
+                    <i class="fas fa-info-circle me-1"></i>
+                    Período máximo: 90 dias. Pickings já existentes serão atualizados.
+                </div>
+                <!-- Resultado -->
+                <div id="syncResultado" class="mt-3" style="display: none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i> Fechar
+                </button>
+                <button type="button" class="btn btn-primary" id="btnSync" onclick="executarSyncManual()">
+                    <i class="fas fa-sync-alt"></i> Sincronizar Agora
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .card-picking {
+        cursor: pointer;
+        transition: all 0.2s ease;
+        border-left: 4px solid var(--bs-success);
+    }
+    .card-picking:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+    }
+    .card-picking.ja-processado {
+        border-left-color: var(--bs-secondary);
+        opacity: 0.7;
+    }
+    .card-picking.em-processamento {
+        border-left-color: var(--bs-warning);
+    }
+
+    .produto-card {
+        border: 1px solid var(--bs-border-color);
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+    .produto-card .produto-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.75rem;
+    }
+    .produto-card .badge-tracking {
+        font-size: 0.7rem;
+    }
+
+    .lote-row {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+    .lote-row input {
+        font-size: 0.85rem;
+    }
+
+    .validacao-qtd {
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+    .validacao-qtd.ok { color: var(--bs-success); }
+    .validacao-qtd.erro { color: var(--bs-danger); }
+
+    .qc-card {
+        border: 1px solid var(--bs-border-color);
+        border-radius: 8px;
+        padding: 0.75rem 1rem;
+        margin-bottom: 0.75rem;
+    }
+    .qc-card .btn-group .btn {
+        font-size: 0.8rem;
+        padding: 0.25rem 0.75rem;
+    }
+    .qc-card .btn-group .btn.active-pass {
+        background-color: var(--bs-success);
+        border-color: var(--bs-success);
+        color: white;
+    }
+    .qc-card .btn-group .btn.active-fail {
+        background-color: var(--bs-danger);
+        border-color: var(--bs-danger);
+        color: white;
+    }
+
+    .measure-inputs {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+    }
+    .measure-inputs input {
+        width: 100px;
+        font-size: 0.85rem;
+    }
+    .measure-tolerance {
+        font-size: 0.75rem;
+        color: var(--bs-secondary);
+    }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// =====================================================
+// Estado global
+// =====================================================
+let pickingAtual = null;
+let detalhesPickingAtual = null;
+
+// =====================================================
+// BUSCAR PICKINGS
+// =====================================================
+function buscarPickings() {
+    const companyId = document.getElementById('filtroEmpresa').value;
+    const filtroNf = document.getElementById('filtroNf').value.trim();
+    const filtroFornecedor = document.getElementById('filtroFornecedor').value.trim();
+
+    document.getElementById('estadoVazio').style.display = 'none';
+    document.getElementById('listaPickings').style.display = 'none';
+    document.getElementById('loadingPickings').style.display = 'block';
+
+    let url = `/recebimento/fisico/pickings?company_id=${companyId}`;
+    if (filtroNf) url += `&filtro_nf=${encodeURIComponent(filtroNf)}`;
+    if (filtroFornecedor) url += `&filtro_fornecedor=${encodeURIComponent(filtroFornecedor)}`;
+
+    fetch(url)
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('loadingPickings').style.display = 'none';
+
+            if (data.error) {
+                toastr.error(data.error);
+                document.getElementById('estadoVazio').style.display = 'block';
+                return;
+            }
+
+            // Exibir info de sincronizacao
+            if (data.ultima_sincronizacao) {
+                document.getElementById('ultimaSync').textContent = data.ultima_sincronizacao;
+                document.getElementById('infoSync').style.display = 'block';
+            } else {
+                document.getElementById('infoSync').style.display = 'none';
+            }
+
+            if (!data.pickings || data.pickings.length === 0) {
+                document.getElementById('estadoVazio').innerHTML = `
+                    <i class="fas fa-inbox fa-3x mb-3"></i>
+                    <p>Nenhum picking disponível para recebimento nesta empresa.</p>
+                    <small class="text-muted">Os pickings são sincronizados a cada 30 minutos.</small>
+                `;
+                document.getElementById('estadoVazio').style.display = 'block';
+                return;
+            }
+
+            renderPickings(data.pickings);
+        })
+        .catch(err => {
+            document.getElementById('loadingPickings').style.display = 'none';
+            document.getElementById('estadoVazio').style.display = 'block';
+            toastr.error('Erro ao buscar pickings: ' + err.message);
+        });
+}
+
+function renderPickings(pickings) {
+    const container = document.getElementById('listaPickings');
+    container.innerHTML = '';
+
+    pickings.forEach(p => {
+        let statusClass = '';
+        let statusBadge = '';
+        let onClick = `abrirRecebimento(${p.id})`;
+
+        if (p.status_local === 'processado') {
+            statusClass = 'ja-processado';
+            statusBadge = '<span class="badge bg-secondary">Já processado</span>';
+            onClick = '';
+        } else if (p.status_local === 'pendente' || p.status_local === 'processando') {
+            statusClass = 'em-processamento';
+            statusBadge = `<span class="badge bg-warning text-dark">${p.status_local}</span>`;
+            onClick = '';
+        }
+
+        const dataFormatada = p.scheduled_date ?
+            new Date(p.scheduled_date).toLocaleDateString('pt-BR') : '-';
+
+        container.innerHTML += `
+            <div class="col-md-4 col-lg-3">
+                <div class="card card-picking ${statusClass}" ${onClick ? `onclick="${onClick}"` : ''}>
+                    <div class="card-body py-3">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h6 class="mb-0 text-success">${p.name}</h6>
+                            ${statusBadge}
+                        </div>
+                        <p class="mb-1 small">
+                            <i class="fas fa-building me-1 text-muted"></i>
+                            ${p.partner_name}
+                        </p>
+                        <p class="mb-1 small">
+                            <i class="fas fa-file-alt me-1 text-muted"></i>
+                            PO: ${p.purchase_order_name || p.origin || '-'}
+                        </p>
+                        <div class="d-flex justify-content-between align-items-center mt-2">
+                            <small class="text-muted">
+                                <i class="fas fa-calendar me-1"></i>${dataFormatada}
+                            </small>
+                            <span class="badge bg-info">${p.qtd_produtos} produtos</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    container.style.display = 'flex';
+}
+
+// =====================================================
+// ABRIR MODAL DE RECEBIMENTO
+// =====================================================
+function abrirRecebimento(pickingId) {
+    pickingAtual = pickingId;
+
+    // Reset modal
+    document.getElementById('loadingDetalhes').style.display = 'block';
+    document.getElementById('conteudoRecebimento').style.display = 'none';
+    document.getElementById('btnSalvar').disabled = false;
+
+    const modal = new bootstrap.Modal(document.getElementById('modalRecebimento'));
+    modal.show();
+
+    // Buscar detalhes
+    fetch(`/recebimento/fisico/picking/${pickingId}/detalhes`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                toastr.error(data.error);
+                modal.hide();
+                return;
+            }
+
+            detalhesPickingAtual = data;
+            renderDetalhes(data);
+        })
+        .catch(err => {
+            toastr.error('Erro ao carregar detalhes: ' + err.message);
+            modal.hide();
+        });
+}
+
+function renderDetalhes(data) {
+    const picking = data.picking;
+    const produtos = data.produtos;
+    const checks = data.quality_checks;
+
+    // Header
+    document.getElementById('modalPickingName').textContent = picking.name;
+    document.getElementById('modalFornecedor').textContent = picking.partner_name || '-';
+    document.getElementById('modalPO').textContent = picking.purchase_order_name || picking.origin || '-';
+    document.getElementById('modalData').textContent = picking.scheduled_date ?
+        new Date(picking.scheduled_date).toLocaleDateString('pt-BR') : '-';
+
+    // Produtos
+    renderProdutos(produtos);
+
+    // Quality Checks
+    if (checks && checks.length > 0) {
+        renderQualityChecks(checks);
+        document.getElementById('secaoQualityChecks').style.display = 'block';
+    } else {
+        document.getElementById('secaoQualityChecks').style.display = 'none';
+    }
+
+    document.getElementById('loadingDetalhes').style.display = 'none';
+    document.getElementById('conteudoRecebimento').style.display = 'block';
+}
+
+// =====================================================
+// RENDER PRODUTOS + LOTES
+// =====================================================
+function renderProdutos(produtos) {
+    const container = document.getElementById('listaProdutos');
+    container.innerHTML = '';
+
+    produtos.forEach((prod, idx) => {
+        const trackingBadge = prod.tracking === 'lot'
+            ? '<span class="badge bg-primary badge-tracking">Lote obrigatório</span>'
+            : prod.tracking === 'serial'
+                ? '<span class="badge bg-danger badge-tracking">Serial obrigatório</span>'
+                : '<span class="badge bg-secondary badge-tracking">Sem tracking</span>';
+
+        const qtdFormatada = formatarNumero(prod.qtd_esperada, 3);
+        const moveLineId = (prod.move_lines && prod.move_lines.length > 0) ? prod.move_lines[0].id : null;
+
+        let lotesHtml = '';
+        if (prod.tracking === 'lot' || prod.tracking === 'serial') {
+            lotesHtml = `
+                <div class="lotes-container" id="lotes-${idx}">
+                    <div class="lote-row" data-idx="0">
+                        <input type="text" class="form-control form-control-sm lote-nome"
+                               placeholder="Nome do lote" style="flex: 2;">
+                        <input type="number" class="form-control form-control-sm lote-qtd"
+                               placeholder="Qtd" step="0.001" min="0"
+                               onchange="validarSomaLotes(${idx})" style="flex: 1;">
+                        ${prod.use_expiration_date ? `
+                        <input type="date" class="form-control form-control-sm lote-validade"
+                               placeholder="Validade" style="flex: 1.2;">
+                        ` : ''}
+                        <button class="btn btn-outline-danger btn-sm" onclick="removerLote(${idx}, this)" title="Remover">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+                <button class="btn btn-outline-success btn-sm mt-1" onclick="adicionarLote(${idx})">
+                    <i class="fas fa-plus"></i> Adicionar Lote
+                </button>
+                <div class="validacao-qtd mt-1" id="validacao-${idx}">
+                    Soma: 0 / ${qtdFormatada} ${prod.product_uom}
+                </div>
+            `;
+        } else {
+            // Produto sem tracking - apenas confirmar quantidade
+            lotesHtml = `
+                <div class="lotes-container" id="lotes-${idx}">
+                    <div class="lote-row" data-idx="0">
+                        <input type="text" class="form-control form-control-sm lote-nome"
+                               value="SEM_LOTE" readonly style="flex: 2; opacity: 0.6;">
+                        <input type="number" class="form-control form-control-sm lote-qtd"
+                               value="${prod.qtd_esperada}" step="0.001" min="0"
+                               onchange="validarSomaLotes(${idx})" style="flex: 1;">
+                    </div>
+                </div>
+                <div class="validacao-qtd mt-1 ok" id="validacao-${idx}">
+                    <i class="fas fa-check"></i> Soma: ${qtdFormatada} / ${qtdFormatada} ${prod.product_uom}
+                </div>
+            `;
+        }
+
+        container.innerHTML += `
+            <div class="produto-card" data-product-id="${prod.product_id}" data-move-id="${prod.move_id}"
+                 data-move-line-id="${moveLineId}" data-tracking="${prod.tracking}"
+                 data-qtd-esperada="${prod.qtd_esperada}" data-use-validade="${prod.use_expiration_date}">
+                <div class="produto-header">
+                    <div>
+                        <strong>${prod.product_name}</strong>
+                        <div class="small text-muted">
+                            Qtd esperada: ${qtdFormatada} ${prod.product_uom}
+                        </div>
+                    </div>
+                    ${trackingBadge}
+                </div>
+                ${lotesHtml}
+            </div>
+        `;
+    });
+}
+
+function adicionarLote(prodIdx) {
+    const container = document.getElementById(`lotes-${prodIdx}`);
+    const prodCard = container.closest('.produto-card');
+    const useValidade = prodCard.dataset.useValidade === 'true' || prodCard.dataset.useValidade === 'True';
+    const numLotes = container.querySelectorAll('.lote-row').length;
+
+    const row = document.createElement('div');
+    row.className = 'lote-row';
+    row.dataset.idx = numLotes;
+    row.innerHTML = `
+        <input type="text" class="form-control form-control-sm lote-nome"
+               placeholder="Nome do lote" style="flex: 2;">
+        <input type="number" class="form-control form-control-sm lote-qtd"
+               placeholder="Qtd" step="0.001" min="0"
+               onchange="validarSomaLotes(${prodIdx})" style="flex: 1;">
+        ${useValidade ? `
+        <input type="date" class="form-control form-control-sm lote-validade"
+               placeholder="Validade" style="flex: 1.2;">
+        ` : ''}
+        <button class="btn btn-outline-danger btn-sm" onclick="removerLote(${prodIdx}, this)" title="Remover">
+            <i class="fas fa-times"></i>
+        </button>
+    `;
+    container.appendChild(row);
+}
+
+function removerLote(prodIdx, btn) {
+    const container = document.getElementById(`lotes-${prodIdx}`);
+    const rows = container.querySelectorAll('.lote-row');
+    if (rows.length <= 1) {
+        toastr.warning('Deve haver pelo menos 1 lote por produto.');
+        return;
+    }
+    btn.closest('.lote-row').remove();
+    validarSomaLotes(prodIdx);
+}
+
+function validarSomaLotes(prodIdx) {
+    const container = document.getElementById(`lotes-${prodIdx}`);
+    const prodCard = container.closest('.produto-card');
+    const qtdEsperada = parseFloat(prodCard.dataset.qtdEsperada);
+    const uom = prodCard.querySelector('.small.text-muted')?.textContent.split(' ').pop() || 'UN';
+
+    const inputs = container.querySelectorAll('.lote-qtd');
+    let soma = 0;
+    inputs.forEach(input => {
+        soma += parseFloat(input.value) || 0;
+    });
+
+    const divValidacao = document.getElementById(`validacao-${prodIdx}`);
+    const somaFormatada = formatarNumero(soma, 3);
+    const esperadaFormatada = formatarNumero(qtdEsperada, 3);
+
+    const diff = Math.abs(soma - qtdEsperada);
+    if (diff < 0.001) {
+        divValidacao.className = 'validacao-qtd mt-1 ok';
+        divValidacao.innerHTML = `<i class="fas fa-check"></i> Soma: ${somaFormatada} / ${esperadaFormatada}`;
+    } else {
+        divValidacao.className = 'validacao-qtd mt-1 erro';
+        divValidacao.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Soma: ${somaFormatada} / ${esperadaFormatada} (diferença: ${formatarNumero(soma - qtdEsperada, 3)})`;
+    }
+}
+
+// =====================================================
+// RENDER QUALITY CHECKS
+// =====================================================
+function renderQualityChecks(checks) {
+    const container = document.getElementById('listaQualityChecks');
+    container.innerHTML = '';
+
+    checks.forEach((qc, idx) => {
+        let controlHtml = '';
+
+        if (qc.test_type === 'measure') {
+            controlHtml = `
+                <div class="measure-inputs">
+                    <input type="number" class="form-control form-control-sm qc-measure"
+                           step="0.0001" placeholder="Valor medido"
+                           data-check-id="${qc.id}" data-check-idx="${idx}">
+                    <span class="text-muted small">${qc.norm_unit || ''}</span>
+                </div>
+                <div class="measure-tolerance mt-1">
+                    Tolerância: ${formatarNumero(qc.tolerance_min, 4)} ~ ${formatarNumero(qc.tolerance_max, 4)} ${qc.norm_unit || ''}
+                </div>
+            `;
+        } else {
+            controlHtml = `
+                <div class="btn-group" role="group">
+                    <button type="button" class="btn btn-outline-success btn-sm qc-btn"
+                            data-resultado="pass" data-check-id="${qc.id}" data-check-idx="${idx}"
+                            onclick="selecionarQC(this, 'pass')">
+                        <i class="fas fa-check"></i> Pass
+                    </button>
+                    <button type="button" class="btn btn-outline-danger btn-sm qc-btn"
+                            data-resultado="fail" data-check-id="${qc.id}" data-check-idx="${idx}"
+                            onclick="selecionarQC(this, 'fail')">
+                        <i class="fas fa-times"></i> Fail
+                    </button>
+                </div>
+            `;
+        }
+
+        container.innerHTML += `
+            <div class="qc-card" data-check-id="${qc.id}" data-point-id="${qc.point_id}"
+                 data-product-id="${qc.product_id}" data-test-type="${qc.test_type}">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong class="small">${qc.title || qc.name}</strong>
+                        <div class="text-muted" style="font-size: 0.75rem;">
+                            ${qc.product_name || 'Operação'} — ${qc.test_type === 'measure' ? 'Medição' : 'Aprovação'}
+                        </div>
+                    </div>
+                    <div class="text-end">
+                        ${controlHtml}
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+}
+
+function selecionarQC(btn, resultado) {
+    const group = btn.closest('.btn-group');
+    group.querySelectorAll('.qc-btn').forEach(b => {
+        b.classList.remove('active-pass', 'active-fail', 'active');
+    });
+    btn.classList.add(resultado === 'pass' ? 'active-pass' : 'active-fail');
+    btn.classList.add('active');
+}
+
+// =====================================================
+// SALVAR RECEBIMENTO
+// =====================================================
+function salvarRecebimento() {
+    const btnSalvar = document.getElementById('btnSalvar');
+    btnSalvar.disabled = true;
+    btnSalvar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+
+    try {
+        const picking = detalhesPickingAtual.picking;
+
+        // Coletar lotes
+        const lotes = [];
+        const prodCards = document.querySelectorAll('.produto-card');
+        let lotesValidos = true;
+
+        prodCards.forEach((card, idx) => {
+            const productId = parseInt(card.dataset.productId);
+            const moveId = parseInt(card.dataset.moveId);
+            const moveLineId = card.dataset.moveLineId ? parseInt(card.dataset.moveLineId) : null;
+            const tracking = card.dataset.tracking;
+            const qtdEsperada = parseFloat(card.dataset.qtdEsperada);
+            const productName = card.querySelector('strong').textContent;
+
+            const container = document.getElementById(`lotes-${idx}`);
+            const rows = container.querySelectorAll('.lote-row');
+
+            let somaLotes = 0;
+            rows.forEach(row => {
+                const nome = row.querySelector('.lote-nome').value.trim();
+                const qtd = parseFloat(row.querySelector('.lote-qtd').value) || 0;
+                const validadeInput = row.querySelector('.lote-validade');
+                const validade = validadeInput ? validadeInput.value : null;
+
+                if (!nome && tracking !== 'none') {
+                    lotesValidos = false;
+                    toastr.error(`Lote sem nome para produto: ${productName}`);
+                    return;
+                }
+                if (qtd <= 0) {
+                    lotesValidos = false;
+                    toastr.error(`Quantidade inválida para produto: ${productName}`);
+                    return;
+                }
+
+                somaLotes += qtd;
+                lotes.push({
+                    product_id: productId,
+                    product_name: productName,
+                    move_id: moveId,
+                    move_line_id: moveLineId,
+                    lote_nome: nome || 'SEM_LOTE',
+                    quantidade: qtd,
+                    qtd_esperada: qtdEsperada,
+                    data_validade: validade,
+                    tracking: tracking,
+                });
+            });
+
+            // Validar soma
+            if (Math.abs(somaLotes - qtdEsperada) >= 0.001) {
+                lotesValidos = false;
+                toastr.error(`Soma dos lotes (${formatarNumero(somaLotes, 3)}) ≠ qtd esperada (${formatarNumero(qtdEsperada, 3)}) para: ${productName}`);
+            }
+        });
+
+        if (!lotesValidos) {
+            btnSalvar.disabled = false;
+            btnSalvar.innerHTML = '<i class="fas fa-save"></i> Salvar Recebimento';
+            return;
+        }
+
+        // Coletar quality checks
+        const qualityChecks = [];
+        const qcCards = document.querySelectorAll('.qc-card');
+        let qcValidos = true;
+
+        qcCards.forEach(card => {
+            const checkId = parseInt(card.dataset.checkId);
+            const pointId = card.dataset.pointId ? parseInt(card.dataset.pointId) : null;
+            const productId = card.dataset.productId ? parseInt(card.dataset.productId) : null;
+            const testType = card.dataset.testType;
+            const titulo = card.querySelector('strong').textContent;
+
+            if (testType === 'measure') {
+                const measureInput = card.querySelector('.qc-measure');
+                const valorMedido = parseFloat(measureInput.value);
+
+                if (isNaN(valorMedido)) {
+                    qcValidos = false;
+                    toastr.error(`Valor medido não preenchido para: ${titulo}`);
+                    return;
+                }
+
+                // Determinar pass/fail baseado na tolerancia
+                const toleranciaMin = parseFloat(card.querySelector('.measure-tolerance').textContent.match(/[\d.,]+/g)?.[0]) || 0;
+                const toleranciaMax = parseFloat(card.querySelector('.measure-tolerance').textContent.match(/[\d.,]+/g)?.[1]) || 0;
+                const resultado = (valorMedido >= toleranciaMin && valorMedido <= toleranciaMax) ? 'pass' : 'fail';
+
+                qualityChecks.push({
+                    check_id: checkId,
+                    point_id: pointId,
+                    product_id: productId,
+                    test_type: testType,
+                    titulo: titulo,
+                    resultado: resultado,
+                    valor_medido: valorMedido,
+                    unidade: card.querySelector('.text-muted.small')?.textContent.trim() || '',
+                    tolerancia_min: toleranciaMin,
+                    tolerancia_max: toleranciaMax,
+                });
+            } else {
+                // passfail
+                const activeBtn = card.querySelector('.qc-btn.active');
+                if (!activeBtn) {
+                    qcValidos = false;
+                    toastr.error(`Quality check não preenchido: ${titulo}`);
+                    return;
+                }
+                const resultado = activeBtn.dataset.resultado;
+
+                qualityChecks.push({
+                    check_id: checkId,
+                    point_id: pointId,
+                    product_id: productId,
+                    test_type: testType,
+                    titulo: titulo,
+                    resultado: resultado,
+                });
+            }
+        });
+
+        if (!qcValidos) {
+            btnSalvar.disabled = false;
+            btnSalvar.innerHTML = '<i class="fas fa-save"></i> Salvar Recebimento';
+            return;
+        }
+
+        // Montar payload
+        const payload = {
+            picking_id: picking.id,
+            picking_name: picking.name,
+            purchase_order_id: picking.purchase_order_id,
+            purchase_order_name: picking.purchase_order_name,
+            partner_id: picking.partner_id,
+            partner_name: picking.partner_name,
+            company_id: parseInt(document.getElementById('filtroEmpresa').value),
+            numero_nf: picking.origin || '',
+            lotes: lotes,
+            quality_checks: qualityChecks,
+        };
+
+        // Enviar
+        fetch('/recebimento/fisico/salvar', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '',
+            },
+            body: JSON.stringify(payload),
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                toastr.error(data.error);
+                if (data.erros_lotes) {
+                    data.erros_lotes.forEach(e => toastr.warning(e));
+                }
+                btnSalvar.disabled = false;
+                btnSalvar.innerHTML = '<i class="fas fa-save"></i> Salvar Recebimento';
+                return;
+            }
+
+            toastr.success(data.message || 'Recebimento salvo com sucesso!');
+            bootstrap.Modal.getInstance(document.getElementById('modalRecebimento')).hide();
+
+            // Recarregar pickings
+            setTimeout(() => buscarPickings(), 1000);
+        })
+        .catch(err => {
+            toastr.error('Erro ao salvar: ' + err.message);
+            btnSalvar.disabled = false;
+            btnSalvar.innerHTML = '<i class="fas fa-save"></i> Salvar Recebimento';
+        });
+
+    } catch (err) {
+        toastr.error('Erro inesperado: ' + err.message);
+        btnSalvar.disabled = false;
+        btnSalvar.innerHTML = '<i class="fas fa-save"></i> Salvar Recebimento';
+    }
+}
+
+// =====================================================
+// UTILITÁRIOS
+// =====================================================
+function formatarNumero(valor, decimais) {
+    if (valor === null || valor === undefined || isNaN(valor)) return '0';
+    return parseFloat(valor).toLocaleString('pt-BR', {
+        minimumFractionDigits: decimais,
+        maximumFractionDigits: decimais,
+    });
+}
+
+// =====================================================
+// SINCRONIZACAO MANUAL
+// =====================================================
+function initSyncDatas() {
+    const hoje = new Date();
+    const seteDiasAtras = new Date(hoje);
+    seteDiasAtras.setDate(hoje.getDate() - 7);
+
+    document.getElementById('syncDataAte').value = hoje.toISOString().split('T')[0];
+    document.getElementById('syncDataDe').value = seteDiasAtras.toISOString().split('T')[0];
+}
+
+function executarSyncManual() {
+    const dataDe = document.getElementById('syncDataDe').value;
+    const dataAte = document.getElementById('syncDataAte').value;
+
+    if (!dataDe || !dataAte) {
+        toastr.error('Preencha as datas De e Até');
+        return;
+    }
+
+    if (dataDe > dataAte) {
+        toastr.error('Data "De" deve ser menor ou igual a "Até"');
+        return;
+    }
+
+    const btnSync = document.getElementById('btnSync');
+    btnSync.disabled = true;
+    btnSync.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sincronizando...';
+
+    document.getElementById('syncResultado').style.display = 'none';
+
+    fetch('/recebimento/fisico/sincronizar', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '',
+        },
+        body: JSON.stringify({ data_de: dataDe, data_ate: dataAte }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        btnSync.disabled = false;
+        btnSync.innerHTML = '<i class="fas fa-sync-alt"></i> Sincronizar Agora';
+
+        const divResultado = document.getElementById('syncResultado');
+        divResultado.style.display = 'block';
+
+        if (data.success) {
+            divResultado.innerHTML = `
+                <div class="alert alert-success mb-0">
+                    <i class="fas fa-check-circle me-1"></i>
+                    <strong>Concluído!</strong> ${data.novos} novos, ${data.atualizados} atualizados
+                    <small class="d-block text-muted mt-1">Tempo: ${data.tempo_execucao}s</small>
+                </div>
+            `;
+            // Recarregar pickings após sync
+            buscarPickings();
+        } else {
+            divResultado.innerHTML = `
+                <div class="alert alert-danger mb-0">
+                    <i class="fas fa-exclamation-circle me-1"></i>
+                    <strong>Erro:</strong> ${data.error || 'Erro desconhecido'}
+                </div>
+            `;
+        }
+    })
+    .catch(err => {
+        btnSync.disabled = false;
+        btnSync.innerHTML = '<i class="fas fa-sync-alt"></i> Sincronizar Agora';
+        toastr.error('Erro na sincronização: ' + err.message);
+    });
+}
+
+// Permitir buscar com Enter nos campos de filtro
+document.addEventListener('DOMContentLoaded', function() {
+    ['filtroNf', 'filtroFornecedor'].forEach(id => {
+        document.getElementById(id)?.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                buscarPickings();
+            }
+        });
+    });
+
+    // Inicializar datas do modal de sync
+    initSyncDatas();
+});
+</script>
+{% endblock %}

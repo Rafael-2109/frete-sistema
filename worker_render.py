@@ -88,7 +88,7 @@ def run_single_worker(config, burst=False):
 @click.option('--workers', default=2, help='Número de workers paralelos')
 @click.option('--verbose', is_flag=True, help='Modo verbose com mais logs')
 @click.option('--burst', is_flag=True, help='Executa jobs pendentes e para')
-@click.option('--queues', default='atacadao,odoo_lancamento,impostos,high,default', help='Filas a processar')
+@click.option('--queues', default='atacadao,odoo_lancamento,impostos,recebimento,high,default', help='Filas a processar')
 def run_worker(workers, verbose, burst, queues):
     """
     Executa o worker otimizado para o Render

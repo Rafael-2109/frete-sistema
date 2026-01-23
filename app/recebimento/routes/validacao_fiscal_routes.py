@@ -407,7 +407,7 @@ def importar_perfil_fiscal_excel():
         usuario = current_user.nome if hasattr(current_user, 'nome') else 'IMPORT_EXCEL'
 
         for idx, row in df.iterrows():
-            linha_num = idx + 2  # +2 porque Excel comeca em 1 e tem header
+            linha_num = idx + 2  # +2 porque Excel comeca em 1 e tem header # type: ignore
 
             try:
                 # 5.1 Validar campos obrigatorios

@@ -44,19 +44,24 @@ class PalletSyncService:
             from app.odoo.utils.connection import get_odoo_connection
             self.odoo = get_odoo_connection()
 
-    def sincronizar_remessas(self, dias_retroativos=30):
+    def sincronizar_remessas(self, dias_retroativos=30, data_de=None, data_ate=None):
         """
         Importa NFs de remessa de pallet (l10n_br_tipo_pedido = 'vasilhame')
 
         Args:
-            dias_retroativos: Quantos dias para tras buscar
+            dias_retroativos: Quantos dias para tras buscar (ignorado se data_de informado)
+            data_de: Data inicial absoluta (formato YYYY-MM-DD)
+            data_ate: Data final absoluta (formato YYYY-MM-DD)
 
         Returns:
             dict: Resumo da sincronizacao
         """
-        logger.info(f"🔄 Iniciando sincronizacao de remessas de pallet (ultimos {dias_retroativos} dias)")
-
-        data_corte = (datetime.now() - timedelta(days=dias_retroativos)).strftime('%Y-%m-%d')
+        if data_de:
+            data_corte = data_de
+            logger.info(f"🔄 Iniciando sincronizacao de remessas de pallet (periodo: {data_de} a {data_ate or 'hoje'})")
+        else:
+            data_corte = (datetime.now() - timedelta(days=dias_retroativos)).strftime('%Y-%m-%d')
+            logger.info(f"🔄 Iniciando sincronizacao de remessas de pallet (ultimos {dias_retroativos} dias)")
 
         resumo = {
             'processados': 0,
@@ -74,6 +79,8 @@ class PalletSyncService:
                 ('l10n_br_tipo_pedido', '=', 'vasilhame'),
                 ('invoice_date', '>=', data_corte)
             ]
+            if data_ate:
+                domain.append(('invoice_date', '<=', data_ate))
 
             campos = [
                 'id', 'name', 'invoice_date', 'partner_id',
@@ -206,19 +213,24 @@ class PalletSyncService:
 
         return resumo
 
-    def sincronizar_vendas_pallet(self, dias_retroativos=30):
+    def sincronizar_vendas_pallet(self, dias_retroativos=30, data_de=None, data_ate=None):
         """
         Importa NFs de venda de pallet (cod_produto = '208000012')
 
         Args:
-            dias_retroativos: Quantos dias para tras buscar
+            dias_retroativos: Quantos dias para tras buscar (ignorado se data_de informado)
+            data_de: Data inicial absoluta (formato YYYY-MM-DD)
+            data_ate: Data final absoluta (formato YYYY-MM-DD)
 
         Returns:
             dict: Resumo da sincronizacao
         """
-        logger.info(f"🔄 Iniciando sincronizacao de vendas de pallet (ultimos {dias_retroativos} dias)")
-
-        data_corte = (datetime.now() - timedelta(days=dias_retroativos)).strftime('%Y-%m-%d')
+        if data_de:
+            data_corte = data_de
+            logger.info(f"🔄 Iniciando sincronizacao de vendas de pallet (periodo: {data_de} a {data_ate or 'hoje'})")
+        else:
+            data_corte = (datetime.now() - timedelta(days=dias_retroativos)).strftime('%Y-%m-%d')
+            logger.info(f"🔄 Iniciando sincronizacao de vendas de pallet (ultimos {dias_retroativos} dias)")
 
         resumo = {
             'processados': 0,
@@ -250,6 +262,8 @@ class PalletSyncService:
                 ('move_id.state', '=', 'posted'),
                 ('move_id.invoice_date', '>=', data_corte)
             ]
+            if data_ate:
+                domain.append(('move_id.invoice_date', '<=', data_ate))
 
             campos = [
                 'id', 'move_id', 'product_id', 'quantity', 'price_total', 'partner_id'
@@ -376,7 +390,7 @@ class PalletSyncService:
 
         return resumo
 
-    def sincronizar_devolucoes(self, dias_retroativos=30):
+    def sincronizar_devolucoes(self, dias_retroativos=30, data_de=None, data_ate=None):
         """
         Importa NFs de devolucao de pallet (NFs de entrada que referenciam remessas de pallet)
 
@@ -385,14 +399,19 @@ class PalletSyncService:
         - NF de entrada do tipo refund que referencia NF de vasilhame
 
         Args:
-            dias_retroativos: Quantos dias para tras buscar
+            dias_retroativos: Quantos dias para tras buscar (ignorado se data_de informado)
+            data_de: Data inicial absoluta (formato YYYY-MM-DD)
+            data_ate: Data final absoluta (formato YYYY-MM-DD)
 
         Returns:
             dict: Resumo da sincronizacao
         """
-        logger.info(f"🔄 Iniciando sincronizacao de devolucoes de pallet (ultimos {dias_retroativos} dias)")
-
-        data_corte = (datetime.now() - timedelta(days=dias_retroativos)).strftime('%Y-%m-%d')
+        if data_de:
+            data_corte = data_de
+            logger.info(f"🔄 Iniciando sincronizacao de devolucoes de pallet (periodo: {data_de} a {data_ate or 'hoje'})")
+        else:
+            data_corte = (datetime.now() - timedelta(days=dias_retroativos)).strftime('%Y-%m-%d')
+            logger.info(f"🔄 Iniciando sincronizacao de devolucoes de pallet (ultimos {dias_retroativos} dias)")
 
         resumo = {
             'processados': 0,
@@ -412,6 +431,8 @@ class PalletSyncService:
                 ('l10n_br_tipo_pedido', '=', 'vasilhame'),
                 ('invoice_date', '>=', data_corte)
             ]
+            if data_ate:
+                domain.append(('invoice_date', '<=', data_ate))
 
             campos = [
                 'id', 'name', 'invoice_date', 'partner_id',
@@ -561,7 +582,7 @@ class PalletSyncService:
 
         return resumo
 
-    def sincronizar_recusas(self, dias_retroativos=30):
+    def sincronizar_recusas(self, dias_retroativos=30, data_de=None, data_ate=None):
         """
         Importa NFs de remessa de pallet que foram recusadas/canceladas
 
@@ -570,14 +591,19 @@ class PalletSyncService:
         - NF foi cancelada dentro do prazo de 24h
 
         Args:
-            dias_retroativos: Quantos dias para tras buscar
+            dias_retroativos: Quantos dias para tras buscar (ignorado se data_de informado)
+            data_de: Data inicial absoluta (formato YYYY-MM-DD)
+            data_ate: Data final absoluta (formato YYYY-MM-DD)
 
         Returns:
             dict: Resumo da sincronizacao
         """
-        logger.info(f"🔄 Iniciando sincronizacao de recusas de pallet (ultimos {dias_retroativos} dias)")
-
-        data_corte = (datetime.now() - timedelta(days=dias_retroativos)).strftime('%Y-%m-%d')
+        if data_de:
+            data_corte = data_de
+            logger.info(f"🔄 Iniciando sincronizacao de recusas de pallet (periodo: {data_de} a {data_ate or 'hoje'})")
+        else:
+            data_corte = (datetime.now() - timedelta(days=dias_retroativos)).strftime('%Y-%m-%d')
+            logger.info(f"🔄 Iniciando sincronizacao de recusas de pallet (ultimos {dias_retroativos} dias)")
 
         resumo = {
             'processados': 0,
@@ -596,6 +622,8 @@ class PalletSyncService:
                 ('l10n_br_tipo_pedido', '=', 'vasilhame'),
                 ('invoice_date', '>=', data_corte)
             ]
+            if data_ate:
+                domain.append(('invoice_date', '<=', data_ate))
 
             campos = [
                 'id', 'name', 'invoice_date', 'partner_id',
@@ -727,24 +755,30 @@ class PalletSyncService:
 
         return resumo
 
-    def sincronizar_tudo(self, dias_retroativos=30):
+    def sincronizar_tudo(self, dias_retroativos=30, data_de=None, data_ate=None):
         """
         Sincroniza remessas, vendas, devolucoes e recusas de pallet
 
         Args:
-            dias_retroativos: Quantos dias para tras buscar
+            dias_retroativos: Quantos dias para tras buscar (ignorado se data_de informado)
+            data_de: Data inicial absoluta (formato YYYY-MM-DD)
+            data_ate: Data final absoluta (formato YYYY-MM-DD)
 
         Returns:
             dict: Resumo consolidado
         """
         logger.info("=" * 60)
         logger.info("🚀 INICIANDO SINCRONIZACAO COMPLETA DE PALLET")
+        if data_de:
+            logger.info(f"   Periodo: {data_de} a {data_ate or 'hoje'}")
+        else:
+            logger.info(f"   Ultimos {dias_retroativos} dias")
         logger.info("=" * 60)
 
-        resumo_remessas = self.sincronizar_remessas(dias_retroativos)
-        resumo_vendas = self.sincronizar_vendas_pallet(dias_retroativos)
-        resumo_devolucoes = self.sincronizar_devolucoes(dias_retroativos)
-        resumo_recusas = self.sincronizar_recusas(dias_retroativos)
+        resumo_remessas = self.sincronizar_remessas(dias_retroativos, data_de=data_de, data_ate=data_ate)
+        resumo_vendas = self.sincronizar_vendas_pallet(dias_retroativos, data_de=data_de, data_ate=data_ate)
+        resumo_devolucoes = self.sincronizar_devolucoes(dias_retroativos, data_de=data_de, data_ate=data_ate)
+        resumo_recusas = self.sincronizar_recusas(dias_retroativos, data_de=data_de, data_ate=data_ate)
 
         return {
             'remessas': resumo_remessas,

@@ -48,6 +48,7 @@ JANELA_PALLET = int(os.environ.get('JANELA_PALLET', 5760))  # ✅ 5760 minutos (
 DIAS_REVERSOES = int(os.environ.get('DIAS_REVERSOES', 30))  # ✅ 30 dias para Reversões de NF
 JANELA_VALIDACAO_FISCAL = int(os.environ.get('JANELA_VALIDACAO_FISCAL', 120))  # ✅ 120 minutos para Validação Fiscal
 JANELA_EXTRATOS = int(os.environ.get('JANELA_EXTRATOS', 120))  # ✅ 120 minutos para Sincronização de Extratos via Odoo
+JANELA_PICKINGS = int(os.environ.get('JANELA_PICKINGS', 90))  # ✅ 90 minutos para Pickings de Recebimento (Fase 4)
 MAX_RETRIES = 3
 RETRY_DELAY = 5
 
@@ -69,6 +70,7 @@ monitoramento_sync_service = None  # ✅ Service de Sincronização com Monitora
 validacao_recebimento_job = None  # ✅ Job de Validação de Recebimento (Fase 1 + Fase 2)
 validacao_ibscbs_job = None  # ✅ Job de Validação IBS/CBS (CTes + NF-es)
 extratos_service = None  # ✅ Service de Sincronização de Extratos via Odoo
+picking_recebimento_sync_service = None  # ✅ Service de Pickings de Recebimento (Fase 4)
 
 
 def inicializar_services():
@@ -77,7 +79,7 @@ def inicializar_services():
     Isso evita problemas de SSL e contexto que ocorrem quando
     instanciados dentro do app.app_context()
     """
-    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_recebimento_job, validacao_ibscbs_job, extratos_service
+    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_recebimento_job, validacao_ibscbs_job, extratos_service, picking_recebimento_sync_service
 
     try:
         # IMPORTANTE: Importar e instanciar FORA do contexto
@@ -98,6 +100,7 @@ def inicializar_services():
         from app.recebimento.jobs.validacao_recebimento_job import ValidacaoRecebimentoJob  # ✅ Job de Validação de Recebimento (Fase 1 + Fase 2)
         from app.recebimento.jobs.validacao_ibscbs_job import ValidacaoIbsCbsJob  # ✅ Job de Validação IBS/CBS (CTes + NF-es)
         from app.financeiro.services.sincronizacao_extratos_service import SincronizacaoExtratosService  # ✅ Service de Extratos via Odoo
+        from app.recebimento.services.picking_recebimento_sync_service import PickingRecebimentoSyncService  # ✅ Service de Pickings Recebimento (Fase 4)
 
         logger.info("🔧 Inicializando services FORA do contexto...")
         faturamento_service = FaturamentoService()
@@ -117,6 +120,7 @@ def inicializar_services():
         validacao_recebimento_job = ValidacaoRecebimentoJob()  # ✅ Instanciar job de Validação de Recebimento (Fase 1 + Fase 2)
         validacao_ibscbs_job = ValidacaoIbsCbsJob()  # ✅ Instanciar job de Validação IBS/CBS (CTes + NF-es)
         extratos_service = SincronizacaoExtratosService()  # ✅ Instanciar service de Extratos via Odoo
+        picking_recebimento_sync_service = PickingRecebimentoSyncService()  # ✅ Instanciar service de Pickings Recebimento (Fase 4)
         logger.info("✅ Services inicializados com sucesso")
 
         return True
@@ -131,7 +135,7 @@ def executar_sincronizacao():
     Executa sincronização usando services já instanciados
     Similar ao que funciona em SincronizacaoIntegradaService
     """
-    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_recebimento_job, validacao_ibscbs_job, extratos_service
+    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_recebimento_job, validacao_ibscbs_job, extratos_service, picking_recebimento_sync_service
 
     logger.info("=" * 60)
     logger.info(f"🔄 SINCRONIZAÇÃO DEFINITIVA - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -155,10 +159,11 @@ def executar_sincronizacao():
     logger.info(f"   - Validação Recebimento (Fase 1+2): janela={JANELA_VALIDACAO_FISCAL}min")  # ✅ Validação de Recebimento (Fase 1 Fiscal + Fase 2 NF×PO)
     logger.info(f"   - Validação IBS/CBS (CTe+NF-e): janela={JANELA_VALIDACAO_FISCAL}min")  # ✅ Validação IBS/CBS
     logger.info(f"   - Extratos via Odoo: janela={JANELA_EXTRATOS}min")  # ✅ Sincronização de Extratos via Odoo
+    logger.info(f"   - Pickings Recebimento: janela={JANELA_PICKINGS}min")  # ✅ Pickings Recebimento (Fase 4)
     logger.info("=" * 60)
 
     # Verificar se services estão inicializados
-    if not all([faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_recebimento_job, validacao_ibscbs_job, extratos_service]):
+    if not all([faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_recebimento_job, validacao_ibscbs_job, extratos_service, picking_recebimento_sync_service]):
         logger.warning("⚠️ Services não inicializados, tentando inicializar...")
         if not inicializar_services():
             logger.error("❌ Falha ao inicializar services")
@@ -1260,6 +1265,61 @@ def executar_sincronizacao():
                 else:
                     break
 
+        # Limpar sessão entre services
+        try:
+            db.session.remove()
+            db.engine.dispose()
+            logger.info("♻️ Reconexão antes de Pickings Recebimento")
+        except Exception as e:
+            pass
+
+        # 1️⃣7️⃣ PICKINGS RECEBIMENTO (Fase 4) - com retry
+        sucesso_pickings_recebimento = False
+        for tentativa in range(1, MAX_RETRIES + 1):
+            try:
+                logger.info(f"📦 Sincronizando Pickings Recebimento (tentativa {tentativa}/{MAX_RETRIES})...")
+                logger.info(f"   Janela: {JANELA_PICKINGS} minutos")
+
+                resultado_pickings = picking_recebimento_sync_service.sincronizar_pickings_incremental(
+                    minutos_janela=JANELA_PICKINGS,
+                    primeira_execucao=False
+                )
+
+                if resultado_pickings.get("sucesso"):
+                    sucesso_pickings_recebimento = True
+                    logger.info("✅ Pickings Recebimento sincronizados!")
+                    logger.info(f"   - Novos: {resultado_pickings.get('novos', 0)}")
+                    logger.info(f"   - Atualizados: {resultado_pickings.get('atualizados', 0)}")
+
+                    db.session.commit()
+                    break
+                else:
+                    erro = resultado_pickings.get('erro', 'Erro desconhecido')
+                    logger.error(f"❌ Erro Pickings Recebimento: {erro}")
+
+                    if tentativa < MAX_RETRIES:
+                        logger.info(f"🔄 Aguardando {RETRY_DELAY}s antes de tentar novamente...")
+                        sleep(RETRY_DELAY)
+                        from app.recebimento.services.picking_recebimento_sync_service import PickingRecebimentoSyncService
+                        picking_recebimento_sync_service = PickingRecebimentoSyncService()
+                    else:
+                        break
+
+            except Exception as e:
+                logger.error(f"❌ Erro ao sincronizar Pickings Recebimento: {e}")
+                if tentativa < MAX_RETRIES and ("SSL" in str(e) or "connection" in str(e).lower()):
+                    logger.info(f"🔄 Tentando reconectar ({tentativa}/{MAX_RETRIES})...")
+                    sleep(RETRY_DELAY)
+                    try:
+                        db.session.rollback()
+                        db.session.remove()
+                        from app.recebimento.services.picking_recebimento_sync_service import PickingRecebimentoSyncService
+                        picking_recebimento_sync_service = PickingRecebimentoSyncService()
+                    except Exception as e:
+                        pass
+                else:
+                    break
+
         # Limpar conexões ao final
         try:
             db.session.remove()
@@ -1269,12 +1329,12 @@ def executar_sincronizacao():
 
         # Resumo final
         logger.info("=" * 60)
-        total_sucesso = sum([sucesso_faturamento, sucesso_carteira, sucesso_verificacao, sucesso_requisicoes, sucesso_pedidos, sucesso_alocacoes, sucesso_entradas, sucesso_ctes, sucesso_contas_receber, sucesso_baixas, sucesso_extratos, sucesso_contas_pagar, sucesso_nfds, sucesso_pallets, sucesso_reversoes, sucesso_monitoramento, sucesso_validacao_recebimento, sucesso_validacao_ibscbs])
+        total_sucesso = sum([sucesso_faturamento, sucesso_carteira, sucesso_verificacao, sucesso_requisicoes, sucesso_pedidos, sucesso_alocacoes, sucesso_entradas, sucesso_ctes, sucesso_contas_receber, sucesso_baixas, sucesso_extratos, sucesso_contas_pagar, sucesso_nfds, sucesso_pallets, sucesso_reversoes, sucesso_monitoramento, sucesso_validacao_recebimento, sucesso_validacao_ibscbs, sucesso_pickings_recebimento])
 
-        if total_sucesso == 18:
+        if total_sucesso == 19:
             logger.info("✅ SINCRONIZAÇÃO COMPLETA COM SUCESSO!")
-        elif total_sucesso >= 16:
-            logger.info(f"⚠️ Sincronização parcial - {total_sucesso}/18 módulos OK")
+        elif total_sucesso >= 17:
+            logger.info(f"⚠️ Sincronização parcial - {total_sucesso}/19 módulos OK")
             if not sucesso_faturamento:
                 logger.info("   ❌ Faturamento: FALHOU")
             if not sucesso_carteira:
@@ -1311,8 +1371,10 @@ def executar_sincronizacao():
                 logger.info("   ❌ Validação Recebimento (Fase 1+2): FALHOU")
             if not sucesso_validacao_ibscbs:
                 logger.info("   ❌ Validação IBS/CBS (CTe+NF-e): FALHOU")
+            if not sucesso_pickings_recebimento:
+                logger.info("   ❌ Pickings Recebimento (Fase 4): FALHOU")
         else:
-            logger.error(f"❌ Sincronização com falhas graves - apenas {total_sucesso}/18 módulos OK")
+            logger.error(f"❌ Sincronização com falhas graves - apenas {total_sucesso}/19 módulos OK")
         logger.info("=" * 60)
 
 

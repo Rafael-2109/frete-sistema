@@ -152,7 +152,7 @@ async function abrirModalDetalhesSeparacao(separacaoLoteId) {
             if (dados.transportadora) {
                 html += '<div class="col-md-6">';
                 html += '<table class="table table-sm table-bordered">';
-                html += `<tr><th style="width: 150px;">Transportadora:</th><td><strong>${dados.transportadora.nome || '-'}</strong></td></tr>`;
+                html += `<tr><th style="width: 150px;">Transportadora:</th><td><strong>${dados.transportadora.razao_social || '-'}</strong></td></tr>`;
                 html += `<tr><th>CNPJ:</th><td>${dados.transportadora.cnpj || '-'}</td></tr>`;
                 html += '</table>';
                 html += '</div>';

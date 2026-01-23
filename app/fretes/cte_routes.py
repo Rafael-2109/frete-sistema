@@ -552,7 +552,7 @@ def buscar_fretes_api():
             'cliente': frete.nome_cliente,
             'cnpj': frete.cnpj_cliente,
             'valor_cte': float(frete.valor_cte) if frete.valor_cte else 0,
-            'transportadora': frete.transportadora.nome if frete.transportadora else 'N/A'
+            'transportadora': frete.transportadora.razao_social if frete.transportadora else 'N/A'
         })
 
     return jsonify(resultados)

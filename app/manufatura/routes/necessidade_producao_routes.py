@@ -344,7 +344,7 @@ def register_necessidade_producao_routes(bp):
                         transportadora = db.session.get(Transportadora,embarque.transportadora_id) if embarque.transportadora_id else None
                         if transportadora:
                             transportadora_info = {
-                                'nome': transportadora.nome,
+                                'nome': transportadora.razao_social,
                                 'cnpj': transportadora.cnpj
                             }
 

@@ -30,3 +30,7 @@ def init_app(app):
     # Views (telas HTML) de recebimento
     from .routes.views import recebimento_views_bp
     app.register_blueprint(recebimento_views_bp)
+
+    # APIs e Views de Recebimento Fisico (Fase 4)
+    from .routes.recebimento_fisico_routes import recebimento_fisico_bp
+    app.register_blueprint(recebimento_fisico_bp)

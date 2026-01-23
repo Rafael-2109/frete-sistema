@@ -1,0 +1,435 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-tasks text-info me-2"></i>Status Recebimentos</h2>
+            <p class="text-muted mb-0">Acompanhar processamento dos recebimentos no Odoo</p>
+        </div>
+        <div>
+            <a href="{{ url_for('recebimento_fisico_views.index') }}" class="btn btn-outline-success">
+                <i class="fas fa-boxes"></i> Novo Recebimento
+            </a>
+            <button class="btn btn-outline-primary ms-2" onclick="carregarRecebimentos()">
+                <i class="fas fa-sync-alt"></i> Atualizar
+            </button>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body py-3">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small">Empresa</label>
+                    <select id="filtroEmpresa" class="form-select form-select-sm">
+                        <option value="">Todas</option>
+                        <option value="1">NACOM GOYA - FB</option>
+                        <option value="3">NACOM GOYA - SC</option>
+                        <option value="4">NACOM GOYA - CD</option>
+                        <option value="5">LA FAMIGLIA - LF</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small">Status</label>
+                    <select id="filtroStatus" class="form-select form-select-sm">
+                        <option value="">Todos</option>
+                        <option value="pendente">Pendente</option>
+                        <option value="processando">Processando</option>
+                        <option value="processado">Processado</option>
+                        <option value="erro">Erro</option>
+                        <option value="cancelado">Cancelado</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Limite</label>
+                    <select id="filtroLimite" class="form-select form-select-sm">
+                        <option value="20">20</option>
+                        <option value="50" selected>50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-primary btn-sm w-100" onclick="carregarRecebimentos()">
+                        <i class="fas fa-search"></i> Filtrar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cards de Estatisticas -->
+    <div class="row mb-4" id="statsCards" style="display: none;">
+        <div class="col">
+            <div class="card border-left-warning">
+                <div class="card-body py-2">
+                    <h6 class="text-muted text-uppercase small mb-1">Pendentes</h6>
+                    <h3 class="mb-0 text-warning" id="statPendente">0</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card border-left-info">
+                <div class="card-body py-2">
+                    <h6 class="text-muted text-uppercase small mb-1">Processando</h6>
+                    <h3 class="mb-0 text-info" id="statProcessando">0</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card border-left-success">
+                <div class="card-body py-2">
+                    <h6 class="text-muted text-uppercase small mb-1">Processados</h6>
+                    <h3 class="mb-0 text-success" id="statProcessado">0</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card border-left-danger">
+                <div class="card-body py-2">
+                    <h6 class="text-muted text-uppercase small mb-1">Erros</h6>
+                    <h3 class="mb-0 text-danger" id="statErro">0</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela de Recebimentos -->
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Picking</th>
+                            <th>Fornecedor</th>
+                            <th>PO</th>
+                            <th>NF</th>
+                            <th>Status</th>
+                            <th>Tentativas</th>
+                            <th>Criado em</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelaRecebimentos">
+                        <tr>
+                            <td colspan="9" class="text-center py-4 text-muted">
+                                <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
+                                Clique em "Filtrar" para carregar os recebimentos.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading -->
+    <div id="loadingStatus" class="text-center py-4" style="display: none;">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="mt-2 small">Carregando recebimentos...</p>
+    </div>
+</div>
+
+<!-- Modal: Detalhes do Recebimento -->
+<div class="modal fade" id="modalDetalhes" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Detalhes do Recebimento #<span id="detalheId"></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="detalheConteudo">
+                    <!-- Preenchido via JS -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .badge-status {
+        font-size: 0.75rem;
+        padding: 0.3em 0.6em;
+    }
+    .badge-pendente { background-color: var(--bs-warning); color: var(--bs-dark); }
+    .badge-processando { background-color: var(--bs-info); color: white; }
+    .badge-processado { background-color: var(--bs-success); color: white; }
+    .badge-erro { background-color: var(--bs-danger); color: white; }
+    .badge-cancelado { background-color: var(--bs-secondary); color: white; }
+
+    .btn-action {
+        padding: 0.2rem 0.4rem;
+        font-size: 0.75rem;
+    }
+
+    .erro-msg {
+        font-size: 0.75rem;
+        color: var(--bs-danger);
+        max-width: 200px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// =====================================================
+// CARREGAR RECEBIMENTOS
+// =====================================================
+function carregarRecebimentos() {
+    const companyId = document.getElementById('filtroEmpresa').value;
+    const status = document.getElementById('filtroStatus').value;
+    const limit = document.getElementById('filtroLimite').value;
+
+    document.getElementById('loadingStatus').style.display = 'block';
+
+    let url = `/recebimento/fisico/status/listar?limit=${limit}`;
+    if (companyId) url += `&company_id=${companyId}`;
+    if (status) url += `&status=${status}`;
+
+    fetch(url)
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('loadingStatus').style.display = 'none';
+
+            if (data.error) {
+                toastr.error(data.error);
+                return;
+            }
+
+            renderRecebimentos(data.recebimentos || []);
+            atualizarStats(data.recebimentos || []);
+        })
+        .catch(err => {
+            document.getElementById('loadingStatus').style.display = 'none';
+            toastr.error('Erro ao carregar: ' + err.message);
+        });
+}
+
+function renderRecebimentos(recebimentos) {
+    const tbody = document.getElementById('tabelaRecebimentos');
+
+    if (recebimentos.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="9" class="text-center py-4 text-muted">
+                    Nenhum recebimento encontrado com os filtros atuais.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = recebimentos.map(r => {
+        const statusBadge = `<span class="badge badge-status badge-${r.status}">${r.status}</span>`;
+        const criadoEm = r.criado_em ? new Date(r.criado_em).toLocaleString('pt-BR') : '-';
+        const tentativas = `${r.tentativas}/${r.max_tentativas}`;
+
+        let acoes = '';
+        if (r.status === 'erro') {
+            acoes += `<button class="btn btn-outline-warning btn-action me-1" onclick="retryRecebimento(${r.id})" title="Retentar">
+                <i class="fas fa-redo"></i>
+            </button>`;
+        }
+        if (r.status === 'processado' || r.status === 'erro') {
+            acoes += `<button class="btn btn-outline-info btn-action me-1" onclick="consultarOdoo(${r.id})" title="Consultar Odoo">
+                <i class="fas fa-cloud"></i>
+            </button>`;
+        }
+        acoes += `<button class="btn btn-outline-secondary btn-action" onclick="verDetalhes(${r.id}, ${JSON.stringify(r).replace(/"/g, '&quot;')})" title="Detalhes">
+            <i class="fas fa-eye"></i>
+        </button>`;
+
+        const erroMsg = r.erro_mensagem ?
+            `<div class="erro-msg" title="${r.erro_mensagem}">${r.erro_mensagem}</div>` : '';
+
+        return `
+            <tr>
+                <td>${r.id}</td>
+                <td><strong>${r.odoo_picking_name || '-'}</strong></td>
+                <td>${r.odoo_partner_name || '-'}</td>
+                <td>${r.odoo_purchase_order_name || '-'}</td>
+                <td>${r.numero_nf || '-'}</td>
+                <td>${statusBadge}${erroMsg}</td>
+                <td>${tentativas}</td>
+                <td><small>${criadoEm}</small></td>
+                <td class="text-nowrap">${acoes}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function atualizarStats(recebimentos) {
+    const stats = { pendente: 0, processando: 0, processado: 0, erro: 0 };
+    recebimentos.forEach(r => {
+        if (stats.hasOwnProperty(r.status)) {
+            stats[r.status]++;
+        }
+    });
+
+    document.getElementById('statPendente').textContent = stats.pendente;
+    document.getElementById('statProcessando').textContent = stats.processando;
+    document.getElementById('statProcessado').textContent = stats.processado;
+    document.getElementById('statErro').textContent = stats.erro;
+    document.getElementById('statsCards').style.display = 'flex';
+}
+
+// =====================================================
+// AÇÕES
+// =====================================================
+function retryRecebimento(recebimentoId) {
+    if (!confirm('Retentar processamento deste recebimento?')) return;
+
+    fetch(`/recebimento/fisico/status/${recebimentoId}/retry`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '',
+        },
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            toastr.error(data.error);
+            return;
+        }
+        toastr.success(data.message || 'Re-enfileirado com sucesso!');
+        carregarRecebimentos();
+    })
+    .catch(err => toastr.error('Erro: ' + err.message));
+}
+
+function consultarOdoo(recebimentoId) {
+    fetch(`/recebimento/fisico/status/${recebimentoId}/consultar-odoo`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                toastr.error(data.error);
+                return;
+            }
+
+            const stateMap = {
+                'draft': 'Rascunho',
+                'waiting': 'Aguardando',
+                'confirmed': 'Confirmado',
+                'assigned': 'Pronto',
+                'done': 'Concluído',
+                'cancel': 'Cancelado',
+            };
+
+            const stateLabel = stateMap[data.picking_state] || data.picking_state;
+            const icon = data.picking_state === 'done' ? '✅' : '⚠️';
+
+            toastr.info(
+                `${icon} Picking ${data.picking_name || recebimentoId}: <strong>${stateLabel}</strong>`,
+                'Estado no Odoo',
+                { timeOut: 8000, extendedTimeOut: 3000, enableHtml: true }
+            );
+        })
+        .catch(err => toastr.error('Erro ao consultar Odoo: ' + err.message));
+}
+
+function verDetalhes(recebimentoId, recebimento) {
+    document.getElementById('detalheId').textContent = recebimentoId;
+
+    const criadoEm = recebimento.criado_em ?
+        new Date(recebimento.criado_em).toLocaleString('pt-BR') : '-';
+    const processadoEm = recebimento.processado_em ?
+        new Date(recebimento.processado_em).toLocaleString('pt-BR') : '-';
+
+    let html = `
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <table class="table table-sm table-borderless">
+                    <tr><th class="text-muted">Picking:</th><td>${recebimento.odoo_picking_name || '-'}</td></tr>
+                    <tr><th class="text-muted">Fornecedor:</th><td>${recebimento.odoo_partner_name || '-'}</td></tr>
+                    <tr><th class="text-muted">PO:</th><td>${recebimento.odoo_purchase_order_name || '-'}</td></tr>
+                    <tr><th class="text-muted">NF:</th><td>${recebimento.numero_nf || '-'}</td></tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <table class="table table-sm table-borderless">
+                    <tr><th class="text-muted">Status:</th><td><span class="badge badge-status badge-${recebimento.status}">${recebimento.status}</span></td></tr>
+                    <tr><th class="text-muted">Tentativas:</th><td>${recebimento.tentativas}/${recebimento.max_tentativas}</td></tr>
+                    <tr><th class="text-muted">Criado em:</th><td>${criadoEm}</td></tr>
+                    <tr><th class="text-muted">Processado em:</th><td>${processadoEm}</td></tr>
+                    <tr><th class="text-muted">Usuário:</th><td>${recebimento.usuario || '-'}</td></tr>
+                    <tr><th class="text-muted">Job ID:</th><td><code class="small">${recebimento.job_id || '-'}</code></td></tr>
+                </table>
+            </div>
+        </div>
+    `;
+
+    if (recebimento.erro_mensagem) {
+        html += `
+            <div class="alert alert-danger small">
+                <strong>Erro:</strong><br>
+                <pre class="mb-0" style="white-space: pre-wrap; font-size: 0.8rem;">${recebimento.erro_mensagem}</pre>
+            </div>
+        `;
+    }
+
+    if (recebimento.lotes && recebimento.lotes.length > 0) {
+        html += `
+            <h6 class="mt-3"><i class="fas fa-cubes me-1"></i> Lotes (${recebimento.lotes.length})</h6>
+            <table class="table table-sm small">
+                <thead><tr><th>Produto</th><th>Lote</th><th>Qtd</th><th>Validade</th><th>Processado</th></tr></thead>
+                <tbody>
+                    ${recebimento.lotes.map(l => `
+                        <tr>
+                            <td>${l.odoo_product_name || l.odoo_product_id}</td>
+                            <td><code>${l.lote_nome}</code></td>
+                            <td>${parseFloat(l.quantidade).toLocaleString('pt-BR', {minimumFractionDigits: 3})}</td>
+                            <td>${l.data_validade || '-'}</td>
+                            <td>${l.processado ? '<i class="fas fa-check text-success"></i>' : '<i class="fas fa-clock text-warning"></i>'}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    }
+
+    if (recebimento.quality_checks && recebimento.quality_checks.length > 0) {
+        html += `
+            <h6 class="mt-3"><i class="fas fa-vial me-1"></i> Quality Checks (${recebimento.quality_checks.length})</h6>
+            <table class="table table-sm small">
+                <thead><tr><th>Título</th><th>Tipo</th><th>Resultado</th><th>Valor</th><th>Processado</th></tr></thead>
+                <tbody>
+                    ${recebimento.quality_checks.map(qc => `
+                        <tr>
+                            <td>${qc.titulo || '-'}</td>
+                            <td>${qc.test_type}</td>
+                            <td><span class="badge ${qc.resultado === 'pass' ? 'bg-success' : 'bg-danger'}">${qc.resultado}</span></td>
+                            <td>${qc.valor_medido != null ? parseFloat(qc.valor_medido).toLocaleString('pt-BR', {minimumFractionDigits: 4}) + ' ' + (qc.unidade || '') : '-'}</td>
+                            <td>${qc.processado ? '<i class="fas fa-check text-success"></i>' : '<i class="fas fa-clock text-warning"></i>'}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    }
+
+    document.getElementById('detalheConteudo').innerHTML = html;
+    new bootstrap.Modal(document.getElementById('modalDetalhes')).show();
+}
+
+// Auto-carregar ao abrir a pagina
+document.addEventListener('DOMContentLoaded', function() {
+    carregarRecebimentos();
+});
+</script>
+{% endblock %}
