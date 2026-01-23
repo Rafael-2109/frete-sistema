@@ -1350,9 +1350,23 @@ def divergencias_nf_po():
             return f'{cnpj_limpo[:2]}.{cnpj_limpo[2:5]}.{cnpj_limpo[5:8]}/{cnpj_limpo[8:12]}-{cnpj_limpo[12:14]}'
         return cnpj  # Retorna original se nao for 14 digitos
 
+    # Fallback para empresa compradora (DFEs antigos sem campo preenchido)
+    EMPRESAS_COMPRADORA_FALLBACK = {
+        '61724241000330': 'NACOM GOYA - CD',
+        '61724241000178': 'NACOM GOYA - FB',
+        '61724241000259': 'NACOM GOYA - SC',
+        '18467441000163': 'LA FAMIGLIA - LF',
+    }
+
     # Enriquecer itens com dados adicionais
     items_enriquecidos = []
     for div in paginacao.items:
+        # Resolver razao_empresa_compradora com fallback
+        razao_empresa = div.razao_empresa_compradora
+        if not razao_empresa and div.cnpj_empresa_compradora:
+            cnpj_limpo = ''.join(c for c in div.cnpj_empresa_compradora if c.isdigit())
+            razao_empresa = EMPRESAS_COMPRADORA_FALLBACK.get(cnpj_limpo)
+
         item = {
             'id': div.id,
             'validacao_id': div.validacao_id,
@@ -1361,7 +1375,7 @@ def divergencias_nf_po():
             'cnpj_fornecedor': formatar_cnpj(div.cnpj_fornecedor),
             'razao_fornecedor': div.razao_fornecedor,
             'cnpj_empresa_compradora': formatar_cnpj(div.cnpj_empresa_compradora),
-            'razao_empresa_compradora': div.razao_empresa_compradora,
+            'razao_empresa_compradora': razao_empresa,
             'cod_produto_fornecedor': div.cod_produto_fornecedor,
             'cod_produto_interno': div.cod_produto_interno,
             'nome_produto': div.nome_produto,

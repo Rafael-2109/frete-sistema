@@ -57,6 +57,16 @@ function formatarNumero(valor, decimais = 2) {
     return parseFloat(valor).toLocaleString('pt-BR', {minimumFractionDigits: decimais, maximumFractionDigits: decimais});
 }
 
+function formatarData(dataStr) {
+    if (!dataStr || dataStr === '-') return '-';
+    // Tratar 'YYYY-MM-DD', 'YYYY-MM-DD HH:MM:SS' e 'YYYY-MM-DDTHH:MM:SS'
+    const partes = dataStr.split(/[T ]/)[0].split('-');
+    if (partes.length === 3) {
+        return `${partes[2]}/${partes[1]}/${partes[0]}`;
+    }
+    return dataStr;
+}
+
 // =============================================================================
 // POS CANDIDATOS - MODAL PRINCIPAL
 // =============================================================================
@@ -84,7 +94,7 @@ function verPosCandidatos(dfeId) {
             document.getElementById('posNfNumero').textContent = `NF ${data.dfe.numero_nf || '-'}`;
             document.getElementById('posEmpresa').textContent = data.dfe.razao_empresa_compradora || '-';
             document.getElementById('posFornecedor').textContent = data.dfe.razao_fornecedor || '-';
-            document.getElementById('posDataEmissao').textContent = data.dfe.data_emissao || '-';
+            document.getElementById('posDataEmissao').textContent = formatarData(data.dfe.data_emissao);
             document.getElementById('posValorTotal').textContent = formatarMoeda(data.dfe.valor_total);
             document.getElementById('posQtdItens').textContent = data.itens_nf.length;
 
@@ -115,15 +125,34 @@ function renderizarTabelaItensNf(itensNf, posCandidatos) {
 
     let html = '';
     itensNf.forEach((item, idx) => {
-        // Verificar se tem match em algum PO
-        let poMatch = '-';
+        // Verificar match em TODOS os POs candidatos
+        let poMatchBadges = [];
         for (const po of posCandidatos) {
             const linhaMatch = po.linhas.find(l => l.match_item_nf === item.cod_produto_fornecedor);
             if (linhaMatch) {
-                poMatch = `<span class="badge bg-success">${po.po_name}</span>`;
-                break;
+                const div = linhaMatch.divergencias;
+                if (div) {
+                    const qtdOk = div.qtd_ok;
+                    const precoOk = div.preco_ok;
+                    const dataOk = div.data_ok !== false;
+                    const todosOk = qtdOk && precoOk && dataOk;
+                    if (todosOk) {
+                        poMatchBadges.push(`<span class="badge bg-success">${po.po_name}</span>`);
+                    } else {
+                        // Match com divergencia - mostrar quais problemas
+                        const problemas = [];
+                        if (!qtdOk) problemas.push('Qtd');
+                        if (!precoOk) problemas.push('Preco');
+                        if (!dataOk) problemas.push('Data');
+                        poMatchBadges.push(`<span class="badge bg-warning text-dark" title="${problemas.join(', ')}">${po.po_name} <i class="fas fa-exclamation-circle"></i></span>`);
+                    }
+                } else {
+                    // Sem dados de divergencia - badge neutro
+                    poMatchBadges.push(`<span class="badge bg-secondary">${po.po_name}</span>`);
+                }
             }
         }
+        const poMatch = poMatchBadges.length > 0 ? poMatchBadges.join(' ') : '-';
 
         const temConversao = item.fator_conversao && item.fator_conversao !== 1;
         const rowClass = item.tem_depara ? '' : 'table-warning';
@@ -168,10 +197,29 @@ function renderizarPosCandidatos(posCandidatos, itensNf) {
 
     posCandidatos.forEach((po, idx) => {
         const hasMatch = po.qtd_linhas_match > 0;
-        const headerClass = hasMatch ? 'bg-success text-white' : 'bg-light';
-        const matchBadge = hasMatch
-            ? `<span class="badge bg-light text-success">${po.qtd_linhas_match} match(es)</span>`
-            : '<span class="badge bg-secondary">Sem match</span>';
+
+        // Calcular status consolidado das linhas do PO
+        let poQtdOk = true, poPrecoOk = true, poDataOk = true;
+        if (hasMatch) {
+            po.linhas.forEach(l => {
+                if (l.divergencias) {
+                    if (!l.divergencias.qtd_ok) poQtdOk = false;
+                    if (!l.divergencias.preco_ok) poPrecoOk = false;
+                    if (l.divergencias.data_ok === false) poDataOk = false;
+                }
+            });
+        }
+        const todasOk = hasMatch && poQtdOk && poPrecoOk && poDataOk;
+        const headerClass = !hasMatch ? 'bg-light' : (todasOk ? 'bg-success text-white' : 'bg-warning text-dark');
+
+        // Badge com status individual por criterio
+        let matchBadge = '<span class="badge bg-secondary">Sem match</span>';
+        if (hasMatch) {
+            const qtdBadge = `<span class="badge ${poQtdOk ? 'bg-success' : 'bg-danger'}">Qtd: ${poQtdOk ? 'OK' : 'Div.'}</span>`;
+            const precoBadge = `<span class="badge ${poPrecoOk ? 'bg-success' : 'bg-danger'}">Preco: ${poPrecoOk ? 'OK' : 'Div.'}</span>`;
+            const dataBadge = `<span class="badge ${poDataOk ? 'bg-success' : 'bg-danger'}">Data: ${poDataOk ? 'OK' : 'Div.'}</span>`;
+            matchBadge = `<span class="badge bg-light text-dark">${po.qtd_linhas_match} match(es)</span> ${qtdBadge} ${precoBadge} ${dataBadge}`;
+        }
 
         html += `
             <div class="accordion-item">
@@ -186,8 +234,8 @@ function renderizarPosCandidatos(posCandidatos, itensNf) {
                                 ${matchBadge}
                             </div>
                             <div>
-                                <span class="me-3"><small>Pedido:</small> ${po.data_pedido || '-'}</span>
-                                <span class="me-3"><small>Previsto:</small> ${po.data_prevista || '-'}</span>
+                                <span class="me-3"><small>Pedido:</small> ${formatarData(po.data_pedido)}</span>
+                                <span class="me-3"><small>Previsto:</small> ${formatarData(po.data_prevista)}</span>
                                 <span><small>Total:</small> <strong>${formatarMoeda(po.valor_total)}</strong></span>
                             </div>
                         </div>
@@ -241,7 +289,7 @@ function renderizarLinhasPo(linhas) {
         // Dados do PO
         const saldoPo = formatarNumero(linha.saldo, 2);
         const precoPo = formatarMoeda4(linha.preco);
-        const dataPrevista = linha.data_prevista || '-';
+        const dataPrevista = formatarData(linha.data_prevista);
 
         // Dados da NF (se houver match)
         let qtdNf = '-', precoNf = '-';
@@ -256,6 +304,7 @@ function renderizarLinhasPo(linhas) {
             // Divergencias com cores
             const qtdOk = div.qtd_ok;
             const precoOk = div.preco_ok;
+            const dataOk = div.data_ok !== false; // true se nao informado
             const qtdClass = qtdOk ? 'text-success' : 'text-danger fw-bold';
             const precoClass = precoOk ? 'text-success' : 'text-danger fw-bold';
 
@@ -263,19 +312,23 @@ function renderizarLinhasPo(linhas) {
             divQtd = `<span class="${qtdClass}">${sinal(div.dif_qtd_pct)}${div.dif_qtd_pct?.toFixed(1)}%</span>`;
             divPreco = `<span class="${precoClass}">${sinal(div.dif_preco_pct)}${div.dif_preco_pct?.toFixed(1)}%</span>`;
 
-            // Status geral
-            if (qtdOk && precoOk) {
+            // Status geral (inclui data)
+            const todosOk = qtdOk && precoOk && dataOk;
+            if (todosOk) {
                 statusIcon = '<span class="badge bg-success"><i class="fas fa-check-circle"></i> OK</span>';
-            } else if (!qtdOk && !precoOk) {
-                statusIcon = '<span class="badge bg-danger"><i class="fas fa-times-circle"></i> Qtd+Preco</span>';
-            } else if (!qtdOk) {
-                statusIcon = '<span class="badge bg-warning text-dark"><i class="fas fa-exclamation-circle"></i> Qtd</span>';
             } else {
-                statusIcon = '<span class="badge bg-warning text-dark"><i class="fas fa-exclamation-circle"></i> Preco</span>';
+                // Montar lista de problemas
+                const problemas = [];
+                if (!qtdOk) problemas.push('Qtd');
+                if (!precoOk) problemas.push('Preco');
+                if (!dataOk) problemas.push('Data');
+                const badgeClass = problemas.length > 1 ? 'bg-danger' : 'bg-warning text-dark';
+                const icon = problemas.length > 1 ? 'fa-times-circle' : 'fa-exclamation-circle';
+                statusIcon = `<span class="badge ${badgeClass}"><i class="fas ${icon}"></i> ${problemas.join('+')}</span>`;
             }
         }
 
-        const rowClass = hasMatch ? (linha.divergencias.qtd_ok && linha.divergencias.preco_ok ? 'table-success' : 'table-warning') : '';
+        const rowClass = hasMatch ? (linha.divergencias.qtd_ok && linha.divergencias.preco_ok && linha.divergencias.data_ok !== false ? 'table-success' : 'table-warning') : '';
 
         return `
             <tr class="${rowClass}">
@@ -285,7 +338,7 @@ function renderizarLinhasPo(linhas) {
                 </td>
                 <td class="text-end ${saldoClass}"><strong>${saldoPo}</strong></td>
                 <td class="text-end">${precoPo}</td>
-                <td class="text-center"><small>${dataPrevista}</small></td>
+                <td class="text-center"><small class="${hasMatch && linha.divergencias.data_ok === false ? 'text-danger fw-bold' : ''}">${dataPrevista}</small></td>
                 <td class="text-end">${qtdNf}</td>
                 <td class="text-end">${precoNf}</td>
                 <td class="text-center">${hasMatch ? `<small class="text-muted">${linha.match_item_nf}</small>` : '-'}</td>

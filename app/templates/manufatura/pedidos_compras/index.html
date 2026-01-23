@@ -266,6 +266,17 @@
 let autocompleteTimer;
 let paginaAtual = 1;
 
+// Formatar data ISO (YYYY-MM-DD) para dd/mm/yyyy sem timezone shift
+function formatarData(dataStr) {
+    if (!dataStr || dataStr === '-') return '-';
+    // Tratar 'YYYY-MM-DD' e 'YYYY-MM-DD HH:MM:SS' e 'YYYY-MM-DDTHH:MM:SS'
+    const partes = dataStr.split(/[T ]/)[0].split('-');
+    if (partes.length === 3) {
+        return `${partes[2]}/${partes[1]}/${partes[0]}`;
+    }
+    return dataStr;
+}
+
 // Carregar pedidos ao abrir página
 document.addEventListener('DOMContentLoaded', () => {
     filtrarPedidos(1);
@@ -480,8 +491,8 @@ function criarAccordionPedido(pedido, index) {
                             <strong>${pedido.fornecedor || '-'}</strong>
                             <br>
                             <small class="text-muted">
-                                Criado: ${pedido.data_criacao ? new Date(pedido.data_criacao).toLocaleDateString('pt-BR') : '-'}
-                                ${pedido.data_previsao ? ` | Previsão: ${new Date(pedido.data_previsao).toLocaleDateString('pt-BR')}` : ''}
+                                Criado: ${formatarData(pedido.data_criacao)}
+                                ${pedido.data_previsao ? ` | Previsão: ${formatarData(pedido.data_previsao)}` : ''}
                             </small>
                             ${statusBadge}
                         </div>

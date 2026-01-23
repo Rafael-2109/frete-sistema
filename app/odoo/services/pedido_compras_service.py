@@ -597,9 +597,11 @@ class PedidoComprasServiceOtimizado:
             if parceiro_id:
                 fornecedor = self._fornecedores_cache.get(parceiro_id)
                 if fornecedor:
-                    cnpj_fornecedor = fornecedor.get('l10n_br_cnpj')
+                    # Odoo retorna False para campos vazios — sanitizar para None
+                    cnpj_raw = fornecedor.get('l10n_br_cnpj')
+                    cnpj_fornecedor = cnpj_raw if cnpj_raw and cnpj_raw is not False else None
                     if not raz_social:
-                        raz_social = fornecedor.get('name')
+                        raz_social = fornecedor.get('name') or None
 
         # Converter datas
         data_pedido_criacao = None
@@ -651,8 +653,8 @@ class PedidoComprasServiceOtimizado:
             # Status do Odoo (✅ NOVO)
             status_odoo=pedido_odoo.get('state'),
 
-            # ✅ Tipo de pedido (l10n_br_tipo_pedido)
-            tipo_pedido=pedido_odoo.get('l10n_br_tipo_pedido'),
+            # ✅ Tipo de pedido (l10n_br_tipo_pedido) — sanitizar False do Odoo
+            tipo_pedido=pedido_odoo.get('l10n_br_tipo_pedido') or None,
 
             # Controle
             importado_odoo=True
@@ -729,8 +731,9 @@ class PedidoComprasServiceOtimizado:
                 parceiro_id = partner_id[0] if isinstance(partner_id, list) else partner_id
                 fornecedor = self._fornecedores_cache.get(parceiro_id)
                 if fornecedor:
+                    # Odoo retorna False para campos vazios — sanitizar
                     novo_cnpj = fornecedor.get('l10n_br_cnpj')
-                    if novo_cnpj:
+                    if novo_cnpj and novo_cnpj is not False:
                         pedido_existente.cnpj_fornecedor = novo_cnpj
                         alterado = True
                         self.logger.info(
@@ -782,6 +785,26 @@ class PedidoComprasServiceOtimizado:
         novo_tipo = pedido_odoo.get('l10n_br_tipo_pedido')
         if pedido_existente.tipo_pedido != novo_tipo:
             pedido_existente.tipo_pedido = novo_tipo
+            alterado = True
+
+        # ✅ Verificar mudança de data prevista (date_planned da linha)
+        nova_data_previsao = None
+        if linha_odoo.get('date_planned'):
+            nova_data_previsao = datetime.strptime(
+                linha_odoo['date_planned'], '%Y-%m-%d %H:%M:%S'
+            ).date()
+        if pedido_existente.data_pedido_previsao != nova_data_previsao:
+            pedido_existente.data_pedido_previsao = nova_data_previsao
+            alterado = True
+
+        # ✅ Verificar mudança de data criação (date_order do pedido)
+        nova_data_criacao = None
+        if pedido_odoo.get('date_order'):
+            nova_data_criacao = datetime.strptime(
+                pedido_odoo['date_order'], '%Y-%m-%d %H:%M:%S'
+            ).date()
+        if pedido_existente.data_pedido_criacao != nova_data_criacao:
+            pedido_existente.data_pedido_criacao = nova_data_criacao
             alterado = True
 
         if alterado:

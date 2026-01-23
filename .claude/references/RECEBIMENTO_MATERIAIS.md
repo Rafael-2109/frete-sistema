@@ -279,7 +279,6 @@ CREATE TABLE validacao_fiscal_dfe (
 | `nfe_infnfe_emit_cnpj` | CNPJ do fornecedor (emitente) |
 | `nfe_infnfe_emit_xnome` | Razao social do fornecedor |
 | `nfe_infnfe_dest_cnpj` | **CNPJ da empresa compradora (destinatario)** |
-| `nfe_infnfe_dest_xnome` | **Razao social da empresa compradora** |
 | `nfe_infnfe_ide_nnf` | Numero da NF |
 | `protnfe_infnfe_chnfe` | Chave NF-e (44 digitos) |
 | `nfe_infnfe_ide_dhemi` | Data de emissao |

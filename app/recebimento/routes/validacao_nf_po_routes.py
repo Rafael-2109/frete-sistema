@@ -696,6 +696,11 @@ def detalhe_validacao_nf_po(validacao_id):
                 'itens_qtd_diverge': validacao.itens_qtd_diverge,
                 'po_consolidado_id': validacao.po_consolidado_id,
                 'po_consolidado_name': validacao.po_consolidado_name,
+                'odoo_po_vinculado_id': validacao.odoo_po_vinculado_id,
+                'odoo_po_vinculado_name': validacao.odoo_po_vinculado_name,
+                'odoo_po_fiscal_id': validacao.odoo_po_fiscal_id,
+                'odoo_po_fiscal_name': validacao.odoo_po_fiscal_name,
+                'pos_vinculados_importados_em': validacao.pos_vinculados_importados_em.strftime('%d/%m/%Y %H:%M') if validacao.pos_vinculados_importados_em else None,
                 'criado_em': validacao.criado_em.isoformat() if validacao.criado_em else None,
                 'validado_em': validacao.validado_em.isoformat() if validacao.validado_em else None,
                 'consolidado_em': validacao.consolidado_em.isoformat() if validacao.consolidado_em else None
@@ -706,14 +711,15 @@ def detalhe_validacao_nf_po(validacao_id):
                 'cod_produto_fornecedor': m.cod_produto_fornecedor,
                 'cod_produto_interno': m.cod_produto_interno,
                 'nome_produto': m.nome_produto,
-                'qtd_nf': m.qtd_nf,
-                'preco_nf': m.preco_nf,
+                'qtd_nf': float(m.qtd_nf) if m.qtd_nf else None,
+                'preco_nf': float(m.preco_nf) if m.preco_nf else None,
                 'um_nf': m.um_nf,
-                'fator_conversao': m.fator_conversao,
+                'fator_conversao': float(m.fator_conversao) if m.fator_conversao else None,
                 'odoo_po_id': m.odoo_po_id,
                 'odoo_po_name': m.odoo_po_name,
-                'qtd_po': m.qtd_po,
-                'preco_po': m.preco_po,
+                'qtd_po': float(m.qtd_po) if m.qtd_po else None,
+                'preco_po': float(m.preco_po) if m.preco_po else None,
+                'data_po': m.data_po.strftime('%d/%m/%Y') if m.data_po else None,
                 'status_match': m.status_match,
                 'motivo_bloqueio': m.motivo_bloqueio
             } for m in matches],
@@ -825,16 +831,25 @@ def criar_depara_para_divergencia(divergencia_id):
                 'erro': 'Campo obrigatorio: cod_produto_interno'
             }), 400
 
+        # Salvar dados da divergencia em variaveis locais ANTES da criacao
+        # (o objeto pode ser deletado pela revalidacao interna do service via cascade)
+        cnpj_fornecedor = divergencia.cnpj_fornecedor
+        cod_produto_fornecedor = divergencia.cod_produto_fornecedor
+        razao_fornecedor = divergencia.razao_fornecedor
+        nome_produto = divergencia.nome_produto
+
         # Criar De-Para via service
+        # NOTA: depara_service.criar() ja executa revalidacao internamente
+        # via _reprocessar_divergencias_relacionadas()
         depara_service = DeparaService()
 
         try:
             depara = depara_service.criar(
-                cnpj_fornecedor=divergencia.cnpj_fornecedor,
-                cod_produto_fornecedor=divergencia.cod_produto_fornecedor,
+                cnpj_fornecedor=cnpj_fornecedor,
+                cod_produto_fornecedor=cod_produto_fornecedor,
                 cod_produto_interno=cod_produto_interno,
-                razao_fornecedor=divergencia.razao_fornecedor,
-                descricao_produto_fornecedor=divergencia.nome_produto,
+                razao_fornecedor=razao_fornecedor,
+                descricao_produto_fornecedor=nome_produto,
                 nome_produto_interno=data.get('nome_produto_interno'),
                 odoo_product_id=data.get('odoo_product_id'),
                 um_fornecedor=data.get('um_fornecedor'),
@@ -853,34 +868,24 @@ def criar_depara_para_divergencia(divergencia_id):
             if depara and depara.get('id'):
                 sync_resultado = depara_service.sincronizar_para_odoo(depara['id'])
         except Exception as e:
-            # Log mas nao falha - sync pode ser feito depois
-            import logging
             logging.getLogger(__name__).warning(
                 f"Falha ao sincronizar De-Para {depara.get('id')} com Odoo: {e}"
             )
 
-        # NAO alterar status da divergencia!
-        # A divergencia permanece como 'pendente' ate a revalidacao resolver
-
-        # Disparar revalidacao do DFE (opcional - pode ser feito via scheduler)
-        revalidacao_resultado = None
-        if divergencia.odoo_dfe_id:
-            try:
-                from app.recebimento.services.validacao_nf_po_service import ValidacaoNfPoService
-                validacao_service = ValidacaoNfPoService()
-                revalidacao_resultado = validacao_service.validar_dfe(divergencia.odoo_dfe_id)
-            except Exception as e:
-                import logging
-                logging.getLogger(__name__).warning(
-                    f"Falha na revalidacao automatica do DFE {divergencia.odoo_dfe_id}: {e}"
-                )
+        # Resultado da revalidacao ja veio dentro de depara_service.criar()
+        # via _reprocessar_divergencias_relacionadas() -> validar_dfe()
+        reprocessamento = depara.get('reprocessamento', {}) if depara else {}
+        revalidacao_status = 'nao_executada'
+        if reprocessamento.get('resultados'):
+            primeiro = reprocessamento['resultados'][0]
+            revalidacao_status = primeiro.get('status', primeiro.get('erro', 'nao_executada'))
 
         return jsonify({
             'sucesso': True,
             'mensagem': 'De-Para criado com sucesso! A NF sera revalidada automaticamente.',
             'depara': depara,
             'sincronizado_odoo': sync_resultado.get('sucesso') if sync_resultado else False,
-            'revalidacao': revalidacao_resultado.get('status') if revalidacao_resultado else 'nao_executada'
+            'revalidacao': revalidacao_status
         })
 
     except Exception as e:

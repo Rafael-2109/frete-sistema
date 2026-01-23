@@ -387,11 +387,12 @@ class ValidacaoRecebimentoJob:
             ).all()
         )
 
-        # Fase 2: ja validados (status != pendente/erro)
+        # Fase 2: ja validados (status que NAO precisam reprocessar)
+        # 'bloqueado' DEVE ser reprocessado pois tolerancias/POs podem ter mudado
         fase2_processados = set(
             r.odoo_dfe_id for r in ValidacaoNfPoDfe.query.filter(
                 ValidacaoNfPoDfe.odoo_dfe_id.in_(dfe_ids),
-                ValidacaoNfPoDfe.status.notin_(['pendente', 'erro'])
+                ValidacaoNfPoDfe.status.notin_(['pendente', 'erro', 'bloqueado'])
             ).all()
         )
 

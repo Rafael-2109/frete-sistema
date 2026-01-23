@@ -312,6 +312,14 @@ function verDetalhes(id) {
                     <div class="alert alert-danger">Erro: ${data.erro}</div>
                 `;
             }
+        })
+        .catch(err => {
+            document.getElementById('modalDetalhesBody').innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Erro ao carregar detalhes: ${err.message}
+                </div>
+            `;
         });
 }
 
@@ -320,14 +328,26 @@ function renderizarDetalhes(data) {
     const matches = data.matches;
     const divergencias = data.divergencias;
 
+    // Badge de status
+    const statusMap = {
+        'aprovado': '<span class="badge bg-success">Aprovado</span>',
+        'bloqueado': '<span class="badge bg-danger">Bloqueado</span>',
+        'consolidado': '<span class="badge bg-primary">Consolidado</span>',
+        'finalizado_odoo': '<span class="badge bg-dark">Finalizado</span>',
+        'pendente': '<span class="badge bg-secondary">Pendente</span>',
+        'erro': '<span class="badge bg-danger">Erro</span>'
+    };
+    const statusBadge = statusMap[v.status] || `<span class="badge bg-secondary">${v.status}</span>`;
+
     let html = `
         <div class="row mb-4">
             <div class="col-md-6">
-                <h6>Dados da NF</h6>
+                <h6>Dados da NF ${statusBadge}</h6>
                 <table class="table table-sm">
                     <tr><td>Numero:</td><td><strong>${v.numero_nf || v.odoo_dfe_id}</strong></td></tr>
                     <tr><td>Data:</td><td>${v.data_nf || 'N/A'}</td></tr>
-                    <tr><td>Valor:</td><td>R$ ${v.valor_total_nf?.toFixed(2) || 'N/A'}</td></tr>
+                    <tr><td>Valor:</td><td>R$ ${parseFloat(v.valor_total_nf)?.toFixed(2) || 'N/A'}</td></tr>
+                    <tr><td>Itens:</td><td>${v.total_itens || 'N/A'}</td></tr>
                 </table>
             </div>
             <div class="col-md-6">
@@ -343,13 +363,14 @@ function renderizarDetalhes(data) {
     // Mostrar informacao especial se status for finalizado_odoo
     if (v.status === 'finalizado_odoo') {
         html += `
-            <div class="alert alert-dark mb-4">
+            <div class="alert alert-success mb-4">
                 <h6 class="mb-2"><i class="fas fa-check-circle me-2"></i>DFE Finalizado no Odoo</h6>
-                <p class="mb-0">Este DFE ja possui PO vinculado diretamente no Odoo e nao requer validacao manual.</p>
+                <p class="mb-1">Este DFE ja possui PO vinculado diretamente no Odoo e nao requer validacao manual.</p>
                 <table class="table table-sm table-borderless mt-2 mb-0">
-                    ${v.odoo_po_vinculado_name ? `<tr><td><strong>PO Vinculado:</strong></td><td>${v.odoo_po_vinculado_name} (ID: ${v.odoo_po_vinculado_id})</td></tr>` : ''}
-                    ${v.odoo_po_fiscal_name ? `<tr><td><strong>PO Fiscal:</strong></td><td>${v.odoo_po_fiscal_name} (ID: ${v.odoo_po_fiscal_id})</td></tr>` : ''}
+                    ${v.odoo_po_vinculado_name ? `<tr><td><strong>PO Vinculado:</strong></td><td>${v.odoo_po_vinculado_name}</td></tr>` : ''}
+                    ${v.odoo_po_fiscal_name ? `<tr><td><strong>PO Fiscal:</strong></td><td>${v.odoo_po_fiscal_name}</td></tr>` : ''}
                     ${v.pos_vinculados_importados_em ? `<tr><td><strong>Importado em:</strong></td><td>${v.pos_vinculados_importados_em}</td></tr>` : ''}
+                    <tr><td><strong>Total Itens:</strong></td><td>${v.total_itens || 'N/A'}</td></tr>
                 </table>
             </div>
         `;
@@ -361,6 +382,17 @@ function renderizarDetalhes(data) {
         }
     }
 
+    // Mostrar informacao de consolidacao se status for consolidado
+    if (v.status === 'consolidado' && v.po_consolidado_name) {
+        html += `
+            <div class="alert alert-primary mb-4">
+                <h6 class="mb-2"><i class="fas fa-object-group me-2"></i>PO Consolidado</h6>
+                <p class="mb-0">PO Conciliador: <strong>${v.po_consolidado_name}</strong></p>
+                ${v.consolidado_em ? `<small class="text-muted">Consolidado em: ${v.consolidado_em}</small>` : ''}
+            </div>
+        `;
+    }
+
     html += `<h6>Resultado do Match (${matches.length} itens)</h6>
         <table class="table table-sm table-bordered">
             <thead class="table-light">
@@ -370,6 +402,7 @@ function renderizarDetalhes(data) {
                     <th class="text-end">Preco NF</th>
                     <th>PO</th>
                     <th class="text-end">Qtd PO</th>
+                    <th>Data PO</th>
                     <th class="text-center">Status</th>
                 </tr>
             </thead>
@@ -377,15 +410,15 @@ function renderizarDetalhes(data) {
     `;
 
     for (const m of matches) {
-        let statusBadge = '';
+        let matchBadge = '';
         if (m.status_match === 'match') {
-            statusBadge = '<span class="badge bg-success">Match</span>';
+            matchBadge = '<span class="badge bg-success">Match</span>';
         } else if (m.status_match === 'sem_depara') {
-            statusBadge = '<span class="badge bg-secondary">Sem De-Para</span>';
+            matchBadge = '<span class="badge bg-secondary">Sem De-Para</span>';
         } else if (m.status_match === 'sem_po') {
-            statusBadge = '<span class="badge bg-warning">Sem PO</span>';
+            matchBadge = '<span class="badge bg-warning">Sem PO</span>';
         } else {
-            statusBadge = `<span class="badge bg-danger">${m.status_match}</span>`;
+            matchBadge = `<span class="badge bg-danger">${m.status_match}</span>`;
         }
 
         html += `
@@ -395,11 +428,12 @@ function renderizarDetalhes(data) {
                     ${m.cod_produto_interno ? `<i class="fas fa-arrow-right mx-1"></i><code class="text-success">${m.cod_produto_interno}</code>` : ''}
                     <br><small>${m.nome_produto || ''}</small>
                 </td>
-                <td class="text-end">${m.qtd_nf?.toFixed(2) || 'N/A'}</td>
-                <td class="text-end">${m.preco_nf?.toFixed(4) || 'N/A'}</td>
+                <td class="text-end">${m.qtd_nf != null ? parseFloat(m.qtd_nf).toFixed(2) : 'N/A'}</td>
+                <td class="text-end">${m.preco_nf != null ? parseFloat(m.preco_nf).toFixed(4) : 'N/A'}</td>
                 <td>${m.odoo_po_name || '-'}</td>
-                <td class="text-end">${m.qtd_po?.toFixed(2) || '-'}</td>
-                <td class="text-center">${statusBadge}</td>
+                <td class="text-end">${m.qtd_po != null ? parseFloat(m.qtd_po).toFixed(2) : '-'}</td>
+                <td>${m.data_po || '-'}</td>
+                <td class="text-center">${matchBadge}</td>
             </tr>
         `;
     }

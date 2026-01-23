@@ -35,6 +35,7 @@ from datetime import datetime
 
 from app import db
 from app.recebimento.models import ValidacaoNfPoDfe, MatchNfPoItem, MatchAlocacao
+from app.manufatura.models import PedidoCompras
 from app.odoo.utils.connection import get_odoo_connection
 
 logger = logging.getLogger(__name__)
@@ -126,14 +127,28 @@ class OdooPoService:
                                 'itens': []
                             }
 
-                        # Buscar saldo real da linha do PO no Odoo (qtd - recebido - alocado)
-                        # Por enquanto, assumimos que qtd_alocada foi calculada corretamente
+                        # Buscar qtd_original da linha do PO local
+                        qtd_original = Decimal('0')
+                        pedido_local = PedidoCompras.query.filter_by(
+                            odoo_id=str(aloc.odoo_po_line_id)
+                        ).first()
+                        if pedido_local:
+                            qtd_original = Decimal(str(pedido_local.qtd_produto_pedido or 0))
+                        else:
+                            # Fallback: usar qtd_alocada como original
+                            qtd_original = qtd_alocada
+
+                        qtd_saldo = qtd_original - qtd_alocada
+
                         pos_originais[aloc.odoo_po_id]['itens'].append({
                             'cod_produto': match.cod_produto_interno,
                             'nome_produto': match.nome_produto,
                             'po_line_id': aloc.odoo_po_line_id,
-                            'qtd_alocada': float(qtd_alocada),
-                            'preco': float(preco)
+                            'qtd_original': float(qtd_original),
+                            'qtd_usada': float(qtd_alocada),
+                            'qtd_saldo': float(qtd_saldo) if qtd_saldo > 0 else 0,
+                            'preco': float(preco),
+                            'data_po': pedido_local.data_pedido_previsao.strftime('%d/%m/%Y') if pedido_local and pedido_local.data_pedido_previsao else None
                         })
 
                 elif match.odoo_po_id:
@@ -162,6 +177,11 @@ class OdooPoService:
                             'itens': []
                         }
 
+                    # Buscar pedido local para a data
+                    pedido_fallback = PedidoCompras.query.filter_by(
+                        odoo_id=str(match.odoo_po_line_id)
+                    ).first()
+
                     pos_originais[match.odoo_po_id]['itens'].append({
                         'cod_produto': match.cod_produto_interno,
                         'nome_produto': match.nome_produto,
@@ -169,7 +189,8 @@ class OdooPoService:
                         'qtd_original': float(qtd_po),
                         'qtd_usada': float(qtd_nf),
                         'qtd_saldo': float(saldo) if saldo > 0 else 0,
-                        'preco': float(preco)
+                        'preco': float(preco),
+                        'data_po': pedido_fallback.data_pedido_previsao.strftime('%d/%m/%Y') if pedido_fallback and pedido_fallback.data_pedido_previsao else None
                     })
 
             if not itens_conciliador:

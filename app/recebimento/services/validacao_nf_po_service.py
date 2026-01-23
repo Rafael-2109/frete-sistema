@@ -51,8 +51,8 @@ logger = logging.getLogger(__name__)
 
 # Tolerancias de validacao
 TOLERANCIA_QTD_PERCENTUAL = Decimal('10.0')      # 10% para cima
-TOLERANCIA_DATA_ANTECIPADO_DIAS_UTEIS = 3        # NF chegou ANTES do PO (~5 dias corridos)
-TOLERANCIA_DATA_ATRASADO_DIAS_UTEIS = 7          # NF chegou DEPOIS do PO (~10 dias corridos)
+TOLERANCIA_DATA_ANTECIPADO_DIAS = 5              # NF chegou ANTES do PO (dias corridos)
+TOLERANCIA_DATA_ATRASADO_DIAS = 15               # NF chegou DEPOIS do PO (dias corridos)
 TOLERANCIA_PRECO_PERCENTUAL = Decimal('0.0')     # 0% (exato)
 
 
@@ -797,6 +797,7 @@ class ValidacaoNfPoService:
             pos_agrupados = defaultdict(lambda: {
                 'id': None,
                 'name': None,
+                'date_order': None,
                 'date_planned': None,
                 'lines': []
             })
@@ -808,6 +809,9 @@ class ValidacaoNfPoService:
                 if pos_agrupados[num_pedido]['id'] is None:
                     pos_agrupados[num_pedido]['id'] = po.odoo_id  # ID da linha no Odoo
                     pos_agrupados[num_pedido]['name'] = po.num_pedido
+                    pos_agrupados[num_pedido]['date_order'] = (
+                        po.data_pedido_criacao.strftime('%Y-%m-%d') if po.data_pedido_criacao else None
+                    )
                     pos_agrupados[num_pedido]['date_planned'] = (
                         po.data_pedido_previsao.strftime('%Y-%m-%d') if po.data_pedido_previsao else None
                     )
@@ -1013,18 +1017,12 @@ class ValidacaoNfPoService:
         # Calcular diferenca: positivo = NF depois, negativo = NF antes
         diff_dias = (data_nf - data_po).days
 
-        # Converter dias uteis para corridos (aproximacao: 1 dia util ~= 1.4 dias corridos)
-        # 3 dias uteis ~= 5 dias corridos (antecipado)
-        # 7 dias uteis ~= 10 dias corridos (atrasado)
-        DIAS_CORRIDOS_ANTECIPADO = 5   # Para 3 dias uteis
-        DIAS_CORRIDOS_ATRASADO = 10    # Para 7 dias uteis
-
         if diff_dias < 0:
             # NF chegou ANTES do PO (antecipada)
-            return abs(diff_dias) <= DIAS_CORRIDOS_ANTECIPADO
+            return abs(diff_dias) <= TOLERANCIA_DATA_ANTECIPADO_DIAS
         else:
             # NF chegou DEPOIS do PO (atrasada) ou na data exata
-            return diff_dias <= DIAS_CORRIDOS_ATRASADO
+            return diff_dias <= TOLERANCIA_DATA_ATRASADO_DIAS
 
     def _validar_quantidade(self, qtd_nf: Decimal, saldo_po: Decimal) -> bool:
         """
@@ -2201,8 +2199,22 @@ class ValidacaoNfPoService:
             logger.error(traceback.format_exc())
             return {'sucesso': False, 'erro': str(e)}
 
+    # Mapeamento fixo das empresas compradoras do grupo (fallback para DFEs antigos)
+    EMPRESAS_COMPRADORA_FALLBACK = {
+        '61724241000330': 'NACOM GOYA - CD',
+        '61724241000178': 'NACOM GOYA - FB',
+        '61724241000259': 'NACOM GOYA - SC',
+        '18467441000163': 'LA FAMIGLIA - LF',
+    }
+
     def _montar_dfe_local(self, validacao: ValidacaoNfPoDfe, cnpj_fornecedor: str) -> Dict[str, Any]:
         """Monta dados do DFE a partir da tabela local ValidacaoNfPoDfe."""
+        # Fallback para empresa compradora quando campo nulo (DFEs antigos)
+        razao_empresa = validacao.razao_empresa_compradora
+        if not razao_empresa and validacao.cnpj_empresa_compradora:
+            cnpj_limpo = ''.join(c for c in validacao.cnpj_empresa_compradora if c.isdigit())
+            razao_empresa = self.EMPRESAS_COMPRADORA_FALLBACK.get(cnpj_limpo)
+
         return {
             'id': validacao.odoo_dfe_id,
             'numero_nf': validacao.numero_nf,
@@ -2210,7 +2222,7 @@ class ValidacaoNfPoService:
             'cnpj_fornecedor': cnpj_fornecedor,
             'razao_fornecedor': validacao.razao_fornecedor,
             'cnpj_empresa_compradora': validacao.cnpj_empresa_compradora,
-            'razao_empresa_compradora': validacao.razao_empresa_compradora,
+            'razao_empresa_compradora': razao_empresa,
             'data_emissao': validacao.data_nf.isoformat() if validacao.data_nf else None,
             'valor_total': float(validacao.valor_total_nf or 0)
         }
@@ -2246,7 +2258,7 @@ class ValidacaoNfPoService:
             po_info = {
                 'po_id': po.get('id'),
                 'po_name': po.get('name'),
-                'data_pedido': po.get('date_planned'),
+                'data_pedido': po.get('date_order'),
                 'data_prevista': po.get('date_planned'),
                 'estado': 'purchase',
                 'valor_total': 0.0,
@@ -2351,6 +2363,9 @@ class ValidacaoNfPoService:
         return {
             'qtd_nf': float(qtd_nf),
             'preco_nf': float(preco_nf),
+            # Nomes usados pelo frontend JS (divergencias_nf_po.js)
+            'qtd_nf_convertida': float(qtd_nf),
+            'preco_nf_convertido': float(preco_nf),
             'dif_qtd': round(float(dif_qtd), 3),
             'dif_qtd_pct': round(float(dif_qtd_pct), 2),
             'dif_preco': round(float(dif_preco), 4),

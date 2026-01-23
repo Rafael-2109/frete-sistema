@@ -128,7 +128,7 @@
                         <tr>
                             <td>
                                 <strong>{{ item.cod_produto }}</strong>
-                                <br><small class="text-muted">{{ item.nome_produto[:50] }}{% if item.nome_produto|length > 50 %}...{% endif %}</small>
+                                <br><small class="text-muted">{{ (item.nome_produto or '')[:50] }}{% if (item.nome_produto or '')|length > 50 %}...{% endif %}</small>
                             </td>
                             <td class="text-center">{{ item.qtd|int }} un</td>
                             <td class="text-end">R$ {{ "%.4f"|format(item.preco) }}</td>
@@ -166,6 +166,7 @@
                             <th class="text-center">Qtd Original</th>
                             <th class="text-center">Usado na NF</th>
                             <th class="text-center">SALDO</th>
+                            <th class="text-center">Data Prevista</th>
                             <th class="text-center">Status</th>
                         </tr>
                     </thead>
@@ -180,7 +181,7 @@
                             {% endif %}
                             <td>
                                 <strong>{{ item.cod_produto }}</strong>
-                                <br><small class="text-muted">{{ item.nome_produto[:40] }}{% if item.nome_produto|length > 40 %}...{% endif %}</small>
+                                <br><small class="text-muted">{{ (item.nome_produto or '')[:40] }}{% if (item.nome_produto or '')|length > 40 %}...{% endif %}</small>
                             </td>
                             <td class="text-center">{{ item.qtd_original|int }} un</td>
                             <td class="text-center text-danger">-{{ item.qtd_usada|int }} un</td>
@@ -190,6 +191,9 @@
                                 {% else %}
                                 <span class="text-muted">0 un</span>
                                 {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {{ item.data_po or '-' }}
                             </td>
                             <td class="text-center">
                                 {% if item.qtd_saldo > 0 %}

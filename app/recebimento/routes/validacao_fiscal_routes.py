@@ -11,7 +11,7 @@ Endpoints:
 - POST /api/recebimento/primeira-compra/<id>/validar - Valida 1a compra
 - POST /api/recebimento/primeira-compra/<id>/rejeitar - Rejeita 1a compra
 
-Referencia: .claude/references/RECEBIMENTO_MATERIAIS.md
+Referencia: "/home/rafaelnascimento/.claude/plans/plano-validacao-nf-po.md"
 """
 
 import base64
