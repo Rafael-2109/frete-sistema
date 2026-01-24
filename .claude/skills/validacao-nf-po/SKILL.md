@@ -217,7 +217,7 @@ No workflow Odoo do recebimento de compras:
 ```python
 # Converte datas absolutas para minutos_janela
 dt_de = datetime.strptime(data_de, '%Y-%m-%d')
-agora = datetime.utcnow()
+agora = datetime.now(timezone.utc)
 minutos_janela = int((agora - dt_de).total_seconds() / 60)
 # Usa minutos_janela no job (afeta APENAS etapa 3)
 ```

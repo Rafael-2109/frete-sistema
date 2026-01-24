@@ -8,19 +8,21 @@ Operações:
    - Se cod_produto é numérico (product_id antigo): busca default_code e name,
      e ATUALIZA cod_produto para o default_code correto
    - Se cod_produto não é numérico: busca name pelo default_code
-4. Commit em batches de 50
+4. Commit em batches de 50 usando SQL direto (evita timeout SSL)
 
 Uso:
     python scripts/migrations/atualizar_nomes_perfis_existentes.py
 """
 import sys
 import os
+from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from app import create_app, db
 from app.recebimento.models import PerfilFiscalProdutoFornecedor
 from app.odoo.utils.connection import get_odoo_connection
+from sqlalchemy import text
 
 # Mapeamento hardcoded de empresas (CNPJ digits → Nome)
 EMPRESAS_CNPJ_NOME = {
@@ -110,6 +112,81 @@ def cod_produto_eh_numerico(cod):
     return cod.strip().isdigit()
 
 
+def salvar_em_batches(atualizacoes):
+    """Salva atualizações em batches de BATCH_SIZE usando SQL direto.
+
+    Args:
+        atualizacoes: dict {perfil_id: {campo: valor, ...}}
+
+    Returns:
+        Tuple (total_salvos, total_erros)
+    """
+    if not atualizacoes:
+        print("ℹ️  Nenhuma alteração para salvar.")
+        return 0, 0
+
+    items = list(atualizacoes.items())
+    total = len(items)
+    total_batches = (total + BATCH_SIZE - 1) // BATCH_SIZE
+    total_salvos = 0
+    total_erros = 0
+
+    print(f"   Total de perfis a atualizar: {total}")
+    print(f"   Batches de {BATCH_SIZE}: {total_batches}")
+
+    for batch_num in range(total_batches):
+        inicio = batch_num * BATCH_SIZE
+        fim = min(inicio + BATCH_SIZE, total)
+        chunk = items[inicio:fim]
+
+        try:
+            for perfil_id, campos in chunk:
+                campos['atualizado_em'] = datetime.now(timezone.utc)
+                set_parts = []
+                params = {'id': perfil_id}
+                for idx, (campo, valor) in enumerate(campos.items()):
+                    param_name = f"p{idx}"
+                    set_parts.append(f"{campo} = :{param_name}")
+                    params[param_name] = valor
+
+                set_clause = ', '.join(set_parts)
+                sql = text(f"UPDATE perfil_fiscal_produto_fornecedor SET {set_clause} WHERE id = :id")
+                db.session.execute(sql, params)
+
+            db.session.commit()
+            total_salvos += len(chunk)
+            print(f"   ✅ Batch {batch_num + 1}/{total_batches} - {len(chunk)} registros salvos")
+
+        except Exception as e:
+            print(f"   ❌ Erro no batch {batch_num + 1}/{total_batches}: {e}")
+            db.session.rollback()
+            total_erros += len(chunk)
+
+            # Tentar registro por registro no batch que falhou
+            print(f"   🔄 Tentando registro por registro...")
+            for perfil_id, campos in chunk:
+                try:
+                    campos['atualizado_em'] = datetime.now(timezone.utc)
+                    set_parts = []
+                    params = {'id': perfil_id}
+                    for idx, (campo, valor) in enumerate(campos.items()):
+                        param_name = f"p{idx}"
+                        set_parts.append(f"{campo} = :{param_name}")
+                        params[param_name] = valor
+
+                    set_clause = ', '.join(set_parts)
+                    sql = text(f"UPDATE perfil_fiscal_produto_fornecedor SET {set_clause} WHERE id = :id")
+                    db.session.execute(sql, params)
+                    db.session.commit()
+                    total_salvos += 1
+                    total_erros -= 1
+                except Exception as e2:
+                    print(f"      ❌ Perfil ID {perfil_id}: {e2}")
+                    db.session.rollback()
+
+    return total_salvos, total_erros
+
+
 def executar_atualizacao():
     app = create_app()
     with app.app_context():
@@ -121,7 +198,7 @@ def executar_atualizacao():
             print("   O script preencherá apenas nome_empresa (hardcoded) sem Odoo.")
             odoo = None
 
-        # Buscar todos os perfis que precisam de atualização
+        # Buscar todos os perfis (somente leitura, sem modificar objetos ORM)
         perfis = PerfilFiscalProdutoFornecedor.query.all()
         total = len(perfis)
         print(f"\n📊 Total de perfis encontrados: {total}")
@@ -129,6 +206,9 @@ def executar_atualizacao():
         if total == 0:
             print("ℹ️  Nenhum perfil para atualizar.")
             return
+
+        # Dicionário para acumular atualizações: {perfil_id: {campo: valor}}
+        atualizacoes = {}
 
         # Separar perfis por tipo de atualização necessária
         perfis_sem_nome_empresa = [p for p in perfis if not p.nome_empresa_compradora]
@@ -141,6 +221,9 @@ def executar_atualizacao():
         print(f"   - Sem nome_produto: {len(perfis_sem_nome_prod)}")
         print(f"   - Com cod_produto numérico (product_id antigo): {len(perfis_cod_numerico)}")
 
+        # Expunge todos os objetos da sessão para evitar flush automático
+        db.session.expunge_all()
+
         # ═══════════════════════════════════════════════
         # ETAPA 1: Preencher nome_empresa (hardcoded, sem Odoo)
         # ═══════════════════════════════════════════════
@@ -149,16 +232,21 @@ def executar_atualizacao():
         for perfil in perfis_sem_nome_empresa:
             cnpj_empresa = perfil.cnpj_empresa_compradora
             if cnpj_empresa and cnpj_empresa in EMPRESAS_CNPJ_NOME:
-                perfil.nome_empresa_compradora = EMPRESAS_CNPJ_NOME[cnpj_empresa]
+                if perfil.id not in atualizacoes:
+                    atualizacoes[perfil.id] = {}
+                atualizacoes[perfil.id]['nome_empresa_compradora'] = EMPRESAS_CNPJ_NOME[cnpj_empresa]
                 count_empresa += 1
-        print(f"   ✅ {count_empresa} perfis atualizados com nome_empresa")
+        print(f"   ✅ {count_empresa} perfis marcados para atualizar nome_empresa")
 
         # ═══════════════════════════════════════════════
         # ETAPA 2: Resolver cod_produto numérico → default_code
         # ═══════════════════════════════════════════════
+        # Manter track dos cod_produto resolvidos para uso na etapa 3
+        cod_produto_resolvido = {}  # {perfil_id: novo_cod_produto}
+        nomes_produto_preenchidos = set()  # IDs que já receberam nome_produto
+
         if odoo and perfis_cod_numerico:
             print("\n── ETAPA 2: Resolvendo cod_produto numérico → default_code ──")
-            # Coletar IDs únicos
             product_ids_unicos = set()
             for perfil in perfis_cod_numerico:
                 try:
@@ -180,13 +268,19 @@ def executar_atualizacao():
 
                 if pid in mapa_por_id:
                     dados = mapa_por_id[pid]
+                    if perfil.id not in atualizacoes:
+                        atualizacoes[perfil.id] = {}
+
                     # Atualizar cod_produto para default_code
                     if dados['default_code']:
-                        perfil.cod_produto = dados['default_code']
+                        atualizacoes[perfil.id]['cod_produto'] = dados['default_code']
+                        cod_produto_resolvido[perfil.id] = dados['default_code']
                         count_cod_atualizado += 1
+
                     # Preencher nome_produto se estiver vazio
                     if not perfil.nome_produto and dados['name']:
-                        perfil.nome_produto = dados['name']
+                        atualizacoes[perfil.id]['nome_produto'] = dados['name']
+                        nomes_produto_preenchidos.add(perfil.id)
                         count_nome_prod_via_id += 1
 
             print(f"   ✅ {count_cod_atualizado} cod_produto atualizados (product_id → default_code)")
@@ -198,24 +292,32 @@ def executar_atualizacao():
         # ETAPA 3: Preencher nome_produto (busca por default_code)
         # ═══════════════════════════════════════════════
         if odoo:
-            # Recalcular perfis sem nome (alguns podem ter sido preenchidos na etapa 2)
-            perfis_ainda_sem_nome_prod = [
-                p for p in perfis
-                if not p.nome_produto and p.cod_produto and not cod_produto_eh_numerico(p.cod_produto)
-            ]
+            # Perfis que ainda não têm nome_produto e cujo cod_produto não é numérico
+            # (ou foi resolvido na etapa 2)
+            perfis_para_buscar_nome = []
+            for p in perfis:
+                if p.id in nomes_produto_preenchidos:
+                    continue  # Já preenchido na etapa 2
+                if p.nome_produto:
+                    continue  # Já tem nome
+                # Usar cod_produto resolvido se disponível
+                cod = cod_produto_resolvido.get(p.id, p.cod_produto)
+                if cod and not cod_produto_eh_numerico(cod):
+                    perfis_para_buscar_nome.append((p.id, cod.strip()))
 
-            if perfis_ainda_sem_nome_prod:
-                print(f"\n── ETAPA 3: Preenchendo nome_produto por default_code ({len(perfis_ainda_sem_nome_prod)} perfis) ──")
-                codigos_unicos = set(p.cod_produto.strip() for p in perfis_ainda_sem_nome_prod if p.cod_produto)
+            if perfis_para_buscar_nome:
+                print(f"\n── ETAPA 3: Preenchendo nome_produto por default_code ({len(perfis_para_buscar_nome)} perfis) ──")
+                codigos_unicos = set(cod for _, cod in perfis_para_buscar_nome)
                 print(f"   Buscando {len(codigos_unicos)} default_codes no Odoo...")
                 mapa_por_dc = buscar_produtos_por_default_code(odoo, codigos_unicos)
                 print(f"   Encontrados: {len(mapa_por_dc)} produtos")
 
                 count_nome_prod = 0
-                for perfil in perfis_ainda_sem_nome_prod:
-                    cod = perfil.cod_produto.strip() if perfil.cod_produto else ''
+                for perfil_id, cod in perfis_para_buscar_nome:
                     if cod in mapa_por_dc:
-                        perfil.nome_produto = mapa_por_dc[cod]
+                        if perfil_id not in atualizacoes:
+                            atualizacoes[perfil_id] = {}
+                        atualizacoes[perfil_id]['nome_produto'] = mapa_por_dc[cod]
                         count_nome_prod += 1
                 print(f"   ✅ {count_nome_prod} nome_produto preenchidos via default_code")
             else:
@@ -225,55 +327,32 @@ def executar_atualizacao():
         # ETAPA 4: Preencher razao_fornecedor (busca por CNPJ no Odoo)
         # ═══════════════════════════════════════════════
         if odoo:
-            # Recalcular perfis sem razão (nenhum deveria ter mudado, mas por segurança)
-            perfis_ainda_sem_razao = [p for p in perfis if not p.razao_fornecedor and p.cnpj_fornecedor]
+            perfis_para_razao = [p for p in perfis if not p.razao_fornecedor and p.cnpj_fornecedor]
 
-            if perfis_ainda_sem_razao:
-                print(f"\n── ETAPA 4: Preenchendo razao_fornecedor ({len(perfis_ainda_sem_razao)} perfis) ──")
-                cnpjs_unicos = set(p.cnpj_fornecedor.strip() for p in perfis_ainda_sem_razao if p.cnpj_fornecedor)
+            if perfis_para_razao:
+                print(f"\n── ETAPA 4: Preenchendo razao_fornecedor ({len(perfis_para_razao)} perfis) ──")
+                cnpjs_unicos = set(p.cnpj_fornecedor.strip() for p in perfis_para_razao if p.cnpj_fornecedor)
                 print(f"   Buscando {len(cnpjs_unicos)} CNPJs no Odoo...")
                 mapa_fornecedores = buscar_fornecedores_odoo(odoo, cnpjs_unicos)
                 print(f"   Encontrados: {len(mapa_fornecedores)} fornecedores")
 
                 count_razao = 0
-                for perfil in perfis_ainda_sem_razao:
+                for perfil in perfis_para_razao:
                     cnpj = perfil.cnpj_fornecedor.strip() if perfil.cnpj_fornecedor else ''
                     if cnpj in mapa_fornecedores:
-                        perfil.razao_fornecedor = mapa_fornecedores[cnpj]
+                        if perfil.id not in atualizacoes:
+                            atualizacoes[perfil.id] = {}
+                        atualizacoes[perfil.id]['razao_fornecedor'] = mapa_fornecedores[cnpj]
                         count_razao += 1
                 print(f"   ✅ {count_razao} razao_fornecedor preenchidos")
             else:
                 print("\n── ETAPA 4: Nenhum perfil restante sem razao_fornecedor ──")
 
         # ═══════════════════════════════════════════════
-        # COMMIT em batches
+        # COMMIT em batches reais com SQL direto
         # ═══════════════════════════════════════════════
-        print(f"\n── COMMIT: Salvando alterações em batches de {BATCH_SIZE} ──")
-        try:
-            # Verificar quantos perfis foram realmente modificados
-            modificados = [p for p in perfis if db.session.is_modified(p)]
-            total_mod = len(modificados)
-
-            if total_mod == 0:
-                print("ℹ️  Nenhuma alteração detectada. Nada a salvar.")
-                return
-
-            print(f"   Total de perfis modificados: {total_mod}")
-
-            # Commit em batches
-            for i in range(0, total_mod, BATCH_SIZE):
-                db.session.flush()
-                batch_num = (i // BATCH_SIZE) + 1
-                total_batches = (total_mod + BATCH_SIZE - 1) // BATCH_SIZE
-                print(f"   Batch {batch_num}/{total_batches}...")
-
-            db.session.commit()
-            print(f"\n✅ CONCLUÍDO: {total_mod} perfis atualizados com sucesso!")
-
-        except Exception as e:
-            print(f"\n❌ Erro ao salvar: {e}")
-            db.session.rollback()
-            raise
+        print(f"\n── COMMIT: Salvando alterações em batches de {BATCH_SIZE} (SQL direto) ──")
+        total_salvos, total_erros = salvar_em_batches(atualizacoes)
 
         # ═══════════════════════════════════════════════
         # RESUMO FINAL
@@ -281,6 +360,8 @@ def executar_atualizacao():
         print("\n" + "=" * 60)
         print("RESUMO DA ATUALIZAÇÃO RETROATIVA")
         print("=" * 60)
+        print(f"  Total salvos:  {total_salvos}")
+        print(f"  Total erros:   {total_erros}")
 
         # Recontar para verificação
         total_com_empresa = PerfilFiscalProdutoFornecedor.query.filter(
@@ -292,15 +373,10 @@ def executar_atualizacao():
         total_com_nome_prod = PerfilFiscalProdutoFornecedor.query.filter(
             PerfilFiscalProdutoFornecedor.nome_produto.isnot(None)
         ).count()
-        total_cod_numerico = len([
-            p for p in PerfilFiscalProdutoFornecedor.query.all()
-            if cod_produto_eh_numerico(p.cod_produto)
-        ])
 
         print(f"  Perfis com nome_empresa:    {total_com_empresa}/{total}")
         print(f"  Perfis com razao_fornecedor: {total_com_razao}/{total}")
         print(f"  Perfis com nome_produto:     {total_com_nome_prod}/{total}")
-        print(f"  Perfis com cod numérico:     {total_cod_numerico}/{total} (deveria ser 0)")
         print("=" * 60)
 
 

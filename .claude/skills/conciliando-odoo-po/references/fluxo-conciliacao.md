@@ -105,7 +105,7 @@ enquanto os POs originais permanecem com o saldo restante.
 │   validacao.po_consolidado_name = po_conciliador_name                │
 │   validacao.pos_saldo_ids = json.dumps([...])                        │
 │   validacao.acao_executada = { ... detalhes completos ... }           │
-│   validacao.consolidado_em = datetime.utcnow()                       │
+│   validacao.consolidado_em = datetime.now(timezone.utc)                       │
 │   db.session.commit()                                                │
 └─────────────────────────────────────────────────────────────────────┘
 ```
