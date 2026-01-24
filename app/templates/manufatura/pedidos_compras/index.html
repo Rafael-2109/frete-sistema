@@ -175,9 +175,41 @@
                     <input type="text" id="filtro-fornecedor" class="form-control" placeholder="Nome...">
                 </div>
 
+                <!-- Tipo de Pedido -->
+                <div class="col-md-2">
+                    <label class="form-label">Tipo de Pedido:</label>
+                    <select id="filtro-tipo-pedido" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="compra">Compra</option>
+                        <option value="importacao">Importacao</option>
+                        <option value="comp-importacao">Comp. Importacao</option>
+                        <option value="devolucao">Devolucao</option>
+                        <option value="devolucao_compra">Devolucao Compra</option>
+                        <option value="industrializacao">Industrializacao</option>
+                        <option value="serv-industrializacao">Serv. Industrializacao</option>
+                        <option value="ent-bonificacao">Ent. Bonificacao</option>
+                    </select>
+                </div>
+
+                <!-- Status -->
+                <div class="col-md-2">
+                    <label class="form-label">Status:</label>
+                    <select id="filtro-status" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="draft">Rascunho</option>
+                        <option value="sent">Enviado</option>
+                        <option value="to approve">A Aprovar</option>
+                        <option value="purchase">Confirmado</option>
+                        <option value="done">Concluido</option>
+                        <option value="cancel">Cancelado</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="row g-3 mt-1">
                 <!-- Data Criação -->
                 <div class="col-md-3">
-                    <label class="form-label">Criação (De - Até):</label>
+                    <label class="form-label">Criacao (De - Ate):</label>
                     <div class="input-group">
                         <input type="date" id="filtro-criacao-inicio" class="form-control">
                         <input type="date" id="filtro-criacao-fim" class="form-control">
@@ -186,7 +218,7 @@
 
                 <!-- Data Previsão -->
                 <div class="col-md-3">
-                    <label class="form-label">Previsão (De - Até):</label>
+                    <label class="form-label">Previsao (De - Ate):</label>
                     <div class="input-group">
                         <input type="date" id="filtro-previsao-inicio" class="form-control">
                         <input type="date" id="filtro-previsao-fim" class="form-control">
@@ -358,6 +390,8 @@ function filtrarPedidos(page = 1) {
     }
 
     const fornecedor = document.getElementById('filtro-fornecedor').value;
+    const tipoPedido = document.getElementById('filtro-tipo-pedido').value;
+    const statusOdoo = document.getElementById('filtro-status').value;
     const criacaoInicio = document.getElementById('filtro-criacao-inicio').value;
     const criacaoFim = document.getElementById('filtro-criacao-fim').value;
     const previsaoInicio = document.getElementById('filtro-previsao-inicio').value;
@@ -365,6 +399,8 @@ function filtrarPedidos(page = 1) {
 
     if (codProduto) params.append('cod_produto', codProduto);
     if (fornecedor) params.append('fornecedor', fornecedor);
+    if (tipoPedido) params.append('tipo_pedido', tipoPedido);
+    if (statusOdoo) params.append('status_odoo', statusOdoo);
     if (criacaoInicio) params.append('data_criacao_inicio', criacaoInicio);
     if (criacaoFim) params.append('data_criacao_fim', criacaoFim);
     if (previsaoInicio) params.append('data_previsao_inicio', previsaoInicio);
@@ -402,6 +438,8 @@ function limparFiltros() {
     document.getElementById('filtro-produto-busca').value = '';
     document.getElementById('filtro-cod-produto').value = '';
     document.getElementById('filtro-fornecedor').value = '';
+    document.getElementById('filtro-tipo-pedido').value = '';
+    document.getElementById('filtro-status').value = '';
     document.getElementById('filtro-criacao-inicio').value = '';
     document.getElementById('filtro-criacao-fim').value = '';
     document.getElementById('filtro-previsao-inicio').value = '';

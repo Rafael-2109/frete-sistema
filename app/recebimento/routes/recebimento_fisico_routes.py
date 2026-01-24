@@ -44,12 +44,15 @@ def status():
 @recebimento_fisico_bp.route('/pickings')
 def api_pickings():
     """
-    API: Buscar pickings disponiveis para recebimento.
+    API: Buscar pickings disponiveis para recebimento (paginado).
 
     Query params:
         company_id: ID da empresa (obrigatorio)
         filtro_nf: Filtrar por NF/origin
         filtro_fornecedor: Filtrar por nome fornecedor
+        apenas_com_nf: Se 'true', retorna apenas pickings com NF vinculada
+        pagina: Pagina atual (padrao 1)
+        por_pagina: Itens por pagina (padrao 50)
     """
     try:
         from app.recebimento.services.recebimento_fisico_service import RecebimentoFisicoService
@@ -60,17 +63,29 @@ def api_pickings():
 
         filtro_nf = request.args.get('filtro_nf', '').strip() or None
         filtro_fornecedor = request.args.get('filtro_fornecedor', '').strip() or None
+        apenas_com_nf = request.args.get('apenas_com_nf', 'false').lower() == 'true'
+        pagina = request.args.get('pagina', 1, type=int)
+        por_pagina = request.args.get('por_pagina', 50, type=int)
+
+        # Limitar por_pagina para evitar abuso
+        por_pagina = min(por_pagina, 200)
 
         service = RecebimentoFisicoService()
         resultado = service.buscar_pickings_disponiveis(
             company_id=company_id,
             filtro_nf=filtro_nf,
             filtro_fornecedor=filtro_fornecedor,
+            apenas_com_nf=apenas_com_nf,
+            pagina=pagina,
+            por_pagina=por_pagina,
         )
 
         return jsonify({
             'pickings': resultado['pickings'],
-            'total': len(resultado['pickings']),
+            'total': resultado['total'],
+            'pagina': resultado['pagina'],
+            'por_pagina': resultado['por_pagina'],
+            'total_paginas': resultado['total_paginas'],
             'ultima_sincronizacao': resultado.get('ultima_sincronizacao'),
         })
 

@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+
+{% block title %}Central Compras{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Central Compras - Hub com Cards */
+.compras-dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1.5rem;
+    margin-top: 2rem;
+}
+
+.fin-section-card {
+    background: var(--bg-light, #1a1a2e);
+    border-radius: 12px;
+    padding: 1.5rem;
+    border: 1px solid var(--border, rgba(255,255,255,0.1));
+}
+
+.fin-section-card__header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border, rgba(255,255,255,0.1));
+}
+
+.fin-section-card__icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+}
+
+.fin-section-card__title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 0;
+    color: var(--text, #fff);
+}
+
+.fin-section-card__desc {
+    font-size: 0.85rem;
+    color: var(--text-muted, #888);
+    margin: 0;
+}
+
+.fin-section-links {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.fin-section-link {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    background: var(--bg, #0f0f1a);
+    color: var(--text, #fff);
+    text-decoration: none;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+}
+
+.fin-section-link:hover {
+    background: var(--amber-50, #fffbeb);
+    color: var(--amber-700, #b45309);
+    border-color: var(--amber-200, #fde68a);
+    transform: translateX(4px);
+}
+
+.fin-section-link__icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255,255,255,0.05);
+    font-size: 0.9rem;
+}
+
+.fin-section-link__text {
+    flex: 1;
+}
+
+.fin-section-link__title {
+    font-weight: 500;
+    font-size: 0.95rem;
+}
+
+.fin-section-link__subtitle {
+    font-size: 0.75rem;
+    opacity: 0.7;
+}
+
+/* Dark mode adjustments */
+[data-bs-theme="light"] .fin-section-card {
+    background: #fff;
+    border-color: #e5e7eb;
+}
+
+[data-bs-theme="light"] .fin-section-link {
+    background: #f9fafb;
+}
+
+[data-bs-theme="light"] .fin-section-link:hover {
+    background: var(--amber-50, #fffbeb);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="fin-container premium-page">
+    <!-- Header -->
+    <header class="fin-header reveal">
+        <div class="fin-header__content">
+            <h1 class="fin-header__title">
+                <i class="fas fa-shopping-cart"></i>
+                Central Compras
+            </h1>
+            <p class="fin-header__subtitle">
+                Pedidos de compra, validacoes NF x PO, cadastros De-Para e recebimento fisico
+            </p>
+        </div>
+        <div class="fin-header__actions">
+            <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-light btn-sm">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </header>
+
+    <!-- Grid de Cards -->
+    <div class="compras-dashboard-grid">
+
+        <!-- PEDIDOS -->
+        <div class="fin-section-card">
+            <div class="fin-section-card__header">
+                <div class="fin-section-card__icon" style="background: linear-gradient(135deg, #dbeafe, #bfdbfe); color: #2563eb;">
+                    <i class="fas fa-file-alt"></i>
+                </div>
+                <div>
+                    <h3 class="fin-section-card__title">Pedidos</h3>
+                    <p class="fin-section-card__desc">Pedidos de compra do Odoo</p>
+                </div>
+            </div>
+            <div class="fin-section-links">
+                <a href="{{ url_for('pedidos_compras.index') }}" class="fin-section-link">
+                    <div class="fin-section-link__icon">
+                        <i class="fas fa-list-alt text-primary"></i>
+                    </div>
+                    <div class="fin-section-link__text">
+                        <div class="fin-section-link__title">Pedidos de Compras</div>
+                        <div class="fin-section-link__subtitle">Consultar pedidos de compra</div>
+                    </div>
+                </a>
+            </div>
+        </div>
+
+        <!-- VALIDACOES -->
+        <div class="fin-section-card">
+            <div class="fin-section-card__header">
+                <div class="fin-section-card__icon" style="background: linear-gradient(135deg, #d1fae5, #a7f3d0); color: #059669;">
+                    <i class="fas fa-check-double"></i>
+                </div>
+                <div>
+                    <h3 class="fin-section-card__title">Validacoes</h3>
+                    <p class="fin-section-card__desc">Status e divergencias NF x PO</p>
+                </div>
+            </div>
+            <div class="fin-section-links">
+                <a href="{{ url_for('recebimento_views.validacoes_nf_po') }}" class="fin-section-link">
+                    <div class="fin-section-link__icon">
+                        <i class="fas fa-check-double text-success"></i>
+                    </div>
+                    <div class="fin-section-link__text">
+                        <div class="fin-section-link__title">Status NF x PO</div>
+                        <div class="fin-section-link__subtitle">Acompanhar validacoes em andamento</div>
+                    </div>
+                </a>
+                <a href="{{ url_for('recebimento_views.divergencias_nf_po') }}" class="fin-section-link">
+                    <div class="fin-section-link__icon">
+                        <i class="fas fa-exclamation-circle text-danger"></i>
+                    </div>
+                    <div class="fin-section-link__text">
+                        <div class="fin-section-link__title">Divergencias NF x PO</div>
+                        <div class="fin-section-link__subtitle">Itens com diferenca preco/quantidade</div>
+                    </div>
+                </a>
+                <a href="{{ url_for('recebimento_views.historico_aprovacoes_nf_po') }}" class="fin-section-link">
+                    <div class="fin-section-link__icon">
+                        <i class="fas fa-history text-secondary"></i>
+                    </div>
+                    <div class="fin-section-link__text">
+                        <div class="fin-section-link__title">Historico de Aprovacoes</div>
+                        <div class="fin-section-link__subtitle">Aprovacoes e rejeicoes anteriores</div>
+                    </div>
+                </a>
+            </div>
+        </div>
+
+        <!-- CADASTROS -->
+        <div class="fin-section-card">
+            <div class="fin-section-card__header">
+                <div class="fin-section-card__icon" style="background: linear-gradient(135deg, #ede9fe, #ddd6fe); color: #7c3aed;">
+                    <i class="fas fa-exchange-alt"></i>
+                </div>
+                <div>
+                    <h3 class="fin-section-card__title">Cadastros</h3>
+                    <p class="fin-section-card__desc">Mapeamentos e configuracoes</p>
+                </div>
+            </div>
+            <div class="fin-section-links">
+                <a href="{{ url_for('recebimento_views.depara_fornecedor') }}" class="fin-section-link">
+                    <div class="fin-section-link__icon">
+                        <i class="fas fa-exchange-alt text-info"></i>
+                    </div>
+                    <div class="fin-section-link__text">
+                        <div class="fin-section-link__title">De-Para Produto</div>
+                        <div class="fin-section-link__subtitle">Mapeamento produto fornecedor x interno</div>
+                    </div>
+                </a>
+            </div>
+        </div>
+
+        <!-- RECEBIMENTO -->
+        <div class="fin-section-card">
+            <div class="fin-section-card__header">
+                <div class="fin-section-card__icon" style="background: linear-gradient(135deg, #fef3c7, #fde68a); color: #b45309;">
+                    <i class="fas fa-boxes"></i>
+                </div>
+                <div>
+                    <h3 class="fin-section-card__title">Recebimento</h3>
+                    <p class="fin-section-card__desc">Recebimento fisico e processamento Odoo</p>
+                </div>
+            </div>
+            <div class="fin-section-links">
+                <a href="{{ url_for('recebimento_fisico_views.index') }}" class="fin-section-link">
+                    <div class="fin-section-link__icon">
+                        <i class="fas fa-boxes text-success"></i>
+                    </div>
+                    <div class="fin-section-link__text">
+                        <div class="fin-section-link__title">Recebimento Fisico</div>
+                        <div class="fin-section-link__subtitle">Lotes, quality checks, validacao</div>
+                    </div>
+                </a>
+                <a href="{{ url_for('recebimento_fisico_views.status') }}" class="fin-section-link">
+                    <div class="fin-section-link__icon">
+                        <i class="fas fa-tasks text-info"></i>
+                    </div>
+                    <div class="fin-section-link__text">
+                        <div class="fin-section-link__title">Processamento Odoo</div>
+                        <div class="fin-section-link__subtitle">Status de recebimentos no Odoo</div>
+                    </div>
+                </a>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

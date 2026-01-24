@@ -93,6 +93,8 @@ def api_listar_pedidos():
     # Filtros independentes
     cod_produto = request.args.get('cod_produto')
     fornecedor = request.args.get('fornecedor')
+    tipo_pedido = request.args.get('tipo_pedido')
+    status_odoo = request.args.get('status_odoo')
 
     # Filtro de data de criação
     data_criacao_inicio = request.args.get('data_criacao_inicio')
@@ -118,6 +120,12 @@ def api_listar_pedidos():
     if fornecedor:
         query_base = query_base.filter(PedidoCompras.raz_social.ilike(f'%{fornecedor}%'))
 
+    if tipo_pedido:
+        query_base = query_base.filter(PedidoCompras.tipo_pedido == tipo_pedido)
+
+    if status_odoo:
+        query_base = query_base.filter(PedidoCompras.status_odoo == status_odoo)
+
     if data_criacao_inicio:
         query_base = query_base.filter(PedidoCompras.data_pedido_criacao >= data_criacao_inicio)
 
@@ -141,6 +149,10 @@ def api_listar_pedidos():
         subquery_pedidos = subquery_pedidos.filter(PedidoCompras.cod_produto.ilike(f'%{cod_produto}%'))
     if fornecedor:
         subquery_pedidos = subquery_pedidos.filter(PedidoCompras.raz_social.ilike(f'%{fornecedor}%'))
+    if tipo_pedido:
+        subquery_pedidos = subquery_pedidos.filter(PedidoCompras.tipo_pedido == tipo_pedido)
+    if status_odoo:
+        subquery_pedidos = subquery_pedidos.filter(PedidoCompras.status_odoo == status_odoo)
     if data_criacao_inicio:
         subquery_pedidos = subquery_pedidos.filter(PedidoCompras.data_pedido_criacao >= data_criacao_inicio)
     if data_criacao_fim:

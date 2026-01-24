@@ -207,15 +207,15 @@ class ValidacaoRecebimentoJob:
         """
         Sincroniza POs vinculados do Odoo para DFEs que nao tinham PO.
 
-        Busca:
-        1. ValidacaoNfPoDfe onde odoo_po_vinculado_id IS NULL
-        2. Para cada um, consulta o DFE no Odoo
-        3. Se o DFE agora tem purchase_id ou purchase_fiscal_id, atualiza
+        Busca 3 caminhos (em ordem):
+        1. DFE.purchase_id (many2one direto - 14.6% dos casos)
+        2. DFE.purchase_fiscal_id (many2one escrituracao)
+        3. PO.dfe_id = DFE.id (caminho inverso - 85.4% dos casos em status=04)
 
-        Isso cobre o cenario:
+        Isso cobre cenarios:
         - DFE chegou sem PO vinculado
         - Usuario vinculou PO manualmente no Odoo
-        - Este sync importa essa vinculacao para o sistema
+        - PO.dfe_id preenchido mas DFE.purchase_id nao (caminho principal)
         """
         resultado = {
             'dfes_verificados': 0,
@@ -241,36 +241,44 @@ class ValidacaoRecebimentoJob:
             # Coletar IDs para consulta em batch no Odoo
             dfe_ids = [v.odoo_dfe_id for v in validacoes_sem_po]
 
-            # Consultar DFEs no Odoo
             odoo = self._get_odoo()
+
+            # CAMINHO 1+2: Consultar DFEs no Odoo (purchase_id, purchase_fiscal_id)
             dfes_odoo = odoo.search_read(
                 'l10n_br_ciel_it_account.dfe',
                 [['id', 'in', dfe_ids]],
                 fields=['id', 'purchase_id', 'purchase_fiscal_id']
             )
 
-            if not dfes_odoo:
-                logger.info("Sync POs: Nenhum DFE encontrado no Odoo")
-                resultado['dfes_sem_po'] = len(validacoes_sem_po)
-                return resultado
+            dfe_map = {d['id']: d for d in dfes_odoo} if dfes_odoo else {}
 
-            # Criar mapa de DFE -> dados do Odoo
-            dfe_map = {d['id']: d for d in dfes_odoo}
+            # CAMINHO 3: Buscar POs que apontam dfe_id para esses DFEs (batch)
+            pos_por_dfe = {}
+            if dfe_ids:
+                pos_com_dfe = odoo.search_read(
+                    'purchase.order',
+                    [['dfe_id', 'in', dfe_ids]],
+                    fields=['id', 'name', 'dfe_id']
+                )
+                if pos_com_dfe:
+                    for po in pos_com_dfe:
+                        dfe_id_vinculado = po['dfe_id'][0] if po.get('dfe_id') else None
+                        if dfe_id_vinculado:
+                            pos_por_dfe[dfe_id_vinculado] = po
 
-            # Atualizar validacoes com POs encontrados
+            logger.info(
+                f"Sync POs: {len(dfe_map)} DFEs no Odoo, "
+                f"{len(pos_por_dfe)} POs via dfe_id"
+            )
+
+            # Processar validacoes
             for validacao in validacoes_sem_po:
                 try:
-                    dfe_data = dfe_map.get(validacao.odoo_dfe_id)
-                    if not dfe_data:
-                        resultado['dfes_sem_po'] += 1
-                        continue
-
-                    # Verificar purchase_id (vem como [id, name] ou False)
-                    purchase_id_data = dfe_data.get('purchase_id')
-                    purchase_fiscal_data = dfe_data.get('purchase_fiscal_id')
-
                     tem_po = False
+                    dfe_data = dfe_map.get(validacao.odoo_dfe_id, {})
 
+                    # Caminho 1: purchase_id
+                    purchase_id_data = dfe_data.get('purchase_id')
                     if purchase_id_data and isinstance(purchase_id_data, (list, tuple)):
                         validacao.odoo_po_vinculado_id = purchase_id_data[0]
                         validacao.odoo_po_vinculado_name = (
@@ -282,16 +290,31 @@ class ValidacaoRecebimentoJob:
                             f"{validacao.odoo_po_vinculado_name}"
                         )
 
-                    if purchase_fiscal_data and isinstance(purchase_fiscal_data, (list, tuple)):
-                        validacao.odoo_po_fiscal_id = purchase_fiscal_data[0]
-                        validacao.odoo_po_fiscal_name = (
-                            purchase_fiscal_data[1] if len(purchase_fiscal_data) > 1 else None
-                        )
-                        tem_po = True
-                        logger.info(
-                            f"DFE {validacao.odoo_dfe_id}: PO fiscal encontrado - "
-                            f"{validacao.odoo_po_fiscal_name}"
-                        )
+                    # Caminho 2: purchase_fiscal_id
+                    if not tem_po:
+                        purchase_fiscal_data = dfe_data.get('purchase_fiscal_id')
+                        if purchase_fiscal_data and isinstance(purchase_fiscal_data, (list, tuple)):
+                            validacao.odoo_po_fiscal_id = purchase_fiscal_data[0]
+                            validacao.odoo_po_fiscal_name = (
+                                purchase_fiscal_data[1] if len(purchase_fiscal_data) > 1 else None
+                            )
+                            tem_po = True
+                            logger.info(
+                                f"DFE {validacao.odoo_dfe_id}: PO fiscal encontrado - "
+                                f"{validacao.odoo_po_fiscal_name}"
+                            )
+
+                    # Caminho 3: PO.dfe_id (inverso)
+                    if not tem_po:
+                        po_inverso = pos_por_dfe.get(validacao.odoo_dfe_id)
+                        if po_inverso:
+                            validacao.odoo_po_vinculado_id = po_inverso['id']
+                            validacao.odoo_po_vinculado_name = po_inverso['name']
+                            tem_po = True
+                            logger.info(
+                                f"DFE {validacao.odoo_dfe_id}: PO vinculado via PO.dfe_id - "
+                                f"{po_inverso['name']}"
+                            )
 
                     if tem_po:
                         validacao.pos_vinculados_importados_em = datetime.utcnow()

@@ -117,6 +117,39 @@ recebimento_views_bp = Blueprint(
 
 
 # =============================================================================
+# HUB: CENTRAL FISCAL
+# =============================================================================
+
+@recebimento_views_bp.route('/central-fiscal')
+@login_required
+def central_fiscal():
+    """
+    Hub Central Fiscal - Pagina card-based com links para:
+    - Validacao de Compras (Divergencias, Primeira Compra, Perfis)
+    - Validacao IBS/CBS (NCM, Pendencias)
+    - Relatorios (Documentos Fiscais IBS/CBS)
+    """
+    return render_template('recebimento/central_fiscal.html')
+
+
+# =============================================================================
+# HUB: CENTRAL COMPRAS
+# =============================================================================
+
+@recebimento_views_bp.route('/central-compras')
+@login_required
+def central_compras():
+    """
+    Hub Central Compras - Pagina card-based com links para:
+    - Pedidos de Compras
+    - Validacoes NF x PO (Status, Divergencias, Historico)
+    - Cadastros (De-Para Produto)
+    - Recebimento (Fisico, Processamento Odoo)
+    """
+    return render_template('recebimento/central_compras.html')
+
+
+# =============================================================================
 # TELA 1: DIVERGENCIAS FISCAIS
 # =============================================================================
 
@@ -281,9 +314,17 @@ def perfis_fiscais():
             PerfilFiscalProdutoFornecedor.cod_produto.ilike(f'%{cod_produto}%')
         )
     if cnpj:
-        query = query.filter(
-            PerfilFiscalProdutoFornecedor.cnpj_fornecedor.ilike(f'%{cnpj}%')
-        )
+        # Normalizar: remover formatacao para buscar apenas digitos
+        cnpj_limpo = ''.join(c for c in cnpj if c.isdigit())
+        if cnpj_limpo:
+            query = query.filter(
+                PerfilFiscalProdutoFornecedor.cnpj_fornecedor.ilike(f'%{cnpj_limpo}%')
+            )
+        else:
+            # Se nao tem digitos, buscar pelo texto original
+            query = query.filter(
+                PerfilFiscalProdutoFornecedor.cnpj_fornecedor.ilike(f'%{cnpj}%')
+            )
 
     # Ordenar por data decrescente e paginar
     paginacao = query.order_by(

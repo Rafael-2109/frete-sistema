@@ -398,6 +398,63 @@ def importar_perfil_fiscal_excel():
                 'colunas_esperadas': colunas_obrigatorias
             }), 400
 
+        # 4.1. Buscar nomes em batch (empresa, fornecedor, produto) via Odoo
+        from app.odoo.services.odoo_client import OdooClient
+
+        EMPRESAS_CNPJ_NOME = {
+            '61724241000330': 'NACOM GOYA - CD',
+            '61724241000178': 'NACOM GOYA - FB',
+            '61724241000259': 'NACOM GOYA - SC',
+            '18467441000163': 'LA FAMIGLIA - LF',
+        }
+
+        # Coletar CNPJs e codigos unicos para busca em batch
+        cnpjs_fornecedores_unicos = set()
+        cod_produtos_unicos = set()
+        for _, row in df.iterrows():
+            cnpj_raw = str(row.get('cnpj_fornecedor', '')).strip()
+            cnpj_limpo = ''.join(c for c in cnpj_raw if c.isdigit())
+            if len(cnpj_limpo) == 14:
+                cnpjs_fornecedores_unicos.add(cnpj_limpo)
+            cod_prod = str(row.get('cod_produto', '')).strip()
+            if cod_prod:
+                cod_produtos_unicos.add(cod_prod)
+
+        # Buscar nomes dos fornecedores no Odoo
+        mapa_fornecedor_nome = {}
+        mapa_produto_nome = {}
+        try:
+            odoo = OdooClient()
+
+            # Fornecedores: buscar por CNPJ formatado
+            if cnpjs_fornecedores_unicos:
+                for cnpj_forn in cnpjs_fornecedores_unicos:
+                    # Formatar CNPJ para busca no Odoo (XX.XXX.XXX/XXXX-XX)
+                    cnpj_fmt = f"{cnpj_forn[:2]}.{cnpj_forn[2:5]}.{cnpj_forn[5:8]}/{cnpj_forn[8:12]}-{cnpj_forn[12:14]}"
+                    partners = odoo.search_read(
+                        'res.partner',
+                        [['l10n_br_cnpj', '=', cnpj_fmt]],
+                        fields=['id', 'name'],
+                        limit=1
+                    )
+                    if partners:
+                        mapa_fornecedor_nome[cnpj_forn] = partners[0].get('name', '')
+
+            # Produtos: buscar por default_code
+            if cod_produtos_unicos:
+                produtos = odoo.search_read(
+                    'product.product',
+                    [['default_code', 'in', list(cod_produtos_unicos)]],
+                    fields=['id', 'default_code', 'name']
+                )
+                for p in produtos:
+                    dc = str(p.get('default_code', '')).strip()
+                    if dc:
+                        mapa_produto_nome[dc] = p.get('name', '')
+
+        except Exception as e:
+            logger.warning(f"Erro ao buscar nomes no Odoo (importacao continuara sem nomes): {e}")
+
         # 5. Processar linha por linha
         from app import db
 
@@ -531,7 +588,12 @@ def importar_perfil_fiscal_excel():
                 cst_pis = str(row.get('cst_pis_esperado', '')).strip() or None
                 cst_cofins = str(row.get('cst_cofins_esperado', '')).strip() or None
 
-                # 5.8 Buscar ou criar perfil (chave: empresa + fornecedor + produto)
+                # 5.8 Resolver nomes para exibicao
+                nome_empresa = EMPRESAS_CNPJ_NOME.get(cnpj_empresa, '')
+                razao_forn = mapa_fornecedor_nome.get(cnpj, '')
+                nome_prod = mapa_produto_nome.get(cod_produto, '')
+
+                # 5.9 Buscar ou criar perfil (chave: empresa + fornecedor + produto)
                 perfil = PerfilFiscalProdutoFornecedor.query.filter_by(
                     cnpj_empresa_compradora=cnpj_empresa,
                     cnpj_fornecedor=cnpj,
@@ -554,6 +616,13 @@ def importar_perfil_fiscal_excel():
                     perfil.atualizado_por = usuario
                     perfil.atualizado_em = datetime.now(timezone.utc)
                     perfil.ativo = True
+                    # Atualizar nomes (podem ter sido adicionados/corrigidos)
+                    if nome_empresa:
+                        perfil.nome_empresa_compradora = nome_empresa
+                    if razao_forn:
+                        perfil.razao_fornecedor = razao_forn
+                    if nome_prod:
+                        perfil.nome_produto = nome_prod
                     atualizados += 1
                 else:
                     # Criar novo
@@ -561,6 +630,9 @@ def importar_perfil_fiscal_excel():
                         cnpj_empresa_compradora=cnpj_empresa,
                         cnpj_fornecedor=cnpj,
                         cod_produto=cod_produto,
+                        nome_empresa_compradora=nome_empresa or None,
+                        razao_fornecedor=razao_forn or None,
+                        nome_produto=nome_prod or None,
                         ncm_esperado=ncm_limpo,
                         cfop_esperados=cfops_json,
                         cst_icms_esperado=cst_icms,

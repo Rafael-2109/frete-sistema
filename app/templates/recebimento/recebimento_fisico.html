@@ -46,9 +46,9 @@
                 </div>
                 <div class="col-md-2">
                     <div class="form-check mt-4">
-                        <input type="checkbox" class="form-check-input" id="filtroSemNf" checked>
-                        <label class="form-check-label" for="filtroSemNf">
-                            Ocultar S/NF
+                        <input type="checkbox" class="form-check-input" id="filtroApenasNf">
+                        <label class="form-check-label" for="filtroApenasNf">
+                            Apenas com NF
                         </label>
                     </div>
                 </div>
@@ -73,6 +73,28 @@
     <div id="listaPickings" class="row g-3" style="display: none;">
         <!-- Cards inseridos via JS -->
     </div>
+
+    <!-- Paginacao -->
+    <nav id="paginacaoPickings" class="mt-3" style="display: none;">
+        <div class="d-flex justify-content-between align-items-center">
+            <small class="text-muted" id="paginacaoTotal">0 pickings</small>
+            <ul class="pagination pagination-sm mb-0">
+                <li class="page-item" id="paginaAnterior">
+                    <a class="page-link" href="#" onclick="mudarPagina(-1); return false;">
+                        <i class="fas fa-chevron-left"></i>
+                    </a>
+                </li>
+                <li class="page-item disabled">
+                    <span class="page-link" id="paginaInfo">1 / 1</span>
+                </li>
+                <li class="page-item" id="paginaProxima">
+                    <a class="page-link" href="#" onclick="mudarPagina(1); return false;">
+                        <i class="fas fa-chevron-right"></i>
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </nav>
 
     <!-- Estado vazio -->
     <div id="estadoVazio" class="text-center py-5 text-muted">
@@ -331,7 +353,10 @@
 // =====================================================
 let pickingAtual = null;
 let detalhesPickingAtual = null;
-let pickingsCarregados = []; // Cache para filtro S/NF client-side
+let pickingsCarregados = [];
+let paginaAtual = 1;
+let totalPaginas = 1;
+let totalPickings = 0;
 
 // =====================================================
 // UTILITARIOS
@@ -355,22 +380,31 @@ function formatarNumero(valor, decimais) {
 }
 
 // =====================================================
-// BUSCAR PICKINGS
+// BUSCAR PICKINGS (com paginacao server-side)
 // =====================================================
-function buscarPickings() {
+function buscarPickings(resetPagina = true) {
+    if (resetPagina) paginaAtual = 1;
+
     const companyId = document.getElementById('filtroEmpresa').value;
     const filtroNf = document.getElementById('filtroNf').value.trim();
     const filtroFornecedor = document.getElementById('filtroFornecedor').value.trim();
+    const apenasComNf = document.getElementById('filtroApenasNf').checked;
 
     document.getElementById('estadoVazio').style.display = 'none';
     document.getElementById('listaPickings').style.display = 'none';
+    document.getElementById('paginacaoPickings').style.display = 'none';
     document.getElementById('loadingPickings').style.display = 'block';
 
-    let url = `/recebimento/fisico/pickings?company_id=${companyId}`;
-    if (filtroNf) url += `&filtro_nf=${encodeURIComponent(filtroNf)}`;
-    if (filtroFornecedor) url += `&filtro_fornecedor=${encodeURIComponent(filtroFornecedor)}`;
+    const params = new URLSearchParams({
+        company_id: companyId,
+        pagina: paginaAtual,
+        por_pagina: 50,
+        apenas_com_nf: apenasComNf,
+    });
+    if (filtroNf) params.append('filtro_nf', filtroNf);
+    if (filtroFornecedor) params.append('filtro_fornecedor', filtroFornecedor);
 
-    fetch(url)
+    fetch(`/recebimento/fisico/pickings?${params}`)
         .then(r => r.json())
         .then(data => {
             document.getElementById('loadingPickings').style.display = 'none';
@@ -380,6 +414,11 @@ function buscarPickings() {
                 document.getElementById('estadoVazio').style.display = 'block';
                 return;
             }
+
+            // Atualizar estado de paginacao
+            totalPaginas = data.total_paginas || 1;
+            paginaAtual = data.pagina || 1;
+            totalPickings = data.total || 0;
 
             // Exibir info de sincronizacao
             if (data.ultima_sincronizacao) {
@@ -399,9 +438,10 @@ function buscarPickings() {
                 return;
             }
 
-            // Guardar pickings no cache global
+            // Guardar pickings e renderizar
             pickingsCarregados = data.pickings;
             renderPickings();
+            atualizarPaginacao();
         })
         .catch(err => {
             document.getElementById('loadingPickings').style.display = 'none';
@@ -410,23 +450,38 @@ function buscarPickings() {
         });
 }
 
+function mudarPagina(delta) {
+    const novaPagina = paginaAtual + delta;
+    if (novaPagina >= 1 && novaPagina <= totalPaginas) {
+        paginaAtual = novaPagina;
+        buscarPickings(false);
+    }
+}
+
+function atualizarPaginacao() {
+    const nav = document.getElementById('paginacaoPickings');
+    if (totalPaginas <= 1) {
+        nav.style.display = 'none';
+        return;
+    }
+    nav.style.display = 'block';
+    document.getElementById('paginaInfo').textContent = `${paginaAtual} / ${totalPaginas}`;
+    document.getElementById('paginacaoTotal').textContent = `${totalPickings} pickings`;
+    document.getElementById('paginaAnterior').classList.toggle('disabled', paginaAtual <= 1);
+    document.getElementById('paginaProxima').classList.toggle('disabled', paginaAtual >= totalPaginas);
+}
+
 function renderPickings() {
     const container = document.getElementById('listaPickings');
     container.innerHTML = '';
 
-    const ocultarSemNf = document.getElementById('filtroSemNf').checked;
-
-    // Filtrar: se checkbox marcado, ocultar pickings sem NF
     let pickings = pickingsCarregados;
-    if (ocultarSemNf) {
-        pickings = pickings.filter(p => p.fase_validacao && p.fase_validacao.tem_nf);
-    }
 
     if (pickings.length === 0) {
         container.innerHTML = `
             <div class="col-12 text-center py-4 text-muted">
                 <i class="fas fa-filter fa-2x mb-2"></i>
-                <p>Nenhum picking com NF vinculada. Desmarque "Ocultar S/NF" para ver todos.</p>
+                <p>Nenhum picking encontrado com os filtros aplicados.</p>
             </div>
         `;
         container.style.display = 'flex';
@@ -1117,11 +1172,9 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Checkbox S/NF: re-render sem nova request
-    document.getElementById('filtroSemNf')?.addEventListener('change', function() {
-        if (pickingsCarregados.length > 0) {
-            renderPickings();
-        }
+    // Checkbox "Apenas com NF": refaz requisicao com filtro backend
+    document.getElementById('filtroApenasNf')?.addEventListener('change', function() {
+        buscarPickings();
     });
 
     // Inicializar datas do modal de sync

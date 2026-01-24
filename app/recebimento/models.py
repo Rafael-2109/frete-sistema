@@ -49,6 +49,11 @@ class PerfilFiscalProdutoFornecedor(db.Model):
     cod_produto = db.Column(db.String(50), nullable=False, index=True)
     cnpj_fornecedor = db.Column(db.String(20), nullable=False, index=True)
 
+    # Nomes para exibicao
+    nome_empresa_compradora = db.Column(db.String(255), nullable=True)
+    razao_fornecedor = db.Column(db.String(255), nullable=True)
+    nome_produto = db.Column(db.String(255), nullable=True)
+
     # Dados fiscais esperados (baseline)
     ncm_esperado = db.Column(db.String(10), nullable=True)
     cfop_esperados = db.Column(db.Text, nullable=True)  # JSON: ["5101", "6101"]

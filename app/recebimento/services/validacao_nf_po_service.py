@@ -439,17 +439,13 @@ class ValidacaoNfPoService:
         """
         Importa informacoes dos POs vinculados ao DFE do Odoo.
 
-        O Odoo pode ter vinculado automaticamente o DFE a um PO atraves dos campos:
-        - purchase_id: PO principal
-        - purchase_fiscal_id: PO fiscal (escrituracao)
-
-        Esses dados sao importantes para:
-        1. Manter sincronizacao com o Odoo
-        2. Identificar se o DFE ja foi processado
-        3. Facilitar rastreamento de fluxo documental
+        Estrategia de busca (3 caminhos, em ordem):
+        1. DFE.purchase_id (many2one direto - 14.6% dos casos)
+        2. DFE.purchase_fiscal_id (many2one escrituracao - 75% dos concluidos)
+        3. PO.dfe_id = DFE.id (caminho inverso - 85.4% dos casos em status=04)
         """
         try:
-            # purchase_id vem como [id, name] ou False
+            # 1. purchase_id (caminho direto - excepcional)
             purchase_id_data = dfe_data.get('purchase_id')
             if purchase_id_data and isinstance(purchase_id_data, (list, tuple)):
                 validacao.odoo_po_vinculado_id = purchase_id_data[0]
@@ -459,7 +455,7 @@ class ValidacaoNfPoService:
                     f"{validacao.odoo_po_vinculado_name} (ID: {validacao.odoo_po_vinculado_id})"
                 )
 
-            # purchase_fiscal_id vem como [id, name] ou False
+            # 2. purchase_fiscal_id (escrituracao)
             purchase_fiscal_data = dfe_data.get('purchase_fiscal_id')
             if purchase_fiscal_data and isinstance(purchase_fiscal_data, (list, tuple)):
                 validacao.odoo_po_fiscal_id = purchase_fiscal_data[0]
@@ -469,12 +465,53 @@ class ValidacaoNfPoService:
                     f"{validacao.odoo_po_fiscal_name} (ID: {validacao.odoo_po_fiscal_id})"
                 )
 
+            # 3. FALLBACK: Buscar PO via PO.dfe_id (caminho inverso)
+            #    Cobre 85.4% dos DFEs em status=04 que nao tem purchase_id preenchido
+            if not validacao.odoo_po_vinculado_id and not validacao.odoo_po_fiscal_id:
+                self._vincular_po_via_dfe_id(validacao)
+
             # Marcar data de importacao se algum PO foi encontrado
             if validacao.odoo_po_vinculado_id or validacao.odoo_po_fiscal_id:
                 validacao.pos_vinculados_importados_em = datetime.utcnow()
 
         except Exception as e:
             logger.warning(f"Erro ao importar POs vinculados do DFE {validacao.odoo_dfe_id}: {e}")
+
+    def _vincular_po_via_dfe_id(self, validacao: ValidacaoNfPoDfe) -> None:
+        """
+        Fallback: busca PO que aponta dfe_id para este DFE.
+        Caminho: purchase.order WHERE dfe_id = DFE.id
+
+        Este e o caminho PRIMARIO no Odoo (85.4% dos DFEs em status=04).
+        O campo PO.dfe_id (many2one) e preenchido pelo Odoo quando o usuario
+        vincula o DFE ao PO na interface de compras.
+        """
+        try:
+            odoo = get_odoo_connection()
+
+            # Buscar PO que tem dfe_id apontando para este DFE
+            pos = odoo.execute_kw(
+                'purchase.order', 'search_read',
+                [[['dfe_id', '=', validacao.odoo_dfe_id]]],
+                {'fields': ['id', 'name'], 'limit': 1}
+            )
+
+            if pos:
+                validacao.odoo_po_vinculado_id = pos[0]['id']
+                validacao.odoo_po_vinculado_name = pos[0]['name']
+                logger.info(
+                    f"DFE {validacao.odoo_dfe_id}: PO vinculado via PO.dfe_id - "
+                    f"{pos[0]['name']} (ID: {pos[0]['id']})"
+                )
+            else:
+                logger.debug(
+                    f"DFE {validacao.odoo_dfe_id}: Nenhum PO encontrado via PO.dfe_id"
+                )
+
+        except Exception as e:
+            logger.warning(
+                f"Erro ao vincular PO via dfe_id para DFE {validacao.odoo_dfe_id}: {e}"
+            )
 
     def _buscar_dfe_lines(self, odoo_dfe_id: int) -> List[Dict[str, Any]]:
         """Busca linhas do DFE no Odoo."""

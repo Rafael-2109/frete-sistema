@@ -1402,21 +1402,49 @@ def executar_validacao_manual():
 
     Executa:
     1. Sync De-Para do Odoo (product.supplierinfo)
-    2. Busca DFEs de compra pendentes
-    3. Executa validacao Fase 1 (Fiscal) + Fase 2 (NF x PO)
+    2. Sync POs vinculados (3 caminhos: purchase_id, purchase_fiscal_id, PO.dfe_id)
+    3. Busca DFEs de compra pendentes no periodo
+    4. Executa validacao Fase 1 (Fiscal) + Fase 2 (NF x PO)
 
-    Query params:
-        minutos_janela: Janela de tempo em minutos (default: 120)
+    Body JSON:
+        data_de: Data inicial (YYYY-MM-DD) - opcional
+        data_ate: Data final (YYYY-MM-DD) - opcional
+        Se nao informados, usa janela padrao de 48h.
 
     Returns:
         JSON com resultado da execucao
     """
     try:
         from app.recebimento.jobs.validacao_recebimento_job import executar_validacao_recebimento
+        from datetime import datetime as dt, timedelta
 
-        minutos_janela = request.args.get('minutos_janela', 2880, type=int)  # 48 horas
+        data = request.get_json(silent=True) or {}
+        data_de = data.get('data_de')  # Formato: YYYY-MM-DD
+        data_ate = data.get('data_ate')  # Formato: YYYY-MM-DD
 
-        logger.info(f"Executando validacao manual (janela: {minutos_janela} min) por {current_user.nome}")
+        if data_de and data_ate:
+            # Converter datas absolutas para minutos_janela
+            dt_de = dt.strptime(data_de, '%Y-%m-%d')
+            agora = dt.utcnow()
+
+            # Janela = diferenca entre agora e data_de (em minutos)
+            minutos_janela = int((agora - dt_de).total_seconds() / 60)
+
+            # Validar periodo maximo de 90 dias
+            if minutos_janela > 90 * 24 * 60:
+                return jsonify({'sucesso': False, 'erro': 'Periodo maximo: 90 dias'}), 400
+
+            # Validar datas
+            if minutos_janela < 0:
+                return jsonify({'sucesso': False, 'erro': 'Data "De" nao pode ser futura'}), 400
+
+            logger.info(
+                f"Executando validacao manual (periodo: {data_de} a {data_ate}, "
+                f"janela: {minutos_janela} min) por {current_user.nome}"
+            )
+        else:
+            minutos_janela = 2880  # 48 horas padrao
+            logger.info(f"Executando validacao manual (janela padrao: {minutos_janela} min) por {current_user.nome}")
 
         resultado = executar_validacao_recebimento(minutos_janela=minutos_janela)
 
@@ -1426,6 +1454,9 @@ def executar_validacao_manual():
             'resultado': resultado
         })
 
+    except ValueError as e:
+        logger.error(f"Erro de formato na execucao manual: {e}")
+        return jsonify({'sucesso': False, 'erro': f'Formato de data invalido: {e}'}), 400
     except Exception as e:
         logger.error(f"Erro na execucao manual da validacao: {e}")
         return jsonify({'sucesso': False, 'erro': str(e)}), 500

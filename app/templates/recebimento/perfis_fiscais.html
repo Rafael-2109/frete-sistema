@@ -115,12 +115,21 @@
                         {% for item in paginacao.items %}
                         <tr>
                             <td>
+                                {% if item.nome_empresa_compradora %}
+                                <small>{{ item.nome_empresa_compradora }}</small><br>
+                                {% endif %}
                                 <small class="text-muted">{{ item.cnpj_empresa_compradora|formatar_cnpj if item.cnpj_empresa_compradora else '-' }}</small>
                             </td>
                             <td>
+                                {% if item.razao_fornecedor %}
+                                <small>{{ item.razao_fornecedor }}</small><br>
+                                {% endif %}
                                 <small class="text-muted">{{ item.cnpj_fornecedor|formatar_cnpj }}</small>
                             </td>
                             <td>
+                                {% if item.nome_produto %}
+                                <small>{{ item.nome_produto }}</small><br>
+                                {% endif %}
                                 <code>{{ item.cod_produto }}</code>
                             </td>
                             <td><code>{{ item.ncm_esperado or '-' }}</code></td>

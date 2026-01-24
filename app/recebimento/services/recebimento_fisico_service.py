@@ -44,20 +44,27 @@ class RecebimentoFisicoService:
         5: 'LA FAMIGLIA - LF',
     }
 
-    def buscar_pickings_disponiveis(self, company_id, filtro_nf=None, filtro_fornecedor=None):
+    def buscar_pickings_disponiveis(self, company_id, filtro_nf=None, filtro_fornecedor=None,
+                                     apenas_com_nf=False, pagina=1, por_pagina=50):
         """
         Busca pickings disponiveis do CACHE LOCAL (tabelas picking_recebimento_*).
         Dedup por purchase_order_id: mostra apenas o picking mais recente (write_date).
+        Suporta paginacao server-side e filtro por NF vinculada.
 
         Args:
             company_id: ID da empresa no Odoo
             filtro_nf: Filtrar por numero de NF (origin do picking)
             filtro_fornecedor: Filtrar por nome do fornecedor
+            apenas_com_nf: Se True, retorna apenas pickings com ValidacaoNfPoDfe
+            pagina: Pagina atual (1-indexed)
+            por_pagina: Itens por pagina (padrao 50)
 
         Returns:
-            Dict com lista de pickings + info de ultima sincronizacao
+            Dict com lista de pickings paginada + metadados de paginacao
         """
         try:
+            from app.recebimento.models import ValidacaoNfPoDfe
+
             # Subquery: para cada PO, pegar o picking com maior write_date
             subq = db.session.query(
                 PickingRecebimento.odoo_purchase_order_id,
@@ -88,7 +95,35 @@ class RecebimentoFisicoService:
             if filtro_fornecedor:
                 query = query.filter(PickingRecebimento.odoo_partner_name.ilike(f'%{filtro_fornecedor}%'))
 
-            pickings = query.order_by(PickingRecebimento.scheduled_date.desc()).limit(50).all()
+            # Filtro apenas_com_nf: subquery para PO IDs que tem ValidacaoNfPoDfe
+            if apenas_com_nf:
+                po_ids_com_nf = db.session.query(
+                    ValidacaoNfPoDfe.odoo_po_vinculado_id
+                ).filter(
+                    ValidacaoNfPoDfe.odoo_po_vinculado_id.isnot(None)
+                ).union(
+                    db.session.query(
+                        ValidacaoNfPoDfe.po_consolidado_id
+                    ).filter(
+                        ValidacaoNfPoDfe.po_consolidado_id.isnot(None)
+                    )
+                ).subquery()
+
+                query = query.filter(
+                    PickingRecebimento.odoo_purchase_order_id.in_(
+                        db.session.query(po_ids_com_nf)
+                    )
+                )
+
+            # Ordenar
+            query = query.order_by(PickingRecebimento.scheduled_date.desc())
+
+            # Contar total ANTES de paginar
+            total = query.count()
+
+            # Paginar
+            offset = (pagina - 1) * por_pagina
+            pickings = query.offset(offset).limit(por_pagina).all()
 
             # Verificar quais ja tem recebimento local pendente/processando
             picking_ids = [p.odoo_picking_id for p in pickings]
@@ -146,9 +181,17 @@ class RecebimentoFisicoService:
                     'tipo_liberacao': phase.tipo_liberacao if phase else None,
                 }
 
-            logger.info(f"Encontrados {len(resultado)} pickings no cache local para company_id={company_id}")
+            total_paginas = (total + por_pagina - 1) // por_pagina
+            logger.info(
+                f"Pickings company_id={company_id}: pagina {pagina}/{total_paginas} "
+                f"({len(resultado)} de {total} total)"
+            )
             return {
                 'pickings': resultado,
+                'total': total,
+                'pagina': pagina,
+                'por_pagina': por_pagina,
+                'total_paginas': total_paginas,
                 'ultima_sincronizacao': ultima_sync.strftime('%d/%m/%Y %H:%M') if ultima_sync else None,
             }
 

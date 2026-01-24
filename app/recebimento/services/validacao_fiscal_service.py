@@ -232,14 +232,59 @@ class ValidacaoFiscalService:
                         # Se nao veio do DFE, pega do partner
                         dados_nf['uf_fornecedor'] = state[1][:2] if len(state) > 1 else None
 
+            # 3.3. Resolver default_code de todos os product_ids em bulk
+            product_ids_unicos = set()
+            for linha in linhas:
+                pid = linha.get('product_id', [None, ''])[0] if linha.get('product_id') else None
+                if pid:
+                    product_ids_unicos.add(int(pid))
+
+            # Mapeamento: product_id -> {default_code, name}
+            mapa_produtos = {}
+            if product_ids_unicos:
+                produtos_odoo = odoo.search_read(
+                    'product.product',
+                    [['id', 'in', list(product_ids_unicos)]],
+                    fields=['id', 'default_code', 'name']
+                )
+                for p in produtos_odoo:
+                    mapa_produtos[p['id']] = {
+                        'default_code': str(p.get('default_code', '')).strip() if p.get('default_code') else None,
+                        'name': p.get('name', '')
+                    }
+
+            # 3.4. Resolver nome da empresa compradora
+            EMPRESAS_CNPJ_NOME = {
+                '61724241000330': 'NACOM GOYA - CD',
+                '61724241000178': 'NACOM GOYA - FB',
+                '61724241000259': 'NACOM GOYA - SC',
+                '18467441000163': 'LA FAMIGLIA - LF',
+            }
+            nome_empresa = EMPRESAS_CNPJ_NOME.get(cnpj_empresa_compradora, razao_empresa_compradora)
+
             # 4. Validar cada linha
             for linha in linhas:
-                cod_produto = str(linha.get('product_id', [None, ''])[0]) if linha.get('product_id') else None
-                nome_produto = linha.get('det_prod_xprod', '')
+                product_id_odoo = linha.get('product_id', [None, ''])[0] if linha.get('product_id') else None
 
-                if not cod_produto:
+                if not product_id_odoo:
                     logger.warning(f"Linha {linha.get('id')} sem product_id, pulando...")
                     continue
+
+                # Resolver default_code (codigo interno) a partir do product_id
+                produto_info = mapa_produtos.get(int(product_id_odoo), {})
+                if produto_info.get('default_code'):
+                    cod_produto = produto_info['default_code']
+                    nome_produto_interno = produto_info.get('name', '')
+                else:
+                    # Fallback: usar product_id se nao tiver default_code
+                    cod_produto = str(product_id_odoo)
+                    nome_produto_interno = linha.get('det_prod_xprod', '')
+                    logger.warning(
+                        f"Produto ID {product_id_odoo} sem default_code no Odoo, "
+                        f"usando product_id como cod_produto"
+                    )
+
+                nome_produto = linha.get('det_prod_xprod', '')
 
                 # Buscar perfil fiscal (baseline) - chave: empresa + fornecedor + produto
                 perfil = PerfilFiscalProdutoFornecedor.query.filter_by(
@@ -258,7 +303,9 @@ class ValidacaoFiscalService:
                         nome_produto=nome_produto,
                         cnpj=cnpj,
                         razao=razao,
-                        dados_nf=dados_nf
+                        dados_nf=dados_nf,
+                        nome_produto_interno=nome_produto_interno,
+                        nome_empresa=nome_empresa
                     )
 
                     if historico_resultado['acao'] == 'perfil_criado':
@@ -374,7 +421,9 @@ class ValidacaoFiscalService:
         nome_produto: str,
         cnpj: str,
         razao: str,
-        dados_nf: Dict = None
+        dados_nf: Dict = None,
+        nome_produto_interno: str = None,
+        nome_empresa: str = None
     ) -> Dict:
         """
         Processa linha sem perfil local.
@@ -428,7 +477,10 @@ class ValidacaoFiscalService:
                 cnpj_fornecedor=cnpj,
                 cnpj_empresa_compradora=dados_nf.get('cnpj_empresa_compradora') if dados_nf else None,
                 dados=dados_consistentes,
-                dfe_ids=[h['dfe_id'] for h in historico]
+                dfe_ids=[h['dfe_id'] for h in historico],
+                nome_produto=nome_produto_interno,
+                razao_fornecedor=razao,
+                nome_empresa=nome_empresa
             )
             return {
                 'acao': 'perfil_criado',
@@ -465,9 +517,52 @@ class ValidacaoFiscalService:
         """
         Busca historico de NFs do produto/fornecedor no Odoo.
 
+        Args:
+            cod_produto: Codigo interno do produto (default_code)
+            cnpj_fornecedor: CNPJ do fornecedor (apenas digitos)
+            excluir_dfe_id: ID do DFE a excluir da busca
+
         Retorna lista de dicts com dados fiscais das ultimas N NFs.
         """
         odoo = self._get_odoo()
+
+        # Resolver product_id a partir do default_code
+        # Se cod_produto e numerico puro, pode ser um product_id legado
+        try:
+            product_id_int = int(cod_produto)
+            # Verificar se e um product_id valido
+            produto = odoo.search_read(
+                'product.product',
+                [['id', '=', product_id_int]],
+                fields=['id', 'default_code'],
+                limit=1
+            )
+            if produto:
+                product_id = product_id_int
+            else:
+                # Nao existe como ID, tentar como default_code
+                produto = odoo.search_read(
+                    'product.product',
+                    [['default_code', '=', cod_produto]],
+                    fields=['id'],
+                    limit=1
+                )
+                if not produto:
+                    logger.warning(f"Produto nao encontrado no Odoo: {cod_produto}")
+                    return []
+                product_id = produto[0]['id']
+        except (ValueError, TypeError):
+            # Nao e numerico, buscar por default_code
+            produto = odoo.search_read(
+                'product.product',
+                [['default_code', '=', cod_produto]],
+                fields=['id'],
+                limit=1
+            )
+            if not produto:
+                logger.warning(f"Produto nao encontrado no Odoo por default_code: {cod_produto}")
+                return []
+            product_id = produto[0]['id']
 
         # Buscar DFEs do fornecedor (tipo compra)
         # l10n_br_status = '04' significa processado/concluido
@@ -506,17 +601,21 @@ class ValidacaoFiscalService:
                 'l10n_br_ciel_it_account.dfe.line',
                 [
                     ['dfe_id', '=', dfe['id']],
-                    ['product_id', '=', int(cod_produto)]
+                    ['product_id', '=', product_id]
                 ],
                 fields=[
                     'id', 'det_prod_ncm', 'det_prod_cfop',
                     'det_imposto_icms_picms', 'det_imposto_icms_vbcst',
                     'det_imposto_icms_vicmsst',  # Para calcular aliq ST
-                    'det_imposto_ipi_pipi', 'det_imposto_icms_cst',
+                    'det_imposto_icms_predbc',  # Reducao BC ICMS
+                    'det_imposto_ipi_pipi', 'det_imposto_ipi_vipi',
+                    'det_imposto_icms_cst',
                     # PIS
                     'det_imposto_pis_cst', 'det_imposto_pis_ppis',
+                    'det_imposto_pis_vpis',
                     # COFINS
-                    'det_imposto_cofins_cst', 'det_imposto_cofins_pcofins'
+                    'det_imposto_cofins_cst', 'det_imposto_cofins_pcofins',
+                    'det_imposto_cofins_vcofins'
                 ],
                 limit=1
             )
@@ -525,6 +624,25 @@ class ValidacaoFiscalService:
                 linha = linhas[0]
                 # Calcular aliquota ICMS ST = vicmsst / vbcst * 100
                 aliq_icms_st = self._calcular_aliq_icms_st(linha)
+
+                # IPI: se nao tem valor de IPI, aliquota e None (nao se aplica)
+                aliq_ipi = self._to_decimal(linha.get('det_imposto_ipi_pipi'))
+                vipi = self._to_decimal(linha.get('det_imposto_ipi_vipi'))
+                if vipi is None or vipi == 0:
+                    aliq_ipi = None
+
+                # PIS: se nao tem valor de PIS, aliquota e None
+                aliq_pis = self._to_decimal(linha.get('det_imposto_pis_ppis'))
+                vpis = self._to_decimal(linha.get('det_imposto_pis_vpis'))
+                if vpis is None or vpis == 0:
+                    aliq_pis = None
+
+                # COFINS: se nao tem valor de COFINS, aliquota e None
+                aliq_cofins = self._to_decimal(linha.get('det_imposto_cofins_pcofins'))
+                vcofins = self._to_decimal(linha.get('det_imposto_cofins_vcofins'))
+                if vcofins is None or vcofins == 0:
+                    aliq_cofins = None
+
                 historico.append({
                     'dfe_id': dfe['id'],
                     'dfe_name': dfe['name'],
@@ -533,19 +651,20 @@ class ValidacaoFiscalService:
                     'cfop': linha.get('det_prod_cfop'),
                     'cst_icms': linha.get('det_imposto_icms_cst'),
                     'aliq_icms': self._to_decimal(linha.get('det_imposto_icms_picms')),
+                    'reducao_bc_icms': self._to_decimal(linha.get('det_imposto_icms_predbc')),
                     'aliq_icms_st': aliq_icms_st,
-                    'aliq_ipi': self._to_decimal(linha.get('det_imposto_ipi_pipi')),
+                    'aliq_ipi': aliq_ipi,
                     # PIS
                     'cst_pis': linha.get('det_imposto_pis_cst'),
-                    'aliq_pis': self._to_decimal(linha.get('det_imposto_pis_ppis')),
+                    'aliq_pis': aliq_pis,
                     # COFINS
                     'cst_cofins': linha.get('det_imposto_cofins_cst'),
-                    'aliq_cofins': self._to_decimal(linha.get('det_imposto_cofins_pcofins'))
+                    'aliq_cofins': aliq_cofins
                 })
 
         logger.debug(
-            f"Historico Odoo: produto={cod_produto}, fornecedor={cnpj_fornecedor}, "
-            f"encontrados={len(historico)} registros"
+            f"Historico Odoo: produto={cod_produto} (product_id={product_id}), "
+            f"fornecedor={cnpj_fornecedor}, encontrados={len(historico)} registros"
         )
 
         return historico
@@ -579,6 +698,7 @@ class ValidacaoFiscalService:
         ncms = [h['ncm'] for h in historico if h['ncm']]
         cfops = [h['cfop'] for h in historico if h['cfop']]
         aliqs_icms = [h['aliq_icms'] for h in historico if h['aliq_icms'] is not None]
+        reducoes_bc_icms = [h.get('reducao_bc_icms') for h in historico if h.get('reducao_bc_icms') is not None]
         aliqs_icms_st = [h['aliq_icms_st'] for h in historico if h['aliq_icms_st'] is not None]
         aliqs_ipi = [h['aliq_ipi'] for h in historico if h['aliq_ipi'] is not None]
         csts = [h['cst_icms'] for h in historico if h['cst_icms']]
@@ -602,6 +722,11 @@ class ValidacaoFiscalService:
         if len(set(aliqs_icms)) > 1:
             consistente = False
             motivos_inconsistencia.append(f"ICMS: {set(aliqs_icms)}")
+
+        # % Reducao BC ICMS - deve ser unico
+        if len(set(reducoes_bc_icms)) > 1:
+            consistente = False
+            motivos_inconsistencia.append(f"Red. BC ICMS: {set(reducoes_bc_icms)}")
 
         # % ICMS ST - deve ser unico
         if len(set(aliqs_icms_st)) > 1:
@@ -642,6 +767,7 @@ class ValidacaoFiscalService:
             'cfops': list(set(cfops)),  # CFOP pode ter varios
             'cst_icms': csts[0] if csts else None,
             'aliq_icms': aliqs_icms[0] if aliqs_icms else None,
+            'reducao_bc_icms': reducoes_bc_icms[0] if reducoes_bc_icms else None,
             'aliq_icms_st': aliqs_icms_st[0] if aliqs_icms_st else None,
             'aliq_ipi': aliqs_ipi[0] if aliqs_ipi else None,
             # PIS
@@ -660,17 +786,23 @@ class ValidacaoFiscalService:
         cnpj_fornecedor: str,
         cnpj_empresa_compradora: str,
         dados: Dict,
-        dfe_ids: List[int]
+        dfe_ids: List[int],
+        nome_produto: str = None,
+        razao_fornecedor: str = None,
+        nome_empresa: str = None
     ) -> PerfilFiscalProdutoFornecedor:
         """
         Cria perfil fiscal automaticamente a partir de historico consistente.
 
         Args:
-            cod_produto: Codigo do produto
+            cod_produto: Codigo interno do produto (default_code)
             cnpj_fornecedor: CNPJ do fornecedor
             cnpj_empresa_compradora: CNPJ da empresa compradora (destinatario)
             dados: Dados fiscais consistentes do historico
             dfe_ids: IDs dos DFEs usados para criar o perfil
+            nome_produto: Nome interno do produto (para exibicao)
+            razao_fornecedor: Razao social do fornecedor (para exibicao)
+            nome_empresa: Nome da empresa compradora (para exibicao)
 
         Returns:
             PerfilFiscalProdutoFornecedor criado
@@ -679,6 +811,11 @@ class ValidacaoFiscalService:
             cnpj_empresa_compradora=cnpj_empresa_compradora,
             cod_produto=cod_produto,
             cnpj_fornecedor=cnpj_fornecedor,
+            # Nomes para exibicao
+            nome_empresa_compradora=nome_empresa,
+            razao_fornecedor=razao_fornecedor,
+            nome_produto=nome_produto,
+            # Dados fiscais
             ncm_esperado=dados.get('ncm'),
             cfop_esperados=json.dumps(dados.get('cfops', [])),
             cst_icms_esperado=dados.get('cst_icms'),
@@ -1075,18 +1212,20 @@ class ValidacaoFiscalService:
 
         O campo det_imposto_icms_picmsst nao existe no Odoo,
         entao calculamos a partir dos valores.
+
+        Retorna None quando ICMS ST nao se aplica (sem base ou sem valor).
         """
         vicmsst = self._to_decimal(linha.get('det_imposto_icms_vicmsst'))
         vbcst = self._to_decimal(linha.get('det_imposto_icms_vbcst'))
 
         if vicmsst is None or vbcst is None or vbcst == 0:
-            return Decimal('0')
+            return None  # ICMS ST nao se aplica
 
         try:
             aliq = (vicmsst / vbcst) * 100
             return aliq.quantize(Decimal('0.01'))
         except Exception:
-            return Decimal('0')
+            return None
 
     # =========================================================================
     # METODOS PARA RESOLUCAO DE DIVERGENCIAS

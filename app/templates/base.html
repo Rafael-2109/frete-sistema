@@ -201,6 +201,15 @@
               <li><a class="dropdown-item" href="{{ url_for('portaria.historico') }}">
                   <i class="fas fa-history"></i> Histórico da Portaria
                 </a></li>
+              <li>
+                <hr class="dropdown-divider">
+              </li>
+              <li>
+                <h6 class="dropdown-header">🛒 Compras</h6>
+              </li>
+              <li><a class="dropdown-item" href="{{ url_for('recebimento_views.central_compras') }}">
+                  <i class="fas fa-shopping-cart text-primary"></i> <strong>Central Compras</strong>
+                </a></li>
             </ul>
           </li>
           {% endif %}
@@ -255,74 +264,16 @@
         
 
               {# ================================================================= #}
-              {# CENTRAL FISCAL - Validações e Cadastros Fiscais                  #}
+              {# CENTRAL FISCAL - Hub com cards                                    #}
               {# ================================================================= #}
               {% if current_user.tem_permissao('financeiro', 'pendencias') or current_user.pode_acessar_financeiro() or
               current_user.perfil == 'administrador' %}
               <li><hr class="dropdown-divider"></li>
-              <li>
-                <h6 class="dropdown-header">📋 Central Fiscal</h6>
-              </li>
-
-              {# Validação de Compras (Fase 1 - Fiscal) #}
-              <li><a class="dropdown-item" href="{{ url_for('recebimento_views.divergencias') }}">
-                  <i class="fas fa-exclamation-triangle text-warning"></i> Divergências Fiscais
-                </a></li>
-              <li><a class="dropdown-item" href="{{ url_for('recebimento_views.primeira_compra') }}">
-                  <i class="fas fa-clipboard-check text-info"></i> Primeira Compra
-                </a></li>
-              <li><a class="dropdown-item" href="{{ url_for('recebimento_views.perfis_fiscais') }}">
-                  <i class="fas fa-id-card text-primary"></i> Perfis Fiscais
-                </a></li>
-
-              {# Validação NF × PO (Fase 2) #}
-              <li><a class="dropdown-item" href="{{ url_for('recebimento_views.validacoes_nf_po') }}">
-                  <i class="fas fa-check-double text-success"></i> Validações NF × PO
-                </a></li>
-              <li><a class="dropdown-item" href="{{ url_for('recebimento_views.divergencias_nf_po') }}">
-                  <i class="fas fa-exclamation-circle text-danger"></i> Divergências NF × PO
-                </a></li>
-              <li><a class="dropdown-item" href="{{ url_for('recebimento_views.historico_aprovacoes_nf_po') }}">
-                  <i class="fas fa-history text-secondary"></i> Histórico Aprovações
-                </a></li>
-              <li><a class="dropdown-item" href="{{ url_for('recebimento_views.depara_fornecedor') }}">
-                  <i class="fas fa-exchange-alt text-info"></i> De-Para Fornecedor
-                </a></li>
-
-              {# Recebimento Físico (Fase 4) #}
-              <li><a class="dropdown-item" href="{{ url_for('recebimento_fisico_views.index') }}">
-                  <i class="fas fa-boxes text-success"></i> Recebimento Físico
-                </a></li>
-              <li><a class="dropdown-item" href="{{ url_for('recebimento_fisico_views.status') }}">
-                  <i class="fas fa-tasks text-info"></i> Status Recebimentos
-                </a></li>
-
-              {# Cadastros Fiscais - IBS/CBS #}
-              <li><a class="dropdown-item" href="{{ url_for('relatorios_fiscais.pagina_relatorio_ibscbs') }}">
-                  <i class="fas fa-file-invoice text-info"></i> Documentos C/ IBS/CBS
-                </a></li>
-              <li><a class="dropdown-item" href="{{ url_for('recebimento_views.ncm_ibscbs') }}">
-                  <i class="fas fa-list-ol text-success"></i> Cadastro NCM IBS/CBS
-                </a></li>
-              <li><a class="dropdown-item" href="{{ url_for('recebimento_views.pendencias_ibscbs') }}">
-                  <i class="fas fa-clipboard-list text-warning"></i> Pendências IBS/CBS
-                </a></li>
-
-              {% endif %}
-
-              {# ================================================================= #}
-              {# CONCILIAÇÃO BANCÁRIA - CNAB400 e Retornos                        #}
-              {# ================================================================= #}
-              {% if current_user.tem_permissao('financeiro') or current_user.pode_acessar_financeiro() or
-              current_user.perfil == 'administrador' %}
-              <li><hr class="dropdown-divider"></li>
-              <li>
-                <h6 class="dropdown-header">💳 Conciliação Bancária</h6>
-              </li>
-              <li><a class="dropdown-item" href="{{ url_for('cnab400.index') }}">
-                  <i class="fas fa-file-invoice-dollar text-success"></i> CNAB400 - Retorno Bancário
+              <li><a class="dropdown-item" href="{{ url_for('recebimento_views.central_fiscal') }}">
+                  <i class="fas fa-file-invoice text-info"></i> <strong>Central Fiscal</strong>
                 </a></li>
               {% endif %}
+
             </ul>
           </li>
           {% endif %}
