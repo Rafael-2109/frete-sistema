@@ -173,3 +173,50 @@ Se passo 1 nao ocorreu, passo 2 falha.
 - [ ] Usar `_buscar_pos_fornecedor_local()` para POs
 - [ ] Usar constantes TOLERANCIA_* (nao hardcodar)
 - [ ] Lembrar que qtd_nf/preco_nf no MatchNfPoItem JA ESTAO convertidos
+
+---
+
+## ERRO 9: DFE status=04 sem PO mas PO.dfe_id Existe no Odoo
+
+**Sintoma**: DFE aparece "sem PO vinculado" na listagem de validacoes, mas no Odoo o PO esta vinculado ao DFE.
+
+**Causa**: No workflow Odoo de recebimento de compras, o operador vincula PO ao DFE preenchendo o campo `PO.dfe_id` (many2one no purchase.order apontando para o DFE). Porem os campos `DFE.purchase_id` e `DFE.purchase_fiscal_id` NAO sao preenchidos neste momento — eles so sao preenchidos em casos excepcionais (purchase_id) ou na escrituracao (purchase_fiscal_id, status=06).
+
+**Estatistica**: 85.4% dos DFEs em status=04 tem vinculacao APENAS via `PO.dfe_id`.
+
+**Solucao**: O `_sync_pos_vinculados()` (Caminho 3) agora faz batch lookup:
+```python
+# Query no Odoo: buscar POs que apontam para esses DFEs
+pos_com_dfe = odoo.search_read(
+    'purchase.order',
+    [['dfe_id', 'in', dfe_ids]],
+    fields=['id', 'name', 'dfe_id']
+)
+# Preenche validacao.odoo_po_vinculado_id com o PO encontrado
+```
+
+**Referencia**: `validacao_recebimento_job.py:255-268` (Query 2 do batch)
+
+---
+
+## ERRO 10: Periodo do "Executar Validacao" nao Pega DFEs Antigos
+
+**Sintoma**: Ao clicar "Executar Validacao", DFEs com write_date anterior a 48h nao sao processados, mesmo existindo no Odoo com status=04.
+
+**Causa**: O `_buscar_dfes_pendentes()` filtra por:
+```python
+['write_date', '>=', data_limite_str]
+# onde data_limite = datetime.utcnow() - timedelta(minutes=minutos_janela)
+# minutos_janela padrao = 2880 (48 horas)
+```
+
+**Solucao**: O modal "Executar Validacao" agora permite selecionar periodo (De/Ate, maximo 90 dias). As datas sao convertidas para minutos_janela no backend:
+```python
+dt_de = datetime.strptime(data_de, '%Y-%m-%d')
+agora = datetime.utcnow()
+minutos_janela = int((agora - dt_de).total_seconds() / 60)
+```
+
+**ATENCAO**: O periodo afeta APENAS a etapa 3 (`_buscar_dfes_pendentes`). A etapa 2 (`_sync_pos_vinculados`) SEMPRE processa TODOS os DFEs sem PO, sem limite de data.
+
+**Referencia**: `validacao_nf_po_routes.py:1397-1451` (rota executar-validacao)

@@ -1,7 +1,75 @@
 # Fluxo Completo: Validacao NF x PO
 
-## Arquivo Principal
-`app/recebimento/services/validacao_nf_po_service.py`
+## Arquivos Principais
+
+| Arquivo | Responsabilidade |
+|---------|-----------------|
+| `app/recebimento/services/validacao_nf_po_service.py` | Logica de validacao (match, preview, divergencias) |
+| `app/recebimento/jobs/validacao_recebimento_job.py` | Orquestracao do job (scheduler, sync, buscar DFEs) |
+| `app/recebimento/routes/validacao_nf_po_routes.py` | Rotas HTTP (tela, APIs, execucao manual) |
+
+---
+
+## JOB DE VALIDACAO (Orquestracao)
+
+**Arquivo**: `app/recebimento/jobs/validacao_recebimento_job.py`
+**Classe**: `ValidacaoRecebimentoJob`
+**Scheduler**: Cada 30 minutos | **Manual**: Botao na tela NF x PO (modal De/Ate)
+
+### 4 Etapas do Job (`executar()`, linha 75):
+
+```
+[1/4] _sync_depara_odoo() (linha 186)
+      Importa product.supplierinfo do Odoo (limit=200)
+
+[2/4] _sync_pos_vinculados() (linha 206) — SEM LIMITE DE DATA
+      Busca TODAS ValidacaoNfPoDfe sem PO (odoo_po_vinculado_id IS NULL AND odoo_po_fiscal_id IS NULL)
+      Verifica 3 caminhos (2 queries batch no Odoo):
+        Query 1: search_read DFE [id in dfe_ids] -> purchase_id, purchase_fiscal_id
+        Query 2: search_read PO [dfe_id in dfe_ids] -> id, name, dfe_id
+
+      Prioridade:
+        1. DFE.purchase_id (many2one direto - 14.6% dos casos)
+        2. DFE.purchase_fiscal_id (escrituracao - 75% dos status=06)
+        3. PO.dfe_id (inverso - 85.4% dos status=04 - PRINCIPAL)
+
+[3/4] _buscar_dfes_pendentes(minutos_janela) (linha 347) — COM JANELA TEMPORAL
+      Filtro Odoo:
+        - l10n_br_tipo_pedido = 'compra'
+        - l10n_br_status = '04' (PO vinculado)
+        - nfe_infnfe_ide_finnfe != '4' (excluir devolucoes)
+        - is_cte = False
+        - write_date >= (now - minutos_janela)
+      Pos-filtro:
+        - Exclui CNPJs do grupo (Nacom: 61724241, Goya: 18467441)
+        - Exclui DFEs ja processados em AMBAS as fases
+        - 'bloqueado' em Fase 2 SERA reprocessado (tolerancias/POs podem ter mudado)
+      Limite: 100 DFEs
+
+[4/4] _processar_dfe_completo(dfe) (linha 432)
+      Para cada DFE:
+        - Fase 1: ValidacaoFiscalService.validar_dfe()
+        - Fase 2: ValidacaoNfPoService.validar_dfe()
+```
+
+### Diferenca Critica:
+
+| Aspecto | Etapa 2 (_sync_pos_vinculados) | Etapa 3 (_buscar_dfes_pendentes) |
+|---------|-------------------------------|----------------------------------|
+| Janela temporal | **NENHUMA** | minutos_janela (default 2880 = 48h) |
+| O que busca | ValidacaoNfPoDfe locais sem PO | DFEs no Odoo (compra, status=04) |
+| Afetado pelo modal De/Ate | **NAO** | **SIM** |
+| Proposito | Vincular POs que apareceram depois | Processar novos DFEs |
+| Reprocessa bloqueados | N/A | SIM (fase 2 bloqueado e reprocessado) |
+
+### Funcao Convenience (linha 538):
+
+```python
+def executar_validacao_recebimento(minutos_janela=None):
+    """Chamada pela rota /executar-validacao"""
+    job = ValidacaoRecebimentoJob()
+    return job.executar(minutos_janela=minutos_janela)
+```
 
 ---
 
@@ -59,7 +127,7 @@ validacao.valor_total_nf = dfe_data.get('nfe_infnfe_total_icmstot_vnf')
 
 ---
 
-## ETAPA 3: Buscar Linhas DFE - _buscar_dfe_lines() (linha 479)
+## ETAPA 3: Buscar Linhas DFE - _buscar_dfe_lines() (linha 516)
 
 ```python
 def _buscar_dfe_lines(self, odoo_dfe_id: int) -> List[Dict[str, Any]]:
@@ -88,7 +156,7 @@ def _buscar_dfe_lines(self, odoo_dfe_id: int) -> List[Dict[str, Any]]:
 
 ---
 
-## ETAPA 4: Conversao De-Para BATCH - _converter_itens_dfe_batch() (linha 513)
+## ETAPA 4: Conversao De-Para BATCH - _converter_itens_dfe_batch() (linha 550)
 
 **Logica**:
 1. Extrair todos `det_prod_cprod` das linhas
@@ -130,7 +198,7 @@ preco_convertido = preco_original / fator  # R$ 41/ML / 1000 = R$ 0.041/UNIT
 
 ---
 
-## ETAPA 5: Buscar POs LOCAL - _buscar_pos_fornecedor_local() (linha 755)
+## ETAPA 5: Buscar POs LOCAL - _buscar_pos_fornecedor_local() (linha 792)
 
 **Criterios de filtro**:
 ```python
@@ -148,7 +216,7 @@ PedidoCompras.query.filter(
 
 ---
 
-## ETAPA 6: Match com Split - _fazer_match_com_split() (linha ~1707)
+## ETAPA 6: Match com Split - _fazer_match_com_split() (linha 1742)
 
 Para cada produto unico da NF:
 1. Filtrar POs candidatos por preco (0%) e data (±dias uteis)
@@ -171,7 +239,7 @@ Para cada item da NF, cria `MatchNfPoItem` com:
 
 ---
 
-## PREVIEW: buscar_preview_pos_candidatos() (linha 2104)
+## PREVIEW: buscar_preview_pos_candidatos() (linha 2139)
 
 **REGRA**: Este metodo NUNCA chama Odoo. 100% dados locais.
 
