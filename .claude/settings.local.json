@@ -39,7 +39,10 @@
       "Skill(superpowers:brainstorming:*)",
       "Skill(superpowers:systematic-debugging)",
       "Skill(superpowers:systematic-debugging:*)",
-      "mcp__render__list_postgres_instances"
+      "mcp__render__list_postgres_instances",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(curl:*)",
+      "WebFetch(domain:api.github.com)"
     ],
     "deny": []
   },

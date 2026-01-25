@@ -1,6 +1,6 @@
 # Índice de Referências
 
-**Última atualização**: 16/01/2026
+**Última atualização**: 24/01/2026
 
 Este é o ponto de entrada para toda documentação de referência do projeto.
 
@@ -17,6 +17,18 @@ Este é o ponto de entrada para toda documentação de referência do projeto.
 | Recebimento de materiais | [RECEBIMENTO_MATERIAIS.md](RECEBIMENTO_MATERIAIS.md) |
 
 **Nota**: Campos de CarteiraPrincipal e Separacao estão no **CLAUDE.md** (raiz do projeto).
+
+---
+
+## Integração Odoo (NOVO)
+
+| Preciso de... | Documento |
+|---------------|-----------|
+| IDs fixos (Companies, Picking Types, Operações, Journals) | [ODOO_IDS_FIXOS.md](ODOO_IDS_FIXOS.md) |
+| GOTCHAS críticos (timeouts, campos inexistentes, comportamentos) | [ODOO_GOTCHAS.md](ODOO_GOTCHAS.md) |
+| Modelos Odoo (DFe, PO, SO, Stock, Financeiro) | [ODOO_MODELOS_CAMPOS.md](ODOO_MODELOS_CAMPOS.md) |
+| Padrões avançados (auditoria, batch, locks, retomada) | [ODOO_PADROES_AVANCADOS.md](ODOO_PADROES_AVANCADOS.md) |
+| Pipeline Recebimento (Fases 1-4) | [ODOO_PIPELINE_RECEBIMENTO.md](ODOO_PIPELINE_RECEBIMENTO.md) |
 
 ---
 

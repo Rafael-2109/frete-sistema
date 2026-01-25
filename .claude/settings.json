@@ -35,6 +35,6 @@
     "frontend-design@claude-plugins-official": true,
     "pyright-lsp@claude-plugins-official": true,
     "code-simplifier@claude-plugins-official": true,
-    "ralph-wiggum@claude-code-plugins": true
+    "ralph-wiggum@claude-code-plugins": false
   }
 }

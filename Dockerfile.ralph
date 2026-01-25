@@ -1,0 +1,34 @@
+FROM python:3.12-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    nodejs \
+    npm \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Claude CLI globally
+RUN npm install -g @anthropic-ai/claude-code
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements first for better caching
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy project files
+COPY . .
+
+# Set environment variables (NÃO incluir secrets reais)
+ENV FLASK_APP=run.py
+ENV FLASK_ENV=development
+ENV PYTHONUNBUFFERED=1
+
+# Git config for commits inside container
+RUN git config --global user.email "ralph@container.local" && \
+    git config --global user.name "Ralph Wiggum"
+
+# Entry point for Ralph loop
+ENTRYPOINT ["/bin/bash"]

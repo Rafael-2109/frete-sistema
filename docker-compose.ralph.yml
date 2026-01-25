@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  ralph:
+    build:
+      context: .
+      dockerfile: Dockerfile.ralph
+    volumes:
+      # Mount project directory
+      - .:/app
+      # Mount Anthropic config (API key) - read-only for security
+      - ~/.anthropic:/root/.anthropic:ro
+      # Mount git config for commits
+      - ~/.gitconfig:/root/.gitconfig:ro
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - FLASK_APP=run.py
+      - FLASK_ENV=development
+    working_dir: /app
+    stdin_open: true
+    tty: true
+    # Security: No access to host secrets beyond Anthropic API
+    # No SSH keys, no browser cookies, no other credentials
+
+# Usage:
+# 1. Build: docker-compose -f docker-compose.ralph.yml build
+# 2. Run:   docker-compose -f docker-compose.ralph.yml run ralph
+# 3. Inside container: ./ralph-loop.sh plan 3

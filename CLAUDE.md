@@ -661,7 +661,48 @@ Usuario: "Como fazer bulk insert com SQLAlchemy?"
 | `exportando-arquivos` | `.claude/skills/exportando-arquivos/` | Gerar Excel, CSV, JSON para download |
 | `lendo-arquivos` | `.claude/skills/lendo-arquivos/` | Processar Excel/CSV enviados |
 | `frontend-design` | `.claude/skills/frontend-design/` | Criar interfaces web, componentes UI |
-| `skill_creator` | `.claude/skills/skill_creator/` | Criar/atualizar skills
+| `skill_creator` | `.claude/skills/skill_creator/` | Criar/atualizar skills |
+| `ralph-wiggum` | `.claude/skills/ralph-wiggum/` | Loops autonomos de desenvolvimento com IA (Ralph Wiggum technique) |
+
+## Ralph Wiggum (Loops Autonomos)
+
+O Ralph Wiggum e uma tecnica de desenvolvimento autonomo com loops de IA. Permite que o Claude execute tarefas em ciclos automaticos com planejamento, implementacao e validacao.
+
+### Arquivos do Ralph Wiggum
+
+| Arquivo | Descricao |
+|---------|-----------|
+| `ralph-loop.sh` | Script principal do loop |
+| `PROMPT_plan.md` | Prompt para modo planejamento |
+| `PROMPT_build.md` | Prompt para modo construcao |
+| `AGENTS.md` | Guia operacional (comandos, padroes) |
+| `IMPLEMENTATION_PLAN.md` | Plano priorizado (gerado automaticamente) |
+| `specs/` | Diretorio de especificacoes |
+
+### Uso Rapido
+
+```bash
+# Modo planejamento (3 iteracoes)
+./ralph-loop.sh plan 3
+
+# Modo construcao (10 iteracoes)
+./ralph-loop.sh 10
+
+# Com Docker (RECOMENDADO para seguranca)
+docker-compose -f docker-compose.ralph.yml run ralph
+./ralph-loop.sh plan 3
+```
+
+### Quando Usar
+
+- Implementar features com multiplos arquivos
+- Tarefas repetitivas que requerem contexto fresco
+- Desenvolvimento autonomo com backpressure (testes)
+- Quando precisar de planejamento antes de implementacao
+
+### Seguranca
+
+⚠️ O Ralph usa `--dangerously-skip-permissions`. **SEMPRE usar Docker** para isolar credenciais.
 
 ---
 

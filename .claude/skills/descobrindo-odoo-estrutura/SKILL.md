@@ -104,26 +104,21 @@ python .claude/skills/descobrindo-odoo-estrutura/scripts/descobrindo.py \
 
 ---
 
-### Cenario 2: Debug de valor inesperado
+### Cenario 2: Debug de campo com valor inesperado
 
-**Situacao**: "Por que a NF 12345 nao esta aparecendo no rastreamento?"
+**Situacao**: "Qual o valor do campo X no registro Y?"
+
+> **NOTA**: Para RASTREAR documentos (NF, PO, SO), use a skill `rastreando-odoo` em vez desta.
 
 ```bash
-# Passo 1: Buscar o ID da NF pelo numero
+# Inspecionar TODOS os campos de um registro especifico
 source .venv/bin/activate && \
 python .claude/skills/descobrindo-odoo-estrutura/scripts/descobrindo.py \
-  --modelo l10n_br_ciel_it_account.dfe \
-  --filtro '[["document_number","=","12345"]]' \
-  --campos '["id","name","state","document_type"]' \
-  --limit 1
-
-# Passo 2: Inspecionar TODOS os campos do registro encontrado
-python .claude/skills/descobrindo-odoo-estrutura/scripts/descobrindo.py \
-  --modelo l10n_br_ciel_it_account.dfe \
-  --inspecionar [ID_ENCONTRADO]
+  --modelo res.partner \
+  --inspecionar 12345
 ```
 
-**Resultado**: Ver se `state` esta em status inesperado, se `document_type` e diferente, etc.
+**Resultado**: Ver todos os valores de campos do registro para debug.
 
 ---
 
