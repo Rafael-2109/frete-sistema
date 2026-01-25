@@ -111,7 +111,7 @@
                 <div>
                     <h2><i class="fas fa-route"></i> Rastreamento GPS - Embarque #{{ rastreamento.embarque.numero }}</h2>
                     <p class="text-muted mb-0">
-                        <strong>Transportadora:</strong> {{ rastreamento.embarque.transportadora.nome if rastreamento.embarque.transportadora else 'Não definida' }}
+                        <strong>Transportadora:</strong> {{ rastreamento.embarque.transportadora.razao_social if rastreamento.embarque.transportadora else 'Não definida' }}
                         |
                         <strong>NFs:</strong>
                         {% set nfs = [] %}

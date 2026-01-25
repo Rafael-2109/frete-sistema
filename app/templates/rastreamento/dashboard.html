@@ -117,7 +117,7 @@
                                 {% set ultimo_ping = rastr.pings.first() %}
                                 <tr class="card-rastreamento clicavel" style="cursor: pointer;" data-url="{{ url_for('rastreamento.detalhes_rastreamento', embarque_id=rastr.embarque_id) }}">
                                     <td><strong>#{{ rastr.embarque.numero if rastr.embarque else rastr.embarque_id }}</strong></td>
-                                    <td>{{ rastr.embarque.transportadora.nome if rastr.embarque.transportadora else '-' }}</td>
+                                    <td>{{ rastr.embarque.transportadora.razao_social if rastr.embarque.transportadora else '-' }}</td>
                                     <td>
                                         {% set nfs = [] %}
                                         {% for item in rastr.embarque.itens %}

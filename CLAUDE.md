@@ -663,6 +663,7 @@ Usuario: "Como fazer bulk insert com SQLAlchemy?"
 | `frontend-design` | `.claude/skills/frontend-design/` | Criar interfaces web, componentes UI |
 | `skill_creator` | `.claude/skills/skill_creator/` | Criar/atualizar skills |
 | `ralph-wiggum` | `.claude/skills/ralph-wiggum/` | Loops autonomos de desenvolvimento com IA (Ralph Wiggum technique) |
+| `prd-generator` | `.claude/skills/prd-generator/` | Gera specs/PRDs para Ralph Loop via perguntas iterativas |
 
 ## Ralph Wiggum (Loops Autonomos)
 
