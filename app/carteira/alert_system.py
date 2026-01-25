@@ -3,6 +3,10 @@
 """
 SISTEMA DE ALERTAS PARA CARTEIRA DE PEDIDOS
 Gerencia alertas relacionados a separações cotadas e outras situações críticas
+
+INTEGRADO COM: app.notificacoes.services.NotificationDispatcher
+- Alertas são persistidos em alerta_notificacoes
+- Suporta envio por email, webhook e in_app
 """
 
 from datetime import datetime
@@ -95,9 +99,17 @@ class AlertaSistemaCarteira:
             return []
     
     @staticmethod
-    def gerar_alerta_critico(tipo, dados):
+    def gerar_alerta_critico(tipo, dados, email_destinatario=None):
         """
-        Gera alerta crítico padronizado
+        Gera alerta crítico padronizado e envia via NotificationDispatcher.
+
+        Args:
+            tipo: Tipo do alerta (ex: PRE_SEPARACAO_CONFLITO)
+            dados: Dicionario com contexto do alerta
+            email_destinatario: Email para notificacao (opcional)
+
+        Returns:
+            dict: Alerta gerado com resultado do envio
         """
         try:
             alerta = {
@@ -106,15 +118,38 @@ class AlertaSistemaCarteira:
                 'timestamp': datetime.utcnow(),
                 'dados': dados
             }
-            
+
             # Log crítico
             logger.critical(f"ALERTA CRITICO: {tipo} | {dados}")
-            
-            # TODO: Implementar notificações (email, webhook, etc.)
-            # TODO: Salvar em tabela de auditoria
-            
+
+            # IMPLEMENTADO: Enviar via NotificationDispatcher
+            try:
+                from app.notificacoes.services import enviar_alerta_critico
+
+                titulo = dados.get('mensagem', tipo)[:100]  # Limita titulo
+                mensagem = dados.get('mensagem', f'Alerta critico do tipo {tipo}')
+
+                resultado_envio = enviar_alerta_critico(
+                    titulo=titulo,
+                    mensagem=mensagem,
+                    tipo=tipo,
+                    dados=dados,
+                    email_destinatario=email_destinatario,
+                    origem='alert_system.gerar_alerta_critico',
+                )
+
+                alerta['envio'] = resultado_envio
+                logger.info(f"Alerta {tipo} enviado via NotificationDispatcher: {resultado_envio.get('success')}")
+
+            except ImportError as e:
+                logger.warning(f"Modulo notificacoes nao disponivel: {e}")
+                alerta['envio'] = {'success': False, 'error': 'Modulo notificacoes nao disponivel'}
+            except Exception as e:
+                logger.error(f"Erro ao enviar via NotificationDispatcher: {e}")
+                alerta['envio'] = {'success': False, 'error': str(e)}
+
             return alerta
-            
+
         except Exception as e:
             logger.error(f"Erro ao gerar alerta critico: {e}")
             return None

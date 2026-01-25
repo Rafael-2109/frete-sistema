@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard de Métricas{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-0">
+                        <i class="fas fa-chart-bar text-primary me-2"></i>
+                        Dashboard de Métricas
+                    </h1>
+                    <p class="text-muted mb-0">
+                        Visão geral do sistema - {{ metricas.mes_referencia }}
+                    </p>
+                </div>
+                <div class="text-end">
+                    <small class="text-muted">
+                        <i class="fas fa-sync-alt me-1"></i>
+                        Atualizado em: {{ metricas.data_atualizacao }}
+                    </small>
+                    <br>
+                    <a href="{{ url_for('metricas.dashboard_metricas') }}" class="btn btn-sm btn-outline-primary mt-1">
+                        <i class="fas fa-redo me-1"></i> Atualizar
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cards de Métricas -->
+    <div class="row g-4">
+        <!-- Card 1: Pedidos do Mês -->
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="bg-primary bg-opacity-10 rounded-3 p-3">
+                                <i class="fas fa-shopping-cart fa-2x text-primary"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h6 class="text-muted mb-1">Pedidos no Mês</h6>
+                            <h2 class="mb-0 fw-bold">{{ metricas.pedidos_mes|numero_br(0) }}</h2>
+                            <small class="text-muted">
+                                <i class="fas fa-calendar me-1"></i>
+                                {{ metricas.mes_referencia }}
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer bg-transparent border-0 pt-0">
+                    <a href="{{ url_for('carteira.dashboard') }}" class="text-primary text-decoration-none small">
+                        <i class="fas fa-arrow-right me-1"></i> Ver carteira
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 2: Separações Pendentes -->
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="bg-warning bg-opacity-10 rounded-3 p-3">
+                                <i class="fas fa-boxes fa-2x text-warning"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h6 class="text-muted mb-1">Separações Pendentes</h6>
+                            <h2 class="mb-0 fw-bold">{{ metricas.separacoes_pendentes|numero_br(0) }}</h2>
+                            <small class="text-muted">
+                                <i class="fas fa-clock me-1"></i>
+                                Aguardando NF
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer bg-transparent border-0 pt-0">
+                    <a href="{{ url_for('separacao.lista_separacoes') }}" class="text-warning text-decoration-none small">
+                        <i class="fas fa-arrow-right me-1"></i> Ver separações
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 3: Embarques do Mês -->
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="bg-success bg-opacity-10 rounded-3 p-3">
+                                <i class="fas fa-truck fa-2x text-success"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h6 class="text-muted mb-1">Embarques no Mês</h6>
+                            <h2 class="mb-0 fw-bold">{{ metricas.embarques_mes|numero_br(0) }}</h2>
+                            <small class="text-muted">
+                                <i class="fas fa-calendar me-1"></i>
+                                {{ metricas.mes_referencia }}
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer bg-transparent border-0 pt-0">
+                    <a href="{{ url_for('embarques.lista_embarques') }}" class="text-success text-decoration-none small">
+                        <i class="fas fa-arrow-right me-1"></i> Ver embarques
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Nota informativa -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="alert alert-info d-flex align-items-center" role="alert">
+                <i class="fas fa-info-circle me-2"></i>
+                <div>
+                    <strong>Nota:</strong> Os dados são atualizados manualmente ao recarregar a página.
+                    As separações pendentes representam itens com <code>sincronizado_nf=False</code>.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

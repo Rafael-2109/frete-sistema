@@ -136,14 +136,14 @@ Transformar respostas em checkboxes:
 
    [PREVIEW DO CONTEUDO]
 
-   Posso salvar em specs/nome-feature.md?"
+   Posso salvar em .claude/ralph-loop/specs/nome-feature.md?"
    ```
 
 3. **Salvar arquivo** apos confirmacao
 
 4. **Instruir proximo passo**:
    ```
-   "Spec salva em specs/nome-feature.md
+   "Spec salva em .claude/ralph-loop/specs/nome-feature.md
 
    Para executar:
    ./ralph-loop.sh plan 3
@@ -227,7 +227,7 @@ ERRADO:
 "Pronto, arquivo salvo."
 
 CERTO:
-"Arquivo salvo em specs/nome.md
+"Arquivo salvo em .claude/ralph-loop/specs/nome.md
 
 Proximo passo:
 ./ralph-loop.sh plan 3"
@@ -272,12 +272,12 @@ Skill: [monta preview]
        ## Objetivo
        Dashboard para gerentes comerciais visualizarem...
 
-       Posso salvar em specs/dashboard-vendas.md?"
+       Posso salvar em .claude/ralph-loop/specs/dashboard-vendas.md?"
 
 User: "Sim"
 
 Skill: [salva arquivo]
-       "Pronto! Arquivo salvo.
+       "Pronto! Arquivo salvo em .claude/ralph-loop/specs/dashboard-vendas.md
 
        Para implementar:
        ./ralph-loop.sh plan 3"

@@ -205,6 +205,15 @@
                 <hr class="dropdown-divider">
               </li>
               <li>
+                <h6 class="dropdown-header">📊 Relatórios</h6>
+              </li>
+              <li><a class="dropdown-item" href="{{ url_for('metricas.dashboard_metricas') }}">
+                  <i class="fas fa-chart-bar text-info"></i> Dashboard de Métricas
+                </a></li>
+              <li>
+                <hr class="dropdown-divider">
+              </li>
+              <li>
                 <h6 class="dropdown-header">🛒 Compras</h6>
               </li>
               <li><a class="dropdown-item" href="{{ url_for('recebimento_views.central_compras') }}">
@@ -462,6 +471,32 @@
                 </a></li>
               <li><a class="dropdown-item" href="{{ url_for('localidades.listar_sub_rotas') }}">
                   <i class="fas fa-map-marker-alt"></i> Cadastro de Sub-rotas
+                </a></li>
+            </ul>
+          </li>
+          {% endif %}
+
+          <!-- BI - Business Intelligence & Analytics -->
+          {% if current_user.perfil in ['administrador'] %}
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="menuBI" role="button" data-bs-toggle="dropdown">
+              <i class="fas fa-chart-bar text-info"></i> BI & Analytics
+            </a>
+            <ul class="dropdown-menu">
+              <li>
+                <h6 class="dropdown-header">📊 Dashboards</h6>
+              </li>
+              <li><a class="dropdown-item" href="{{ url_for('bi.dashboard') }}">
+                  <i class="fas fa-tachometer-alt text-primary"></i> Dashboard Principal
+                </a></li>
+              <li><a class="dropdown-item" href="{{ url_for('bi.transportadoras') }}">
+                  <i class="fas fa-truck text-success"></i> Análise de Transportadoras
+                </a></li>
+              <li><a class="dropdown-item" href="{{ url_for('bi.regional') }}">
+                  <i class="fas fa-map-marked-alt text-warning"></i> Análise Regional
+                </a></li>
+              <li><a class="dropdown-item" href="{{ url_for('bi.despesas') }}">
+                  <i class="fas fa-money-bill-wave text-danger"></i> Análise de Despesas
                 </a></li>
             </ul>
           </li>
@@ -778,6 +813,22 @@
 
       return originalFetch.apply(this, [url, options]);
     };
+
+    // ✅ INTERCEPTOR ROBUSTO para jQuery AJAX incluir CSRF
+    $.ajaxSetup({
+        beforeSend: function(xhr, settings) {
+            // Só adiciona para métodos que modificam dados
+            if (!/^(GET|HEAD|OPTIONS|TRACE)$/i.test(settings.type) && !this.crossDomain) {
+                const token = getCSRFToken();
+                if (token) {
+                    xhr.setRequestHeader("X-CSRFToken", token);
+                    console.log('🔒 Token CSRF adicionado à requisição jQuery AJAX');
+                } else {
+                    console.warn('⚠️ Token CSRF não encontrado para jQuery AJAX');
+                }
+            }
+        }
+    });
   </script>
 
   {% block scripts %}{% endblock %}

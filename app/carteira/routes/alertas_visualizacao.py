@@ -10,7 +10,7 @@ from app.embarques.models import EmbarqueItem, Embarque
 from datetime import datetime
 from sqlalchemy import func
 
-alertas_visualizacao_bp = Blueprint('alertas_visualizacao', __name__, url_prefix='/carteira/alertas')
+alertas_visualizacao_bp = Blueprint('alertas_visualizacao', __name__, url_prefix='/alertas')
 
 @alertas_visualizacao_bp.route('/dashboard')
 @login_required
@@ -93,7 +93,7 @@ def marcar_reimpresso(alerta_id):
     alerta = AlertaSeparacaoCotada.query.get_or_404(alerta_id)
     
     alerta.reimpresso = True
-    alerta.data_reimpressao = datetime.utcnow()
+    alerta.data_reimpressao = datetime.now()
     alerta.usuario_reimpressao = current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
     
     db.session.commit()

@@ -2,66 +2,49 @@
 API de Alertas Críticos da Carteira
 ===================================
 
-Sistema de visualização e gerenciamento de alertas críticos detectados
+API JSON para verificação em tempo real de alertas críticos detectados
 durante sincronizações com Odoo.
+
+NOTA: O dashboard visual está em alertas_visualizacao.py (/carteira/alertas/dashboard)
+Este módulo fornece apenas endpoints de API JSON.
 """
 
-from flask import Blueprint, jsonify, render_template
+from flask import Blueprint, jsonify, redirect, url_for
 from flask_login import login_required
 from app.utils.logging_config import logger
-from app.odoo.services.carteira_service import CarteiraService
 from app.carteira.alert_system import AlertaSistemaCarteira
-from datetime import datetime, timedelta
+from app.notificacoes.models import AlertaNotificacao
+from datetime import datetime, timedelta, timezone
 from app import db
 
-# Blueprint para alertas
+# Blueprint para API de alertas (apenas endpoints JSON)
 alertas_bp = Blueprint('alertas', __name__, url_prefix='/carteira/alertas')
+
 
 @alertas_bp.route('/')
 @login_required
 def dashboard_alertas():
-    """Dashboard principal de alertas críticos"""
-    try:
-        # Verificações em tempo real
-        alertas = _executar_verificacoes_completas()
-        
-        # Histórico de alertas (últimas 24h)
-        historico = _buscar_historico_alertas(horas=24)
-        
-        return render_template('carteira/alertas_dashboard.html',
-                             alertas=alertas,
-                             historico=historico,
-                             timestamp=datetime.now())
-                             
-    except Exception as e:
-        logger.error(f"Erro ao carregar dashboard de alertas: {e}")
-        # Retornar estrutura completa mesmo em caso de erro
-        alertas_vazio = {
-            'separacoes_cotadas': {
-                'quantidade': 0,
-                'nivel': 'ERRO',
-                'mensagem': 'Erro ao verificar separações',
-                'separacoes_afetadas': []
-            },
-            'faturamento_pendente': {
-                'quantidade': 0,
-                'nivel': 'ERRO',
-                'mensagem': 'Erro ao verificar faturamento',
-                'pedidos_afetados': [],
-                'percentual_risco': 0
-            },
-            'total_criticos': 0,
-            'recomendacoes': []
-        }
-        return render_template('carteira/alertas_dashboard.html',
-                             erro=str(e),
-                             alertas=alertas_vazio,
-                             historico=[])
+    """
+    Redireciona para o dashboard visual em alertas_visualizacao.
+
+    Esta rota existe para manter compatibilidade com links antigos.
+    O dashboard real está em /carteira/alertas/dashboard.
+    """
+    return redirect(url_for('carteira.alertas_visualizacao.dashboard'))
 
 @alertas_bp.route('/api/verificar')
 @login_required
 def api_verificar_alertas():
-    """API para verificação em tempo real dos alertas"""
+    """
+    API para verificação em tempo real dos alertas.
+
+    Verifica:
+    - Separações COTADAS que podem ser afetadas por sincronização
+    - Histórico de alertas recentes (últimas 24h)
+
+    Returns:
+        JSON: {sucesso, alertas, timestamp}
+    """
     try:
         alertas = _executar_verificacoes_completas()
         return jsonify({
@@ -76,18 +59,29 @@ def api_verificar_alertas():
             'erro': str(e)
         }), 500
 
+
 @alertas_bp.route('/api/detalhes/<tipo_alerta>')
 @login_required
 def api_detalhes_alerta(tipo_alerta):
-    """Retorna detalhes específicos de um tipo de alerta"""
+    """
+    Retorna detalhes específicos de um tipo de alerta.
+
+    Args:
+        tipo_alerta: 'separacoes_cotadas' ou 'historico_recente'
+
+    Returns:
+        JSON: {sucesso, tipo, detalhes}
+    """
     try:
         if tipo_alerta == 'separacoes_cotadas':
             detalhes = _detalhar_separacoes_cotadas()
-        elif tipo_alerta == 'faturamento_pendente':
-            detalhes = _detalhar_faturamento_pendente()
+        elif tipo_alerta == 'historico_recente':
+            detalhes = _buscar_historico_alertas(horas=24)
         else:
-            return jsonify({'erro': 'Tipo de alerta inválido'}), 400
-            
+            return jsonify({
+                'erro': f'Tipo de alerta inválido: {tipo_alerta}. Tipos válidos: separacoes_cotadas, historico_recente'
+            }), 400
+
         return jsonify({
             'sucesso': True,
             'tipo': tipo_alerta,
@@ -100,8 +94,18 @@ def api_detalhes_alerta(tipo_alerta):
             'erro': str(e)
         }), 500
 
+
 def _executar_verificacoes_completas():
-    """Executa todas as verificações de alertas críticos"""
+    """
+    Executa todas as verificações de alertas críticos.
+
+    Verificações realizadas:
+    1. Separações COTADAS em risco (via AlertaSistemaCarteira)
+    2. Histórico de alertas recentes (últimas 24h)
+
+    Returns:
+        dict: Estrutura com alertas e recomendações
+    """
     alertas = {
         'separacoes_cotadas': {
             'quantidade': 0,
@@ -109,19 +113,18 @@ def _executar_verificacoes_completas():
             'mensagem': 'Nenhuma separação cotada em risco',
             'separacoes_afetadas': []
         },
-        'faturamento_pendente': {
+        'historico_recente': {
             'quantidade': 0,
             'nivel': 'OK',
-            'mensagem': 'Nenhum faturamento pendente crítico',
-            'pedidos_afetados': [],
-            'percentual_risco': 0
+            'mensagem': 'Nenhum alerta nas últimas 24h',
+            'alertas_recentes': []
         },
         'total_criticos': 0,
         'recomendacoes': []
     }
-    
+
     try:
-        # 1. Verificar separações cotadas
+        # 1. Verificar separações cotadas (usa AlertaSistemaCarteira existente)
         resultado_cotadas = AlertaSistemaCarteira.verificar_separacoes_cotadas_antes_sincronizacao()
         if resultado_cotadas.get('alertas'):
             alertas['separacoes_cotadas']['quantidade'] = resultado_cotadas.get('quantidade', 0)
@@ -129,24 +132,22 @@ def _executar_verificacoes_completas():
             alertas['separacoes_cotadas']['mensagem'] = resultado_cotadas.get('mensagem', 'Separações cotadas detectadas')
             alertas['separacoes_cotadas']['separacoes_afetadas'] = resultado_cotadas.get('separacoes_afetadas', [])
             alertas['total_criticos'] += 1
-            
-        # 2. Verificar faturamento pendente
-        service = CarteiraService()
-        risco_faturamento = service._verificar_risco_faturamento_pendente()
-        
-        if risco_faturamento.get('risco_alto'):
-            alertas['faturamento_pendente']['quantidade'] = risco_faturamento.get('pedidos_em_risco', 0)
-            alertas['faturamento_pendente']['nivel'] = 'CRÍTICO'
-            alertas['faturamento_pendente']['mensagem'] = risco_faturamento.get('mensagem', 'Faturamento pendente detectado')
-            alertas['faturamento_pendente']['pedidos_afetados'] = risco_faturamento.get('lista_pedidos', [])
-            alertas['faturamento_pendente']['percentual_risco'] = risco_faturamento.get('percentual_risco', 0)
-            alertas['total_criticos'] += 1
-            alertas['recomendacoes'].append('Execute sincronização de FATURAMENTO antes da carteira')
-            
+            alertas['recomendacoes'].append('Verifique separações COTADAS antes de sincronizar')
+
+        # 2. Buscar histórico de alertas recentes (últimas 24h)
+        historico = _buscar_historico_alertas(horas=24)
+        alertas_criticos = [h for h in historico if h.get('nivel') == 'CRITICO']
+
+        if alertas_criticos:
+            alertas['historico_recente']['quantidade'] = len(alertas_criticos)
+            alertas['historico_recente']['nivel'] = 'ATENÇÃO'
+            alertas['historico_recente']['mensagem'] = f'{len(alertas_criticos)} alerta(s) crítico(s) nas últimas 24h'
+            alertas['historico_recente']['alertas_recentes'] = alertas_criticos[:10]  # Limita a 10
+
     except Exception as e:
         logger.error(f"Erro nas verificações: {e}")
         alertas['erro'] = str(e)
-        
+
     return alertas
 
 def _detalhar_separacoes_cotadas():
@@ -184,50 +185,67 @@ def _detalhar_separacoes_cotadas():
         
     return detalhes
 
-def _detalhar_faturamento_pendente():
-    """Retorna detalhes dos pedidos cotados sem faturamento"""
-    service = CarteiraService()
-    risco = service._verificar_risco_faturamento_pendente()
-    
-    if not risco.get('lista_pedidos'):
-        return []
-        
-    # Enriquecer com mais detalhes
-    from app.pedidos.models import Pedido
-    detalhes = []
-    
-    for item in risco['lista_pedidos']:
-        pedido = Pedido.query.filter_by(
-            num_pedido=item['num_pedido']
-        ).first()
-        
-        if pedido:
-            detalhes.append({
-                **item,
-                'cliente': pedido.raz_social_red,
-                'data_pedido': pedido.data_pedido.strftime('%Y-%m-%d') if pedido.data_pedido else None,
-                'valor_pedido': float(pedido.valor_saldo_total) if pedido.valor_saldo_total else 0
-            })
-        else:
-            detalhes.append(item)
-            
-    return detalhes
-
 def _buscar_historico_alertas(horas=24):
-    """Busca histórico de alertas nas últimas X horas"""
-    # Por enquanto retorna dados mockados
-    # TODO: Implementar tabela de histórico de alertas
-    return [
-        {
-            'timestamp': (datetime.now() - timedelta(hours=2)).strftime('%Y-%m-%d %H:%M'),
-            'tipo': 'SEPARACOES_COTADAS',
-            'quantidade': 205,
-            'resolvido': False
-        },
-        {
-            'timestamp': (datetime.now() - timedelta(hours=5)).strftime('%Y-%m-%d %H:%M'),
-            'tipo': 'FATURAMENTO_PENDENTE',
-            'quantidade': 38,
-            'resolvido': True
-        }
-    ]
+    """
+    Busca histórico REAL de alertas nas últimas X horas.
+
+    Consulta a tabela alerta_notificacoes para obter alertas reais
+    que foram gerados pelo sistema (alert_system, sincronização, etc).
+
+    Args:
+        horas: Número de horas para buscar histórico (default: 24)
+
+    Returns:
+        Lista de dicts com formato:
+        - timestamp: Data/hora do alerta (formato brasileiro)
+        - tipo: Tipo do alerta (SEPARACOES_COTADAS, etc)
+        - quantidade: Quantidade de itens afetados (do campo dados)
+        - resolvido: True se status_envio == 'lido'
+        - id: ID do alerta (para futuras ações)
+        - nivel: Nível de severidade (CRITICO, ATENCAO, INFO)
+    """
+    try:
+        # Calcular limite de tempo
+        data_limite = datetime.now(timezone.utc) - timedelta(hours=horas)
+
+        # Buscar alertas do período
+        alertas = AlertaNotificacao.query.filter(
+            AlertaNotificacao.criado_em >= data_limite
+        ).order_by(
+            AlertaNotificacao.criado_em.desc()
+        ).limit(100).all()
+
+        # Se não houver alertas, retornar lista vazia
+        if not alertas:
+            return []
+
+        # Formatar para o frontend
+        historico = []
+        for alerta in alertas:
+            # Extrair quantidade do campo dados (JSON)
+            dados = alerta.dados or {}
+            quantidade = (
+                dados.get('quantidade') or
+                dados.get('total') or
+                len(dados.get('separacoes_afetadas', [])) or
+                len(dados.get('itens', [])) or
+                1  # Default: 1 se não encontrar
+            )
+
+            historico.append({
+                'timestamp': alerta.criado_em.strftime('%d/%m/%Y %H:%M') if alerta.criado_em else None,
+                'tipo': alerta.tipo,
+                'quantidade': quantidade,
+                'resolvido': alerta.status_envio == 'lido',
+                'id': alerta.id,
+                'nivel': alerta.nivel,
+                'titulo': alerta.titulo,
+                'mensagem': alerta.mensagem[:100] + '...' if len(alerta.mensagem or '') > 100 else alerta.mensagem
+            })
+
+        return historico
+
+    except Exception as e:
+        logger.error(f"Erro ao buscar histórico de alertas: {e}")
+        # Em caso de erro, retornar lista vazia (fail-safe)
+        return []

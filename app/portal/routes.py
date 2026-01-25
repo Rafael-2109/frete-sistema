@@ -762,30 +762,69 @@ def comparar_portal(lote_id):
         # Se há integração, buscar dados do portal
         portal_data = None
         divergencias = []
-        
+
         if integracao and integracao.protocolo:
-            # TODO: Implementar busca real no portal
-            # Por enquanto, simular dados
-            portal_data = {
-                'protocolo': integracao.protocolo,
-                'produtos': [
-                    # Simular produtos do portal
-                    {
-                        'codigo': '35642',
-                        'mercadoria': 'AZEITONA VERDE CAMPO BELO BALDE 2KG',
-                        'quantidade': 8
-                    },
-                    {
-                        'codigo': '46626',
-                        'mercadoria': 'AZEITONA VERDE CAMPO BELO S/C POUCH 150G',
-                        'quantidade': 24
+            # Verificar portal real - apenas Atacadão suportado
+            if portal == 'atacadao':
+                from app.portal.atacadao.verificacao_protocolo import VerificadorProtocoloAtacadao
+
+                logger.info(f"Comparando lote {lote_id} com protocolo {integracao.protocolo} no portal Atacadão")
+
+                try:
+                    verificador = VerificadorProtocoloAtacadao()
+                    resultado = verificador.verificar_protocolo_completo(
+                        protocolo=integracao.protocolo,
+                        lote_id=lote_id
+                    )
+
+                    if resultado.get('success'):
+                        # Dados reais do portal
+                        portal_data = {
+                            'protocolo': integracao.protocolo,
+                            'produtos': resultado.get('produtos_portal', []),
+                            'produtos_unificados': resultado.get('produtos_unificados', []),
+                            'produtos_nao_mapeados': resultado.get('produtos_nao_mapeados', []),
+                            'status_text': resultado.get('status_text'),
+                            'agendamento_confirmado': resultado.get('agendamento_confirmado', False),
+                            'data_aprovada': resultado.get('data_aprovada')
+                        }
+                        divergencias = resultado.get('divergencias', [])
+                        logger.info(f"✅ Dados do portal obtidos: {len(portal_data.get('produtos', []))} produtos, {len(divergencias)} divergências")
+                    else:
+                        # Falha ao consultar portal - retornar erro com contexto
+                        error_msg = resultado.get('message', 'Erro ao consultar portal')
+                        logger.warning(f"⚠️ Falha ao consultar portal: {error_msg}")
+
+                        # Se requer login, indicar na resposta
+                        if resultado.get('requer_login'):
+                            return jsonify({
+                                'success': False,
+                                'message': error_msg,
+                                'requer_login': True
+                            })
+
+                        # Retornar dados da separação mesmo com erro no portal
+                        portal_data = {
+                            'protocolo': integracao.protocolo,
+                            'produtos': [],
+                            'erro': error_msg
+                        }
+
+                except Exception as e:
+                    logger.error(f"❌ Erro ao verificar no portal Atacadão: {e}")
+                    portal_data = {
+                        'protocolo': integracao.protocolo,
+                        'produtos': [],
+                        'erro': f'Erro de conexão com portal: {str(e)}'
                     }
-                ]
-            }
-            
-            # Verificar divergências
-            # TODO: Implementar comparação real com DE-PARA
-        
+            else:
+                # Portal não suportado - retornar apenas protocolo
+                portal_data = {
+                    'protocolo': integracao.protocolo,
+                    'produtos': [],
+                    'aviso': f'Portal {portal} não suporta verificação automática'
+                }
+
         return jsonify({
             'success': True,
             'separacao': {
@@ -807,46 +846,143 @@ def comparar_portal(lote_id):
 @portal_bp.route('/api/extrair-confirmacoes')
 @login_required
 def extrair_confirmacoes():
-    """Extrai confirmações pendentes dos portais"""
+    """Extrai confirmações pendentes dos portais - verifica status REAL no portal"""
     try:
         # Buscar integrações aguardando confirmação
         integracoes = PortalIntegracao.query.filter(
             PortalIntegracao.status.in_(['aguardando_confirmacao', 'processando']),
             PortalIntegracao.protocolo.isnot(None)
         ).all()
-        
+
         resultados = []
-        
+        erros = []
+        status_negativos = ["Cancelado", "No show", "Recusado", "Rejeitado"]
+
+        logger.info(f"Verificando {len(integracoes)} integrações pendentes")
+
         for integracao in integracoes:
-            # TODO: Implementar extração real do portal
-            # Por enquanto, simular confirmação
-            
             if integracao.portal == 'atacadao':
-                # Simular verificação no Atacadão
-                integracao.status = 'confirmado'
-                integracao.data_confirmacao = datetime.now()
-                
-                # Atualizar lote original
-                if integracao.tipo_lote == 'separacao':
-                    Separacao.query.filter_by(
-                        separacao_lote_id=integracao.lote_id
-                    ).update({
-                        'agendamento_confirmado': True,
-                        'protocolo': integracao.protocolo
+                # Verificar status REAL no portal Atacadão
+                from app.portal.atacadao.verificacao_protocolo import VerificadorProtocoloAtacadao
+
+                try:
+                    verificador = VerificadorProtocoloAtacadao()
+                    resultado_portal = verificador.verificar_protocolo_completo(
+                        protocolo=integracao.protocolo,
+                        lote_id=integracao.lote_id
+                    )
+
+                    if not resultado_portal.get('success'):
+                        # Falha na verificação - registrar mas não atualizar
+                        error_msg = resultado_portal.get('message', 'Erro ao verificar')
+                        logger.warning(f"⚠️ Lote {integracao.lote_id}: {error_msg}")
+                        erros.append({
+                            'lote_id': integracao.lote_id,
+                            'protocolo': integracao.protocolo,
+                            'erro': error_msg,
+                            'requer_login': resultado_portal.get('requer_login', False)
+                        })
+                        continue
+
+                    # Verificar status negativo - NÃO confirmar
+                    status_text = resultado_portal.get('status_text', '')
+                    is_negativo = any(neg in status_text for neg in status_negativos)
+
+                    if is_negativo:
+                        logger.warning(f"❌ Lote {integracao.lote_id}: Status negativo '{status_text}' - NÃO atualizado")
+                        integracao.status = 'cancelado'
+                        integracao.resposta_portal = resultado_portal
+                        resultados.append({
+                            'lote_id': integracao.lote_id,
+                            'protocolo': integracao.protocolo,
+                            'status': 'cancelado',
+                            'status_portal': status_text
+                        })
+                        continue
+
+                    # Verificar se está confirmado no portal
+                    if resultado_portal.get('agendamento_confirmado'):
+                        logger.info(f"✅ Lote {integracao.lote_id}: Confirmado no portal")
+
+                        # Atualizar PortalIntegracao
+                        integracao.status = 'confirmado'
+                        integracao.data_confirmacao = datetime.now()
+                        integracao.resposta_portal = resultado_portal
+
+                        # Atualizar Separacao (fonte da verdade)
+                        if integracao.tipo_lote == 'separacao':
+                            separacoes = Separacao.query.filter_by(
+                                separacao_lote_id=integracao.lote_id
+                            ).all()
+
+                            for sep in separacoes:
+                                sep.agendamento_confirmado = True
+                                sep.protocolo = integracao.protocolo
+                                # Atualizar data de agendamento se disponível
+                                if resultado_portal.get('data_aprovada'):
+                                    try:
+                                        nova_data = datetime.strptime(
+                                            resultado_portal['data_aprovada'], '%Y-%m-%d'
+                                        ).date()
+                                        sep.agendamento = nova_data
+                                    except Exception as e:
+                                        logger.warning(f"Erro ao converter data: {e}")
+
+                        # Sincronizar com outras tabelas
+                        try:
+                            from app.pedidos.services.sincronizacao_agendamento_service import SincronizadorAgendamentoService
+                            sincronizador = SincronizadorAgendamentoService(usuario='Portal Atacadão')
+                            resultado_sync = sincronizador.sincronizar_desde_separacao(
+                                separacao_lote_id=integracao.lote_id,
+                                criar_agendamento=True
+                            )
+                            if resultado_sync.get('success'):
+                                logger.info(f"   Sincronizado: {resultado_sync.get('tabelas_atualizadas', [])}")
+                        except Exception as sync_error:
+                            logger.error(f"   Erro na sincronização: {sync_error}")
+
+                        resultados.append({
+                            'lote_id': integracao.lote_id,
+                            'protocolo': integracao.protocolo,
+                            'status': 'confirmado',
+                            'status_portal': status_text,
+                            'data_aprovada': resultado_portal.get('data_aprovada')
+                        })
+                    else:
+                        # Ainda aguardando
+                        logger.info(f"⏳ Lote {integracao.lote_id}: Aguardando - '{status_text}'")
+                        resultados.append({
+                            'lote_id': integracao.lote_id,
+                            'protocolo': integracao.protocolo,
+                            'status': 'aguardando',
+                            'status_portal': status_text
+                        })
+
+                except Exception as e:
+                    logger.error(f"❌ Erro ao verificar lote {integracao.lote_id}: {e}")
+                    erros.append({
+                        'lote_id': integracao.lote_id,
+                        'protocolo': integracao.protocolo,
+                        'erro': str(e)
                     })
-                
-                resultados.append({
-                    'lote_id': integracao.lote_id,
-                    'protocolo': integracao.protocolo,
-                    'status': 'confirmado'
-                })
-        
+                    continue
+
         db.session.commit()
-        
+
+        # Contagem de resultados por status
+        confirmados = len([r for r in resultados if r.get('status') == 'confirmado'])
+        aguardando = len([r for r in resultados if r.get('status') == 'aguardando'])
+        cancelados = len([r for r in resultados if r.get('status') == 'cancelado'])
+
         return jsonify({
             'success': True,
-            'confirmacoes': len(resultados),
-            'resultados': resultados
+            'total_verificados': len(integracoes),
+            'confirmados': confirmados,
+            'aguardando': aguardando,
+            'cancelados': cancelados,
+            'erros': len(erros),
+            'resultados': resultados,
+            'erros_detalhes': erros
         })
         
     except Exception as e:

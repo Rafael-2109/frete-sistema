@@ -338,26 +338,31 @@ def processar_importacao_palletizacao():
         erros = []
         
         for index, row in df.iterrows():
+            # ✅ CORREÇÃO: Usar savepoint para cada item do loop
+            # Isso permite rollback individual sem perder itens já processados
             try:
+                db.session.begin_nested()  # Savepoint
+
                 # 📋 EXTRAIR DADOS usando nomes exatos das colunas Excel
                 cod_produto = str(row.get('Cód.Produto', '')).strip() if pd.notna(row.get('Cód.Produto')) else ''
-                
+
                 if not cod_produto or cod_produto == 'nan':
+                    db.session.rollback()  # Libera savepoint vazio
                     continue
-                
+
                 # Verificar se já existe
                 palletizacao_existente = CadastroPalletizacao.query.filter_by(cod_produto=cod_produto).first()
-                
+
                 # 📝 DADOS BÁSICOS
                 nome_produto = str(row.get('Descrição Produto', '')).strip()
                 palletizacao = float(row.get('PALLETIZACAO', 0) or 0)
                 peso_bruto = float(row.get('PESO BRUTO', 0) or 0)
-                
+
                 # 📏 MEDIDAS OPCIONAIS
                 altura_cm = float(row.get('altura_cm', 0) or 0) if pd.notna(row.get('altura_cm')) else 0
                 largura_cm = float(row.get('largura_cm', 0) or 0) if pd.notna(row.get('largura_cm')) else 0
                 comprimento_cm = float(row.get('comprimento_cm', 0) or 0) if pd.notna(row.get('comprimento_cm')) else 0
-                
+
                 # 🏷️ NOVOS CAMPOS DE SUBCATEGORIAS (opcionais)
                 categoria_produto = str(row.get('CATEGORIA', '')).strip() if pd.notna(row.get('CATEGORIA')) else None
                 subcategoria = str(row.get('SUBCATEGORIA', '')).strip() if pd.notna(row.get('SUBCATEGORIA')) else None
@@ -423,14 +428,16 @@ def processar_importacao_palletizacao():
 
                     db.session.add(nova_palletizacao)
                     produtos_importados += 1
-                
+
+                db.session.commit()  # Commit do savepoint (libera para o próximo item)
+
             except Exception as e:
+                db.session.rollback()  # ✅ CORREÇÃO: Rollback do savepoint individual
                 erros.append(f"Linha {index + 1}: {str(e)}") # type: ignore
                 continue
-        
-        # Commit das alterações
-        db.session.commit()
-        
+
+        # ✅ NOTA: Commit já feito item a item via savepoints, não precisa de commit global
+
         # Mensagens de resultado
         if produtos_importados > 0 or produtos_atualizados > 0:
             mensagem = f"✅ Importação concluída: {produtos_importados} novos produtos, {produtos_atualizados} atualizados"
@@ -550,13 +557,17 @@ def processar_importacao_programacao():
         erros = []
         
         for index, row in df.iterrows():
+            # ✅ CORREÇÃO: Usar savepoint para cada item do loop
             try:
+                db.session.begin_nested()  # Savepoint
+
                 # 📋 EXTRAIR DADOS usando nomes exatos das colunas Excel
                 cod_produto = str(row.get('CÓDIGO', '')).strip() if pd.notna(row.get('CÓDIGO')) else ''
-                
+
                 if not cod_produto or cod_produto == 'nan':
+                    db.session.rollback()  # Libera savepoint vazio
                     continue
-                
+
                 # 📅 PROCESSAR DATA
                 data_programacao = row.get('DATA')
                 if pd.notna(data_programacao):
@@ -564,24 +575,25 @@ def processar_importacao_programacao():
                         try:
                             # Formato brasileiro DD/MM/YYYY
                             data_programacao = pd.to_datetime(data_programacao, format='%d/%m/%Y').date()
-                        except Exception as e:
+                        except Exception:
                             try:
                                 data_programacao = pd.to_datetime(data_programacao).date()
-                            except Exception as e:
+                            except Exception:
                                 data_programacao = None
                     elif hasattr(data_programacao, 'date'):
                         data_programacao = data_programacao.date()
                 else:
                     data_programacao = None
-                
+
                 if not data_programacao:
+                    db.session.rollback()  # Libera savepoint
                     erros.append(f"Linha {index + 1}: Data inválida") # type: ignore
                     continue
-                
+
                 # 📝 DADOS BÁSICOS
                 nome_produto = str(row.get('DESCRIÇÃO', '')).strip()
                 qtd_programada = float(row.get('QTDE', 0) or 0)
-                
+
                 # ➕ CRIAR NOVO REGISTRO (constraint agora inclui cliente)
                 novo_produto = ProgramacaoProducao()
                 novo_produto.data_programacao = data_programacao
@@ -589,21 +601,23 @@ def processar_importacao_programacao():
                 novo_produto.nome_produto = nome_produto
                 novo_produto.qtd_programada = qtd_programada
                 novo_produto.created_by = current_user.nome
-                
+
                 # 🔧 CAMPOS ESPECÍFICOS CONFORME EXCEL
                 novo_produto.linha_producao = str(row.get('SEÇÃO / MÁQUINA', '')).strip() if pd.notna(row.get('SEÇÃO / MÁQUINA')) else ''
                 novo_produto.cliente_produto = str(row.get('CLIENTE', '')).strip() if pd.notna(row.get('CLIENTE')) else ''
                 novo_produto.observacao_pcp = str(row.get('OP', '')).strip() if pd.notna(row.get('OP')) else ''
-                
+
                 db.session.add(novo_produto)
                 produtos_importados += 1
-                
+
+                db.session.commit()  # Commit do savepoint
+
             except Exception as e:
+                db.session.rollback()  # ✅ CORREÇÃO: Rollback do savepoint individual
                 erros.append(f"Linha {index + 1}: {str(e)}") # type: ignore
                 continue
-        
-        # Commit das alterações
-        db.session.commit()
+
+        # ✅ NOTA: Commit já feito item a item via savepoints
         
         # Mensagens de resultado
         if produtos_importados > 0:

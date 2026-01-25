@@ -1,119 +1,100 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BI Fretes - Análise de Transportadoras</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
-    <style>
-        .navbar-bi {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        }
-        .section-title {
-            border-left: 4px solid #667eea;
-            padding-left: 10px;
-            margin-bottom: 20px;
-        }
-        .score-badge {
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.5rem;
-            font-weight: bold;
-            color: white;
-        }
-        .score-excellent { background: #27ae60; }
-        .score-good { background: #3498db; }
-        .score-regular { background: #f39c12; }
-        .score-poor { background: #e74c3c; }
-        .transp-card {
-            border-radius: 10px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            transition: transform 0.2s;
-            margin-bottom: 20px;
-        }
-        .transp-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-        }
-        .metric-value {
-            font-size: 1.3rem;
-            font-weight: bold;
-            color: #2c3e50;
-        }
-        .metric-label {
-            color: #7f8c8d;
-            font-size: 0.85rem;
-        }
-        .chart-container {
-            position: relative;
-            height: 350px;
-            margin-top: 20px;
-        }
-        .filter-section {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-        }
-        .ranking-number {
-            width: 35px;
-            height: 35px;
-            border-radius: 50%;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            margin-right: 10px;
-        }
-        .ranking-1 { background: gold; color: #000; }
-        .ranking-2 { background: silver; color: #000; }
-        .ranking-3 { background: #cd7f32; color: #fff; }
-        .ranking-other { background: #6c757d; color: #fff; }
-    </style>
-</head>
-<body>
-    <!-- Navbar -->
-    <nav class="navbar navbar-expand-lg navbar-dark navbar-bi">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="#">
-                <i class="bi bi-graph-up"></i> BI Fretes
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav">
-                    <li class="nav-item">
-                        <a class="nav-link" href="/bi/dashboard">Dashboard</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link active" href="/bi/transportadoras">Transportadoras</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/bi/regional">Análise Regional</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/bi/despesas">Despesas Extras</a>
-                    </li>
-                </ul>
-                <div class="ms-auto">
-                    <button class="btn btn-outline-light btn-sm" onclick="executarETL()">
-                        <i class="bi bi-arrow-clockwise"></i> Atualizar Dados
-                    </button>
-                </div>
-            </div>
-        </div>
-    </nav>
+{% extends 'base.html' %}
 
-    <div class="container-fluid mt-4">
-        <!-- Filtros -->
-        <div class="filter-section">
+{% block extra_css %}
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<!-- Bootstrap Icons -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+<style>
+    .section-title {
+        border-left: 4px solid #667eea;
+        padding-left: 10px;
+        margin-bottom: 20px;
+    }
+    .score-badge {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: white;
+    }
+    .score-excellent { background: #27ae60; }
+    .score-good { background: #3498db; }
+    .score-regular { background: #f39c12; }
+    .score-poor { background: #e74c3c; }
+    .transp-card {
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        transition: transform 0.2s;
+        margin-bottom: 20px;
+    }
+    .transp-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+    .metric-value {
+        font-size: 1.3rem;
+        font-weight: bold;
+    }
+    .metric-label {
+        font-size: 0.85rem;
+    }
+    .chart-container {
+        position: relative;
+        height: 350px;
+        margin-top: 20px;
+    }
+    .filter-section {
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+    .ranking-number {
+        width: 35px;
+        height: 35px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        margin-right: 10px;
+    }
+    .ranking-1 { background: gold; color: #000; }
+    .ranking-2 { background: silver; color: #000; }
+    .ranking-3 { background: #cd7f32; color: #fff; }
+    .ranking-other { background: #6c757d; color: #fff; }
+    .bi-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1rem;
+        border-radius: 10px;
+        margin-bottom: 1.5rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header do BI -->
+    <div class="bi-header d-flex justify-content-between align-items-center">
+        <div>
+            <h4 class="mb-0"><i class="bi bi-truck"></i> BI Fretes - Análise de Transportadoras</h4>
+            <small>Performance e comparativos de transportadoras</small>
+        </div>
+        <div>
+            <button class="btn btn-outline-light btn-sm" onclick="executarETL()">
+                <i class="bi bi-arrow-clockwise"></i> Atualizar Dados
+            </button>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="filter-section card">
+        <div class="card-body">
             <div class="row align-items-end">
                 <div class="col-md-3">
                     <label class="form-label">Período</label>
@@ -143,436 +124,435 @@
                 </div>
             </div>
         </div>
+    </div>
 
-        <!-- Cards de Transportadoras -->
-        <h4 class="section-title">Performance por Transportadora</h4>
-        <div id="cards-transportadoras" class="row">
-            <!-- Preenchido via JS -->
-        </div>
+    <!-- Cards de Transportadoras -->
+    <h4 class="section-title">Performance por Transportadora</h4>
+    <div id="cards-transportadoras" class="row">
+        <!-- Preenchido via JS -->
+    </div>
 
-        <!-- Gráficos Comparativos -->
-        <div class="row mt-4">
-            <!-- Comparativo de Custos -->
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header bg-white">
-                        <h5 class="mb-0">
-                            <i class="bi bi-bar-chart text-primary"></i> Comparativo de Custo/KG
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="chart-container">
-                            <canvas id="chartCustoKg"></canvas>
-                        </div>
-                    </div>
+    <!-- Gráficos Comparativos -->
+    <div class="row mt-4">
+        <!-- Comparativo de Custos -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-transparent">
+                    <h5 class="mb-0">
+                        <i class="bi bi-bar-chart text-primary"></i> Comparativo de Custo/KG
+                    </h5>
                 </div>
-            </div>
-
-            <!-- Distribuição de Volume -->
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header bg-white">
-                        <h5 class="mb-0">
-                            <i class="bi bi-pie-chart text-info"></i> Distribuição de Volume
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="chart-container">
-                            <canvas id="chartVolume"></canvas>
-                        </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="chartCustoKg"></canvas>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Evolução do Score -->
-        <div class="row mt-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header bg-white">
-                        <h5 class="mb-0">
-                            <i class="bi bi-graph-up text-success"></i> Evolução do Score de Qualidade
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="chart-container">
-                            <canvas id="chartEvolucaoScore"></canvas>
-                        </div>
-                    </div>
+        <!-- Distribuição de Volume -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-transparent">
+                    <h5 class="mb-0">
+                        <i class="bi bi-pie-chart text-info"></i> Distribuição de Volume
+                    </h5>
                 </div>
-            </div>
-        </div>
-
-        <!-- Tabela Detalhada -->
-        <div class="row mt-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">
-                            <i class="bi bi-table text-secondary"></i> Ranking Completo
-                        </h5>
-                        <button class="btn btn-sm btn-outline-primary" onclick="exportarRanking()">
-                            <i class="bi bi-download"></i> Exportar
-                        </button>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>Ranking</th>
-                                        <th>Transportadora</th>
-                                        <th>CNPJ</th>
-                                        <th>Volume (kg)</th>
-                                        <th>Valor Total</th>
-                                        <th>Custo/kg</th>
-                                        <th>Despesas</th>
-                                        <th>Score</th>
-                                        <th>Conta Corrente</th>
-                                        <th>Ações</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tbody-ranking">
-                                    <!-- Preenchido via JS -->
-                                </tbody>
-                            </table>
-                        </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="chartVolume"></canvas>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Modal de Detalhes -->
-    <div class="modal fade" id="modalDetalhes" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Detalhes da Transportadora</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    <!-- Evolução do Score -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-transparent">
+                    <h5 class="mb-0">
+                        <i class="bi bi-graph-up text-success"></i> Evolução do Score de Qualidade
+                    </h5>
                 </div>
-                <div class="modal-body" id="modal-body-detalhes">
-                    <!-- Preenchido via JS -->
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="chartEvolucaoScore"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script>
-        // Variáveis globais
-        let chartCustoKg, chartVolume, chartEvolucaoScore;
-        let dadosTransportadoras = [];
+    <!-- Tabela Detalhada -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-table text-secondary"></i> Ranking Completo
+                    </h5>
+                    <button class="btn btn-sm btn-outline-primary" onclick="exportarRanking()">
+                        <i class="bi bi-download"></i> Exportar
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Ranking</th>
+                                    <th>Transportadora</th>
+                                    <th>CNPJ</th>
+                                    <th>Volume (kg)</th>
+                                    <th>Valor Total</th>
+                                    <th>Custo/kg</th>
+                                    <th>Despesas</th>
+                                    <th>Score</th>
+                                    <th>Conta Corrente</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-ranking">
+                                <!-- Preenchido via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
-        // Função para formatar valores
-        function formatarMoeda(valor) {
-            return new Intl.NumberFormat('pt-BR', {
-                style: 'currency',
-                currency: 'BRL'
-            }).format(valor);
-        }
+<!-- Modal de Detalhes -->
+<div class="modal fade" id="modalDetalhes" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Detalhes da Transportadora</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="modal-body-detalhes">
+                <!-- Preenchido via JS -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
 
-        function formatarNumero(numero) {
-            return new Intl.NumberFormat('pt-BR').format(numero);
-        }
+{% block scripts %}
+<script>
+    // Variáveis globais
+    let chartCustoKg, chartVolume, chartEvolucaoScore;
+    let dadosTransportadoras = [];
 
-        // Função para calcular classe do score
-        function getScoreClass(score) {
-            if (score >= 80) return 'score-excellent';
-            if (score >= 60) return 'score-good';
-            if (score >= 40) return 'score-regular';
-            return 'score-poor';
-        }
+    // Função para formatar valores
+    function formatarMoeda(valor) {
+        return new Intl.NumberFormat('pt-BR', {
+            style: 'currency',
+            currency: 'BRL'
+        }).format(valor);
+    }
 
-        // Função para calcular classe do ranking
-        function getRankingClass(ranking) {
-            if (ranking === 1) return 'ranking-1';
-            if (ranking === 2) return 'ranking-2';
-            if (ranking === 3) return 'ranking-3';
-            return 'ranking-other';
-        }
+    function formatarNumero(numero) {
+        return new Intl.NumberFormat('pt-BR').format(numero);
+    }
 
-        // Carregar dados das transportadoras
-        function carregarTransportadoras() {
-            const periodo = $('#filtro-periodo').val();
-            
-            $.get(`/bi/api/ranking-transportadoras?periodo=${periodo}`, function(data) {
-                dadosTransportadoras = data;
-                renderizarCards(data);
-                renderizarGraficos(data);
-                renderizarTabela(data);
-            });
-        }
+    // Função para calcular classe do score
+    function getScoreClass(score) {
+        if (score >= 80) return 'score-excellent';
+        if (score >= 60) return 'score-good';
+        if (score >= 40) return 'score-regular';
+        return 'score-poor';
+    }
 
-        // Renderizar cards de transportadoras
-        function renderizarCards(data) {
-            let html = '';
-            
-            data.slice(0, 6).forEach(function(transp) {
-                const score = transp.score || 75; // Score real vindo da API
-                const scoreClass = getScoreClass(score);
-                
-                html += `
-                    <div class="col-md-4">
-                        <div class="card transp-card">
-                            <div class="card-body">
-                                <div class="d-flex justify-content-between align-items-start mb-3">
-                                    <div>
-                                        <h5 class="card-title">${transp.transportadora}</h5>
-                                        <span class="badge bg-secondary">Ranking #${transp.ranking}</span>
-                                    </div>
-                                    <div class="score-badge ${scoreClass}">
-                                        ${score.toFixed(0)}
-                                    </div>
+    // Função para calcular classe do ranking
+    function getRankingClass(ranking) {
+        if (ranking === 1) return 'ranking-1';
+        if (ranking === 2) return 'ranking-2';
+        if (ranking === 3) return 'ranking-3';
+        return 'ranking-other';
+    }
+
+    // Carregar dados das transportadoras
+    function carregarTransportadoras() {
+        const periodo = $('#filtro-periodo').val();
+
+        $.get(`/bi/api/ranking-transportadoras?periodo=${periodo}`, function(data) {
+            dadosTransportadoras = data;
+            renderizarCards(data);
+            renderizarGraficos(data);
+            renderizarTabela(data);
+        });
+    }
+
+    // Renderizar cards de transportadoras
+    function renderizarCards(data) {
+        let html = '';
+
+        data.slice(0, 6).forEach(function(transp) {
+            const score = transp.score || 75;
+            const scoreClass = getScoreClass(score);
+
+            html += `
+                <div class="col-md-4">
+                    <div class="card transp-card">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div>
+                                    <h5 class="card-title">${transp.transportadora}</h5>
+                                    <span class="badge bg-secondary">Ranking #${transp.ranking}</span>
                                 </div>
-                                
-                                <div class="row">
-                                    <div class="col-6">
-                                        <div class="metric-label">Volume Total</div>
-                                        <div class="metric-value">${formatarNumero(transp.peso_total)} kg</div>
-                                    </div>
-                                    <div class="col-6">
-                                        <div class="metric-label">Valor Total</div>
-                                        <div class="metric-value">${formatarMoeda(transp.valor_total)}</div>
-                                    </div>
+                                <div class="score-badge ${scoreClass}">
+                                    ${score.toFixed(0)}
                                 </div>
-                                
-                                <div class="row mt-3">
-                                    <div class="col-6">
-                                        <div class="metric-label">Custo/kg</div>
-                                        <div class="metric-value">${formatarMoeda(transp.custo_kg)}</div>
-                                    </div>
-                                    <div class="col-6">
-                                        <div class="metric-label">Despesas</div>
-                                        <div class="metric-value text-warning">${transp.percentual_despesas.toFixed(1)}%</div>
-                                    </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-6">
+                                    <div class="metric-label text-muted">Volume Total</div>
+                                    <div class="metric-value">${formatarNumero(transp.peso_total)} kg</div>
                                 </div>
-                                
-                                <div class="mt-3">
-                                    <button class="btn btn-sm btn-outline-primary w-100" onclick="verDetalhes('${transp.transportadora}')">
-                                        <i class="bi bi-eye"></i> Ver Detalhes
-                                    </button>
+                                <div class="col-6">
+                                    <div class="metric-label text-muted">Valor Total</div>
+                                    <div class="metric-value">${formatarMoeda(transp.valor_total)}</div>
                                 </div>
+                            </div>
+
+                            <div class="row mt-3">
+                                <div class="col-6">
+                                    <div class="metric-label text-muted">Custo/kg</div>
+                                    <div class="metric-value">${formatarMoeda(transp.custo_kg)}</div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="metric-label text-muted">Despesas</div>
+                                    <div class="metric-value text-warning">${transp.percentual_despesas.toFixed(1)}%</div>
+                                </div>
+                            </div>
+
+                            <div class="mt-3">
+                                <button class="btn btn-sm btn-outline-primary w-100" onclick="verDetalhes('${transp.transportadora}')">
+                                    <i class="bi bi-eye"></i> Ver Detalhes
+                                </button>
                             </div>
                         </div>
                     </div>
-                `;
-            });
-            
-            $('#cards-transportadoras').html(html);
-        }
-
-        // Renderizar gráficos
-        function renderizarGraficos(data) {
-            // Gráfico de Custo/KG
-            const ctxCusto = document.getElementById('chartCustoKg').getContext('2d');
-            if (chartCustoKg) chartCustoKg.destroy();
-            
-            chartCustoKg = new Chart(ctxCusto, {
-                type: 'bar',
-                data: {
-                    labels: data.slice(0, 10).map(d => d.transportadora.substring(0, 20)),
-                    datasets: [{
-                        label: 'Custo por KG',
-                        data: data.slice(0, 10).map(d => d.custo_kg),
-                        backgroundColor: '#667eea'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                callback: function(value) {
-                                    return formatarMoeda(value);
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-
-            // Gráfico de Volume
-            const ctxVolume = document.getElementById('chartVolume').getContext('2d');
-            if (chartVolume) chartVolume.destroy();
-            
-            chartVolume = new Chart(ctxVolume, {
-                type: 'doughnut',
-                data: {
-                    labels: data.slice(0, 5).map(d => d.transportadora.substring(0, 20)),
-                    datasets: [{
-                        data: data.slice(0, 5).map(d => d.peso_total),
-                        backgroundColor: [
-                            '#667eea',
-                            '#f093fb',
-                            '#4facfe',
-                            '#43e97b',
-                            '#fa709a'
-                        ]
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'right'
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    return context.label + ': ' + formatarNumero(context.parsed) + ' kg';
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-
-            // Gráfico de Evolução do Score (simulado)
-            const ctxEvolucao = document.getElementById('chartEvolucaoScore').getContext('2d');
-            if (chartEvolucaoScore) chartEvolucaoScore.destroy();
-            
-            // Dados simulados para evolução
-            const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun'];
-            const datasets = data.slice(0, 3).map((transp, idx) => ({
-                label: transp.transportadora.substring(0, 20),
-                data: meses.map(() => 0), // Será atualizado com dados reais
-                borderColor: ['#667eea', '#f093fb', '#4facfe'][idx],
-                tension: 0.4
-            }));
-            
-            chartEvolucaoScore = new Chart(ctxEvolucao, {
-                type: 'line',
-                data: {
-                    labels: meses,
-                    datasets: datasets
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: {
-                            beginAtZero: false,
-                            min: 0,
-                            max: 100
-                        }
-                    }
-                }
-            });
-        }
-
-        // Renderizar tabela
-        function renderizarTabela(data) {
-            let html = '';
-            
-            data.forEach(function(transp) {
-                const score = item.score || 75; // Score real
-                const saldo = item.saldo || 0; // Saldo real
-                const rankingClass = getRankingClass(transp.ranking);
-                
-                html += `
-                    <tr>
-                        <td>
-                            <span class="ranking-number ${rankingClass}">${transp.ranking}</span>
-                        </td>
-                        <td>${transp.transportadora}</td>
-                        <td>XX.XXX.XXX/XXXX-XX</td>
-                        <td>${formatarNumero(transp.peso_total)}</td>
-                        <td>${formatarMoeda(transp.valor_total)}</td>
-                        <td>${formatarMoeda(transp.custo_kg)}</td>
-                        <td>
-                            <span class="badge ${transp.percentual_despesas > 5 ? 'bg-danger' : 'bg-success'}">
-                                ${transp.percentual_despesas.toFixed(1)}%
-                            </span>
-                        </td>
-                        <td>
-                            <span class="badge ${score >= 60 ? 'bg-success' : 'bg-warning'}">
-                                ${score.toFixed(0)}
-                            </span>
-                        </td>
-                        <td class="${saldo >= 0 ? 'text-success' : 'text-danger'}">
-                            ${formatarMoeda(Math.abs(saldo))}
-                        </td>
-                        <td>
-                            <button class="btn btn-sm btn-outline-primary" onclick="verDetalhes('${transp.transportadora}')">
-                                <i class="bi bi-eye"></i>
-                            </button>
-                        </td>
-                    </tr>
-                `;
-            });
-            
-            $('#tbody-ranking').html(html);
-        }
-
-        // Ver detalhes da transportadora
-        function verDetalhes(transportadora) {
-            const transp = dadosTransportadoras.find(t => t.transportadora === transportadora);
-            
-            if (transp) {
-                let html = `
-                    <h6>${transp.transportadora}</h6>
-                    <hr>
-                    <div class="row">
-                        <div class="col-md-6">
-                            <p><strong>Ranking:</strong> #${transp.ranking}</p>
-                            <p><strong>Volume Total:</strong> ${formatarNumero(transp.peso_total)} kg</p>
-                            <p><strong>Valor Total:</strong> ${formatarMoeda(transp.valor_total)}</p>
-                            <p><strong>Custo/kg:</strong> ${formatarMoeda(transp.custo_kg)}</p>
-                        </div>
-                        <div class="col-md-6">
-                            <p><strong>Despesas Extras:</strong> ${formatarMoeda(transp.despesas)}</p>
-                            <p><strong>% Despesas:</strong> ${transp.percentual_despesas.toFixed(1)}%</p>
-                            <p><strong>Dias Ativos:</strong> ${transp.dias_ativos}</p>
-                        </div>
-                    </div>
-                `;
-                
-                $('#modal-body-detalhes').html(html);
-                new bootstrap.Modal(document.getElementById('modalDetalhes')).show();
-            }
-        }
-
-        // Aplicar filtros
-        function aplicarFiltros() {
-            carregarTransportadoras();
-        }
-
-        // Exportar ranking
-        function exportarRanking() {
-            alert('Funcionalidade de exportação em desenvolvimento');
-        }
-
-        // Executar ETL
-        function executarETL() {
-            if (confirm('Deseja executar a atualização dos dados agora?')) {
-                $.post('/bi/api/executar-etl', function(data) {
-                    if (data.sucesso) {
-                        alert('Dados atualizados com sucesso!');
-                        carregarTransportadoras();
-                    } else {
-                        alert('Erro ao atualizar dados');
-                    }
-                });
-            }
-        }
-
-        // Carregar ao iniciar
-        $(document).ready(function() {
-            carregarTransportadoras();
-            
-            // Atualizar quando mudar período
-            $('#filtro-periodo').change(function() {
-                carregarTransportadoras();
-            });
+                </div>
+            `;
         });
-    </script>
-</body>
-</html>
+
+        $('#cards-transportadoras').html(html);
+    }
+
+    // Renderizar gráficos
+    function renderizarGraficos(data) {
+        // Gráfico de Custo/KG
+        const ctxCusto = document.getElementById('chartCustoKg').getContext('2d');
+        if (chartCustoKg) chartCustoKg.destroy();
+
+        chartCustoKg = new Chart(ctxCusto, {
+            type: 'bar',
+            data: {
+                labels: data.slice(0, 10).map(d => d.transportadora.substring(0, 20)),
+                datasets: [{
+                    label: 'Custo por KG',
+                    data: data.slice(0, 10).map(d => d.custo_kg),
+                    backgroundColor: '#667eea'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return formatarMoeda(value);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // Gráfico de Volume
+        const ctxVolume = document.getElementById('chartVolume').getContext('2d');
+        if (chartVolume) chartVolume.destroy();
+
+        chartVolume = new Chart(ctxVolume, {
+            type: 'doughnut',
+            data: {
+                labels: data.slice(0, 5).map(d => d.transportadora.substring(0, 20)),
+                datasets: [{
+                    data: data.slice(0, 5).map(d => d.peso_total),
+                    backgroundColor: [
+                        '#667eea',
+                        '#f093fb',
+                        '#4facfe',
+                        '#43e97b',
+                        '#fa709a'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.label + ': ' + formatarNumero(context.parsed) + ' kg';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // Gráfico de Evolução do Score
+        const ctxEvolucao = document.getElementById('chartEvolucaoScore').getContext('2d');
+        if (chartEvolucaoScore) chartEvolucaoScore.destroy();
+
+        const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun'];
+        const datasets = data.slice(0, 3).map((transp, idx) => ({
+            label: transp.transportadora.substring(0, 20),
+            data: meses.map(() => 0),
+            borderColor: ['#667eea', '#f093fb', '#4facfe'][idx],
+            tension: 0.4
+        }));
+
+        chartEvolucaoScore = new Chart(ctxEvolucao, {
+            type: 'line',
+            data: {
+                labels: meses,
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        min: 0,
+                        max: 100
+                    }
+                }
+            }
+        });
+    }
+
+    // Renderizar tabela
+    function renderizarTabela(data) {
+        let html = '';
+
+        data.forEach(function(transp) {
+            const score = transp.score || 75;
+            const saldo = transp.saldo || 0;
+            const rankingClass = getRankingClass(transp.ranking);
+
+            html += `
+                <tr>
+                    <td>
+                        <span class="ranking-number ${rankingClass}">${transp.ranking}</span>
+                    </td>
+                    <td>${transp.transportadora}</td>
+                    <td>XX.XXX.XXX/XXXX-XX</td>
+                    <td>${formatarNumero(transp.peso_total)}</td>
+                    <td>${formatarMoeda(transp.valor_total)}</td>
+                    <td>${formatarMoeda(transp.custo_kg)}</td>
+                    <td>
+                        <span class="badge ${transp.percentual_despesas > 5 ? 'bg-danger' : 'bg-success'}">
+                            ${transp.percentual_despesas.toFixed(1)}%
+                        </span>
+                    </td>
+                    <td>
+                        <span class="badge ${score >= 60 ? 'bg-success' : 'bg-warning'}">
+                            ${score.toFixed(0)}
+                        </span>
+                    </td>
+                    <td class="${saldo >= 0 ? 'text-success' : 'text-danger'}">
+                        ${formatarMoeda(Math.abs(saldo))}
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" onclick="verDetalhes('${transp.transportadora}')">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+
+        $('#tbody-ranking').html(html);
+    }
+
+    // Ver detalhes da transportadora
+    function verDetalhes(transportadora) {
+        const transp = dadosTransportadoras.find(t => t.transportadora === transportadora);
+
+        if (transp) {
+            let html = `
+                <h6>${transp.transportadora}</h6>
+                <hr>
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Ranking:</strong> #${transp.ranking}</p>
+                        <p><strong>Volume Total:</strong> ${formatarNumero(transp.peso_total)} kg</p>
+                        <p><strong>Valor Total:</strong> ${formatarMoeda(transp.valor_total)}</p>
+                        <p><strong>Custo/kg:</strong> ${formatarMoeda(transp.custo_kg)}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Despesas Extras:</strong> ${formatarMoeda(transp.despesas)}</p>
+                        <p><strong>% Despesas:</strong> ${transp.percentual_despesas.toFixed(1)}%</p>
+                        <p><strong>Dias Ativos:</strong> ${transp.dias_ativos}</p>
+                    </div>
+                </div>
+            `;
+
+            $('#modal-body-detalhes').html(html);
+            new bootstrap.Modal(document.getElementById('modalDetalhes')).show();
+        }
+    }
+
+    // Aplicar filtros
+    function aplicarFiltros() {
+        carregarTransportadoras();
+    }
+
+    // Exportar ranking
+    function exportarRanking() {
+        toastr.info('Funcionalidade de exportação em desenvolvimento');
+    }
+
+    // Executar ETL
+    function executarETL() {
+        if (confirm('Deseja executar a atualização dos dados agora?')) {
+            $.post('/bi/api/executar-etl', function(data) {
+                if (data.sucesso) {
+                    toastr.success('Dados atualizados com sucesso!');
+                    carregarTransportadoras();
+                } else {
+                    toastr.error('Erro ao atualizar dados');
+                }
+            });
+        }
+    }
+
+    // Carregar ao iniciar
+    $(document).ready(function() {
+        carregarTransportadoras();
+
+        // Atualizar quando mudar período
+        $('#filtro-periodo').change(function() {
+            carregarTransportadoras();
+        });
+    });
+</script>
+{% endblock %}

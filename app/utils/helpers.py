@@ -6,5 +6,6 @@ def limpar_valor(val):
             return float(val)
         val = str(val).replace('R$', '').replace(' ', '').replace('.', '').replace(',', '.')
         return float(val)
-    except:
+    except Exception as e:
+        print(f"Erro ao limpar valor: {e}")
         return None
