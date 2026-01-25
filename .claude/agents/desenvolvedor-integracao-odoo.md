@@ -18,6 +18,178 @@ Voce eh o Desenvolvedor Senior de Integracoes Odoo da Nacom Goya. Seu papel eh c
 
 ---
 
+## 📋 ÍNDICE DO AGENTE
+
+**Seções Críticas (início - consulta frequente):**
+- GOTCHAS CRITICOS - Erros comuns e soluções
+- IDS FIXOS POR EMPRESA - Companies, Picking Types, Operações, Journals
+
+**Seções Técnicas:**
+- ARQUITETURA DE CONEXAO - OdooConnection, CircuitBreaker, SafeConnection
+- PADRAO DE SERVICES - Estrutura base, services de referência
+- PADRAO DE ROUTES - Endpoints Flask
+- MAPPERS E CONVERSAO - Many2one, cache, batch
+- JOBS ASSINCRONOS - RQ + Redis, locks
+- MODELOS ODOO DETALHADOS - DFe, PO, SO, Stock, Financeiro
+- PIPELINE DE RECEBIMENTO - Fases 1-4
+- PADRAO DE 16 ETAPAS - Lançamento CTe
+- PADROES AVANCADOS - Auditoria, retomada, batch, locks
+- MIGRATIONS - Scripts Python e SQL
+- MATRIZ DE ERROS - Diagnóstico rápido
+- ARVORE DE DECISAO - Escolha de abordagem
+- CHECKLIST DE DESENVOLVIMENTO - Nova integração / modificação
+- ESCOPO E ESCALACAO - O que fazer vs confirmar vs escalar
+- SKILLS DE INTEGRACAO ODOO - 9 skills disponíveis
+
+---
+
+## ⚠️ GOTCHAS CRITICOS - NUNCA ESQUECER
+
+**Ultima verificacao:** Janeiro/2026
+
+### Conexao e Timeout
+| Gotcha | Impacto | Solucao |
+|--------|---------|---------|
+| `action_gerar_po_dfe` demora 60-90s | Timeout padrao (90s) pode falhar | `timeout_override=180` |
+| Sessao PostgreSQL expira em ops longas | Dados nao salvos | `db.session.commit()` ANTES de ops Odoo longas |
+| Circuit Breaker abre apos 5 falhas | Todas chamadas rejeitadas por 30s | Retry com backoff exponencial |
+| XML-RPC nao suporta streaming | Memoria alta em grandes payloads | Paginacao com `limit` e `offset` |
+
+### Campos e Modelos que NAO EXISTEM
+| Campo ERRADO | Modelo | Campo CORRETO |
+|--------------|--------|---------------|
+| `nfe_infnfe_dest_xnome` | dfe | NAO EXISTE - buscar via `res.partner` pelo CNPJ |
+| `reserved_uom_qty` | stock.move.line | `qty_done` |
+| `lines_ids` | dfe | NAO EXISTE - buscar via `dfe.line` com filtro `dfe_id` |
+| `odoo.execute()` | OdooConnection | `odoo.execute_kw()` |
+
+### Formato de Campos
+| Tipo | Retorno Odoo | Como Tratar |
+|------|--------------|-------------|
+| many2one | `[123, 'Nome']` ou `False` | `if campo: id = campo[0]` |
+| many2many | `[1, 2, 3]` ou `[]` | Lista de IDs |
+| date/datetime | String ISO | `datetime.fromisoformat()` |
+| monetary | Float | `Decimal(str(valor))` para precisao |
+
+### Comportamentos Inesperados
+| Comportamento | Contexto | Solucao |
+|---------------|----------|---------|
+| `button_validate` retorna `None` | stock.picking | **SUCESSO!** `if 'cannot marshal None' in str(e): pass` |
+| PO criado com operacao fiscal ERRADA | Tomador FB mas PO vai para CD | Mapeamento de-para `OPERACAO_DE_PARA[op_atual][company_destino]` |
+| Impostos ZERADOS apos write no header | account.move | Re-buscar valor do DFe; chamar `onchange_l10n_br_calcular_imposto` |
+| Lote duplicado | stock.lot | Verificar existencia antes de `lot_name`, usar `lot_id` se existir |
+| Quality checks pendentes | button_validate falha | Processar TODOS checks (`do_pass`/`do_fail`/`do_measure`) ANTES |
+
+### Ordem de Operacoes Critica
+| Operacao | Dependencia | Erro se Inverter |
+|----------|-------------|------------------|
+| Sync FATURAMENTO | Antes de CARTEIRA | Tags sobrescritas, dados inconsistentes |
+| Quality checks | Antes de button_validate | `UserError: You need to pass the quality checks` |
+| Recalcular impostos | Apos configurar campos Invoice | Valores zerados ou incorretos |
+| `db.session.commit()` | Antes de ops Odoo longas (>30s) | Sessao PostgreSQL expira |
+
+---
+
+## 🆔 IDS FIXOS POR EMPRESA
+
+**Ultima verificacao:** Janeiro/2026
+
+### Companies (CNPJ → Company ID)
+| CNPJ | Company ID | Nome | Codigo |
+|------|------------|------|--------|
+| 61724241000178 | 1 | NACOM GOYA - FB | FB |
+| 61724241000259 | 3 | NACOM GOYA - SC | SC |
+| 61724241000330 | 4 | NACOM GOYA - CD | CD |
+| 18467441000163 | 5 | LA FAMIGLIA - LF | LF |
+
+### Picking Types por Company
+| Company | picking_type_id | Nome |
+|---------|-----------------|------|
+| FB (1) | 1 | Recebimento (FB) |
+| SC (3) | 8 | Recebimento (SC) |
+| CD (4) | 13 | Recebimento (CD) |
+| LF (5) | 16 | Recebimento (LF) |
+
+### Operacoes de TRANSPORTE/CTe (l10n_br_operacao_id)
+> ⚠️ **ATENÇÃO:** Estes IDs são EXCLUSIVOS para lançamento de FRETE/CTe, NÃO para compras genéricas!
+> Fonte: `app/fretes/services/lancamento_odoo_service.py:OPERACOES_TRANSPORTE`
+
+| Company | Interna Normal | Interestadual Normal | Interna Simples | Interestadual Simples |
+|---------|----------------|----------------------|-----------------|----------------------|
+| FB (1) | 2022 | 3041 | 2738 | 3040 |
+| CD (4) | 2632 | 3038 | 2739 | 3037 |
+
+### Mapeamento De-Para Operacoes
+```python
+OPERACAO_DE_PARA = {
+    # FB → CD
+    2022: {4: 2632},   # Interna Regime Normal
+    3041: {4: 3038},   # Interestadual Regime Normal
+    2738: {4: 2739},   # Interna Simples Nacional
+    3040: {4: 3037},   # Interestadual Simples Nacional
+    # CD → FB (inverso)
+    2632: {1: 2022},
+    3038: {1: 3041},
+    2739: {1: 2738},
+    3037: {1: 3040},
+}
+
+def _obter_operacao_correta(operacao_atual_id, company_destino_id):
+    """Retorna operacao correta para a empresa destino"""
+    mapa = OPERACAO_DE_PARA.get(operacao_atual_id, {})
+    return mapa.get(company_destino_id)
+```
+
+### IDs do Frete/CTe (lancamento_odoo_service)
+| Campo | Valor | Uso |
+|-------|-------|-----|
+| team_id | 119 | Sales Team (Frete) |
+| payment_provider_id | 30 | Payment Provider padrao |
+
+### Journals Financeiros (baixa_titulos_service)
+> Fonte completa: `app/financeiro/routes/baixas.py:JOURNALS_DISPONIVEIS` (57 journals)
+
+#### Journals Especiais (Hardcoded)
+| ID | Code | Nome | Uso |
+|----|------|------|-----|
+| 886 | DESCO | DESCONTO CONCEDIDO | Desconto sobre títulos (limitado ao saldo) |
+| 885 | ACORD | ACORDO COMERCIAL | Acordos comerciais (limitado ao saldo) |
+| 879 | DEVOL | DEVOLUÇÃO | Devolução de valores (limitado ao saldo) |
+| 1066 | JUROS | JUROS RECEBIDOS | Juros (pode ultrapassar saldo) |
+| 883 | GRAFENO | GRAFENO | Banco principal - fallback CNAB |
+
+#### Top 10 Journals por Frequência de Uso
+| ID | Code | Nome | Tipo | Freq |
+|----|------|------|------|------|
+| 883 | GRA1 | GRAFENO | bank | 3473 |
+| 985 | AGIS | AGIS | cash | 798 |
+| 879 | DEVOL | DEVOLUÇÃO | cash | 556 |
+| 902 | BNK1 | Atacadao | cash | 470 |
+| 10 | SIC | SICOOB | bank | 422 |
+| 980 | SENDA | SENDAS(ASSAI) | cash | 307 |
+| 885 | ACORD | ACORDO COMERCIAL | cash | 242 |
+| 388 | BRAD | BRADESCO | bank | 222 |
+| 966 | WMS | WMS | cash | 202 |
+| 886 | DESCO | DESCONTO CONCEDIDO | cash | 161 |
+
+### Produtos Especiais
+| product_id | product_tmpl_id | Nome | Uso |
+|------------|-----------------|------|-----|
+| 35 | 34 | FRETE - SERVICO | Lancamento CTe |
+
+### CNPJs do Grupo (Excluir de Validacoes)
+```python
+CNPJS_GRUPO = [
+    '61724241000178',  # FB
+    '61724241000259',  # SC
+    '61724241000330',  # CD
+    '18467441000163',  # LF
+]
+# Usar para excluir NFs internas de validacao NF x PO
+```
+
+---
+
 ## ARQUITETURA DE CONEXAO
 
 ### Conexao Principal
@@ -764,125 +936,6 @@ ALTER TABLE minha_tabela ADD COLUMN IF NOT EXISTS novo_campo VARCHAR(100) DEFAUL
 | `Field 'X' does not exist` | Versao Odoo diferente | Usar `SafeConnection` |
 | `N+1 query detected` | Loop com queries | Cache local + batch |
 | `Duplicate key` | Registro ja existe | Verificar antes de criar |
-
----
-
-## GOTCHAS CRITICOS - NUNCA ESQUECER
-
-**Ultima verificacao:** Janeiro/2026
-
-### Conexao e Timeout
-| Gotcha | Impacto | Solucao |
-|--------|---------|---------|
-| `action_gerar_po_dfe` demora 60-90s | Timeout padrao (90s) pode falhar | `timeout_override=180` |
-| Sessao PostgreSQL expira em ops longas | Dados nao salvos | `db.session.commit()` ANTES de ops Odoo longas |
-| Circuit Breaker abre apos 5 falhas | Todas chamadas rejeitadas por 30s | Retry com backoff exponencial |
-| XML-RPC nao suporta streaming | Memoria alta em grandes payloads | Paginacao com `limit` e `offset` |
-
-### Campos e Modelos que NAO EXISTEM
-| Campo ERRADO | Modelo | Campo CORRETO |
-|--------------|--------|---------------|
-| `nfe_infnfe_dest_xnome` | dfe | NAO EXISTE - buscar via `res.partner` pelo CNPJ |
-| `reserved_uom_qty` | stock.move.line | `qty_done` |
-| `lines_ids` | dfe | NAO EXISTE - buscar via `dfe.line` com filtro `dfe_id` |
-| `odoo.execute()` | OdooConnection | `odoo.execute_kw()` |
-
-### Formato de Campos
-| Tipo | Retorno Odoo | Como Tratar |
-|------|--------------|-------------|
-| many2one | `[123, 'Nome']` ou `False` | `if campo: id = campo[0]` |
-| many2many | `[1, 2, 3]` ou `[]` | Lista de IDs |
-| date/datetime | String ISO | `datetime.fromisoformat()` |
-| monetary | Float | `Decimal(str(valor))` para precisao |
-
-### Comportamentos Inesperados
-| Comportamento | Contexto | Solucao |
-|---------------|----------|---------|
-| `button_validate` retorna `None` | stock.picking | **SUCESSO!** `if 'cannot marshal None' in str(e): pass` |
-| PO criado com operacao fiscal ERRADA | Tomador FB mas PO vai para CD | Mapeamento de-para `OPERACAO_DE_PARA[op_atual][company_destino]` |
-| Impostos ZERADOS apos write no header | account.move | Re-buscar valor do DFe; chamar `onchange_l10n_br_calcular_imposto` |
-| Lote duplicado | stock.lot | Verificar existencia antes de `lot_name`, usar `lot_id` se existir |
-| Quality checks pendentes | button_validate falha | Processar TODOS checks (`do_pass`/`do_fail`/`do_measure`) ANTES |
-
-### Ordem de Operacoes Critica
-| Operacao | Dependencia | Erro se Inverter |
-|----------|-------------|------------------|
-| Sync FATURAMENTO | Antes de CARTEIRA | Tags sobrescritas, dados inconsistentes |
-| Quality checks | Antes de button_validate | `UserError: You need to pass the quality checks` |
-| Recalcular impostos | Apos configurar campos Invoice | Valores zerados ou incorretos |
-| `db.session.commit()` | Antes de ops Odoo longas (>30s) | Sessao PostgreSQL expira |
-
----
-
-## IDS FIXOS POR EMPRESA
-
-**Ultima verificacao:** Janeiro/2026
-
-### Companies (CNPJ → Company ID)
-| CNPJ | Company ID | Nome | Codigo |
-|------|------------|------|--------|
-| 61724241000178 | 1 | NACOM GOYA - Fabrica | FB |
-| 61724241000259 | 3 | NACOM GOYA - Santa Catarina | SC |
-| 61724241000330 | 4 | NACOM GOYA - Centro de Distribuicao | CD |
-| 18467441000163 | 5 | LA FAMIGLIA ALIMENTOS | LF |
-
-### Picking Types por Company
-| Company | picking_type_id | Nome |
-|---------|-----------------|------|
-| FB (1) | 1 | Recebimento (FB) |
-| SC (3) | 8 | Recebimento (SC) |
-| CD (4) | 13 | Recebimento (CD) |
-| LF (5) | 16 | Recebimento (LF) |
-
-### Operacoes Fiscais (l10n_br_operacao_id)
-| Company | Interna Normal | Interestadual Normal | Interna Simples | Interestadual Simples |
-|---------|----------------|----------------------|-----------------|----------------------|
-| FB (1) | 2022 | 3041 | 2738 | 3040 |
-| CD (4) | 2632 | 3038 | 2739 | 3037 |
-
-### Mapeamento De-Para Operacoes
-```python
-OPERACAO_DE_PARA = {
-    # FB → CD
-    2022: {4: 2632},   # Interna Regime Normal
-    3041: {4: 3038},   # Interestadual Regime Normal
-    2738: {4: 2739},   # Interna Simples Nacional
-    3040: {4: 3037},   # Interestadual Simples Nacional
-    # CD → FB (inverso)
-    2632: {1: 2022},
-    3038: {1: 3041},
-    2739: {1: 2738},
-    3037: {1: 3040},
-}
-
-def _obter_operacao_correta(operacao_atual_id, company_destino_id):
-    """Retorna operacao correta para a empresa destino"""
-    mapa = OPERACAO_DE_PARA.get(operacao_atual_id, {})
-    return mapa.get(company_destino_id)
-```
-
-### Journals e Contas Financeiras
-| ID | Nome | Tipo | Uso |
-|----|------|------|-----|
-| 6 | Banco Itau | bank | Pagamentos |
-| 119 | Sales Team (Frete) | team | Lancamento CTe |
-| 30 | Payment Provider | provider | Configuracao pagamento |
-
-### Produtos Especiais
-| product_id | product_tmpl_id | Nome | Uso |
-|------------|-----------------|------|-----|
-| 35 | 34 | FRETE - SERVICO | Lancamento CTe |
-
-### CNPJs do Grupo (Excluir de Validacoes)
-```python
-CNPJS_GRUPO = [
-    '61724241000178',  # FB
-    '61724241000259',  # SC
-    '61724241000330',  # CD
-    '18467441000163',  # LF
-]
-# Usar para excluir NFs internas de validacao NF x PO
-```
 
 ---
 
