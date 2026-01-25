@@ -923,122 +923,123 @@ class PreSeparacaoItem(db.Model):
         """
         Aplica redução de quantidade seguindo hierarquia de impacto
         1º SALDO LIVRE → 2º PRÉ-SEPARAÇÃO → 3º SEPARAÇÃO ABERTO → 4º SEPARAÇÃO COTADO
+
+        ✅ CORREÇÃO (2026-01-25): Adicionado savepoints para atomicidade
+        Conforme IMPLEMENTATION_PLAN.md - Item 3.2: Método sem atomicidade
+        Agora cada fase usa begin_nested() para rollback parcial se falhar.
         """
         try:
             qtd_restante = float(qtd_reduzida)
             log_operacoes = []
-            
-            # 1º Consumir do saldo livre primeiro (CarteiraPrincipal)
-            # NOTA: Campo separacao_lote_id foi REMOVIDO de CarteiraPrincipal
-            # Agora buscamos direto o item sem verificar separação (separação está em Separacao)
-            carteira_item = CarteiraPrincipal.query.filter(
-                CarteiraPrincipal.num_pedido == num_pedido,
-                CarteiraPrincipal.cod_produto == cod_produto
-            ).first()
-            
-            if carteira_item and carteira_item.qtd_saldo_produto_pedido and qtd_restante > 0:
-                qtd_consumida_saldo = min(float(carteira_item.qtd_saldo_produto_pedido), qtd_restante)
-                # Converter para Decimal antes de subtrair para evitar erro de tipo
-                carteira_item.qtd_saldo_produto_pedido = Decimal(str(float(carteira_item.qtd_saldo_produto_pedido) - qtd_consumida_saldo))
-                qtd_restante -= qtd_consumida_saldo
-                log_operacoes.append(f"Saldo livre reduzido em {qtd_consumida_saldo}")
-            
-            # 2º Consumir de pré-separações (mais recentes primeiro)
+
+            # ✅ FASE 1: Consumir do saldo livre (CarteiraPrincipal)
+            # Usa savepoint para rollback parcial se falhar
+            with db.session.begin_nested():
+                carteira_item = CarteiraPrincipal.query.filter(
+                    CarteiraPrincipal.num_pedido == num_pedido,
+                    CarteiraPrincipal.cod_produto == cod_produto
+                ).first()
+
+                if carteira_item and carteira_item.qtd_saldo_produto_pedido and qtd_restante > 0:
+                    qtd_consumida_saldo = min(float(carteira_item.qtd_saldo_produto_pedido), qtd_restante)
+                    carteira_item.qtd_saldo_produto_pedido = Decimal(str(float(carteira_item.qtd_saldo_produto_pedido) - qtd_consumida_saldo))
+                    qtd_restante -= qtd_consumida_saldo
+                    log_operacoes.append(f"Saldo livre reduzido em {qtd_consumida_saldo}")
+
+            # ✅ FASE 2: Consumir de pré-separações (mais recentes primeiro)
             if qtd_restante > 0:
-                pre_separacoes = cls.query.filter(
-                    cls.num_pedido == num_pedido,
-                    cls.cod_produto == cod_produto,
-                    cls.status.in_(['CRIADO', 'RECOMPOSTO'])
-                ).order_by(cls.data_criacao.desc()).all()
-                
-                for pre_sep in pre_separacoes:
-                    if qtd_restante <= 0:
-                        break
-                    
-                    qtd_consumida_pre = min(float(pre_sep.qtd_selecionada_usuario), qtd_restante)
-                    # Converter para Decimal antes de subtrair
-                    pre_sep.qtd_selecionada_usuario = Decimal(str(float(pre_sep.qtd_selecionada_usuario) - qtd_consumida_pre))
-                    qtd_restante -= qtd_consumida_pre
-                    log_operacoes.append(f"Pré-separação ID:{pre_sep.id} reduzida em {qtd_consumida_pre}")
-                    
-                    # Marcar para exclusão se zerou
-                    if pre_sep.qtd_selecionada_usuario <= 0:
-                        db.session.delete(pre_sep)
-                        log_operacoes.append(f"Pré-separação ID:{pre_sep.id} removida (zerada)")
-            
-            # 3º Consumir de separações ABERTO
-            if qtd_restante > 0:
-                try:
-                    from app.separacao.models import Separacao
-                    from app.pedidos.models import Pedido
-                    # CORRIGIDO: Separacao não tem campo 'status', usar Pedido.status via JOIN
-                    separacoes_aberto = db.session.query(Separacao).join(
-                        Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
-                    ).filter(
-                        Separacao.num_pedido == num_pedido,
-                        Separacao.cod_produto == cod_produto,
-                        Pedido.status == 'ABERTO'
-                    ).all()
-                    
-                    for separacao in separacoes_aberto:
+                with db.session.begin_nested():
+                    pre_separacoes = cls.query.filter(
+                        cls.num_pedido == num_pedido,
+                        cls.cod_produto == cod_produto,
+                        cls.status.in_(['CRIADO', 'RECOMPOSTO'])
+                    ).order_by(cls.data_criacao.desc()).all()
+
+                    for pre_sep in pre_separacoes:
                         if qtd_restante <= 0:
                             break
-                        
-                        qtd_consumida_sep = min(float(separacao.qtd_saldo or 0), qtd_restante)
-                        # Converter para Decimal antes de subtrair
-                        separacao.qtd_saldo = Decimal(str(float(separacao.qtd_saldo or 0) - qtd_consumida_sep))
-                        qtd_restante -= qtd_consumida_sep
-                        log_operacoes.append(f"Separação ABERTO {separacao.separacao_lote_id} reduzida em {qtd_consumida_sep}")
-                        
-                except ImportError:
-                    log_operacoes.append("AVISO: Módulo separação não disponível")
-            
-            # 4º ÚLTIMO RECURSO: Separações COTADO (gerar alerta crítico)
+
+                        qtd_consumida_pre = min(float(pre_sep.qtd_selecionada_usuario), qtd_restante)
+                        pre_sep.qtd_selecionada_usuario = Decimal(str(float(pre_sep.qtd_selecionada_usuario) - qtd_consumida_pre))
+                        qtd_restante -= qtd_consumida_pre
+                        log_operacoes.append(f"Pré-separação ID:{pre_sep.id} reduzida em {qtd_consumida_pre}")
+
+                        if pre_sep.qtd_selecionada_usuario <= 0:
+                            db.session.delete(pre_sep)
+                            log_operacoes.append(f"Pré-separação ID:{pre_sep.id} removida (zerada)")
+
+            # ✅ FASE 3: Consumir de separações ABERTO
             if qtd_restante > 0:
-                try:
-                    from app.separacao.models import Separacao
-                    from app.pedidos.models import Pedido
-                    # CORRIGIDO: Separacao não tem campo 'status', usar Pedido.status via JOIN
-                    separacoes_cotado = db.session.query(Separacao).join(
-                        Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
-                    ).filter(
-                        Separacao.num_pedido == num_pedido,
-                        Separacao.cod_produto == cod_produto,
-                        Pedido.status == 'COTADO'
-                    ).all()
-                    
-                    if separacoes_cotado:
-                        # GERAR ALERTA CRÍTICO
-                        cls._gerar_alerta_separacao_cotada_afetada(
-                            num_pedido, cod_produto, qtd_restante, separacoes_cotado, motivo
-                        )
-                        
-                        # Aplicar redução mesmo com alerta
-                        for separacao in separacoes_cotado:
+                with db.session.begin_nested():
+                    try:
+                        from app.separacao.models import Separacao
+                        from app.pedidos.models import Pedido
+                        separacoes_aberto = db.session.query(Separacao).join(
+                            Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
+                        ).filter(
+                            Separacao.num_pedido == num_pedido,
+                            Separacao.cod_produto == cod_produto,
+                            Pedido.status == 'ABERTO'
+                        ).all()
+
+                        for separacao in separacoes_aberto:
                             if qtd_restante <= 0:
                                 break
-                            
-                            qtd_consumida_cotado = min(float(separacao.qtd_saldo or 0), qtd_restante)
-                            # Converter para Decimal antes de subtrair
-                            separacao.qtd_saldo = Decimal(str(float(separacao.qtd_saldo or 0) - qtd_consumida_cotado))
-                            qtd_restante -= qtd_consumida_cotado
-                            log_operacoes.append(f"🚨 CRÍTICO: Separação COTADA {separacao.separacao_lote_id} reduzida em {qtd_consumida_cotado}")
-                            
-                except ImportError:
-                    log_operacoes.append("ERRO: Não foi possível acessar separações COTADO")
-            
+
+                            qtd_consumida_sep = min(float(separacao.qtd_saldo or 0), qtd_restante)
+                            separacao.qtd_saldo = Decimal(str(float(separacao.qtd_saldo or 0) - qtd_consumida_sep))
+                            qtd_restante -= qtd_consumida_sep
+                            log_operacoes.append(f"Separação ABERTO {separacao.separacao_lote_id} reduzida em {qtd_consumida_sep}")
+
+                    except ImportError:
+                        log_operacoes.append("AVISO: Módulo separação não disponível")
+                        raise  # ✅ CORREÇÃO: Re-levantar para rollback do savepoint
+
+            # ✅ FASE 4: ÚLTIMO RECURSO - Separações COTADO (gerar alerta crítico)
+            if qtd_restante > 0:
+                with db.session.begin_nested():
+                    try:
+                        from app.separacao.models import Separacao
+                        from app.pedidos.models import Pedido
+                        separacoes_cotado = db.session.query(Separacao).join(
+                            Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
+                        ).filter(
+                            Separacao.num_pedido == num_pedido,
+                            Separacao.cod_produto == cod_produto,
+                            Pedido.status == 'COTADO'
+                        ).all()
+
+                        if separacoes_cotado:
+                            cls._gerar_alerta_separacao_cotada_afetada(
+                                num_pedido, cod_produto, qtd_restante, separacoes_cotado, motivo
+                            )
+
+                            for separacao in separacoes_cotado:
+                                if qtd_restante <= 0:
+                                    break
+
+                                qtd_consumida_cotado = min(float(separacao.qtd_saldo or 0), qtd_restante)
+                                separacao.qtd_saldo = Decimal(str(float(separacao.qtd_saldo or 0) - qtd_consumida_cotado))
+                                qtd_restante -= qtd_consumida_cotado
+                                log_operacoes.append(f"🚨 CRÍTICO: Separação COTADA {separacao.separacao_lote_id} reduzida em {qtd_consumida_cotado}")
+
+                    except ImportError:
+                        log_operacoes.append("ERRO: Não foi possível acessar separações COTADO")
+                        raise  # ✅ CORREÇÃO: Re-levantar para rollback do savepoint
+
+            # ✅ COMMIT FINAL: Só executa se TODOS os savepoints passaram
             db.session.commit()
-            
+
             resultado = {
                 'sucesso': True,
                 'qtd_reduzida_total': float(qtd_reduzida) - qtd_restante,
                 'qtd_nao_aplicada': qtd_restante,
                 'operacoes': log_operacoes
             }
-            
+
             logger.info(f"✅ Redução aplicada: {num_pedido}-{cod_produto} | {resultado}")
             return resultado
-            
+
         except Exception as e:
             db.session.rollback()
             logger.error(f"❌ Erro ao aplicar redução: {e}")
@@ -1177,18 +1178,32 @@ class PreSeparacaoItem(db.Model):
                 'tipo': 'SEPARACAO_COTADA_ALTERADA',
                 'pedido': num_pedido,
                 'produto': cod_produto,
-                'quantidade_afetada': qtd_afetada,
+                'quantidade_afetada': float(qtd_afetada) if qtd_afetada else 0,
                 'motivo': motivo,
                 'separacoes_afetadas': [s.separacao_lote_id for s in separacoes],
-                'timestamp': datetime.now(timezone.utc),
-                'mensagem': f'🚨 URGENTE: {len(separacoes)} separação(ões) COTADA(s) afetada(s) por {motivo}',
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'acao_requerida': 'Verificar impacto no processo físico imediatamente'
             }
-            
+            mensagem = f'🚨 URGENTE: {len(separacoes)} separação(ões) COTADA(s) afetada(s) por {motivo}'
+
             logger.critical(f"🚨 ALERTA CRÍTICO: {alerta}")
-            
-            # TODO: Implementar sistema de notificações (email, webhook, etc.)
-            # TODO: Salvar alerta em tabela de auditoria
+
+            # IMPLEMENTADO: Enviar via NotificationDispatcher
+            try:
+                from app.notificacoes.services import enviar_alerta_critico
+
+                resultado = enviar_alerta_critico(
+                    titulo=f'Separação COTADA alterada: {num_pedido}',
+                    mensagem=mensagem,
+                    tipo='SEPARACAO_COTADA_ALTERADA',
+                    dados=alerta,
+                    origem='CarteiraPrincipal._gerar_alerta_separacao_cotada',
+                )
+                logger.info(f"Notificação enviada: {resultado.get('success')}")
+            except ImportError:
+                logger.warning("Módulo notificações não disponível")
+            except Exception as notif_err:
+                logger.error(f"Erro ao enviar notificação: {notif_err}")
             
         except Exception as e:
             logger.error(f"❌ Erro ao gerar alerta: {e}")

@@ -289,11 +289,13 @@ grep -r "valor_pago\|valor_cte" app/fretes/
 **Arquivo de Config:** `app/odoo/config/odoo_config.py`
 
 ```python
+import os
+
 ODOO_CONFIG = {
-    'url': 'https://odoo.nacomgoya.com.br',
-    'database': 'odoo-17-ee-nacomgoya-prd',
-    'username': 'rafael@conservascampobelo.com.br',
-    'api_key': '67705b0986ff5c052e657f1c0ffd96ceb191af69',
+    'url': os.environ.get('ODOO_URL', 'https://odoo.nacomgoya.com.br'),
+    'database': os.environ.get('ODOO_DATABASE', 'odoo-17-ee-nacomgoya-prd'),
+    'username': os.environ.get('ODOO_USERNAME', ''),
+    'api_key': os.environ.get('ODOO_API_KEY', ''),  # Configure via variável de ambiente!
     'timeout': 120,
     'retry_attempts': 3
 }

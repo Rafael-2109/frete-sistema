@@ -376,6 +376,7 @@ Nunca invente informações."""
                 "Write",      # Escrita de arquivos (RESTRITO a /tmp via can_use_tool)
                 "Edit",       # Edição de arquivos (RESTRITO a /tmp via can_use_tool)
                 "TodoWrite",  # Gerenciamento de tarefas (feedback visual)
+                "Memory",     # Memória persistente do usuário (DatabaseMemoryTool)
             ]
 
         # Modo de permissão

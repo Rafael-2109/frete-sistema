@@ -523,9 +523,13 @@ class BiETLService:
                     data_inicio, data_fim, uf_destino=r.uf_destino
                 )
 
-                # TODO: Calcular percentual no prazo e com problema
-                bi_regional.percentual_no_prazo = 95.0  # Placeholder
-                bi_regional.percentual_com_problema = 5.0  # Placeholder
+                # ✅ CORREÇÃO: Cálculos reais em vez de placeholders
+                bi_regional.percentual_no_prazo = BiCalculosReais.calcular_percentual_no_prazo_por_regiao(
+                    r.uf_destino, data_inicio, data_fim
+                )
+                bi_regional.percentual_com_problema = BiCalculosReais.calcular_percentual_com_problema_por_regiao(
+                    r.uf_destino, data_inicio, data_fim
+                )
 
                 bi_regional.processado_em = datetime.now()
 
@@ -670,10 +674,10 @@ class BiETLService:
                     float(kpis_anterior.custo_total) * 100
                 )
 
-            # Performance
-            bi_indicador.percentual_no_prazo = 90.0  # TODO: Calcular real
-            bi_indicador.percentual_com_divergencia = 10.0  # TODO: Calcular real
-            bi_indicador.percentual_aprovado = 85.0  # TODO: Calcular real
+            # ✅ CORREÇÃO: Cálculos reais de performance
+            bi_indicador.percentual_no_prazo = BiCalculosReais.calcular_percentual_no_prazo_mensal(ano, mes)
+            bi_indicador.percentual_com_divergencia = BiCalculosReais.calcular_percentual_divergencia_mensal(ano, mes)
+            bi_indicador.percentual_aprovado = BiCalculosReais.calcular_percentual_aprovado_mensal(ano, mes)
 
             bi_indicador.calculado_em = datetime.now()
 

@@ -8,11 +8,11 @@
 
 3. When you discover issues, immediately update @IMPLEMENTATION_PLAN.md with your findings. When resolved, update and remove the item.
 
-4. When tests pass, update @IMPLEMENTATION_PLAN.md, then `git add -A` then `git commit` with descriptive message. After commit, `git push`.
+4. When tests pass, update @IMPLEMENTATION_PLAN.md. Do NOT run git commands - the user will handle commits manually.
 
 99999. Capture the why in documentation.
 999999. Single sources of truth, no migrations/adapters. If unrelated tests fail, resolve them.
-9999999. Create git tag on clean builds (start 0.0.0, increment patch).
+9999999. Do NOT create git tags - user handles versioning manually.
 99999999. Add extra logging if needed for debugging.
 999999999. Keep @IMPLEMENTATION_PLAN.md current with learnings.
 9999999999. Update @AGENTS.md with operational learnings (keep brief).

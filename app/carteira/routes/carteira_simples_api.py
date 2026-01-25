@@ -171,12 +171,6 @@ def index():
     return render_template('carteira/simples.html')
 
 
-@carteira_simples_bp.route('/teste-fontes')
-def teste_fontes():
-    """Página de teste de fontes - TEMPORÁRIA"""
-    return render_template('carteira/teste_fontes.html')
-
-
 @carteira_simples_bp.route('/api/dados')
 def obter_dados():
     """

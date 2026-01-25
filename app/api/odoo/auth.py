@@ -12,18 +12,44 @@ from functools import wraps
 logger = logging.getLogger(__name__)
 
 # Configurações de autenticação
-JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'sua-chave-secreta-jwt-aqui')
+_jwt_secret = os.getenv('JWT_SECRET_KEY')
+if not _jwt_secret:
+    logger.warning(
+        "⚠️ JWT_SECRET_KEY não configurada! "
+        "Configure via variável de ambiente para segurança em produção."
+    )
+    _jwt_secret = 'dev-jwt-key-insecure-local-only'
+JWT_SECRET_KEY = _jwt_secret
 API_KEY_HEADER = 'X-API-Key'
 JWT_HEADER = 'Authorization'
 
-# API Keys válidas (em produção, armazenar em banco ou Redis)
-VALID_API_KEYS = {
-    'odoo-integration-key-2024': {
-        'name': 'Odoo Integration',
+# API Keys válidas - devem ser configuradas via variáveis de ambiente em produção
+# Formato: API_KEY_<NOME>=<permissões separadas por vírgula>
+# Exemplo: API_KEY_ODOO_INTEGRATION=carteira,faturamento
+def _load_api_keys_from_env():
+    """Carrega API keys das variáveis de ambiente."""
+    keys = {}
+    for key, value in os.environ.items():
+        if key.startswith('API_KEY_') and not key.endswith('_NAME'):
+            key_id = key[8:].lower().replace('_', '-')
+            key_name = os.getenv(f'{key}_NAME', key_id.replace('-', ' ').title())
+            permissions = [p.strip() for p in value.split(',')]
+            keys[os.getenv(f'API_KEY_{key[8:]}_VALUE', value)] = {
+                'name': key_name,
+                'permissions': permissions,
+                'active': True
+            }
+    return keys
+
+# Carrega API keys do ambiente ou usa fallback para desenvolvimento
+_env_keys = _load_api_keys_from_env()
+VALID_API_KEYS = _env_keys if _env_keys else {
+    # Fallback apenas para desenvolvimento local (NUNCA usar em produção)
+    'dev-api-key-local-only': {
+        'name': 'Development Key',
         'permissions': ['carteira', 'faturamento'],
-        'active': True
+        'active': os.getenv('ENVIRONMENT') != 'production'
     },
-    # Adicionar mais chaves conforme necessário
 }
 
 def require_api_key():

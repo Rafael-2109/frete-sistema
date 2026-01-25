@@ -1287,7 +1287,39 @@ def api_status_cards():
             RelatorioFaturamentoImportado.ativo == True
         ).count()
         
-        nfs_pendentes = 5  # TODO: Calcular real
+        # Calcular NFs pendentes de processamento
+        # NF pendente = importada no RelatorioFaturamentoImportado mas:
+        #   1. Não tem MovimentacaoEstoque com separacao_lote_id (processamento incompleto)
+        #   2. Ou está em EmbarqueItem com erro_validacao
+        try:
+            from app.estoque.models import MovimentacaoEstoque
+
+            # Subquery: NFs já processadas (com MovimentacaoEstoque e lote)
+            nfs_processadas = (
+                db.session.query(MovimentacaoEstoque.numero_nf)
+                .filter(
+                    MovimentacaoEstoque.numero_nf.isnot(None),
+                    MovimentacaoEstoque.separacao_lote_id.isnot(None),
+                    MovimentacaoEstoque.status_nf == 'FATURADO'
+                )
+                .distinct()
+                .subquery()
+            )
+
+            # Contar NFs importadas no mês que NÃO estão processadas
+            nfs_pendentes = RelatorioFaturamentoImportado.query.filter(
+                RelatorioFaturamentoImportado.criado_em >= mes_atual,
+                RelatorioFaturamentoImportado.ativo == True,
+                ~RelatorioFaturamentoImportado.numero_nf.in_(
+                    db.session.query(nfs_processadas.c.numero_nf)
+                )
+            ).count()
+
+        except Exception as e_pendentes:
+            # Fallback para 0 se der erro na query complexa
+            import logging
+            logging.getLogger(__name__).warning(f"Erro ao calcular NFs pendentes: {e_pendentes}")
+            nfs_pendentes = 0
         
         valor_faturado_mes = 0
         try:

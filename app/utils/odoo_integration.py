@@ -2,8 +2,15 @@
 """
 Módulo de Integração com Odoo via XML-RPC
 Sistema de Fretes - Integração com ERP Odoo
+
+IMPORTANTE: Credenciais via variáveis de ambiente:
+- ODOO_URL
+- ODOO_DATABASE
+- ODOO_USERNAME
+- ODOO_API_KEY
 """
 
+import os
 import xmlrpc.client
 import ssl
 import logging
@@ -408,12 +415,12 @@ class OdooIntegration:
                 'message': str(e)
             }
 
-# Configuração padrão
+# Configuração padrão via variáveis de ambiente
 DEFAULT_CONFIG = OdooConfig(
-    url='https://odoo.nacomgoya.com.br',
-    database='odoo-17-ee-nacomgoya-prd',
-    username='rafael@conservascampobelo.com.br',
-    api_key='67705b0986ff5c052e657f1c0ffd96ceb191af69',
+    url=os.environ.get('ODOO_URL', 'https://odoo.nacomgoya.com.br'),
+    database=os.environ.get('ODOO_DATABASE', 'odoo-17-ee-nacomgoya-prd'),
+    username=os.environ.get('ODOO_USERNAME', ''),
+    api_key=os.environ.get('ODOO_API_KEY', ''),
     timeout=30,
     retry_attempts=3,
     ssl_verify=False

@@ -501,25 +501,71 @@ class GrupoEmpresarialService:
     
     def obter_transportadoras_grupo(self, transportadora_id: int) -> List[int]:
         """
-        Retorna lista de IDs de transportadoras que pertencem ao mesmo grupo.
-        Por enquanto, retorna apenas o ID da própria transportadora.
-        
-        TODO: Implementar lógica de grupos empresariais baseada em CNPJ
+        Retorna lista de IDs de transportadoras que pertencem ao mesmo grupo empresarial.
+
+        Detecta grupo de duas formas:
+        1. Via prefixo CNPJ (primeiros 10 dígitos iguais = mesma empresa matriz)
+        2. Via detector de grupos manuais (quando cadastrado)
+
+        Isso permite buscar tabelas de frete em todas as filiais de uma mesma
+        transportadora matriz.
+
+        Args:
+            transportadora_id: ID da transportadora de referência
+
+        Returns:
+            Lista de IDs de transportadoras do mesmo grupo (inclui a própria)
         """
         try:
-            # Por enquanto, apenas retorna a própria transportadora
-            # Isso mantém o comportamento atual sem quebrar o sistema
-            return [transportadora_id]
-            
-            # TODO: Implementar lógica real de grupos:
+            from app.transportadoras.models import Transportadora
+
             # 1. Buscar transportadora por ID
-            # 2. Verificar CNPJ da transportadora
-            # 3. Detectar grupo empresarial usando detector.detectar_grupo_por_cnpj()
-            # 4. Buscar todas as transportadoras com CNPJs do mesmo grupo
-            # 5. Retornar lista de IDs
-            
+            transportadora = Transportadora.query.get(transportadora_id)
+            if not transportadora:
+                logger.warning(f"⚠️ Transportadora {transportadora_id} não encontrada")
+                return [transportadora_id]  # Fallback seguro
+
+            if not transportadora.cnpj:
+                logger.warning(f"⚠️ Transportadora {transportadora_id} sem CNPJ cadastrado")
+                return [transportadora_id]  # Fallback seguro
+
+            # 2. Extrair prefixo CNPJ (primeiros 10 dígitos = mesma empresa matriz)
+            # Formato típico: "65.523.110/0001-83"
+            # Prefixo: "65.523.110/" (identifica a empresa matriz)
+            cnpj = transportadora.cnpj.strip()
+
+            # Buscar posição da barra
+            barra_pos = cnpj.find('/')
+            if barra_pos == -1:
+                # CNPJ sem formatação, tentar extrair primeiros 8 dígitos
+                cnpj_limpo = re.sub(r'[^\d]', '', cnpj)
+                if len(cnpj_limpo) >= 8:
+                    prefixo_busca = cnpj_limpo[:8]
+                else:
+                    logger.debug(f"📦 CNPJ inválido para transportadora {transportadora_id}")
+                    return [transportadora_id]
+            else:
+                # CNPJ formatado, usar tudo até a barra (inclusive)
+                prefixo_busca = cnpj[:barra_pos + 1]
+
+            # 3. Buscar todas as transportadoras com mesmo prefixo CNPJ
+            transportadoras_grupo = Transportadora.query.filter(
+                Transportadora.cnpj.ilike(f"{prefixo_busca}%")
+            ).all()
+
+            # 4. Retornar lista de IDs
+            ids = [t.id for t in transportadoras_grupo if t.id]
+
+            if len(ids) > 1:
+                logger.info(f"🏢 Grupo de transportadoras detectado via CNPJ {prefixo_busca}: "
+                           f"{len(ids)} membros → IDs {ids}")
+            else:
+                logger.debug(f"📦 Transportadora {transportadora_id} não pertence a grupo (CNPJ único)")
+
+            return ids if ids else [transportadora_id]
+
         except Exception as e:
-            logger.error(f"Erro ao obter transportadoras do grupo para {transportadora_id}: {e}")
+            logger.error(f"❌ Erro ao obter transportadoras do grupo para {transportadora_id}: {e}")
             return [transportadora_id]  # Fallback seguro
     
     def detectar_grupo_na_consulta(self, consulta: str) -> Optional[Dict[str, Any]]:

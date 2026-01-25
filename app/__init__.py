@@ -217,10 +217,13 @@ def create_app(config_name=None):
     # 🔧 Configurações personalizadas baseadas no ambiente
     if app.config.get("ENVIRONMENT") == "production":
         app.config["SQLALCHEMY_ECHO"] = False
-        app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "fallback_secret_key")
+        # Em produção, SECRET_KEY DEVE vir de variável de ambiente (já validado em config.py)
+        # Não sobrescrevemos aqui para manter a validação do config.py
     else:
         app.config["SQLALCHEMY_ECHO"] = False  # Para não poluir os logs
-        app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev_secret_key_change_in_production")
+        # Em desenvolvimento, permite fallback para facilitar testes locais
+        if not os.environ.get("SECRET_KEY"):
+            app.config["SECRET_KEY"] = "dev_secret_key_local_only"
 
     # 🔧 Configurar upload
     app.config["UPLOAD_FOLDER"] = os.path.join(app.root_path, "uploads")
@@ -675,6 +678,8 @@ def create_app(config_name=None):
     from app.cotacao.routes import cotacao_bp
     from app.portaria.routes import portaria_bp
     from app.api.routes import api_bp
+    from app.metricas.routes import metricas_bp  # 📊 Dashboard de Métricas
+    from app.notificacoes import notificacoes_bp  # 🔔 Sistema de Notificações
 
     # from app.odoo import odoo_bp  # DESATIVADO - Movido para Carteira & Estoque
     from app.odoo.routes.sincronizacao_integrada import sync_integrada_bp  # REATIVADO - Necessário!
@@ -742,6 +747,12 @@ def create_app(config_name=None):
 
     # 🆕 API REST para funcionalidades MCP
     app.register_blueprint(api_bp)
+
+    # 📊 Dashboard de Métricas
+    app.register_blueprint(metricas_bp)
+
+    # 🔔 Sistema de Notificações
+    app.register_blueprint(notificacoes_bp)
 
     # 🔗 API Odoo Integration - DESATIVADO (funcionalidade integrada em Carteira & Estoque)
     # app.register_blueprint(odoo_bp)  # Movido para Carteira & Estoque

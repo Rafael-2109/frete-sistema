@@ -212,7 +212,7 @@ class DatabaseMemoryTool(BetaAbstractMemoryTool):
         Returns:
             Mensagem de sucesso
         """
-        from .models import AgentMemory
+        from .models import AgentMemory, AgentMemoryVersion
         from app import db
 
         path = self._validate_path(command.path)
@@ -221,6 +221,14 @@ class DatabaseMemoryTool(BetaAbstractMemoryTool):
             # Verifica se já existe
             existing = AgentMemory.get_by_path(self.user_id, path)
             if existing:
+                # Salvar versão anterior antes de atualizar
+                if existing.content is not None:
+                    AgentMemoryVersion.save_version(
+                        memory_id=existing.id,
+                        content=existing.content,
+                        changed_by='claude'
+                    )
+
                 # Atualiza conteúdo se já existe
                 existing.content = command.file_text
                 existing.is_directory = False
@@ -246,7 +254,7 @@ class DatabaseMemoryTool(BetaAbstractMemoryTool):
             FileNotFoundError: Se arquivo não existe
             ValueError: Se texto não encontrado ou não é único
         """
-        from .models import AgentMemory
+        from .models import AgentMemory, AgentMemoryVersion
         from app import db
 
         path = self._validate_path(command.path)
@@ -268,6 +276,14 @@ class DatabaseMemoryTool(BetaAbstractMemoryTool):
             elif count > 1:
                 raise ValueError(f"Texto aparece {count} vezes em {path}. Deve ser único.")
 
+            # Salvar versão anterior antes de editar
+            if content:
+                AgentMemoryVersion.save_version(
+                    memory_id=memory.id,
+                    content=content,
+                    changed_by='claude'
+                )
+
             memory.content = content.replace(command.old_str, command.new_str)
             db.session.commit()
 
@@ -284,7 +300,7 @@ class DatabaseMemoryTool(BetaAbstractMemoryTool):
         Returns:
             Mensagem de sucesso
         """
-        from .models import AgentMemory
+        from .models import AgentMemory, AgentMemoryVersion
         from app import db
 
         path = self._validate_path(command.path)
@@ -304,6 +320,14 @@ class DatabaseMemoryTool(BetaAbstractMemoryTool):
             insert_line = command.insert_line
             if insert_line < 0 or insert_line > len(lines):
                 raise ValueError(f"Linha inválida {insert_line}. Deve ser 0-{len(lines)}")
+
+            # Salvar versão anterior antes de inserir
+            if content:
+                AgentMemoryVersion.save_version(
+                    memory_id=memory.id,
+                    content=content,
+                    changed_by='claude'
+                )
 
             lines.insert(insert_line, command.insert_text.rstrip('\n'))
             memory.content = '\n'.join(lines) + '\n'

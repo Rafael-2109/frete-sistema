@@ -354,14 +354,18 @@ class OdooSaleOrderCreator:
 def exemplo_criar_pedido():
     """Exemplo de uso completo"""
 
-    # Configuração de conexão
-    # ⚠️ Em produção, use variáveis de ambiente!
+    # Configuração de conexão via variáveis de ambiente
+    import os
     config = {
-        'url': 'https://odoo.nacomgoya.com.br',
-        'database': 'odoo-17-ee-nacomgoya-prd',
-        'username': 'rafael@conservascampobelo.com.br',
-        'api_key': '67705b0986ff5c052e657f1c0ffd96ceb191af69'
+        'url': os.environ.get('ODOO_URL', 'https://odoo.nacomgoya.com.br'),
+        'database': os.environ.get('ODOO_DATABASE', 'odoo-17-ee-nacomgoya-prd'),
+        'username': os.environ.get('ODOO_USERNAME', ''),
+        'api_key': os.environ.get('ODOO_API_KEY', '')
     }
+
+    # Validação de credenciais
+    if not config['api_key']:
+        raise ValueError("ODOO_API_KEY não configurado. Configure via variável de ambiente.")
 
     # Criar cliente
     odoo = OdooSaleOrderCreator(**config)

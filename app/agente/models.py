@@ -63,8 +63,11 @@ class AgentSession(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # Relacionamento
-    user = db.relationship('Usuario', backref=db.backref('agent_sessions', lazy='dynamic'))
+    # Relacionamento - cascade delete quando usuário é deletado
+    user = db.relationship(
+        'Usuario',
+        backref=db.backref('agent_sessions', lazy='dynamic', cascade='all, delete-orphan')
+    )
 
     def __repr__(self):
         return f'<AgentSession {self.session_id[:8]}... user={self.user_id}>'
@@ -363,8 +366,11 @@ class AgentMemory(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # Relacionamento
-    user = db.relationship('Usuario', backref=db.backref('agent_memories', lazy='dynamic'))
+    # Relacionamento - cascade delete quando usuário é deletado
+    user = db.relationship(
+        'Usuario',
+        backref=db.backref('agent_memories', lazy='dynamic', cascade='all, delete-orphan')
+    )
 
     # Constraint única: um usuário não pode ter dois arquivos com mesmo path
     __table_args__ = (
@@ -534,3 +540,137 @@ class AgentMemory(db.Model):
 
         memory.path = new_path
         return True
+
+
+class AgentMemoryVersion(db.Model):
+    """
+    Histórico de versões de memórias.
+
+    Rastreia mudanças em memórias para auditoria e permite reverter para versões anteriores.
+    Implementado conforme spec: specs/memoria-persistente-agent-sdk.md
+
+    Cada vez que uma memória é atualizada (str_replace, create com overwrite, insert),
+    a versão anterior é salva nesta tabela antes da modificação.
+
+    Uso:
+        - Auditoria de mudanças
+        - Recuperação de versões anteriores
+        - Análise de padrões de uso
+
+    Campos:
+        memory_id: FK para agent_memories.id (com cascade delete)
+        content: Conteúdo da versão anterior
+        version: Número da versão (1, 2, 3...)
+        changed_at: Timestamp da mudança
+        changed_by: Quem fez a mudança ('user', 'haiku', 'claude')
+    """
+    __tablename__ = 'agent_memory_versions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    memory_id = db.Column(
+        db.Integer,
+        db.ForeignKey('agent_memories.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True
+    )
+
+    # Conteúdo da versão anterior
+    content = db.Column(db.Text, nullable=True)
+
+    # Número da versão (incrementa a cada update)
+    version = db.Column(db.Integer, nullable=False)
+
+    # Timestamp da mudança
+    changed_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Quem fez a mudança
+    changed_by = db.Column(db.String(50), nullable=True)  # 'user', 'haiku', 'claude'
+
+    # Relacionamento com AgentMemory (cascade delete via FK)
+    memory = db.relationship(
+        'AgentMemory',
+        backref=db.backref('versions', lazy='dynamic', cascade='all, delete-orphan')
+    )
+
+    # Constraint única: uma memória não pode ter duas versões com mesmo número
+    __table_args__ = (
+        db.UniqueConstraint('memory_id', 'version', name='uq_memory_version'),
+    )
+
+    def __repr__(self):
+        return f'<AgentMemoryVersion memory={self.memory_id} v{self.version} by={self.changed_by}>'
+
+    # =========================================================================
+    # MÉTODOS DE CLASSE
+    # =========================================================================
+
+    @classmethod
+    def get_latest_version_number(cls, memory_id: int) -> int:
+        """
+        Retorna o número da última versão para uma memória.
+
+        Args:
+            memory_id: ID da memória
+
+        Returns:
+            Número da última versão (0 se não houver versões)
+        """
+        latest = cls.query.filter_by(memory_id=memory_id)\
+            .order_by(cls.version.desc())\
+            .first()
+        return latest.version if latest else 0
+
+    @classmethod
+    def save_version(cls, memory_id: int, content: str, changed_by: str = 'claude') -> 'AgentMemoryVersion':
+        """
+        Salva uma nova versão de uma memória.
+
+        Args:
+            memory_id: ID da memória
+            content: Conteúdo a ser versionado
+            changed_by: Quem fez a mudança ('user', 'haiku', 'claude')
+
+        Returns:
+            Instância de AgentMemoryVersion criada
+        """
+        version_number = cls.get_latest_version_number(memory_id) + 1
+
+        version = cls(
+            memory_id=memory_id,
+            content=content,
+            version=version_number,
+            changed_by=changed_by
+        )
+        db.session.add(version)
+        return version
+
+    @classmethod
+    def get_versions(cls, memory_id: int, limit: int = 10) -> List['AgentMemoryVersion']:
+        """
+        Lista versões de uma memória (mais recentes primeiro).
+
+        Args:
+            memory_id: ID da memória
+            limit: Limite de versões a retornar
+
+        Returns:
+            Lista de versões ordenadas por versão DESC
+        """
+        return cls.query.filter_by(memory_id=memory_id)\
+            .order_by(cls.version.desc())\
+            .limit(limit)\
+            .all()
+
+    @classmethod
+    def get_version(cls, memory_id: int, version: int) -> Optional['AgentMemoryVersion']:
+        """
+        Busca uma versão específica de uma memória.
+
+        Args:
+            memory_id: ID da memória
+            version: Número da versão
+
+        Returns:
+            Instância de AgentMemoryVersion ou None
+        """
+        return cls.query.filter_by(memory_id=memory_id, version=version).first()

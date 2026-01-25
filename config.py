@@ -57,7 +57,14 @@ class Config:
         SQLALCHEMY_ENGINE_OPTIONS["pool_timeout"] = 30
     else:
         SQLALCHEMY_ENGINE_OPTIONS["connect_args"] = {}
-    SECRET_KEY = os.environ.get("SECRET_KEY") or "dev-key-super-secreta-aqui"
+    # SECRET_KEY: obrigatório em produção, permite fallback apenas em desenvolvimento local
+    _secret_key = os.environ.get("SECRET_KEY")
+    if not _secret_key and IS_PRODUCTION:
+        raise ValueError(
+            "SECRET_KEY must be set in production environment! "
+            "Generate a secure key with: python -c 'import secrets; print(secrets.token_hex(32))'"
+        )
+    SECRET_KEY = _secret_key or "dev-key-local-only-insecure"  # Apenas para desenvolvimento local
     SQLALCHEMY_DATABASE_URI = DATABASE_URL
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
