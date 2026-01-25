@@ -622,6 +622,7 @@ Usuario: "Como fazer bulk insert com SQLAlchemy?"
 | Conciliar PO/Split | `conciliando-odoo-po` | "consolide POs", "crie PO conciliador", "execute split" |
 | Recebimento Fisico | `recebimento-fisico-odoo` | "lote nao criou", "quality check falhou", "picking nao validou" |
 | Razao Geral | `razao-geral-odoo` | "exportar razao geral", "relatorio contabil", "account.move.line" |
+| Odoo cross-area / nao sabe qual skill | `especialista-odoo` | "DFE bloqueado", "picking nao valida", "timeout XML-RPC", "qual skill usar para..." |
 
 ## Skills de Desenvolvimento
 
@@ -694,3 +695,71 @@ Task(
 - Decisao parcial vs aguardar
 - Templates de comunicacao PCP/Comercial
 - Conhecimento de leadtimes e gargalos
+
+## especialista-odoo
+
+**Arquivo**: `.claude/agents/especialista-odoo.md`
+**Modelo**: Opus (recomendado para raciocinio cross-area)
+**Tools**: Read, Bash, Glob, Grep
+**Skills**: rastreando-odoo, executando-odoo-financeiro, descobrindo-odoo-estrutura, integracao-odoo, validacao-nf-po, conciliando-odoo-po, recebimento-fisico-odoo, razao-geral-odoo
+
+**Descricao**: Orquestrador de todas as integracoes Odoo. Diagnostica problemas cross-area, explica fluxos e delega para skills especificas.
+
+**Quando usar**:
+- Problema cross-area Odoo (NF travada entre fases, pagamento + extrato)
+- Nao sabe qual skill Odoo usar
+- Precisa entender fluxo completo Odoo (pipeline Fase 1-4)
+- Diagnosticar erros de conexao/timeout/Circuit Breaker
+- Explicar relacoes entre modelos Odoo
+- Ajudar a desenvolver nova integracao
+
+**Exemplo de invocacao** (via Task tool):
+```python
+Task(
+    subagent_type="especialista-odoo",
+    prompt="Por que o picking do PO 12345 nao valida?"
+)
+```
+
+**Capacidades**:
+- Mapa completo de 18+ modelos Odoo com campos-chave
+- Pipeline Fase 1→4 com status transitions
+- Diagnostico de Circuit Breaker e timeouts
+- Conhecimento de gotchas criticos (UoM, tax delay, CNPJ formatado)
+- Delegacao inteligente para 8 skills Odoo
+- Exemplos reais de metodos de acao e pesquisa
+
+## desenvolvedor-integracao-odoo
+
+**Arquivo**: `.claude/agents/desenvolvedor-integracao-odoo.md`
+**Modelo**: Opus
+**Tools**: Read, Bash, Write, Edit, Glob, Grep
+**Skills**: integracao-odoo, descobrindo-odoo-estrutura, rastreando-odoo, executando-odoo-financeiro, validacao-nf-po, conciliando-odoo-po, recebimento-fisico-odoo, razao-geral-odoo, frontend-design
+
+**Descricao**: Desenvolvedor especializado em criar e modificar integracoes Odoo. Conhece arquitetura completa (services, mappers, jobs, Circuit Breaker), GOTCHAS criticos, IDs fixos por empresa, e padroes avancados.
+
+**Quando usar**:
+- Criar novo service de integracao Odoo
+- Implementar novo fluxo de lancamento (seguindo 16 etapas)
+- Extender integracao existente (novos campos, validacoes)
+- Criar routes e migrations para Odoo
+- Modificar mappers e conversao de dados
+
+**Exemplo de invocacao** (via Task tool):
+```python
+Task(
+    subagent_type="desenvolvedor-integracao-odoo",
+    prompt="Crie uma integracao para sincronizar devolucoes do Odoo"
+)
+```
+
+**Capacidades**:
+- Arquitetura de conexao (OdooConnection, SafeConnection, CircuitBreaker)
+- **12+ GOTCHAS criticos** documentados (campos inexistentes, timeouts, comportamentos)
+- **24+ IDs fixos** por empresa (companies, picking_types, operacoes fiscais)
+- **30+ modelos Odoo** detalhados com relacionamentos
+- **8 padroes avancados**: auditoria, retomada, rollback, batch, lock, progresso
+- 10 services de referencia com 15K+ linhas analisadas
+- Padrao de 16 etapas para lancamentos
+- Pipeline Recebimento (Fases 1-4) documentado
+- 9 skills Odoo linkadas para consulta

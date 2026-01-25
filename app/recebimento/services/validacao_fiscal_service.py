@@ -819,16 +819,16 @@ class ValidacaoFiscalService:
             ncm_esperado=dados.get('ncm'),
             cfop_esperados=json.dumps(dados.get('cfops', [])),
             cst_icms_esperado=dados.get('cst_icms'),
-            aliquota_icms_esperada=dados.get('aliq_icms'),
-            reducao_bc_icms_esperada=dados.get('reducao_bc_icms'),
-            aliquota_icms_st_esperada=dados.get('aliq_icms_st'),
-            aliquota_ipi_esperada=dados.get('aliq_ipi'),
+            aliquota_icms_esperada=dados.get('aliq_icms') or Decimal('0'),
+            reducao_bc_icms_esperada=dados.get('reducao_bc_icms') or Decimal('0'),
+            aliquota_icms_st_esperada=dados.get('aliq_icms_st') or Decimal('0'),
+            aliquota_ipi_esperada=dados.get('aliq_ipi') or Decimal('0'),
             # PIS
             cst_pis_esperado=dados.get('cst_pis'),
-            aliquota_pis_esperada=dados.get('aliq_pis'),
+            aliquota_pis_esperada=dados.get('aliq_pis') or Decimal('0'),
             # COFINS
             cst_cofins_esperado=dados.get('cst_cofins'),
-            aliquota_cofins_esperada=dados.get('aliq_cofins'),
+            aliquota_cofins_esperada=dados.get('aliq_cofins') or Decimal('0'),
             ultimas_nfs_ids=json.dumps(dfe_ids),
             criado_por='SISTEMA_AUTO_HISTORICO',
             ativo=True
@@ -1364,15 +1364,29 @@ class ValidacaoFiscalService:
         if cadastro.status != 'pendente':
             return {'sucesso': False, 'mensagem': f'Cadastro ja processado: {cadastro.status}'}
 
-        # Criar perfil fiscal
+        # Criar perfil fiscal com TODOS os campos disponíveis
         perfil = PerfilFiscalProdutoFornecedor(
             cod_produto=cadastro.cod_produto,
             cnpj_fornecedor=cadastro.cnpj_fornecedor,
+            cnpj_empresa_compradora=cadastro.cnpj_empresa_compradora,
+            # Nomes para exibição
+            nome_empresa_compradora=cadastro.razao_empresa_compradora,
+            razao_fornecedor=cadastro.razao_fornecedor,
+            nome_produto=cadastro.nome_produto,
+            # Dados fiscais completos
             ncm_esperado=cadastro.ncm,
             cfop_esperados=json.dumps([cadastro.cfop]) if cadastro.cfop else None,
-            aliquota_icms_esperada=cadastro.aliquota_icms,
-            aliquota_icms_st_esperada=cadastro.aliquota_icms_st,
-            aliquota_ipi_esperada=cadastro.aliquota_ipi,
+            cst_icms_esperado=cadastro.cst_icms,
+            aliquota_icms_esperada=cadastro.aliquota_icms or Decimal('0'),
+            reducao_bc_icms_esperada=cadastro.reducao_bc_icms or Decimal('0'),
+            aliquota_icms_st_esperada=cadastro.aliquota_icms_st or Decimal('0'),
+            aliquota_ipi_esperada=cadastro.aliquota_ipi or Decimal('0'),
+            # PIS
+            cst_pis_esperado=cadastro.cst_pis,
+            aliquota_pis_esperada=cadastro.aliquota_pis or Decimal('0'),
+            # COFINS
+            cst_cofins_esperado=cadastro.cst_cofins,
+            aliquota_cofins_esperada=cadastro.aliquota_cofins or Decimal('0'),
             ultimas_nfs_ids=json.dumps([cadastro.odoo_dfe_id]),
             criado_por=usuario,
             ativo=True

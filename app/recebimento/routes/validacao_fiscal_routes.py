@@ -573,12 +573,14 @@ def importar_perfil_fiscal_excel():
                         raise ValueError(f'{campo} invalido: {valor}')
 
                 try:
-                    aliq_icms = parse_decimal(row.get('aliquota_icms_esperada', ''), 'aliquota_icms_esperada')
-                    reducao_bc_icms = parse_decimal(row.get('reducao_bc_icms_esperada', ''), 'reducao_bc_icms_esperada')
-                    aliq_icms_st = parse_decimal(row.get('aliquota_icms_st_esperada', ''), 'aliquota_icms_st_esperada')
-                    aliq_ipi = parse_decimal(row.get('aliquota_ipi_esperada', ''), 'aliquota_ipi_esperada')
-                    aliq_pis = parse_decimal(row.get('aliquota_pis_esperada', ''), 'aliquota_pis_esperada')
-                    aliq_cofins = parse_decimal(row.get('aliquota_cofins_esperada', ''), 'aliquota_cofins_esperada')
+                    # Campos zeráveis: vazio = zero (não None), pois a validação fiscal
+                    # precisa detectar divergência quando NF chegar com valor > 0
+                    aliq_icms = parse_decimal(row.get('aliquota_icms_esperada', ''), 'aliquota_icms_esperada') or Decimal('0')
+                    aliq_pis = parse_decimal(row.get('aliquota_pis_esperada', ''), 'aliquota_pis_esperada') or Decimal('0')
+                    aliq_cofins = parse_decimal(row.get('aliquota_cofins_esperada', ''), 'aliquota_cofins_esperada') or Decimal('0')
+                    reducao_bc_icms = parse_decimal(row.get('reducao_bc_icms_esperada', ''), 'reducao_bc_icms_esperada') or Decimal('0')
+                    aliq_icms_st = parse_decimal(row.get('aliquota_icms_st_esperada', ''), 'aliquota_icms_st_esperada') or Decimal('0')
+                    aliq_ipi = parse_decimal(row.get('aliquota_ipi_esperada', ''), 'aliquota_ipi_esperada') or Decimal('0')
                 except ValueError as ve:
                     erros.append({'linha': linha_num, 'erro': str(ve)})
                     continue
@@ -973,6 +975,286 @@ def obter_info_dfe(dfe_id):
         })
 
     except Exception as e:
+        return jsonify({
+            'sucesso': False,
+            'erro': str(e)
+        }), 500
+
+
+# =============================================================================
+# CRUD DE PERFIS FISCAIS - Edição e Exclusão
+# =============================================================================
+
+@validacao_fiscal_bp.route('/perfil-fiscal/<int:perfil_id>', methods=['GET'])
+@login_required
+def obter_perfil_fiscal(perfil_id):
+    """
+    Retorna os dados de um perfil fiscal específico.
+    Usado para preencher o modal de edição.
+    """
+    try:
+        from app import db
+        import json
+
+        perfil = PerfilFiscalProdutoFornecedor.query.get(perfil_id)
+        if not perfil:
+            return jsonify({
+                'sucesso': False,
+                'erro': f'Perfil fiscal {perfil_id} não encontrado'
+            }), 404
+
+        # Converter cfop_esperados de JSON para string separada por vírgula
+        cfops_str = ''
+        if perfil.cfop_esperados:
+            try:
+                cfops_list = json.loads(perfil.cfop_esperados)
+                if isinstance(cfops_list, list):
+                    cfops_str = ','.join(str(c) for c in cfops_list)
+            except (json.JSONDecodeError, TypeError):
+                cfops_str = str(perfil.cfop_esperados)
+
+        return jsonify({
+            'sucesso': True,
+            'perfil': {
+                'id': perfil.id,
+                'cnpj_empresa_compradora': perfil.cnpj_empresa_compradora,
+                'nome_empresa_compradora': perfil.nome_empresa_compradora,
+                'cnpj_fornecedor': perfil.cnpj_fornecedor,
+                'razao_fornecedor': perfil.razao_fornecedor,
+                'cod_produto': perfil.cod_produto,
+                'nome_produto': perfil.nome_produto,
+                'ncm_esperado': perfil.ncm_esperado,
+                'cfop_esperados': cfops_str,
+                'cst_icms_esperado': perfil.cst_icms_esperado,
+                'aliquota_icms_esperada': str(perfil.aliquota_icms_esperada) if perfil.aliquota_icms_esperada is not None else '',
+                'reducao_bc_icms_esperada': str(perfil.reducao_bc_icms_esperada) if perfil.reducao_bc_icms_esperada is not None else '0',
+                'aliquota_icms_st_esperada': str(perfil.aliquota_icms_st_esperada) if perfil.aliquota_icms_st_esperada is not None else '0',
+                'aliquota_ipi_esperada': str(perfil.aliquota_ipi_esperada) if perfil.aliquota_ipi_esperada is not None else '0',
+                'cst_pis_esperado': perfil.cst_pis_esperado,
+                'aliquota_pis_esperada': str(perfil.aliquota_pis_esperada) if perfil.aliquota_pis_esperada is not None else '',
+                'cst_cofins_esperado': perfil.cst_cofins_esperado,
+                'aliquota_cofins_esperada': str(perfil.aliquota_cofins_esperada) if perfil.aliquota_cofins_esperada is not None else '',
+                'criado_por': perfil.criado_por,
+                'criado_em': perfil.criado_em.isoformat() if perfil.criado_em else None
+            }
+        })
+
+    except Exception as e:
+        return jsonify({
+            'sucesso': False,
+            'erro': str(e)
+        }), 500
+
+
+@validacao_fiscal_bp.route('/perfil-fiscal/<int:perfil_id>', methods=['PUT'])
+@login_required
+def editar_perfil_fiscal(perfil_id):
+    """
+    Edita um perfil fiscal existente.
+
+    Campos editáveis:
+    - cnpj_empresa_compradora (obrigatório)
+    - ncm_esperado, cfop_esperados
+    - cst_icms_esperado, aliquota_icms_esperada
+    - reducao_bc_icms_esperada (default 0)
+    - aliquota_icms_st_esperada (default 0)
+    - aliquota_ipi_esperada (default 0)
+    - cst_pis_esperado, aliquota_pis_esperada
+    - cst_cofins_esperado, aliquota_cofins_esperada
+    """
+    try:
+        from app import db
+        from decimal import Decimal, InvalidOperation
+        from datetime import datetime, timezone
+        import json
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        perfil = PerfilFiscalProdutoFornecedor.query.get(perfil_id)
+        if not perfil:
+            return jsonify({
+                'sucesso': False,
+                'erro': f'Perfil fiscal {perfil_id} não encontrado'
+            }), 404
+
+        dados = request.get_json()
+        if not dados:
+            return jsonify({
+                'sucesso': False,
+                'erro': 'Nenhum dado enviado'
+            }), 400
+
+        # Função auxiliar para parse de decimal
+        def parse_decimal_safe(valor, campo):
+            if valor is None or valor == '':
+                return None
+            try:
+                # Tratar formato brasileiro (vírgula como decimal)
+                if isinstance(valor, str):
+                    valor = valor.replace(',', '.')
+                return Decimal(valor)
+            except (InvalidOperation, ValueError):
+                raise ValueError(f"Valor inválido para {campo}: {valor}")
+
+        # Mapeamento CNPJ → Nome empresa (hardcoded)
+        EMPRESAS_CNPJ_NOME = {
+            '61724241000330': 'NACOM GOYA - CD',
+            '61724241000178': 'NACOM GOYA - FB',
+            '61724241000259': 'NACOM GOYA - SC',
+            '18467441000163': 'LA FAMIGLIA - LF',
+        }
+
+        # Atualizar campos
+        campos_alterados = []
+
+        # cnpj_empresa_compradora - obrigatório
+        if 'cnpj_empresa_compradora' in dados:
+            cnpj_empresa = dados['cnpj_empresa_compradora']
+            if cnpj_empresa:
+                # Limpar CNPJ (remover formatação)
+                cnpj_limpo = ''.join(c for c in cnpj_empresa if c.isdigit())
+                if len(cnpj_limpo) != 14:
+                    return jsonify({
+                        'sucesso': False,
+                        'erro': f'CNPJ empresa compradora inválido: {cnpj_empresa}'
+                    }), 400
+                perfil.cnpj_empresa_compradora = cnpj_limpo
+                campos_alterados.append('cnpj_empresa_compradora')
+
+                # Preencher nome se for CNPJ conhecido
+                if cnpj_limpo in EMPRESAS_CNPJ_NOME:
+                    perfil.nome_empresa_compradora = EMPRESAS_CNPJ_NOME[cnpj_limpo]
+                    campos_alterados.append('nome_empresa_compradora')
+
+        # NCM
+        if 'ncm_esperado' in dados:
+            perfil.ncm_esperado = dados['ncm_esperado'] or None
+            campos_alterados.append('ncm_esperado')
+
+        # CFOPs (converter para JSON array)
+        if 'cfop_esperados' in dados:
+            cfops = dados['cfop_esperados']
+            if cfops:
+                cfops_list = [c.strip() for c in str(cfops).split(',') if c.strip()]
+                perfil.cfop_esperados = json.dumps(cfops_list) if cfops_list else None
+            else:
+                perfil.cfop_esperados = None
+            campos_alterados.append('cfop_esperados')
+
+        # CST ICMS
+        if 'cst_icms_esperado' in dados:
+            perfil.cst_icms_esperado = dados['cst_icms_esperado'] or None
+            campos_alterados.append('cst_icms_esperado')
+
+        # Alíquota ICMS (default 0 se vazio)
+        if 'aliquota_icms_esperada' in dados:
+            val = parse_decimal_safe(dados['aliquota_icms_esperada'], 'aliquota_icms_esperada')
+            perfil.aliquota_icms_esperada = val if val is not None else Decimal('0')
+            campos_alterados.append('aliquota_icms_esperada')
+
+        # Redução BC ICMS (default 0 se vazio)
+        if 'reducao_bc_icms_esperada' in dados:
+            val = parse_decimal_safe(dados['reducao_bc_icms_esperada'], 'reducao_bc_icms_esperada')
+            perfil.reducao_bc_icms_esperada = val if val is not None else Decimal('0')
+            campos_alterados.append('reducao_bc_icms_esperada')
+
+        # ICMS ST (default 0 se vazio)
+        if 'aliquota_icms_st_esperada' in dados:
+            val = parse_decimal_safe(dados['aliquota_icms_st_esperada'], 'aliquota_icms_st_esperada')
+            perfil.aliquota_icms_st_esperada = val if val is not None else Decimal('0')
+            campos_alterados.append('aliquota_icms_st_esperada')
+
+        # IPI (default 0 se vazio)
+        if 'aliquota_ipi_esperada' in dados:
+            val = parse_decimal_safe(dados['aliquota_ipi_esperada'], 'aliquota_ipi_esperada')
+            perfil.aliquota_ipi_esperada = val if val is not None else Decimal('0')
+            campos_alterados.append('aliquota_ipi_esperada')
+
+        # CST PIS
+        if 'cst_pis_esperado' in dados:
+            perfil.cst_pis_esperado = dados['cst_pis_esperado'] or None
+            campos_alterados.append('cst_pis_esperado')
+
+        # Alíquota PIS (default 0 se vazio)
+        if 'aliquota_pis_esperada' in dados:
+            val = parse_decimal_safe(dados['aliquota_pis_esperada'], 'aliquota_pis_esperada')
+            perfil.aliquota_pis_esperada = val if val is not None else Decimal('0')
+            campos_alterados.append('aliquota_pis_esperada')
+
+        # CST COFINS
+        if 'cst_cofins_esperado' in dados:
+            perfil.cst_cofins_esperado = dados['cst_cofins_esperado'] or None
+            campos_alterados.append('cst_cofins_esperado')
+
+        # Alíquota COFINS (default 0 se vazio)
+        if 'aliquota_cofins_esperada' in dados:
+            val = parse_decimal_safe(dados['aliquota_cofins_esperada'], 'aliquota_cofins_esperada')
+            perfil.aliquota_cofins_esperada = val if val is not None else Decimal('0')
+            campos_alterados.append('aliquota_cofins_esperada')
+
+        # Atualizar metadata
+        perfil.atualizado_em = datetime.now(timezone.utc)
+
+        db.session.commit()
+
+        logger.info(f"Perfil fiscal {perfil_id} editado por {current_user.email}. Campos alterados: {campos_alterados}")
+
+        return jsonify({
+            'sucesso': True,
+            'mensagem': f'Perfil fiscal {perfil_id} atualizado com sucesso',
+            'campos_alterados': campos_alterados
+        })
+
+    except ValueError as ve:
+        return jsonify({
+            'sucesso': False,
+            'erro': str(ve)
+        }), 400
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'sucesso': False,
+            'erro': str(e)
+        }), 500
+
+
+@validacao_fiscal_bp.route('/perfil-fiscal/<int:perfil_id>', methods=['DELETE'])
+@login_required
+def excluir_perfil_fiscal(perfil_id):
+    """
+    Exclui um perfil fiscal.
+    """
+    try:
+        from app import db
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        perfil = PerfilFiscalProdutoFornecedor.query.get(perfil_id)
+        if not perfil:
+            return jsonify({
+                'sucesso': False,
+                'erro': f'Perfil fiscal {perfil_id} não encontrado'
+            }), 404
+
+        # Guardar info para log
+        info = f"produto={perfil.cod_produto}, fornecedor={perfil.cnpj_fornecedor}, empresa={perfil.cnpj_empresa_compradora}"
+
+        db.session.delete(perfil)
+        db.session.commit()
+
+        logger.info(f"Perfil fiscal {perfil_id} excluído por {current_user.email}. Info: {info}")
+
+        return jsonify({
+            'sucesso': True,
+            'mensagem': f'Perfil fiscal {perfil_id} excluído com sucesso'
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'sucesso': False,
             'erro': str(e)

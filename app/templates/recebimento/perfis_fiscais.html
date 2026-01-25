@@ -109,6 +109,7 @@
                             <th>COFINS</th>
                             <th>Origem</th>
                             <th>Criado Em</th>
+                            <th class="text-center" style="width: 100px;">Acoes</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -206,10 +207,20 @@
                                 <br><small class="text-muted">Atualizado: {{ item.atualizado_em|formatar_data_brasil }}</small>
                                 {% endif %}
                             </td>
+                            <td class="text-center">
+                                <button type="button" class="btn btn-sm btn-outline-primary me-1"
+                                        onclick="editarPerfil({{ item.id }})" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-danger"
+                                        onclick="excluirPerfil({{ item.id }}, '{{ item.cod_produto }}')" title="Excluir">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="13" class="text-center py-4">
+                            <td colspan="14" class="text-center py-4">
                                 <i class="fas fa-inbox fa-3x text-muted mb-3 d-block"></i>
                                 <span class="text-muted">Nenhum perfil fiscal encontrado</span>
                             </td>
@@ -474,5 +485,246 @@ document.getElementById('modalImportarExcel').addEventListener('hidden.bs.modal'
     document.getElementById('listaErros').style.display = 'none';
     document.getElementById('arquivoExcel').value = '';
 });
+
+// =============================================================================
+// FUNCOES DE EDICAO E EXCLUSAO DE PERFIL FISCAL
+// =============================================================================
+
+function editarPerfil(perfilId) {
+    // Buscar dados do perfil
+    fetch(`/api/recebimento/perfil-fiscal/${perfilId}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.sucesso) {
+                preencherModalEdicao(data.perfil);
+                const modal = new bootstrap.Modal(document.getElementById('modalEditarPerfil'));
+                modal.show();
+            } else {
+                alert('Erro ao carregar perfil: ' + data.erro);
+            }
+        })
+        .catch(err => {
+            alert('Erro de comunicacao: ' + err.message);
+        });
+}
+
+function preencherModalEdicao(perfil) {
+    document.getElementById('editPerfilId').value = perfil.id;
+    document.getElementById('editCodProduto').value = perfil.cod_produto || '';
+    document.getElementById('editNomeProduto').value = perfil.nome_produto || '';
+    document.getElementById('editCnpjFornecedor').value = perfil.cnpj_fornecedor || '';
+    document.getElementById('editRazaoFornecedor').value = perfil.razao_fornecedor || '';
+    document.getElementById('editCnpjEmpresa').value = perfil.cnpj_empresa_compradora || '';
+    document.getElementById('editNcm').value = perfil.ncm_esperado || '';
+    document.getElementById('editCfop').value = perfil.cfop_esperados || '';
+    document.getElementById('editCstIcms').value = perfil.cst_icms_esperado || '';
+    document.getElementById('editAliqIcms').value = perfil.aliquota_icms_esperada || '';
+    document.getElementById('editReducaoBc').value = perfil.reducao_bc_icms_esperada || '0';
+    document.getElementById('editAliqSt').value = perfil.aliquota_icms_st_esperada || '0';
+    document.getElementById('editAliqIpi').value = perfil.aliquota_ipi_esperada || '0';
+    document.getElementById('editCstPis').value = perfil.cst_pis_esperado || '';
+    document.getElementById('editAliqPis').value = perfil.aliquota_pis_esperada || '';
+    document.getElementById('editCstCofins').value = perfil.cst_cofins_esperado || '';
+    document.getElementById('editAliqCofins').value = perfil.aliquota_cofins_esperada || '';
+}
+
+function salvarEdicaoPerfil() {
+    const perfilId = document.getElementById('editPerfilId').value;
+
+    const dados = {
+        cnpj_empresa_compradora: document.getElementById('editCnpjEmpresa').value,
+        ncm_esperado: document.getElementById('editNcm').value,
+        cfop_esperados: document.getElementById('editCfop').value,
+        cst_icms_esperado: document.getElementById('editCstIcms').value,
+        aliquota_icms_esperada: document.getElementById('editAliqIcms').value,
+        reducao_bc_icms_esperada: document.getElementById('editReducaoBc').value || '0',
+        aliquota_icms_st_esperada: document.getElementById('editAliqSt').value || '0',
+        aliquota_ipi_esperada: document.getElementById('editAliqIpi').value || '0',
+        cst_pis_esperado: document.getElementById('editCstPis').value,
+        aliquota_pis_esperada: document.getElementById('editAliqPis').value,
+        cst_cofins_esperado: document.getElementById('editCstCofins').value,
+        aliquota_cofins_esperada: document.getElementById('editAliqCofins').value
+    };
+
+    // Validar CNPJ empresa obrigatorio
+    if (!dados.cnpj_empresa_compradora) {
+        alert('CNPJ da Empresa Compradora e obrigatorio');
+        return;
+    }
+
+    const btn = document.getElementById('btnSalvarEdicao');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Salvando...';
+
+    fetch(`/api/recebimento/perfil-fiscal/${perfilId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(dados)
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save me-2"></i>Salvar';
+
+        if (data.sucesso) {
+            alert('Perfil atualizado com sucesso!');
+            bootstrap.Modal.getInstance(document.getElementById('modalEditarPerfil')).hide();
+            location.reload();
+        } else {
+            alert('Erro ao salvar: ' + data.erro);
+        }
+    })
+    .catch(err => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save me-2"></i>Salvar';
+        alert('Erro de comunicacao: ' + err.message);
+    });
+}
+
+function excluirPerfil(perfilId, codProduto) {
+    if (!confirm(`Confirma exclusao do perfil fiscal do produto ${codProduto}?\n\nEsta acao nao pode ser desfeita.`)) {
+        return;
+    }
+
+    fetch(`/api/recebimento/perfil-fiscal/${perfilId}`, {
+        method: 'DELETE'
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.sucesso) {
+            alert('Perfil excluido com sucesso!');
+            location.reload();
+        } else {
+            alert('Erro ao excluir: ' + data.erro);
+        }
+    })
+    .catch(err => {
+        alert('Erro de comunicacao: ' + err.message);
+    });
+}
 </script>
+
+<!-- Modal Editar Perfil Fiscal -->
+<div class="modal fade" id="modalEditarPerfil" tabindex="-1" aria-labelledby="modalEditarPerfilLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalEditarPerfilLabel">
+                    <i class="fas fa-edit me-2"></i>Editar Perfil Fiscal
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editPerfilId">
+
+                <!-- Informacoes do Produto (somente leitura) -->
+                <div class="card mb-3 bg-light">
+                    <div class="card-body py-2">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <small class="text-muted">Produto:</small>
+                                <div><strong id="editCodProduto"></strong> - <span id="editNomeProduto" class="text-muted"></span></div>
+                            </div>
+                            <div class="col-md-6">
+                                <small class="text-muted">Fornecedor:</small>
+                                <div><strong id="editCnpjFornecedor"></strong> - <span id="editRazaoFornecedor" class="text-muted"></span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Empresa Compradora -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold">CNPJ Empresa Compradora *</label>
+                    <select id="editCnpjEmpresa" class="form-select">
+                        <option value="">Selecione...</option>
+                        <option value="61724241000330">61.724.241/0003-30 - NACOM GOYA - CD</option>
+                        <option value="61724241000178">61.724.241/0001-78 - NACOM GOYA - FB</option>
+                        <option value="61724241000259">61.724.241/0002-59 - NACOM GOYA - SC</option>
+                        <option value="18467441000163">18.467.441/0001-63 - LA FAMIGLIA - LF</option>
+                    </select>
+                    <small class="text-muted">Obrigatorio - Define para qual empresa este perfil se aplica</small>
+                </div>
+
+                <hr>
+
+                <!-- Campos Fiscais -->
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">NCM</label>
+                        <input type="text" id="editNcm" class="form-control" placeholder="Ex: 20089900" maxlength="8">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">CFOPs</label>
+                        <input type="text" id="editCfop" class="form-control" placeholder="Ex: 5101,6101">
+                        <small class="text-muted">Separar por virgula</small>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">CST ICMS</label>
+                        <input type="text" id="editCstIcms" class="form-control" placeholder="Ex: 00" maxlength="3">
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Aliq. ICMS (%)</label>
+                        <input type="text" id="editAliqIcms" class="form-control" placeholder="Ex: 18.00">
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Reducao BC (%)</label>
+                        <input type="text" id="editReducaoBc" class="form-control" placeholder="Ex: 33.33" value="0">
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Aliq. ICMS ST (%)</label>
+                        <input type="text" id="editAliqSt" class="form-control" placeholder="Ex: 0.00" value="0">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Aliq. IPI (%)</label>
+                        <input type="text" id="editAliqIpi" class="form-control" placeholder="Ex: 0.00" value="0">
+                    </div>
+                </div>
+
+                <hr>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">CST PIS</label>
+                        <input type="text" id="editCstPis" class="form-control" placeholder="Ex: 01" maxlength="2">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Aliq. PIS (%)</label>
+                        <input type="text" id="editAliqPis" class="form-control" placeholder="Ex: 1.65">
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">CST COFINS</label>
+                        <input type="text" id="editCstCofins" class="form-control" placeholder="Ex: 01" maxlength="2">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Aliq. COFINS (%)</label>
+                        <input type="text" id="editAliqCofins" class="form-control" placeholder="Ex: 7.60">
+                    </div>
+                </div>
+
+                <div class="alert alert-info py-2 small">
+                    <i class="fas fa-info-circle me-1"></i>
+                    <strong>Campos zeraveis:</strong> Se Reducao BC, ICMS ST ou IPI ficarem vazios, serao gravados como 0.00 (a validacao detectara divergencia se a NF chegar com valor diferente de zero).
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnSalvarEdicao" onclick="salvarEdicaoPerfil()">
+                    <i class="fas fa-save me-2"></i>Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
