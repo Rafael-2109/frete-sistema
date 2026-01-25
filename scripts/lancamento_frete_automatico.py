@@ -271,11 +271,13 @@ def lancar_frete_odoo(chave_cte, data_vencimento=None, modo_teste=True):
 
         if not modo_teste:
             try:
+                # 🔧 TIMEOUT 180s: action_gerar_po_dfe pode demorar 60-90s quando Odoo ocupado
                 resultado_po = odoo.execute_kw(
                     'l10n_br_ciel_it_account.dfe',
                     'action_gerar_po_dfe',
                     [[dfe_id]],
-                    {'context': {'validate_analytic': True}}
+                    {'context': {'validate_analytic': True}},
+                    timeout_override=180
                 )
                 print("✅ PO gerado com sucesso!")
                 print(f"   Resultado: {resultado_po}")

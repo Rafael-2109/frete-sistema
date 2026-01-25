@@ -772,9 +772,14 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
 
                 contexto = {'validate_analytic': True}
 
-                # 🔧 Timeout estendido de 90s para action_gerar_po_dfe
-                # Esta operação pode demorar quando o Odoo está ocupado
-                TIMEOUT_GERAR_PO = 90
+                # 🔧 CORRECAO 24/01/2026: Timeout aumentado de 90s para 180s
+                # A etapa action_gerar_po_dfe é a mais pesada do processo:
+                # - Cria Purchase Order
+                # - Configura linhas do PO
+                # - Calcula impostos automaticamente
+                # - Pode demorar 60-90s quando Odoo está ocupado
+                # O timeout de 90s estava causando falhas intermitentes
+                TIMEOUT_GERAR_PO = 180
 
                 inicio = time.time()
                 self.odoo.execute_kw(

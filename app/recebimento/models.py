@@ -1026,9 +1026,14 @@ class RecebimentoFisico(db.Model):
     validacao_id = db.Column(db.Integer, db.ForeignKey('validacao_nf_po_dfe.id'), nullable=True)
     numero_nf = db.Column(db.String(50), nullable=True)
 
-    # Status do processamento
+    # Status do processamento local
     status = db.Column(db.String(20), default='pendente', nullable=False, index=True)
     # Valores: 'pendente', 'processando', 'processado', 'erro', 'cancelado'
+
+    # Status do picking no Odoo (state do stock.picking)
+    odoo_status = db.Column(db.String(20), nullable=True)
+    # Valores: 'draft', 'waiting', 'confirmed', 'assigned', 'done', 'cancel'
+
     erro_mensagem = db.Column(db.Text, nullable=True)
     tentativas = db.Column(db.Integer, default=0, nullable=False)
     max_tentativas = db.Column(db.Integer, default=3, nullable=False)
@@ -1064,6 +1069,7 @@ class RecebimentoFisico(db.Model):
             'validacao_id': self.validacao_id,
             'numero_nf': self.numero_nf,
             'status': self.status,
+            'odoo_status': self.odoo_status,
             'erro_mensagem': self.erro_mensagem,
             'tentativas': self.tentativas,
             'job_id': self.job_id,
