@@ -6,7 +6,7 @@ Executa em duas formas:
 1. Python local: python scripts/criar_indices_performance.py
 2. SQL no Render Shell: copiar os comandos SQL gerados
 
-18 índices identificados via análise de IMPLEMENTATION_PLAN.md
+18 índices identificados via análise de .claude/ralph-loop/IMPLEMENTATION_PLAN.md
 """
 
 import sys
