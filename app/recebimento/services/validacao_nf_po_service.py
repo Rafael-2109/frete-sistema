@@ -2537,4 +2537,3 @@ class ValidacaoNfPoService:
             'pos_candidatos': len(pos_candidatos),
             'valor_total_pos': sum(po.get('valor_total', 0) for po in pos_candidatos)
         }
-

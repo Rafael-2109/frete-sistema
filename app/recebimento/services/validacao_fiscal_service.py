@@ -451,7 +451,9 @@ class ValidacaoFiscalService:
                 linha=linha,
                 cnpj=cnpj,
                 razao=razao,
-                dados_nf=dados_nf
+                dados_nf=dados_nf,
+                cod_produto=cod_produto,  # FASE 2: passa código já resolvido (default_code)
+                nome_produto_interno=nome_produto_interno
             )
             return {
                 'acao': 'primeira_compra',
@@ -496,7 +498,9 @@ class ValidacaoFiscalService:
                 linha=linha,
                 cnpj=cnpj,
                 razao=razao,
-                dados_nf=dados_nf
+                dados_nf=dados_nf,
+                cod_produto=cod_produto,  # FASE 2: passa código já resolvido (default_code)
+                nome_produto_interno=nome_produto_interno
             )
             return {
                 'acao': 'primeira_compra',
@@ -852,12 +856,29 @@ class ValidacaoFiscalService:
         linha: Dict,
         cnpj: str,
         razao: str,
-        dados_nf: Dict = None
+        dados_nf: Dict = None,
+        cod_produto: str = None,
+        nome_produto_interno: str = None
     ) -> Dict:
-        """Cria registro de 1a compra para validacao manual"""
+        """
+        Cria registro de 1a compra para validacao manual.
 
-        cod_produto = str(linha.get('product_id', [None, ''])[0])
-        nome_produto = linha.get('det_prod_xprod', '')
+        Args:
+            odoo_dfe_id: ID do DFE no Odoo
+            linha: Dados da linha do DFE (dfe.line)
+            cnpj: CNPJ do fornecedor (normalizado)
+            razao: Razao social do fornecedor
+            dados_nf: Dados gerais da NF (cnpj_empresa_compradora, etc.)
+            cod_produto: Codigo interno do produto (default_code). Se None, usa product_id (legado)
+            nome_produto_interno: Nome interno do produto. Se None, usa det_prod_xprod
+        """
+        # CORREÇÃO FASE 2: Usar cod_produto passado (já resolvido de product_id → default_code)
+        # Se não passado, usar fallback para product_id (comportamento legado)
+        if cod_produto is None:
+            cod_produto = str(linha.get('product_id', [None, ''])[0])
+
+        # Usar nome_produto_interno se disponível, senão usar nome do XML
+        nome_produto = nome_produto_interno or linha.get('det_prod_xprod', '')
         dados_nf = dados_nf or {}
 
         # Verificar se ja existe registro pendente
@@ -1413,10 +1434,106 @@ class ValidacaoFiscalService:
             f"perfil={perfil.id}, produto={cadastro.cod_produto}"
         )
 
+        # ===========================================================
+        # FASE 3: PROPAGAÇÃO - Validar outras 1as compras pendentes
+        # com mesma combinação (empresa + fornecedor + produto)
+        # ===========================================================
+        outros_validados = 0
+        ids_propagados = []
+
+        if cadastro.cnpj_empresa_compradora and cadastro.cnpj_fornecedor and cadastro.cod_produto:
+            outros_pendentes = CadastroPrimeiraCompra.query.filter_by(
+                cnpj_empresa_compradora=cadastro.cnpj_empresa_compradora,
+                cnpj_fornecedor=cadastro.cnpj_fornecedor,
+                cod_produto=cadastro.cod_produto,
+                status='pendente'
+            ).filter(CadastroPrimeiraCompra.id != cadastro_id).all()
+
+            for outro in outros_pendentes:
+                outro.status = 'validado'
+                outro.validado_por = f'PROPAGADO_DE_{cadastro_id}'
+                outro.validado_em = datetime.utcnow()
+                outro.observacao = f'Validado automaticamente por propagação do registro {cadastro_id}'
+                ids_propagados.append(outro.id)
+
+            if outros_pendentes:
+                db.session.commit()
+                outros_validados = len(outros_pendentes)
+                logger.info(
+                    f"Propagação: {outros_validados} registros de 1a compra validados "
+                    f"automaticamente para combinação empresa={cadastro.cnpj_empresa_compradora}, "
+                    f"fornecedor={cadastro.cnpj_fornecedor}, produto={cadastro.cod_produto}. "
+                    f"IDs: {ids_propagados}"
+                )
+
+        mensagem = 'Perfil fiscal criado com sucesso'
+        if outros_validados > 0:
+            mensagem += f'. {outros_validados} outras NFs validadas automaticamente'
+
         return {
             'sucesso': True,
-            'mensagem': 'Perfil fiscal criado com sucesso',
-            'perfil_id': perfil.id
+            'mensagem': mensagem,
+            'perfil_id': perfil.id,
+            'propagados': outros_validados,
+            'ids_propagados': ids_propagados
+        }
+
+    def revalidar_primeiras_compras_por_perfil(
+        self,
+        perfil: PerfilFiscalProdutoFornecedor
+    ) -> Dict:
+        """
+        Revalida primeiras compras pendentes que fazem match com o perfil criado.
+
+        FASE 4: Chamado após criar perfil fiscal manualmente (via importação Excel
+        ou outro fluxo que não seja a validação de 1ª compra).
+
+        Args:
+            perfil: Perfil fiscal recém criado
+
+        Returns:
+            {'sucesso': bool, 'validados': int, 'ids': List[int]}
+        """
+        # Validar que perfil tem campos necessários para match
+        if not perfil.cnpj_empresa_compradora or not perfil.cnpj_fornecedor or not perfil.cod_produto:
+            logger.warning(
+                f"Perfil {perfil.id} sem campos obrigatórios para revalidação: "
+                f"empresa={perfil.cnpj_empresa_compradora}, "
+                f"fornecedor={perfil.cnpj_fornecedor}, "
+                f"produto={perfil.cod_produto}"
+            )
+            return {'sucesso': True, 'validados': 0, 'ids': []}
+
+        # Buscar primeiras compras pendentes com mesma combinação
+        pendentes = CadastroPrimeiraCompra.query.filter_by(
+            cnpj_empresa_compradora=perfil.cnpj_empresa_compradora,
+            cnpj_fornecedor=perfil.cnpj_fornecedor,
+            cod_produto=perfil.cod_produto,
+            status='pendente'
+        ).all()
+
+        if not pendentes:
+            return {'sucesso': True, 'validados': 0, 'ids': []}
+
+        ids_validados = []
+        for cadastro in pendentes:
+            cadastro.status = 'validado'
+            cadastro.validado_por = f'AUTO_PERFIL_{perfil.id}'
+            cadastro.validado_em = datetime.utcnow()
+            cadastro.observacao = f'Validado automaticamente ao criar/atualizar perfil fiscal {perfil.id}'
+            ids_validados.append(cadastro.id)
+
+        db.session.commit()
+
+        logger.info(
+            f"Revalidação por perfil {perfil.id}: {len(ids_validados)} registros "
+            f"de 1a compra validados automaticamente. IDs: {ids_validados}"
+        )
+
+        return {
+            'sucesso': True,
+            'validados': len(ids_validados),
+            'ids': ids_validados
         }
 
     def rejeitar_primeira_compra(

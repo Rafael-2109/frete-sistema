@@ -285,7 +285,9 @@ def listar_perfis_fiscais():
         if cod_produto:
             query = query.filter(PerfilFiscalProdutoFornecedor.cod_produto.ilike(f'%{cod_produto}%'))
         if cnpj:
-            query = query.filter(PerfilFiscalProdutoFornecedor.cnpj_fornecedor.ilike(f'%{cnpj}%'))
+            # FASE 5: Normalizar CNPJ antes de buscar (aceita formatado ou apenas dígitos)
+            cnpj_limpo = normalizar_cnpj(cnpj)
+            query = query.filter(PerfilFiscalProdutoFornecedor.cnpj_fornecedor.ilike(f'%{cnpj_limpo}%'))
 
         perfis = query.order_by(PerfilFiscalProdutoFornecedor.criado_em.desc()).limit(limit).all()
 
@@ -457,6 +459,7 @@ def importar_perfil_fiscal_excel():
         criados = 0
         atualizados = 0
         erros = []
+        perfis_processados = []  # FASE 4: Coletar perfis para revalidação
         usuario = current_user.nome if hasattr(current_user, 'nome') else 'IMPORT_EXCEL'
 
         for idx, row in df.iterrows():
@@ -622,6 +625,7 @@ def importar_perfil_fiscal_excel():
                     if nome_prod:
                         perfil.nome_produto = nome_prod
                     atualizados += 1
+                    perfis_processados.append(perfil)  # FASE 4: Coletar para revalidação
                 else:
                     # Criar novo
                     perfil = PerfilFiscalProdutoFornecedor(
@@ -648,6 +652,7 @@ def importar_perfil_fiscal_excel():
                     )
                     db.session.add(perfil)
                     criados += 1
+                    perfis_processados.append(perfil)  # FASE 4: Coletar para revalidação
 
             except Exception as e:
                 erros.append({'linha': linha_num, 'erro': str(e)})
@@ -656,9 +661,26 @@ def importar_perfil_fiscal_excel():
         # 6. Commit
         db.session.commit()
 
+        # ===========================================================
+        # FASE 4: REVALIDAÇÃO - Validar primeiras compras pendentes
+        # que fazem match com os perfis criados/atualizados
+        # ===========================================================
+        total_revalidados = 0
+        ids_revalidados = []
+        service = ValidacaoFiscalService()
+
+        for perfil in perfis_processados:
+            try:
+                resultado_reval = service.revalidar_primeiras_compras_por_perfil(perfil)
+                if resultado_reval.get('validados', 0) > 0:
+                    total_revalidados += resultado_reval['validados']
+                    ids_revalidados.extend(resultado_reval.get('ids', []))
+            except Exception as e:
+                logger.warning(f"Erro ao revalidar por perfil {perfil.id}: {e}")
+
         logger.info(
             f"Importacao de perfis fiscais: {criados} criados, {atualizados} atualizados, "
-            f"{len(erros)} erros - Usuario: {usuario}"
+            f"{len(erros)} erros, {total_revalidados} 1as compras revalidadas - Usuario: {usuario}"
         )
 
         return jsonify({
@@ -666,6 +688,8 @@ def importar_perfil_fiscal_excel():
             'criados': criados,
             'atualizados': atualizados,
             'total_processados': criados + atualizados,
+            'revalidacoes': total_revalidados,  # FASE 4: Quantas 1as compras foram validadas
+            'ids_revalidados': ids_revalidados[:100],  # Limitar para não sobrecarregar
             'erros': erros[:50]  # Limitar a 50 erros para nao sobrecarregar resposta
         })
 

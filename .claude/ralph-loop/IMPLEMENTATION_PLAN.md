@@ -1,9 +1,9 @@
 # IMPLEMENTATION PLAN: Correções no Módulo de Recebimento - CNPJ, Empresa e Produto
 
 **Spec**: `.claude/ralph-loop/specs/correcoes-recebimento-cnpj-empresa-produto.md`
-**Versão**: 1.3.0
+**Versão**: 1.8.0
 **Data**: 26/01/2026
-**Status**: EM IMPLEMENTAÇÃO (FASE 1 CONCLUÍDA ✅)
+**Status**: ✅ IMPLEMENTAÇÃO CONCLUÍDA (TODAS AS FASES)
 
 ---
 
@@ -156,34 +156,15 @@ dados_nf['razao_empresa_compradora'] = nome_empresa
 #### 2.1 Modificar `_criar_registro_primeira_compra()` em validacao_fiscal_service.py
 
 ##### 2.1.1 Usar default_code ao invés de product_id
-- [ ] **Status**: PENDENTE (análise concluída)
+- [x] **Status**: ✅ IMPLEMENTADO (26/01/2026)
 - **Arquivo**: `app/recebimento/services/validacao_fiscal_service.py`
-- **Linhas 845-940**: Modificar método
-- **Problema atual** (linha 855):
-```python
-# ERRADO: Usa product_id do Odoo
-cod_produto = str(linha.get('product_id', [None, ''])[0])
-```
-- **ANÁLISE DETALHADA**:
-  - `_processar_sem_perfil()` (linha 409) **JÁ RECEBE** `cod_produto` como parâmetro (já resolvido!)
-  - MAS as chamadas na linha 445 e 490 **NÃO PASSAM** esse parâmetro para `_criar_registro_primeira_compra()`
-  - `_criar_registro_primeira_compra()` (linha 845) recalcula errado na linha 855
+- **Linhas modificadas**: 853-881 (assinatura e corpo do método)
+- **Solução**: Adicionados parâmetros opcionais `cod_produto` e `nome_produto_interno`
 
 ##### 2.1.2 Adicionar parâmetro cod_produto ao método
-- [ ] **Status**: PENDENTE
-- **Mudança de assinatura**:
+- [x] **Status**: ✅ IMPLEMENTADO (26/01/2026)
+- **Código implementado** (linhas 853-874):
 ```python
-# ANTES:
-def _criar_registro_primeira_compra(
-    self,
-    odoo_dfe_id: int,
-    linha: Dict,
-    cnpj: str,
-    razao: str,
-    dados_nf: Dict = None
-) -> Dict:
-
-# DEPOIS:
 def _criar_registro_primeira_compra(
     self,
     odoo_dfe_id: int,
@@ -191,57 +172,55 @@ def _criar_registro_primeira_compra(
     cnpj: str,
     razao: str,
     dados_nf: Dict = None,
-    cod_produto: str = None,  # NOVO: código interno já resolvido
-    nome_produto_interno: str = None  # NOVO: nome do produto interno
+    cod_produto: str = None,
+    nome_produto_interno: str = None
 ) -> Dict:
+    """
+    Cria registro de 1a compra para validacao manual.
+
+    Args:
+        odoo_dfe_id: ID do DFE no Odoo
+        linha: Dados da linha do DFE (dfe.line)
+        cnpj: CNPJ do fornecedor (normalizado)
+        razao: Razao social do fornecedor
+        dados_nf: Dados gerais da NF (cnpj_empresa_compradora, etc.)
+        cod_produto: Codigo interno do produto (default_code). Se None, usa product_id (legado)
+        nome_produto_interno: Nome interno do produto. Se None, usa det_prod_xprod
+    """
 ```
 
 ##### 2.1.3 Usar cod_produto passado ao invés de recalcular
-- [ ] **Status**: PENDENTE
-- **Mudança no corpo do método** (linha 855):
+- [x] **Status**: ✅ IMPLEMENTADO (26/01/2026)
+- **Código implementado** (linhas 875-881):
 ```python
-# ANTES:
-cod_produto = str(linha.get('product_id', [None, ''])[0])
-
-# DEPOIS:
-# Usar cod_produto passado (já resolvido de product_id → default_code)
+# CORREÇÃO FASE 2: Usar cod_produto passado (já resolvido de product_id → default_code)
 # Se não passado, usar fallback para product_id (comportamento legado)
 if cod_produto is None:
     cod_produto = str(linha.get('product_id', [None, ''])[0])
+
+# Usar nome_produto_interno se disponível, senão usar nome do XML
+nome_produto = nome_produto_interno or linha.get('det_prod_xprod', '')
 ```
 
 ##### 2.1.4 Atualizar chamadas de `_criar_registro_primeira_compra()`
-- [ ] **Status**: PENDENTE (linhas confirmadas via grep)
+- [x] **Status**: ✅ IMPLEMENTADO (26/01/2026)
 - **Arquivo**: `app/recebimento/services/validacao_fiscal_service.py`
-- **Linhas a modificar**:
-  - **445-450**: Chamada em `_processar_sem_perfil()` (caso: sem histórico)
-  - **490-495**: Chamada em `_processar_sem_perfil()` (caso: histórico inconsistente)
-- **CONTEXTO IMPORTANTE**:
-  - `_processar_sem_perfil()` já recebe `cod_produto` (linha 413) e `nome_produto_interno` (linha 418)
-  - Esses valores JÁ ESTÃO DISPONÍVEIS no escopo, só não estão sendo passados
-- **Mudança**:
+- **Linhas modificadas**:
+  - **449-457**: Chamada em `_processar_sem_perfil()` (caso: sem histórico) ✅
+  - **496-504**: Chamada em `_processar_sem_perfil()` (caso: histórico inconsistente) ✅
+- **Código implementado** (ambas as chamadas):
 ```python
-# ANTES (linha 445-450):
-registro = self._criar_registro_primeira_compra(
-    odoo_dfe_id=odoo_dfe_id,
-    linha=linha,
-    cnpj=cnpj,
-    razao=razao,
-    dados_nf=dados_nf
-)
-
-# DEPOIS:
 registro = self._criar_registro_primeira_compra(
     odoo_dfe_id=odoo_dfe_id,
     linha=linha,
     cnpj=cnpj,
     razao=razao,
     dados_nf=dados_nf,
-    cod_produto=cod_produto,  # NOVO: passa código já resolvido (default_code)
-    nome_produto_interno=nome_produto_interno  # NOVO: passa nome interno
+    cod_produto=cod_produto,  # FASE 2: passa código já resolvido (default_code)
+    nome_produto_interno=nome_produto_interno
 )
 ```
-- **APLICAR EM AMBAS**: linhas 445-450 E linhas 490-495
+- **Validação**: Sintaxe OK via `py_compile`
 
 ---
 
@@ -252,33 +231,60 @@ registro = self._criar_registro_primeira_compra(
 #### 3.1 Modificar `validar_primeira_compra()` em validacao_fiscal_service.py
 
 ##### 3.1.1 Após criar perfil, propagar para outras NFs pendentes
-- [ ] **Status**: PENDENTE
+- [x] **Status**: ✅ IMPLEMENTADO (26/01/2026)
 - **Arquivo**: `app/recebimento/services/validacao_fiscal_service.py`
-- **Linhas 1340-1416**: Modificar método
-- **Adicionar após linha ~1405** (após `db.session.commit()`):
+- **Linhas 1437-1479**: Lógica de propagação adicionada após `db.session.commit()`
+- **Código implementado**:
 ```python
-# PROPAGAÇÃO: Validar outras 1as compras pendentes com mesma combinação
-outros_pendentes = CadastroPrimeiraCompra.query.filter_by(
-    cnpj_empresa_compradora=cadastro.cnpj_empresa_compradora,
-    cnpj_fornecedor=cadastro.cnpj_fornecedor,
-    cod_produto=cadastro.cod_produto,
-    status='pendente'
-).filter(CadastroPrimeiraCompra.id != cadastro_id).all()
+# ===========================================================
+# FASE 3: PROPAGAÇÃO - Validar outras 1as compras pendentes
+# com mesma combinação (empresa + fornecedor + produto)
+# ===========================================================
+outros_validados = 0
+ids_propagados = []
 
-for outro in outros_pendentes:
-    outro.status = 'validado'
-    outro.validado_por = f'PROPAGADO_DE_{cadastro_id}'
-    outro.validado_em = datetime.utcnow()
-    outro.observacao = f'Validado automaticamente por propagação do registro {cadastro_id}'
+if cadastro.cnpj_empresa_compradora and cadastro.cnpj_fornecedor and cadastro.cod_produto:
+    outros_pendentes = CadastroPrimeiraCompra.query.filter_by(
+        cnpj_empresa_compradora=cadastro.cnpj_empresa_compradora,
+        cnpj_fornecedor=cadastro.cnpj_fornecedor,
+        cod_produto=cadastro.cod_produto,
+        status='pendente'
+    ).filter(CadastroPrimeiraCompra.id != cadastro_id).all()
 
-if outros_pendentes:
-    db.session.commit()
-    logger.info(
-        f"Propagação: {len(outros_pendentes)} registros de 1a compra validados "
-        f"automaticamente para combinação empresa={cadastro.cnpj_empresa_compradora}, "
-        f"fornecedor={cadastro.cnpj_fornecedor}, produto={cadastro.cod_produto}"
-    )
+    for outro in outros_pendentes:
+        outro.status = 'validado'
+        outro.validado_por = f'PROPAGADO_DE_{cadastro_id}'
+        outro.validado_em = datetime.utcnow()
+        outro.observacao = f'Validado automaticamente por propagação do registro {cadastro_id}'
+        ids_propagados.append(outro.id)
+
+    if outros_pendentes:
+        db.session.commit()
+        outros_validados = len(outros_pendentes)
+        logger.info(
+            f"Propagação: {outros_validados} registros de 1a compra validados "
+            f"automaticamente para combinação empresa={cadastro.cnpj_empresa_compradora}, "
+            f"fornecedor={cadastro.cnpj_fornecedor}, produto={cadastro.cod_produto}. "
+            f"IDs: {ids_propagados}"
+        )
+
+mensagem = 'Perfil fiscal criado com sucesso'
+if outros_validados > 0:
+    mensagem += f'. {outros_validados} outras NFs validadas automaticamente'
+
+return {
+    'sucesso': True,
+    'mensagem': mensagem,
+    'perfil_id': perfil.id,
+    'propagados': outros_validados,
+    'ids_propagados': ids_propagados
+}
 ```
+- **Validação**: Sintaxe OK via `py_compile`
+- **Melhorias sobre o plano original**:
+  1. Adicionada verificação de campos não-nulos antes da busca
+  2. Retorna IDs dos registros propagados para rastreabilidade
+  3. Mensagem de retorno informativa para o usuário
 
 ---
 
@@ -289,10 +295,10 @@ if outros_pendentes:
 #### 4.1 Criar método `revalidar_primeiras_compras_por_perfil()`
 
 ##### 4.1.1 Adicionar novo método em validacao_fiscal_service.py
-- [ ] **Status**: PENDENTE
+- [x] **Status**: ✅ IMPLEMENTADO (26/01/2026)
 - **Arquivo**: `app/recebimento/services/validacao_fiscal_service.py`
-- **Localização**: Após método `validar_primeira_compra()` (~linha 1416)
-- **Código**:
+- **Localização**: Após método `validar_primeira_compra()` (linhas 1481-1527)
+- **Código implementado**:
 ```python
 def revalidar_primeiras_compras_por_perfil(
     self,
@@ -301,7 +307,8 @@ def revalidar_primeiras_compras_por_perfil(
     """
     Revalida primeiras compras pendentes que fazem match com o perfil criado.
 
-    Chamado após criar perfil fiscal manualmente.
+    FASE 4: Chamado após criar perfil fiscal manualmente (via importação Excel
+    ou outro fluxo que não seja a validação de 1ª compra).
 
     Args:
         perfil: Perfil fiscal recém criado
@@ -309,6 +316,10 @@ def revalidar_primeiras_compras_por_perfil(
     Returns:
         {'sucesso': bool, 'validados': int, 'ids': List[int]}
     """
+    # Validar que perfil tem campos necessários para match
+    if not perfil.cnpj_empresa_compradora or not perfil.cnpj_fornecedor or not perfil.cod_produto:
+        return {'sucesso': True, 'validados': 0, 'ids': []}
+
     # Buscar primeiras compras pendentes com mesma combinação
     pendentes = CadastroPrimeiraCompra.query.filter_by(
         cnpj_empresa_compradora=perfil.cnpj_empresa_compradora,
@@ -325,28 +336,27 @@ def revalidar_primeiras_compras_por_perfil(
         cadastro.status = 'validado'
         cadastro.validado_por = f'AUTO_PERFIL_{perfil.id}'
         cadastro.validado_em = datetime.utcnow()
-        cadastro.observacao = f'Validado automaticamente ao criar perfil fiscal {perfil.id}'
+        cadastro.observacao = f'Validado automaticamente ao criar/atualizar perfil fiscal {perfil.id}'
         ids_validados.append(cadastro.id)
 
     db.session.commit()
-
-    logger.info(
-        f"Revalidação por perfil {perfil.id}: {len(ids_validados)} registros "
-        f"de 1a compra validados automaticamente"
-    )
-
-    return {
-        'sucesso': True,
-        'validados': len(ids_validados),
-        'ids': ids_validados
-    }
+    return {'sucesso': True, 'validados': len(ids_validados), 'ids': ids_validados}
 ```
+- **Validação**: Sintaxe OK via `py_compile`
 
-##### 4.1.2 Chamar método após criar perfil manualmente
-- [ ] **Status**: PENDENTE
+##### 4.1.2 Chamar método após criar perfil via importação Excel
+- [x] **Status**: ✅ IMPLEMENTADO (26/01/2026)
 - **Arquivo**: `app/recebimento/routes/validacao_fiscal_routes.py`
-- **Endpoint**: POST para criar perfil fiscal
-- **Verificar**: Existe endpoint de criação manual de perfil?
+- **Endpoint**: `POST /api/recebimento/perfil-fiscal/importar-excel`
+- **Linhas modificadas**:
+  - **460**: Adicionada lista `perfis_processados = []` para coletar perfis
+  - **624-625**: Perfis atualizados são coletados
+  - **651-652**: Perfis criados são coletados
+  - **659-685**: Loop de revalidação após commit + retorno de estatísticas
+- **Retorno do endpoint agora inclui**:
+  - `revalidacoes`: quantidade de 1as compras validadas automaticamente
+  - `ids_revalidados`: lista dos IDs validados (limitado a 100)
+- **Validação**: Sintaxe OK via `py_compile`
 
 ---
 
@@ -357,15 +367,27 @@ def revalidar_primeiras_compras_por_perfil(
 #### 5.1 Verificar APIs de listagem
 
 ##### 5.1.1 Verificar rota de listagem de validações NF x PO
-- [ ] **Status**: PENDENTE
+- [x] **Status**: ✅ JÁ IMPLEMENTADO (verificado 26/01/2026)
 - **Arquivo**: `app/recebimento/routes/validacao_nf_po_routes.py`
-- **Verificar**: Parâmetro de busca por CNPJ normaliza entrada?
-- **Se não**: Adicionar `normalizar_cnpj()` no filtro
+- **Verificação**: O método `listar_validacoes` no service já chama `self._limpar_cnpj(cnpj_fornecedor)` na linha 2073
+- **Evidência**: `validacao_nf_po_service.py:2073`: `cnpj_limpo = self._limpar_cnpj(cnpj_fornecedor)`
 
 ##### 5.1.2 Verificar rota de listagem de primeira compra
-- [ ] **Status**: PENDENTE
+- [x] **Status**: ✅ NÃO REQUER (sem filtro por CNPJ)
 - **Arquivo**: `app/recebimento/routes/validacao_fiscal_routes.py`
-- **Verificar**: Parâmetro de busca por CNPJ normaliza entrada?
+- **Verificação**: O endpoint `GET /primeira-compra` não tem parâmetro de busca por CNPJ, apenas `status`
+
+##### 5.1.3 Verificar rota de listagem de perfis fiscais (adicional)
+- [x] **Status**: ✅ IMPLEMENTADO (26/01/2026)
+- **Arquivo**: `app/recebimento/routes/validacao_fiscal_routes.py`
+- **Linha 288**: Corrigida busca por CNPJ para normalizar entrada
+- **Código implementado**:
+```python
+# FASE 5: Normalizar CNPJ antes de buscar (aceita formatado ou apenas dígitos)
+cnpj_limpo = normalizar_cnpj(cnpj)
+query = query.filter(PerfilFiscalProdutoFornecedor.cnpj_fornecedor.ilike(f'%{cnpj_limpo}%'))
+```
+- **Validação**: Sintaxe OK via `py_compile`
 
 ---
 
@@ -399,41 +421,39 @@ def revalidar_primeiras_compras_por_perfil(
 #### 7.1 Script para corrigir razao_empresa_compradora em validacao_nf_po_dfe
 
 ##### 7.1.1 Criar script Python
-- [ ] **Status**: PENDENTE
+- [x] **Status**: ✅ IMPLEMENTADO (26/01/2026)
 - **Arquivo**: `scripts/recebimento/001_corrigir_razao_empresa_validacao_nf_po.py`
 - **Funcionalidade**: Atualizar registros com cnpj preenchido mas razao vazia
+- **Uso**:
+  - Dry-run: `python scripts/recebimento/001_corrigir_razao_empresa_validacao_nf_po.py --dry-run`
+  - Execução: `python scripts/recebimento/001_corrigir_razao_empresa_validacao_nf_po.py`
 
 ##### 7.1.2 Criar script SQL para Render
-- [ ] **Status**: PENDENTE
+- [x] **Status**: ✅ IMPLEMENTADO (26/01/2026)
 - **Arquivo**: `scripts/recebimento/001_corrigir_razao_empresa_validacao_nf_po.sql`
-- **SQL**:
-```sql
--- CORREÇÃO: razao_empresa_compradora em validacao_nf_po_dfe
-UPDATE validacao_nf_po_dfe
-SET razao_empresa_compradora = CASE cnpj_empresa_compradora
-    WHEN '61724241000330' THEN 'NACOM GOYA - CD'
-    WHEN '61724241000178' THEN 'NACOM GOYA - FB'
-    WHEN '61724241000259' THEN 'NACOM GOYA - SC'
-    WHEN '18467441000163' THEN 'LA FAMIGLIA - LF'
-END
-WHERE razao_empresa_compradora IS NULL
-  AND cnpj_empresa_compradora IN ('61724241000330','61724241000178','61724241000259','18467441000163');
-```
+- **Contém**: Diagnóstico, preview, UPDATE, verificação e rollback
+- **Uso**: Conectar `psql $DATABASE_URL` e executar os passos na ordem
 
 #### 7.2 Script para corrigir dados em cadastro_primeira_compra
 
 ##### 7.2.1 Criar script Python
-- [ ] **Status**: PENDENTE
+- [x] **Status**: ✅ IMPLEMENTADO (26/01/2026)
 - **Arquivo**: `scripts/recebimento/002_corrigir_primeira_compra.py`
 - **Funcionalidade**:
-  1. Atualizar `razao_empresa_compradora` usando mapeamento CNPJ
-  2. Atualizar `cnpj_empresa_compradora` buscando do DFE no Odoo
-  3. Converter `cod_produto` de product_id para default_code (requer consulta Odoo)
+  1. Atualizar `cnpj_empresa_compradora` buscando do DFE no Odoo
+  2. Atualizar `razao_empresa_compradora` usando mapeamento CNPJ
+  3. Converter `cod_produto` de product_id para default_code (consulta Odoo em batch)
+- **Uso**:
+  - Dry-run: `python scripts/recebimento/002_corrigir_primeira_compra.py --dry-run`
+  - Execução: `python scripts/recebimento/002_corrigir_primeira_compra.py`
+  - Apenas CNPJ/razão: `python scripts/recebimento/002_corrigir_primeira_compra.py --skip-produto`
+  - Apenas cod_produto: `python scripts/recebimento/002_corrigir_primeira_compra.py --only-produto`
 
 ##### 7.2.2 Criar script SQL parcial para Render
-- [ ] **Status**: PENDENTE
+- [x] **Status**: ✅ IMPLEMENTADO (26/01/2026)
 - **Arquivo**: `scripts/recebimento/002_corrigir_primeira_compra.sql`
-- **NOTA**: Conversão de cod_produto requer mapeamento do Odoo, não pode ser feita apenas com SQL
+- **NOTA**: Correção COMPLETA requer script Python (consulta Odoo)
+- **Contém**: Diagnóstico, UPDATE parcial (apenas razão), instruções para usar Python
 
 ---
 
@@ -464,13 +484,14 @@ WHERE razao_empresa_compradora IS NULL
 
 | Arquivo | Fase | Linhas (VERIFICADAS) | Tipo de Mudança | Status |
 |---------|------|----------------------|-----------------|--------|
-| `app/recebimento/services/validacao_nf_po_service.py` | 1.1 | 48 (import), 1133, 1165, 1217, 1302, 1447 | Import + 5 métodos | ⏳ PENDENTE |
-| `app/recebimento/services/validacao_fiscal_service.py` | 1.2 | 256 (adicionar atualização dados_nf) | Propagar nome empresa | ⏳ PENDENTE |
-| `app/recebimento/services/validacao_fiscal_service.py` | 2.1 | 845-852 (assinatura), 855 (uso), 445-450, 490-495 (chamadas) | Fix cod_produto | ⏳ PENDENTE |
-| `app/recebimento/services/validacao_fiscal_service.py` | 3.1 | ~1405 (após commit) | Propagação 1a compra | ⏳ PENDENTE |
-| `app/recebimento/services/validacao_fiscal_service.py` | 4.1 | ~1416 (novo método) | Revalidar por perfil | ⏳ PENDENTE |
-| `app/recebimento/routes/validacao_nf_po_routes.py` | 5.1.1 | A verificar | Filtro CNPJ | 🔍 VERIFICAR |
-| `app/recebimento/routes/validacao_fiscal_routes.py` | 4.1.2, 5.1.2 | Após criar perfil | Chamar revalidação + Filtro CNPJ | 🔍 VERIFICAR |
+| `app/recebimento/services/validacao_nf_po_service.py` | 1.1 | 48 (import), 1133, 1165, 1217, 1302, 1447 | Import + 5 métodos | ✅ IMPLEMENTADO |
+| `app/recebimento/services/validacao_fiscal_service.py` | 1.2 | 256-259 (atualização dados_nf) | Propagar nome empresa | ✅ IMPLEMENTADO |
+| `app/recebimento/services/validacao_fiscal_service.py` | 2.1 | 853-881 (assinatura), 875-881 (uso), 449-457, 496-504 (chamadas) | Fix cod_produto | ✅ IMPLEMENTADO |
+| `app/recebimento/services/validacao_fiscal_service.py` | 3.1 | 1437-1479 (propagação) | Propagação 1a compra | ✅ IMPLEMENTADO |
+| `app/recebimento/services/validacao_fiscal_service.py` | 4.1 | 1481-1527 (novo método) | Revalidar por perfil | ✅ IMPLEMENTADO |
+| `app/recebimento/routes/validacao_fiscal_routes.py` | 4.1.2 | 460, 624-625, 651-652, 659-685 | Chamar revalidação na importação | ✅ IMPLEMENTADO |
+| `app/recebimento/routes/validacao_nf_po_routes.py` | 5.1.1 | N/A | Filtro CNPJ | ✅ JÁ NORMALIZA (service:2073) |
+| `app/recebimento/routes/validacao_fiscal_routes.py` | 5.1.3 | 288 | Filtro CNPJ perfis-fiscais | ✅ IMPLEMENTADO |
 
 ### Tarefas JÁ IMPLEMENTADAS (não requerem mudança):
 
@@ -480,14 +501,14 @@ WHERE razao_empresa_compradora IS NULL
 | `app/recebimento/services/validacao_fiscal_service.py` | `_buscar_dfe()` busca `nfe_infnfe_dest_cnpj` | Linha 353: já busca |
 | `app/recebimento/services/validacao_fiscal_service.py` | Fallback `nome_empresa` | Linha 256: já resolve (mas não atualiza dados_nf) |
 
-## ARQUIVOS A CRIAR
+## ARQUIVOS CRIADOS
 
-| Arquivo | Fase | Descrição |
-|---------|------|-----------|
-| `scripts/recebimento/001_corrigir_razao_empresa_validacao_nf_po.py` | 7.1.1 | Script Python migração |
-| `scripts/recebimento/001_corrigir_razao_empresa_validacao_nf_po.sql` | 7.1.2 | Script SQL Render |
-| `scripts/recebimento/002_corrigir_primeira_compra.py` | 7.2.1 | Script Python migração |
-| `scripts/recebimento/002_corrigir_primeira_compra.sql` | 7.2.2 | Script SQL parcial |
+| Arquivo | Fase | Descrição | Status |
+|---------|------|-----------|--------|
+| `scripts/recebimento/001_corrigir_razao_empresa_validacao_nf_po.py` | 7.1.1 | Script Python migração | ✅ CRIADO |
+| `scripts/recebimento/001_corrigir_razao_empresa_validacao_nf_po.sql` | 7.1.2 | Script SQL Render | ✅ CRIADO |
+| `scripts/recebimento/002_corrigir_primeira_compra.py` | 7.2.1 | Script Python migração | ✅ CRIADO |
+| `scripts/recebimento/002_corrigir_primeira_compra.sql` | 7.2.2 | Script SQL parcial | ✅ CRIADO |
 
 ---
 
@@ -527,13 +548,13 @@ WHERE razao_empresa_compradora IS NULL
 | Fase | Tarefas | Concluídas | Pendentes | Status |
 |------|---------|------------|-----------|--------|
 | 1. Razão Empresa | 6 | 6 | 0 | ✅ **IMPLEMENTADO** |
-| 2. cod_produto | 4 | 0 | 4 | 🟡 PRONTO P/ IMPL |
-| 3. Propagação | 1 | 0 | 1 | 🟡 PRONTO P/ IMPL |
-| 4. Revalidação | 2 | 0 | 2 | 🟡 PRONTO P/ IMPL |
-| 5. Busca CNPJ | 2 | 0 | 2 | 🟡 PRONTO P/ IMPL |
+| 2. cod_produto | 4 | 4 | 0 | ✅ **IMPLEMENTADO** |
+| 3. Propagação | 1 | 1 | 0 | ✅ **IMPLEMENTADO** |
+| 4. Revalidação | 2 | 2 | 0 | ✅ **IMPLEMENTADO** |
+| 5. Busca CNPJ | 3 | 3 | 0 | ✅ **IMPLEMENTADO** |
 | 6. Finalizado Odoo | 2 | 0 | 0 | ✅ NÃO REQUER MUDANÇA |
-| 7. Scripts | 4 | 0 | 4 | 🟡 PRONTO P/ IMPL |
-| **TOTAL** | **21** | **6** | **13** | 🟢 **EM IMPLEMENTAÇÃO - v1.3.0** |
+| 7. Scripts | 4 | 4 | 0 | ✅ **IMPLEMENTADO** |
+| **TOTAL** | **22** | **22** | **0** | 🟢 **CONCLUÍDO - v1.8.0** |
 
 ### Notas da Implementação v1.3.0 (26/01/2026):
 
@@ -546,10 +567,154 @@ WHERE razao_empresa_compradora IS NULL
      - `app/recebimento/services/validacao_fiscal_service.py`
    - **Validação**: Sintaxe OK via `py_compile`
 
-2. **Próximo passo**: Implementar Fase 2 (cod_produto: product_id → default_code)
+2. **Próximo passo**: ~~Implementar Fase 2 (cod_produto: product_id → default_code)~~ → **CONCLUÍDO**
+
+### Notas da Implementação v1.4.0 (26/01/2026):
+
+1. **Fase 2 (cod_produto)**: ✅ **IMPLEMENTADO**
+   - Método `_criar_registro_primeira_compra()` agora aceita `cod_produto` e `nome_produto_interno` como parâmetros opcionais
+   - Se `cod_produto` não for passado, mantém fallback para comportamento legado (`product_id`)
+   - Ambas as chamadas em `_processar_sem_perfil()` atualizadas para passar os novos parâmetros
+   - **Arquivos modificados**:
+     - `app/recebimento/services/validacao_fiscal_service.py` (linhas 449-457, 496-504, 853-881)
+   - **Validação**: Sintaxe OK via `py_compile`
+
+### Notas da Implementação v1.5.0 (26/01/2026):
+
+1. **Fase 3 (Propagação de validação)**: ✅ **IMPLEMENTADO**
+   - Lógica de propagação adicionada ao método `validar_primeira_compra()`
+   - Após criar perfil e validar o cadastro original, busca outros cadastros pendentes com mesma combinação
+   - Combinação: `cnpj_empresa_compradora` + `cnpj_fornecedor` + `cod_produto`
+   - Registros propagados são marcados com `validado_por = 'PROPAGADO_DE_{id_original}'`
+   - Retorno do método agora inclui `propagados` (contagem) e `ids_propagados` (lista)
+   - **Arquivos modificados**:
+     - `app/recebimento/services/validacao_fiscal_service.py` (linhas 1437-1479)
+   - **Validação**: Sintaxe OK via `py_compile`
+
+2. **Próximo passo**: ~~Implementar Fase 4 (Revalidação ao criar perfil)~~ → **CONCLUÍDO**
+
+### Notas da Implementação v1.6.0 (26/01/2026):
+
+1. **Fase 4 (Revalidação ao criar perfil)**: ✅ **IMPLEMENTADO**
+   - Criado método `revalidar_primeiras_compras_por_perfil()` em `validacao_fiscal_service.py` (linhas 1481-1527)
+   - O método é chamado para cada perfil processado na importação Excel
+   - Endpoint `POST /api/recebimento/perfil-fiscal/importar-excel` agora:
+     - Coleta perfis criados/atualizados durante o processamento
+     - Após commit, chama revalidação para cada perfil
+     - Retorna `revalidacoes` (count) e `ids_revalidados` (lista)
+   - **Arquivos modificados**:
+     - `app/recebimento/services/validacao_fiscal_service.py`
+     - `app/recebimento/routes/validacao_fiscal_routes.py`
+   - **Validação**: Sintaxe OK via `py_compile`
+
+2. **Próximo passo**: ~~Implementar Fase 5 (Busca CNPJ)~~ → **CONCLUÍDO**
+
+### Notas da Implementação v1.7.0 (26/01/2026):
+
+1. **Fase 5 (Busca CNPJ)**: ✅ **IMPLEMENTADO**
+   - Verificado endpoint `GET /validacoes-nf-po`: JÁ normaliza via `service._limpar_cnpj()` (linha 2073)
+   - Verificado endpoint `GET /primeira-compra`: NÃO TEM filtro por CNPJ (apenas status)
+   - Verificado endpoint `GET /buscar-pos-fornecedor`: JÁ normaliza (linha 1235)
+   - Corrigido endpoint `GET /perfis-fiscais`: Adicionada normalização via `normalizar_cnpj()` (linha 288)
+   - **Arquivos modificados**:
+     - `app/recebimento/routes/validacao_fiscal_routes.py` (linha 288)
+   - **Validação**: Sintaxe OK via `py_compile`
+
+2. **Próximo passo**: ~~Implementar Fase 7 (Scripts de migração)~~ → **CONCLUÍDO**
+
+### Notas da Implementação v1.8.0 (26/01/2026):
+
+1. **Fase 7 (Scripts de Migração)**: ✅ **IMPLEMENTADO**
+   - Criado diretório `scripts/recebimento/`
+   - **Script 001**: `001_corrigir_razao_empresa_validacao_nf_po.py`
+     - Corrige `razao_empresa_compradora` em `validacao_nf_po_dfe`
+     - Usa mapeamento `EMPRESAS_CNPJ_NOME` de `cnpj_utils.py`
+     - Suporta `--dry-run` para simulação
+   - **Script 001 SQL**: `001_corrigir_razao_empresa_validacao_nf_po.sql`
+     - UPDATE direto para uso no Render Shell
+     - Inclui diagnóstico, preview, verificação e rollback
+   - **Script 002**: `002_corrigir_primeira_compra.py`
+     - Busca `cnpj_empresa_compradora` do DFE no Odoo em batch
+     - Preenche `razao_empresa_compradora` via mapeamento
+     - Converte `cod_produto` de product_id para default_code via Odoo
+     - Suporta `--dry-run`, `--skip-produto`, `--only-produto`
+   - **Script 002 SQL**: `002_corrigir_primeira_compra.sql`
+     - Correção parcial (apenas razão se CNPJ já preenchido)
+     - Nota que correção COMPLETA requer script Python
+   - **Arquivos criados**:
+     - `scripts/recebimento/001_corrigir_razao_empresa_validacao_nf_po.py`
+     - `scripts/recebimento/001_corrigir_razao_empresa_validacao_nf_po.sql`
+     - `scripts/recebimento/002_corrigir_primeira_compra.py`
+     - `scripts/recebimento/002_corrigir_primeira_compra.sql`
+   - **Validação**: Sintaxe OK via `py_compile`
+
+2. **IMPLEMENTAÇÃO COMPLETA** - Todas as 7 fases concluídas
 
 ### Notas da Verificação v1.2.0:
 
 1. **Fase 6 (Finalizado Odoo)**: Confirmado que a deleção de matches/divergências é **COMPORTAMENTO INTENCIONAL** (linhas 179-185 de `validacao_nf_po_service.py`). Quando DFE já tem PO vinculado no Odoo, os matches locais são limpos porque a validação não é mais necessária. **NÃO é bug, é design.**
 
 2. **Todas as outras fases**: Bugs confirmados via grep/read. Plano detalhado pronto para execução.
+
+---
+
+## ✅ VERIFICAÇÃO FINAL DA IMPLEMENTAÇÃO (v1.9.0 - 26/01/2026)
+
+### Verificação de Sintaxe
+| Arquivo | Status |
+|---------|--------|
+| `app/recebimento/services/validacao_fiscal_service.py` | ✅ OK via `py_compile` |
+| `app/recebimento/services/validacao_nf_po_service.py` | ✅ OK via `py_compile` |
+| `app/recebimento/routes/validacao_fiscal_routes.py` | ✅ OK via `py_compile` |
+| `scripts/recebimento/001_corrigir_razao_empresa_validacao_nf_po.py` | ✅ OK via `py_compile` |
+| `scripts/recebimento/002_corrigir_primeira_compra.py` | ✅ OK via `py_compile` |
+
+### Verificação de Imports
+| Verificação | Status |
+|-------------|--------|
+| Flask app cria contexto | ✅ OK |
+| `ValidacaoFiscalService` importa | ✅ OK |
+| `ValidacaoNfPoService` importa | ✅ OK |
+| Método `revalidar_primeiras_compras_por_perfil` existe | ✅ OK |
+| `obter_nome_empresa` importado em `validacao_nf_po_service` | ✅ OK |
+
+### Verificação de Correções de Campo
+| Correção | Verificação | Status |
+|----------|-------------|--------|
+| `nfe_infnfe_dest_xnome` removido (5 ocorrências) | grep retorna apenas comentários | ✅ OK |
+| `obter_nome_empresa()` usado em vez de campo inexistente | Linhas 1135, 1168, 1221, 1307, 1453 | ✅ OK |
+| `dados_nf['razao_empresa_compradora']` atualizado | Linha 260 | ✅ OK |
+| `cod_produto` recebe parâmetro ao invés de recalcular | Linhas 455, 502, 877-878 | ✅ OK |
+
+### Scripts de Migração
+| Script | Teste | Status |
+|--------|-------|--------|
+| `001_corrigir_razao_empresa_validacao_nf_po.py` | `--help` funciona | ✅ OK |
+| `002_corrigir_primeira_compra.py` | `--help` funciona | ✅ OK |
+
+### Status Final
+- **Todas as 7 fases implementadas e verificadas**
+- **Código compila e importa sem erros**
+- **Scripts de migração prontos para execução**
+- **Próximo passo**: Executar scripts de migração em produção para corrigir dados existentes
+
+---
+
+## 📋 PRÓXIMOS PASSOS PARA DEPLOY
+
+1. **Fazer deploy do código** (via git push/Render)
+2. **Executar script 001** no Render Shell:
+   ```bash
+   python scripts/recebimento/001_corrigir_razao_empresa_validacao_nf_po.py --dry-run
+   python scripts/recebimento/001_corrigir_razao_empresa_validacao_nf_po.py
+   ```
+3. **Executar script 002** no Render Shell:
+   ```bash
+   python scripts/recebimento/002_corrigir_primeira_compra.py --dry-run
+   python scripts/recebimento/002_corrigir_primeira_compra.py
+   ```
+4. **Testar manualmente**:
+   - Acessar tela de Primeira Compra e verificar campo EMPRESA
+   - Acessar tela de Validações NF x PO e verificar CNPJ/Razão
+   - Testar busca por CNPJ (formatado e sem formatação)
+   - Validar uma combinação e verificar propagação para outras NFs
