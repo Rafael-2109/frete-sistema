@@ -39,6 +39,7 @@ from app.recebimento.models import (
     ValidacaoFiscalDfe
 )
 from app.odoo.utils.connection import get_odoo_connection
+from app.utils.cnpj_utils import normalizar_cnpj, obter_nome_empresa
 
 logger = logging.getLogger(__name__)
 
@@ -193,9 +194,7 @@ class ValidacaoFiscalService:
             razao = dfe.get('nfe_infnfe_emit_xnome', '')
 
             # 3.0.1. Extrair empresa compradora (destinatario da NF)
-            cnpj_empresa_compradora = dfe.get('nfe_infnfe_dest_cnpj', '')
-            if cnpj_empresa_compradora:
-                cnpj_empresa_compradora = ''.join(c for c in cnpj_empresa_compradora if c.isdigit())
+            cnpj_empresa_compradora = normalizar_cnpj(dfe.get('nfe_infnfe_dest_cnpj', ''))
             razao_empresa_compradora = dfe.get('nfe_infnfe_dest_xnome', '')
 
             # 3.1. Extrair dados da NF
@@ -253,14 +252,8 @@ class ValidacaoFiscalService:
                         'name': p.get('name', '')
                     }
 
-            # 3.4. Resolver nome da empresa compradora
-            EMPRESAS_CNPJ_NOME = {
-                '61724241000330': 'NACOM GOYA - CD',
-                '61724241000178': 'NACOM GOYA - FB',
-                '61724241000259': 'NACOM GOYA - SC',
-                '18467441000163': 'LA FAMIGLIA - LF',
-            }
-            nome_empresa = EMPRESAS_CNPJ_NOME.get(cnpj_empresa_compradora, razao_empresa_compradora)
+            # 3.4. Resolver nome da empresa compradora (usa mapeamento centralizado)
+            nome_empresa = obter_nome_empresa(cnpj_empresa_compradora) or razao_empresa_compradora
 
             # 4. Validar cada linha
             for linha in linhas:
@@ -406,8 +399,8 @@ class ValidacaoFiscalService:
     def _extrair_cnpj(self, dfe: Dict) -> str:
         """Extrai CNPJ do fornecedor do DFE"""
         cnpj = dfe.get('nfe_infnfe_emit_cnpj', '')
-        # Limpar formatacao
-        return ''.join(c for c in cnpj if c.isdigit())
+        # Limpar formatacao usando funcao centralizada
+        return normalizar_cnpj(cnpj)
 
     # =========================================================================
     # BUSCA HISTORICA NO ODOO
@@ -807,6 +800,10 @@ class ValidacaoFiscalService:
         Returns:
             PerfilFiscalProdutoFornecedor criado
         """
+        # Garantir que nome_empresa seja preenchido pelo mapeamento se não vier
+        if not nome_empresa and cnpj_empresa_compradora:
+            nome_empresa = obter_nome_empresa(cnpj_empresa_compradora)
+
         perfil = PerfilFiscalProdutoFornecedor(
             cnpj_empresa_compradora=cnpj_empresa_compradora,
             cod_produto=cod_produto,
@@ -1365,12 +1362,17 @@ class ValidacaoFiscalService:
             return {'sucesso': False, 'mensagem': f'Cadastro ja processado: {cadastro.status}'}
 
         # Criar perfil fiscal com TODOS os campos disponíveis
+        # Garantir que nome_empresa seja preenchido pelo mapeamento se não vier
+        nome_empresa = cadastro.razao_empresa_compradora
+        if not nome_empresa and cadastro.cnpj_empresa_compradora:
+            nome_empresa = obter_nome_empresa(cadastro.cnpj_empresa_compradora)
+
         perfil = PerfilFiscalProdutoFornecedor(
             cod_produto=cadastro.cod_produto,
             cnpj_fornecedor=cadastro.cnpj_fornecedor,
             cnpj_empresa_compradora=cadastro.cnpj_empresa_compradora,
             # Nomes para exibição
-            nome_empresa_compradora=cadastro.razao_empresa_compradora,
+            nome_empresa_compradora=nome_empresa,
             razao_fornecedor=cadastro.razao_fornecedor,
             nome_produto=cadastro.nome_produto,
             # Dados fiscais completos

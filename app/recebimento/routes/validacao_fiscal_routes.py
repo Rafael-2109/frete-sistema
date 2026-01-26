@@ -22,6 +22,7 @@ from flask_login import login_required, current_user
 from app.recebimento.models import DivergenciaFiscal, CadastroPrimeiraCompra, PerfilFiscalProdutoFornecedor
 from app.recebimento.services.validacao_fiscal_service import ValidacaoFiscalService
 from app.odoo.utils.connection import get_odoo_connection
+from app.utils.cnpj_utils import normalizar_cnpj, formatar_cnpj, obter_nome_empresa, EMPRESAS_CNPJ_NOME
 
 validacao_fiscal_bp = Blueprint('validacao_fiscal', __name__, url_prefix='/api/recebimento')
 
@@ -401,19 +402,14 @@ def importar_perfil_fiscal_excel():
         # 4.1. Buscar nomes em batch (empresa, fornecedor, produto) via Odoo
         from app.odoo.services.odoo_client import OdooClient
 
-        EMPRESAS_CNPJ_NOME = {
-            '61724241000330': 'NACOM GOYA - CD',
-            '61724241000178': 'NACOM GOYA - FB',
-            '61724241000259': 'NACOM GOYA - SC',
-            '18467441000163': 'LA FAMIGLIA - LF',
-        }
+        # EMPRESAS_CNPJ_NOME importado de app.utils.cnpj_utils
 
         # Coletar CNPJs e codigos unicos para busca em batch
         cnpjs_fornecedores_unicos = set()
         cod_produtos_unicos = set()
         for _, row in df.iterrows():
             cnpj_raw = str(row.get('cnpj_fornecedor', '')).strip()
-            cnpj_limpo = ''.join(c for c in cnpj_raw if c.isdigit())
+            cnpj_limpo = normalizar_cnpj(cnpj_raw)
             if len(cnpj_limpo) == 14:
                 cnpjs_fornecedores_unicos.add(cnpj_limpo)
             cod_prod = str(row.get('cod_produto', '')).strip()
@@ -430,7 +426,7 @@ def importar_perfil_fiscal_excel():
             if cnpjs_fornecedores_unicos:
                 for cnpj_forn in cnpjs_fornecedores_unicos:
                     # Formatar CNPJ para busca no Odoo (XX.XXX.XXX/XXXX-XX)
-                    cnpj_fmt = f"{cnpj_forn[:2]}.{cnpj_forn[2:5]}.{cnpj_forn[5:8]}/{cnpj_forn[8:12]}-{cnpj_forn[12:14]}"
+                    cnpj_fmt = formatar_cnpj(cnpj_forn)
                     partners = odoo.search_read(
                         'res.partner',
                         [['l10n_br_cnpj', '=', cnpj_fmt]],
@@ -510,8 +506,8 @@ def importar_perfil_fiscal_excel():
                             cnpj_empresa = cnpj_val
                             break
                 else:
-                    # Tentar tratar como CNPJ
-                    cnpj_empresa = ''.join(c for c in empresa_compradora_raw if c.isdigit())
+                    # Tentar tratar como CNPJ (usa função centralizada)
+                    cnpj_empresa = normalizar_cnpj(empresa_compradora_raw)
 
                     # Verificar se Excel converteu para notacao cientifica (ex: 6.17E+13)
                     if 'E' in empresa_compradora_raw.upper() and any(c.isdigit() for c in empresa_compradora_raw):
@@ -529,7 +525,7 @@ def importar_perfil_fiscal_excel():
                         continue
 
                 # 5.3 Limpar CNPJ fornecedor (aceita formatado: 52.502.978/0001-55 ou apenas digitos)
-                cnpj = ''.join(c for c in cnpj_raw if c.isdigit())
+                cnpj = normalizar_cnpj(cnpj_raw)
 
                 # Verificar se Excel converteu para notacao cientifica (ex: 5.25E+13)
                 if 'E' in cnpj_raw.upper() or 'e' in cnpj_raw:
@@ -1097,13 +1093,7 @@ def editar_perfil_fiscal(perfil_id):
             except (InvalidOperation, ValueError):
                 raise ValueError(f"Valor inválido para {campo}: {valor}")
 
-        # Mapeamento CNPJ → Nome empresa (hardcoded)
-        EMPRESAS_CNPJ_NOME = {
-            '61724241000330': 'NACOM GOYA - CD',
-            '61724241000178': 'NACOM GOYA - FB',
-            '61724241000259': 'NACOM GOYA - SC',
-            '18467441000163': 'LA FAMIGLIA - LF',
-        }
+        # EMPRESAS_CNPJ_NOME importado de app.utils.cnpj_utils
 
         # Atualizar campos
         campos_alterados = []
@@ -1112,8 +1102,8 @@ def editar_perfil_fiscal(perfil_id):
         if 'cnpj_empresa_compradora' in dados:
             cnpj_empresa = dados['cnpj_empresa_compradora']
             if cnpj_empresa:
-                # Limpar CNPJ (remover formatação)
-                cnpj_limpo = ''.join(c for c in cnpj_empresa if c.isdigit())
+                # Limpar CNPJ usando função centralizada
+                cnpj_limpo = normalizar_cnpj(cnpj_empresa)
                 if len(cnpj_limpo) != 14:
                     return jsonify({
                         'sucesso': False,
@@ -1122,9 +1112,10 @@ def editar_perfil_fiscal(perfil_id):
                 perfil.cnpj_empresa_compradora = cnpj_limpo
                 campos_alterados.append('cnpj_empresa_compradora')
 
-                # Preencher nome se for CNPJ conhecido
-                if cnpj_limpo in EMPRESAS_CNPJ_NOME:
-                    perfil.nome_empresa_compradora = EMPRESAS_CNPJ_NOME[cnpj_limpo]
+                # Preencher nome se for CNPJ conhecido (usa função centralizada)
+                nome_empresa = obter_nome_empresa(cnpj_limpo)
+                if nome_empresa:
+                    perfil.nome_empresa_compradora = nome_empresa
                     campos_alterados.append('nome_empresa_compradora')
 
         # NCM

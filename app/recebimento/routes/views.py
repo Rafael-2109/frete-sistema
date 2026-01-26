@@ -65,6 +65,9 @@ def _serializar_item_primeira_compra(item):
         'nome_produto': item.nome_produto,
         'cnpj_fornecedor': item.cnpj_fornecedor,
         'razao_fornecedor': item.razao_fornecedor,
+        # Empresa compradora (destinatário da NF)
+        'cnpj_empresa_compradora': item.cnpj_empresa_compradora,
+        'razao_empresa_compradora': item.razao_empresa_compradora,
         # Localizacao do fornecedor
         'uf_fornecedor': item.uf_fornecedor,
         'cidade_fornecedor': item.cidade_fornecedor,

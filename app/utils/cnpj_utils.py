@@ -65,3 +65,42 @@ def formatar_cnpj(cnpj):
     
     # Aplica máscara XX.XXX.XXX/XXXX-XX
     return f"{cnpj_limpo[:2]}.{cnpj_limpo[2:5]}.{cnpj_limpo[5:8]}/{cnpj_limpo[8:12]}-{cnpj_limpo[12:14]}"
+
+
+# =============================================================================
+# MAPEAMENTO DE EMPRESAS DO GRUPO
+# =============================================================================
+
+# CNPJs das empresas do grupo mapeados para seus nomes amigáveis
+# Fonte de verdade centralizada - NÃO duplicar em outros arquivos
+EMPRESAS_CNPJ_NOME = {
+    '61724241000330': 'NACOM GOYA - CD',
+    '61724241000178': 'NACOM GOYA - FB',
+    '61724241000259': 'NACOM GOYA - SC',
+    '18467441000163': 'LA FAMIGLIA - LF',
+}
+
+
+def obter_nome_empresa(cnpj: str) -> str:
+    """
+    Retorna o nome da empresa pelo CNPJ normalizado.
+
+    Usa o mapeamento centralizado EMPRESAS_CNPJ_NOME para obter
+    o nome amigável da empresa compradora.
+
+    Args:
+        cnpj: CNPJ formatado (XX.XXX.XXX/XXXX-XX) ou limpo (14 dígitos)
+
+    Returns:
+        Nome da empresa (ex: 'NACOM GOYA - CD') ou string vazia se desconhecida
+
+    Exemplos:
+        '61.724.241/0003-30' -> 'NACOM GOYA - CD'
+        '61724241000330' -> 'NACOM GOYA - CD'
+        '12345678000199' -> ''  # CNPJ desconhecido
+    """
+    if not cnpj:
+        return ''
+
+    cnpj_limpo = normalizar_cnpj(cnpj)
+    return EMPRESAS_CNPJ_NOME.get(cnpj_limpo, '')
