@@ -4,6 +4,41 @@
 
 ---
 
+## MODELOS INEXISTENTES (NAO USAR)
+
+**ATENCAO**: Os seguintes modelos NAO EXISTEM nesta instalacao do Odoo. Sao comuns em outras implementacoes de localizacao brasileira mas NAO estao disponiveis aqui.
+
+| Modelo INEXISTENTE | Modelo CORRETO | Observacao |
+|--------------------|----------------|------------|
+| `l10n_br_fiscal.document` | `l10n_br_ciel_it_account.dfe` | DFe/NFe |
+| `l10n_br_fiscal.document.line` | `l10n_br_ciel_it_account.dfe.line` | Linhas do DFe |
+| `l10n_br_fiscal.cfop` | Campo `det_prod_cfop` (char) | CFOP eh campo texto |
+
+### Mapeamento de Campos (l10n_br_fiscal.document → l10n_br_ciel_it_account.dfe)
+
+| Campo ERRADO | Campo CORRETO |
+|--------------|---------------|
+| `document_type_id.code` | `nfe_infnfe_ide_finnfe` |
+| `state_edoc` | `l10n_br_status` |
+| `date` | `nfe_infnfe_ide_dhemi` |
+| `number` | `nfe_infnfe_ide_nnf` |
+| `document_serie` | `nfe_infnfe_ide_serie` |
+| `document_key` | `protnfe_infnfe_chnfe` |
+| `partner_cnpj_cpf` | `nfe_infnfe_emit_cnpj` |
+| `fiscal_additional_data` | `nfe_infnfe_infadic_infcpl` |
+| `amount_total` | `nfe_infnfe_total_icmstot_vnf` |
+
+### Mapeamento de Campos (l10n_br_fiscal.document.line → l10n_br_ciel_it_account.dfe.line)
+
+| Campo ERRADO | Campo CORRETO |
+|--------------|---------------|
+| `document_id` | `dfe_id` |
+| `cfop_id` (many2one) | `det_prod_cfop` (char) |
+| `quantity` | `det_prod_qcom` |
+| `product_id` | `product_id` (mesmo) |
+
+---
+
 ## Documentos Fiscais Eletronicos (DFe)
 
 ### l10n_br_ciel_it_account.dfe

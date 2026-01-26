@@ -127,24 +127,23 @@ class MatchService:
         resultado = []
 
         try:
-            # Buscar DFEs de entrada (finnfe=4) no período
-            # Campos disponíveis no modelo l10n_br_fiscal.document do Odoo
+            # Buscar DFEs de entrada no período
+            # Modelo correto: l10n_br_ciel_it_account.dfe
             domain = [
-                ('document_type_id.code', 'in', ['55']),  # NF-e
-                ('state_edoc', '=', 'autorizada'),
-                ('date', '>=', data_de),
-                ('date', '<=', data_ate),
+                ('l10n_br_status', 'in', ['03', '04', '05', '06']),  # Ciencia, PO, Rateio, Concluido
+                ('nfe_infnfe_ide_dhemi', '>=', data_de),
+                ('nfe_infnfe_ide_dhemi', '<=', data_ate),
             ]
 
             campos = [
-                'id', 'number', 'document_serie', 'document_key',
-                'date', 'partner_id', 'partner_cnpj_cpf',
-                'fiscal_additional_data', 'amount_total'
+                'id', 'nfe_infnfe_ide_nnf', 'nfe_infnfe_ide_serie', 'protnfe_infnfe_chnfe',
+                'nfe_infnfe_ide_dhemi', 'partner_id', 'nfe_infnfe_emit_cnpj',
+                'nfe_infnfe_infadic_infcpl', 'nfe_infnfe_total_icmstot_vnf'
             ]
 
             # Buscar documentos fiscais
             documentos = self.odoo.search_read(
-                'l10n_br_fiscal.document', domain, campos
+                'l10n_br_ciel_it_account.dfe', domain, campos
             )
 
             logger.info(f"   📄 Encontrados {len(documentos)} documentos fiscais")
@@ -156,22 +155,22 @@ class MatchService:
                     if not self._eh_nf_devolucao_pallet(doc['id']):
                         continue
 
-                    # Limpar CNPJ
+                    # Limpar CNPJ (campo correto: nfe_infnfe_emit_cnpj)
                     cnpj_emitente = self._limpar_cnpj(
-                        doc.get('partner_cnpj_cpf', '')
+                        doc.get('nfe_infnfe_emit_cnpj', '')
                     )
 
                     # Ignorar intercompany
                     if self._eh_intercompany(cnpj_emitente):
                         continue
 
-                    # Verificar se já processada
+                    # Verificar se já processada (campo correto: protnfe_infnfe_chnfe)
                     if apenas_nao_processadas:
-                        if self._nf_ja_processada(doc.get('document_key', '')):
+                        if self._nf_ja_processada(doc.get('protnfe_infnfe_chnfe', '')):
                             continue
 
-                    # Extrair informações
-                    info_complementar = doc.get('fiscal_additional_data', '') or ''
+                    # Extrair informações (campo correto: nfe_infnfe_infadic_infcpl)
+                    info_complementar = doc.get('nfe_infnfe_infadic_infcpl', '') or ''
                     nf_remessa_ref = self._extrair_nf_referencia(info_complementar)
                     tipo_sugestao = 'RETORNO' if nf_remessa_ref else 'DEVOLUCAO'
 
@@ -180,10 +179,10 @@ class MatchService:
 
                     nf_data = {
                         'odoo_dfe_id': doc['id'],
-                        'numero_nf': str(doc.get('number', '')),
-                        'serie': str(doc.get('document_serie', '')),
-                        'chave_nfe': doc.get('document_key', ''),
-                        'data_emissao': doc.get('date'),
+                        'numero_nf': str(doc.get('nfe_infnfe_ide_nnf', '')),
+                        'serie': str(doc.get('nfe_infnfe_ide_serie', '')),
+                        'chave_nfe': doc.get('protnfe_infnfe_chnfe', ''),
+                        'data_emissao': doc.get('nfe_infnfe_ide_dhemi'),
                         'cnpj_emitente': cnpj_emitente,
                         'nome_emitente': (
                             doc.get('partner_id', [None, ''])[1]
@@ -191,7 +190,7 @@ class MatchService:
                             else ''
                         ),
                         'quantidade': qtd_pallets,
-                        'valor_total': Decimal(str(doc.get('amount_total', 0))),
+                        'valor_total': Decimal(str(doc.get('nfe_infnfe_total_icmstot_vnf', 0))),
                         'info_complementar': info_complementar,
                         'tipo_sugestao': tipo_sugestao,
                         'nf_remessa_referenciada': nf_remessa_ref
@@ -218,7 +217,7 @@ class MatchService:
             logger.error(f"Erro ao buscar NFs de devolução de pallet: {e}")
             raise
 
-    def _eh_nf_devolucao_pallet(self, document_id: int) -> bool:
+    def _eh_nf_devolucao_pallet(self, dfe_id: int) -> bool:
         """
         Verifica se o documento fiscal é uma NF de devolução de pallet.
 
@@ -227,26 +226,24 @@ class MatchService:
         - OU tem linha com produto código 208000012
 
         Args:
-            document_id: ID do documento fiscal no Odoo
+            dfe_id: ID do DFE no Odoo (l10n_br_ciel_it_account.dfe)
 
         Returns:
             bool: True se é NF de devolução de pallet
         """
         try:
-            # Buscar linhas do documento
+            # Buscar linhas do DFE (modelo correto: l10n_br_ciel_it_account.dfe.line)
             linhas = self.odoo.search_read(
-                'l10n_br_fiscal.document.line',
-                [('document_id', '=', document_id)],
-                ['cfop_id', 'product_id', 'quantity']
+                'l10n_br_ciel_it_account.dfe.line',
+                [('dfe_id', '=', dfe_id)],
+                ['det_prod_cfop', 'product_id', 'det_prod_qcom']
             )
 
             for linha in linhas:
-                # Verificar CFOP
-                cfop_id = linha.get('cfop_id')
-                if cfop_id:
-                    cfop_code = self._obter_cfop_code(cfop_id[0] if isinstance(cfop_id, (list, tuple)) else cfop_id)
-                    if cfop_code in CFOPS_DEVOLUCAO_PALLET:
-                        return True
+                # Verificar CFOP (campo det_prod_cfop é char, não many2one)
+                cfop_code = linha.get('det_prod_cfop', '')
+                if cfop_code and cfop_code in CFOPS_DEVOLUCAO_PALLET:
+                    return True
 
                 # Verificar produto
                 product_id = linha.get('product_id')
@@ -258,22 +255,8 @@ class MatchService:
             return False
 
         except Exception as e:
-            logger.warning(f"Erro ao verificar se doc #{document_id} é pallet: {e}")
+            logger.warning(f"Erro ao verificar se DFE #{dfe_id} é pallet: {e}")
             return False
-
-    def _obter_cfop_code(self, cfop_id: int) -> str:
-        """Obtém o código do CFOP pelo ID."""
-        try:
-            cfop = self.odoo.search_read(
-                'l10n_br_fiscal.cfop',
-                [('id', '=', cfop_id)],
-                ['code']
-            )
-            if cfop:
-                return cfop[0].get('code', '')
-            return ''
-        except Exception:
-            return ''
 
     def _eh_produto_pallet(self, product_id: int) -> bool:
         """Verifica se o produto é pallet pelo código."""
@@ -289,13 +272,14 @@ class MatchService:
         except Exception:
             return False
 
-    def _obter_quantidade_pallets_linhas(self, document_id: int) -> int:
-        """Obtém a quantidade de pallets das linhas do documento."""
+    def _obter_quantidade_pallets_linhas(self, dfe_id: int) -> int:
+        """Obtém a quantidade de pallets das linhas do DFE."""
         try:
+            # Modelo correto: l10n_br_ciel_it_account.dfe.line
             linhas = self.odoo.search_read(
-                'l10n_br_fiscal.document.line',
-                [('document_id', '=', document_id)],
-                ['cfop_id', 'product_id', 'quantity']
+                'l10n_br_ciel_it_account.dfe.line',
+                [('dfe_id', '=', dfe_id)],
+                ['det_prod_cfop', 'product_id', 'det_prod_qcom']
             )
 
             total = 0
@@ -303,13 +287,10 @@ class MatchService:
                 # Verificar se é linha de pallet (por CFOP ou produto)
                 eh_pallet = False
 
-                cfop_id = linha.get('cfop_id')
-                if cfop_id:
-                    cfop_code = self._obter_cfop_code(
-                        cfop_id[0] if isinstance(cfop_id, (list, tuple)) else cfop_id
-                    )
-                    if cfop_code in CFOPS_DEVOLUCAO_PALLET:
-                        eh_pallet = True
+                # CFOP é campo char, não many2one
+                cfop_code = linha.get('det_prod_cfop', '')
+                if cfop_code and cfop_code in CFOPS_DEVOLUCAO_PALLET:
+                    eh_pallet = True
 
                 if not eh_pallet:
                     product_id = linha.get('product_id')
@@ -319,7 +300,8 @@ class MatchService:
                             eh_pallet = True
 
                 if eh_pallet:
-                    total += int(linha.get('quantity', 0))
+                    # Quantidade é det_prod_qcom (float)
+                    total += int(linha.get('det_prod_qcom', 0))
 
             return total
 

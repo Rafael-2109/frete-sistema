@@ -26,6 +26,37 @@ dfes = odoo.search_read('l10n_br_ciel_it_account.dfe',
 
 **Solucao**: O modelo correto eh `l10n_br_ciel_it_account.dfe`
 
+**IMPORTANTE**: Os modelos `l10n_br_fiscal.*` NAO EXISTEM nesta instalacao do Odoo.
+
+| Modelo ERRADO (inexistente) | Modelo CORRETO |
+|----------------------------|----------------|
+| `l10n_br_fiscal.document` | `l10n_br_ciel_it_account.dfe` |
+| `l10n_br_fiscal.document.line` | `l10n_br_ciel_it_account.dfe.line` |
+| `l10n_br_fiscal.cfop` | NAO EXISTE - usar campo char `det_prod_cfop` |
+
+### Mapeamento de Campos (l10n_br_fiscal.document → l10n_br_ciel_it_account.dfe)
+
+| Campo ERRADO | Campo CORRETO |
+|--------------|---------------|
+| `document_type_id.code` | `nfe_infnfe_ide_finnfe` (finalidade) |
+| `state_edoc` | `l10n_br_status` |
+| `date` | `nfe_infnfe_ide_dhemi` |
+| `number` | `nfe_infnfe_ide_nnf` |
+| `document_serie` | `nfe_infnfe_ide_serie` |
+| `document_key` | `protnfe_infnfe_chnfe` |
+| `partner_cnpj_cpf` | `nfe_infnfe_emit_cnpj` |
+| `fiscal_additional_data` | `nfe_infnfe_infadic_infcpl` |
+| `amount_total` | `nfe_infnfe_total_icmstot_vnf` |
+
+### Mapeamento de Campos (l10n_br_fiscal.document.line → l10n_br_ciel_it_account.dfe.line)
+
+| Campo ERRADO | Campo CORRETO |
+|--------------|---------------|
+| `document_id` | `dfe_id` |
+| `cfop_id` (many2one) | `det_prod_cfop` (char) |
+| `quantity` | `det_prod_qcom` |
+| `product_id` | `product_id` (mesmo nome) |
+
 ## Campos de impostos nao aparecem
 
 **Problema**: Campos como `vicms`, `vpis` nao retornam valores

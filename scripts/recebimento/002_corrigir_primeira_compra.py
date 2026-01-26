@@ -71,7 +71,7 @@ def buscar_dfes_odoo(dfe_ids: List[int], conn) -> Dict[int, Dict]:
 
     try:
         dfes = conn.search_read(
-            'l10n_br_fiscal.document',
+            'l10n_br_ciel_it_account.dfe',  # CORRIGIDO: modelo correto usado em todo o projeto
             [('id', 'in', dfe_ids)],
             campos
         )

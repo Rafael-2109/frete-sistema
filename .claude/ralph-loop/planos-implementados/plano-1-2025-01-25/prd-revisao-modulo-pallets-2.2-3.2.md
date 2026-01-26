@@ -152,7 +152,7 @@ app/pallet/
 |------|--------|------------|---------|
 | NF de Remessa | `sincronizar_remessas()` | `account.move` (l10n_br_tipo_pedido='vasilhame') | PalletNFRemessa + PalletCredito |
 | NF de Venda | `sincronizar_vendas_pallet()` | `account.move.line` (produto='208000012') | MovimentacaoEstoque |
-| NF Devolução/Retorno | `match_service.buscar_nfs_devolucao_pallet_dfe()` | `l10n_br_fiscal.document` | PalletNFSolucao |
+| NF Devolução/Retorno | `match_service.buscar_nfs_devolucao_pallet_dfe()` | `l10n_br_ciel_it_account.dfe` | PalletNFSolucao |
 
 ### 5.3 Fluxo de Importação de NF de Remessa
 
@@ -182,10 +182,10 @@ sync_odoo_service.sincronizar_remessas(data_de, data_ate)
 ```
 match_service.buscar_nfs_devolucao_pallet_dfe(data_de, data_ate)
     │
-    ├── Domain Odoo (l10n_br_fiscal.document):
-    │   - document_type_id.code = '55' (NF-e)
-    │   - state = 'autorizada'
-    │   - document_date >= data_de
+    ├── Domain Odoo (l10n_br_ciel_it_account.dfe):
+    │   - l10n_br_status IN ['03', '04', '05', '06']
+    │   - nfe_infnfe_ide_dhemi >= data_de
+    │   - nfe_infnfe_ide_dhemi <= data_ate
     │
     ├── Filtra por CFOP: ['5920', '6920', '1920', '2920']
     │   OU produto código = '208000012' (PALLET)
