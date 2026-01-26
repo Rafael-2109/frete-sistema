@@ -898,8 +898,14 @@ def create_app(config_name=None):
     app.register_blueprint(estoque_bp)
 
     # Modulo de Pallet (Gestao de NF de Pallet em Terceiros)
-    from app.pallet.routes import pallet_bp
+    # v1 (legacy) - será deprecado gradualmente
+    from app.pallet.routes_legacy import pallet_bp
     app.register_blueprint(pallet_bp)
+
+    # v2 (novo) - estrutura de dois domínios
+    from app.pallet.routes import register_blueprints as register_pallet_v2
+    register_pallet_v2(app)
+    app.logger.info("✅ Módulo Pallet v2 registrado com sucesso")
 
     app.register_blueprint(producao_bp)
     app.register_blueprint(relatorios_producao_bp)

@@ -1,8 +1,13 @@
 """
-Modelos do módulo de Pallet
+Modelo ValePallet - Modelo Legado
 
-Este módulo contém os modelos para controle de pallets em terceiros,
-incluindo vale pallets e rastreamento de responsabilidade.
+Este é o modelo original para controle de Vale Pallets.
+Será gradualmente substituído pelo sistema v2 (PalletDocumento + PalletCredito + PalletSolucao).
+
+NOTA: Manter para compatibilidade durante período de transição.
+Novos desenvolvimentos devem usar os modelos v2.
+
+Spec: .claude/ralph-loop/specs/prd-reestruturacao-modulo-pallets.md
 """
 from datetime import datetime
 from app import db
@@ -10,11 +15,16 @@ from app import db
 
 class ValePallet(db.Model):
     """
-    Modelo para controle de Vale Pallets.
+    Modelo para controle de Vale Pallets (LEGADO).
 
     O vale pallet é emitido pelo cliente quando ele não aceita NF de remessa de pallet.
     A transportadora deve retornar o vale para nossa empresa, que então deve
     resolver (coletar os pallets ou vendê-los).
+
+    DEPRECAÇÃO: Este modelo será migrado para:
+    - PalletDocumento (documentos tipo CANHOTO ou VALE_PALLET)
+    - PalletCredito (rastreamento de créditos)
+    - PalletSolucao (resoluções)
     """
     __tablename__ = 'vale_pallets'
 

@@ -1,0 +1,1031 @@
+{% extends 'base.html' %}
+
+{% block title %}Documentos de Pallet | Controle de Pallets v2{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ============================================
+   VALES/DOCUMENTOS - Controle de Pallets v2
+   ============================================ */
+
+.pallet-vales {
+    padding: 1.5rem;
+    background-color: #f8f9fa;
+    min-height: calc(100vh - 60px);
+}
+
+/* Header */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.page-header h1 {
+    font-size: 1.75rem;
+    font-weight: 600;
+    color: #212529;
+    margin: 0;
+}
+
+.page-header h1 i {
+    color: #6c63ff;
+    margin-right: 0.5rem;
+}
+
+/* Breadcrumb */
+.breadcrumb-nav {
+    margin-bottom: 1rem;
+}
+
+.breadcrumb-nav .breadcrumb {
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    font-size: 0.875rem;
+}
+
+.breadcrumb-nav .breadcrumb-item a {
+    color: #6c757d;
+    text-decoration: none;
+}
+
+.breadcrumb-nav .breadcrumb-item a:hover {
+    color: #6c63ff;
+}
+
+.breadcrumb-nav .breadcrumb-item.active {
+    color: #212529;
+}
+
+/* Stats Cards */
+.stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.stat-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.25rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+}
+
+.stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+}
+
+.stat-icon.total { background: #e8f4fd; color: #0d6efd; }
+.stat-icon.canhoto { background: #fff3cd; color: #ffc107; }
+.stat-icon.vale { background: #d1e7dd; color: #198754; }
+.stat-icon.recebido { background: #d3d3d3; color: #6c757d; }
+
+.stat-content h4 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin: 0;
+    color: #212529;
+}
+
+.stat-content span {
+    font-size: 0.875rem;
+    color: #6c757d;
+}
+
+/* Filtros */
+.filter-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.25rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    margin-bottom: 1.5rem;
+}
+
+.filter-card .filter-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 1rem;
+}
+
+.filter-row {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: flex-end;
+}
+
+.filter-group {
+    flex: 1;
+    min-width: 180px;
+}
+
+.filter-group label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #495057;
+    margin-bottom: 0.5rem;
+}
+
+.filter-group select,
+.filter-group input {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.filter-group select:focus,
+.filter-group input:focus {
+    border-color: #6c63ff;
+    box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.15);
+    outline: none;
+}
+
+.filter-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.btn-filter {
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.btn-filter-primary {
+    background: #6c63ff;
+    color: white;
+    border: none;
+}
+
+.btn-filter-primary:hover {
+    background: #5a52d9;
+    color: white;
+}
+
+.btn-filter-secondary {
+    background: #f8f9fa;
+    color: #495057;
+    border: 1px solid #dee2e6;
+}
+
+.btn-filter-secondary:hover {
+    background: #e9ecef;
+}
+
+/* Tabela de Documentos */
+.table-card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    overflow: hidden;
+}
+
+.table-header {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid #e9ecef;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.table-header h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #212529;
+    margin: 0;
+}
+
+.table-header .badge {
+    font-size: 0.75rem;
+    padding: 0.35em 0.65em;
+}
+
+.table-responsive {
+    max-height: calc(100vh - 450px);
+    overflow-y: auto;
+}
+
+.table-vales {
+    margin: 0;
+    width: 100%;
+}
+
+.table-vales thead th {
+    background: #f8f9fa;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 0.75rem 1rem;
+    border-bottom: 2px solid #e9ecef;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.table-vales tbody td {
+    padding: 0.75rem 1rem;
+    vertical-align: middle;
+    font-size: 0.875rem;
+    border-bottom: 1px solid #f1f3f4;
+}
+
+.table-vales tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+/* Badges de status */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.status-badge.pendente {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.status-badge.recebido {
+    background: #d4edda;
+    color: #155724;
+}
+
+.status-badge.vencido {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.status-badge.a-vencer {
+    background: #ffe5d0;
+    color: #7c4a03;
+}
+
+/* Tipo de documento badge */
+.tipo-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.tipo-badge.canhoto {
+    background: #e8f4fd;
+    color: #0d6efd;
+}
+
+.tipo-badge.vale {
+    background: #d1e7dd;
+    color: #198754;
+}
+
+/* Botões de ação na tabela */
+.action-buttons {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.btn-action {
+    padding: 0.35rem 0.65rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-receber {
+    background: #d4edda;
+    color: #155724;
+}
+
+.btn-receber:hover {
+    background: #c3e6cb;
+}
+
+.btn-detalhes {
+    background: #e9ecef;
+    color: #495057;
+}
+
+.btn-detalhes:hover {
+    background: #dee2e6;
+}
+
+/* Célula de responsável */
+.responsavel-cell {
+    max-width: 200px;
+}
+
+.responsavel-nome {
+    font-weight: 500;
+    color: #212529;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+}
+
+.responsavel-cnpj {
+    font-size: 0.75rem;
+    color: #6c757d;
+    font-family: 'Monaco', 'Consolas', monospace;
+}
+
+/* Empty state */
+.empty-state {
+    padding: 3rem;
+    text-align: center;
+}
+
+.empty-state i {
+    font-size: 3rem;
+    color: #dee2e6;
+    margin-bottom: 1rem;
+}
+
+.empty-state h4 {
+    color: #6c757d;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+}
+
+.empty-state p {
+    color: #adb5bd;
+    margin: 0;
+}
+
+/* Paginação */
+.pagination-wrapper {
+    padding: 1rem 1.25rem;
+    border-top: 1px solid #e9ecef;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.pagination-info {
+    font-size: 0.875rem;
+    color: #6c757d;
+}
+
+.pagination {
+    margin: 0;
+}
+
+.pagination .page-link {
+    border-radius: 6px;
+    margin: 0 0.15rem;
+    border: none;
+    color: #495057;
+    font-size: 0.875rem;
+}
+
+.pagination .page-link:hover {
+    background: #e9ecef;
+}
+
+.pagination .page-item.active .page-link {
+    background: #6c63ff;
+    color: white;
+}
+
+/* Botão de ação principal */
+.btn-primary-action {
+    background: linear-gradient(135deg, #6c63ff 0%, #5a52d9 100%);
+    color: white;
+    border: none;
+    padding: 0.625rem 1.25rem;
+    border-radius: 10px;
+    font-weight: 500;
+    font-size: 0.875rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s;
+    box-shadow: 0 2px 8px rgba(108, 99, 255, 0.25);
+}
+
+.btn-primary-action:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(108, 99, 255, 0.35);
+    color: white;
+}
+
+/* Vencimento highlight */
+.vencimento-cell {
+    font-weight: 500;
+}
+
+.vencimento-cell.vencido {
+    color: #dc3545;
+}
+
+.vencimento-cell.a-vencer {
+    color: #fd7e14;
+}
+
+.vencimento-cell.ok {
+    color: #198754;
+}
+
+/* Modal */
+.modal-header {
+    background: linear-gradient(135deg, #6c63ff 0%, #5a52d9 100%);
+    color: white;
+    border-radius: 12px 12px 0 0;
+}
+
+.modal-header .btn-close {
+    filter: brightness(0) invert(1);
+}
+
+.modal-content {
+    border-radius: 12px;
+    border: none;
+}
+
+.modal-footer {
+    border-top: 1px solid #e9ecef;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="pallet-vales">
+    <!-- Breadcrumb -->
+    <nav class="breadcrumb-nav" aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item">
+                <a href="{{ url_for('pallet_v2.dashboard.index') }}">
+                    <i class="fas fa-pallet"></i> Gestão de Pallets
+                </a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">Documentos</li>
+        </ol>
+    </nav>
+
+    <!-- Header -->
+    <div class="page-header">
+        <h1><i class="fas fa-file-signature"></i> Documentos de Pallet</h1>
+        <button type="button" class="btn btn-primary-action" data-bs-toggle="modal" data-bs-target="#modalNovoDocumento">
+            <i class="fas fa-plus"></i> Registrar Documento
+        </button>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="stats-row">
+        <div class="stat-card">
+            <div class="stat-icon total">
+                <i class="fas fa-file-alt"></i>
+            </div>
+            <div class="stat-content">
+                <h4>{{ stats.total }}</h4>
+                <span>Total de Documentos</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon canhoto">
+                <i class="fas fa-receipt"></i>
+            </div>
+            <div class="stat-content">
+                <h4>{{ stats.canhotos_pendentes }}</h4>
+                <span>Canhotos Pendentes</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon vale">
+                <i class="fas fa-ticket-alt"></i>
+            </div>
+            <div class="stat-content">
+                <h4>{{ stats.vales_pendentes }}</h4>
+                <span>Vales Pendentes</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon recebido">
+                <i class="fas fa-check-circle"></i>
+            </div>
+            <div class="stat-content">
+                <h4>{{ stats.recebidos }}</h4>
+                <span>Recebidos</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="filter-card">
+        <div class="filter-title">
+            <i class="fas fa-filter"></i> Filtros
+        </div>
+        <form method="GET" action="{{ url_for('pallet_v2.controle_pallets.listar_vales') }}">
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label for="tipo">Tipo de Documento</label>
+                    <select name="tipo" id="tipo" class="form-select">
+                        <option value="">Todos os tipos</option>
+                        <option value="CANHOTO" {% if filtro_tipo == 'CANHOTO' %}selected{% endif %}>Canhoto Assinado</option>
+                        <option value="VALE_PALLET" {% if filtro_tipo == 'VALE_PALLET' %}selected{% endif %}>Vale Pallet</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="status">Status</label>
+                    <select name="status" id="status" class="form-select">
+                        <option value="">Todos os status</option>
+                        <option value="PENDENTE" {% if filtro_status == 'PENDENTE' %}selected{% endif %}>Pendente de Recebimento</option>
+                        <option value="RECEBIDO" {% if filtro_status == 'RECEBIDO' %}selected{% endif %}>Recebido</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="cnpj">CNPJ/Nome do Emissor</label>
+                    <input type="text"
+                           name="cnpj"
+                           id="cnpj"
+                           class="form-control"
+                           placeholder="Buscar por CNPJ ou nome..."
+                           value="{{ filtro_cnpj or '' }}">
+                </div>
+                <div class="filter-actions">
+                    <button type="submit" class="btn btn-filter btn-filter-primary">
+                        <i class="fas fa-search"></i> Filtrar
+                    </button>
+                    <a href="{{ url_for('pallet_v2.controle_pallets.listar_vales') }}" class="btn btn-filter btn-filter-secondary">
+                        <i class="fas fa-times"></i> Limpar
+                    </a>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Tabela de Documentos -->
+    <div class="table-card">
+        <div class="table-header">
+            <h3>
+                <i class="fas fa-list"></i> Listagem de Documentos
+            </h3>
+            <span class="badge bg-secondary">{{ documentos.total }} registro(s)</span>
+        </div>
+
+        {% if documentos.items %}
+        <div class="table-responsive">
+            <table class="table table-vales">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Tipo</th>
+                        <th>Número</th>
+                        <th>Qtd</th>
+                        <th>Emissor</th>
+                        <th>Emissão</th>
+                        <th>Validade</th>
+                        <th>Status</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for doc in documentos.items %}
+                    <tr>
+                        <td><strong>#{{ doc.id }}</strong></td>
+                        <td>
+                            {% if doc.tipo == 'CANHOTO' %}
+                            <span class="tipo-badge canhoto">
+                                <i class="fas fa-receipt"></i> Canhoto
+                            </span>
+                            {% else %}
+                            <span class="tipo-badge vale">
+                                <i class="fas fa-ticket-alt"></i> Vale
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td>{{ doc.numero_documento or '-' }}</td>
+                        <td><strong>{{ doc.quantidade }}</strong></td>
+                        <td class="responsavel-cell">
+                            <span class="responsavel-nome" title="{{ doc.nome_emissor or 'N/A' }}">
+                                {{ doc.nome_emissor or 'N/A' }}
+                            </span>
+                            {% if doc.cnpj_emissor %}
+                            <span class="responsavel-cnpj">{{ doc.cnpj_emissor }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if doc.data_emissao %}
+                            {{ doc.data_emissao.strftime('%d/%m/%Y') }}
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td class="vencimento-cell {% if doc.vencido %}vencido{% elif doc.prestes_a_vencer %}a-vencer{% else %}ok{% endif %}">
+                            {% if doc.data_validade %}
+                            {{ doc.data_validade.strftime('%d/%m/%Y') }}
+                            {% if doc.dias_para_vencer is not none %}
+                                {% if doc.dias_para_vencer < 0 %}
+                                <small class="text-danger">({{ doc.dias_para_vencer|abs }} dias atrás)</small>
+                                {% elif doc.dias_para_vencer == 0 %}
+                                <small class="text-warning">(Hoje)</small>
+                                {% elif doc.dias_para_vencer <= 7 %}
+                                <small class="text-warning">({{ doc.dias_para_vencer }} dias)</small>
+                                {% endif %}
+                            {% endif %}
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if doc.vencido %}
+                            <span class="status-badge vencido">
+                                <i class="fas fa-exclamation-circle"></i> Vencido
+                            </span>
+                            {% elif doc.prestes_a_vencer %}
+                            <span class="status-badge a-vencer">
+                                <i class="fas fa-clock"></i> A Vencer
+                            </span>
+                            {% elif doc.recebido %}
+                            <span class="status-badge recebido">
+                                <i class="fas fa-check"></i> Recebido
+                            </span>
+                            {% else %}
+                            <span class="status-badge pendente">
+                                <i class="fas fa-hourglass-half"></i> Pendente
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="action-buttons">
+                                {% if not doc.recebido %}
+                                <form method="POST" action="{{ url_for('pallet_v2.controle_pallets.receber_documento', doc_id=doc.id) }}" style="display: inline;">
+                                    <button type="submit" class="btn-action btn-receber" title="Marcar como Recebido" onclick="return confirm('Confirma o recebimento deste documento?')">
+                                        <i class="fas fa-check"></i> Receber
+                                    </button>
+                                </form>
+                                {% endif %}
+                                <button type="button" class="btn-action btn-detalhes" title="Ver Detalhes" data-bs-toggle="modal" data-bs-target="#modalDetalhes{{ doc.id }}">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Paginação -->
+        <div class="pagination-wrapper">
+            <div class="pagination-info">
+                Mostrando {{ ((documentos.page - 1) * documentos.per_page) + 1 }} -
+                {{ [documentos.page * documentos.per_page, documentos.total]|min }}
+                de {{ documentos.total }} registros
+            </div>
+
+            {% if documentos.pages > 1 %}
+            <nav aria-label="Paginação">
+                <ul class="pagination">
+                    {% if documentos.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('pallet_v2.controle_pallets.listar_vales', page=documentos.prev_num, tipo=filtro_tipo, status=filtro_status, cnpj=filtro_cnpj) }}">
+                            <i class="fas fa-chevron-left"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+
+                    {% for page_num in documentos.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                        {% if page_num %}
+                            {% if page_num == documentos.page %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ page_num }}</span>
+                            </li>
+                            {% else %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('pallet_v2.controle_pallets.listar_vales', page=page_num, tipo=filtro_tipo, status=filtro_status, cnpj=filtro_cnpj) }}">{{ page_num }}</a>
+                            </li>
+                            {% endif %}
+                        {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">...</span>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if documentos.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('pallet_v2.controle_pallets.listar_vales', page=documentos.next_num, tipo=filtro_tipo, status=filtro_status, cnpj=filtro_cnpj) }}">
+                            <i class="fas fa-chevron-right"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+
+        {% else %}
+        <!-- Empty State -->
+        <div class="empty-state">
+            <i class="fas fa-file-alt"></i>
+            <h4>Nenhum documento encontrado</h4>
+            <p>Ajuste os filtros ou registre um novo documento</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Modal Novo Documento -->
+<div class="modal fade" id="modalNovoDocumento" tabindex="-1" aria-labelledby="modalNovoDocumentoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalNovoDocumentoLabel">
+                    <i class="fas fa-plus-circle"></i> Registrar Documento
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form method="POST" action="{{ url_for('pallet_v2.controle_pallets.registrar_documento') }}">
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <!-- Crédito (busca via API) -->
+                        <div class="col-md-6">
+                            <label for="credito_id" class="form-label">Crédito de Pallet <span class="text-danger">*</span></label>
+                            <select name="credito_id" id="credito_id" class="form-select" required>
+                                <option value="">Selecione um crédito...</option>
+                            </select>
+                            <small class="text-muted">Selecione o crédito ao qual vincular este documento</small>
+                        </div>
+
+                        <!-- Tipo de Documento -->
+                        <div class="col-md-6">
+                            <label for="doc_tipo" class="form-label">Tipo de Documento <span class="text-danger">*</span></label>
+                            <select name="tipo" id="doc_tipo" class="form-select" required>
+                                <option value="">Selecione...</option>
+                                <option value="CANHOTO">Canhoto Assinado</option>
+                                <option value="VALE_PALLET">Vale Pallet</option>
+                            </select>
+                        </div>
+
+                        <!-- Número do Documento -->
+                        <div class="col-md-4">
+                            <label for="numero_documento" class="form-label">Número do Documento</label>
+                            <input type="text" class="form-control" id="numero_documento" name="numero_documento" placeholder="Ex: 123456">
+                        </div>
+
+                        <!-- Quantidade -->
+                        <div class="col-md-4">
+                            <label for="quantidade" class="form-label">Quantidade de Pallets</label>
+                            <input type="number" class="form-control" id="quantidade" name="quantidade" min="1" value="1">
+                        </div>
+
+                        <!-- Data de Emissão -->
+                        <div class="col-md-4">
+                            <label for="data_emissao" class="form-label">Data de Emissão</label>
+                            <input type="date" class="form-control" id="data_emissao" name="data_emissao">
+                        </div>
+
+                        <!-- Data de Validade -->
+                        <div class="col-md-4">
+                            <label for="data_validade" class="form-label">Data de Validade</label>
+                            <input type="date" class="form-control" id="data_validade" name="data_validade">
+                        </div>
+
+                        <!-- CNPJ Emissor -->
+                        <div class="col-md-4">
+                            <label for="cnpj_emissor" class="form-label">CNPJ do Emissor</label>
+                            <input type="text" class="form-control" id="cnpj_emissor" name="cnpj_emissor" placeholder="00.000.000/0000-00">
+                        </div>
+
+                        <!-- Nome Emissor -->
+                        <div class="col-md-4">
+                            <label for="nome_emissor" class="form-label">Nome do Emissor</label>
+                            <input type="text" class="form-control" id="nome_emissor" name="nome_emissor" placeholder="Razão Social">
+                        </div>
+
+                        <!-- Observação -->
+                        <div class="col-12">
+                            <label for="observacao" class="form-label">Observações</label>
+                            <textarea class="form-control" id="observacao" name="observacao" rows="2" placeholder="Observações adicionais..."></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Registrar Documento
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modais de Detalhes -->
+{% for doc in documentos.items %}
+<div class="modal fade" id="modalDetalhes{{ doc.id }}" tabindex="-1" aria-labelledby="modalDetalhesLabel{{ doc.id }}" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalDetalhesLabel{{ doc.id }}">
+                    <i class="fas fa-file-alt"></i> Documento #{{ doc.id }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <table class="table table-bordered table-sm">
+                    <tr>
+                        <th width="40%">Tipo</th>
+                        <td>{{ doc.tipo_display }}</td>
+                    </tr>
+                    <tr>
+                        <th>Número</th>
+                        <td>{{ doc.numero_documento or '-' }}</td>
+                    </tr>
+                    <tr>
+                        <th>Quantidade</th>
+                        <td><strong>{{ doc.quantidade }}</strong> pallet(s)</td>
+                    </tr>
+                    <tr>
+                        <th>Crédito Vinculado</th>
+                        <td>#{{ doc.credito_id }}</td>
+                    </tr>
+                    <tr>
+                        <th>Emissor</th>
+                        <td>
+                            {{ doc.nome_emissor or 'N/A' }}
+                            {% if doc.cnpj_emissor %}
+                            <br><small class="text-muted">{{ doc.cnpj_emissor }}</small>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Data de Emissão</th>
+                        <td>{{ doc.data_emissao.strftime('%d/%m/%Y') if doc.data_emissao else '-' }}</td>
+                    </tr>
+                    <tr>
+                        <th>Data de Validade</th>
+                        <td>
+                            {{ doc.data_validade.strftime('%d/%m/%Y') if doc.data_validade else '-' }}
+                            {% if doc.dias_para_vencer is not none %}
+                                {% if doc.dias_para_vencer < 0 %}
+                                <span class="badge bg-danger">Vencido há {{ doc.dias_para_vencer|abs }} dia(s)</span>
+                                {% elif doc.dias_para_vencer == 0 %}
+                                <span class="badge bg-warning">Vence hoje</span>
+                                {% elif doc.dias_para_vencer <= 30 %}
+                                <span class="badge bg-warning">Vence em {{ doc.dias_para_vencer }} dia(s)</span>
+                                {% else %}
+                                <span class="badge bg-success">{{ doc.dias_para_vencer }} dias</span>
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Status</th>
+                        <td>
+                            {% if doc.recebido %}
+                            <span class="badge bg-success">Recebido</span>
+                            {% else %}
+                            <span class="badge bg-warning">Pendente</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% if doc.recebido %}
+                    <tr>
+                        <th>Recebido em</th>
+                        <td>{{ doc.recebido_em.strftime('%d/%m/%Y %H:%M') if doc.recebido_em else '-' }}</td>
+                    </tr>
+                    <tr>
+                        <th>Recebido por</th>
+                        <td>{{ doc.recebido_por or '-' }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if doc.observacao %}
+                    <tr>
+                        <th>Observação</th>
+                        <td>{{ doc.observacao }}</td>
+                    </tr>
+                    {% endif %}
+                    <tr>
+                        <th>Criado em</th>
+                        <td>{{ doc.criado_em.strftime('%d/%m/%Y %H:%M') if doc.criado_em else '-' }}</td>
+                    </tr>
+                    <tr>
+                        <th>Criado por</th>
+                        <td>{{ doc.criado_por or '-' }}</td>
+                    </tr>
+                </table>
+            </div>
+            <div class="modal-footer">
+                {% if not doc.recebido %}
+                <form method="POST" action="{{ url_for('pallet_v2.controle_pallets.receber_documento', doc_id=doc.id) }}" style="display: inline;">
+                    <button type="submit" class="btn btn-success" onclick="return confirm('Confirma o recebimento deste documento?')">
+                        <i class="fas fa-check"></i> Marcar como Recebido
+                    </button>
+                </form>
+                {% endif %}
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Carregar créditos pendentes no modal de novo documento
+    const modalNovoDocumento = document.getElementById('modalNovoDocumento');
+    const selectCredito = document.getElementById('credito_id');
+
+    if (modalNovoDocumento && selectCredito) {
+        modalNovoDocumento.addEventListener('show.bs.modal', function() {
+            carregarCreditosPendentes();
+        });
+    }
+
+    function carregarCreditosPendentes() {
+        selectCredito.innerHTML = '<option value="">Carregando...</option>';
+
+        fetch('{{ url_for("pallet_v2.controle_pallets.api_listar_creditos") }}?status=PENDENTE&limit=100')
+            .then(response => response.json())
+            .then(data => {
+                selectCredito.innerHTML = '<option value="">Selecione um crédito...</option>';
+
+                if (data && data.length > 0) {
+                    data.forEach(function(credito) {
+                        const option = document.createElement('option');
+                        option.value = credito.id;
+                        option.textContent = `#${credito.id} - NF ${credito.numero_nf || 'N/A'} - ${credito.nome_responsavel || credito.cnpj_responsavel} (Saldo: ${credito.qtd_saldo})`;
+                        selectCredito.appendChild(option);
+                    });
+                } else {
+                    const option = document.createElement('option');
+                    option.value = '';
+                    option.textContent = 'Nenhum crédito pendente encontrado';
+                    option.disabled = true;
+                    selectCredito.appendChild(option);
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao carregar créditos:', error);
+                selectCredito.innerHTML = '<option value="">Erro ao carregar créditos</option>';
+            });
+    }
+
+    // Máscara de CNPJ
+    const cnpjInput = document.getElementById('cnpj_emissor');
+    if (cnpjInput) {
+        cnpjInput.addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.length > 14) value = value.slice(0, 14);
+
+            if (value.length > 12) {
+                value = value.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+            } else if (value.length > 8) {
+                value = value.replace(/^(\d{2})(\d{3})(\d{3})(\d+)$/, '$1.$2.$3/$4');
+            } else if (value.length > 5) {
+                value = value.replace(/^(\d{2})(\d{3})(\d+)$/, '$1.$2.$3');
+            } else if (value.length > 2) {
+                value = value.replace(/^(\d{2})(\d+)$/, '$1.$2');
+            }
+
+            e.target.value = value;
+        });
+    }
+});
+</script>
+{% endblock %}

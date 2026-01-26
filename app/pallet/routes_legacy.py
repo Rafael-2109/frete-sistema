@@ -1,3 +1,25 @@
+"""
+Routes legadas do módulo de Pallet (v1)
+
+⚠️  DEPRECATED: Este arquivo está em processo de deprecação.
+    Novas funcionalidades devem ser implementadas em app/pallet/routes/ (v2).
+
+    Mapeamento de routes v1 → v2:
+    - /pallet/              → /pallet/v2/                    (dashboard)
+    - /pallet/movimentos    → /pallet/v2/controle/vales      (listagem)
+    - /pallet/vales         → /pallet/v2/controle/vales      (documentos)
+    - /pallet/substituicao  → /pallet/v2/controle/substituicao
+
+    O módulo v2 separa em dois domínios independentes:
+    - Domínio A: Controle de Pallets (créditos, vales, soluções)
+    - Domínio B: Tratativa de NFs (ciclo de vida documental)
+
+    Spec: .claude/ralph-loop/specs/prd-reestruturacao-modulo-pallets.md
+"""
+import logging
+import warnings
+from functools import wraps
+
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
 from datetime import datetime, date, timedelta
@@ -9,13 +31,55 @@ from app.transportadoras.models import Transportadora
 from app.cadastros_agendamento.models import ContatoAgendamento
 from app.pallet.models import ValePallet
 from app.pallet.utils import (
-    raiz_cnpj, 
+    raiz_cnpj,
     calcular_prazo_cobranca, PRAZO_COBRANCA_SP_RED, PRAZO_COBRANCA_OUTROS
 )
 from sqlalchemy import func, or_
 from sqlalchemy.orm import joinedload
 
+logger = logging.getLogger(__name__)
+
 pallet_bp = Blueprint('pallet', __name__, url_prefix='/pallet')
+
+
+# =============================================================================
+# DECORATORS DE DEPRECAÇÃO
+# =============================================================================
+
+def deprecated_route(alternative_route: str = None, message: str = None):
+    """
+    Decorator para marcar routes como deprecated.
+
+    Adiciona warning no log a cada acesso.
+
+    Args:
+        alternative_route: Nome da rota v2 equivalente (ex: 'pallet_v2.dashboard.index')
+        message: Mensagem adicional de deprecação
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            route_name = f"pallet.{func.__name__}"
+
+            # Log de deprecação (WARNING level para aparecer nos logs de produção)
+            deprecation_msg = f"[DEPRECATED] Route '{route_name}' está em deprecação."
+            if alternative_route:
+                deprecation_msg += f" Use '{alternative_route}' em seu lugar."
+            if message:
+                deprecation_msg += f" {message}"
+
+            logger.warning(deprecation_msg)
+
+            # Também emitir Python warning (útil para desenvolvimento)
+            warnings.warn(
+                deprecation_msg,
+                DeprecationWarning,
+                stacklevel=2
+            )
+
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
 
 # Codigo do produto PALLET
 COD_PRODUTO_PALLET = '208000012'
@@ -146,8 +210,15 @@ def calcular_prazo_remessa(remessa) -> int:
 
 @pallet_bp.route('/')
 @login_required
+@deprecated_route(
+    alternative_route='pallet_v2.dashboard.index',
+    message='Dashboard v2 com separação em domínios A (Controle Pallets) e B (Tratativa NFs).'
+)
 def index():
-    """Dashboard de gestao de pallet - 3 abas: NF Remessa / Vale Pallet / Retornos"""
+    """Dashboard de gestao de pallet - 3 abas: NF Remessa / Vale Pallet / Retornos
+
+    ⚠️  DEPRECATED: Use /pallet/v2/ para o novo dashboard.
+    """
     hoje = date.today()
 
     # ====== ESTATISTICAS GERAIS ======
@@ -305,8 +376,15 @@ def index():
 
 @pallet_bp.route('/movimentos')
 @login_required
+@deprecated_route(
+    alternative_route='pallet_v2.controle_pallets.listar_vales',
+    message='Listagem consolidada movida para Tab Controle de Pallets no dashboard v2.'
+)
 def listar_movimentos():
-    """Lista todos os movimentos de pallet"""
+    """Lista todos os movimentos de pallet
+
+    ⚠️  DEPRECATED: Use /pallet/v2/controle/vales para a nova listagem.
+    """
     page = request.args.get('page', 1, type=int)
     filtro_tipo = request.args.get('tipo', '')
     filtro_baixado = request.args.get('baixado', '')
@@ -437,8 +515,15 @@ def listar_movimentos():
 
 @pallet_bp.route('/registrar-saida', methods=['GET', 'POST'])
 @login_required
+@deprecated_route(
+    alternative_route='pallet_v2.controle_pallets.registrar_documento',
+    message='Use o novo fluxo de registro de documentos no Domínio A.'
+)
 def registrar_saida():
-    """Registra uma saida de pallet (emissao de NF)"""
+    """Registra uma saida de pallet (emissao de NF)
+
+    ⚠️  DEPRECATED: Use /pallet/v2/controle/documento via POST.
+    """
     if request.method == 'POST':
         try:
             embarque_id = request.form.get('embarque_id')
@@ -476,8 +561,15 @@ def registrar_saida():
 
 @pallet_bp.route('/registrar-retorno', methods=['GET', 'POST'])
 @login_required
+@deprecated_route(
+    alternative_route='pallet_v2.controle_pallets.registrar_recebimento',
+    message='Use o novo fluxo de recebimento no Domínio A.'
+)
 def registrar_retorno():
-    """Registra um retorno de pallet com baixa automatica das remessas"""
+    """Registra um retorno de pallet com baixa automatica das remessas
+
+    ⚠️  DEPRECATED: Use /pallet/v2/controle/recebimento via POST.
+    """
     if request.method == 'POST':
         try:
             cnpj = request.form.get('cnpj_destinatario', '').replace('.', '').replace('-', '').replace('/', '')
@@ -656,12 +748,20 @@ def desfazer_baixa(movimento_id):
     return redirect(url_for('pallet.listar_movimentos'))
 
 
-# ========== APIs ==========
+# ========== APIs (DEPRECATED) ==========
+# Novas APIs disponíveis em /pallet/v2/controle/api/ e /pallet/v2/tratativa/api/
 
 @pallet_bp.route('/api/saldo/<cnpj>')
 @login_required
+@deprecated_route(
+    alternative_route='pallet_v2.controle_pallets.api_resumo_responsavel',
+    message='Use a nova API de resumo por responsável.'
+)
 def api_saldo_cnpj(cnpj):
-    """Retorna saldo de pallet de um CNPJ"""
+    """Retorna saldo de pallet de um CNPJ
+
+    ⚠️  DEPRECATED: Use /pallet/v2/controle/api/resumo-responsavel/<cnpj>.
+    """
     cnpj_limpo = cnpj.replace('.', '').replace('-', '').replace('/', '')
     saldo = MovimentacaoEstoque.saldo_pallet_por_destinatario(cnpj_limpo)
     return jsonify({'cnpj': cnpj, 'saldo': int(saldo)})
@@ -770,8 +870,15 @@ def api_embarque_itens(embarque_id):
 
 @pallet_bp.route('/api/dashboard')
 @login_required
+@deprecated_route(
+    alternative_route='pallet_v2.dashboard.api_stats',
+    message='Use a nova API de estatísticas do dashboard v2.'
+)
 def api_dashboard():
-    """Retorna dados do dashboard em JSON"""
+    """Retorna dados do dashboard em JSON
+
+    ⚠️  DEPRECATED: Use /pallet/v2/api/stats.
+    """
     total_em_terceiros = db.session.query(
         func.coalesce(func.sum(MovimentacaoEstoque.qtd_movimentacao), 0)
     ).filter(
@@ -803,8 +910,15 @@ def api_dashboard():
 
 @pallet_bp.route('/vales')
 @login_required
+@deprecated_route(
+    alternative_route='pallet_v2.controle_pallets.listar_vales',
+    message='Gestão de documentos (canhotos/vales) movida para Domínio A.'
+)
 def listar_vales():
-    """Lista todos os vale pallets"""
+    """Lista todos os vale pallets
+
+    ⚠️  DEPRECATED: Use /pallet/v2/controle/vales para a nova listagem.
+    """
     page = request.args.get('page', 1, type=int)
     filtro_status = request.args.get('status', '')
     filtro_transportadora = request.args.get('transportadora', '')
@@ -939,8 +1053,15 @@ def baixar_nf_remessa_automaticamente(numero_nf: str, usuario: str) -> dict:
 
 @pallet_bp.route('/vales/novo', methods=['GET', 'POST'])
 @login_required
+@deprecated_route(
+    alternative_route='pallet_v2.controle_pallets.registrar_documento',
+    message='Criação de documentos (canhotos/vales) movida para Domínio A.'
+)
 def criar_vale():
-    """Cria um novo vale pallet"""
+    """Cria um novo vale pallet
+
+    ⚠️  DEPRECATED: Use /pallet/v2/controle/documento via POST.
+    """
     if request.method == 'POST':
         try:
             # Calcular data de validade (30 dias a partir da emissao)
@@ -1055,8 +1176,15 @@ def editar_vale(vale_id):
 
 @pallet_bp.route('/vales/<int:vale_id>/receber', methods=['POST'])
 @login_required
+@deprecated_route(
+    alternative_route='pallet_v2.controle_pallets.receber_documento',
+    message='Recebimento de documentos movido para Domínio A.'
+)
 def receber_vale(vale_id):
-    """Marca um vale pallet como recebido pela Nacom"""
+    """Marca um vale pallet como recebido pela Nacom
+
+    ⚠️  DEPRECATED: Use /pallet/v2/controle/documento/<id>/receber via POST.
+    """
     vale = ValePallet.query.get_or_404(vale_id)
 
     if vale.recebido:
@@ -1118,8 +1246,15 @@ def enviar_resolucao(vale_id):
 
 @pallet_bp.route('/vales/<int:vale_id>/resolver', methods=['GET', 'POST'])
 @login_required
+@deprecated_route(
+    alternative_route='pallet_v2.controle_pallets.registrar_baixa',
+    message='Resolução de vales movida para Domínio A (soluções).'
+)
 def resolver_vale(vale_id):
-    """Marca vale pallet como resolvido"""
+    """Marca vale pallet como resolvido
+
+    ⚠️  DEPRECATED: Use /pallet/v2/controle/baixa via POST.
+    """
     vale = ValePallet.query.get_or_404(vale_id)
 
     if vale.resolvido:
@@ -1242,8 +1377,15 @@ def sincronizar_odoo():
 
 @pallet_bp.route('/substituicao', methods=['GET'])
 @login_required
+@deprecated_route(
+    alternative_route='pallet_v2.controle_pallets.registrar_substituicao',
+    message='Substituição de responsável movida para Domínio A.'
+)
 def listar_substituicoes():
-    """Lista remessas disponiveis para substituicao (com saldo disponível)"""
+    """Lista remessas disponiveis para substituicao (com saldo disponível)
+
+    ⚠️  DEPRECATED: Use /pallet/v2/controle/substituicao via POST.
+    """
     # Buscar remessas pendentes de transportadoras
     remessas_raw = MovimentacaoEstoque.query.filter(
         MovimentacaoEstoque.local_movimentacao == 'PALLET',

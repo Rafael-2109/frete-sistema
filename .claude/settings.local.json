@@ -42,7 +42,8 @@
       "mcp__render__list_postgres_instances",
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(curl:*)",
-      "WebFetch(domain:api.github.com)"
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:github.com)"
     ],
     "deny": []
   },

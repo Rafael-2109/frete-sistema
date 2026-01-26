@@ -1,0 +1,668 @@
+"""
+Routes de Tratativa de NFs de Pallet v2 - Domínio B
+
+Gerencia o ciclo de vida documental das NFs:
+- GET /tratativa/direcionamento - NFs aguardando vinculação
+- GET /tratativa/sugestoes - Sugestões automáticas de match
+- POST /tratativa/vincular-devolucao - Vincular devolução (1:N)
+- POST /tratativa/vincular-retorno - Vincular retorno (1:1)
+- POST /tratativa/confirmar-sugestao/<id> - Confirmar sugestão
+- POST /tratativa/rejeitar-sugestao/<id> - Rejeitar sugestão
+- GET /tratativa/canceladas - NFs canceladas (histórico)
+
+Spec: .claude/ralph-loop/specs/prd-reestruturacao-modulo-pallets.md
+"""
+import logging
+from datetime import datetime
+
+from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for
+from flask_login import login_required, current_user
+from sqlalchemy import func
+
+from app import db
+from app.pallet.models import PalletNFRemessa, PalletNFSolucao
+from app.pallet.services import NFService, MatchService
+
+logger = logging.getLogger(__name__)
+
+# Sub-blueprint para Tratativa de NFs (Domínio B)
+tratativa_nfs_bp = Blueprint('tratativa_nfs', __name__, url_prefix='/tratativa')
+
+
+# =============================================================================
+# LISTAGENS
+# =============================================================================
+
+@tratativa_nfs_bp.route('/direcionamento')
+@login_required
+def direcionamento():
+    """
+    Lista NFs aguardando vinculação (direcionamento).
+
+    Query params:
+    - tipo_destinatario: TRANSPORTADORA, CLIENTE
+    - cnpj: CNPJ do destinatário
+    - empresa: CD, FB, SC
+    - page: Página (default: 1)
+    """
+    tipo_destinatario = request.args.get('tipo_destinatario', '')
+    cnpj = request.args.get('cnpj', '').strip()
+    empresa = request.args.get('empresa', '')
+    page = request.args.get('page', 1, type=int)
+
+    # Query base: NFs ativas (pendentes de vinculação)
+    query = PalletNFRemessa.query.filter(
+        PalletNFRemessa.ativo == True,
+        PalletNFRemessa.status == 'ATIVA'
+    )
+
+    # Filtrar por tipo de destinatário
+    if tipo_destinatario:
+        query = query.filter(PalletNFRemessa.tipo_destinatario == tipo_destinatario)
+
+    # Filtrar por CNPJ
+    if cnpj:
+        cnpj_limpo = cnpj.replace('.', '').replace('-', '').replace('/', '')
+        query = query.filter(
+            db.or_(
+                PalletNFRemessa.cnpj_destinatario.ilike(f'%{cnpj_limpo}%'),
+                PalletNFRemessa.nome_destinatario.ilike(f'%{cnpj}%')
+            )
+        )
+
+    # Filtrar por empresa
+    if empresa:
+        query = query.filter(PalletNFRemessa.empresa == empresa)
+
+    # Ordenar por data de emissão (mais antigas primeiro)
+    query = query.order_by(PalletNFRemessa.data_emissao.asc())
+
+    nfs = query.paginate(page=page, per_page=50, error_out=False)
+
+    # Estatísticas
+    stats = {
+        'total_ativas': nfs.total,
+        'transportadoras': PalletNFRemessa.query.filter(
+            PalletNFRemessa.ativo == True,
+            PalletNFRemessa.status == 'ATIVA',
+            PalletNFRemessa.tipo_destinatario == 'TRANSPORTADORA'
+        ).count(),
+        'clientes': PalletNFRemessa.query.filter(
+            PalletNFRemessa.ativo == True,
+            PalletNFRemessa.status == 'ATIVA',
+            PalletNFRemessa.tipo_destinatario == 'CLIENTE'
+        ).count()
+    }
+
+    return render_template(
+        'pallet/v2/tratativa_nfs/direcionamento.html',
+        nfs=nfs,
+        stats=stats,
+        filtro_tipo_destinatario=tipo_destinatario,
+        filtro_cnpj=cnpj,
+        filtro_empresa=empresa
+    )
+
+
+@tratativa_nfs_bp.route('/sugestoes')
+@login_required
+def listar_sugestoes():
+    """
+    Lista sugestões automáticas de vinculação pendentes de confirmação.
+
+    Query params:
+    - tipo: DEVOLUCAO, RETORNO
+    - page: Página (default: 1)
+    """
+    tipo = request.args.get('tipo', '')
+    page = request.args.get('page', 1, type=int)
+
+    # Query base: sugestões pendentes
+    query = PalletNFSolucao.query.filter(
+        PalletNFSolucao.ativo == True,
+        PalletNFSolucao.vinculacao == 'SUGESTAO',
+        PalletNFSolucao.confirmado_em.is_(None)
+    )
+
+    # Filtrar por tipo
+    if tipo:
+        query = query.filter(PalletNFSolucao.tipo == tipo)
+
+    # Ordenar por data de criação (mais antigas primeiro)
+    query = query.order_by(PalletNFSolucao.criado_em.asc())
+
+    sugestoes = query.paginate(page=page, per_page=50, error_out=False)
+
+    # Estatísticas
+    stats = {
+        'total_pendentes': sugestoes.total,
+        'devolucoes': PalletNFSolucao.query.filter(
+            PalletNFSolucao.ativo == True,
+            PalletNFSolucao.vinculacao == 'SUGESTAO',
+            PalletNFSolucao.confirmado_em.is_(None),
+            PalletNFSolucao.tipo == 'DEVOLUCAO'
+        ).count(),
+        'retornos': PalletNFSolucao.query.filter(
+            PalletNFSolucao.ativo == True,
+            PalletNFSolucao.vinculacao == 'SUGESTAO',
+            PalletNFSolucao.confirmado_em.is_(None),
+            PalletNFSolucao.tipo == 'RETORNO'
+        ).count()
+    }
+
+    return render_template(
+        'pallet/v2/tratativa_nfs/sugestoes.html',
+        sugestoes=sugestoes,
+        stats=stats,
+        filtro_tipo=tipo
+    )
+
+
+@tratativa_nfs_bp.route('/solucoes')
+@login_required
+def listar_solucoes():
+    """
+    Histórico de soluções de NF (devoluções e retornos registrados).
+
+    Query params:
+    - tipo: DEVOLUCAO, RETORNO, CANCELAMENTO
+    - vinculacao: AUTOMATICO, MANUAL, SUGESTAO
+    - data_de: Data inicial
+    - data_ate: Data final
+    - page: Página (default: 1)
+    """
+    tipo = request.args.get('tipo', '')
+    vinculacao = request.args.get('vinculacao', '')
+    data_de = request.args.get('data_de', '')
+    data_ate = request.args.get('data_ate', '')
+    page = request.args.get('page', 1, type=int)
+
+    query = PalletNFSolucao.query.filter(PalletNFSolucao.ativo == True)
+
+    # Filtrar por tipo
+    if tipo:
+        query = query.filter(PalletNFSolucao.tipo == tipo)
+
+    # Filtrar por tipo de vinculação
+    if vinculacao:
+        query = query.filter(PalletNFSolucao.vinculacao == vinculacao)
+
+    # Filtrar por data
+    if data_de:
+        try:
+            dt_de = datetime.strptime(data_de, '%Y-%m-%d')
+            query = query.filter(PalletNFSolucao.criado_em >= dt_de)
+        except ValueError:
+            pass
+
+    if data_ate:
+        try:
+            dt_ate = datetime.strptime(data_ate, '%Y-%m-%d')
+            query = query.filter(PalletNFSolucao.criado_em <= dt_ate)
+        except ValueError:
+            pass
+
+    # Ordenar por data de criação (mais recentes primeiro)
+    query = query.order_by(PalletNFSolucao.criado_em.desc())
+
+    solucoes = query.paginate(page=page, per_page=50, error_out=False)
+
+    # Estatísticas
+    stats_query = db.session.query(
+        PalletNFSolucao.tipo,
+        func.count(PalletNFSolucao.id).label('quantidade'),
+        func.sum(PalletNFSolucao.quantidade).label('qtd_total')
+    ).filter(
+        PalletNFSolucao.ativo == True
+    ).group_by(PalletNFSolucao.tipo).all()
+
+    stats = {}
+    for row in stats_query:
+        stats[row.tipo] = {
+            'count': row.quantidade,
+            'qtd': int(row.qtd_total or 0)
+        }
+
+    return render_template(
+        'pallet/v2/tratativa_nfs/solucoes.html',
+        solucoes=solucoes,
+        stats=stats,
+        filtro_tipo=tipo,
+        filtro_vinculacao=vinculacao,
+        filtro_data_de=data_de,
+        filtro_data_ate=data_ate
+    )
+
+
+@tratativa_nfs_bp.route('/canceladas')
+@login_required
+def listar_canceladas():
+    """
+    Lista NFs canceladas (histórico para auditoria).
+
+    Query params:
+    - data_de: Data inicial
+    - data_ate: Data final
+    - page: Página (default: 1)
+    """
+    data_de = request.args.get('data_de', '')
+    data_ate = request.args.get('data_ate', '')
+    page = request.args.get('page', 1, type=int)
+
+    query = PalletNFRemessa.query.filter(
+        PalletNFRemessa.ativo == True,
+        PalletNFRemessa.status == 'CANCELADA'
+    )
+
+    # Filtrar por data
+    if data_de:
+        try:
+            dt_de = datetime.strptime(data_de, '%Y-%m-%d')
+            query = query.filter(PalletNFRemessa.cancelada_em >= dt_de)
+        except ValueError:
+            pass
+
+    if data_ate:
+        try:
+            dt_ate = datetime.strptime(data_ate, '%Y-%m-%d')
+            query = query.filter(PalletNFRemessa.cancelada_em <= dt_ate)
+        except ValueError:
+            pass
+
+    # Ordenar por data de cancelamento (mais recentes primeiro)
+    query = query.order_by(PalletNFRemessa.cancelada_em.desc())
+
+    nfs = query.paginate(page=page, per_page=50, error_out=False)
+
+    return render_template(
+        'pallet/v2/tratativa_nfs/canceladas.html',
+        nfs=nfs,
+        filtro_data_de=data_de,
+        filtro_data_ate=data_ate
+    )
+
+
+# =============================================================================
+# AÇÕES: VINCULAÇÃO
+# =============================================================================
+
+@tratativa_nfs_bp.route('/vincular-devolucao', methods=['POST'])
+@login_required
+def vincular_devolucao():
+    """
+    Vincula uma NF de devolução a múltiplas NFs de remessa (1:N).
+
+    REGRA 004: 1 NF devolução pode fechar N NFs remessa.
+
+    Form params:
+    - numero_nf_devolucao: Número da NF de devolução
+    - chave_nfe_devolucao: Chave da NF-e de devolução
+    - data_nf_devolucao: Data da NF de devolução
+    - nfs_remessa: JSON com lista de {nf_remessa_id, quantidade}
+    - observacao: Observações
+    """
+    numero_nf_devolucao = request.form.get('numero_nf_devolucao', '').strip()
+    nfs_remessa_json = request.form.get('nfs_remessa', '[]')
+
+    if not numero_nf_devolucao:
+        flash('Número da NF de devolução é obrigatório!', 'danger')
+        return redirect(request.referrer or url_for('pallet_v2.tratativa_nfs.direcionamento'))
+
+    try:
+        import json
+        nfs_remessa = json.loads(nfs_remessa_json)
+
+        if not nfs_remessa:
+            flash('Selecione pelo menos uma NF de remessa!', 'danger')
+            return redirect(request.referrer or url_for('pallet_v2.tratativa_nfs.direcionamento'))
+
+        # Parsear data
+        data_nf_devolucao = None
+        data_str = request.form.get('data_nf_devolucao', '').strip()
+        if data_str:
+            data_nf_devolucao = datetime.strptime(data_str, '%Y-%m-%d')
+
+        usuario = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
+
+        # Preparar dados
+        nf_devolucao = {
+            'numero_nf': numero_nf_devolucao,
+            'chave_nfe': request.form.get('chave_nfe_devolucao', '').strip() or None,
+            'data_emissao': data_nf_devolucao
+        }
+
+        # Extrair IDs e quantidades
+        nf_remessa_ids = [item['nf_remessa_id'] for item in nfs_remessa]
+        quantidades = {item['nf_remessa_id']: item['quantidade'] for item in nfs_remessa}
+
+        # Usar MatchService para vincular
+        match_service = MatchService()
+        resultado = match_service.vincular_devolucao_manual(
+            nf_remessa_ids=nf_remessa_ids,
+            nf_devolucao=nf_devolucao,
+            quantidades=quantidades,
+            usuario=usuario
+        )
+
+        flash(
+            f'Devolução vinculada com sucesso! '
+            f'NF {numero_nf_devolucao} → {len(resultado["vinculacoes"])} NF(s) de remessa',
+            'success'
+        )
+
+    except ValueError as e:
+        flash(f'Erro de validação: {str(e)}', 'danger')
+    except Exception as e:
+        logger.exception(f"Erro ao vincular devolução")
+        flash(f'Erro ao vincular devolução: {str(e)}', 'danger')
+
+    return redirect(request.referrer or url_for('pallet_v2.tratativa_nfs.direcionamento'))
+
+
+@tratativa_nfs_bp.route('/vincular-retorno', methods=['POST'])
+@login_required
+def vincular_retorno():
+    """
+    Vincula uma NF de retorno a uma NF de remessa (1:1).
+
+    REGRA 004: 1 NF retorno fecha apenas 1 NF remessa.
+
+    Form params:
+    - nf_remessa_id: ID da NF de remessa
+    - numero_nf_retorno: Número da NF de retorno
+    - chave_nfe_retorno: Chave da NF-e de retorno
+    - data_nf_retorno: Data da NF de retorno
+    - quantidade: Quantidade de pallets
+    - observacao: Observações
+    """
+    nf_remessa_id = request.form.get('nf_remessa_id', type=int)
+    numero_nf_retorno = request.form.get('numero_nf_retorno', '').strip()
+
+    if not nf_remessa_id or not numero_nf_retorno:
+        flash('NF de remessa e NF de retorno são obrigatórios!', 'danger')
+        return redirect(request.referrer or url_for('pallet_v2.tratativa_nfs.direcionamento'))
+
+    try:
+        # Parsear data
+        data_nf_retorno = None
+        data_str = request.form.get('data_nf_retorno', '').strip()
+        if data_str:
+            data_nf_retorno = datetime.strptime(data_str, '%Y-%m-%d')
+
+        quantidade = request.form.get('quantidade', type=int)
+
+        usuario = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
+
+        # Preparar dados
+        nf_retorno = {
+            'numero_nf': numero_nf_retorno,
+            'chave_nfe': request.form.get('chave_nfe_retorno', '').strip() or None,
+            'data_emissao': data_nf_retorno
+        }
+
+        # Usar MatchService para vincular
+        match_service = MatchService()
+        resultado = match_service.vincular_retorno_manual(
+            nf_remessa_id=nf_remessa_id,
+            nf_retorno=nf_retorno,
+            quantidade=quantidade,
+            usuario=usuario
+        )
+
+        nf_remessa = PalletNFRemessa.query.get(nf_remessa_id)
+        flash(
+            f'Retorno vinculado com sucesso! '
+            f'NF {numero_nf_retorno} → NF remessa {nf_remessa.numero_nf if nf_remessa else nf_remessa_id}',
+            'success'
+        )
+
+    except ValueError as e:
+        flash(f'Erro de validação: {str(e)}', 'danger')
+    except Exception as e:
+        logger.exception(f"Erro ao vincular retorno")
+        flash(f'Erro ao vincular retorno: {str(e)}', 'danger')
+
+    return redirect(request.referrer or url_for('pallet_v2.tratativa_nfs.direcionamento'))
+
+
+@tratativa_nfs_bp.route('/confirmar-sugestao/<int:sugestao_id>', methods=['POST'])
+@login_required
+def confirmar_sugestao(sugestao_id):
+    """
+    Confirma uma sugestão de vinculação automática.
+    """
+    sugestao = PalletNFSolucao.query.get_or_404(sugestao_id)
+
+    if sugestao.vinculacao != 'SUGESTAO':
+        flash('Esta vinculação não é uma sugestão!', 'warning')
+        return redirect(request.referrer or url_for('pallet_v2.tratativa_nfs.listar_sugestoes'))
+
+    if sugestao.confirmado_em:
+        flash('Esta sugestão já foi confirmada!', 'warning')
+        return redirect(request.referrer or url_for('pallet_v2.tratativa_nfs.listar_sugestoes'))
+
+    try:
+        usuario = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
+
+        NFService.confirmar_sugestao(sugestao_id, usuario=usuario)
+
+        flash('Sugestão confirmada com sucesso!', 'success')
+
+    except Exception as e:
+        logger.exception(f"Erro ao confirmar sugestão #{sugestao_id}")
+        flash(f'Erro ao confirmar sugestão: {str(e)}', 'danger')
+
+    return redirect(request.referrer or url_for('pallet_v2.tratativa_nfs.listar_sugestoes'))
+
+
+@tratativa_nfs_bp.route('/rejeitar-sugestao/<int:sugestao_id>', methods=['POST'])
+@login_required
+def rejeitar_sugestao(sugestao_id):
+    """
+    Rejeita uma sugestão de vinculação automática.
+    """
+    sugestao = PalletNFSolucao.query.get_or_404(sugestao_id)
+
+    if sugestao.vinculacao != 'SUGESTAO':
+        flash('Esta vinculação não é uma sugestão!', 'warning')
+        return redirect(request.referrer or url_for('pallet_v2.tratativa_nfs.listar_sugestoes'))
+
+    motivo = request.form.get('motivo', '').strip()
+
+    try:
+        usuario = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
+
+        NFService.rejeitar_sugestao(sugestao_id, motivo=motivo, usuario=usuario)
+
+        flash('Sugestão rejeitada!', 'success')
+
+    except Exception as e:
+        logger.exception(f"Erro ao rejeitar sugestão #{sugestao_id}")
+        flash(f'Erro ao rejeitar sugestão: {str(e)}', 'danger')
+
+    return redirect(request.referrer or url_for('pallet_v2.tratativa_nfs.listar_sugestoes'))
+
+
+# =============================================================================
+# AÇÕES: BUSCAR DEVOLUÇÕES NO DFE
+# =============================================================================
+
+@tratativa_nfs_bp.route('/processar-devolucoes', methods=['POST'])
+@login_required
+def processar_devolucoes():
+    """
+    Processa devoluções pendentes do DFe e cria sugestões de vinculação.
+
+    Form params:
+    - data_de: Data inicial (YYYY-MM-DD)
+    - data_ate: Data final (YYYY-MM-DD)
+    """
+    data_de = request.form.get('data_de', '').strip() or None
+    data_ate = request.form.get('data_ate', '').strip() or None
+
+    try:
+        match_service = MatchService()
+        resultado = match_service.processar_devolucoes_pendentes(
+            data_de=data_de,
+            data_ate=data_ate,
+            criar_sugestoes=True
+        )
+
+        flash(
+            f'Processamento concluído! '
+            f'{resultado.get("nfs_encontradas", 0)} NF(s) encontradas, '
+            f'{resultado.get("sugestoes_criadas", 0)} sugestão(ões) criada(s)',
+            'success'
+        )
+
+    except Exception as e:
+        logger.exception(f"Erro ao processar devoluções")
+        flash(f'Erro ao processar devoluções: {str(e)}', 'danger')
+
+    return redirect(url_for('pallet_v2.tratativa_nfs.listar_sugestoes'))
+
+
+# =============================================================================
+# APIs
+# =============================================================================
+
+@tratativa_nfs_bp.route('/api/sugestoes')
+@login_required
+def api_listar_sugestoes():
+    """
+    API para listar sugestões pendentes.
+
+    Query params:
+    - tipo: DEVOLUCAO, RETORNO
+    - limit: Limite de resultados (default: 50)
+    """
+    tipo = request.args.get('tipo', '')
+    limit = request.args.get('limit', 50, type=int)
+
+    query = PalletNFSolucao.query.filter(
+        PalletNFSolucao.ativo == True,
+        PalletNFSolucao.vinculacao == 'SUGESTAO',
+        PalletNFSolucao.confirmado_em.is_(None)
+    )
+
+    if tipo:
+        query = query.filter(PalletNFSolucao.tipo == tipo)
+
+    sugestoes = query.order_by(PalletNFSolucao.criado_em.asc()).limit(limit).all()
+
+    return jsonify([{
+        'id': s.id,
+        'tipo': s.tipo,
+        'nf_remessa_id': s.nf_remessa_id,
+        'numero_nf_remessa': s.nf_remessa.numero_nf if s.nf_remessa else None,
+        'numero_nf_solucao': s.numero_nf_solucao,
+        'quantidade': s.quantidade,
+        'score': s.score_match,
+        'criado_em': s.criado_em.isoformat() if s.criado_em else None
+    } for s in sugestoes])
+
+
+@tratativa_nfs_bp.route('/api/buscar-devolucoes')
+@login_required
+def api_buscar_devolucoes():
+    """
+    API para buscar NFs de devolução no DFe.
+
+    Query params:
+    - data_de: Data inicial (YYYY-MM-DD)
+    - data_ate: Data final (YYYY-MM-DD)
+    """
+    data_de = request.args.get('data_de', '')
+    data_ate = request.args.get('data_ate', '')
+
+    try:
+        match_service = MatchService()
+        nfs = match_service.buscar_nfs_devolucao_pallet_dfe(
+            data_de=data_de if data_de else None,
+            data_ate=data_ate if data_ate else None,
+            apenas_nao_processadas=True
+        )
+
+        return jsonify({
+            'sucesso': True,
+            'nfs': nfs
+        })
+
+    except Exception as e:
+        logger.exception(f"Erro ao buscar devoluções no DFe")
+        return jsonify({
+            'sucesso': False,
+            'erro': str(e)
+        }), 500
+
+
+@tratativa_nfs_bp.route('/api/sugerir-vinculacao')
+@login_required
+def api_sugerir_vinculacao():
+    """
+    API para obter sugestões de vinculação para uma NF de devolução.
+
+    Query params:
+    - numero_nf: Número da NF de devolução
+    - cnpj_emitente: CNPJ do emitente
+    - quantidade: Quantidade de pallets
+    """
+    numero_nf = request.args.get('numero_nf', '').strip()
+    cnpj_emitente = request.args.get('cnpj_emitente', '').strip()
+    quantidade = request.args.get('quantidade', type=int) or 0
+
+    if not numero_nf:
+        return jsonify({'erro': 'Número da NF é obrigatório'}), 400
+
+    try:
+        # Preparar dados da NF de devolução
+        nf_devolucao = {
+            'numero_nf': numero_nf,
+            'cnpj_emitente': cnpj_emitente.replace('.', '').replace('-', '').replace('/', ''),
+            'quantidade': quantidade
+        }
+
+        match_service = MatchService()
+        sugestoes = match_service.sugerir_vinculacao_devolucao(
+            nf_devolucao=nf_devolucao,
+            criar_sugestao=False  # Apenas retorna, não cria
+        )
+
+        return jsonify({
+            'sucesso': True,
+            'sugestoes': sugestoes
+        })
+
+    except Exception as e:
+        logger.exception(f"Erro ao sugerir vinculação")
+        return jsonify({
+            'sucesso': False,
+            'erro': str(e)
+        }), 500
+
+
+@tratativa_nfs_bp.route('/api/nf-solucao/<int:solucao_id>')
+@login_required
+def api_detalhe_solucao(solucao_id):
+    """
+    API para obter detalhes de uma solução de NF.
+    """
+    solucao = PalletNFSolucao.query.get_or_404(solucao_id)
+
+    return jsonify({
+        'id': solucao.id,
+        'nf_remessa_id': solucao.nf_remessa_id,
+        'numero_nf_remessa': solucao.nf_remessa.numero_nf if solucao.nf_remessa else None,
+        'tipo': solucao.tipo,
+        'quantidade': solucao.quantidade,
+        'numero_nf_solucao': solucao.numero_nf_solucao,
+        'chave_nfe_solucao': solucao.chave_nfe_solucao,
+        'data_nf_solucao': solucao.data_nf_solucao.isoformat() if solucao.data_nf_solucao else None,
+        'vinculacao': solucao.vinculacao,
+        'score_match': solucao.score_match,
+        'criado_em': solucao.criado_em.isoformat() if solucao.criado_em else None,
+        'criado_por': solucao.criado_por,
+        'confirmado_em': solucao.confirmado_em.isoformat() if solucao.confirmado_em else None,
+        'confirmado_por': solucao.confirmado_por,
+        'observacao': solucao.observacao
+    })

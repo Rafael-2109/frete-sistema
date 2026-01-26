@@ -1,0 +1,945 @@
+{% extends 'base.html' %}
+{% block title %}Gestao de Pallets v2{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Pallet Dashboard v2 - Estilos */
+.pallet-dashboard {
+    padding: 1.5rem;
+}
+
+.pallet-dashboard__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.pallet-dashboard__title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.pallet-dashboard__subtitle {
+    font-size: 0.875rem;
+    color: var(--text-muted, #6c757d);
+    margin-top: 0.25rem;
+}
+
+/* Cards de Resumo */
+.pallet-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.pallet-stat-card {
+    background: var(--bg-light, #1a1a2e);
+    border-radius: 12px;
+    padding: 1.25rem;
+    border: 1px solid var(--border, rgba(255,255,255,0.1));
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.pallet-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.pallet-stat-card--primary {
+    border-left: 4px solid var(--bs-primary);
+}
+
+.pallet-stat-card--warning {
+    border-left: 4px solid var(--bs-warning);
+}
+
+.pallet-stat-card--success {
+    border-left: 4px solid var(--bs-success);
+}
+
+.pallet-stat-card--danger {
+    border-left: 4px solid var(--bs-danger);
+}
+
+.pallet-stat-card--info {
+    border-left: 4px solid var(--bs-info);
+}
+
+.pallet-stat-card__icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.pallet-stat-card__icon--primary {
+    background: rgba(var(--bs-primary-rgb), 0.15);
+    color: var(--bs-primary);
+}
+
+.pallet-stat-card__icon--warning {
+    background: rgba(var(--bs-warning-rgb), 0.15);
+    color: var(--bs-warning);
+}
+
+.pallet-stat-card__icon--success {
+    background: rgba(var(--bs-success-rgb), 0.15);
+    color: var(--bs-success);
+}
+
+.pallet-stat-card__icon--danger {
+    background: rgba(var(--bs-danger-rgb), 0.15);
+    color: var(--bs-danger);
+}
+
+.pallet-stat-card__icon--info {
+    background: rgba(var(--bs-info-rgb), 0.15);
+    color: var(--bs-info);
+}
+
+.pallet-stat-card__value {
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 0.25rem;
+}
+
+.pallet-stat-card__label {
+    font-size: 0.875rem;
+    color: var(--text-muted, #6c757d);
+}
+
+/* Tabs de Navegacao */
+.pallet-tabs {
+    margin-bottom: 1.5rem;
+}
+
+.pallet-tabs .nav-link {
+    border-radius: 8px 8px 0 0;
+    padding: 0.75rem 1.25rem;
+    font-weight: 500;
+    color: var(--text-muted, #6c757d);
+    border: 1px solid transparent;
+    border-bottom: none;
+}
+
+.pallet-tabs .nav-link:hover {
+    color: var(--bs-primary);
+    background: rgba(var(--bs-primary-rgb), 0.05);
+}
+
+.pallet-tabs .nav-link.active {
+    color: var(--bs-primary);
+    background: var(--bg-light, #1a1a2e);
+    border-color: var(--border, rgba(255,255,255,0.1));
+}
+
+/* Conteudo das Tabs */
+.pallet-tab-content {
+    background: var(--bg-light, #1a1a2e);
+    border-radius: 0 12px 12px 12px;
+    padding: 1.5rem;
+    border: 1px solid var(--border, rgba(255,255,255,0.1));
+}
+
+/* Cards de Secao */
+.pallet-section-card {
+    background: var(--bg, #0f0f1a);
+    border-radius: 10px;
+    border: 1px solid var(--border, rgba(255,255,255,0.1));
+    margin-bottom: 1rem;
+}
+
+.pallet-section-card__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border, rgba(255,255,255,0.1));
+}
+
+.pallet-section-card__title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.pallet-section-card__body {
+    padding: 1.25rem;
+}
+
+/* Tabelas */
+.pallet-table {
+    margin: 0;
+}
+
+.pallet-table thead th {
+    background: var(--bg, #0f0f1a);
+    border-bottom: 2px solid var(--border, rgba(255,255,255,0.15));
+    font-weight: 600;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted, #6c757d);
+    padding: 0.75rem 1rem;
+}
+
+.pallet-table tbody td {
+    padding: 0.75rem 1rem;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--border, rgba(255,255,255,0.05));
+}
+
+.pallet-table tbody tr:hover {
+    background: rgba(var(--bs-primary-rgb), 0.05);
+}
+
+/* Status badges */
+.pallet-status {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.pallet-status--ativa {
+    background: rgba(var(--bs-primary-rgb), 0.15);
+    color: var(--bs-primary);
+}
+
+.pallet-status--resolvida {
+    background: rgba(var(--bs-success-rgb), 0.15);
+    color: var(--bs-success);
+}
+
+.pallet-status--cancelada {
+    background: rgba(var(--bs-secondary-rgb), 0.15);
+    color: var(--bs-secondary);
+}
+
+.pallet-status--pendente {
+    background: rgba(var(--bs-warning-rgb), 0.15);
+    color: var(--bs-warning);
+}
+
+.pallet-status--parcial {
+    background: rgba(var(--bs-info-rgb), 0.15);
+    color: var(--bs-info);
+}
+
+/* Acoes Rapidas */
+.pallet-quick-actions {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.pallet-quick-action {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.pallet-quick-action:hover {
+    transform: translateY(-2px);
+}
+
+/* Mini stats inline */
+.pallet-mini-stats {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.pallet-mini-stat {
+    text-align: center;
+}
+
+.pallet-mini-stat__value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.pallet-mini-stat__label {
+    font-size: 0.75rem;
+    color: var(--text-muted, #6c757d);
+}
+
+/* Alertas de Vencimento */
+.pallet-alert-vencimento {
+    background: rgba(var(--bs-danger-rgb), 0.1);
+    border: 1px solid rgba(var(--bs-danger-rgb), 0.3);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.pallet-alert-vencimento__header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    color: var(--bs-danger);
+    margin-bottom: 0.5rem;
+}
+
+/* Sugestoes pendentes */
+.pallet-sugestao {
+    background: rgba(var(--bs-info-rgb), 0.1);
+    border: 1px solid rgba(var(--bs-info-rgb), 0.3);
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+/* Light mode */
+[data-bs-theme="light"] .pallet-dashboard,
+[data-bs-theme="light"] .pallet-stat-card,
+[data-bs-theme="light"] .pallet-tab-content,
+[data-bs-theme="light"] .pallet-section-card {
+    background: #fff;
+}
+
+[data-bs-theme="light"] .pallet-section-card {
+    background: #f8f9fa;
+}
+
+[data-bs-theme="light"] .pallet-table thead th {
+    background: #f8f9fa;
+}
+
+/* Empty state */
+.pallet-empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--text-muted, #6c757d);
+}
+
+.pallet-empty-state__icon {
+    font-size: 3rem;
+    opacity: 0.3;
+    margin-bottom: 1rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .pallet-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .pallet-dashboard__header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="pallet-dashboard">
+    <!-- Header -->
+    <div class="pallet-dashboard__header">
+        <div>
+            <h1 class="pallet-dashboard__title">
+                <i class="fas fa-pallet text-primary"></i>
+                Gestao de Pallets
+            </h1>
+            <p class="pallet-dashboard__subtitle">
+                Controle de creditos e tratativa de NFs de remessa de pallet
+            </p>
+        </div>
+        <div class="pallet-quick-actions">
+            <a href="{{ url_for('pallet_v2.controle_pallets.registrar_documento') if url_for('pallet_v2.controle_pallets.registrar_documento') else '#' }}"
+               class="pallet-quick-action btn btn-outline-primary"
+               onclick="openDocumentoModal(); return false;">
+                <i class="fas fa-file-alt"></i> Registrar Documento
+            </a>
+            <a href="{{ url_for('pallet.sincronizar_odoo') }}" class="pallet-quick-action btn btn-outline-secondary">
+                <i class="fas fa-sync"></i> Sincronizar Odoo
+            </a>
+        </div>
+    </div>
+
+    <!-- Cards de Resumo Geral -->
+    <div class="pallet-stats-grid">
+        <div class="pallet-stat-card pallet-stat-card--primary">
+            <div class="pallet-stat-card__icon pallet-stat-card__icon--primary">
+                <i class="fas fa-warehouse"></i>
+            </div>
+            <div class="pallet-stat-card__value">{{ total_em_terceiros|numero_br(0) }}</div>
+            <div class="pallet-stat-card__label">Pallets em Terceiros</div>
+        </div>
+        <div class="pallet-stat-card pallet-stat-card--warning">
+            <div class="pallet-stat-card__icon pallet-stat-card__icon--warning">
+                <i class="fas fa-coins"></i>
+            </div>
+            <div class="pallet-stat-card__value">{{ creditos_pendentes }}</div>
+            <div class="pallet-stat-card__label">Creditos Pendentes</div>
+        </div>
+        <div class="pallet-stat-card pallet-stat-card--info">
+            <div class="pallet-stat-card__icon pallet-stat-card__icon--info">
+                <i class="fas fa-file-invoice"></i>
+            </div>
+            <div class="pallet-stat-card__value">{{ nfs_pendentes_vinculacao }}</div>
+            <div class="pallet-stat-card__label">NFs Pendentes Vinculacao</div>
+        </div>
+        <div class="pallet-stat-card pallet-stat-card--danger">
+            <div class="pallet-stat-card__icon pallet-stat-card__icon--danger">
+                <i class="fas fa-clock"></i>
+            </div>
+            <div class="pallet-stat-card__value">{{ creditos_proximos_vencer|length }}</div>
+            <div class="pallet-stat-card__label">Proximos do Vencimento</div>
+        </div>
+    </div>
+
+    <!-- Alerta de Vencimentos (se houver) -->
+    {% if creditos_proximos_vencer %}
+    <div class="pallet-alert-vencimento">
+        <div class="pallet-alert-vencimento__header">
+            <i class="fas fa-exclamation-triangle"></i>
+            Creditos proximos do vencimento (7 dias)
+        </div>
+        <div class="table-responsive" style="max-height: 150px; overflow-y: auto;">
+            <table class="table table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th>NF Remessa</th>
+                        <th>Responsavel</th>
+                        <th>Saldo</th>
+                        <th>Vencimento</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for credito in creditos_proximos_vencer[:5] %}
+                    <tr>
+                        <td><strong>{{ credito.nf_remessa.numero_nf if credito.nf_remessa else '-' }}</strong></td>
+                        <td>{{ credito.nome_responsavel or credito.cnpj_responsavel or '-' }}</td>
+                        <td class="fw-bold">{{ credito.qtd_saldo }}</td>
+                        <td>
+                            {% if credito.data_vencimento %}
+                            <span class="text-danger">{{ credito.data_vencimento.strftime('%d/%m/%Y') }}</span>
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if creditos_proximos_vencer|length > 5 %}
+        <div class="text-end mt-2">
+            <small class="text-muted">E mais {{ creditos_proximos_vencer|length - 5 }} outros...</small>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Tabs de Navegacao -->
+    <ul class="nav nav-tabs pallet-tabs" id="palletV2Tabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="tab-nf-remessa" data-bs-toggle="tab"
+                    data-bs-target="#content-nf-remessa" type="button" role="tab">
+                <i class="fas fa-file-invoice me-1"></i> NFs de Remessa
+                {% if stats_nf_remessa.total_ativas > 0 %}
+                <span class="badge bg-primary ms-1">{{ stats_nf_remessa.total_ativas }}</span>
+                {% endif %}
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-controle" data-bs-toggle="tab"
+                    data-bs-target="#content-controle" type="button" role="tab">
+                <i class="fas fa-coins me-1"></i> Controle de Pallets
+                {% if stats_creditos.pendentes + stats_creditos.parciais > 0 %}
+                <span class="badge bg-warning text-dark ms-1">{{ stats_creditos.pendentes + stats_creditos.parciais }}</span>
+                {% endif %}
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-tratativa" data-bs-toggle="tab"
+                    data-bs-target="#content-tratativa" type="button" role="tab">
+                <i class="fas fa-link me-1"></i> Tratativa de NFs
+                {% if sugestoes_pendentes > 0 %}
+                <span class="badge bg-info ms-1">{{ sugestoes_pendentes }}</span>
+                {% endif %}
+            </button>
+        </li>
+    </ul>
+
+    <!-- Conteudo das Tabs -->
+    <div class="tab-content pallet-tab-content" id="palletV2TabsContent">
+
+        <!-- ========== TAB 1: NFs DE REMESSA ========== -->
+        <div class="tab-pane fade show active" id="content-nf-remessa" role="tabpanel">
+            <!-- Mini stats -->
+            <div class="pallet-mini-stats mb-4">
+                <div class="pallet-mini-stat">
+                    <div class="pallet-mini-stat__value text-primary">{{ stats_nf_remessa.total_ativas }}</div>
+                    <div class="pallet-mini-stat__label">Ativas</div>
+                </div>
+                <div class="pallet-mini-stat">
+                    <div class="pallet-mini-stat__value text-success">{{ stats_nf_remessa.total_resolvidas }}</div>
+                    <div class="pallet-mini-stat__label">Resolvidas</div>
+                </div>
+                <div class="pallet-mini-stat">
+                    <div class="pallet-mini-stat__value text-secondary">{{ stats_nf_remessa.total_canceladas }}</div>
+                    <div class="pallet-mini-stat__label">Canceladas</div>
+                </div>
+            </div>
+
+            <!-- Tabela de NFs Ativas -->
+            <div class="pallet-section-card">
+                <div class="pallet-section-card__header">
+                    <h3 class="pallet-section-card__title">
+                        <i class="fas fa-file-invoice text-primary"></i>
+                        NFs de Remessa Ativas
+                    </h3>
+                    <a href="{{ url_for('pallet_v2.nf_remessa.listar') }}" class="btn btn-sm btn-outline-primary">
+                        Ver Todas <i class="fas fa-arrow-right ms-1"></i>
+                    </a>
+                </div>
+                <div class="table-responsive">
+                    <table class="table pallet-table">
+                        <thead>
+                            <tr>
+                                <th>NF</th>
+                                <th>Emissao</th>
+                                <th>Destinatario</th>
+                                <th class="text-center">Qtd</th>
+                                <th>Status</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for nf in nfs_ativas %}
+                            <tr>
+                                <td>
+                                    <strong>{{ nf.numero_nf }}</strong>
+                                    {% if nf.serie %}<small class="text-muted">/{{ nf.serie }}</small>{% endif %}
+                                </td>
+                                <td>{{ nf.data_emissao.strftime('%d/%m/%Y') if nf.data_emissao else '-' }}</td>
+                                <td>
+                                    <span class="badge bg-{{ 'info' if nf.tipo_destinatario == 'TRANSPORTADORA' else 'secondary' }} me-1">
+                                        {{ nf.tipo_destinatario[:4] if nf.tipo_destinatario else '-' }}
+                                    </span>
+                                    {{ nf.nome_destinatario or nf.cnpj_destinatario or '-' }}
+                                </td>
+                                <td class="text-center fw-bold">{{ nf.quantidade }}</td>
+                                <td>
+                                    <span class="pallet-status pallet-status--ativa">
+                                        <i class="fas fa-circle me-1" style="font-size: 0.5rem;"></i> Ativa
+                                    </span>
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('pallet_v2.nf_remessa.detalhe', nf_id=nf.id) }}"
+                                       class="btn btn-sm btn-outline-primary" title="Ver detalhes">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="6">
+                                    <div class="pallet-empty-state">
+                                        <div class="pallet-empty-state__icon">
+                                            <i class="fas fa-file-invoice"></i>
+                                        </div>
+                                        <p>Nenhuma NF de remessa ativa</p>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- NFs Resolvidas (resumo) -->
+            {% if nfs_resolvidas %}
+            <div class="pallet-section-card">
+                <div class="pallet-section-card__header">
+                    <h3 class="pallet-section-card__title">
+                        <i class="fas fa-check-circle text-success"></i>
+                        Ultimas NFs Resolvidas
+                    </h3>
+                </div>
+                <div class="table-responsive">
+                    <table class="table pallet-table table-sm">
+                        <thead>
+                            <tr>
+                                <th>NF</th>
+                                <th>Destinatario</th>
+                                <th class="text-center">Qtd</th>
+                                <th>Resolvida em</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for nf in nfs_resolvidas[:5] %}
+                            <tr>
+                                <td><strong>{{ nf.numero_nf }}</strong></td>
+                                <td>{{ nf.nome_destinatario or '-' }}</td>
+                                <td class="text-center">{{ nf.quantidade }}</td>
+                                <td>{{ nf.atualizado_em.strftime('%d/%m/%Y') if nf.atualizado_em else '-' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- ========== TAB 2: CONTROLE DE PALLETS (Dominio A) ========== -->
+        <div class="tab-pane fade" id="content-controle" role="tabpanel">
+            <!-- Mini stats -->
+            <div class="pallet-mini-stats mb-4">
+                <div class="pallet-mini-stat">
+                    <div class="pallet-mini-stat__value text-warning">{{ stats_creditos.pendentes }}</div>
+                    <div class="pallet-mini-stat__label">Pendentes ({{ stats_creditos.saldo_pendente }} pal)</div>
+                </div>
+                <div class="pallet-mini-stat">
+                    <div class="pallet-mini-stat__value text-info">{{ stats_creditos.parciais }}</div>
+                    <div class="pallet-mini-stat__label">Parciais ({{ stats_creditos.saldo_parcial }} pal)</div>
+                </div>
+                <div class="pallet-mini-stat">
+                    <div class="pallet-mini-stat__value text-success">{{ stats_creditos.resolvidos }}</div>
+                    <div class="pallet-mini-stat__label">Resolvidos</div>
+                </div>
+                <div class="pallet-mini-stat">
+                    <div class="pallet-mini-stat__value text-secondary">{{ docs_pendentes }}</div>
+                    <div class="pallet-mini-stat__label">Docs Pendentes</div>
+                </div>
+            </div>
+
+            <!-- Cards de acoes -->
+            <div class="row mb-4">
+                <div class="col-md-6 col-lg-3 mb-3">
+                    <a href="{{ url_for('pallet_v2.controle_pallets.listar_vales') }}" class="card h-100 text-decoration-none">
+                        <div class="card-body text-center py-4">
+                            <i class="fas fa-ticket-alt fa-2x text-primary mb-2"></i>
+                            <h6 class="card-title mb-1">Controle de Vales</h6>
+                            <p class="card-text small text-muted">Canhotos e vales pallet</p>
+                            {% if docs_pendentes > 0 %}
+                            <span class="badge bg-warning">{{ docs_pendentes }} pendentes</span>
+                            {% endif %}
+                        </div>
+                    </a>
+                </div>
+                <div class="col-md-6 col-lg-3 mb-3">
+                    <a href="{{ url_for('pallet_v2.controle_pallets.listar_solucoes') }}" class="card h-100 text-decoration-none">
+                        <div class="card-body text-center py-4">
+                            <i class="fas fa-tasks fa-2x text-success mb-2"></i>
+                            <h6 class="card-title mb-1">Solucoes de Pallets</h6>
+                            <p class="card-text small text-muted">Baixa, venda, recebimento</p>
+                            {% if stats_creditos.pendentes + stats_creditos.parciais > 0 %}
+                            <span class="badge bg-primary">{{ stats_creditos.pendentes + stats_creditos.parciais }} creditos</span>
+                            {% endif %}
+                        </div>
+                    </a>
+                </div>
+                <div class="col-md-6 col-lg-3 mb-3">
+                    <a href="{{ url_for('pallet_v2.controle_pallets.historico_solucoes') }}" class="card h-100 text-decoration-none">
+                        <div class="card-body text-center py-4">
+                            <i class="fas fa-history fa-2x text-info mb-2"></i>
+                            <h6 class="card-title mb-1">Historico</h6>
+                            <p class="card-text small text-muted">Solucoes registradas</p>
+                        </div>
+                    </a>
+                </div>
+                <div class="col-md-6 col-lg-3 mb-3">
+                    <a href="{{ url_for('pallet.listar_substituicoes') }}" class="card h-100 text-decoration-none">
+                        <div class="card-body text-center py-4">
+                            <i class="fas fa-exchange-alt fa-2x text-secondary mb-2"></i>
+                            <h6 class="card-title mb-1">Substituicoes</h6>
+                            <p class="card-text small text-muted">Transferir responsabilidade</p>
+                        </div>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Solucoes do mes -->
+            <div class="pallet-section-card">
+                <div class="pallet-section-card__header">
+                    <h3 class="pallet-section-card__title">
+                        <i class="fas fa-chart-bar text-primary"></i>
+                        Solucoes nos Ultimos 30 Dias
+                    </h3>
+                </div>
+                <div class="pallet-section-card__body">
+                    <div class="row text-center">
+                        <div class="col-3">
+                            <div class="h4 mb-0 text-danger">{{ stats_solucoes_mes.BAIXA.qtd|default(0) }}</div>
+                            <small class="text-muted">Baixas ({{ stats_solucoes_mes.BAIXA.count|default(0) }} ops)</small>
+                        </div>
+                        <div class="col-3">
+                            <div class="h4 mb-0 text-success">{{ stats_solucoes_mes.VENDA.qtd|default(0) }}</div>
+                            <small class="text-muted">Vendas ({{ stats_solucoes_mes.VENDA.count|default(0) }} ops)</small>
+                        </div>
+                        <div class="col-3">
+                            <div class="h4 mb-0 text-primary">{{ stats_solucoes_mes.RECEBIMENTO.qtd|default(0) }}</div>
+                            <small class="text-muted">Recebimentos ({{ stats_solucoes_mes.RECEBIMENTO.count|default(0) }} ops)</small>
+                        </div>
+                        <div class="col-3">
+                            <div class="h4 mb-0 text-info">{{ stats_solucoes_mes.SUBSTITUICAO.qtd|default(0) }}</div>
+                            <small class="text-muted">Substituicoes ({{ stats_solucoes_mes.SUBSTITUICAO.count|default(0) }} ops)</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== TAB 3: TRATATIVA DE NFs (Dominio B) ========== -->
+        <div class="tab-pane fade" id="content-tratativa" role="tabpanel">
+            <!-- Mini stats -->
+            <div class="pallet-mini-stats mb-4">
+                <div class="pallet-mini-stat">
+                    <div class="pallet-mini-stat__value text-success">{{ stats_nf_solucoes.DEVOLUCAO.count }}</div>
+                    <div class="pallet-mini-stat__label">Devolucoes ({{ stats_nf_solucoes.DEVOLUCAO.qtd }} pal)</div>
+                </div>
+                <div class="pallet-mini-stat">
+                    <div class="pallet-mini-stat__value text-info">{{ stats_nf_solucoes.RETORNO.count }}</div>
+                    <div class="pallet-mini-stat__label">Retornos ({{ stats_nf_solucoes.RETORNO.qtd }} pal)</div>
+                </div>
+                <div class="pallet-mini-stat">
+                    <div class="pallet-mini-stat__value text-secondary">{{ stats_nf_solucoes.CANCELAMENTO.count }}</div>
+                    <div class="pallet-mini-stat__label">Cancelamentos</div>
+                </div>
+                <div class="pallet-mini-stat">
+                    <div class="pallet-mini-stat__value text-warning">{{ sugestoes_pendentes }}</div>
+                    <div class="pallet-mini-stat__label">Sugestoes Pendentes</div>
+                </div>
+            </div>
+
+            <!-- Sugestoes pendentes -->
+            {% if sugestoes_pendentes > 0 %}
+            <div class="pallet-sugestao mb-4">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <strong><i class="fas fa-lightbulb text-info me-2"></i>Sugestoes de Vinculacao</strong>
+                        <p class="mb-0 text-muted small">
+                            O sistema identificou {{ sugestoes_pendentes }} possiveis vinculacoes automaticas.
+                        </p>
+                    </div>
+                    <a href="{{ url_for('pallet_v2.tratativa_nfs.listar_sugestoes') }}" class="btn btn-info">
+                        <i class="fas fa-eye me-1"></i> Revisar Sugestoes
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Cards de acoes -->
+            <div class="row mb-4">
+                <div class="col-md-6 col-lg-3 mb-3">
+                    <a href="{{ url_for('pallet_v2.tratativa_nfs.direcionamento') }}" class="card h-100 text-decoration-none">
+                        <div class="card-body text-center py-4">
+                            <i class="fas fa-compass fa-2x text-primary mb-2"></i>
+                            <h6 class="card-title mb-1">Direcionamento</h6>
+                            <p class="card-text small text-muted">NFs aguardando vinculacao</p>
+                        </div>
+                    </a>
+                </div>
+                <div class="col-md-6 col-lg-3 mb-3">
+                    <a href="{{ url_for('pallet_v2.tratativa_nfs.listar_sugestoes') }}" class="card h-100 text-decoration-none">
+                        <div class="card-body text-center py-4">
+                            <i class="fas fa-magic fa-2x text-info mb-2"></i>
+                            <h6 class="card-title mb-1">Sugestoes</h6>
+                            <p class="card-text small text-muted">Vinculos automaticos</p>
+                            {% if sugestoes_pendentes > 0 %}
+                            <span class="badge bg-info">{{ sugestoes_pendentes }} pendentes</span>
+                            {% endif %}
+                        </div>
+                    </a>
+                </div>
+                <div class="col-md-6 col-lg-3 mb-3">
+                    <a href="{{ url_for('pallet_v2.tratativa_nfs.listar_solucoes') }}" class="card h-100 text-decoration-none">
+                        <div class="card-body text-center py-4">
+                            <i class="fas fa-check-double fa-2x text-success mb-2"></i>
+                            <h6 class="card-title mb-1">Solucoes de NF</h6>
+                            <p class="card-text small text-muted">Devolucoes e retornos</p>
+                        </div>
+                    </a>
+                </div>
+                <div class="col-md-6 col-lg-3 mb-3">
+                    <a href="{{ url_for('pallet_v2.tratativa_nfs.listar_canceladas') }}" class="card h-100 text-decoration-none">
+                        <div class="card-body text-center py-4">
+                            <i class="fas fa-ban fa-2x text-secondary mb-2"></i>
+                            <h6 class="card-title mb-1">Canceladas</h6>
+                            <p class="card-text small text-muted">Historico de cancelamentos</p>
+                        </div>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Processar devolucoes -->
+            <div class="pallet-section-card">
+                <div class="pallet-section-card__header">
+                    <h3 class="pallet-section-card__title">
+                        <i class="fas fa-search text-primary"></i>
+                        Buscar Devolucoes no DFe
+                    </h3>
+                </div>
+                <div class="pallet-section-card__body">
+                    <p class="text-muted mb-3">
+                        Busca automaticamente NFs de devolucao/retorno de pallet no DFe e cria sugestoes de vinculacao.
+                    </p>
+                    <form action="{{ url_for('pallet_v2.tratativa_nfs.processar_devolucoes') }}" method="POST" class="row g-3">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div class="col-md-4">
+                            <label class="form-label">Data Inicial</label>
+                            <input type="date" name="data_de" class="form-control"
+                                   value="{{ (request.args.get('data_de') or '') }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Data Final</label>
+                            <input type="date" name="data_ate" class="form-control"
+                                   value="{{ (request.args.get('data_ate') or '') }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">&nbsp;</label>
+                            <button type="submit" class="btn btn-primary d-block w-100">
+                                <i class="fas fa-search me-1"></i> Buscar e Criar Sugestoes
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para registrar documento -->
+<div class="modal fade" id="modalRegistrarDocumento" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-file-alt me-2"></i>Registrar Documento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="{{ url_for('pallet_v2.controle_pallets.registrar_documento') }}" method="POST">
+                <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Tipo de Documento *</label>
+                            <select name="tipo" class="form-select" required>
+                                <option value="">Selecione...</option>
+                                <option value="CANHOTO">Canhoto da NF</option>
+                                <option value="VALE_PALLET">Vale Pallet</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Credito (NF Remessa) *</label>
+                            <select name="credito_id" class="form-select" required id="selectCredito">
+                                <option value="">Selecione...</option>
+                                {# Sera preenchido via JS #}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Numero do Documento</label>
+                            <input type="text" name="numero_documento" class="form-control"
+                                   placeholder="Ex: 12345">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Quantidade *</label>
+                            <input type="number" name="quantidade" class="form-control"
+                                   min="1" required placeholder="Quantidade de pallets">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Data de Emissao</label>
+                            <input type="date" name="data_emissao" class="form-control">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Data de Validade</label>
+                            <input type="date" name="data_validade" class="form-control">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Observacao</label>
+                            <textarea name="observacao" class="form-control" rows="2"
+                                      placeholder="Observacoes adicionais..."></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i> Registrar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Abrir modal de registrar documento
+function openDocumentoModal() {
+    const modal = new bootstrap.Modal(document.getElementById('modalRegistrarDocumento'));
+
+    // Carregar creditos pendentes
+    fetch('{{ url_for("pallet_v2.controle_pallets.api_listar_creditos") }}?status=PENDENTE,PARCIAL')
+        .then(response => response.json())
+        .then(data => {
+            const select = document.getElementById('selectCredito');
+            select.innerHTML = '<option value="">Selecione...</option>';
+
+            // API retorna array direto, não objeto com .creditos
+            if (data && data.length > 0) {
+                data.forEach(credito => {
+                    const option = document.createElement('option');
+                    option.value = credito.id;
+                    option.textContent = `NF ${credito.numero_nf || '-'} - ${credito.nome_responsavel || credito.cnpj_responsavel || '-'} (saldo: ${credito.qtd_saldo})`;
+                    select.appendChild(option);
+                });
+            } else {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = 'Nenhum credito pendente';
+                option.disabled = true;
+                select.appendChild(option);
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao carregar creditos:', error);
+            toastr.error('Erro ao carregar creditos');
+        });
+
+    modal.show();
+}
+
+// Auto-refresh stats a cada 5 minutos
+setInterval(function() {
+    fetch('{{ url_for("pallet_v2.dashboard.api_stats") }}')
+        .then(response => response.json())
+        .then(data => {
+            console.log('Stats atualizados:', data);
+            // Poderia atualizar os cards aqui se necessario
+        })
+        .catch(error => console.error('Erro ao atualizar stats:', error));
+}, 300000);
+</script>
+{% endblock %}

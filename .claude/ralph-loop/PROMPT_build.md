@@ -1,3 +1,12 @@
+# CRITICAL RULE
+Complete EXACTLY ONE task per iteration. After completing the task:
+1. Update IMPLEMENTATION_PLAN.md marking the task as done
+2. STOP IMMEDIATELY - do not start another task
+3. The loop script will restart you with fresh context
+DO NOT continue to another task in the same session.
+
+---
+
 0a. Study `specs/*` with up to 500 parallel subagents to learn specifications.
 0b. Study @IMPLEMENTATION_PLAN.md.
 0c. Reference CLAUDE.md for field names, conventions, and validation rules.
@@ -8,7 +17,11 @@
 
 3. When you discover issues, immediately update @IMPLEMENTATION_PLAN.md with your findings. When resolved, update and remove the item.
 
-4. When tests pass, update @IMPLEMENTATION_PLAN.md. Do NOT run git commands - the user will handle commits manually.
+4. When tests pass:
+   - Update @IMPLEMENTATION_PLAN.md marking the task complete
+   - STOP HERE - your work for this iteration is done
+   - Do NOT run git commands - the user will handle commits manually
+   - Do NOT start another task - exit and let the loop restart you
 
 99999. Capture the why in documentation.
 999999. Single sources of truth, no migrations/adapters. If unrelated tests fail, resolve them.

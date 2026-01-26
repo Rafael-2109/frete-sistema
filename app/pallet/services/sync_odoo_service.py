@@ -5,11 +5,20 @@ Este servico importa:
 1. NFs de remessa de pallet (l10n_br_tipo_pedido = 'vasilhame') -> tipo_movimentacao = 'REMESSA'
 2. NFs de venda de pallet (cod_produto = '208000012') -> tipo_movimentacao = 'SAIDA'
 3. NFs de retorno/entrada de pallet -> tipo_movimentacao = 'ENTRADA'
+
+INTEGRAÇÃO COM NOVOS MODELS (v2):
+- Ao criar MovimentacaoEstoque de REMESSA, também cria:
+  - PalletNFRemessa (via NFService.importar_nf_remessa_odoo)
+  - PalletCredito (criado automaticamente pelo NFService)
+
+Spec: .claude/ralph-loop/specs/prd-reestruturacao-modulo-pallets.md
 """
 import logging
 from datetime import datetime, date, timedelta
+from decimal import Decimal
 from app import db
 from app.estoque.models import MovimentacaoEstoque
+from app.pallet.services.nf_service import NFService
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +34,13 @@ CNPJS_INTERCOMPANY_PREFIXOS = [
     '61724241',  # Nacom Goya (matriz e filiais)
     '18467441',  # La Famiglia
 ]
+
+# Mapeamento de company_id do Odoo para codigo de empresa
+COMPANY_ID_TO_EMPRESA = {
+    4: 'CD',  # NACOM GOYA - CD
+    1: 'FB',  # NACOM GOYA - FB
+    3: 'SC',  # NACOM GOYA - SC
+}
 
 
 class PalletSyncService:
@@ -85,7 +101,8 @@ class PalletSyncService:
             campos = [
                 'id', 'name', 'invoice_date', 'partner_id',
                 'l10n_br_numero_nota_fiscal', 'l10n_br_tipo_pedido',
-                'amount_total', 'invoice_line_ids'
+                'amount_total', 'invoice_line_ids', 'company_id',
+                'l10n_br_chave_nfe'  # Chave da NF-e para vincular com novos models
             ]
 
             nfs = self.odoo.search_read('account.move', domain, campos)
@@ -167,7 +184,15 @@ class PalletSyncService:
                     elif not data_nf:
                         data_nf = date.today()
 
-                    # Criar movimentacao
+                    # Determinar empresa pelo company_id
+                    company_data = nf.get('company_id', [])
+                    company_id = company_data[0] if isinstance(company_data, (list, tuple)) else company_data
+                    empresa = COMPANY_ID_TO_EMPRESA.get(company_id, 'CD')  # Default CD se desconhecido
+
+                    # Obter chave da NF-e
+                    chave_nfe = nf.get('l10n_br_chave_nfe', '') or ''
+
+                    # Criar movimentacao (sistema legado - manter para compatibilidade)
                     movimento = MovimentacaoEstoque(
                         cod_produto=COD_PRODUTO_PALLET,
                         nome_produto=NOME_PRODUTO_PALLET,
@@ -187,6 +212,46 @@ class PalletSyncService:
                     )
 
                     db.session.add(movimento)
+                    db.session.flush()  # Obter ID do movimento antes de commit
+
+                    # ============================================================
+                    # INTEGRACAO COM NOVOS MODELS v2
+                    # Criar PalletNFRemessa e PalletCredito automaticamente
+                    # ============================================================
+                    try:
+                        odoo_move_id = nf.get('id')
+
+                        dados_nf_remessa = {
+                            'numero_nf': numero_nf,
+                            'chave_nfe': chave_nfe if chave_nfe else None,
+                            'data_emissao': datetime.combine(data_nf, datetime.min.time()) if isinstance(data_nf, date) else data_nf,
+                            'quantidade': int(quantidade_total),
+                            'empresa': empresa,
+                            'tipo_destinatario': tipo_destinatario,
+                            'cnpj_destinatario': cnpj_destinatario,
+                            'nome_destinatario': partner_nome,
+                            'valor_unitario': Decimal('35.00'),  # Valor padrao
+                            'odoo_account_move_id': odoo_move_id,
+                            'movimentacao_estoque_id': movimento.id,
+                            'observacao': f'Importado automaticamente do Odoo (account.move #{odoo_move_id})'
+                        }
+
+                        # Chamar NFService para criar NF Remessa + Credito
+                        nf_remessa = NFService.importar_nf_remessa_odoo(
+                            dados_odoo=dados_nf_remessa,
+                            usuario='SYNC_ODOO'
+                        )
+
+                        logger.info(f"      ↳ PalletNFRemessa #{nf_remessa.id} criada (Credito auto)")
+
+                    except Exception as e_v2:
+                        # Erro ao criar novos models nao deve bloquear o legado
+                        logger.warning(
+                            f"      ⚠️ Erro ao criar PalletNFRemessa para NF {numero_nf}: {e_v2}. "
+                            "MovimentacaoEstoque criada normalmente."
+                        )
+                    # ============================================================
+
                     db.session.commit()
 
                     resumo['novos'] += 1
@@ -194,10 +259,11 @@ class PalletSyncService:
                         'nf': numero_nf,
                         'destinatario': partner_nome,
                         'quantidade': int(quantidade_total),
-                        'tipo': tipo_destinatario
+                        'tipo': tipo_destinatario,
+                        'empresa': empresa
                     })
 
-                    logger.info(f"   ✅ NF {numero_nf}: {int(quantidade_total)} pallets -> {partner_nome}")
+                    logger.info(f"   ✅ NF {numero_nf}: {int(quantidade_total)} pallets -> {partner_nome} ({empresa})")
 
                 except Exception as e:
                     resumo['erros'] += 1
