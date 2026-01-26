@@ -2,7 +2,7 @@
 Service para processamento de recebimento fisico no Odoo (Worker RQ)
 ====================================================================
 
-Responsabilidades (7 passos):
+Responsabilidades (8 passos):
 1. Conectar ao Odoo e verificar picking (state=assigned)
 2. Preencher stock.move.line (lote + quantidade)
 3. Preencher quality checks (passfail: do_pass/do_fail)
@@ -10,8 +10,15 @@ Responsabilidades (7 passos):
 5. Validar picking (button_validate)
 6. Verificar resultado (state=done)
 7. Atualizar status local
+8. Criar MovimentacaoEstoque (rastreabilidade + entrada de estoque)
 
 IMPORTANTE: Este service e chamado pelo job RQ, NAO diretamente pela rota.
+
+UNIFICACAO (2026-01-26):
+- O Passo 8 cria MovimentacaoEstoque diretamente apos validacao do picking
+- Usa odoo_move_id como chave para evitar duplicacao com EntradaMaterialService
+- Se EntradaMaterialService ja criou a entrada, apenas atualiza com rastreabilidade
+- Campos adicionais: recebimento_fisico_id, recebimento_lote_id, lote_nome, data_validade
 """
 
 import logging
@@ -33,7 +40,7 @@ class RecebimentoFisicoOdooService:
 
     def processar_recebimento(self, recebimento_id, usuario_nome=None):
         """
-        Processa um recebimento completo no Odoo (7 passos).
+        Processa um recebimento completo no Odoo (8 passos).
 
         Args:
             recebimento_id: ID do RecebimentoFisico local
@@ -61,7 +68,7 @@ class RecebimentoFisicoOdooService:
             # PASSO 1: Verificar picking
             # =====================================================
             logger.info(
-                f"[Recebimento {recebimento_id}] Passo 1/7: Verificando picking "
+                f"[Recebimento {recebimento_id}] Passo 1/8: Verificando picking "
                 f"{recebimento.odoo_picking_name} (ID={recebimento.odoo_picking_id})"
             )
 
@@ -102,7 +109,7 @@ class RecebimentoFisicoOdooService:
             # PASSO 2: Preencher lotes + quantidades
             # =====================================================
             logger.info(
-                f"[Recebimento {recebimento_id}] Passo 2/7: Preenchendo lotes"
+                f"[Recebimento {recebimento_id}] Passo 2/8: Preenchendo lotes"
             )
             self._preencher_lotes(odoo, recebimento, picking)
 
@@ -115,7 +122,7 @@ class RecebimentoFisicoOdooService:
 
             if checks_passfail:
                 logger.info(
-                    f"[Recebimento {recebimento_id}] Passo 3/7: "
+                    f"[Recebimento {recebimento_id}] Passo 3/8: "
                     f"Preenchendo {len(checks_passfail)} quality checks (passfail)"
                 )
                 self._preencher_quality_checks_passfail(odoo, checks_passfail)
@@ -129,7 +136,7 @@ class RecebimentoFisicoOdooService:
 
             if checks_measure:
                 logger.info(
-                    f"[Recebimento {recebimento_id}] Passo 4/7: "
+                    f"[Recebimento {recebimento_id}] Passo 4/8: "
                     f"Preenchendo {len(checks_measure)} quality checks (measure)"
                 )
                 self._preencher_quality_checks_measure(odoo, checks_measure)
@@ -138,7 +145,7 @@ class RecebimentoFisicoOdooService:
             # PASSO 5: Validar picking
             # =====================================================
             logger.info(
-                f"[Recebimento {recebimento_id}] Passo 5/7: Validando picking"
+                f"[Recebimento {recebimento_id}] Passo 5/8: Validando picking"
             )
             self._validar_picking(odoo, recebimento.odoo_picking_id)
 
@@ -146,7 +153,7 @@ class RecebimentoFisicoOdooService:
             # PASSO 6: Verificar resultado
             # =====================================================
             logger.info(
-                f"[Recebimento {recebimento_id}] Passo 6/7: Verificando resultado"
+                f"[Recebimento {recebimento_id}] Passo 6/8: Verificando resultado"
             )
             picking_final = odoo.execute_kw(
                 'stock.picking', 'search_read',
@@ -169,12 +176,31 @@ class RecebimentoFisicoOdooService:
             # PASSO 7: Atualizar status local
             # =====================================================
             logger.info(
-                f"[Recebimento {recebimento_id}] Passo 7/7: Atualizando status local"
+                f"[Recebimento {recebimento_id}] Passo 7/8: Atualizando status local"
             )
             recebimento.status = 'processado'
             recebimento.processado_em = datetime.utcnow()
             recebimento.erro_mensagem = None
             db.session.commit()
+
+            # =====================================================
+            # PASSO 8: Criar MovimentacaoEstoque
+            # =====================================================
+            logger.info(
+                f"[Recebimento {recebimento_id}] Passo 8/8: Criando MovimentacaoEstoque"
+            )
+            try:
+                self._criar_movimentacoes_estoque(odoo, recebimento)
+                logger.info(
+                    f"[Recebimento {recebimento_id}] MovimentacaoEstoque criadas com sucesso"
+                )
+            except Exception as e:
+                # Nao falhar o recebimento por erro na criacao de MovimentacaoEstoque
+                # EntradaMaterialService ira criar como fallback
+                logger.warning(
+                    f"[Recebimento {recebimento_id}] Erro ao criar MovimentacaoEstoque "
+                    f"(fallback via EntradaMaterialService): {e}"
+                )
 
             logger.info(
                 f"[Recebimento {recebimento_id}] SUCESSO: Picking "
@@ -436,3 +462,207 @@ class RecebimentoFisicoOdooService:
                 raise
             # Sucesso (padrao Odoo - retorna None que causa marshal error)
             logger.debug(f"  button_validate retornou None (sucesso) para picking {picking_id}")
+
+    # =========================================================================
+    # PASSO 8: Criar MovimentacaoEstoque
+    # =========================================================================
+
+    def _criar_movimentacoes_estoque(self, odoo, recebimento):
+        """
+        Cria MovimentacaoEstoque a partir dos lotes do RecebimentoFisico.
+
+        Usa odoo_move_line_criado_id do lote para obter o odoo_move_id,
+        garantindo que EntradaMaterialService nao duplique.
+
+        Regras:
+        - Para cada lote processado, cria uma entrada em MovimentacaoEstoque
+        - Usa odoo_move_id como chave para evitar duplicacao
+        - Se ja existe (criado por EntradaMaterialService), apenas atualiza com rastreabilidade
+        - Se nao existe, cria nova entrada
+
+        Args:
+            odoo: Conexao com Odoo
+            recebimento: Instancia de RecebimentoFisico
+        """
+        from app.estoque.models import MovimentacaoEstoque
+        from app.producao.models import CadastroPalletizacao
+
+        lotes_processados = recebimento.lotes.filter_by(processado=True).all()
+
+        if not lotes_processados:
+            logger.warning(
+                f"[Recebimento {recebimento.id}] Nenhum lote processado para criar MovimentacaoEstoque"
+            )
+            return
+
+        logger.info(f"  Processando {len(lotes_processados)} lotes para MovimentacaoEstoque")
+
+        # Coletar todos os product_ids e move_line_ids para buscar em batch
+        product_ids = list(set(lote.odoo_product_id for lote in lotes_processados if lote.odoo_product_id))
+        move_line_ids = list(set(lote.odoo_move_line_criado_id for lote in lotes_processados if lote.odoo_move_line_criado_id))
+
+        # Buscar codigos de produto em batch
+        codigos_por_product_id = self._buscar_codigos_produto_batch(odoo, product_ids)
+
+        # Buscar move_ids das move_lines em batch
+        move_ids_por_line = self._buscar_move_ids_batch(odoo, move_line_ids)
+
+        movimentacoes_criadas = 0
+        movimentacoes_atualizadas = 0
+
+        for lote in lotes_processados:
+            try:
+                # Buscar cod_produto via product_id
+                cod_produto = codigos_por_product_id.get(lote.odoo_product_id)
+                if not cod_produto:
+                    logger.warning(
+                        f"  Lote {lote.lote_nome}: produto {lote.odoo_product_id} sem default_code - PULANDO"
+                    )
+                    continue
+
+                # Buscar move_id da move_line
+                move_id = move_ids_por_line.get(lote.odoo_move_line_criado_id)
+                if not move_id:
+                    logger.warning(
+                        f"  Lote {lote.lote_nome}: move_line {lote.odoo_move_line_criado_id} sem move_id - PULANDO"
+                    )
+                    continue
+
+                # Verificar se produto e comprado (tem cadastro)
+                cadastro = CadastroPalletizacao.query.filter_by(
+                    cod_produto=str(cod_produto),
+                    produto_comprado=True
+                ).first()
+
+                if not cadastro:
+                    logger.debug(
+                        f"  Lote {lote.lote_nome}: produto {cod_produto} nao e comprado - PULANDO"
+                    )
+                    continue
+
+                # Verificar se ja existe (proteção contra duplicação)
+                existente = MovimentacaoEstoque.query.filter_by(
+                    odoo_move_id=str(move_id)
+                ).first()
+
+                if existente:
+                    # Ja existe - atualizar com info de rastreabilidade
+                    existente.recebimento_fisico_id = recebimento.id
+                    existente.recebimento_lote_id = lote.id
+                    existente.lote_nome = lote.lote_nome
+                    existente.data_validade = lote.data_validade
+                    existente.atualizado_em = datetime.utcnow()
+                    existente.atualizado_por = recebimento.usuario or 'Sistema Recebimento'
+                    movimentacoes_atualizadas += 1
+                    logger.debug(
+                        f"  Lote {lote.lote_nome}: MovimentacaoEstoque {existente.id} atualizada com rastreabilidade"
+                    )
+                    continue
+
+                # Criar nova entrada
+                entrada = MovimentacaoEstoque(
+                    # Produto
+                    cod_produto=str(cod_produto),
+                    nome_produto=lote.odoo_product_name or cadastro.nome_produto,
+
+                    # Movimentacao
+                    data_movimentacao=datetime.utcnow().date(),
+                    tipo_movimentacao='ENTRADA',
+                    local_movimentacao='COMPRA',
+                    qtd_movimentacao=lote.quantidade,
+
+                    # Rastreabilidade Odoo
+                    odoo_picking_id=str(recebimento.odoo_picking_id),
+                    odoo_move_id=str(move_id),
+                    tipo_origem='ODOO',
+
+                    # Rastreabilidade Recebimento Fisico
+                    recebimento_fisico_id=recebimento.id,
+                    recebimento_lote_id=lote.id,
+                    lote_nome=lote.lote_nome,
+                    data_validade=lote.data_validade,
+
+                    # Observacao e auditoria
+                    num_pedido=recebimento.odoo_purchase_order_name,
+                    observacao=f"Recebimento {recebimento.odoo_picking_name} - Lote: {lote.lote_nome}",
+                    criado_por=recebimento.usuario or 'Sistema Recebimento',
+                    ativo=True
+                )
+                db.session.add(entrada)
+                movimentacoes_criadas += 1
+                logger.debug(
+                    f"  Lote {lote.lote_nome}: MovimentacaoEstoque criada para {cod_produto} (qtd={lote.quantidade})"
+                )
+
+            except Exception as e:
+                logger.error(
+                    f"  Erro ao processar lote {lote.lote_nome}: {e}"
+                )
+                # Continuar com os outros lotes
+
+        db.session.commit()
+        logger.info(
+            f"  MovimentacaoEstoque: {movimentacoes_criadas} criadas, "
+            f"{movimentacoes_atualizadas} atualizadas"
+        )
+
+    def _buscar_codigos_produto_batch(self, odoo, product_ids):
+        """
+        Busca default_code de varios produtos em uma unica chamada.
+
+        Args:
+            odoo: Conexao com Odoo
+            product_ids: Lista de IDs de product.product
+
+        Returns:
+            Dict[product_id] -> default_code
+        """
+        if not product_ids:
+            return {}
+
+        try:
+            produtos = odoo.execute_kw(
+                'product.product',
+                'read',
+                [product_ids],
+                {'fields': ['id', 'default_code']}
+            )
+            return {p['id']: p.get('default_code') for p in produtos if p.get('default_code')}
+        except Exception as e:
+            logger.error(f"  Erro ao buscar codigos de produto: {e}")
+            return {}
+
+    def _buscar_move_ids_batch(self, odoo, move_line_ids):
+        """
+        Busca move_id de varias move_lines em uma unica chamada.
+
+        Args:
+            odoo: Conexao com Odoo
+            move_line_ids: Lista de IDs de stock.move.line
+
+        Returns:
+            Dict[move_line_id] -> move_id
+        """
+        if not move_line_ids:
+            return {}
+
+        try:
+            move_lines = odoo.execute_kw(
+                'stock.move.line',
+                'read',
+                [move_line_ids],
+                {'fields': ['id', 'move_id']}
+            )
+            result = {}
+            for ml in move_lines:
+                move_id_data = ml.get('move_id')
+                if move_id_data:
+                    # Odoo retorna [id, nome] ou apenas id
+                    if isinstance(move_id_data, (list, tuple)):
+                        result[ml['id']] = move_id_data[0]
+                    else:
+                        result[ml['id']] = move_id_data
+            return result
+        except Exception as e:
+            logger.error(f"  Erro ao buscar move_ids: {e}")
+            return {}

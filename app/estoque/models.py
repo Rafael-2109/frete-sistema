@@ -53,6 +53,13 @@ class MovimentacaoEstoque(db.Model):
     purchase_line_id = db.Column(db.String(50), nullable=True)             # ID da linha de pedido Odoo (purchase.order.line)
     pedido_compras_id = db.Column(db.Integer, db.ForeignKey('pedido_compras.id', ondelete='SET NULL'), nullable=True)  # FK para PedidoCompras local
 
+    # Campos de Rastreabilidade - Recebimento Físico (Fase 4)
+    # Vinculam a MovimentacaoEstoque com o processamento local de recebimento
+    recebimento_fisico_id = db.Column(db.Integer, db.ForeignKey('recebimento_fisico.id', ondelete='SET NULL'), nullable=True, index=True)
+    recebimento_lote_id = db.Column(db.Integer, db.ForeignKey('recebimento_lote.id', ondelete='SET NULL'), nullable=True, index=True)
+    lote_nome = db.Column(db.String(100), nullable=True)        # Nome do lote (ex: LOTE-2024-001)
+    data_validade = db.Column(db.Date, nullable=True)           # Data de validade do lote
+
     # Observações (mantido para compatibilidade)
     observacao = db.Column(db.Text, nullable=True)
 
@@ -112,6 +119,9 @@ class MovimentacaoEstoque(db.Model):
         db.Index('idx_movimentacao_baixado', 'baixado'),
         db.Index('idx_movimentacao_nf_remessa_origem', 'nf_remessa_origem'),
         db.Index('idx_movimentacao_cnpj_responsavel', 'cnpj_responsavel'),
+        # Índices para rastreabilidade de Recebimento Físico
+        db.Index('idx_movimentacao_recebimento_fisico', 'recebimento_fisico_id'),
+        db.Index('idx_movimentacao_recebimento_lote', 'recebimento_lote_id'),
     )
 
     def __repr__(self):
@@ -151,7 +161,12 @@ class MovimentacaoEstoque(db.Model):
             # Campos de substituicao
             'nf_remessa_origem': self.nf_remessa_origem,
             'cnpj_responsavel': self.cnpj_responsavel,
-            'nome_responsavel': self.nome_responsavel
+            'nome_responsavel': self.nome_responsavel,
+            # Campos de rastreabilidade Recebimento Físico
+            'recebimento_fisico_id': self.recebimento_fisico_id,
+            'recebimento_lote_id': self.recebimento_lote_id,
+            'lote_nome': self.lote_nome,
+            'data_validade': self.data_validade.strftime('%d/%m/%Y') if self.data_validade else None
         }
 
     # ========== MÉTODOS PARA PALLET EM TERCEIROS ==========

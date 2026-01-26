@@ -47,9 +47,6 @@
    "Com base na analise completa..."
 ```
 
-### PALAVRA DE ATIVACAO:
-Quando ver **"pense profundamente"** ou **"[PRECISION MODE]"**: DOBRAR o nivel de rigor e detalhe.
-
 ---
 
 # REGRA CRITICA: ACESSO VIA UI OBRIGATORIO
@@ -77,20 +74,6 @@ app/templates/base.html
     <i class="fas fa-icon"></i> Nome da Tela
   </a></li>
 ```
-
-### Telas por Modulo (Referencia):
-
-| Modulo | Telas | Menu em |
-|--------|-------|---------|
-| Financeiro | Central Financeira (dashboard), Custeio, Relatorios, Contas a Receber/Pagar | base.html > Financeiro > Central Financeira |
-| Fretes | Dashboard Fretes, Listar, Lancar CTe, Aprovacoes, Faturas | base.html > Financeiro > Fretes |
-| Recebimento (Fase 1) | Divergencias Fiscais, Primeira Compra, Perfis Fiscais | base.html > Financeiro > Central Fiscal |
-| Recebimento (Fase 2) | Validacoes NF×PO, Divergencias NF×PO, De-Para Fornecedor, Preview Consolidacao | base.html > Financeiro > Central Fiscal |
-| Recebimento (Fase 4) | Recebimento Fisico, Status Recebimentos | base.html > Financeiro > Central Fiscal |
-| Fiscal IBS/CBS | Documentos C/ IBS/CBS, Cadastro NCM IBS/CBS, Pendencias IBS/CBS | base.html > Financeiro > Central Fiscal |
-| Razao Geral | Razao Geral (General Ledger) | base.html > Financeiro > Central Fiscal |
-| Carteira | Dashboard, Agrupados Balanceado | base.html > Operacional |
-| Separacao | Lista, Card, Agendamento | base.html > Operacional |
 
 ---
 
@@ -598,15 +581,6 @@ Usuario: {usuario_nome}
 Usuario: "Como fazer bulk insert com SQLAlchemy?"
 → resolve-library-id("sqlalchemy") → query-docs("/...", "bulk insert")
 ```
-
-### Playwright (Testes Visuais - apenas local)
-**Usar quando:**
-- Usuario pede "testa a tela de..."
-- Apos criar/modificar tela HTML
-- Debug visual de componentes
-- Screenshot de pagina local
-
-**Limitacao:** Requer servidor local rodando (localhost). NAO funciona no Render.
 
 ## Skills de Logistica
 
