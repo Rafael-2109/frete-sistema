@@ -301,6 +301,9 @@ CREATE TABLE IF NOT EXISTS pallet_nf_solucoes (
     -- Vinculação
     vinculacao VARCHAR(20) DEFAULT 'MANUAL' NOT NULL,
 
+    -- Score de match para sugestões (0-100)
+    score_match INTEGER,
+
     -- Confirmação
     confirmado BOOLEAN DEFAULT TRUE NOT NULL,
     confirmado_em TIMESTAMP,
