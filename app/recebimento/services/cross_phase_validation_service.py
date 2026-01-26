@@ -225,6 +225,18 @@ class CrossPhaseValidationService:
                 ).all()
                 fiscais_by_dfe = {f.odoo_dfe_id: f for f in fiscais}
 
+            # Identificar POs que não têm ValidacaoNfPoDfe para buscar fallback
+            po_ids_sem_validacao = []
+            for p in pickings:
+                po_id = p.odoo_purchase_order_id
+                if po_id and po_id not in po_to_validacao:
+                    po_ids_sem_validacao.append(po_id)
+
+            # Buscar NFs via PO.dfe_id (fallback) para POs sem validação local
+            nfs_fallback = {}
+            if po_ids_sem_validacao:
+                nfs_fallback = self._buscar_nfs_via_po_dfe_batch(po_ids_sem_validacao)
+
             # Montar resultado por picking
             results = {}
             for p in pickings:
@@ -237,9 +249,23 @@ class CrossPhaseValidationService:
 
                 validacao = po_to_validacao.get(po_id)
                 if not validacao:
-                    results[p.odoo_picking_id] = self._make_blocked_status(
-                        'NF nao encontrada no sistema', fase=0
-                    )
+                    # Tentar fallback via PO.dfe_id
+                    nf_fallback = nfs_fallback.get(po_id)
+                    if nf_fallback:
+                        # Tem NF via PO.dfe_id mas sem validação local
+                        # Criar status bloqueado mas com NF exibida
+                        status = PhaseStatus()
+                        status.pode_receber = False
+                        status.tem_nf = True
+                        status.numero_nf = nf_fallback
+                        status.fase_bloqueio = 2
+                        status.bloqueio_motivo = 'Validacao Compras - Falar com Compras'
+                        status.contato_resolucao = 'Compras'
+                        results[p.odoo_picking_id] = status
+                    else:
+                        results[p.odoo_picking_id] = self._make_blocked_status(
+                            'NF nao encontrada no sistema', fase=0
+                        )
                     continue
 
                 fiscal = fiscais_by_dfe.get(validacao.odoo_dfe_id) if validacao.odoo_dfe_id else None
@@ -385,3 +411,132 @@ class CrossPhaseValidationService:
     def _prioridade(self, status_str):
         """Retorna prioridade numerica de um status (menor = melhor)."""
         return self.PRIORIDADE_STATUS.get(status_str, 99)
+
+    def _buscar_nf_via_po_dfe(self, purchase_order_id: int):
+        """
+        Busca número da NF diretamente no Odoo via PO.dfe_id.
+        Fallback quando não há ValidacaoNfPoDfe.
+
+        Campos Odoo:
+        - purchase.order.dfe_id → many2one para l10n_br_ciel_it_account.dfe
+        - l10n_br_ciel_it_account.dfe.nfe_infnfe_ide_nnf → número da NF
+
+        Args:
+            purchase_order_id: ID do PO no Odoo
+
+        Returns:
+            str: Número da NF ou None se não encontrado
+        """
+        try:
+            from app.odoo.utils.connection import get_odoo_connection
+
+            odoo = get_odoo_connection()
+            if not odoo.authenticate():
+                logger.warning("Falha na autenticacao com Odoo para buscar NF via PO.dfe_id")
+                return None
+
+            # Buscar PO com dfe_id
+            pos = odoo.execute_kw(
+                'purchase.order', 'search_read',
+                [[['id', '=', purchase_order_id]]],
+                {'fields': ['dfe_id'], 'limit': 1}
+            )
+
+            if not pos or not pos[0].get('dfe_id'):
+                return None
+
+            # dfe_id é many2one: [id, name] ou id
+            dfe_id_data = pos[0]['dfe_id']
+            dfe_id = dfe_id_data[0] if isinstance(dfe_id_data, (list, tuple)) else dfe_id_data
+
+            if not dfe_id:
+                return None
+
+            # Buscar DFe para obter número da NF
+            dfes = odoo.execute_kw(
+                'l10n_br_ciel_it_account.dfe', 'search_read',
+                [[['id', '=', dfe_id]]],
+                {'fields': ['nfe_infnfe_ide_nnf'], 'limit': 1}
+            )
+
+            if dfes and dfes[0].get('nfe_infnfe_ide_nnf'):
+                return str(dfes[0]['nfe_infnfe_ide_nnf'])
+
+            return None
+
+        except Exception as e:
+            logger.warning(f"Erro ao buscar NF via PO.dfe_id para PO {purchase_order_id}: {e}")
+            return None
+
+    def _buscar_nfs_via_po_dfe_batch(self, po_ids: list) -> dict:
+        """
+        Busca números de NF via PO.dfe_id em batch para múltiplos POs.
+        Otimização para evitar N+1 queries.
+
+        Args:
+            po_ids: Lista de IDs de POs no Odoo
+
+        Returns:
+            Dict: {po_id: numero_nf} para POs que têm dfe_id
+        """
+        if not po_ids:
+            return {}
+
+        try:
+            from app.odoo.utils.connection import get_odoo_connection
+
+            odoo = get_odoo_connection()
+            if not odoo.authenticate():
+                logger.warning("Falha na autenticacao com Odoo para buscar NFs via PO.dfe_id batch")
+                return {}
+
+            # Buscar todos os POs com seus dfe_id
+            pos = odoo.execute_kw(
+                'purchase.order', 'search_read',
+                [[['id', 'in', list(po_ids)]]],
+                {'fields': ['id', 'dfe_id']}
+            )
+
+            if not pos:
+                return {}
+
+            # Mapear PO -> dfe_id
+            po_to_dfe = {}
+            dfe_ids = set()
+            for po in pos:
+                dfe_id_data = po.get('dfe_id')
+                if dfe_id_data:
+                    dfe_id = dfe_id_data[0] if isinstance(dfe_id_data, (list, tuple)) else dfe_id_data
+                    if dfe_id:
+                        po_to_dfe[po['id']] = dfe_id
+                        dfe_ids.add(dfe_id)
+
+            if not dfe_ids:
+                return {}
+
+            # Buscar DFes para obter números das NFs
+            dfes = odoo.execute_kw(
+                'l10n_br_ciel_it_account.dfe', 'search_read',
+                [[['id', 'in', list(dfe_ids)]]],
+                {'fields': ['id', 'nfe_infnfe_ide_nnf']}
+            )
+
+            # Mapear dfe_id -> numero_nf
+            dfe_to_nf = {}
+            for dfe in dfes:
+                if dfe.get('nfe_infnfe_ide_nnf'):
+                    dfe_to_nf[dfe['id']] = str(dfe['nfe_infnfe_ide_nnf'])
+
+            # Montar resultado: po_id -> numero_nf
+            resultado = {}
+            for po_id, dfe_id in po_to_dfe.items():
+                nf = dfe_to_nf.get(dfe_id)
+                if nf:
+                    resultado[po_id] = nf
+
+            logger.info(f"   Batch NF via PO.dfe_id: {len(resultado)} NFs encontradas de {len(po_ids)} POs")
+            return resultado
+
+        except Exception as e:
+            logger.warning(f"Erro ao buscar NFs via PO.dfe_id batch: {e}")
+            return {}

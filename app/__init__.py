@@ -208,6 +208,7 @@ def date_format_safe(data, formato="%d/%m/%Y"):
 def create_app(config_name=None):
     app = Flask(__name__)
     app.config["TEMPLATES_AUTO_RELOAD"] = True
+    app.jinja_env.add_extension('jinja2.ext.do')  # Habilita {% do %} em templates
 
     if config_name == "testing":
         app.config.from_object(TestConfig)

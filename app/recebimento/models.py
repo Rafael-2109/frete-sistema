@@ -690,6 +690,18 @@ class ValidacaoNfPoDfe(db.Model):
     # REGRA: Vazio/AUTORIZADA = permite | CANCELADA/INUTILIZADA = bloqueia
     situacao_dfe_odoo = db.Column(db.String(20), nullable=True)
 
+    # === RASTREAMENTO DE MUDANÇAS EM POs (Skip Inteligente) ===
+    # Flag: True se alguma PO usada nesta validação foi modificada depois
+    # Quando True → DFE deve ser revalidado; Quando False → pode skip
+    po_modificada_apos_validacao = db.Column(
+        db.Boolean, default=False, nullable=False, index=True
+    )
+    # Timestamp de quando esta validação foi executada com sucesso
+    ultima_validacao_em = db.Column(db.DateTime, nullable=True)
+    # JSON com IDs das POs usadas nesta validação
+    # Formato: [{"id": 123, "name": "PO00456"}, {"id": 456, "name": "PO00789"}]
+    po_ids_usados = db.Column(db.Text, nullable=True)
+
     # Auditoria
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
     validado_em = db.Column(db.DateTime, nullable=True)
@@ -1231,6 +1243,7 @@ class PickingRecebimento(db.Model):
     picking_type_code = db.Column(db.String(20), nullable=True)
     odoo_partner_id = db.Column(db.Integer, nullable=True)
     odoo_partner_name = db.Column(db.String(255), nullable=True)
+    odoo_partner_cnpj = db.Column(db.String(20), nullable=True)  # CNPJ do fornecedor (l10n_br_cnpj)
     origin = db.Column(db.String(100), nullable=True)
     odoo_purchase_order_id = db.Column(db.Integer, nullable=True)
     odoo_purchase_order_name = db.Column(db.String(50), nullable=True)
@@ -1260,6 +1273,7 @@ class PickingRecebimento(db.Model):
     __table_args__ = (
         db.Index('idx_picking_rec_company', 'company_id', 'state'),
         db.Index('idx_picking_rec_partner', 'odoo_partner_name'),
+        db.Index('idx_picking_rec_partner_cnpj', 'odoo_partner_cnpj'),
         db.Index('idx_picking_rec_origin', 'origin'),
         db.Index('idx_picking_rec_po', 'odoo_purchase_order_id'),
         db.Index('idx_picking_rec_write', 'write_date'),
@@ -1277,6 +1291,7 @@ class PickingRecebimento(db.Model):
             'state': self.state,
             'odoo_partner_id': self.odoo_partner_id,
             'odoo_partner_name': self.odoo_partner_name,
+            'odoo_partner_cnpj': self.odoo_partner_cnpj,
             'origin': self.origin,
             'odoo_purchase_order_id': self.odoo_purchase_order_id,
             'odoo_purchase_order_name': self.odoo_purchase_order_name,

@@ -614,27 +614,50 @@ function confirmarCriarDepara() {
 }
 
 // =============================================================================
-// EXECUTAR VALIDACAO MANUAL
+// EXECUTAR VALIDACAO COM MODAL DE PERIODO
 // =============================================================================
 
-function executarValidacao() {
-    const btn = document.getElementById('btnExecutarValidacao');
-    const originalHtml = btn.innerHTML;
+function confirmarValidacao() {
+    const dataDe = document.getElementById('validacaoDataDe').value;
+    const dataAte = document.getElementById('validacaoDataAte').value;
 
+    if (!dataDe || !dataAte) {
+        alert('Selecione o período (De e Até)');
+        return;
+    }
+
+    // Validar periodo
+    const de = new Date(dataDe);
+    const ate = new Date(dataAte);
+    const diffDias = (ate - de) / (1000 * 60 * 60 * 24);
+    if (diffDias < 0) {
+        alert('Data "De" deve ser anterior à data "Até"');
+        return;
+    }
+    if (diffDias > 90) {
+        alert('Período máximo: 90 dias');
+        return;
+    }
+
+    const btn = document.getElementById('btnConfirmarValidacao');
+    const originalHtml = btn.innerHTML;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Executando...';
     btn.disabled = true;
 
     fetch('/api/recebimento/executar-validacao', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'}
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ data_de: dataDe, data_ate: dataAte })
     })
     .then(r => r.json())
     .then(data => {
         if (data.sucesso) {
             const res = data.resultado || {};
+            const syncPo = res.sync_pos_vinculados || {};
             const msg = [
-                'Validacao executada com sucesso!',
+                'Validação executada com sucesso!',
                 '',
+                `POs vinculados (sync): ${syncPo.dfes_atualizados || 0} atualizados`,
                 `DFEs processados: ${res.dfes_processados || 0}`,
                 `Fase 1 - Aprovados: ${res.fase1_fiscal?.dfes_aprovados || 0}`,
                 `Fase 1 - Bloqueados: ${res.fase1_fiscal?.dfes_bloqueados || 0}`,
@@ -650,8 +673,28 @@ function executarValidacao() {
         }
     })
     .catch(err => {
-        alert('Erro de conexao: ' + err.message);
+        alert('Erro de conexão: ' + err.message);
         btn.innerHTML = originalHtml;
         btn.disabled = false;
     });
 }
+
+// Inicializar datas padrao (ultimos 7 dias)
+function initValidacaoDatas() {
+    const hoje = new Date();
+    const seteDiasAtras = new Date();
+    seteDiasAtras.setDate(hoje.getDate() - 7);
+
+    const inputDe = document.getElementById('validacaoDataDe');
+    const inputAte = document.getElementById('validacaoDataAte');
+
+    if (inputDe && inputAte) {
+        inputAte.value = hoje.toISOString().split('T')[0];
+        inputDe.value = seteDiasAtras.toISOString().split('T')[0];
+    }
+}
+
+// Inicializar datas ao carregar pagina
+document.addEventListener('DOMContentLoaded', function() {
+    initValidacaoDatas();
+});

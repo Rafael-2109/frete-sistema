@@ -41,6 +41,66 @@ from app.odoo.utils.connection import get_odoo_connection
 logger = logging.getLogger(__name__)
 
 
+def _marcar_dfes_afetados_por_pos(po_ids: list) -> int:
+    """
+    Marca DFEs que usam POs modificadas para revalidação.
+
+    Chamado após operações que modificam POs (consolidação, ajuste de quantidade, etc.)
+    para garantir que DFEs aprovados sejam revalidados na próxima execução do job.
+
+    Args:
+        po_ids: Lista de IDs de POs modificados no Odoo
+
+    Returns:
+        Número de DFEs marcados para revalidação
+    """
+    if not po_ids:
+        return 0
+
+    try:
+        # Buscar alocações que usam essas POs
+        alocacoes = MatchAlocacao.query.filter(
+            MatchAlocacao.odoo_po_id.in_(po_ids)
+        ).all()
+
+        if not alocacoes:
+            return 0
+
+        # Agrupar por validação
+        validacao_ids = set()
+        for aloc in alocacoes:
+            if aloc.match_item_id:
+                match = MatchNfPoItem.query.get(aloc.match_item_id)
+                if match and match.validacao_id:
+                    validacao_ids.add(match.validacao_id)
+
+        if not validacao_ids:
+            return 0
+
+        # Marcar validações aprovadas para revalidação
+        dfes_marcados = 0
+        for val_id in validacao_ids:
+            validacao = ValidacaoNfPoDfe.query.get(val_id)
+            if validacao and validacao.status == 'aprovado':
+                if not validacao.po_modificada_apos_validacao:
+                    validacao.po_modificada_apos_validacao = True
+                    validacao.atualizado_em = datetime.utcnow()
+                    dfes_marcados += 1
+                    logger.info(
+                        f"⚠️ DFE {validacao.odoo_dfe_id} (NF {validacao.numero_nf}) "
+                        f"marcado para revalidação - PO modificada via consolidação"
+                    )
+
+        if dfes_marcados > 0:
+            db.session.commit()
+
+        return dfes_marcados
+
+    except Exception as e:
+        logger.error(f"Erro ao marcar DFEs afetados por POs: {e}")
+        return 0
+
+
 class OdooPoService:
     """
     Service para operacoes de PO no Odoo.
@@ -637,6 +697,38 @@ class OdooPoService:
             validacao.atualizado_em = datetime.utcnow()
 
             db.session.commit()
+
+            # =================================================================
+            # Gap 1 FIX: Marcar DFEs afetados pelas POs modificadas
+            # Isso garante que outros DFEs que usavam essas POs sejam revalidados
+            # =================================================================
+            po_ids_modificados = list(set(
+                aloc['po_id'] for aloc in linhas_ajustadas_originais
+                if aloc.get('po_id')
+            ))
+            if po_ids_modificados:
+                dfes_marcados = _marcar_dfes_afetados_por_pos(po_ids_modificados)
+                if dfes_marcados > 0:
+                    logger.info(
+                        f"🔄 {dfes_marcados} DFEs marcados para revalidação "
+                        f"(POs afetadas pela consolidação)"
+                    )
+
+            # =================================================================
+            # Gap 4 FIX: Chamar detector imediatamente para reduzir latência
+            # Não depender do scheduler (30 min) - detectar mudanças agora
+            # =================================================================
+            try:
+                from app.recebimento.services.po_changes_detector_service import PoChangesDetectorService
+                detector = PoChangesDetectorService()
+                resultado_deteccao = detector.detectar_e_marcar_revalidacoes(minutos_janela=5)
+                if resultado_deteccao.get('dfes_marcados', 0) > 0:
+                    logger.info(
+                        f"🔍 Detector imediato: {resultado_deteccao['dfes_marcados']} DFEs "
+                        f"adicionais marcados para revalidação"
+                    )
+            except Exception as e_det:
+                logger.warning(f"Detector imediato falhou (não crítico): {e_det}")
 
             logger.info(
                 f"SPLIT/CONSOLIDACAO concluida: "
@@ -1285,7 +1377,10 @@ class OdooPoService:
                 pass
 
             # Atualizar validacao
-            validacao.status = 'aprovado'  # Volta para aprovado
+            # Gap 2 FIX: Marcar para revalidação ao reverter consolidação
+            # Isso força o job a reprocessar o DFE na próxima execução
+            validacao.status = 'bloqueado'  # Força revalidação (não apenas 'aprovado')
+            validacao.po_modificada_apos_validacao = True  # Flag de revalidação
             validacao.po_consolidado_id = None
             validacao.po_consolidado_name = None
             validacao.pos_saldo_ids = None
@@ -1295,7 +1390,10 @@ class OdooPoService:
 
             db.session.commit()
 
-            logger.info(f"Reversao da consolidacao {validacao_id} concluida")
+            logger.info(
+                f"⚠️ Reversao da consolidacao {validacao_id} concluida - "
+                f"DFE marcado para revalidação"
+            )
 
             return {
                 'sucesso': True,

@@ -285,7 +285,7 @@ Reestruturar o módulo de pallets em **dois domínios independentes**:
 - **Implementação**:
   - Adicionado mapeamento `COMPANY_ID_TO_EMPRESA` (4=CD, 1=FB, 3=SC)
   - No método `sincronizar_remessas`: após criar `MovimentacaoEstoque`, chama `NFService.importar_nf_remessa_odoo()`
-  - Busca campos adicionais do Odoo: `company_id`, `l10n_br_chave_nfe`
+  - Busca campos adicionais do Odoo: `company_id`, `l10n_br_chave_nf`
   - Tratamento de erro isolado: falha no v2 não bloqueia sistema legado
   - Log detalhado mostrando empresa e criação de PalletNFRemessa
 

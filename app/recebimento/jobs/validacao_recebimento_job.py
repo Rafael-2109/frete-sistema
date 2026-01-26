@@ -3,7 +3,7 @@ Job de Validacao de Recebimento - FASE 1 + FASE 2
 =================================================
 
 Executado pelo scheduler a cada 30 minutos.
-Executa AMBAS as validacoes em PARALELO:
+Executa AMBAS as validacoes:
 - Fase 1: Validacao Fiscal
 - Fase 2: Validacao NF x PO
 
@@ -11,25 +11,34 @@ Tambem executa sincronizacoes:
 - De-Para: Odoo -> Sistema (product.supplierinfo)
 - POs Vinculados: Atualiza DFEs que receberam PO no Odoo
 
+OTIMIZAÇÃO: Skip Inteligente (v2.0)
+===================================
+Para reduzir tempo de execução de ~90s para ~5-15s:
+- Detecta POs modificadas após última validação
+- Marca DFEs afetados com flag po_modificada_apos_validacao=True
+- Skip DFEs aprovados se PO não foi modificada
+- Skip DFEs finalizados no Odoo
+- Reprocessa apenas quando algo REALMENTE mudou
+
 Fluxo:
 1. Sync De-Para do Odoo (product.supplierinfo)
 2. Sync POs vinculados (DFEs sem PO -> verifica se Odoo agora tem)
-3. Buscar DFEs de compra nao validados no Odoo
-4. Para cada DFE:
+3. Buscar DFEs de compra com SKIP INTELIGENTE
+4. Para cada DFE que PRECISA processar:
    a) Executar validacao fiscal (Fase 1)
    b) Executar validacao NF x PO (Fase 2)
    c) Ambas devem aprovar para DFE ser liberado
 
 Referencia:
 - .claude/references/RECEBIMENTO_MATERIAIS.md
-- .claude/plans/wiggly-plotting-newt.md
+- .claude/plans/hashed-noodling-zebra.md (otimização inteligente)
 """
 
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Any
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from flask import current_app
 from app import db
 from app.recebimento.models import ValidacaoFiscalDfe, ValidacaoNfPoDfe
 from app.recebimento.services.validacao_fiscal_service import ValidacaoFiscalService
@@ -134,6 +143,7 @@ class ValidacaoRecebimentoJob:
                 'dfes_erro': 0
             }
 
+            # Processamento sequencial (skip inteligente reduz volume)
             for dfe in dfes:
                 try:
                     res = self._processar_dfe_completo(dfe)
@@ -319,6 +329,16 @@ class ValidacaoRecebimentoJob:
                     if tem_po:
                         validacao.pos_vinculados_importados_em = datetime.utcnow()
                         resultado['dfes_atualizados'] += 1
+
+                        # Gap 3 FIX: Marcar para revalidação se DFE já tinha sido processado
+                        # Quando PO é vinculado pela primeira vez a um DFE que já foi validado,
+                        # precisamos reprocessar para considerar a nova PO
+                        if validacao.status in ('bloqueado', 'aprovado'):
+                            validacao.po_modificada_apos_validacao = True
+                            logger.info(
+                                f"⚠️ DFE {validacao.odoo_dfe_id} marcado para revalidação "
+                                f"(PO vinculado via sync)"
+                            )
                     else:
                         resultado['dfes_sem_po'] += 1
 
@@ -343,6 +363,73 @@ class ValidacaoRecebimentoJob:
             logger.error(f"Erro no sync POs vinculados: {e}")
             db.session.rollback()
             return {'erro': str(e)}
+
+    def _deve_reprocessar_dfe(self, dfe: Dict, validacao: ValidacaoNfPoDfe) -> bool:
+        """
+        Decide INTELIGENTEMENTE se um DFE deve ser reprocessado na Fase 2.
+
+        Regras de Skip:
+        - finalizado_odoo → SKIP (PO já vinculado no Odoo)
+        - aprovado + po_modificada=False → SKIP (nada mudou)
+
+        Regras de Reprocessamento:
+        - po_modificada_apos_validacao=True → REPROCESSAR (PO usada foi modificada)
+        - status pendente/erro/validando → REPROCESSAR (não concluiu)
+        - bloqueado + divergências resolvidas → REPROCESSAR (pode aprovar agora)
+
+        Args:
+            dfe: Dict com dados do DFE do Odoo
+            validacao: Instância de ValidacaoNfPoDfe
+
+        Returns:
+            True se deve reprocessar, False se pode skip
+        """
+        from app.recebimento.models import DivergenciaNfPo
+
+        dfe_id = dfe.get('id')
+
+        # 1. SKIP se finalizado no Odoo (tem PO vinculado diretamente)
+        if validacao.status == 'finalizado_odoo':
+            logger.debug(f"DFE {dfe_id}: SKIP (finalizado_odoo)")
+            return False
+
+        # 2. REPROCESSAR se PO foi modificada após validação
+        if validacao.po_modificada_apos_validacao:
+            logger.info(f"DFE {dfe_id}: REPROCESSAR (PO modificada após validação)")
+            return True
+
+        # 3. SKIP se aprovado e PO não modificada
+        if validacao.status == 'aprovado':
+            logger.debug(f"DFE {dfe_id}: SKIP (aprovado, PO não modificada)")
+            return False
+
+        # 4. Status que sempre precisam reprocessar
+        if validacao.status in ('pendente', 'erro', 'validando'):
+            logger.debug(f"DFE {dfe_id}: REPROCESSAR (status={validacao.status})")
+            return True
+
+        # 5. BLOQUEADO - verificar se divergências foram resolvidas
+        if validacao.status == 'bloqueado':
+            divergencias_pendentes = DivergenciaNfPo.query.filter(
+                DivergenciaNfPo.validacao_id == validacao.id,
+                DivergenciaNfPo.status == 'pendente'
+            ).count()
+
+            if divergencias_pendentes == 0:
+                logger.info(f"DFE {dfe_id}: REPROCESSAR (divergências resolvidas)")
+                return True
+            else:
+                logger.debug(f"DFE {dfe_id}: SKIP ({divergencias_pendentes} divergências pendentes)")
+                return False
+
+        # 6. Consolidado - não reprocessar
+        if validacao.status == 'consolidado':
+            logger.debug(f"DFE {dfe_id}: SKIP (consolidado)")
+            return False
+
+        # DEFAULT: Skip por segurança (status desconhecido)
+        logger.debug(f"DFE {dfe_id}: SKIP (status={validacao.status} - default)")
+        return False
 
     def _buscar_dfes_pendentes(self, minutos_janela: int) -> List[Dict]:
         """
@@ -410,24 +497,44 @@ class ValidacaoRecebimentoJob:
             ).all()
         )
 
-        # Fase 2: ja validados (status que NAO precisam reprocessar)
-        # 'bloqueado' DEVE ser reprocessado pois tolerancias/POs podem ter mudado
-        fase2_processados = set(
-            r.odoo_dfe_id for r in ValidacaoNfPoDfe.query.filter(
-                ValidacaoNfPoDfe.odoo_dfe_id.in_(dfe_ids),
-                ValidacaoNfPoDfe.status.notin_(['pendente', 'erro', 'bloqueado'])
+        # === SKIP INTELIGENTE (Fase 2) ===
+        # Buscar todas as validações de Fase 2 para esses DFEs
+        validacoes_fase2 = {
+            v.odoo_dfe_id: v
+            for v in ValidacaoNfPoDfe.query.filter(
+                ValidacaoNfPoDfe.odoo_dfe_id.in_(dfe_ids)
             ).all()
-        )
+        }
 
-        # DFE precisa ser processado se NAO esta completo em ambas as fases
-        dfes_pendentes = []
+        dfes_para_processar = []
+        dfes_skipped = 0
+
         for dfe in dfes_filtrados:
             dfe_id = dfe['id']
-            # Precisa processar se qualquer fase ainda nao foi feita
-            if dfe_id not in fase1_processados or dfe_id not in fase2_processados:
-                dfes_pendentes.append(dfe)
+            validacao = validacoes_fase2.get(dfe_id)
 
-        return dfes_pendentes
+            # Fase 1 ainda não foi feita -> processar
+            if dfe_id not in fase1_processados:
+                dfes_para_processar.append(dfe)
+                continue
+
+            # Fase 2: nunca validado -> processar
+            if validacao is None:
+                dfes_para_processar.append(dfe)
+                continue
+
+            # Fase 2: verificar se precisa reprocessar (skip inteligente)
+            if self._deve_reprocessar_dfe(dfe, validacao):
+                dfes_para_processar.append(dfe)
+            else:
+                dfes_skipped += 1
+
+        logger.info(
+            f"⚡ Skip inteligente: {dfes_skipped} DFEs skipped, "
+            f"{len(dfes_para_processar)} DFEs para processar"
+        )
+
+        return dfes_para_processar
 
     def _processar_dfe_completo(self, dfe: Dict) -> Dict[str, Any]:
         """

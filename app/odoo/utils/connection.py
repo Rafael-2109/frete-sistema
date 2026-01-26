@@ -213,7 +213,18 @@ class OdooConnection:
                 raise Exception(f"Timeout de {timeout_efetivo}s excedido em {model}.{method}")
 
             except Exception as e:
-                # ✅ Lançar exceção imediatamente para Circuit Breaker detectar
+                error_str = str(e)
+
+                # Erro conhecido: métodos Odoo que retornam None (reconcile, button_validate, etc.)
+                # O servidor Odoo não tem allow_none=True, então Fault é gerado na serialização
+                # Mas a operação FOI executada com sucesso antes do retorno
+                if "cannot marshal None" in error_str:
+                    logger.debug(
+                        f"✓ {model}.{method} executado com sucesso (retorno None é esperado)"
+                    )
+                    return None  # Retorna None normalmente, operação foi bem-sucedida
+
+                # Erro real - logar e propagar para Circuit Breaker detectar
                 logger.error(f"❌ Erro na execução de {model}.{method}: {e}")
                 raise
 

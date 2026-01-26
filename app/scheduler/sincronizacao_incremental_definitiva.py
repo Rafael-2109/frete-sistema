@@ -478,6 +478,29 @@ def executar_sincronizacao():
                 else:
                     break
 
+        # 4️⃣.5️⃣ DETECTAR MUDANÇAS EM POs E MARCAR DFEs PARA REVALIDAÇÃO
+        # Executa APÓS sync de Pedidos, ANTES das Alocações
+        # Marca DFEs aprovados que usaram POs modificadas para revalidação
+        try:
+            from app.recebimento.services.po_changes_detector_service import PoChangesDetectorService
+
+            logger.info("🔍 Detectando mudanças em POs para revalidação...")
+            detector = PoChangesDetectorService()
+            resultado_deteccao = detector.detectar_e_marcar_revalidacoes(
+                minutos_janela=JANELA_PEDIDOS  # Mesma janela da sincronização de POs
+            )
+            logger.info(
+                f"✅ POs verificadas: {resultado_deteccao.get('pos_verificadas', 0)}, "
+                f"DFEs marcados para revalidação: {resultado_deteccao.get('dfes_marcados', 0)}"
+            )
+            db.session.commit()
+        except Exception as e:
+            logger.error(f"❌ Erro ao detectar mudanças em POs: {e}")
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+
         # Limpar sessão entre services
         try:
             db.session.remove()

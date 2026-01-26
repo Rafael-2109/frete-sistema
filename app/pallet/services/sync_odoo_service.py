@@ -102,7 +102,7 @@ class PalletSyncService:
                 'id', 'name', 'invoice_date', 'partner_id',
                 'l10n_br_numero_nota_fiscal', 'l10n_br_tipo_pedido',
                 'amount_total', 'invoice_line_ids', 'company_id',
-                'l10n_br_chave_nfe'  # Chave da NF-e para vincular com novos models
+                'l10n_br_chave_nf'  # Chave da NF-e para vincular com novos models
             ]
 
             nfs = self.odoo.search_read('account.move', domain, campos)
@@ -190,7 +190,7 @@ class PalletSyncService:
                     empresa = COMPANY_ID_TO_EMPRESA.get(company_id, 'CD')  # Default CD se desconhecido
 
                     # Obter chave da NF-e
-                    chave_nfe = nf.get('l10n_br_chave_nfe', '') or ''
+                    chave_nfe = nf.get('l10n_br_chave_nf', '') or ''
 
                     # Criar movimentacao (sistema legado - manter para compatibilidade)
                     movimento = MovimentacaoEstoque(

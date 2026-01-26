@@ -12,7 +12,8 @@
             <a href="{{ url_for('recebimento_views.validacoes_nf_po') }}" class="btn btn-outline-info me-2">
                 <i class="fas fa-list"></i> Ver Validacoes
             </a>
-            <button type="button" class="btn btn-outline-primary" id="btnExecutarValidacao" onclick="executarValidacao()">
+            <button type="button" class="btn btn-outline-primary" id="btnExecutarValidacao"
+                    data-bs-toggle="modal" data-bs-target="#modalValidacao">
                 <i class="fas fa-sync-alt"></i> Executar Validação
             </button>
         </div>
@@ -769,6 +770,48 @@
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                 <button type="button" class="btn btn-success" onclick="confirmarAprovar()">
                     <i class="fas fa-check"></i> Confirmar Aprovacao
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Executar Validacao (com periodo De/Ate) -->
+<div class="modal fade" id="modalValidacao" tabindex="-1" aria-labelledby="modalValidacaoLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalValidacaoLabel">
+                    <i class="fas fa-sync-alt text-primary me-2"></i>Executar Validação
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small mb-3">
+                    O sistema buscará DFEs de compra (NF-e) modificados no período selecionado
+                    e executará as validações Fase 1 (Fiscal) e Fase 2 (NF×PO).
+                </p>
+                <div class="row g-3">
+                    <div class="col-6">
+                        <label class="form-label">De</label>
+                        <input type="date" class="form-control" id="validacaoDataDe">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">Até</label>
+                        <input type="date" class="form-control" id="validacaoDataAte">
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <small class="text-muted">
+                        <i class="fas fa-info-circle"></i>
+                        Período máximo: 90 dias. Limite: 100 DFEs por execução.
+                    </small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnConfirmarValidacao" onclick="confirmarValidacao()">
+                    <i class="fas fa-play"></i> Executar
                 </button>
             </div>
         </div>

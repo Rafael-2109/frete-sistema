@@ -96,10 +96,17 @@ class PickingRecebimentoSyncService:
                     product_ids.add(m['product_id'][0])
             produtos_cache = self._buscar_produtos_batch(list(product_ids))
 
+            # PASSO 3.1: Batch load de CNPJs dos parceiros
+            partner_ids = set()
+            for p in pickings_odoo:
+                if p.get('partner_id'):
+                    partner_ids.add(p['partner_id'][0])
+            cnpjs_cache = self._buscar_cnpjs_parceiros(list(partner_ids))
+
             # PASSO 4: Processar e upsert
             resultado = self._processar_pickings(
                 pickings_odoo, moves, move_lines,
-                quality_checks, produtos_cache
+                quality_checks, produtos_cache, cnpjs_cache
             )
 
             # PASSO 5: Commit
@@ -179,10 +186,17 @@ class PickingRecebimentoSyncService:
                     product_ids.add(m['product_id'][0])
             produtos_cache = self._buscar_produtos_batch(list(product_ids))
 
+            # PASSO 3.1: Batch load de CNPJs dos parceiros
+            partner_ids = set()
+            for p in pickings_odoo:
+                if p.get('partner_id'):
+                    partner_ids.add(p['partner_id'][0])
+            cnpjs_cache = self._buscar_cnpjs_parceiros(list(partner_ids))
+
             # PASSO 4: Processar e upsert
             resultado = self._processar_pickings(
                 pickings_odoo, moves, move_lines,
-                quality_checks, produtos_cache
+                quality_checks, produtos_cache, cnpjs_cache
             )
 
             # PASSO 5: Commit
@@ -262,10 +276,17 @@ class PickingRecebimentoSyncService:
                     product_ids.add(m['product_id'][0])
             produtos_cache = self._buscar_produtos_batch(list(product_ids))
 
+            # Buscar CNPJ do parceiro
+            partner_ids = set()
+            for p in pickings_odoo:
+                if p.get('partner_id'):
+                    partner_ids.add(p['partner_id'][0])
+            cnpjs_cache = self._buscar_cnpjs_parceiros(list(partner_ids))
+
             # Processar (upsert)
             resultado = self._processar_pickings(
                 pickings_odoo, moves, move_lines,
-                quality_checks, produtos_cache
+                quality_checks, produtos_cache, cnpjs_cache
             )
 
             db.session.commit()
@@ -465,6 +486,37 @@ class PickingRecebimentoSyncService:
         logger.info(f"   Batch: {len(cache)} produtos carregados (tracking)")
         return cache
 
+    def _buscar_cnpjs_parceiros(self, partner_ids: List[int]) -> Dict[int, str]:
+        """
+        Busca CNPJ dos parceiros em batch.
+
+        Campo Odoo: res.partner.l10n_br_cnpj
+
+        Args:
+            partner_ids: Lista de IDs de parceiros
+
+        Returns:
+            Dict mapeando partner_id -> CNPJ (apenas dígitos)
+        """
+        if not partner_ids:
+            return {}
+
+        parceiros = self.connection.execute_kw(
+            'res.partner', 'search_read',
+            [[['id', 'in', list(partner_ids)]]],
+            {'fields': ['id', 'l10n_br_cnpj']}
+        )
+
+        # Limpar CNPJ (apenas dígitos)
+        resultado = {}
+        for p in parceiros:
+            cnpj_raw = p.get('l10n_br_cnpj') or ''
+            cnpj_limpo = ''.join(c for c in cnpj_raw if c.isdigit())
+            resultado[p['id']] = cnpj_limpo
+
+        logger.info(f"   Batch: {len(resultado)} CNPJs de parceiros carregados")
+        return resultado
+
     # =========================================================================
     # METODOS PRIVADOS: PROCESSAMENTO + UPSERT
     # =========================================================================
@@ -475,13 +527,25 @@ class PickingRecebimentoSyncService:
         moves: List[Dict],
         move_lines: List[Dict],
         quality_checks: List[Dict],
-        produtos_cache: Dict[int, Dict]
+        produtos_cache: Dict[int, Dict],
+        cnpjs_cache: Dict[int, str] = None
     ) -> Dict[str, int]:
         """
         Processa pickings e faz upsert nas 4 tabelas.
 
-        Retorna contadores de novos/atualizados.
+        Args:
+            pickings_odoo: Lista de pickings do Odoo
+            moves: Lista de stock.move
+            move_lines: Lista de stock.move.line
+            quality_checks: Lista de quality.check
+            produtos_cache: Cache de produtos {id: {name, tracking, use_expiration_date}}
+            cnpjs_cache: Cache de CNPJs dos parceiros {partner_id: cnpj}
+
+        Returns:
+            Dict com contadores de novos/atualizados.
         """
+        if cnpjs_cache is None:
+            cnpjs_cache = {}
         # Indexar moves por picking_id
         moves_por_picking = {}
         for m in moves:
@@ -526,14 +590,18 @@ class PickingRecebimentoSyncService:
             odoo_id = p['id']
             picking_local = existing_pickings.get(odoo_id)
 
+            # Obter partner_id para buscar CNPJ
+            partner_id = p['partner_id'][0] if p.get('partner_id') else None
+
             # Dados do picking
             picking_data = {
                 'odoo_picking_id': odoo_id,
                 'odoo_picking_name': p.get('name', ''),
                 'state': p.get('state', ''),
                 'picking_type_code': p.get('picking_type_code', ''),
-                'odoo_partner_id': p['partner_id'][0] if p.get('partner_id') else None,
+                'odoo_partner_id': partner_id,
                 'odoo_partner_name': p['partner_id'][1] if p.get('partner_id') else None,
+                'odoo_partner_cnpj': cnpjs_cache.get(partner_id, '') if partner_id else '',
                 'origin': p.get('origin', ''),
                 'odoo_purchase_order_id': p['purchase_id'][0] if p.get('purchase_id') else None,
                 'odoo_purchase_order_name': p['purchase_id'][1] if p.get('purchase_id') else None,

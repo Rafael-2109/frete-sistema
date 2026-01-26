@@ -385,6 +385,18 @@ class ValidacaoNfPoService:
             # Identificar POs envolvidos
             pos_envolvidos = self._agrupar_pos_para_consolidar(resultados_match)
 
+            # === RASTREAMENTO PARA SKIP INTELIGENTE ===
+            # Salvar quais POs foram usadas nesta validação
+            # Quando essas POs mudarem, a flag po_modificada_apos_validacao será setada
+            import json
+            from app.recebimento.services.po_changes_detector_service import PoChangesDetectorService
+
+            detector = PoChangesDetectorService()
+            po_ids_usados = detector.extrair_pos_usadas(validacao.id)
+            validacao.po_ids_usados = json.dumps(po_ids_usados) if po_ids_usados else None
+            validacao.ultima_validacao_em = datetime.utcnow()
+            validacao.po_modificada_apos_validacao = False  # Reset flag após validação bem-sucedida
+
             db.session.commit()
 
             logger.info(

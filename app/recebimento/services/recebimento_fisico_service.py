@@ -44,6 +44,10 @@ class RecebimentoFisicoService:
         5: 'LA FAMIGLIA - LF',
     }
 
+    # CNPJs de empresas do grupo (prefixos) a serem excluídos do recebimento
+    # Pickings de fornecedores com esses prefixos são transferências internas
+    CNPJS_GRUPO_INTERNO = ['61724241', '18467441']
+
     def buscar_pickings_disponiveis(self, company_id, filtro_nf=None, filtro_fornecedor=None,
                                      apenas_com_nf=False, pagina=1, por_pagina=50):
         """
@@ -112,6 +116,17 @@ class RecebimentoFisicoService:
                 query = query.filter(
                     PickingRecebimento.odoo_purchase_order_id.in_(
                         db.session.query(po_ids_com_nf)
+                    )
+                )
+
+            # Excluir fornecedores do grupo interno (transferências entre empresas)
+            # Pickings onde odoo_partner_cnpj inicia com prefixos do grupo são filtrados
+            for cnpj_prefixo in self.CNPJS_GRUPO_INTERNO:
+                query = query.filter(
+                    db.or_(
+                        PickingRecebimento.odoo_partner_cnpj.is_(None),
+                        PickingRecebimento.odoo_partner_cnpj == '',
+                        ~PickingRecebimento.odoo_partner_cnpj.like(f'{cnpj_prefixo}%')
                     )
                 )
 

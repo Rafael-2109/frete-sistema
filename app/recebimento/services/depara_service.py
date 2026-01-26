@@ -1130,6 +1130,8 @@ class DeparaService:
                         existente.um_fornecedor = um_fornecedor
                         existente.sincronizado_odoo = True
                         existente.atualizado_em = datetime.utcnow()
+                        # Flush para garantir que a atualização foi aplicada
+                        db.session.flush()
                         atualizados += 1
                     else:
                         # Criar
@@ -1149,13 +1151,23 @@ class DeparaService:
                             criado_em=datetime.utcnow()
                         )
                         db.session.add(novo)
+                        # Flush após cada operação bem-sucedida
+                        db.session.flush()
                         importados += 1
 
                 except Exception as e:
+                    # Rollback imediato para limpar sessão inválida
+                    db.session.rollback()
                     logger.warning(f"Erro ao importar supplierinfo {si.get('id')}: {e}")
                     erros += 1
 
-            db.session.commit()
+            # Commit final com tratamento de erro
+            try:
+                db.session.commit()
+            except Exception as commit_error:
+                db.session.rollback()
+                logger.error(f"Erro ao commitar importacao: {commit_error}")
+                raise
 
             logger.info(
                 f"Importacao Odoo concluida: {importados} importados, "
