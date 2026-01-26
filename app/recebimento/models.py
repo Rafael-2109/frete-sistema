@@ -685,6 +685,11 @@ class ValidacaoNfPoDfe(db.Model):
     # Controle de erro
     erro_mensagem = db.Column(db.Text, nullable=True)
 
+    # Situacao da NF na SEFAZ (l10n_br_situacao_dfe do Odoo)
+    # Valores: AUTORIZADA, CANCELADA, INUTILIZADA (ou None se nao preenchido)
+    # REGRA: Vazio/AUTORIZADA = permite | CANCELADA/INUTILIZADA = bloqueia
+    situacao_dfe_odoo = db.Column(db.String(20), nullable=True)
+
     # Auditoria
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
     validado_em = db.Column(db.DateTime, nullable=True)
@@ -711,6 +716,22 @@ class ValidacaoNfPoDfe(db.Model):
     def pode_consolidar(self):
         """Retorna True se pode executar consolidacao (100% match)"""
         return self.status == 'aprovado' and self.itens_match == self.total_itens
+
+    @property
+    def situacao_nf_bloqueada(self):
+        """
+        Retorna True se a NF esta CANCELADA ou INUTILIZADA na SEFAZ.
+        Usado para bloquear lancamento de NFs invalidas.
+        """
+        return self.situacao_dfe_odoo in ('CANCELADA', 'INUTILIZADA')
+
+    @property
+    def situacao_nf_valida(self):
+        """
+        Retorna True se a situacao da NF permite lancamento.
+        Vazio, None ou AUTORIZADA = valido.
+        """
+        return not self.situacao_nf_bloqueada
 
     def to_dict(self):
         """Serializa para dicionario"""
@@ -742,6 +763,9 @@ class ValidacaoNfPoDfe(db.Model):
             'pos_saldo_ids': json.loads(self.pos_saldo_ids) if self.pos_saldo_ids else [],
             'pos_cancelados_ids': json.loads(self.pos_cancelados_ids) if self.pos_cancelados_ids else [],
             'erro_mensagem': self.erro_mensagem,
+            'situacao_dfe_odoo': self.situacao_dfe_odoo,
+            'situacao_nf_bloqueada': self.situacao_nf_bloqueada,
+            'situacao_nf_valida': self.situacao_nf_valida,
             'criado_em': self.criado_em.isoformat() if self.criado_em else None,
             'validado_em': self.validado_em.isoformat() if self.validado_em else None,
             'consolidado_em': self.consolidado_em.isoformat() if self.consolidado_em else None

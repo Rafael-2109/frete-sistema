@@ -129,6 +129,34 @@ class ValidacaoNfPoService:
             # Atualizar dados basicos da validacao
             self._atualizar_validacao_com_dfe(validacao, dfe_data)
 
+            # =================================================================
+            # VERIFICAR SITUACAO DA NF NA SEFAZ (ANTES DE QUALQUER PROCESSAMENTO)
+            # Se NF CANCELADA ou INUTILIZADA -> BLOQUEAR imediatamente
+            # =================================================================
+            if validacao.situacao_nf_bloqueada:
+                situacao = validacao.situacao_dfe_odoo
+                logger.warning(
+                    f"DFE {odoo_dfe_id} BLOQUEADO: NF {situacao} na SEFAZ. "
+                    f"Nao pode ser lancada."
+                )
+
+                # Limpar matches/divergencias anteriores (se houver de revalidacao)
+                DivergenciaNfPo.query.filter_by(validacao_id=validacao.id).delete()
+                MatchNfPoItem.query.filter_by(validacao_id=validacao.id).delete()
+
+                validacao.status = 'bloqueado'
+                validacao.erro_mensagem = f'NF {situacao} na SEFAZ - Nao pode ser lancada'
+                validacao.validado_em = datetime.utcnow()
+                validacao.atualizado_em = datetime.utcnow()
+                db.session.commit()
+
+                return {
+                    'status': 'bloqueado',
+                    'mensagem': f'NF {situacao} na SEFAZ - Nao pode ser lancada',
+                    'situacao_dfe_odoo': situacao,
+                    'bloqueio_tipo': 'situacao_nf_sefaz'
+                }
+
             # NOVO: Importar POs vinculados do Odoo (se houver)
             self._importar_pos_vinculados(validacao, dfe_data)
 
@@ -413,6 +441,7 @@ class ValidacaoNfPoService:
                 [odoo_dfe_id],
                 [
                     'id', 'name', 'l10n_br_status',
+                    'l10n_br_situacao_dfe',  # NOVO: Situacao NF na SEFAZ (AUTORIZADA/CANCELADA/INUTILIZADA)
                     'nfe_infnfe_emit_cnpj', 'nfe_infnfe_emit_xnome',
                     'nfe_infnfe_dest_cnpj',  # CNPJ empresa compradora (dest_xnome não existe no Odoo)
                     'nfe_infnfe_ide_nnf', 'nfe_infnfe_ide_serie',
@@ -1406,6 +1435,14 @@ class ValidacaoNfPoService:
         validacao.razao_empresa_compradora = dfe_data.get('nfe_infnfe_dest_xnome')
         validacao.data_nf = self._parse_date(dfe_data.get('nfe_infnfe_ide_dhemi', ''))
         validacao.valor_total_nf = dfe_data.get('nfe_infnfe_total_icmstot_vnf')
+
+        # NOVO: Situacao da NF na SEFAZ (l10n_br_situacao_dfe)
+        # Valores: AUTORIZADA, CANCELADA, INUTILIZADA (ou None/False se nao preenchido)
+        situacao_dfe = dfe_data.get('l10n_br_situacao_dfe')
+        # Tratar False do Odoo como None
+        if situacao_dfe is False:
+            situacao_dfe = None
+        validacao.situacao_dfe_odoo = situacao_dfe
 
     def _agrupar_pos_para_consolidar(
         self,

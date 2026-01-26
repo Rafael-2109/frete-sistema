@@ -164,6 +164,12 @@
                                 <span class="badge bg-success">Aprovado</span>
                                 {% elif item.status == 'bloqueado' %}
                                 <span class="badge bg-warning text-dark">Bloqueado</span>
+                                {# NOVO: Badge de situacao NF quando CANCELADA/INUTILIZADA #}
+                                {% if item.situacao_dfe_odoo in ['CANCELADA', 'INUTILIZADA'] %}
+                                <br><span class="badge bg-danger mt-1" title="NF {{ item.situacao_dfe_odoo }} na SEFAZ">
+                                    <i class="fas fa-ban me-1"></i>NF - {{ item.situacao_dfe_odoo }}
+                                </span>
+                                {% endif %}
                                 {% elif item.status == 'consolidado' %}
                                 <span class="badge bg-primary">Consolidado</span>
                                 {% elif item.status == 'finalizado_odoo' %}

@@ -217,6 +217,16 @@
                             </td>
                             <!-- Tipo + Status (agrupados) -->
                             <td class="text-center">
+                                {% if item.situacao_dfe_odoo in ['CANCELADA', 'INUTILIZADA'] %}
+                                {# NF Cancelada/Inutilizada na SEFAZ - Exibir como Rejeitado #}
+                                <span class="badge bg-danger">
+                                    <i class="fas fa-ban me-1"></i>NF {{ item.situacao_dfe_odoo }}
+                                </span>
+                                <br>
+                                <span class="badge bg-danger mt-1">Rejeitado</span>
+                                <br>
+                                <small class="text-danger">NF {{ item.situacao_dfe_odoo }} na SEFAZ</small>
+                                {% else %}
                                 <!-- Tipo Divergencia -->
                                 {% if item.tipo_divergencia == 'sem_depara' %}
                                 <span class="badge bg-secondary">Sem De-Para</span>
@@ -239,8 +249,11 @@
                                 <span class="badge bg-success mt-1">Aprovada</span>
                                 {% elif item.status == 'rejeitada' %}
                                 <span class="badge bg-danger mt-1">Rejeitada</span>
+                                {% elif item.status == 'bloqueado' %}
+                                <span class="badge bg-danger mt-1">Bloqueado</span>
                                 {% else %}
                                 <span class="badge bg-secondary mt-1">{{ item.status }}</span>
+                                {% endif %}
                                 {% endif %}
                             </td>
                             <!-- NF vs PO (NF acima, PO abaixo) -->
@@ -262,7 +275,13 @@
                             </td>
                             <!-- Acoes (controlado por tipo de divergencia) -->
                             <td class="text-center">
-                                {% if item.status == 'pendente' %}
+                                {% if item.situacao_dfe_odoo in ['CANCELADA', 'INUTILIZADA'] %}
+                                {# NF Cancelada/Inutilizada - Sem acoes disponiveis #}
+                                <small class="text-danger">
+                                    <i class="fas fa-ban me-1"></i>NF {{ item.situacao_dfe_odoo }}<br>
+                                    Nao pode ser lancada
+                                </small>
+                                {% elif item.status == 'pendente' %}
                                 {# Definir quais tipos podem ser aprovados manualmente #}
                                 {% set pode_aprovar = item.tipo_divergencia in ['quantidade_tolerancia', 'data_entrega'] %}
 

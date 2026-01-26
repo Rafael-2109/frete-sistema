@@ -16,7 +16,7 @@ from typing import Dict, List, Any, Optional
 logger = logging.getLogger(__name__)
 
 
-# Mapeamento de status DFE
+# Mapeamento de status DFE (l10n_br_status - processamento interno)
 STATUS_DFE = {
     '01': 'Rascunho',
     '02': 'Sincronizado',
@@ -27,13 +27,61 @@ STATUS_DFE = {
     '07': 'Rejeitado',
 }
 
+# Mapeamento de situacao da NF na SEFAZ (l10n_br_situacao_dfe)
+# IMPORTANTE: Este campo pode vir vazio em ~99% dos casos (campo recente no Odoo)
+SITUACAO_NF_DFE = {
+    'AUTORIZADA': 'Autorizada',
+    'CANCELADA': 'Cancelada',
+    'INUTILIZADA': 'Inutilizada',
+}
+
+
+def situacao_nf_valida(situacao: Optional[str]) -> bool:
+    """
+    Verifica se a situacao da NF na SEFAZ permite lancamento.
+
+    Args:
+        situacao: Valor do campo l10n_br_situacao_dfe (pode ser None/vazio)
+
+    Returns:
+        True se permite lancamento (vazio, None ou AUTORIZADA)
+        False se bloqueia lancamento (CANCELADA ou INUTILIZADA)
+
+    Exemplos:
+        situacao_nf_valida(None) -> True (vazio = ok)
+        situacao_nf_valida('') -> True (vazio = ok)
+        situacao_nf_valida('AUTORIZADA') -> True
+        situacao_nf_valida('CANCELADA') -> False (bloqueia)
+        situacao_nf_valida('INUTILIZADA') -> False (bloqueia)
+    """
+    if not situacao or situacao == 'AUTORIZADA':
+        return True
+    return False
+
+
+def situacao_nf_bloqueada(situacao: Optional[str]) -> bool:
+    """
+    Verifica se a situacao da NF na SEFAZ bloqueia lancamento.
+
+    Inverso de situacao_nf_valida() para legibilidade do codigo.
+
+    Args:
+        situacao: Valor do campo l10n_br_situacao_dfe
+
+    Returns:
+        True se CANCELADA ou INUTILIZADA
+        False caso contrario
+    """
+    return situacao in ('CANCELADA', 'INUTILIZADA')
+
 # Campos principais do DFE
 CAMPOS_DFE = [
     'id',
     'name',
-    'l10n_br_status',
+    'l10n_br_status',                  # Status processamento (01-07)
+    'l10n_br_situacao_dfe',            # Situacao NF na SEFAZ (AUTORIZADA/CANCELADA/INUTILIZADA)
     'l10n_br_tipo_pedido',
-    'protnfe_infnfe_chnfe',           # Chave de acesso (44 digitos)
+    'protnfe_infnfe_chnfe',            # Chave de acesso (44 digitos)
     'nfe_infnfe_ide_nnf',              # Numero da NF
     'nfe_infnfe_ide_serie',            # Serie da NF
     'nfe_infnfe_emit_cnpj',            # CNPJ emitente
@@ -369,11 +417,20 @@ def _processar_dfe(dfe: Dict) -> Dict:
     purchase_fiscal_id = dfe.get('purchase_fiscal_id')
     company_id = dfe.get('company_id')
 
+    # Situacao da NF na SEFAZ (pode ser vazio/False)
+    situacao_nf = dfe.get('l10n_br_situacao_dfe')
+    # Tratar False do Odoo como None
+    if situacao_nf is False:
+        situacao_nf = None
+
     return {
         'id': dfe.get('id'),
         'name': dfe.get('name') or '',
         'status': dfe.get('l10n_br_status'),
         'status_nome': STATUS_DFE.get(dfe.get('l10n_br_status'), 'Desconhecido'),
+        'situacao_nf': situacao_nf,                                     # NOVO: Situacao na SEFAZ
+        'situacao_nf_nome': SITUACAO_NF_DFE.get(situacao_nf, ''),       # NOVO: Nome legivel
+        'situacao_nf_valida': situacao_nf_valida(situacao_nf),          # NOVO: Se permite lancamento
         'tipo_pedido': dfe.get('l10n_br_tipo_pedido'),
         'chave_acesso': dfe.get('protnfe_infnfe_chnfe') or '',
         'numero_nf': dfe.get('nfe_infnfe_ide_nnf') or '',

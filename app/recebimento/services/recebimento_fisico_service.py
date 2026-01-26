@@ -461,17 +461,23 @@ class RecebimentoFisicoService:
 
             db.session.commit()
 
-            # Enfileirar job RQ (fire-and-forget)
+            # Enfileirar job RQ (fire-and-forget) com retry automatico
             try:
                 from app.recebimento.workers.recebimento_fisico_jobs import processar_recebimento_job
                 from app.portal.workers import enqueue_job
+                from rq import Retry
+
+                # Retry com backoff exponencial: 30s, 2min, 8min
+                # Resolve problemas temporarios de timeout/indisponibilidade do Odoo
+                retry_config = Retry(max=3, interval=[30, 120, 480])
 
                 job = enqueue_job(
                     processar_recebimento_job,
                     recebimento.id,
                     usuario,
                     queue_name='recebimento',
-                    timeout='10m',
+                    timeout='15m',  # Aumentado para dar margem a operacoes lentas
+                    retry=retry_config,
                 )
                 recebimento.job_id = job.id
                 db.session.commit()
@@ -600,17 +606,22 @@ class RecebimentoFisicoService:
 
             db.session.commit()
 
-            # Re-enfileirar job
+            # Re-enfileirar job com retry automatico
             try:
                 from app.recebimento.workers.recebimento_fisico_jobs import processar_recebimento_job
                 from app.portal.workers import enqueue_job
+                from rq import Retry
+
+                # Retry com backoff exponencial: 30s, 2min, 8min
+                retry_config = Retry(max=3, interval=[30, 120, 480])
 
                 job = enqueue_job(
                     processar_recebimento_job,
                     recebimento.id,
                     recebimento.usuario,
                     queue_name='recebimento',
-                    timeout='10m',
+                    timeout='15m',
+                    retry=retry_config,
                 )
                 recebimento.job_id = job.id
                 db.session.commit()

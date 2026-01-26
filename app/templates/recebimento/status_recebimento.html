@@ -238,7 +238,7 @@ function renderRecebimentos(recebimentos) {
     tbody.innerHTML = recebimentos.map(r => {
         const statusBadge = `<span class="badge badge-status badge-${r.status}">${r.status}</span>`;
         const criadoEm = r.criado_em ? new Date(r.criado_em).toLocaleString('pt-BR') : '-';
-        const tentativas = `${r.tentativas}/${r.max_tentativas}`;
+        const tentativas = `${r.tentativas}`;
 
         let acoes = '';
         if (r.status === 'erro') {
@@ -364,7 +364,7 @@ function verDetalhes(recebimentoId, recebimento) {
             <div class="col-md-6">
                 <table class="table table-sm table-borderless">
                     <tr><th class="text-muted">Status:</th><td><span class="badge badge-status badge-${recebimento.status}">${recebimento.status}</span></td></tr>
-                    <tr><th class="text-muted">Tentativas:</th><td>${recebimento.tentativas}/${recebimento.max_tentativas}</td></tr>
+                    <tr><th class="text-muted">Tentativas:</th><td>${recebimento.tentativas}</td></tr>
                     <tr><th class="text-muted">Criado em:</th><td>${criadoEm}</td></tr>
                     <tr><th class="text-muted">Processado em:</th><td>${processadoEm}</td></tr>
                     <tr><th class="text-muted">Usuário:</th><td>${recebimento.usuario || '-'}</td></tr>
