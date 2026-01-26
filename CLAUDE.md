@@ -669,7 +669,9 @@ Usuario: "Como fazer bulk insert com SQLAlchemy?"
 
 O Ralph Wiggum e uma tecnica de desenvolvimento autonomo com loops de IA. Permite que o Claude execute tarefas em ciclos automaticos com planejamento, implementacao e validacao.
 
-### Arquivos do Ralph Wiggum
+### Arquivos do Ralph Wiggum 
+
+Localizados em: `.claude/ralph-loop/`
 
 | Arquivo | Descricao |
 |---------|-----------|

@@ -9,7 +9,7 @@
 ├─────────────────────────────────────────────────────────────────────┤
 │  1. Identify Jobs-to-Be-Done (JTBD)                                 │
 │  2. Break into Topics of Concern                                     │
-│  3. Generate specs for each topic → specs/*.md                       │
+│  3. Generate specs for each topic → .claude/ralph-loop/specs/*.md                       │
 └─────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
@@ -18,10 +18,10 @@
 │                       ./ralph-loop.sh plan N                         │
 ├─────────────────────────────────────────────────────────────────────┤
 │  For each iteration:                                                 │
-│  1. Study specs/* with subagents                                     │
+│  1. Study .claude/ralph-loop/specs/* with subagents                                     │
 │  2. Study existing code in app/*                                     │
 │  3. Gap analysis: specs vs code                                      │
-│  4. Create/update IMPLEMENTATION_PLAN.md                             │
+│  4. Create/update .claude/ralph-loop/IMPLEMENTATION_PLAN.md                             │
 │  5. Exit (context clears)                                            │
 │                                                                       │
 │  NO IMPLEMENTATION - ONLY PLANNING                                   │
@@ -33,8 +33,8 @@
 │                       ./ralph-loop.sh [N]                            │
 ├─────────────────────────────────────────────────────────────────────┤
 │  For each iteration:                                                 │
-│  1. Orient: Study specs/*                                            │
-│  2. Read: Study IMPLEMENTATION_PLAN.md                               │
+│  1. Orient: Study .claude/ralph-loop/specs/*                                           │
+│  2. Read: Study .claude/ralph-loop/IMPLEMENTATION_PLAN.md                               │
 │  3. Select: Pick most important task                                 │
 │  4. Investigate: Study relevant src/ code                            │
 │  5. Implement: Use parallel subagents for file operations            │

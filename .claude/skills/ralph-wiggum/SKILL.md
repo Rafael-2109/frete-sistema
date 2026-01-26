@@ -24,7 +24,7 @@ Cancel active Ralph loop.
 
 ## Quick Start
 
-1. **Create specs**: Add requirement specs to `specs/` directory
+1. **Create specs**: Add requirement specs to `.claude/ralph-loop/specs/` directory
 2. **Run planning**: `./ralph-loop.sh plan 3` (3 iterations)
 3. **Run building**: `./ralph-loop.sh 10` (10 iterations)
 
@@ -67,7 +67,7 @@ Each iteration:
 |------|------------|
 | **JTBD** | Job-to-Be-Done - high-level user need |
 | **Topic of Concern** | Distinct aspect within a JTBD |
-| **Spec** | Requirements doc (`specs/FILENAME.md`) |
+| **Spec** | Requirements doc (`.claude/ralph-loop/specs/FILENAME.md`) |
 | **Task** | Unit of work from specs vs code comparison |
 
 ## When to Regenerate Plan
@@ -81,7 +81,7 @@ Each iteration:
 ## File Structure
 
 ```
-project/
+project/.claude/ralph-loop/
 ├── ralph-loop.sh          # Loop script
 ├── PROMPT_build.md        # Build instructions
 ├── PROMPT_plan.md         # Plan instructions

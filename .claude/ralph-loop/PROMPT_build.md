@@ -1,13 +1,13 @@
 # CRITICAL RULE
 Complete EXACTLY ONE task per iteration. After completing the task:
-1. Update IMPLEMENTATION_PLAN.md marking the task as done
+1. Update .claude/ralph-loop/IMPLEMENTATION_PLAN.md marking the task as done
 2. STOP IMMEDIATELY - do not start another task
 3. The loop script will restart you with fresh context
 DO NOT continue to another task in the same session.
 
 ---
 
-0a. Study `specs/*` with up to 500 parallel subagents to learn specifications.
+0a. Study `.claude/ralph-loop/specs/*` with up to 500 parallel subagents to learn specifications.
 0b. Study @IMPLEMENTATION_PLAN.md.
 0c. Reference CLAUDE.md for field names, conventions, and validation rules.
 

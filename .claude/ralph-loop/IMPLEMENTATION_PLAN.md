@@ -1,10 +1,10 @@
 # IMPLEMENTATION PLAN: Reestruturação do Módulo de Gestão de Pallets
 
 **Spec**: `.claude/ralph-loop/specs/prd-reestruturacao-modulo-pallets.md`
-**Versão**: 1.2.0
+**Versão**: 1.2.4
 **Data**: 25/01/2026
-**Status**: EM PROGRESSO - Fase 4 Frontend
-**Última Análise**: 25/01/2026 12:40 (Sessão 3 - Templates solucoes.html e historico.html criados)
+**Status**: EM PROGRESSO - Fase 6 Testes (96% Completo)
+**Última Análise**: 25/01/2026 (Sessão 16 - Testes de auditoria de cancelamento implementados: 79 testes total, Critério 8 validado)
 
 ---
 
@@ -133,21 +133,63 @@ Reestruturar o módulo de pallets em **dois domínios independentes**:
 #### 1.3 Scripts de Migração de Dados
 
 ##### 1.3.1 Criar `scripts/pallet/002_migrar_movimentacao_para_nf_remessa.py`
-- [ ] **Status**: NÃO INICIADO
+- [x] **Status**: ✅ CONCLUÍDO (25/01/2026)
 - Migrar `MovimentacaoEstoque` onde `local_movimentacao='PALLET'` e `tipo_movimentacao='REMESSA'`
 - Para cada remessa: criar `PalletNFRemessa` + `PalletCredito`
+- **Arquivos criados**:
+  - `scripts/pallet/002_migrar_movimentacao_para_nf_remessa.py` (~430 linhas) - Script Python com --dry-run e --force
+  - `scripts/pallet/002_migrar_movimentacao_para_nf_remessa.sql` (~150 linhas) - SQL para Render Shell
+- **Funcionalidades**:
+  - Verifica pré-requisitos (tabelas de destino existem)
+  - Evita duplicatas via movimentacao_estoque_id
+  - Calcula qtd_saldo baseado em qtd_abatida
+  - Determina status baseado em baixado e saldo
+  - Modo dry-run para teste
+  - Modo --force para remigração
+  - Relatório final de contagens
 
 ##### 1.3.2 Criar `scripts/pallet/003_migrar_vale_pallet_para_documento.py`
-- [ ] **Status**: NÃO INICIADO
+- [x] **Status**: ✅ CONCLUÍDO (25/01/2026)
 - Migrar `ValePallet` para `PalletDocumento`
 - Vincular a `PalletCredito` correto via `nf_pallet`
 - Se vale resolvido, criar `PalletSolucao` correspondente
+- **Arquivos criados**:
+  - `scripts/pallet/003_migrar_vale_pallet_para_documento.py` (~560 linhas) - Script Python com --dry-run, --force, --verbose
+  - `scripts/pallet/003_migrar_vale_pallet_para_documento.sql` (~220 linhas) - SQL para Render Shell
+- **Funcionalidades**:
+  - Busca PalletCredito via nf_pallet → PalletNFRemessa.numero_nf
+  - Mapeia tipo_vale (CANHOTO_ASSINADO → CANHOTO, VALE_PALLET → VALE_PALLET)
+  - Se resolvido=True, cria PalletSolucao (VENDA ou RECEBIMENTO/COLETA)
+  - Evita duplicatas via vale_pallet_id
+  - Relatório de vales sem crédito correspondente
+  - Modo dry-run para teste
+  - Modo --force para remigração
 
 ##### 1.3.3 Criar `scripts/pallet/004_validar_migracao.py`
-- [ ] **Status**: NÃO INICIADO
-- Verificar integridade referencial
-- Comparar totais migrados
-- Relatório de discrepâncias
+- [x] **Status**: ✅ CONCLUÍDO (25/01/2026)
+- **Arquivos criados**:
+  - `scripts/pallet/004_validar_migracao.py` (~913 linhas) - Script Python com --verbose e --output
+  - `scripts/pallet/004_validar_migracao.sql` (~427 linhas) - SQL para Render Shell
+- **14 Verificações implementadas**:
+  1. Tabelas V2 existem (contagem de registros)
+  2. Tabelas legado existem (fonte de migração)
+  3. FK Créditos → NF Remessa
+  4. FK Documentos → Créditos
+  5. FK Soluções → Créditos
+  6. FK Soluções NF → NF Remessa
+  7. Saldo <= Original (créditos)
+  8. Status vs Saldo (consistência)
+  9. Soma Soluções <= Original
+  10. Migração MovimentacaoEstoque (comparação fonte/destino)
+  11. Migração ValePallet (comparação fonte/destino)
+  12. Totais de Quantidades (consistência matemática)
+  13. NFs Duplicadas
+  14. Formato de CNPJs (11 ou 14 dígitos)
+- **Funcionalidades**:
+  - Modo --verbose para detalhes de cada problema
+  - Modo --output para salvar relatório em arquivo
+  - Resumo final com contagem de OK/AVISO/ERRO
+  - Categorização de problemas (erro crítico vs aviso)
 
 ---
 
@@ -408,24 +450,65 @@ Reestruturar o módulo de pallets em **dois domínios independentes**:
 - Paginação completa com filtros preservados
 - **Arquivo**: `app/templates/pallet/v2/tratativa_nfs/direcionamento.html` (~700 linhas)
 
-##### 4.3.2 Criar `app/templates/pallet/tratativa_nfs/solucoes.html`
-- [ ] **Status**: NÃO INICIADO
-- Listagem de soluções de NF
-- Devoluções e retornos registrados
+##### 4.3.2 Criar `app/templates/pallet/v2/tratativa_nfs/sugestoes.html`
+- [x] **Status**: ✅ CONCLUÍDO (25/01/2026)
+- Listagem de sugestões automáticas de vinculação
+- Stats cards: pendentes, devoluções, retornos
+- Filtro por tipo de sugestão
+- Modais integrados: Confirmar Sugestão, Rejeitar Sugestão, Detalhes
+- Ação de buscar devoluções no DFe (processar pendentes)
+- Score de match visual (high/medium/low)
+- **Arquivo**: `app/templates/pallet/v2/tratativa_nfs/sugestoes.html` (~700 linhas)
+- **NOTA**: Adicionado campo `score_match` ao modelo `PalletNFSolucao` e migrações
 
-##### 4.3.3 Modais/formulários:
+##### 4.3.3 Criar `app/templates/pallet/v2/tratativa_nfs/solucoes.html`
+- [x] **Status**: ✅ CONCLUÍDO (25/01/2026)
+- Listagem de soluções de NF confirmadas (histórico)
+- Devoluções, retornos e cancelamentos registrados
+- Filtros por tipo, vinculação, data_de, data_ate
+- Stats cards: total, devoluções, retornos, cancelamentos (com contagem de pallets)
+- Modal de detalhes completo com informações de confirmação/rejeição
+- Paginação com preservação de filtros
+- **Arquivo**: `app/templates/pallet/v2/tratativa_nfs/solucoes.html` (~700 linhas)
+
+##### 4.3.4 Criar `app/templates/pallet/v2/tratativa_nfs/canceladas.html`
+- [x] **Status**: ✅ CONCLUÍDO (25/01/2026)
+- NFs canceladas (histórico para auditoria)
+- Stats cards: total canceladas, transportadoras, clientes (com contagem de pallets)
+- Filtros por data de cancelamento (data_de, data_ate)
+- Tabela com: NF, tipo destinatário, destinatário, quantidade, emissão, cancelamento, motivo
+- Modal de detalhes reutilizando API de nf_remessa
+- Paginação completa com filtros preservados
+- **Arquivo**: `app/templates/pallet/v2/tratativa_nfs/canceladas.html` (~600 linhas)
+
+##### 4.3.5 Modais/formulários:
 - [x] `Modal Vincular Devolução (1:N)` - ✅ Integrado em direcionamento.html
 - [x] `Modal Vincular Retorno (1:1)` - ✅ Integrado em direcionamento.html
-- [ ] `Modal Confirmar Sugestão` - Pendente, será integrado em sugestoes.html
+- [x] `Modal Confirmar Sugestão` - ✅ Integrado em sugestoes.html
+- [x] `Modal Rejeitar Sugestão` - ✅ Integrado em sugestoes.html
+- [x] `Modal Detalhes Sugestão` - ✅ Integrado em sugestoes.html
 
 #### 4.4 Template de Detalhe
 
-##### 4.4.1 Criar `app/templates/pallet/nf_remessa/detalhe.html`
-- [ ] **Status**: NÃO INICIADO
-- Dados da NF
-- Status dos dois domínios lado a lado
-- Histórico de documentos e soluções
-- Ações contextuais
+##### 4.4.1 Criar `app/templates/pallet/v2/nf_remessa/detalhe.html`
+- [x] **Status**: ✅ CONCLUÍDO (25/01/2026)
+- Dados completos da NF (número, série, chave, data emissão, empresa, quantidade, valores)
+- Status dos dois domínios lado a lado:
+  - Domínio A: Controle de Pallets (créditos com progress bar, lista de créditos, stats)
+  - Domínio B: Tratativa de NFs (soluções documentais com progress bar, lista de soluções)
+- Histórico de soluções em timeline (baixa, venda, recebimento, substituição)
+- Ações contextuais: Cancelar NF (modal), Vincular NF, Gerenciar Créditos
+- Informações de auditoria (criação, atualização, IDs Odoo)
+- **Arquivo**: `app/templates/pallet/v2/nf_remessa/detalhe.html` (~700 linhas)
+
+##### 4.4.2 Criar `app/templates/pallet/v2/nf_remessa/listagem.html`
+- [x] **Status**: ✅ CONCLUÍDO (25/01/2026)
+- Listagem completa de NFs de remessa com filtros
+- Stats cards: total, ativas, resolvidas, canceladas
+- Filtros: status, empresa, tipo destinatário, CNPJ/nome, data inicial/final
+- Tabela com: NF, emissão, empresa, destinatário, quantidade, resolvido, status
+- Paginação completa com filtros preservados
+- **Arquivo**: `app/templates/pallet/v2/nf_remessa/listagem.html` (~400 linhas)
 
 #### 4.5 Atualizar Menu
 
@@ -453,59 +536,69 @@ Reestruturar o módulo de pallets em **dois domínios independentes**:
 - **Problema**: CFOP 5920/6920 (pallet) está entrando junto com devoluções de produto
 
 ##### 5.1.2 Adicionar filtro para excluir devoluções de pallet
-- [ ] **Status**: NÃO INICIADO
-- **Arquivos a modificar**:
-  - `app/devolucao/services/nfd_service.py` - Adicionar filtro na importação
-  - `app/devolucao/routes/vinculacao_routes.py` - Filtrar na listagem de órfãs
-- **Filtros a aplicar**:
-  - Excluir CFOP 5920/6920 (remessa/devolução vasilhame)
-  - Excluir CFOP 1920/2920 (entrada para devolução vasilhame)
-  - Excluir produto código `208000012` (PALLET)
-
-```python
-# Arquivos: app/devolucao/services/nfd_service.py, app/devolucao/routes/vinculacao_routes.py
-# Adicionar na query de importação/listagem:
-CFOP_PALLET = ['5920', '6920', '1920', '2920']
-CODIGO_PALLET = '208000012'
-
-def filtrar_devolucoes_produto(query):
-    """Exclui devoluções de pallet do módulo de devoluções de produtos."""
-    return query.filter(
-        ~DFe.cfop.in_(CFOP_PALLET),
-        ~DFe.produto_codigo.contains(CODIGO_PALLET)
-    )
-```
+- [x] **Status**: ✅ CONCLUÍDO (25/01/2026)
+- **Arquivos modificados**:
+  - `app/devolucao/models.py` - Adicionado campo `e_pallet_devolucao` (Boolean)
+  - `app/devolucao/services/nfd_service.py`:
+    - Adicionadas constantes `CFOPS_PALLET` e `CODIGO_PRODUTO_PALLET`
+    - Criado método `_detectar_nfd_pallet()` para detectar NFDs de pallet por CFOP/código
+    - Chamada automática após `_processar_linhas_produto()` no fluxo de importação
+    - Atualizado `listar_nfds_orfas()` para excluir NFDs de pallet por padrão
+  - `scripts/devolucao/001_adicionar_campo_pallet.py` - Migration Python
+  - `scripts/devolucao/001_adicionar_campo_pallet.sql` - Migration SQL
+  - `scripts/devolucao/002_detectar_nfds_pallet_existentes.py` - Script para marcar NFDs existentes
+- **Implementação**:
+  - Campo `e_pallet_devolucao` adicionado à tabela `nf_devolucao`
+  - Detecção automática por CFOP (1920, 2920, 5920, 6920, 5917, 6917, 1917, 2917)
+  - Detecção automática por código produto (208000012)
+  - Filtro aplicado na listagem de órfãs (parâmetro `incluir_pallets=False` por padrão)
 
 #### 5.2 Consumir DFe para Match Automático
 
 ##### 5.2.1 Criar job/task para identificar NFs de pallet no DFe
-- [ ] **Status**: NÃO INICIADO
+- [x] **Status**: ✅ CONCLUÍDO (25/01/2026)
 - **Objetivo**: Buscar NFs de entrada com CFOP de devolução vasilhame e direcioná-las para o módulo de pallet
-- **Lógica**:
-  1. Consultar tabela `dfe` (sincronizada do Odoo) com filtro CFOP IN ('1920', '2920')
-  2. Verificar se `produto_codigo` contém '208000012' (PALLET)
-  3. Criar registro em `pallet_nf_solucoes` com tipo='DEVOLUCAO' e vinculacao='SUGESTAO'
-  4. Usar `match_service.sugerir_vinculacao_devolucao()` para encontrar NF remessa original
-- **Campos do DFe úteis** (modelo em `app/recebimento/models.py:304-394` - ValidacaoFiscalDfe):
-  - `odoo_dfe_id`, `numero_nf`, `chave_nfe`
-  - `cnpj_fornecedor`, `razao_fornecedor`
-  - Para CFOP: consultar Odoo via `l10n_br_fiscal.document.line`
-  - Para produto: consultar Odoo via `l10n_br_fiscal.document.line.product_id`
-- **Nota**: O modelo local não tem campo CFOP. Será necessário consultar Odoo diretamente ou adicionar campo ao modelo.
+- **Implementação**:
+  - `MatchService.buscar_nfs_devolucao_pallet_dfe()` - Busca NFs de pallet diretamente no Odoo
+  - `MatchService.processar_devolucoes_pendentes()` - Processa e cria sugestões de vinculação
+  - `POST /pallet/v2/tratativa/processar-devolucoes` - Rota para processamento manual
+  - `POST /pallet/v2/tratativa/api/processar-devolucoes` - API JSON para jobs/integrações
+- **Funcionalidades**:
+  - Busca NFs no modelo `l10n_br_fiscal.document` do Odoo
+  - Filtra por CFOP de devolução vasilhame (5920/6920/1920/2920)
+  - Filtra por código produto PALLET (208000012)
+  - Cria sugestões de vinculação (`vinculacao='SUGESTAO'`)
+  - Retornos com NF referenciada são vinculados automaticamente (`vinculacao='AUTOMATICO'`)
+  - Exclui CNPJs intercompany (Nacom/La Famiglia)
+- **Arquivos**:
+  - `app/pallet/services/match_service.py` (~986 linhas)
+  - `app/pallet/routes/tratativa_nfs.py` (rotas adicionadas/corrigidas)
 
 #### 5.3 Listagem de Movimentações (Requisito do Usuário)
 
 ##### 5.3.1 Criar tela de listagem consolidada
-- [ ] **Status**: NÃO INICIADO
-- **Filtros obrigatórios** (conforme resposta do usuário):
-  - NF de venda (via Embarque → EmbarqueItem → NF)
-  - NF de remessa (PalletNFRemessa)
-  - Cliente (cnpj_destinatario quando tipo_destinatario='CLIENTE')
-  - Transportadora (cnpj_destinatario quando tipo_destinatario='TRANSPORTADORA', ou via Embarque.transportadora)
-  - Data
-  - UF
-  - Cidade
-- **Campos a exibir**: Todos os campos relevantes + saldo atual de crédito
+- [x] **Status**: ✅ CONCLUÍDO (25/01/2026)
+- **Filtros implementados** (conforme resposta do usuário):
+  - NF de venda (via Embarque → EmbarqueItem → NF) ✅
+  - NF de remessa (PalletNFRemessa) ✅
+  - Cliente (cnpj_destinatario quando tipo_destinatario='CLIENTE') ✅
+  - Transportadora (cnpj_destinatario quando tipo_destinatario='TRANSPORTADORA', ou via Embarque.transportadora) ✅
+  - Data (data_de, data_ate) ✅
+  - UF (PalletCredito.uf_responsavel) ✅
+  - Cidade (PalletCredito.cidade_responsavel) ✅
+  - Status (ATIVA, RESOLVIDA, CANCELADA) ✅
+  - Tipo Destinatário (TRANSPORTADORA, CLIENTE) ✅
+- **Campos exibidos**: NF Remessa, Emissão, Tipo, Destinatário, Transportadora, NF Venda, UF, Cidade, Qtd, Saldo, Status
+- **Funcionalidades extras**:
+  - Exportação para CSV via API
+  - Paginação com filtros preservados
+  - Stats cards (total registros, total pallets, saldo pendente, ativas, resolvidas, canceladas)
+- **Arquivos criados/modificados**:
+  - `app/pallet/routes/movimentacoes.py` (~450 linhas) - Rota e API de exportação
+  - `app/templates/pallet/v2/movimentacoes/listagem.html` (~350 linhas) - Template
+  - `app/pallet/routes/__init__.py` - Registro do blueprint
+  - `app/templates/pallet/v2/dashboard.html` - Link de acesso rápido
+- **Acesso**: Dashboard Gestão de Pallets > Botão "Movimentações" ou /pallet/v2/movimentacoes/
 
 ---
 
@@ -513,15 +606,15 @@ def filtrar_devolucoes_produto(query):
 **Prioridade**: ALTA | **Após**: Fase 4
 
 #### 6.1 Testes de Migração
-- [ ] **6.1.1** Validar migração de dados existentes
-- [ ] **6.1.2** Comparar totais antes/depois
-- [ ] **6.1.3** Verificar integridade referencial
+- [x] **6.1.1** Validar migração de dados existentes ✅ (25/01/2026 - 28 testes)
+- [x] **6.1.2** Comparar totais antes/depois ✅ (25/01/2026 - 28 testes)
+- [x] **6.1.3** Verificar integridade referencial ✅ (25/01/2026 - 28 testes)
 
 #### 6.2 Testes Funcionais
-- [ ] **6.2.1** Testar fluxo completo: NF remessa → Crédito → Solução
-- [ ] **6.2.2** Testar fluxo completo: NF remessa → Devolução → Vinculação
-- [ ] **6.2.3** Testar independência dos domínios
-- [ ] **6.2.4** Testar match automático
+- [x] **6.2.1** Testar fluxo completo: NF remessa → Crédito → Solução ✅ (25/01/2026)
+- [x] **6.2.2** Testar fluxo completo: NF remessa → Devolução → Vinculação ✅ (25/01/2026)
+- [x] **6.2.3** Testar independência dos domínios ✅ (25/01/2026) - Coberto em 6.2.2
+- [x] **6.2.4** Testar match automático ✅ (25/01/2026) - Coberto em 6.2.2
 
 #### 6.3 Validação de Negócio
 - [ ] **6.3.1** Validar com usuário: Dashboard
@@ -534,14 +627,14 @@ def filtrar_devolucoes_produto(query):
 
 | # | Critério | Status |
 |---|----------|--------|
-| 1 | NF de remessa cria automaticamente registro de crédito | ⬜ |
-| 2 | Crédito pode ser resolvido independente da NF | ⬜ |
-| 3 | NF pode ser resolvida independente do crédito | ⬜ |
-| 4 | Venda de pallets permite N NFs remessa → 1 NF venda | ⬜ |
-| 5 | Substituição transfere responsabilidade com rastreabilidade | ⬜ |
-| 6 | Devolução permite 1 NF → N NFs remessa com confirmação | ⬜ |
-| 7 | Retorno vincula automaticamente 1:1 por informações complementares | ⬜ |
-| 8 | Cancelamento mantém registro para auditoria | ⬜ |
+| 1 | NF de remessa cria automaticamente registro de crédito | ✅ (testado) |
+| 2 | Crédito pode ser resolvido independente da NF | ✅ (testado) |
+| 3 | NF pode ser resolvida independente do crédito | ✅ (testado em 6.2.2) |
+| 4 | Venda de pallets permite N NFs remessa → 1 NF venda | ✅ (testado) |
+| 5 | Substituição transfere responsabilidade com rastreabilidade | ✅ (testado) |
+| 6 | Devolução permite 1 NF → N NFs remessa com confirmação | ✅ (testado em 6.2.2) |
+| 7 | Retorno vincula automaticamente 1:1 por informações complementares | ✅ (testado em 6.2.2) |
+| 8 | Cancelamento mantém registro para auditoria | ✅ (testado - 13 testes em test_cancelamento_auditoria.py) |
 | 9 | UI separa claramente os dois domínios | ⬜ |
 | 10 | Dados históricos migrados corretamente | ⬜ |
 
@@ -594,19 +687,90 @@ Ao preencher `nf_pallet_*` no Embarque/EmbarqueItem:
 
 ---
 
-## RESUMO DE PROGRESSO (Atualizado 25/01/2026 - Sessão 4)
+## RESUMO DE PROGRESSO (Atualizado 25/01/2026 - Sessão 12)
 
 ### Status por Fase
 
 | Fase | Tarefas | Concluídas | Pendentes | Status |
 |------|---------|------------|-----------|--------|
-| 1. Infraestrutura | 8 | 8 | 0 | ✅ **CONCLUÍDO** |
+| 1. Infraestrutura | 11 | 11 | 0 | ✅ **CONCLUÍDO** |
 | 2. Backend | 5 | 5 | 0 | ✅ **CONCLUÍDO** |
 | 3. Routes | 6 | 6 | 0 | ✅ **CONCLUÍDO** |
-| 4. Frontend | 14 | 9 | 5 | 🟡 EM PROGRESSO |
-| 5. Integração | 4 | 1 (análise) | 3 | ⏳ Aguardando |
-| 6. Testes | 9 | 0 | 9 | ⏳ Aguardando |
-| **TOTAL** | **46** | **29** | **17** | 🟢 **63% Completo** |
+| 4. Frontend | 15 | 15 | 0 | ✅ **CONCLUÍDO** |
+| 5. Integração | 4 | 4 | 0 | ✅ **CONCLUÍDO** |
+| 6. Testes | 9 | 7 | 2 | ⏳ EM PROGRESSO (apenas validação com usuário restante) |
+| **TOTAL** | **50** | **48** | **2** | 🟢 **96% Completo** |
+
+### Fase 6 - Testes (⏳ EM PROGRESSO)
+
+| Item | Status | Arquivo | Testes |
+|------|--------|---------|--------|
+| 6.1.1-3 Testes de migração | ✅ | `tests/pallet/test_migracao.py` | 28 |
+| 6.2.1 Fluxo NF→Crédito→Solução | ✅ | `tests/pallet/test_fluxo_nf_credito_solucao.py` | 14 |
+| 6.2.2 Fluxo NF→Devolução→Vinculação | ✅ | `tests/pallet/test_fluxo_nf_devolucao_vinculacao.py` | 24 |
+| 6.2.3 Independência dos domínios | ✅ | Coberto em 6.2.2 (TestIndependenciaDominios) | 2 |
+| 6.2.4 Match automático | ✅ | Coberto em 6.2.2 (TestMatchAutomatico) | 6 |
+| 6.2.5 Auditoria de cancelamento | ✅ | `tests/pallet/test_cancelamento_auditoria.py` | 13 |
+| 6.3.1-3 Validação com usuário | ⬜ | Pendente (requer interação) | - |
+
+**Total de testes implementados**: 79 testes passando
+- `tests/pallet/test_migracao.py`: 28 testes
+- `tests/pallet/test_fluxo_nf_credito_solucao.py`: 14 testes
+- `tests/pallet/test_fluxo_nf_devolucao_vinculacao.py`: 24 testes
+- `tests/pallet/test_cancelamento_auditoria.py`: 13 testes
+
+**Classes de teste (migração)**:
+- `TestTabelasExistem`: Verificar existência de tabelas V2
+- `TestCriacaoDadosMigracao`: Validar criação de dados após migração
+- `TestConsistenciaQuantidades`: Saldo <= Original, soma soluções
+- `TestConsistenciaStatus`: Status consistente com saldo
+- `TestIntegridadeReferencialCreditoNF`: FK crédito → NF remessa
+- `TestIntegridadeReferencialDocumentoCredito`: FK documento → crédito
+- `TestIntegridadeReferencialSolucaoCredito`: FK solução → crédito
+- `TestIntegridadeReferencialNFSolucaoNFRemessa`: FK NF solução → NF remessa
+- `TestUnicidade`: Chaves únicas (numero_nf+serie, chave_nfe)
+- `TestFormatoDados`: Formato CNPJ (11/14 dígitos)
+- `TestFuncoesValidacao`: Funções auxiliares de validação
+- `TestRelacionamentosBidirecionais`: Backrefs funcionando
+
+**Classes de teste (fluxo devolução/vinculação)**:
+- `TestVinculacaoManualDevolucao`: Vinculação manual 1:N
+- `TestVinculacaoManualRetorno`: Vinculação manual 1:1
+- `TestSugestaoVinculacao`: Criar, confirmar e rejeitar sugestões
+- `TestMatchAutomatico`: Extração de NF referenciada, score de match
+- `TestCalculoScore`: Algoritmo de pontuação de candidatas
+- `TestHelpersCNPJ`: Limpeza e validação de CNPJs
+- `TestValidacoesSolucaoNF`: Validações de regras de negócio
+- `TestIndependenciaDominios`: Separação Domínio A × Domínio B
+
+**Classes de teste (auditoria de cancelamento)**:
+- `TestCamposAuditoriaCancelamento`: Campos de auditoria preenchidos corretamente
+- `TestValidacoesCancelamento`: Validações (motivo obrigatório, usuário obrigatório, NF inexistente)
+- `TestSoftDeleteCancelamento`: Soft delete (registro não é deletado, relacionamentos mantidos)
+- `TestMetodoCancelarModelo`: Método cancelar() do modelo PalletNFRemessa
+- `TestSerializacaoCancelamento`: to_dict() inclui campos de cancelamento
+
+### Fase 1.3 - Scripts de Migração de Dados (✅ CONCLUÍDA)
+
+| Item | Status | Arquivo | Linhas |
+|------|--------|---------|--------|
+| 1.3.1 Migrar MovimentacaoEstoque | ✅ | `scripts/pallet/002_migrar_movimentacao_para_nf_remessa.py` | ~430 |
+| 1.3.2 Migrar ValePallet | ✅ | `scripts/pallet/003_migrar_vale_pallet_para_documento.py` | ~560 |
+| 1.3.3 Validar migração | ✅ | `scripts/pallet/004_validar_migracao.py` | ~913 |
+
+### Fase 5 - Detalhamento (✅ CONCLUÍDA)
+
+| Item | Status | Arquivo | Linhas |
+|------|--------|---------|--------|
+| 5.1.1 Identificar arquivo devoluções | ✅ | Análise app/devolucao/ | - |
+| 5.1.2 Adicionar filtro pallet | ✅ | `app/devolucao/services/nfd_service.py` | ~50 |
+| 5.2.1 Job DFe para pallets | ✅ | `app/pallet/services/match_service.py` | ~986 |
+| 5.3.1 Listagem Movimentações | ✅ | `app/pallet/routes/movimentacoes.py` | ~450 |
+
+**Novas rotas v2**:
+- `GET /pallet/v2/movimentacoes/` - Listagem consolidada com filtros
+- `GET /pallet/v2/movimentacoes/api/exportar` - API de exportação JSON
+- `GET /pallet/v2/movimentacoes/api/cidades` - API de cidades por UF
 
 ### Fase 3 - Detalhamento (✅ CONCLUÍDA)
 
@@ -662,12 +826,13 @@ app/pallet/
 │   ├── documento.py     ✅ Criado (PalletDocumento)
 │   ├── solucao.py       ✅ Criado (PalletSolucao)
 │   └── nf_solucao.py    ✅ Criado (PalletNFSolucao)
-├── routes/              ✅ CRIADO (Fase 3) - Blueprint v2
-│   ├── __init__.py      ✅ Criado (~55 linhas) - Hub de registro
+├── routes/              ✅ CRIADO (Fase 3 + Fase 5) - Blueprint v2
+│   ├── __init__.py      ✅ Criado (~60 linhas) - Hub de registro
 │   ├── dashboard.py     ✅ Criado (~270 linhas) - Dashboard 3 tabs
 │   ├── nf_remessa.py    ✅ Criado (~320 linhas) - CRUD NF Remessa
 │   ├── controle_pallets.py ✅ Criado (~640 linhas) - Domínio A
-│   └── tratativa_nfs.py ✅ Criado (~550 linhas) - Domínio B
+│   ├── tratativa_nfs.py ✅ Criado (~550 linhas) - Domínio B
+│   └── movimentacoes.py ✅ CRIADO (~450 linhas) - Listagem consolidada (Fase 5)
 └── services/            ✅ CRIADO (Fase 2)
     ├── __init__.py           ✅ Atualizado (exporta todos os services)
     ├── emissao_nf_pallet.py  ✅ Existe (manter)
@@ -677,21 +842,34 @@ app/pallet/
     ├── nf_service.py         ✅ CRIADO (896 linhas)
     └── match_service.py      ✅ CRIADO (~750 linhas)
 
-scripts/pallet/          ✅ CRIADO
+scripts/pallet/          ✅ COMPLETO
 ├── 001_criar_tabelas_pallet_v2.py   ✅ Criado
-└── 001_criar_tabelas_pallet_v2.sql  ✅ Criado
+├── 001_criar_tabelas_pallet_v2.sql  ✅ Criado
+├── 002_migrar_movimentacao_para_nf_remessa.py  ✅ Criado (~430 linhas)
+├── 002_migrar_movimentacao_para_nf_remessa.sql ✅ Criado (~150 linhas)
+├── 003_migrar_vale_pallet_para_documento.py    ✅ Criado (~560 linhas)
+├── 003_migrar_vale_pallet_para_documento.sql   ✅ Criado (~220 linhas)
+├── 004_validar_migracao.py    ✅ CRIADO (Sessão 12, ~913 linhas) - 14 verificações
+└── 004_validar_migracao.sql   ✅ CRIADO (Sessão 12, ~427 linhas) - SQL para Render Shell
 
 app/templates/pallet/
 ├── 13 arquivos          ✅ Existem (migrar/deprecar na Fase 4)
-├── v2/                  ✅ CRIADO (Fase 4 - Em Progresso)
-│   ├── dashboard.html   ✅ CRIADO (~945 linhas)
+├── v2/                  ✅ CRIADO (Fase 4 + Fase 5)
+│   ├── dashboard.html   ✅ CRIADO (~950 linhas) - Atualizado com link Movimentações
 │   ├── controle_pallets/
 │   │   ├── vales.html   ✅ CRIADO (~1031 linhas)
 │   │   ├── solucoes.html ✅ CRIADO (~1100 linhas) - Com modais integrados
 │   │   └── historico.html ✅ CRIADO (~400 linhas)
 │   ├── tratativa_nfs/
-│   │   └── direcionamento.html ✅ CRIADO (~700 linhas) - Com modais devolução/retorno
-│   └── nf_remessa/      ❌ VAZIO (Fase 4)
+│   │   ├── direcionamento.html ✅ CRIADO (~700 linhas) - Com modais devolução/retorno
+│   │   ├── sugestoes.html ✅ CRIADO (~700 linhas) - Com modais confirmar/rejeitar/detalhes
+│   │   ├── solucoes.html ✅ CRIADO (~700 linhas) - Histórico com modal detalhes
+│   │   └── canceladas.html ✅ CRIADO (~600 linhas) - NFs canceladas para auditoria
+│   ├── nf_remessa/
+│   │   ├── detalhe.html  ✅ CRIADO (~700 linhas) - Detalhe NF com 2 domínios
+│   │   └── listagem.html ✅ CRIADO (~400 linhas) - Listagem com filtros
+│   └── movimentacoes/   ✅ CRIADO (Fase 5)
+│       └── listagem.html ✅ CRIADO (~350 linhas) - Listagem consolidada com filtros
 ```
 
 ### Dependências Confirmadas
@@ -721,30 +899,53 @@ python scripts/pallet/001_criar_tabelas_pallet_v2.py
 psql $DATABASE_URL < scripts/pallet/001_criar_tabelas_pallet_v2.sql
 ```
 
-### Próximo Passo: Fase 4 (Criar Templates/UI)
+### ✅ Fase 4 Concluída (Frontend/UI)
 
-**Fase 3 - Routes concluídos** (35 rotas v2 + 22 rotas v1 deprecated):
-1. ✅ `app/pallet/routes/__init__.py` - Blueprint principal
-2. ✅ `app/pallet/routes/dashboard.py` - Dashboard 3 tabs
-3. ✅ `app/pallet/routes/nf_remessa.py` - CRUD NF Remessa
-4. ✅ `app/pallet/routes/controle_pallets.py` - Domínio A (créditos, documentos, soluções)
-5. ✅ `app/pallet/routes/tratativa_nfs.py` - Domínio B (vinculação, sugestões)
-6. ✅ `app/pallet/routes_legacy.py` - Routes v1 com warnings de deprecação
+**Todos os templates v2 criados** (15 arquivos, ~8000 linhas):
 
-**Pendente - Fase 4** (5 tarefas restantes):
-- ✅ 4.1.1 Criar `app/templates/pallet/v2/dashboard.html` - Dashboard principal ✅ CONCLUÍDO
-- ✅ 4.2.1 Criar `app/templates/pallet/v2/controle_pallets/vales.html` - Listagem documentos ✅ CONCLUÍDO
-- ✅ 4.2.2 Criar `app/templates/pallet/v2/controle_pallets/solucoes.html` - Listagem créditos ✅ CONCLUÍDO
-- ✅ 4.2.3 Criar `app/templates/pallet/v2/controle_pallets/historico.html` - Histórico soluções ✅ CONCLUÍDO
-- ✅ 4.2.4 Criar modais: baixa, venda, recebimento, substituição (integrados em solucoes.html) ✅ CONCLUÍDO
-- ✅ 4.5.1 Modificar `app/templates/base.html` - Link no menu ✅ CONCLUÍDO
-- ✅ 4.3.1 Criar `app/templates/pallet/v2/tratativa_nfs/direcionamento.html` ✅ CONCLUÍDO (Com modais devolução/retorno)
-- 4.3.2 Criar `app/templates/pallet/v2/tratativa_nfs/sugestoes.html`
-- 4.3.3 Criar `app/templates/pallet/v2/tratativa_nfs/solucoes.html`
-- 4.3.4 Criar `app/templates/pallet/v2/tratativa_nfs/canceladas.html`
-- 4.4.1 Criar `app/templates/pallet/v2/nf_remessa/detalhe.html`
+| Arquivo | Descrição | Linhas |
+|---------|-----------|--------|
+| `dashboard.html` | Dashboard com 3 tabs | ~945 |
+| `controle_pallets/vales.html` | Listagem de documentos | ~1031 |
+| `controle_pallets/solucoes.html` | Créditos com 4 modais | ~1100 |
+| `controle_pallets/historico.html` | Histórico soluções | ~400 |
+| `tratativa_nfs/direcionamento.html` | NFs aguardando | ~700 |
+| `tratativa_nfs/sugestoes.html` | Sugestões automáticas | ~700 |
+| `tratativa_nfs/solucoes.html` | Soluções confirmadas | ~700 |
+| `tratativa_nfs/canceladas.html` | NFs canceladas | ~600 |
+| `nf_remessa/detalhe.html` | Detalhe com 2 domínios | ~700 |
+| `nf_remessa/listagem.html` | Listagem com filtros | ~400 |
 
-**Comando para continuar**:
+### ✅ Fase 5 Concluída (Integração) - 100%
+
+**Todas as tarefas da Fase 5 concluídas**:
+- [x] 5.1.1 Identificar arquivo de devoluções ✅
+- [x] 5.1.2 Adicionar filtro para excluir devoluções de pallet do módulo de devolução ✅
+- [x] 5.2.1 Criar job/task para identificar NFs de pallet no DFe ✅ (Sessão 9)
+- [x] 5.3.1 Criar tela de listagem consolidada de movimentações ✅ (Sessão 10)
+
+**APIs disponíveis**:
+- `GET /pallet/v2/movimentacoes/` - Listagem consolidada com filtros
+- `GET /pallet/v2/movimentacoes/api/exportar` - API de exportação JSON/CSV
+- `GET /pallet/v2/movimentacoes/api/cidades` - API de cidades por UF
+- `POST /pallet/v2/tratativa/processar-devolucoes` - Processamento manual
+- `POST /pallet/v2/tratativa/api/processar-devolucoes` - API JSON para jobs
+
+**⚠️ Antes de testar, executar migrations**:
+```bash
+# Opção 1: Script Python (local)
+cd /home/rafaelnascimento/projetos/frete_sistema
+source .venv/bin/activate
+python scripts/pallet/001_criar_tabelas_pallet_v2.py
+python scripts/devolucao/001_adicionar_campo_pallet.py
+python scripts/devolucao/002_detectar_nfds_pallet_existentes.py
+
+# Opção 2: SQL direto no Render Shell
+psql $DATABASE_URL < scripts/pallet/001_criar_tabelas_pallet_v2.sql
+psql $DATABASE_URL < scripts/devolucao/001_adicionar_campo_pallet.sql
+```
+
+**Comando para continuar Ralph Loop**:
 ```bash
 ./ralph-loop.sh 10  # Executa 10 iterações do Ralph Loop
 ```
@@ -753,6 +954,6 @@ psql $DATABASE_URL < scripts/pallet/001_criar_tabelas_pallet_v2.sql
 1. ~~**Fase 1** (BLOQUEADORA) → Criar models e migrations~~ ✅
 2. ~~**Fase 2** → Implementar services~~ ✅
 3. ~~**Fase 3** → Criar routes/APIs~~ ✅
-4. **Fase 4** → Criar templates/UI (PRÓXIMO)
-5. **Fase 5** → Integração com devolução e DFe
+4. ~~**Fase 4** → Criar templates/UI~~ ✅
+5. **Fase 5** → Integração com devolução e DFe (EM PROGRESSO - 75%)
 6. **Fase 6** → Testes e validação
