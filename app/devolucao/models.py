@@ -182,6 +182,14 @@ class NFDevolucao(db.Model):
     ativo = db.Column(db.Boolean, default=True, nullable=False, index=True)
 
     # =========================================================================
+    # CLASSIFICAÇÃO DE TIPO (Pallet vs Produto)
+    # =========================================================================
+    # Se True, esta NFD é de devolução de pallet/vasilhame (CFOP 1920/2920/5920/6920)
+    # e deve ser tratada no módulo de pallet, não no módulo de devoluções de produto.
+    # Detectado automaticamente pelas linhas de produto com CFOPs de vasilhame.
+    e_pallet_devolucao = db.Column(db.Boolean, default=False, nullable=False, index=True)
+
+    # =========================================================================
     # RELACIONAMENTOS
     # =========================================================================
     entrega_monitorada = db.relationship(
@@ -321,6 +329,8 @@ class NFDevolucao(db.Model):
             'numero_com_status_entrada': self.numero_com_status_entrada,
             'criado_em': self.criado_em.isoformat() if self.criado_em else None,
             'criado_por': self.criado_por,
+            # Classificação pallet
+            'e_pallet_devolucao': self.e_pallet_devolucao,
         }
 
 

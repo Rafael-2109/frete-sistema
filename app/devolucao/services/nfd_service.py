@@ -49,6 +49,15 @@ logger = logging.getLogger(__name__)
 # CNPJs a excluir da importação (La Famiglia e Nacom Goya - empresas internas)
 CNPJS_EXCLUIDOS = {'18467441', '61724241'}
 
+# CFOPs de devolução/remessa de vasilhame (pallet)
+# Estas NFDs devem ser tratadas no módulo de pallet, não no módulo de devoluções de produto
+# 1920/2920 = Entrada de vasilhame ou sacaria
+# 5920/6920 = Remessa de vasilhame ou sacaria
+CFOPS_PALLET = {'1920', '2920', '5920', '6920', '5917', '6917', '1917', '2917'}
+
+# Código do produto PALLET no sistema
+CODIGO_PRODUTO_PALLET = '208000012'
+
 
 class NFDService:
     """
@@ -437,6 +446,13 @@ class NFDService:
             # Extrair e salvar linhas de produto
             linhas_criadas = self._processar_linhas_produto(nfd_existente.id, xml_base64)
             estatisticas['linhas_criadas'] = linhas_criadas
+
+            # Detectar se é NFD de pallet/vasilhame (após processar linhas)
+            e_pallet = self._detectar_nfd_pallet(nfd_existente.id)
+            if e_pallet:
+                nfd_existente.e_pallet_devolucao = True
+                estatisticas['e_pallet_devolucao'] = True
+                logger.info(f"   📦 NFD classificada como PALLET (CFOPs de vasilhame detectados)")
 
             # Extrair informações complementares (infCpl) - motivo da devolução
             self._extrair_info_complementar(nfd_existente, xml_base64)
@@ -828,6 +844,48 @@ class NFDService:
             logger.error(f"   ❌ Erro ao processar linhas de produto: {e}")
             return 0
 
+    def _detectar_nfd_pallet(self, nfd_id: int) -> bool:
+        """
+        Detecta se uma NFD é de devolução de pallet/vasilhame.
+
+        Critérios de detecção:
+        1. CFOP nas linhas de produto está em CFOPS_PALLET (1920, 2920, 5920, 6920, etc.)
+        2. Código do produto contém CODIGO_PRODUTO_PALLET (208000012)
+
+        Args:
+            nfd_id: ID da NFDevolucao
+
+        Returns:
+            True se for NFD de pallet, False caso contrário
+        """
+        try:
+            # Buscar linhas de produto desta NFD
+            linhas = NFDevolucaoLinha.query.filter_by(nf_devolucao_id=nfd_id).all()
+
+            if not linhas:
+                return False
+
+            # Verificar se ALGUMA linha tem CFOP de pallet ou código de produto pallet
+            for linha in linhas:
+                # Verificar CFOP
+                if linha.cfop and linha.cfop in CFOPS_PALLET:
+                    logger.info(f"   🎯 CFOP {linha.cfop} identificado como pallet")
+                    return True
+
+                # Verificar código do produto
+                if linha.codigo_produto_cliente:
+                    # Remover caracteres não numéricos para comparação
+                    codigo_limpo = ''.join(c for c in linha.codigo_produto_cliente if c.isdigit())
+                    if CODIGO_PRODUTO_PALLET in codigo_limpo:
+                        logger.info(f"   🎯 Código {linha.codigo_produto_cliente} identificado como pallet")
+                        return True
+
+            return False
+
+        except Exception as e:
+            logger.error(f"   ❌ Erro ao detectar NFD pallet: {e}")
+            return False
+
     def _extrair_info_complementar(self, nfd: NFDevolucao, xml_base64: str) -> bool:
         """
         Extrai informações complementares (infCpl) do XML da NFD
@@ -1061,21 +1119,35 @@ class NFDService:
             logger.error(f"❌ Erro ao vincular NFD: {e}")
             return {'sucesso': False, 'erro': str(e)}
 
-    def listar_nfds_orfas(self, cnpj_prefixo: Optional[str] = None) -> List[Dict]:
+    def listar_nfds_orfas(
+        self,
+        cnpj_prefixo: Optional[str] = None,
+        incluir_pallets: bool = False
+    ) -> List[Dict]:
         """
         Lista NFDs órfãs (sem entrega_monitorada)
 
+        IMPORTANTE: Por padrão, exclui NFDs de pallet/vasilhame que devem
+        ser tratadas no módulo de pallet, não no módulo de devoluções.
+
         Args:
             cnpj_prefixo: Filtrar por prefixo CNPJ (8 dígitos)
+            incluir_pallets: Se True, inclui NFDs de pallet (default: False)
 
         Returns:
-            Lista de NFDs órfãs
+            Lista de NFDs órfãs (excluindo pallets por padrão)
         """
         query = NFDevolucao.query.filter(
             NFDevolucao.entrega_monitorada_id.is_(None),
             NFDevolucao.origem_registro == 'ODOO',
             NFDevolucao.ativo == True
         )
+
+        # Excluir NFDs de pallet por padrão
+        if not incluir_pallets:
+            query = query.filter(
+                NFDevolucao.e_pallet_devolucao == False
+            )
 
         if cnpj_prefixo:
             # Filtrar por prefixo CNPJ

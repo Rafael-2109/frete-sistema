@@ -925,7 +925,7 @@ class PreSeparacaoItem(db.Model):
         1º SALDO LIVRE → 2º PRÉ-SEPARAÇÃO → 3º SEPARAÇÃO ABERTO → 4º SEPARAÇÃO COTADO
 
         ✅ CORREÇÃO (2026-01-25): Adicionado savepoints para atomicidade
-        Conforme IMPLEMENTATION_PLAN.md - Item 3.2: Método sem atomicidade
+        Conforme .claude/ralph-loop/IMPLEMENTATION_PLAN.md - Item 3.2: Método sem atomicidade
         Agora cada fase usa begin_nested() para rollback parcial se falhar.
         """
         try:

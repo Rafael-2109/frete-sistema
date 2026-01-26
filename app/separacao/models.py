@@ -423,7 +423,7 @@ def recalcular_totais_embarque(mapper, connection, target):
     except Exception as e:
         logger.error(f"❌ Erro ao recalcular totais do embarque: {e}", exc_info=True)
         # ✅ CORREÇÃO: Re-levantar exceção para evitar transações parcialmente corrompidas
-        # Conforme IMPLEMENTATION_PLAN.md - Item 3.1: Event Listener SEM Re-raise
+        # Conforme .claude/ralph-loop/IMPLEMENTATION_PLAN.md - Item 3.1: Event Listener SEM Re-raise
         raise
 
 
