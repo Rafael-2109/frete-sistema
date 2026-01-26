@@ -1,0 +1,1085 @@
+{% extends 'base.html' %}
+
+{% block title %}Histórico de Soluções de NF | Tratativa de NFs v2{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ============================================
+   HISTÓRICO DE SOLUÇÕES - Tratativa de NFs v2
+   ============================================ */
+
+.tratativa-solucoes {
+    padding: 1.5rem;
+    background-color: #f8f9fa;
+    min-height: calc(100vh - 60px);
+}
+
+/* Header */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.page-header h1 {
+    font-size: 1.75rem;
+    font-weight: 600;
+    color: #212529;
+    margin: 0;
+}
+
+.page-header h1 i {
+    color: #198754;
+    margin-right: 0.5rem;
+}
+
+/* Breadcrumb */
+.breadcrumb-nav {
+    margin-bottom: 1rem;
+}
+
+.breadcrumb-nav .breadcrumb {
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    font-size: 0.875rem;
+}
+
+.breadcrumb-nav .breadcrumb-item a {
+    color: #6c757d;
+    text-decoration: none;
+}
+
+.breadcrumb-nav .breadcrumb-item a:hover {
+    color: #0d6efd;
+}
+
+.breadcrumb-nav .breadcrumb-item.active {
+    color: #212529;
+}
+
+/* Stats Cards */
+.stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.stat-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.25rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+}
+
+.stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+}
+
+.stat-icon.total { background: #e7f1ff; color: #0d6efd; }
+.stat-icon.devolucoes { background: #d1e7dd; color: #198754; }
+.stat-icon.retornos { background: #cff4fc; color: #0dcaf0; }
+.stat-icon.cancelamentos { background: #f8d7da; color: #dc3545; }
+
+.stat-content h4 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin: 0;
+    color: #212529;
+}
+
+.stat-content span {
+    font-size: 0.875rem;
+    color: #6c757d;
+}
+
+.stat-content small {
+    display: block;
+    font-size: 0.75rem;
+    color: #adb5bd;
+}
+
+/* Filtros */
+.filter-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.25rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    margin-bottom: 1.5rem;
+}
+
+.filter-card .filter-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 1rem;
+}
+
+.filter-row {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: flex-end;
+}
+
+.filter-group {
+    flex: 1;
+    min-width: 150px;
+}
+
+.filter-group label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #495057;
+    margin-bottom: 0.5rem;
+}
+
+.filter-group select,
+.filter-group input {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.filter-group select:focus,
+.filter-group input:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15);
+    outline: none;
+}
+
+.filter-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.btn-filter {
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.btn-filter-primary {
+    background: #0d6efd;
+    color: white;
+    border: none;
+}
+
+.btn-filter-primary:hover {
+    background: #0b5ed7;
+    color: white;
+}
+
+.btn-filter-secondary {
+    background: #f8f9fa;
+    color: #495057;
+    border: 1px solid #dee2e6;
+}
+
+.btn-filter-secondary:hover {
+    background: #e9ecef;
+}
+
+/* Tabela de Soluções */
+.table-card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    overflow: hidden;
+}
+
+.table-header {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid #e9ecef;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.table-header h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #212529;
+    margin: 0;
+}
+
+.table-header .badge {
+    font-size: 0.75rem;
+    padding: 0.35em 0.65em;
+}
+
+.table-responsive {
+    max-height: calc(100vh - 480px);
+    overflow-y: auto;
+}
+
+.table-solucoes {
+    margin: 0;
+    width: 100%;
+}
+
+.table-solucoes thead th {
+    background: #f8f9fa;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 0.75rem 1rem;
+    border-bottom: 2px solid #e9ecef;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.table-solucoes tbody td {
+    padding: 0.75rem 1rem;
+    vertical-align: middle;
+    font-size: 0.875rem;
+    border-bottom: 1px solid #f1f3f4;
+}
+
+.table-solucoes tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+/* Badges de tipo */
+.tipo-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.tipo-badge.devolucao {
+    background: #d1e7dd;
+    color: #198754;
+}
+
+.tipo-badge.retorno {
+    background: #cff4fc;
+    color: #0dcaf0;
+}
+
+.tipo-badge.cancelamento {
+    background: #f8d7da;
+    color: #dc3545;
+}
+
+/* Badges de vinculação */
+.vinculacao-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.vinculacao-badge.automatico {
+    background: #e7f1ff;
+    color: #0d6efd;
+}
+
+.vinculacao-badge.manual {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.vinculacao-badge.sugestao {
+    background: #e2e3e5;
+    color: #6c757d;
+}
+
+/* Badges de status */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.status-badge.confirmada {
+    background: #d1e7dd;
+    color: #198754;
+}
+
+.status-badge.rejeitada {
+    background: #f8d7da;
+    color: #dc3545;
+}
+
+.status-badge.aguardando {
+    background: #fff3cd;
+    color: #856404;
+}
+
+/* Célula de NF */
+.nf-cell {
+    max-width: 180px;
+}
+
+.nf-remessa {
+    font-weight: 500;
+    color: #212529;
+}
+
+.nf-solucao {
+    font-size: 0.75rem;
+    color: #198754;
+    margin-top: 0.25rem;
+}
+
+/* Célula de emitente */
+.emitente-cell {
+    max-width: 200px;
+}
+
+.emitente-nome {
+    font-weight: 500;
+    color: #212529;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+}
+
+.emitente-cnpj {
+    font-size: 0.75rem;
+    color: #6c757d;
+    font-family: 'Monaco', 'Consolas', monospace;
+}
+
+/* Célula de quantidade */
+.qtd-cell {
+    text-align: center;
+}
+
+.qtd-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #0d6efd;
+}
+
+/* Botões de ação */
+.action-buttons {
+    display: flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+}
+
+.btn-action {
+    padding: 0.35rem 0.65rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.btn-detalhes {
+    background: #e9ecef;
+    color: #495057;
+}
+
+.btn-detalhes:hover {
+    background: #dee2e6;
+}
+
+/* Empty state */
+.empty-state {
+    padding: 3rem;
+    text-align: center;
+}
+
+.empty-state i {
+    font-size: 3rem;
+    color: #dee2e6;
+    margin-bottom: 1rem;
+}
+
+.empty-state h4 {
+    color: #6c757d;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+}
+
+.empty-state p {
+    color: #adb5bd;
+    margin: 0;
+}
+
+/* Paginação */
+.pagination-wrapper {
+    padding: 1rem 1.25rem;
+    border-top: 1px solid #e9ecef;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.pagination-info {
+    font-size: 0.875rem;
+    color: #6c757d;
+}
+
+.pagination {
+    margin: 0;
+}
+
+.pagination .page-link {
+    border-radius: 6px;
+    margin: 0 0.15rem;
+    border: none;
+    color: #495057;
+    font-size: 0.875rem;
+}
+
+.pagination .page-link:hover {
+    background: #e9ecef;
+}
+
+.pagination .page-item.active .page-link {
+    background: #0d6efd;
+    color: white;
+}
+
+/* Modal */
+.modal-header {
+    background: linear-gradient(135deg, #198754 0%, #157347 100%);
+    color: white;
+    border-radius: 12px 12px 0 0;
+}
+
+.modal-header .btn-close {
+    filter: brightness(0) invert(1);
+}
+
+.modal-content {
+    border-radius: 12px;
+    border: none;
+}
+
+.modal-footer {
+    border-top: 1px solid #e9ecef;
+}
+
+/* Info card no modal */
+.info-card {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.info-card h6 {
+    color: #6c757d;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+}
+
+.info-card .info-value {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #212529;
+}
+
+.info-card .info-detail {
+    font-size: 0.875rem;
+    color: #6c757d;
+}
+
+/* Info grid no modal */
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+
+.info-grid .info-card {
+    margin-bottom: 0;
+}
+
+/* Data de criação */
+.data-cell {
+    font-size: 0.85rem;
+    color: #495057;
+}
+
+.data-cell small {
+    display: block;
+    color: #6c757d;
+    font-size: 0.75rem;
+}
+
+/* Responsivo */
+@media (max-width: 768px) {
+    .stats-row {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .filter-row {
+        flex-direction: column;
+    }
+
+    .filter-group {
+        width: 100%;
+    }
+
+    .info-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="tratativa-solucoes">
+    <!-- Breadcrumb -->
+    <nav class="breadcrumb-nav" aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item">
+                <a href="{{ url_for('pallet_v2.dashboard.index') }}">
+                    <i class="fas fa-pallet"></i> Gestão de Pallets
+                </a>
+            </li>
+            <li class="breadcrumb-item">Tratativa de NFs</li>
+            <li class="breadcrumb-item active" aria-current="page">Histórico de Soluções</li>
+        </ol>
+    </nav>
+
+    <!-- Header -->
+    <div class="page-header">
+        <h1><i class="fas fa-history"></i> Histórico de Soluções de NF</h1>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('pallet_v2.tratativa_nfs.direcionamento') }}" class="btn btn-outline-primary">
+                <i class="fas fa-route"></i> Direcionamento
+            </a>
+            <a href="{{ url_for('pallet_v2.tratativa_nfs.listar_sugestoes') }}" class="btn btn-outline-warning">
+                <i class="fas fa-lightbulb"></i> Sugestões
+            </a>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="stats-row">
+        {% set total_count = (stats.get('DEVOLUCAO', {}).get('count', 0) or 0) + (stats.get('RETORNO', {}).get('count', 0) or 0) + (stats.get('CANCELAMENTO', {}).get('count', 0) or 0) %}
+        {% set total_qtd = (stats.get('DEVOLUCAO', {}).get('qtd', 0) or 0) + (stats.get('RETORNO', {}).get('qtd', 0) or 0) + (stats.get('CANCELAMENTO', {}).get('qtd', 0) or 0) %}
+        <div class="stat-card">
+            <div class="stat-icon total">
+                <i class="fas fa-layer-group"></i>
+            </div>
+            <div class="stat-content">
+                <h4>{{ total_count }}</h4>
+                <span>Total de Soluções</span>
+                <small>{{ total_qtd }} pallets</small>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon devolucoes">
+                <i class="fas fa-reply-all"></i>
+            </div>
+            <div class="stat-content">
+                <h4>{{ stats.get('DEVOLUCAO', {}).get('count', 0) or 0 }}</h4>
+                <span>Devoluções</span>
+                <small>{{ stats.get('DEVOLUCAO', {}).get('qtd', 0) or 0 }} pallets</small>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon retornos">
+                <i class="fas fa-reply"></i>
+            </div>
+            <div class="stat-content">
+                <h4>{{ stats.get('RETORNO', {}).get('count', 0) or 0 }}</h4>
+                <span>Retornos</span>
+                <small>{{ stats.get('RETORNO', {}).get('qtd', 0) or 0 }} pallets</small>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon cancelamentos">
+                <i class="fas fa-ban"></i>
+            </div>
+            <div class="stat-content">
+                <h4>{{ stats.get('CANCELAMENTO', {}).get('count', 0) or 0 }}</h4>
+                <span>Cancelamentos</span>
+                <small>{{ stats.get('CANCELAMENTO', {}).get('qtd', 0) or 0 }} pallets</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="filter-card">
+        <div class="filter-title">
+            <i class="fas fa-filter"></i> Filtros
+        </div>
+        <form method="GET" action="{{ url_for('pallet_v2.tratativa_nfs.listar_solucoes') }}">
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label for="tipo">Tipo de Solução</label>
+                    <select name="tipo" id="tipo" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="DEVOLUCAO" {% if filtro_tipo == 'DEVOLUCAO' %}selected{% endif %}>Devolução</option>
+                        <option value="RETORNO" {% if filtro_tipo == 'RETORNO' %}selected{% endif %}>Retorno</option>
+                        <option value="CANCELAMENTO" {% if filtro_tipo == 'CANCELAMENTO' %}selected{% endif %}>Cancelamento</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="vinculacao">Tipo de Vinculação</label>
+                    <select name="vinculacao" id="vinculacao" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="AUTOMATICO" {% if filtro_vinculacao == 'AUTOMATICO' %}selected{% endif %}>Automático</option>
+                        <option value="MANUAL" {% if filtro_vinculacao == 'MANUAL' %}selected{% endif %}>Manual</option>
+                        <option value="SUGESTAO" {% if filtro_vinculacao == 'SUGESTAO' %}selected{% endif %}>Sugestão</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="data_de">Data De</label>
+                    <input type="date" name="data_de" id="data_de" class="form-control" value="{{ filtro_data_de }}">
+                </div>
+                <div class="filter-group">
+                    <label for="data_ate">Data Até</label>
+                    <input type="date" name="data_ate" id="data_ate" class="form-control" value="{{ filtro_data_ate }}">
+                </div>
+                <div class="filter-actions">
+                    <button type="submit" class="btn btn-filter btn-filter-primary">
+                        <i class="fas fa-search"></i> Filtrar
+                    </button>
+                    <a href="{{ url_for('pallet_v2.tratativa_nfs.listar_solucoes') }}" class="btn btn-filter btn-filter-secondary">
+                        <i class="fas fa-times"></i> Limpar
+                    </a>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Tabela de Soluções -->
+    <div class="table-card">
+        <div class="table-header">
+            <h3>
+                <i class="fas fa-check-circle"></i> Soluções Registradas
+            </h3>
+            <span class="badge bg-success">{{ solucoes.total }} registro(s)</span>
+        </div>
+
+        {% if solucoes.items %}
+        <div class="table-responsive">
+            <table class="table table-solucoes">
+                <thead>
+                    <tr>
+                        <th>Tipo</th>
+                        <th>NF Remessa / Solução</th>
+                        <th>Emitente</th>
+                        <th class="text-center">Qtd</th>
+                        <th>Vinculação</th>
+                        <th>Status</th>
+                        <th>Registrado em</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for solucao in solucoes.items %}
+                    <tr data-solucao-id="{{ solucao.id }}">
+                        <td>
+                            {% if solucao.tipo == 'DEVOLUCAO' %}
+                            <span class="tipo-badge devolucao">
+                                <i class="fas fa-reply-all"></i> Devolução
+                            </span>
+                            {% elif solucao.tipo == 'RETORNO' %}
+                            <span class="tipo-badge retorno">
+                                <i class="fas fa-reply"></i> Retorno
+                            </span>
+                            {% else %}
+                            <span class="tipo-badge cancelamento">
+                                <i class="fas fa-ban"></i> Cancelamento
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="nf-cell">
+                            <div class="nf-remessa">
+                                NF {{ solucao.nf_remessa.numero_nf if solucao.nf_remessa else '-' }}
+                                {% if solucao.nf_remessa and solucao.nf_remessa.serie %}
+                                <small class="text-muted">/{{ solucao.nf_remessa.serie }}</small>
+                                {% endif %}
+                            </div>
+                            {% if solucao.numero_nf_solucao %}
+                            <div class="nf-solucao">
+                                <i class="fas fa-arrow-right"></i> NF {{ solucao.numero_nf_solucao }}
+                                {% if solucao.serie_nf_solucao %}/{{ solucao.serie_nf_solucao }}{% endif %}
+                            </div>
+                            {% endif %}
+                        </td>
+                        <td class="emitente-cell">
+                            <span class="emitente-nome" title="{{ solucao.nome_emitente or 'N/A' }}">
+                                {{ solucao.nome_emitente or 'N/A' }}
+                            </span>
+                            {% if solucao.cnpj_emitente %}
+                            <span class="emitente-cnpj">{{ solucao.cnpj_emitente }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="qtd-cell">
+                            <div class="qtd-value">{{ solucao.quantidade }}</div>
+                        </td>
+                        <td>
+                            {% if solucao.vinculacao == 'AUTOMATICO' %}
+                            <span class="vinculacao-badge automatico">
+                                <i class="fas fa-robot"></i> Automático
+                            </span>
+                            {% elif solucao.vinculacao == 'MANUAL' %}
+                            <span class="vinculacao-badge manual">
+                                <i class="fas fa-hand-pointer"></i> Manual
+                            </span>
+                            {% else %}
+                            <span class="vinculacao-badge sugestao">
+                                <i class="fas fa-lightbulb"></i> Sugestão
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if solucao.rejeitado %}
+                            <span class="status-badge rejeitada">
+                                <i class="fas fa-times-circle"></i> Rejeitada
+                            </span>
+                            {% elif solucao.confirmado %}
+                            <span class="status-badge confirmada">
+                                <i class="fas fa-check-circle"></i> Confirmada
+                            </span>
+                            {% elif solucao.vinculacao == 'SUGESTAO' %}
+                            <span class="status-badge aguardando">
+                                <i class="fas fa-clock"></i> Aguardando
+                            </span>
+                            {% else %}
+                            <span class="status-badge confirmada">
+                                <i class="fas fa-check-circle"></i> Ativa
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="data-cell">
+                            {{ solucao.criado_em.strftime('%d/%m/%Y') if solucao.criado_em else '-' }}
+                            {% if solucao.criado_em %}
+                            <small>{{ solucao.criado_em.strftime('%H:%M') }}</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="action-buttons">
+                                <button type="button" class="btn-action btn-detalhes" title="Ver Detalhes"
+                                        onclick="openDetalhesModal({{ solucao.id }})">
+                                    <i class="fas fa-eye"></i> Detalhes
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Paginação -->
+        <div class="pagination-wrapper">
+            <div class="pagination-info">
+                Mostrando {{ ((solucoes.page - 1) * solucoes.per_page) + 1 }} -
+                {{ [solucoes.page * solucoes.per_page, solucoes.total]|min }}
+                de {{ solucoes.total }} registros
+            </div>
+
+            {% if solucoes.pages > 1 %}
+            <nav aria-label="Paginação">
+                <ul class="pagination">
+                    {% if solucoes.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('pallet_v2.tratativa_nfs.listar_solucoes', page=solucoes.prev_num, tipo=filtro_tipo, vinculacao=filtro_vinculacao, data_de=filtro_data_de, data_ate=filtro_data_ate) }}">
+                            <i class="fas fa-chevron-left"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+
+                    {% for page_num in solucoes.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                        {% if page_num %}
+                            {% if page_num == solucoes.page %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ page_num }}</span>
+                            </li>
+                            {% else %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('pallet_v2.tratativa_nfs.listar_solucoes', page=page_num, tipo=filtro_tipo, vinculacao=filtro_vinculacao, data_de=filtro_data_de, data_ate=filtro_data_ate) }}">{{ page_num }}</a>
+                            </li>
+                            {% endif %}
+                        {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">...</span>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if solucoes.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('pallet_v2.tratativa_nfs.listar_solucoes', page=solucoes.next_num, tipo=filtro_tipo, vinculacao=filtro_vinculacao, data_de=filtro_data_de, data_ate=filtro_data_ate) }}">
+                            <i class="fas fa-chevron-right"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+
+        {% else %}
+        <!-- Empty State -->
+        <div class="empty-state">
+            <i class="fas fa-history"></i>
+            <h4>Nenhuma solução registrada</h4>
+            <p>Não há soluções de NF registradas com os filtros selecionados.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- =============================================
+     MODAL: DETALHES DA SOLUÇÃO
+     ============================================= -->
+<div class="modal fade" id="modalDetalhes" tabindex="-1" aria-labelledby="modalDetalhesLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalDetalhesLabel">
+                    <i class="fas fa-info-circle"></i> Detalhes da Solução
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="detalhes_loading" class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                    <p class="mt-2 text-muted">Carregando detalhes...</p>
+                </div>
+                <div id="detalhes_content" style="display: none;">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="info-card">
+                                <h6>NF de Remessa</h6>
+                                <div class="info-value" id="det_nf_remessa">-</div>
+                                <div class="info-detail" id="det_nf_remessa_id">ID: -</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="info-card">
+                                <h6>Tipo / Vinculação</h6>
+                                <div class="info-value" id="det_tipo">-</div>
+                                <div class="info-detail" id="det_vinculacao">-</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="info-card">
+                                <h6>NF de Solução</h6>
+                                <div class="info-value" id="det_nf_solucao">-</div>
+                                <div class="info-detail" id="det_data_nf">Data: -</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="info-card">
+                                <h6>Quantidade / Score</h6>
+                                <div class="info-value"><span id="det_quantidade">-</span> pallets</div>
+                                <div class="info-detail">Score: <span id="det_score">-</span>%</div>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="info-card">
+                                <h6>Emitente</h6>
+                                <div class="info-value" id="det_emitente_nome">-</div>
+                                <div class="info-detail">CNPJ: <span id="det_emitente_cnpj">-</span></div>
+                            </div>
+                        </div>
+                        <div class="col-12" id="det_chave_container">
+                            <div class="info-card">
+                                <h6>Chave NF-e</h6>
+                                <div class="info-detail" style="font-family: monospace; word-break: break-all;" id="det_chave_nfe">-</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6" id="det_confirmacao_container" style="display: none;">
+                            <div class="info-card">
+                                <h6>Confirmação</h6>
+                                <div class="info-detail" id="det_confirmado_em">-</div>
+                                <div class="info-detail">Por: <span id="det_confirmado_por">-</span></div>
+                            </div>
+                        </div>
+                        <div class="col-md-6" id="det_rejeicao_container" style="display: none;">
+                            <div class="info-card" style="background: #fff3cd;">
+                                <h6>Rejeição</h6>
+                                <div class="info-detail" id="det_rejeitado_em">-</div>
+                                <div class="info-detail">Por: <span id="det_rejeitado_por">-</span></div>
+                                <div class="info-detail mt-2"><strong>Motivo:</strong> <span id="det_motivo_rejeicao">-</span></div>
+                            </div>
+                        </div>
+                        <div class="col-12" id="det_observacao_container">
+                            <div class="info-card">
+                                <h6>Observação</h6>
+                                <div class="info-detail" id="det_observacao">-</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="info-card">
+                                <h6>Criado em</h6>
+                                <div class="info-detail" id="det_criado_em">-</div>
+                                <div class="info-detail">Por: <span id="det_criado_por">-</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// =============================================
+// MODAL DETALHES
+// =============================================
+function openDetalhesModal(solucaoId) {
+    // Mostrar loading
+    document.getElementById('detalhes_loading').style.display = 'block';
+    document.getElementById('detalhes_content').style.display = 'none';
+
+    new bootstrap.Modal(document.getElementById('modalDetalhes')).show();
+
+    // Buscar detalhes via API
+    fetch('{{ url_for("pallet_v2.tratativa_nfs.api_detalhe_solucao", solucao_id=0) }}'.replace('/0', '/' + solucaoId))
+        .then(response => response.json())
+        .then(data => {
+            // Preencher dados básicos
+            document.getElementById('det_nf_remessa').textContent = 'NF ' + (data.numero_nf_remessa || '-');
+            document.getElementById('det_nf_remessa_id').textContent = 'ID: ' + (data.nf_remessa_id || '-');
+
+            // Tipo com formatação
+            let tipoTexto = data.tipo;
+            if (data.tipo === 'DEVOLUCAO') tipoTexto = 'Devolução';
+            else if (data.tipo === 'RETORNO') tipoTexto = 'Retorno';
+            else if (data.tipo === 'CANCELAMENTO') tipoTexto = 'Cancelamento';
+            document.getElementById('det_tipo').textContent = tipoTexto;
+
+            // Vinculação
+            let vincTexto = data.vinculacao;
+            if (data.vinculacao === 'AUTOMATICO') vincTexto = 'Automático';
+            else if (data.vinculacao === 'MANUAL') vincTexto = 'Manual';
+            else if (data.vinculacao === 'SUGESTAO') vincTexto = 'Sugestão Confirmada';
+            document.getElementById('det_vinculacao').textContent = 'Vinculação: ' + vincTexto;
+
+            // NF Solução
+            document.getElementById('det_nf_solucao').textContent = 'NF ' + (data.numero_nf_solucao || '-');
+            document.getElementById('det_data_nf').textContent = 'Data: ' + (data.data_nf_solucao ? formatarData(data.data_nf_solucao) : '-');
+
+            // Quantidade e Score
+            document.getElementById('det_quantidade').textContent = data.quantidade || 0;
+            document.getElementById('det_score').textContent = data.score_match || 0;
+
+            // Emitente
+            document.getElementById('det_emitente_nome').textContent = data.nome_emitente || '-';
+            document.getElementById('det_emitente_cnpj').textContent = data.cnpj_emitente || '-';
+
+            // Chave NFe
+            const chaveContainer = document.getElementById('det_chave_container');
+            if (data.chave_nfe_solucao) {
+                chaveContainer.style.display = 'block';
+                document.getElementById('det_chave_nfe').textContent = data.chave_nfe_solucao;
+            } else {
+                chaveContainer.style.display = 'none';
+            }
+
+            // Confirmação
+            const confirmacaoContainer = document.getElementById('det_confirmacao_container');
+            if (data.confirmado && data.confirmado_em) {
+                confirmacaoContainer.style.display = 'block';
+                document.getElementById('det_confirmado_em').textContent = formatarDataHora(data.confirmado_em);
+                document.getElementById('det_confirmado_por').textContent = data.confirmado_por || 'SISTEMA';
+            } else {
+                confirmacaoContainer.style.display = 'none';
+            }
+
+            // Rejeição
+            const rejeicaoContainer = document.getElementById('det_rejeicao_container');
+            if (data.rejeitado && data.rejeitado_em) {
+                rejeicaoContainer.style.display = 'block';
+                document.getElementById('det_rejeitado_em').textContent = formatarDataHora(data.rejeitado_em);
+                document.getElementById('det_rejeitado_por').textContent = data.rejeitado_por || '-';
+                document.getElementById('det_motivo_rejeicao').textContent = data.motivo_rejeicao || '-';
+            } else {
+                rejeicaoContainer.style.display = 'none';
+            }
+
+            // Observação
+            const obsContainer = document.getElementById('det_observacao_container');
+            if (data.observacao) {
+                obsContainer.style.display = 'block';
+                document.getElementById('det_observacao').textContent = data.observacao;
+            } else {
+                obsContainer.style.display = 'none';
+            }
+
+            // Auditoria
+            document.getElementById('det_criado_em').textContent = data.criado_em ? formatarDataHora(data.criado_em) : '-';
+            document.getElementById('det_criado_por').textContent = data.criado_por || 'SISTEMA';
+
+            // Mostrar conteúdo
+            document.getElementById('detalhes_loading').style.display = 'none';
+            document.getElementById('detalhes_content').style.display = 'block';
+        })
+        .catch(error => {
+            console.error('Erro ao carregar detalhes:', error);
+            document.getElementById('detalhes_loading').innerHTML = '<div class="alert alert-danger">Erro ao carregar detalhes da solução.</div>';
+        });
+}
+
+function formatarData(isoString) {
+    if (!isoString) return '-';
+    const date = new Date(isoString);
+    return date.toLocaleDateString('pt-BR');
+}
+
+function formatarDataHora(isoString) {
+    if (!isoString) return '-';
+    const date = new Date(isoString);
+    return date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+</script>
+{% endblock %}

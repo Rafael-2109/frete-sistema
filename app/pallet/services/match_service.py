@@ -367,13 +367,13 @@ class MatchService:
         if not info_complementar:
             return None
 
-        # Padrões para buscar NF referenciada
+        # Padrões para buscar NF referenciada (case-insensitive para cada grupo)
         padroes = [
-            r'[Rr]ef\.?\s*[Nn][Ff]\s*[:n°]?\s*(\d+)',
-            r'[Rr]eferente\s+[aà]\s*[Nn][Ff]\s*[:n°]?\s*(\d+)',
-            r'[Nn][Ff]\s+[Rr]emessa\s*[:n°]?\s*(\d+)',
-            r'[Nn][Ff]\s+de\s+origem\s*[:n°]?\s*(\d+)',
-            r'[Nn]ota\s+[Ff]iscal\s*[:n°]?\s*(\d+)',
+            r'[Rr][Ee][Ff]\.?\s*[Nn][Ff]\s*[:n°]?\s*(\d+)',  # Ref. NF, REF NF, ref nf
+            r'[Rr][Ee][Ff][Ee][Rr][Ee][Nn][Tt][Ee]\s+[aàAÀ]\s*[Nn][Ff]\s*[:n°]?\s*(\d+)',  # Referente a NF
+            r'[Nn][Ff]\s+[Rr][Ee][Mm][Ee][Ss][Ss][Aa]\s*[:n°]?\s*(\d+)',  # NF Remessa
+            r'[Nn][Ff]\s+[Dd][Ee]\s+[Oo][Rr][Ii][Gg][Ee][Mm]\s*[:n°]?\s*(\d+)',  # NF de origem
+            r'[Nn][Oo][Tt][Aa]\s+[Ff][Ii][Ss][Cc][Aa][Ll]\s*[:n°]?\s*(\d+)',  # Nota Fiscal
         ]
 
         for padrao in padroes:

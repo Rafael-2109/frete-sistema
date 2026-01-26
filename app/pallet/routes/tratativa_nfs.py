@@ -402,7 +402,7 @@ def vincular_retorno():
 
         # Usar MatchService para vincular
         match_service = MatchService()
-        resultado = match_service.vincular_retorno_manual(
+        match_service.vincular_retorno_manual(
             nf_remessa_id=nf_remessa_id,
             nf_retorno=nf_retorno,
             quantidade=quantidade,
@@ -510,8 +510,9 @@ def processar_devolucoes():
 
         flash(
             f'Processamento concluído! '
-            f'{resultado.get("nfs_encontradas", 0)} NF(s) encontradas, '
-            f'{resultado.get("sugestoes_criadas", 0)} sugestão(ões) criada(s)',
+            f'{resultado.get("processadas", 0)} NF(s) processadas, '
+            f'{resultado.get("sugestoes_criadas", 0)} sugestão(ões) criada(s), '
+            f'{resultado.get("retornos_automaticos", 0)} retorno(s) automático(s)',
             'success'
         )
 
@@ -635,6 +636,60 @@ def api_sugerir_vinculacao():
 
     except Exception as e:
         logger.exception(f"Erro ao sugerir vinculação")
+        return jsonify({
+            'sucesso': False,
+            'erro': str(e)
+        }), 500
+
+
+@tratativa_nfs_bp.route('/api/processar-devolucoes', methods=['POST'])
+@login_required
+def api_processar_devolucoes():
+    """
+    API para processar devoluções pendentes do DFe.
+
+    Usada para:
+    - Chamadas AJAX do frontend
+    - Jobs agendados (cron)
+    - Integrações externas
+
+    JSON params:
+    - data_de: Data inicial (YYYY-MM-DD) - opcional
+    - data_ate: Data final (YYYY-MM-DD) - opcional
+
+    Returns:
+        JSON com resultado do processamento:
+        {
+            'sucesso': bool,
+            'processadas': int,
+            'devolucoes': int,
+            'retornos': int,
+            'retornos_automaticos': int,
+            'sugestoes_criadas': int,
+            'sem_match': int,
+            'erros': int,
+            'detalhes': [...]
+        }
+    """
+    try:
+        data = request.get_json() or {}
+        data_de = data.get('data_de') or request.args.get('data_de')
+        data_ate = data.get('data_ate') or request.args.get('data_ate')
+
+        match_service = MatchService()
+        resultado = match_service.processar_devolucoes_pendentes(
+            data_de=data_de,
+            data_ate=data_ate,
+            criar_sugestoes=True
+        )
+
+        return jsonify({
+            'sucesso': True,
+            **resultado
+        })
+
+    except Exception as e:
+        logger.exception("Erro ao processar devoluções via API")
         return jsonify({
             'sucesso': False,
             'erro': str(e)

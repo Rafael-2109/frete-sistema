@@ -1,0 +1,598 @@
+{% extends 'base.html' %}
+{% block title %}Movimentacoes de Pallets - Gestao de Pallets{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Pallet Movimentacoes Listagem v2 - Estilos */
+.pallet-listagem {
+    padding: 1.5rem;
+}
+
+.pallet-listagem__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.pallet-listagem__title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.pallet-listagem__subtitle {
+    font-size: 0.875rem;
+    color: var(--text-muted, #6c757d);
+    margin-top: 0.25rem;
+}
+
+/* Breadcrumb */
+.pallet-breadcrumb {
+    margin-bottom: 1rem;
+}
+
+.pallet-breadcrumb a {
+    color: var(--bs-primary);
+    text-decoration: none;
+}
+
+.pallet-breadcrumb a:hover {
+    text-decoration: underline;
+}
+
+/* Stats cards */
+.pallet-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.pallet-stat-card {
+    background: var(--bg-light, #1a1a2e);
+    border-radius: 10px;
+    padding: 1rem;
+    border: 1px solid var(--border, rgba(255,255,255,0.1));
+    text-align: center;
+}
+
+.pallet-stat-card__value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 0.25rem;
+}
+
+.pallet-stat-card__label {
+    font-size: 0.8rem;
+    color: var(--text-muted, #6c757d);
+}
+
+/* Filtros */
+.pallet-filtros {
+    background: var(--bg-light, #1a1a2e);
+    border-radius: 12px;
+    padding: 1.25rem;
+    border: 1px solid var(--border, rgba(255,255,255,0.1));
+    margin-bottom: 1.5rem;
+}
+
+.pallet-filtros__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.pallet-filtros__title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Tabela */
+.pallet-table-card {
+    background: var(--bg-light, #1a1a2e);
+    border-radius: 12px;
+    border: 1px solid var(--border, rgba(255,255,255,0.1));
+    overflow: hidden;
+}
+
+.pallet-table {
+    margin: 0;
+}
+
+.pallet-table thead th {
+    background: var(--bg, #0f0f1a);
+    border-bottom: 2px solid var(--border, rgba(255,255,255,0.15));
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted, #6c757d);
+    padding: 0.75rem 0.75rem;
+    white-space: nowrap;
+}
+
+.pallet-table tbody td {
+    padding: 0.75rem 0.75rem;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--border, rgba(255,255,255,0.05));
+    font-size: 0.875rem;
+}
+
+.pallet-table tbody tr:hover {
+    background: rgba(var(--bs-primary-rgb), 0.05);
+}
+
+/* Status badges */
+.pallet-status {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.pallet-status--ativa {
+    background: rgba(var(--bs-primary-rgb), 0.15);
+    color: var(--bs-primary);
+}
+
+.pallet-status--resolvida {
+    background: rgba(var(--bs-success-rgb), 0.15);
+    color: var(--bs-success);
+}
+
+.pallet-status--cancelada {
+    background: rgba(var(--bs-secondary-rgb), 0.15);
+    color: var(--bs-secondary);
+}
+
+/* Tipo destinatario badge */
+.tipo-badge {
+    font-size: 0.65rem;
+    padding: 0.15rem 0.5rem;
+}
+
+/* Paginacao */
+.pallet-pagination {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    border-top: 1px solid var(--border, rgba(255,255,255,0.1));
+}
+
+/* Empty state */
+.pallet-empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--text-muted, #6c757d);
+}
+
+.pallet-empty-state__icon {
+    font-size: 3rem;
+    opacity: 0.3;
+    margin-bottom: 1rem;
+}
+
+/* Cell truncate */
+.cell-truncate {
+    max-width: 180px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Light mode */
+[data-bs-theme="light"] .pallet-listagem,
+[data-bs-theme="light"] .pallet-stat-card,
+[data-bs-theme="light"] .pallet-filtros,
+[data-bs-theme="light"] .pallet-table-card {
+    background: #fff;
+}
+
+[data-bs-theme="light"] .pallet-table thead th {
+    background: #f8f9fa;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .pallet-listagem__header {
+        flex-direction: column;
+    }
+
+    .pallet-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="pallet-listagem">
+    <!-- Breadcrumb -->
+    <nav class="pallet-breadcrumb" aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0">
+            <li class="breadcrumb-item"><a href="{{ url_for('pallet_v2.dashboard.index') }}">Gestao de Pallets</a></li>
+            <li class="breadcrumb-item active">Movimentacoes</li>
+        </ol>
+    </nav>
+
+    <!-- Header -->
+    <div class="pallet-listagem__header">
+        <div>
+            <h1 class="pallet-listagem__title">
+                <i class="fas fa-exchange-alt text-primary"></i>
+                Movimentacoes de Pallets
+            </h1>
+            <p class="pallet-listagem__subtitle">
+                Listagem consolidada de todas as movimentacoes de pallet com filtros avancados
+            </p>
+        </div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-success" id="btn-exportar" title="Exportar para Excel">
+                <i class="fas fa-file-excel me-1"></i> Exportar
+            </button>
+            <a href="{{ url_for('pallet_v2.dashboard.index') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-1"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="pallet-stats-grid">
+        <div class="pallet-stat-card">
+            <div class="pallet-stat-card__value text-primary">{{ stats.total }}</div>
+            <div class="pallet-stat-card__label">Total Registros</div>
+        </div>
+        <div class="pallet-stat-card">
+            <div class="pallet-stat-card__value text-warning">{{ stats.total_pallets }}</div>
+            <div class="pallet-stat-card__label">Total Pallets</div>
+        </div>
+        <div class="pallet-stat-card">
+            <div class="pallet-stat-card__value text-danger">{{ stats.total_saldo }}</div>
+            <div class="pallet-stat-card__label">Saldo Pendente</div>
+        </div>
+        <div class="pallet-stat-card">
+            <div class="pallet-stat-card__value text-primary">{{ stats.ativas }}</div>
+            <div class="pallet-stat-card__label">Ativas</div>
+        </div>
+        <div class="pallet-stat-card">
+            <div class="pallet-stat-card__value text-success">{{ stats.resolvidas }}</div>
+            <div class="pallet-stat-card__label">Resolvidas</div>
+        </div>
+        <div class="pallet-stat-card">
+            <div class="pallet-stat-card__value text-secondary">{{ stats.canceladas }}</div>
+            <div class="pallet-stat-card__label">Canceladas</div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="pallet-filtros">
+        <div class="pallet-filtros__header">
+            <h3 class="pallet-filtros__title">
+                <i class="fas fa-filter"></i> Filtros Avancados
+            </h3>
+            <a href="{{ url_for('pallet_v2.movimentacoes.listar') }}" class="btn btn-sm btn-outline-secondary">
+                <i class="fas fa-times me-1"></i> Limpar
+            </a>
+        </div>
+        <form method="GET" action="{{ url_for('pallet_v2.movimentacoes.listar') }}" id="form-filtros">
+            <div class="row g-3">
+                <!-- Linha 1: Filtros de NF e Entidades -->
+                <div class="col-md-2">
+                    <label class="form-label">NF de Venda</label>
+                    <input type="text" name="nf_venda" class="form-control form-control-sm"
+                           placeholder="Numero NF..." value="{{ filtro_nf_venda }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">NF de Remessa</label>
+                    <input type="text" name="nf_remessa" class="form-control form-control-sm"
+                           placeholder="Numero NF..." value="{{ filtro_nf_remessa }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Cliente</label>
+                    <input type="text" name="cliente" class="form-control form-control-sm"
+                           placeholder="CNPJ/Nome..." value="{{ filtro_cliente }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Transportadora</label>
+                    <input type="text" name="transportadora" class="form-control form-control-sm"
+                           placeholder="CNPJ/Nome..." value="{{ filtro_transportadora }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Status</label>
+                    <select name="status" class="form-select form-select-sm">
+                        <option value="">Todos</option>
+                        <option value="ATIVA" {% if filtro_status == 'ATIVA' %}selected{% endif %}>Ativa</option>
+                        <option value="RESOLVIDA" {% if filtro_status == 'RESOLVIDA' %}selected{% endif %}>Resolvida</option>
+                        <option value="CANCELADA" {% if filtro_status == 'CANCELADA' %}selected{% endif %}>Cancelada</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Tipo Destinatario</label>
+                    <select name="tipo_destinatario" class="form-select form-select-sm">
+                        <option value="">Todos</option>
+                        <option value="TRANSPORTADORA" {% if filtro_tipo_destinatario == 'TRANSPORTADORA' %}selected{% endif %}>Transportadora</option>
+                        <option value="CLIENTE" {% if filtro_tipo_destinatario == 'CLIENTE' %}selected{% endif %}>Cliente</option>
+                    </select>
+                </div>
+
+                <!-- Linha 2: Filtros de Data e Localizacao -->
+                <div class="col-md-2">
+                    <label class="form-label">Data Inicial</label>
+                    <input type="date" name="data_de" class="form-control form-control-sm"
+                           value="{{ filtro_data_de }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Data Final</label>
+                    <input type="date" name="data_ate" class="form-control form-control-sm"
+                           value="{{ filtro_data_ate }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">UF</label>
+                    <select name="uf" class="form-select form-select-sm" id="select-uf">
+                        <option value="">Todas</option>
+                        {% for uf_opt in ufs_disponiveis %}
+                        <option value="{{ uf_opt }}" {% if filtro_uf == uf_opt %}selected{% endif %}>{{ uf_opt }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Cidade</label>
+                    <input type="text" name="cidade" class="form-control form-control-sm"
+                           placeholder="Buscar cidade..." value="{{ filtro_cidade }}" id="input-cidade">
+                </div>
+                <div class="col-md-4 d-flex align-items-end gap-2">
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="fas fa-search me-1"></i> Filtrar
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Tabela -->
+    <div class="pallet-table-card">
+        <div class="table-responsive">
+            <table class="table pallet-table">
+                <thead>
+                    <tr>
+                        <th>NF Remessa</th>
+                        <th>Emissao</th>
+                        <th>Tipo</th>
+                        <th>Destinatario</th>
+                        <th>Transportadora</th>
+                        <th>NF Venda</th>
+                        <th>UF</th>
+                        <th>Cidade</th>
+                        <th class="text-center">Qtd</th>
+                        <th class="text-center">Saldo</th>
+                        <th>Status</th>
+                        <th class="text-center">Acoes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for mov in movimentacoes %}
+                    <tr>
+                        <td>
+                            <a href="{{ url_for('pallet_v2.nf_remessa.detalhe', nf_id=mov.nf_remessa.id) }}"
+                               class="text-decoration-none fw-bold">
+                                {{ mov.nf_remessa.numero_nf }}{% if mov.nf_remessa.serie %}<small class="text-muted">/{{ mov.nf_remessa.serie }}</small>{% endif %}
+                            </a>
+                        </td>
+                        <td>{{ mov.nf_remessa.data_emissao.strftime('%d/%m/%Y') if mov.nf_remessa.data_emissao else '-' }}</td>
+                        <td>
+                            <span class="badge tipo-badge bg-{{ 'info' if mov.nf_remessa.tipo_destinatario == 'TRANSPORTADORA' else 'secondary' }}">
+                                {{ 'TRANSP' if mov.nf_remessa.tipo_destinatario == 'TRANSPORTADORA' else 'CLIENTE' }}
+                            </span>
+                        </td>
+                        <td class="cell-truncate" title="{{ mov.nf_remessa.cnpj_destinatario }} - {{ mov.nf_remessa.nome_destinatario }}">
+                            {{ (mov.nf_remessa.nome_destinatario or mov.nf_remessa.cnpj_destinatario or '-') }}
+                        </td>
+                        <td class="cell-truncate" title="{% if mov.transportadora %}{{ mov.transportadora.cnpj }} - {{ mov.transportadora.nome }}{% endif %}">
+                            {% if mov.transportadora %}
+                                {{ mov.transportadora.nome or mov.transportadora.cnpj or '-' }}
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="cell-truncate" title="{{ mov.nf_venda or '' }}">
+                            {% if mov.nf_venda %}
+                                <span class="text-success">{{ mov.nf_venda }}</span>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if mov.uf %}
+                                <span class="badge bg-outline-secondary" style="border: 1px solid var(--text-muted);">{{ mov.uf }}</span>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="cell-truncate" title="{{ mov.cidade or '' }}">
+                            {{ mov.cidade or '-' }}
+                        </td>
+                        <td class="text-center fw-bold">{{ mov.nf_remessa.quantidade }}</td>
+                        <td class="text-center">
+                            {% set qtd_saldo = mov.qtd_saldo or 0 %}
+                            {% set qtd_total = mov.nf_remessa.quantidade or 1 %}
+                            {% set percentual = ((qtd_total - qtd_saldo) / qtd_total * 100) if qtd_total > 0 else 0 %}
+                            <span class="{% if qtd_saldo == 0 %}text-success{% elif qtd_saldo < qtd_total %}text-warning{% else %}text-danger{% endif %} fw-bold">
+                                {{ qtd_saldo }}
+                            </span>
+                            {% if qtd_saldo > 0 and qtd_saldo < qtd_total %}
+                            <small class="text-muted">({{ percentual|round(0)|int }}% res.)</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="pallet-status pallet-status--{{ mov.nf_remessa.status|lower }}">
+                                {{ mov.nf_remessa.status }}
+                            </span>
+                        </td>
+                        <td class="text-center">
+                            <a href="{{ url_for('pallet_v2.nf_remessa.detalhe', nf_id=mov.nf_remessa.id) }}"
+                               class="btn btn-sm btn-outline-primary" title="Ver detalhes">
+                                <i class="fas fa-eye"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="12">
+                            <div class="pallet-empty-state">
+                                <div class="pallet-empty-state__icon">
+                                    <i class="fas fa-exchange-alt"></i>
+                                </div>
+                                <p>Nenhuma movimentacao encontrada</p>
+                                <small class="text-muted">Ajuste os filtros para ver resultados</small>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Paginacao -->
+        {% if pagination.pages > 1 %}
+        <div class="pallet-pagination">
+            <div>
+                <small class="text-muted">
+                    Mostrando {{ ((pagination.page - 1) * pagination.per_page) + 1 }}-{{ [pagination.page * pagination.per_page, pagination.total]|min }}
+                    de {{ pagination.total }} resultados
+                </small>
+            </div>
+            <nav aria-label="Paginacao">
+                <ul class="pagination pagination-sm mb-0">
+                    {% if pagination.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('pallet_v2.movimentacoes.listar', page=pagination.prev_num, nf_venda=filtro_nf_venda, nf_remessa=filtro_nf_remessa, cliente=filtro_cliente, transportadora=filtro_transportadora, data_de=filtro_data_de, data_ate=filtro_data_ate, uf=filtro_uf, cidade=filtro_cidade, status=filtro_status, tipo_destinatario=filtro_tipo_destinatario) }}">
+                            <i class="fas fa-chevron-left"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+
+                    {% for page_num in pagination.iter_pages %}
+                        {% if page_num %}
+                            {% if page_num == pagination.page %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ page_num }}</span>
+                            </li>
+                            {% else %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('pallet_v2.movimentacoes.listar', page=page_num, nf_venda=filtro_nf_venda, nf_remessa=filtro_nf_remessa, cliente=filtro_cliente, transportadora=filtro_transportadora, data_de=filtro_data_de, data_ate=filtro_data_ate, uf=filtro_uf, cidade=filtro_cidade, status=filtro_status, tipo_destinatario=filtro_tipo_destinatario) }}">
+                                    {{ page_num }}
+                                </a>
+                            </li>
+                            {% endif %}
+                        {% else %}
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if pagination.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('pallet_v2.movimentacoes.listar', page=pagination.next_num, nf_venda=filtro_nf_venda, nf_remessa=filtro_nf_remessa, cliente=filtro_cliente, transportadora=filtro_transportadora, data_de=filtro_data_de, data_ate=filtro_data_ate, uf=filtro_uf, cidade=filtro_cidade, status=filtro_status, tipo_destinatario=filtro_tipo_destinatario) }}">
+                            <i class="fas fa-chevron-right"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Auto-submit form on select change
+document.querySelectorAll('.pallet-filtros select').forEach(function(select) {
+    select.addEventListener('change', function() {
+        document.getElementById('form-filtros').submit();
+    });
+});
+
+// Exportar para Excel (usando skill exportando-arquivos)
+document.getElementById('btn-exportar').addEventListener('click', function() {
+    // Construir URL com filtros atuais
+    const params = new URLSearchParams(window.location.search);
+    params.set('limit', '5000'); // Exporta ate 5000 registros
+
+    const url = '{{ url_for("pallet_v2.movimentacoes.api_exportar") }}?' + params.toString();
+
+    // Abrir em nova aba (para que usuario possa usar skill de exportacao)
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            if (data.movimentacoes && data.movimentacoes.length > 0) {
+                // Converter para CSV
+                const headers = [
+                    'NF Remessa', 'Serie', 'Data Emissao', 'Empresa',
+                    'Tipo', 'CNPJ Destinatario', 'Nome Destinatario',
+                    'CNPJ Transportadora', 'Nome Transportadora',
+                    'Quantidade', 'Valor Unitario', 'Valor Total',
+                    'Status', 'UF', 'Cidade', 'Saldo', 'Vencimento'
+                ];
+
+                let csv = headers.join(';') + '\n';
+
+                data.movimentacoes.forEach(mov => {
+                    const row = [
+                        mov.numero_nf || '',
+                        mov.serie || '',
+                        mov.data_emissao || '',
+                        mov.empresa || '',
+                        mov.tipo_destinatario || '',
+                        mov.cnpj_destinatario || '',
+                        mov.nome_destinatario || '',
+                        mov.cnpj_transportadora || '',
+                        mov.nome_transportadora || '',
+                        mov.quantidade || 0,
+                        mov.valor_unitario || 0,
+                        mov.valor_total || 0,
+                        mov.status || '',
+                        mov.uf || '',
+                        mov.cidade || '',
+                        mov.qtd_saldo || 0,
+                        mov.data_vencimento || ''
+                    ].map(val => `"${String(val).replace(/"/g, '""')}"`);
+
+                    csv += row.join(';') + '\n';
+                });
+
+                // Download do CSV
+                const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = 'movimentacoes_pallets_' + new Date().toISOString().slice(0,10) + '.csv';
+                link.click();
+
+                alert('Exportacao concluida! ' + data.total + ' registros exportados.');
+            } else {
+                alert('Nenhum dado para exportar com os filtros atuais.');
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao exportar:', error);
+            alert('Erro ao exportar dados. Tente novamente.');
+        });
+});
+</script>
+{% endblock %}

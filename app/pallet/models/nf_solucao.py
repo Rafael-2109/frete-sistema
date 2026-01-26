@@ -71,6 +71,9 @@ class PalletNFSolucao(db.Model):
     # SUGESTAO = Sistema sugeriu, aguarda confirmação
     vinculacao = db.Column(db.String(20), default='MANUAL', nullable=False)
 
+    # Score de match para sugestões (0-100)
+    score_match = db.Column(db.Integer, nullable=True)
+
     # Confirmação (para SUGESTAO)
     confirmado = db.Column(db.Boolean, default=True, nullable=False)
     confirmado_em = db.Column(db.DateTime, nullable=True)
@@ -183,6 +186,7 @@ class PalletNFSolucao(db.Model):
             'nome_emitente': self.nome_emitente,
             'vinculacao': self.vinculacao,
             'vinculacao_display': self.vinculacao_display,
+            'score_match': self.score_match,
             'status_display': self.status_display,
             'confirmado': self.confirmado,
             'confirmado_em': self.confirmado_em.isoformat() if self.confirmado_em else None,

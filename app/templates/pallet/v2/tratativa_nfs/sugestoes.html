@@ -1,0 +1,1177 @@
+{% extends 'base.html' %}
+
+{% block title %}Sugestões de Vinculação | Tratativa de NFs v2{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ============================================
+   SUGESTÕES DE VINCULAÇÃO - Tratativa de NFs v2
+   ============================================ */
+
+.tratativa-sugestoes {
+    padding: 1.5rem;
+    background-color: #f8f9fa;
+    min-height: calc(100vh - 60px);
+}
+
+/* Header */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.page-header h1 {
+    font-size: 1.75rem;
+    font-weight: 600;
+    color: #212529;
+    margin: 0;
+}
+
+.page-header h1 i {
+    color: #ffc107;
+    margin-right: 0.5rem;
+}
+
+/* Breadcrumb */
+.breadcrumb-nav {
+    margin-bottom: 1rem;
+}
+
+.breadcrumb-nav .breadcrumb {
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    font-size: 0.875rem;
+}
+
+.breadcrumb-nav .breadcrumb-item a {
+    color: #6c757d;
+    text-decoration: none;
+}
+
+.breadcrumb-nav .breadcrumb-item a:hover {
+    color: #0d6efd;
+}
+
+.breadcrumb-nav .breadcrumb-item.active {
+    color: #212529;
+}
+
+/* Stats Cards */
+.stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.stat-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.25rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+}
+
+.stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+}
+
+.stat-icon.pendentes { background: #fff3cd; color: #856404; }
+.stat-icon.devolucoes { background: #d1e7dd; color: #198754; }
+.stat-icon.retornos { background: #cff4fc; color: #0dcaf0; }
+
+.stat-content h4 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin: 0;
+    color: #212529;
+}
+
+.stat-content span {
+    font-size: 0.875rem;
+    color: #6c757d;
+}
+
+/* Filtros */
+.filter-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.25rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    margin-bottom: 1.5rem;
+}
+
+.filter-card .filter-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 1rem;
+}
+
+.filter-row {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: flex-end;
+}
+
+.filter-group {
+    flex: 1;
+    min-width: 180px;
+}
+
+.filter-group label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #495057;
+    margin-bottom: 0.5rem;
+}
+
+.filter-group select,
+.filter-group input {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.filter-group select:focus,
+.filter-group input:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15);
+    outline: none;
+}
+
+.filter-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.btn-filter {
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.btn-filter-primary {
+    background: #0d6efd;
+    color: white;
+    border: none;
+}
+
+.btn-filter-primary:hover {
+    background: #0b5ed7;
+    color: white;
+}
+
+.btn-filter-secondary {
+    background: #f8f9fa;
+    color: #495057;
+    border: 1px solid #dee2e6;
+}
+
+.btn-filter-secondary:hover {
+    background: #e9ecef;
+}
+
+/* Ação rápida: Buscar devoluções */
+.action-card {
+    background: linear-gradient(135deg, #fff3cd 0%, #ffeeba 100%);
+    border-radius: 12px;
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.action-card-content h5 {
+    color: #856404;
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0 0 0.25rem 0;
+}
+
+.action-card-content p {
+    color: #664d03;
+    font-size: 0.875rem;
+    margin: 0;
+}
+
+.action-card-form {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+
+.action-card-form input {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #ddc487;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    width: 140px;
+}
+
+.btn-processar {
+    background: #856404;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.btn-processar:hover {
+    background: #664d03;
+    color: white;
+}
+
+/* Tabela de Sugestões */
+.table-card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    overflow: hidden;
+}
+
+.table-header {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid #e9ecef;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.table-header h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #212529;
+    margin: 0;
+}
+
+.table-header .badge {
+    font-size: 0.75rem;
+    padding: 0.35em 0.65em;
+}
+
+.table-responsive {
+    max-height: calc(100vh - 500px);
+    overflow-y: auto;
+}
+
+.table-sugestoes {
+    margin: 0;
+    width: 100%;
+}
+
+.table-sugestoes thead th {
+    background: #f8f9fa;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 0.75rem 1rem;
+    border-bottom: 2px solid #e9ecef;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.table-sugestoes tbody td {
+    padding: 0.75rem 1rem;
+    vertical-align: middle;
+    font-size: 0.875rem;
+    border-bottom: 1px solid #f1f3f4;
+}
+
+.table-sugestoes tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+/* Badges de tipo */
+.tipo-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.tipo-badge.devolucao {
+    background: #d1e7dd;
+    color: #198754;
+}
+
+.tipo-badge.retorno {
+    background: #cff4fc;
+    color: #0dcaf0;
+}
+
+/* Score badge */
+.score-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    font-size: 0.875rem;
+    font-weight: 700;
+}
+
+.score-badge.high {
+    background: #d1e7dd;
+    color: #198754;
+}
+
+.score-badge.medium {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.score-badge.low {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+/* Célula de NF */
+.nf-cell {
+    max-width: 180px;
+}
+
+.nf-remessa {
+    font-weight: 500;
+    color: #212529;
+}
+
+.nf-solucao {
+    font-size: 0.75rem;
+    color: #198754;
+    margin-top: 0.25rem;
+}
+
+/* Célula de emitente */
+.emitente-cell {
+    max-width: 200px;
+}
+
+.emitente-nome {
+    font-weight: 500;
+    color: #212529;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+}
+
+.emitente-cnpj {
+    font-size: 0.75rem;
+    color: #6c757d;
+    font-family: 'Monaco', 'Consolas', monospace;
+}
+
+/* Célula de quantidade */
+.qtd-cell {
+    text-align: center;
+}
+
+.qtd-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #0d6efd;
+}
+
+/* Botões de ação */
+.action-buttons {
+    display: flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+}
+
+.btn-action {
+    padding: 0.35rem 0.65rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.btn-confirmar {
+    background: #d4edda;
+    color: #155724;
+}
+
+.btn-confirmar:hover {
+    background: #c3e6cb;
+}
+
+.btn-rejeitar {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.btn-rejeitar:hover {
+    background: #f5c6cb;
+}
+
+.btn-detalhes {
+    background: #e9ecef;
+    color: #495057;
+}
+
+.btn-detalhes:hover {
+    background: #dee2e6;
+}
+
+/* Empty state */
+.empty-state {
+    padding: 3rem;
+    text-align: center;
+}
+
+.empty-state i {
+    font-size: 3rem;
+    color: #dee2e6;
+    margin-bottom: 1rem;
+}
+
+.empty-state h4 {
+    color: #6c757d;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+}
+
+.empty-state p {
+    color: #adb5bd;
+    margin: 0;
+}
+
+/* Paginação */
+.pagination-wrapper {
+    padding: 1rem 1.25rem;
+    border-top: 1px solid #e9ecef;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.pagination-info {
+    font-size: 0.875rem;
+    color: #6c757d;
+}
+
+.pagination {
+    margin: 0;
+}
+
+.pagination .page-link {
+    border-radius: 6px;
+    margin: 0 0.15rem;
+    border: none;
+    color: #495057;
+    font-size: 0.875rem;
+}
+
+.pagination .page-link:hover {
+    background: #e9ecef;
+}
+
+.pagination .page-item.active .page-link {
+    background: #0d6efd;
+    color: white;
+}
+
+/* Modal */
+.modal-header {
+    background: linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%);
+    color: white;
+    border-radius: 12px 12px 0 0;
+}
+
+.modal-header .btn-close {
+    filter: brightness(0) invert(1);
+}
+
+.modal-content {
+    border-radius: 12px;
+    border: none;
+}
+
+.modal-footer {
+    border-top: 1px solid #e9ecef;
+}
+
+/* Modal header variants */
+.modal-header.modal-confirmar {
+    background: linear-gradient(135deg, #198754 0%, #157347 100%);
+}
+
+.modal-header.modal-rejeitar {
+    background: linear-gradient(135deg, #dc3545 0%, #bb2d3b 100%);
+}
+
+/* Info card no modal */
+.info-card {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.info-card h6 {
+    color: #6c757d;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+}
+
+.info-card .info-value {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #212529;
+}
+
+.info-card .info-detail {
+    font-size: 0.875rem;
+    color: #6c757d;
+}
+
+/* Info grid no modal */
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+
+.info-grid .info-card {
+    margin-bottom: 0;
+}
+
+/* Alert info */
+.alert-info-action {
+    background: #e8f4fd;
+    border: 1px solid #b6d4fe;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.alert-info-action i {
+    color: #0d6efd;
+}
+
+/* Data de criação */
+.data-cell {
+    font-size: 0.85rem;
+    color: #495057;
+}
+
+.data-cell small {
+    display: block;
+    color: #6c757d;
+    font-size: 0.75rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="tratativa-sugestoes">
+    <!-- Breadcrumb -->
+    <nav class="breadcrumb-nav" aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item">
+                <a href="{{ url_for('pallet_v2.dashboard.index') }}">
+                    <i class="fas fa-pallet"></i> Gestão de Pallets
+                </a>
+            </li>
+            <li class="breadcrumb-item">Tratativa de NFs</li>
+            <li class="breadcrumb-item active" aria-current="page">Sugestões</li>
+        </ol>
+    </nav>
+
+    <!-- Header -->
+    <div class="page-header">
+        <h1><i class="fas fa-lightbulb"></i> Sugestões de Vinculação</h1>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('pallet_v2.tratativa_nfs.direcionamento') }}" class="btn btn-outline-primary">
+                <i class="fas fa-route"></i> Direcionamento
+            </a>
+            <a href="{{ url_for('pallet_v2.tratativa_nfs.listar_solucoes') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-history"></i> Histórico
+            </a>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="stats-row">
+        <div class="stat-card">
+            <div class="stat-icon pendentes">
+                <i class="fas fa-clock"></i>
+            </div>
+            <div class="stat-content">
+                <h4>{{ stats.total_pendentes }}</h4>
+                <span>Pendentes</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon devolucoes">
+                <i class="fas fa-reply-all"></i>
+            </div>
+            <div class="stat-content">
+                <h4>{{ stats.devolucoes }}</h4>
+                <span>Devoluções</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon retornos">
+                <i class="fas fa-reply"></i>
+            </div>
+            <div class="stat-content">
+                <h4>{{ stats.retornos }}</h4>
+                <span>Retornos</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ação: Buscar Devoluções no DFe -->
+    <div class="action-card">
+        <div class="action-card-content">
+            <h5><i class="fas fa-search"></i> Buscar Devoluções no DFe</h5>
+            <p>Processa NFs de devolução/retorno de pallet no DFe e cria sugestões de vinculação automática.</p>
+        </div>
+        <form method="POST" action="{{ url_for('pallet_v2.tratativa_nfs.processar_devolucoes') }}" class="action-card-form">
+            <div>
+                <label class="form-label small text-muted mb-1">Data De</label>
+                <input type="date" name="data_de" class="form-control form-control-sm">
+            </div>
+            <div>
+                <label class="form-label small text-muted mb-1">Data Até</label>
+                <input type="date" name="data_ate" class="form-control form-control-sm">
+            </div>
+            <button type="submit" class="btn-processar">
+                <i class="fas fa-sync-alt"></i> Processar
+            </button>
+        </form>
+    </div>
+
+    <!-- Filtros -->
+    <div class="filter-card">
+        <div class="filter-title">
+            <i class="fas fa-filter"></i> Filtros
+        </div>
+        <form method="GET" action="{{ url_for('pallet_v2.tratativa_nfs.listar_sugestoes') }}">
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label for="tipo">Tipo de Sugestão</label>
+                    <select name="tipo" id="tipo" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="DEVOLUCAO" {% if filtro_tipo == 'DEVOLUCAO' %}selected{% endif %}>Devolução</option>
+                        <option value="RETORNO" {% if filtro_tipo == 'RETORNO' %}selected{% endif %}>Retorno</option>
+                    </select>
+                </div>
+                <div class="filter-actions">
+                    <button type="submit" class="btn btn-filter btn-filter-primary">
+                        <i class="fas fa-search"></i> Filtrar
+                    </button>
+                    <a href="{{ url_for('pallet_v2.tratativa_nfs.listar_sugestoes') }}" class="btn btn-filter btn-filter-secondary">
+                        <i class="fas fa-times"></i> Limpar
+                    </a>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Tabela de Sugestões -->
+    <div class="table-card">
+        <div class="table-header">
+            <h3>
+                <i class="fas fa-lightbulb"></i> Sugestões Pendentes de Confirmação
+            </h3>
+            <span class="badge bg-warning text-dark">{{ sugestoes.total }} registro(s)</span>
+        </div>
+
+        {% if sugestoes.items %}
+        <div class="table-responsive">
+            <table class="table table-sugestoes">
+                <thead>
+                    <tr>
+                        <th>Tipo</th>
+                        <th>NF Remessa / Solução</th>
+                        <th>Emitente</th>
+                        <th class="text-center">Qtd</th>
+                        <th class="text-center">Score</th>
+                        <th>Criada em</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sugestao in sugestoes.items %}
+                    <tr data-sugestao-id="{{ sugestao.id }}">
+                        <td>
+                            {% if sugestao.tipo == 'DEVOLUCAO' %}
+                            <span class="tipo-badge devolucao">
+                                <i class="fas fa-reply-all"></i> Devolução
+                            </span>
+                            {% else %}
+                            <span class="tipo-badge retorno">
+                                <i class="fas fa-reply"></i> Retorno
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="nf-cell">
+                            <div class="nf-remessa">
+                                NF {{ sugestao.nf_remessa.numero_nf if sugestao.nf_remessa else '-' }}
+                                {% if sugestao.nf_remessa and sugestao.nf_remessa.serie %}
+                                <small class="text-muted">/{{ sugestao.nf_remessa.serie }}</small>
+                                {% endif %}
+                            </div>
+                            {% if sugestao.numero_nf_solucao %}
+                            <div class="nf-solucao">
+                                <i class="fas fa-arrow-right"></i> NF {{ sugestao.numero_nf_solucao }}
+                                {% if sugestao.serie_nf_solucao %}/{{ sugestao.serie_nf_solucao }}{% endif %}
+                            </div>
+                            {% endif %}
+                        </td>
+                        <td class="emitente-cell">
+                            <span class="emitente-nome" title="{{ sugestao.nome_emitente or 'N/A' }}">
+                                {{ sugestao.nome_emitente or 'N/A' }}
+                            </span>
+                            {% if sugestao.cnpj_emitente %}
+                            <span class="emitente-cnpj">{{ sugestao.cnpj_emitente }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="qtd-cell">
+                            <div class="qtd-value">{{ sugestao.quantidade }}</div>
+                        </td>
+                        <td class="text-center">
+                            {% set score = sugestao.score_match or 0 %}
+                            <span class="score-badge {% if score >= 80 %}high{% elif score >= 50 %}medium{% else %}low{% endif %}"
+                                  title="Score de match: {{ score }}%">
+                                {{ score }}
+                            </span>
+                        </td>
+                        <td class="data-cell">
+                            {{ sugestao.criado_em.strftime('%d/%m/%Y') if sugestao.criado_em else '-' }}
+                            {% if sugestao.criado_em %}
+                            <small>{{ sugestao.criado_em.strftime('%H:%M') }}</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="action-buttons">
+                                <button type="button" class="btn-action btn-confirmar" title="Confirmar Sugestão"
+                                        onclick="openConfirmarModal({{ sugestao.id }}, '{{ sugestao.nf_remessa.numero_nf if sugestao.nf_remessa else '' }}', '{{ sugestao.numero_nf_solucao or '' }}', '{{ sugestao.tipo }}', {{ sugestao.quantidade }}, '{{ sugestao.nome_emitente or '' }}')">
+                                    <i class="fas fa-check"></i> Confirmar
+                                </button>
+                                <button type="button" class="btn-action btn-rejeitar" title="Rejeitar Sugestão"
+                                        onclick="openRejeitarModal({{ sugestao.id }}, '{{ sugestao.nf_remessa.numero_nf if sugestao.nf_remessa else '' }}', '{{ sugestao.numero_nf_solucao or '' }}')">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                                <button type="button" class="btn-action btn-detalhes" title="Ver Detalhes"
+                                        onclick="openDetalhesModal({{ sugestao.id }})">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Paginação -->
+        <div class="pagination-wrapper">
+            <div class="pagination-info">
+                Mostrando {{ ((sugestoes.page - 1) * sugestoes.per_page) + 1 }} -
+                {{ [sugestoes.page * sugestoes.per_page, sugestoes.total]|min }}
+                de {{ sugestoes.total }} registros
+            </div>
+
+            {% if sugestoes.pages > 1 %}
+            <nav aria-label="Paginação">
+                <ul class="pagination">
+                    {% if sugestoes.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('pallet_v2.tratativa_nfs.listar_sugestoes', page=sugestoes.prev_num, tipo=filtro_tipo) }}">
+                            <i class="fas fa-chevron-left"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+
+                    {% for page_num in sugestoes.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                        {% if page_num %}
+                            {% if page_num == sugestoes.page %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ page_num }}</span>
+                            </li>
+                            {% else %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('pallet_v2.tratativa_nfs.listar_sugestoes', page=page_num, tipo=filtro_tipo) }}">{{ page_num }}</a>
+                            </li>
+                            {% endif %}
+                        {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">...</span>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if sugestoes.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('pallet_v2.tratativa_nfs.listar_sugestoes', page=sugestoes.next_num, tipo=filtro_tipo) }}">
+                            <i class="fas fa-chevron-right"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+
+        {% else %}
+        <!-- Empty State -->
+        <div class="empty-state">
+            <i class="fas fa-lightbulb"></i>
+            <h4>Nenhuma sugestão pendente</h4>
+            <p>Não há sugestões de vinculação aguardando confirmação. Use o botão "Processar" para buscar novas devoluções no DFe.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- =============================================
+     MODAL: CONFIRMAR SUGESTÃO
+     ============================================= -->
+<div class="modal fade" id="modalConfirmar" tabindex="-1" aria-labelledby="modalConfirmarLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header modal-confirmar">
+                <h5 class="modal-title" id="modalConfirmarLabel">
+                    <i class="fas fa-check-circle"></i> Confirmar Vinculação
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form method="POST" id="formConfirmar">
+                <div class="modal-body">
+                    <div class="alert-info-action">
+                        <i class="fas fa-info-circle"></i>
+                        Ao confirmar esta sugestão, a NF de <strong id="confirmar_tipo">devolução</strong> será vinculada
+                        à NF de remessa e o status da NF de remessa será atualizado.
+                    </div>
+
+                    <div class="info-grid">
+                        <div class="info-card">
+                            <h6>NF de Remessa</h6>
+                            <div class="info-value" id="confirmar_nf_remessa">-</div>
+                        </div>
+                        <div class="info-card">
+                            <h6>NF de Solução</h6>
+                            <div class="info-value" id="confirmar_nf_solucao">-</div>
+                        </div>
+                    </div>
+
+                    <div class="info-card">
+                        <h6>Quantidade / Emitente</h6>
+                        <div class="info-value"><span id="confirmar_quantidade">-</span> pallets</div>
+                        <div class="info-detail" id="confirmar_emitente">-</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-check"></i> Confirmar Vinculação
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- =============================================
+     MODAL: REJEITAR SUGESTÃO
+     ============================================= -->
+<div class="modal fade" id="modalRejeitar" tabindex="-1" aria-labelledby="modalRejeitarLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header modal-rejeitar">
+                <h5 class="modal-title" id="modalRejeitarLabel">
+                    <i class="fas fa-times-circle"></i> Rejeitar Sugestão
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form method="POST" id="formRejeitar">
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Atenção!</strong> Ao rejeitar esta sugestão, ela será marcada como inválida
+                        e não aparecerá mais na listagem de sugestões pendentes.
+                    </div>
+
+                    <div class="info-card">
+                        <h6>Sugestão a Rejeitar</h6>
+                        <div class="info-value">NF <span id="rejeitar_nf_remessa">-</span> → <span id="rejeitar_nf_solucao">-</span></div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="rejeitar_motivo" class="form-label">Motivo da Rejeição <span class="text-danger">*</span></label>
+                        <select class="form-select" id="rejeitar_motivo_select" onchange="updateMotivoText(this)">
+                            <option value="">Selecione um motivo...</option>
+                            <option value="NF não corresponde à remessa">NF não corresponde à remessa</option>
+                            <option value="Quantidade divergente">Quantidade divergente</option>
+                            <option value="CNPJ/emitente incorreto">CNPJ/emitente incorreto</option>
+                            <option value="NF já vinculada anteriormente">NF já vinculada anteriormente</option>
+                            <option value="Outro">Outro motivo...</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="rejeitar_motivo_texto" class="form-label">Descrição do Motivo</label>
+                        <textarea class="form-control" id="rejeitar_motivo_texto" name="motivo" rows="2"
+                                  placeholder="Descreva o motivo da rejeição..." required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-times"></i> Rejeitar Sugestão
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- =============================================
+     MODAL: DETALHES DA SUGESTÃO
+     ============================================= -->
+<div class="modal fade" id="modalDetalhes" tabindex="-1" aria-labelledby="modalDetalhesLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalDetalhesLabel">
+                    <i class="fas fa-info-circle"></i> Detalhes da Sugestão
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="detalhes_loading" class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                    <p class="mt-2 text-muted">Carregando detalhes...</p>
+                </div>
+                <div id="detalhes_content" style="display: none;">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="info-card">
+                                <h6>NF de Remessa</h6>
+                                <div class="info-value" id="det_nf_remessa">-</div>
+                                <div class="info-detail" id="det_nf_remessa_id">ID: -</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="info-card">
+                                <h6>Tipo / Vinculação</h6>
+                                <div class="info-value" id="det_tipo">-</div>
+                                <div class="info-detail" id="det_vinculacao">-</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="info-card">
+                                <h6>NF de Solução</h6>
+                                <div class="info-value" id="det_nf_solucao">-</div>
+                                <div class="info-detail" id="det_data_nf">Data: -</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="info-card">
+                                <h6>Quantidade / Score</h6>
+                                <div class="info-value"><span id="det_quantidade">-</span> pallets</div>
+                                <div class="info-detail">Score: <span id="det_score">-</span>%</div>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="info-card">
+                                <h6>Emitente</h6>
+                                <div class="info-value" id="det_emitente_nome">-</div>
+                                <div class="info-detail">CNPJ: <span id="det_emitente_cnpj">-</span></div>
+                            </div>
+                        </div>
+                        <div class="col-12" id="det_chave_container">
+                            <div class="info-card">
+                                <h6>Chave NF-e</h6>
+                                <div class="info-detail" style="font-family: monospace; word-break: break-all;" id="det_chave_nfe">-</div>
+                            </div>
+                        </div>
+                        <div class="col-12" id="det_observacao_container">
+                            <div class="info-card">
+                                <h6>Observação</h6>
+                                <div class="info-detail" id="det_observacao">-</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="info-card">
+                                <h6>Criado em</h6>
+                                <div class="info-detail" id="det_criado_em">-</div>
+                                <div class="info-detail">Por: <span id="det_criado_por">-</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// =============================================
+// MODAL CONFIRMAR
+// =============================================
+function openConfirmarModal(sugestaoId, nfRemessa, nfSolucao, tipo, quantidade, emitente) {
+    document.getElementById('formConfirmar').action = '{{ url_for("pallet_v2.tratativa_nfs.confirmar_sugestao", sugestao_id=0) }}'.replace('/0', '/' + sugestaoId);
+    document.getElementById('confirmar_tipo').textContent = tipo === 'DEVOLUCAO' ? 'devolução' : 'retorno';
+    document.getElementById('confirmar_nf_remessa').textContent = 'NF ' + nfRemessa;
+    document.getElementById('confirmar_nf_solucao').textContent = 'NF ' + (nfSolucao || '-');
+    document.getElementById('confirmar_quantidade').textContent = quantidade;
+    document.getElementById('confirmar_emitente').textContent = emitente || '-';
+
+    new bootstrap.Modal(document.getElementById('modalConfirmar')).show();
+}
+
+// =============================================
+// MODAL REJEITAR
+// =============================================
+function openRejeitarModal(sugestaoId, nfRemessa, nfSolucao) {
+    document.getElementById('formRejeitar').action = '{{ url_for("pallet_v2.tratativa_nfs.rejeitar_sugestao", sugestao_id=0) }}'.replace('/0', '/' + sugestaoId);
+    document.getElementById('rejeitar_nf_remessa').textContent = nfRemessa;
+    document.getElementById('rejeitar_nf_solucao').textContent = nfSolucao || '-';
+
+    // Limpar campos
+    document.getElementById('rejeitar_motivo_select').value = '';
+    document.getElementById('rejeitar_motivo_texto').value = '';
+
+    new bootstrap.Modal(document.getElementById('modalRejeitar')).show();
+}
+
+function updateMotivoText(select) {
+    const textarea = document.getElementById('rejeitar_motivo_texto');
+    if (select.value && select.value !== 'Outro') {
+        textarea.value = select.value;
+    } else if (select.value === 'Outro') {
+        textarea.value = '';
+        textarea.focus();
+    }
+}
+
+// =============================================
+// MODAL DETALHES
+// =============================================
+function openDetalhesModal(sugestaoId) {
+    // Mostrar loading
+    document.getElementById('detalhes_loading').style.display = 'block';
+    document.getElementById('detalhes_content').style.display = 'none';
+
+    new bootstrap.Modal(document.getElementById('modalDetalhes')).show();
+
+    // Buscar detalhes via API
+    fetch('{{ url_for("pallet_v2.tratativa_nfs.api_detalhe_solucao", solucao_id=0) }}'.replace('/0', '/' + sugestaoId))
+        .then(response => response.json())
+        .then(data => {
+            // Preencher dados
+            document.getElementById('det_nf_remessa').textContent = 'NF ' + (data.numero_nf_remessa || '-');
+            document.getElementById('det_nf_remessa_id').textContent = 'ID: ' + data.nf_remessa_id;
+            document.getElementById('det_tipo').textContent = data.tipo === 'DEVOLUCAO' ? 'Devolução' : 'Retorno';
+            document.getElementById('det_vinculacao').textContent = 'Vinculação: ' + (data.vinculacao || '-');
+            document.getElementById('det_nf_solucao').textContent = 'NF ' + (data.numero_nf_solucao || '-');
+            document.getElementById('det_data_nf').textContent = 'Data: ' + (data.data_nf_solucao ? formatarData(data.data_nf_solucao) : '-');
+            document.getElementById('det_quantidade').textContent = data.quantidade || 0;
+            document.getElementById('det_score').textContent = data.score_match || 0;
+            document.getElementById('det_emitente_nome').textContent = data.nome_emitente || '-';
+            document.getElementById('det_emitente_cnpj').textContent = data.cnpj_emitente || '-';
+
+            // Chave NFe
+            const chaveContainer = document.getElementById('det_chave_container');
+            if (data.chave_nfe_solucao) {
+                chaveContainer.style.display = 'block';
+                document.getElementById('det_chave_nfe').textContent = data.chave_nfe_solucao;
+            } else {
+                chaveContainer.style.display = 'none';
+            }
+
+            // Observação
+            const obsContainer = document.getElementById('det_observacao_container');
+            if (data.observacao) {
+                obsContainer.style.display = 'block';
+                document.getElementById('det_observacao').textContent = data.observacao;
+            } else {
+                obsContainer.style.display = 'none';
+            }
+
+            // Auditoria
+            document.getElementById('det_criado_em').textContent = data.criado_em ? formatarDataHora(data.criado_em) : '-';
+            document.getElementById('det_criado_por').textContent = data.criado_por || 'SISTEMA';
+
+            // Mostrar conteúdo
+            document.getElementById('detalhes_loading').style.display = 'none';
+            document.getElementById('detalhes_content').style.display = 'block';
+        })
+        .catch(error => {
+            console.error('Erro ao carregar detalhes:', error);
+            document.getElementById('detalhes_loading').innerHTML = '<div class="alert alert-danger">Erro ao carregar detalhes.</div>';
+        });
+}
+
+function formatarData(isoString) {
+    if (!isoString) return '-';
+    const date = new Date(isoString);
+    return date.toLocaleDateString('pt-BR');
+}
+
+function formatarDataHora(isoString) {
+    if (!isoString) return '-';
+    const date = new Date(isoString);
+    return date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+</script>
+{% endblock %}

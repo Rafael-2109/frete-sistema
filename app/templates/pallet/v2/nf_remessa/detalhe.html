@@ -1,0 +1,978 @@
+{% extends 'base.html' %}
+{% block title %}NF Remessa {{ nf.numero_nf }} - Gestao de Pallets{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Pallet NF Detalhe v2 - Estilos */
+.pallet-detalhe {
+    padding: 1.5rem;
+}
+
+.pallet-detalhe__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.pallet-detalhe__title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.pallet-detalhe__subtitle {
+    font-size: 0.875rem;
+    color: var(--text-muted, #6c757d);
+    margin-top: 0.25rem;
+}
+
+.pallet-detalhe__actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+/* Breadcrumb */
+.pallet-breadcrumb {
+    margin-bottom: 1rem;
+}
+
+.pallet-breadcrumb a {
+    color: var(--bs-primary);
+    text-decoration: none;
+}
+
+.pallet-breadcrumb a:hover {
+    text-decoration: underline;
+}
+
+/* Cards principais */
+.pallet-info-card {
+    background: var(--bg-light, #1a1a2e);
+    border-radius: 12px;
+    border: 1px solid var(--border, rgba(255,255,255,0.1));
+    margin-bottom: 1.5rem;
+}
+
+.pallet-info-card__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border, rgba(255,255,255,0.1));
+}
+
+.pallet-info-card__title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.pallet-info-card__body {
+    padding: 1.25rem;
+}
+
+/* Info grid */
+.pallet-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.pallet-info-item {
+    padding: 0.75rem;
+    background: var(--bg, #0f0f1a);
+    border-radius: 8px;
+    border: 1px solid var(--border, rgba(255,255,255,0.05));
+}
+
+.pallet-info-item__label {
+    font-size: 0.75rem;
+    color: var(--text-muted, #6c757d);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.25rem;
+}
+
+.pallet-info-item__value {
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+.pallet-info-item__value--large {
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+.pallet-info-item--highlight {
+    border-left: 3px solid var(--bs-primary);
+}
+
+/* Status badge grande */
+.pallet-status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    border-radius: 25px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.pallet-status-badge--ativa {
+    background: rgba(var(--bs-primary-rgb), 0.15);
+    color: var(--bs-primary);
+}
+
+.pallet-status-badge--resolvida {
+    background: rgba(var(--bs-success-rgb), 0.15);
+    color: var(--bs-success);
+}
+
+.pallet-status-badge--cancelada {
+    background: rgba(var(--bs-secondary-rgb), 0.15);
+    color: var(--bs-secondary);
+}
+
+/* Dominios lado a lado */
+.pallet-dominios {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.pallet-dominio-card {
+    background: var(--bg-light, #1a1a2e);
+    border-radius: 12px;
+    border: 1px solid var(--border, rgba(255,255,255,0.1));
+    overflow: hidden;
+}
+
+.pallet-dominio-card__header {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border, rgba(255,255,255,0.1));
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.pallet-dominio-card__header--a {
+    background: linear-gradient(135deg, rgba(var(--bs-warning-rgb), 0.1), transparent);
+}
+
+.pallet-dominio-card__header--b {
+    background: linear-gradient(135deg, rgba(var(--bs-info-rgb), 0.1), transparent);
+}
+
+.pallet-dominio-card__icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+}
+
+.pallet-dominio-card__icon--a {
+    background: rgba(var(--bs-warning-rgb), 0.2);
+    color: var(--bs-warning);
+}
+
+.pallet-dominio-card__icon--b {
+    background: rgba(var(--bs-info-rgb), 0.2);
+    color: var(--bs-info);
+}
+
+.pallet-dominio-card__title {
+    font-weight: 600;
+    margin: 0;
+}
+
+.pallet-dominio-card__subtitle {
+    font-size: 0.8rem;
+    color: var(--text-muted, #6c757d);
+    margin: 0;
+}
+
+.pallet-dominio-card__body {
+    padding: 1.25rem;
+}
+
+/* Progress bar */
+.pallet-progress {
+    background: var(--bg, #0f0f1a);
+    border-radius: 10px;
+    height: 10px;
+    overflow: hidden;
+    margin: 0.75rem 0;
+}
+
+.pallet-progress__bar {
+    height: 100%;
+    border-radius: 10px;
+    transition: width 0.3s ease;
+}
+
+.pallet-progress__bar--success {
+    background: var(--bs-success);
+}
+
+.pallet-progress__bar--warning {
+    background: var(--bs-warning);
+}
+
+.pallet-progress__bar--primary {
+    background: var(--bs-primary);
+}
+
+/* Stats inline */
+.pallet-stats-inline {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.pallet-stat-inline {
+    text-align: center;
+}
+
+.pallet-stat-inline__value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.pallet-stat-inline__label {
+    font-size: 0.75rem;
+    color: var(--text-muted, #6c757d);
+}
+
+/* Tabelas */
+.pallet-table {
+    margin: 0;
+}
+
+.pallet-table thead th {
+    background: var(--bg, #0f0f1a);
+    border-bottom: 2px solid var(--border, rgba(255,255,255,0.15));
+    font-weight: 600;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted, #6c757d);
+    padding: 0.75rem 1rem;
+}
+
+.pallet-table tbody td {
+    padding: 0.75rem 1rem;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--border, rgba(255,255,255,0.05));
+}
+
+.pallet-table tbody tr:hover {
+    background: rgba(var(--bs-primary-rgb), 0.05);
+}
+
+/* Status badges pequenos */
+.pallet-status {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.pallet-status--pendente { background: rgba(var(--bs-warning-rgb), 0.15); color: var(--bs-warning); }
+.pallet-status--parcial { background: rgba(var(--bs-info-rgb), 0.15); color: var(--bs-info); }
+.pallet-status--resolvido { background: rgba(var(--bs-success-rgb), 0.15); color: var(--bs-success); }
+.pallet-status--confirmada { background: rgba(var(--bs-success-rgb), 0.15); color: var(--bs-success); }
+.pallet-status--aguardando { background: rgba(var(--bs-warning-rgb), 0.15); color: var(--bs-warning); }
+.pallet-status--rejeitada { background: rgba(var(--bs-danger-rgb), 0.15); color: var(--bs-danger); }
+
+/* Tipo badges */
+.pallet-tipo {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+.pallet-tipo--baixa { background: rgba(var(--bs-danger-rgb), 0.15); color: var(--bs-danger); }
+.pallet-tipo--venda { background: rgba(var(--bs-success-rgb), 0.15); color: var(--bs-success); }
+.pallet-tipo--recebimento { background: rgba(var(--bs-primary-rgb), 0.15); color: var(--bs-primary); }
+.pallet-tipo--substituicao { background: rgba(var(--bs-info-rgb), 0.15); color: var(--bs-info); }
+.pallet-tipo--devolucao { background: rgba(var(--bs-success-rgb), 0.15); color: var(--bs-success); }
+.pallet-tipo--retorno { background: rgba(var(--bs-info-rgb), 0.15); color: var(--bs-info); }
+.pallet-tipo--cancelamento { background: rgba(var(--bs-secondary-rgb), 0.15); color: var(--bs-secondary); }
+
+/* Vinculacao badges */
+.pallet-vinculacao--automatico { color: var(--bs-success); }
+.pallet-vinculacao--manual { color: var(--bs-primary); }
+.pallet-vinculacao--sugestao { color: var(--bs-warning); }
+
+/* Empty state */
+.pallet-empty-state {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: var(--text-muted, #6c757d);
+}
+
+.pallet-empty-state__icon {
+    font-size: 2.5rem;
+    opacity: 0.3;
+    margin-bottom: 0.75rem;
+}
+
+/* Alerta de cancelamento */
+.pallet-alert-cancelamento {
+    background: rgba(var(--bs-danger-rgb), 0.1);
+    border: 1px solid rgba(var(--bs-danger-rgb), 0.3);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+}
+
+.pallet-alert-cancelamento__header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    color: var(--bs-danger);
+    margin-bottom: 0.5rem;
+}
+
+/* Light mode */
+[data-bs-theme="light"] .pallet-detalhe,
+[data-bs-theme="light"] .pallet-info-card,
+[data-bs-theme="light"] .pallet-dominio-card {
+    background: #fff;
+}
+
+[data-bs-theme="light"] .pallet-info-item,
+[data-bs-theme="light"] .pallet-progress {
+    background: #f8f9fa;
+}
+
+[data-bs-theme="light"] .pallet-table thead th {
+    background: #f8f9fa;
+}
+
+/* Timeline */
+.pallet-timeline {
+    position: relative;
+    padding-left: 2rem;
+}
+
+.pallet-timeline::before {
+    content: '';
+    position: absolute;
+    left: 0.5rem;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--border, rgba(255,255,255,0.1));
+}
+
+.pallet-timeline__item {
+    position: relative;
+    padding-bottom: 1.5rem;
+}
+
+.pallet-timeline__item:last-child {
+    padding-bottom: 0;
+}
+
+.pallet-timeline__dot {
+    position: absolute;
+    left: -1.75rem;
+    top: 0.25rem;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--bs-primary);
+    border: 2px solid var(--bg-light, #1a1a2e);
+}
+
+.pallet-timeline__dot--success { background: var(--bs-success); }
+.pallet-timeline__dot--warning { background: var(--bs-warning); }
+.pallet-timeline__dot--danger { background: var(--bs-danger); }
+.pallet-timeline__dot--info { background: var(--bs-info); }
+
+.pallet-timeline__content {
+    background: var(--bg, #0f0f1a);
+    border-radius: 8px;
+    padding: 1rem;
+    border: 1px solid var(--border, rgba(255,255,255,0.05));
+}
+
+.pallet-timeline__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 0.5rem;
+}
+
+.pallet-timeline__title {
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.pallet-timeline__date {
+    font-size: 0.75rem;
+    color: var(--text-muted, #6c757d);
+}
+
+.pallet-timeline__body {
+    font-size: 0.875rem;
+    color: var(--text-muted, #6c757d);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .pallet-dominios {
+        grid-template-columns: 1fr;
+    }
+
+    .pallet-detalhe__header {
+        flex-direction: column;
+    }
+
+    .pallet-info-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="pallet-detalhe">
+    <!-- Breadcrumb -->
+    <nav class="pallet-breadcrumb" aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0">
+            <li class="breadcrumb-item"><a href="{{ url_for('pallet_v2.dashboard.index') }}">Gestao de Pallets</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('pallet_v2.nf_remessa.listar') }}">NFs de Remessa</a></li>
+            <li class="breadcrumb-item active">{{ nf.numero_nf }}</li>
+        </ol>
+    </nav>
+
+    <!-- Header -->
+    <div class="pallet-detalhe__header">
+        <div>
+            <h1 class="pallet-detalhe__title">
+                <i class="fas fa-file-invoice text-primary"></i>
+                NF de Remessa {{ nf.numero_nf }}{% if nf.serie %}/{{ nf.serie }}{% endif %}
+            </h1>
+            <p class="pallet-detalhe__subtitle">
+                Emitida em {{ nf.data_emissao.strftime('%d/%m/%Y') if nf.data_emissao else '-' }}
+                {% if nf.empresa %}| Empresa: {{ nf.empresa }}{% endif %}
+            </p>
+        </div>
+        <div class="pallet-detalhe__actions">
+            <span class="pallet-status-badge pallet-status-badge--{{ nf.status|lower }}">
+                <i class="fas fa-circle me-2" style="font-size: 0.5rem;"></i>
+                {{ nf.status }}
+            </span>
+            {% if nf.status == 'ATIVA' %}
+            <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modalCancelar">
+                <i class="fas fa-ban me-1"></i> Cancelar NF
+            </button>
+            {% endif %}
+            <a href="{{ url_for('pallet_v2.nf_remessa.listar') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-1"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    <!-- Alerta de Cancelamento (se cancelada) -->
+    {% if nf.cancelada %}
+    <div class="pallet-alert-cancelamento">
+        <div class="pallet-alert-cancelamento__header">
+            <i class="fas fa-ban"></i>
+            NF Cancelada
+        </div>
+        <p class="mb-1"><strong>Motivo:</strong> {{ nf.motivo_cancelamento or 'Nao informado' }}</p>
+        <small class="text-muted">
+            Cancelada em {{ nf.cancelada_em.strftime('%d/%m/%Y as %H:%M') if nf.cancelada_em else '-' }}
+            por {{ nf.cancelada_por or '-' }}
+        </small>
+    </div>
+    {% endif %}
+
+    <!-- Dados da NF -->
+    <div class="pallet-info-card">
+        <div class="pallet-info-card__header">
+            <h3 class="pallet-info-card__title">
+                <i class="fas fa-info-circle text-primary"></i>
+                Dados da NF de Remessa
+            </h3>
+        </div>
+        <div class="pallet-info-card__body">
+            <div class="pallet-info-grid">
+                <div class="pallet-info-item pallet-info-item--highlight">
+                    <div class="pallet-info-item__label">Numero NF</div>
+                    <div class="pallet-info-item__value pallet-info-item__value--large">
+                        {{ nf.numero_nf }}{% if nf.serie %}<small class="text-muted">/{{ nf.serie }}</small>{% endif %}
+                    </div>
+                </div>
+                <div class="pallet-info-item">
+                    <div class="pallet-info-item__label">Data Emissao</div>
+                    <div class="pallet-info-item__value">
+                        {{ nf.data_emissao.strftime('%d/%m/%Y') if nf.data_emissao else '-' }}
+                    </div>
+                </div>
+                <div class="pallet-info-item">
+                    <div class="pallet-info-item__label">Empresa</div>
+                    <div class="pallet-info-item__value">
+                        {% if nf.empresa == 'CD' %}Centro de Distribuicao
+                        {% elif nf.empresa == 'FB' %}Fabrica
+                        {% elif nf.empresa == 'SC' %}Santa Catarina
+                        {% else %}{{ nf.empresa }}{% endif %}
+                    </div>
+                </div>
+                <div class="pallet-info-item pallet-info-item--highlight">
+                    <div class="pallet-info-item__label">Quantidade</div>
+                    <div class="pallet-info-item__value pallet-info-item__value--large">
+                        {{ nf.quantidade }} <small class="text-muted">pallets</small>
+                    </div>
+                </div>
+                <div class="pallet-info-item">
+                    <div class="pallet-info-item__label">Tipo Destinatario</div>
+                    <div class="pallet-info-item__value">
+                        <span class="badge bg-{{ 'info' if nf.tipo_destinatario == 'TRANSPORTADORA' else 'secondary' }}">
+                            {{ nf.tipo_destinatario }}
+                        </span>
+                    </div>
+                </div>
+                <div class="pallet-info-item">
+                    <div class="pallet-info-item__label">Destinatario</div>
+                    <div class="pallet-info-item__value">
+                        {{ nf.nome_destinatario or nf.cnpj_destinatario or '-' }}
+                    </div>
+                </div>
+                {% if nf.cnpj_destinatario %}
+                <div class="pallet-info-item">
+                    <div class="pallet-info-item__label">CNPJ Destinatario</div>
+                    <div class="pallet-info-item__value">{{ nf.cnpj_destinatario }}</div>
+                </div>
+                {% endif %}
+                {% if nf.cnpj_transportadora %}
+                <div class="pallet-info-item">
+                    <div class="pallet-info-item__label">Transportadora</div>
+                    <div class="pallet-info-item__value">
+                        {{ nf.nome_transportadora or nf.cnpj_transportadora }}
+                    </div>
+                </div>
+                {% endif %}
+                <div class="pallet-info-item">
+                    <div class="pallet-info-item__label">Valor Unitario</div>
+                    <div class="pallet-info-item__value">
+                        R$ {{ nf.valor_unitario|numero_br(2) if nf.valor_unitario else '-' }}
+                    </div>
+                </div>
+                <div class="pallet-info-item">
+                    <div class="pallet-info-item__label">Valor Total</div>
+                    <div class="pallet-info-item__value">
+                        R$ {{ nf.valor_total|numero_br(2) if nf.valor_total else '-' }}
+                    </div>
+                </div>
+                {% if nf.chave_nfe %}
+                <div class="pallet-info-item" style="grid-column: span 2;">
+                    <div class="pallet-info-item__label">Chave NF-e</div>
+                    <div class="pallet-info-item__value" style="font-size: 0.8rem; word-break: break-all;">
+                        {{ nf.chave_nfe }}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Dominios lado a lado -->
+    <div class="pallet-dominios">
+        <!-- Dominio A: Controle de Pallets (Creditos) -->
+        <div class="pallet-dominio-card">
+            <div class="pallet-dominio-card__header pallet-dominio-card__header--a">
+                <div class="pallet-dominio-card__icon pallet-dominio-card__icon--a">
+                    <i class="fas fa-coins"></i>
+                </div>
+                <div>
+                    <h4 class="pallet-dominio-card__title">Controle de Pallets</h4>
+                    <p class="pallet-dominio-card__subtitle">Dominio A - Creditos e Solucoes</p>
+                </div>
+            </div>
+            <div class="pallet-dominio-card__body">
+                {% if creditos %}
+                {% set total_original = creditos|map(attribute='qtd_original')|sum %}
+                {% set total_saldo = creditos|map(attribute='qtd_saldo')|sum %}
+                {% set total_resolvido = total_original - total_saldo %}
+                {% set percentual = ((total_resolvido / total_original) * 100) if total_original > 0 else 0 %}
+
+                <!-- Stats -->
+                <div class="pallet-stats-inline mb-3">
+                    <div class="pallet-stat-inline">
+                        <div class="pallet-stat-inline__value text-warning">{{ total_original }}</div>
+                        <div class="pallet-stat-inline__label">Original</div>
+                    </div>
+                    <div class="pallet-stat-inline">
+                        <div class="pallet-stat-inline__value text-success">{{ total_resolvido }}</div>
+                        <div class="pallet-stat-inline__label">Resolvido</div>
+                    </div>
+                    <div class="pallet-stat-inline">
+                        <div class="pallet-stat-inline__value text-danger">{{ total_saldo }}</div>
+                        <div class="pallet-stat-inline__label">Saldo</div>
+                    </div>
+                </div>
+
+                <!-- Progress -->
+                <div class="pallet-progress">
+                    <div class="pallet-progress__bar pallet-progress__bar--success"
+                         style="width: {{ percentual|round(0)|int }}%"></div>
+                </div>
+                <div class="text-center mb-3">
+                    <small class="text-muted">{{ percentual|round(1) }}% resolvido</small>
+                </div>
+
+                <!-- Lista de Creditos -->
+                <div class="table-responsive">
+                    <table class="table pallet-table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Responsavel</th>
+                                <th class="text-center">Qtd</th>
+                                <th class="text-center">Saldo</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for credito in creditos %}
+                            <tr>
+                                <td>
+                                    <span class="badge bg-{{ 'info' if credito.tipo_responsavel == 'TRANSPORTADORA' else 'secondary' }} me-1" style="font-size: 0.65rem;">
+                                        {{ credito.tipo_responsavel[:4] }}
+                                    </span>
+                                    <span title="{{ credito.cnpj_responsavel }}">
+                                        {{ credito.nome_responsavel or credito.cnpj_responsavel or '-' }}
+                                    </span>
+                                </td>
+                                <td class="text-center">{{ credito.qtd_original }}</td>
+                                <td class="text-center fw-bold">{{ credito.qtd_saldo }}</td>
+                                <td>
+                                    <span class="pallet-status pallet-status--{{ credito.status|lower }}">
+                                        {{ credito.status }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Acoes -->
+                <div class="mt-3 text-center">
+                    <a href="{{ url_for('pallet_v2.controle_pallets.listar_solucoes', cnpj=nf.cnpj_destinatario) }}"
+                       class="btn btn-sm btn-outline-warning">
+                        <i class="fas fa-tasks me-1"></i> Gerenciar Creditos
+                    </a>
+                </div>
+                {% else %}
+                <div class="pallet-empty-state">
+                    <div class="pallet-empty-state__icon">
+                        <i class="fas fa-coins"></i>
+                    </div>
+                    <p>Nenhum credito vinculado</p>
+                    <small class="text-muted">Creditos sao criados automaticamente ao importar NF do Odoo</small>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Dominio B: Tratativa de NFs (Solucoes Documentais) -->
+        <div class="pallet-dominio-card">
+            <div class="pallet-dominio-card__header pallet-dominio-card__header--b">
+                <div class="pallet-dominio-card__icon pallet-dominio-card__icon--b">
+                    <i class="fas fa-link"></i>
+                </div>
+                <div>
+                    <h4 class="pallet-dominio-card__title">Tratativa de NFs</h4>
+                    <p class="pallet-dominio-card__subtitle">Dominio B - Vinculacoes Documentais</p>
+                </div>
+            </div>
+            <div class="pallet-dominio-card__body">
+                {% set qtd_original = nf.quantidade %}
+                {% set qtd_resolvida = nf.qtd_resolvida or 0 %}
+                {% set qtd_pendente = qtd_original - qtd_resolvida %}
+                {% set percentual_nf = ((qtd_resolvida / qtd_original) * 100) if qtd_original > 0 else 0 %}
+
+                <!-- Stats -->
+                <div class="pallet-stats-inline mb-3">
+                    <div class="pallet-stat-inline">
+                        <div class="pallet-stat-inline__value text-info">{{ qtd_original }}</div>
+                        <div class="pallet-stat-inline__label">Original</div>
+                    </div>
+                    <div class="pallet-stat-inline">
+                        <div class="pallet-stat-inline__value text-success">{{ qtd_resolvida }}</div>
+                        <div class="pallet-stat-inline__label">Resolvido</div>
+                    </div>
+                    <div class="pallet-stat-inline">
+                        <div class="pallet-stat-inline__value text-danger">{{ qtd_pendente }}</div>
+                        <div class="pallet-stat-inline__label">Pendente</div>
+                    </div>
+                </div>
+
+                <!-- Progress -->
+                <div class="pallet-progress">
+                    <div class="pallet-progress__bar pallet-progress__bar--primary"
+                         style="width: {{ percentual_nf|round(0)|int }}%"></div>
+                </div>
+                <div class="text-center mb-3">
+                    <small class="text-muted">{{ percentual_nf|round(1) }}% vinculado</small>
+                </div>
+
+                {% if solucoes_nf %}
+                <!-- Lista de Solucoes NF -->
+                <div class="table-responsive">
+                    <table class="table pallet-table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Tipo</th>
+                                <th>NF</th>
+                                <th class="text-center">Qtd</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for solucao in solucoes_nf %}
+                            <tr>
+                                <td>
+                                    <span class="pallet-tipo pallet-tipo--{{ solucao.tipo|lower }}">
+                                        {{ solucao.tipo_display }}
+                                    </span>
+                                </td>
+                                <td>{{ solucao.numero_nf_solucao or '-' }}</td>
+                                <td class="text-center fw-bold">{{ solucao.quantidade }}</td>
+                                <td>
+                                    <span class="pallet-status pallet-status--{{ solucao.status_display|lower }}">
+                                        {{ solucao.status_display }}
+                                    </span>
+                                    <small class="pallet-vinculacao--{{ solucao.vinculacao|lower }} ms-1">
+                                        ({{ solucao.vinculacao_display }})
+                                    </small>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="pallet-empty-state">
+                    <div class="pallet-empty-state__icon">
+                        <i class="fas fa-link"></i>
+                    </div>
+                    <p>Nenhuma solucao documental</p>
+                    <small class="text-muted">Vincule devolucoes ou retornos a esta NF</small>
+                </div>
+                {% endif %}
+
+                <!-- Acoes -->
+                {% if nf.status == 'ATIVA' %}
+                <div class="mt-3 text-center">
+                    <a href="{{ url_for('pallet_v2.tratativa_nfs.direcionamento') }}"
+                       class="btn btn-sm btn-outline-info">
+                        <i class="fas fa-link me-1"></i> Vincular NF
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Historico de Solucoes dos Creditos -->
+    {% if creditos %}
+    <div class="pallet-info-card">
+        <div class="pallet-info-card__header">
+            <h3 class="pallet-info-card__title">
+                <i class="fas fa-history text-warning"></i>
+                Historico de Solucoes (Dominio A)
+            </h3>
+        </div>
+        <div class="pallet-info-card__body">
+            {% set all_solucoes = [] %}
+            {% for credito in creditos %}
+                {% for solucao in credito.solucoes.filter_by(ativo=True).order_by(None).all() %}
+                    {% do all_solucoes.append(solucao) %}
+                {% endfor %}
+            {% endfor %}
+
+            {% if all_solucoes %}
+            <div class="pallet-timeline">
+                {% for solucao in all_solucoes|sort(attribute='criado_em', reverse=true) %}
+                <div class="pallet-timeline__item">
+                    <div class="pallet-timeline__dot
+                        {% if solucao.tipo == 'BAIXA' %}pallet-timeline__dot--danger
+                        {% elif solucao.tipo == 'VENDA' %}pallet-timeline__dot--success
+                        {% elif solucao.tipo == 'RECEBIMENTO' %}pallet-timeline__dot--primary
+                        {% elif solucao.tipo == 'SUBSTITUICAO' %}pallet-timeline__dot--info
+                        {% endif %}">
+                    </div>
+                    <div class="pallet-timeline__content">
+                        <div class="pallet-timeline__header">
+                            <div>
+                                <span class="pallet-tipo pallet-tipo--{{ solucao.tipo|lower }}">
+                                    {{ solucao.tipo_display }}
+                                </span>
+                                <span class="pallet-timeline__title ms-2">{{ solucao.quantidade }} pallets</span>
+                            </div>
+                            <span class="pallet-timeline__date">
+                                {{ solucao.criado_em.strftime('%d/%m/%Y %H:%M') if solucao.criado_em else '-' }}
+                            </span>
+                        </div>
+                        <div class="pallet-timeline__body">
+                            {% if solucao.tipo == 'BAIXA' %}
+                                Motivo: {{ solucao.motivo_baixa or '-' }}
+                            {% elif solucao.tipo == 'VENDA' %}
+                                NF Venda: {{ solucao.nf_venda or '-' }} |
+                                Comprador: {{ solucao.nome_comprador or solucao.cnpj_comprador or '-' }}
+                            {% elif solucao.tipo == 'RECEBIMENTO' %}
+                                Local: {{ solucao.local_recebimento or '-' }} |
+                                Recebido de: {{ solucao.recebido_de or '-' }}
+                            {% elif solucao.tipo == 'SUBSTITUICAO' %}
+                                Motivo: {{ solucao.motivo_substituicao or '-' }}
+                                {% if solucao.nf_destino %}| NF Destino: {{ solucao.nf_destino }}{% endif %}
+                            {% endif %}
+                            <br>
+                            <small class="text-muted">Registrado por {{ solucao.criado_por or '-' }}</small>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="pallet-empty-state">
+                <div class="pallet-empty-state__icon">
+                    <i class="fas fa-history"></i>
+                </div>
+                <p>Nenhuma solucao registrada</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Informacoes de Auditoria -->
+    <div class="pallet-info-card">
+        <div class="pallet-info-card__header">
+            <h3 class="pallet-info-card__title">
+                <i class="fas fa-clipboard-check text-secondary"></i>
+                Auditoria
+            </h3>
+        </div>
+        <div class="pallet-info-card__body">
+            <div class="row">
+                <div class="col-md-6">
+                    <small class="text-muted">Criado em:</small>
+                    <p class="mb-2">{{ nf.criado_em.strftime('%d/%m/%Y as %H:%M') if nf.criado_em else '-' }} por {{ nf.criado_por or '-' }}</p>
+                </div>
+                <div class="col-md-6">
+                    <small class="text-muted">Ultima atualizacao:</small>
+                    <p class="mb-2">{{ nf.atualizado_em.strftime('%d/%m/%Y as %H:%M') if nf.atualizado_em else '-' }} por {{ nf.atualizado_por or '-' }}</p>
+                </div>
+                {% if nf.odoo_account_move_id %}
+                <div class="col-md-6">
+                    <small class="text-muted">Odoo Account Move ID:</small>
+                    <p class="mb-2">{{ nf.odoo_account_move_id }}</p>
+                </div>
+                {% endif %}
+                {% if nf.odoo_picking_id %}
+                <div class="col-md-6">
+                    <small class="text-muted">Odoo Picking ID:</small>
+                    <p class="mb-2">{{ nf.odoo_picking_id }}</p>
+                </div>
+                {% endif %}
+                {% if nf.embarque_id %}
+                <div class="col-md-6">
+                    <small class="text-muted">Embarque:</small>
+                    <p class="mb-2">#{{ nf.embarque_id }}</p>
+                </div>
+                {% endif %}
+                {% if nf.movimentacao_estoque_id %}
+                <div class="col-md-6">
+                    <small class="text-muted">Movimentacao Estoque (legado):</small>
+                    <p class="mb-2">#{{ nf.movimentacao_estoque_id }}</p>
+                </div>
+                {% endif %}
+            </div>
+            {% if nf.observacao %}
+            <div class="mt-3">
+                <small class="text-muted">Observacao:</small>
+                <p class="mb-0">{{ nf.observacao }}</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Cancelamento -->
+{% if nf.status == 'ATIVA' %}
+<div class="modal fade" id="modalCancelar" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="fas fa-ban me-2"></i>Cancelar NF de Remessa</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="{{ url_for('pallet_v2.nf_remessa.cancelar', nf_id=nf.id) }}" method="POST">
+                <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Atencao!</strong> Esta acao nao pode ser desfeita.
+                        A NF sera marcada como cancelada e mantida para auditoria.
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">NF a ser cancelada</label>
+                        <input type="text" class="form-control" disabled
+                               value="{{ nf.numero_nf }}{% if nf.serie %}/{{ nf.serie }}{% endif %} - {{ nf.quantidade }} pallets">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Motivo do Cancelamento *</label>
+                        <textarea name="motivo" class="form-control" rows="3" required
+                                  placeholder="Descreva o motivo do cancelamento..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Voltar</button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-ban me-1"></i> Confirmar Cancelamento
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Nenhum JS adicional necessario no momento
+// Funcionalidades de modal ja sao tratadas pelo Bootstrap
+</script>
+{% endblock %}

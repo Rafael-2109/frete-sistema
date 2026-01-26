@@ -256,12 +256,20 @@ def historico_solucoes():
         PalletSolucao.ativo == True
     ).group_by(PalletSolucao.tipo).all()
 
-    stats_dict = {}
+    # Inicializar com todos os tipos possíveis (evita UndefinedError no template)
+    stats_dict = {
+        'BAIXA': {'count': 0, 'qtd': 0},
+        'VENDA': {'count': 0, 'qtd': 0},
+        'RECEBIMENTO': {'count': 0, 'qtd': 0},
+        'SUBSTITUICAO': {'count': 0, 'qtd': 0}
+    }
+    # Popular com dados reais do banco
     for row in stats:
-        stats_dict[row.tipo] = {
-            'count': row.quantidade,
-            'qtd': int(row.qtd_total or 0)
-        }
+        if row.tipo in stats_dict:
+            stats_dict[row.tipo] = {
+                'count': row.quantidade,
+                'qtd': int(row.qtd_total or 0)
+            }
 
     return render_template(
         'pallet/v2/controle_pallets/historico.html',

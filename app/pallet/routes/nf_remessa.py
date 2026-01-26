@@ -358,3 +358,190 @@ def api_pendentes_vinculacao():
         'quantidade': nf.quantidade,
         'saldo_pendente': nf.quantidade - (nf.quantidade_resolvida or 0)
     } for nf in nfs])
+
+
+# =============================================================================
+# APIs de Sincronização com Odoo
+# =============================================================================
+
+@nf_remessa_bp.route('/api/sync/remessas', methods=['POST'])
+@login_required
+def api_sync_remessas():
+    """
+    Dispara sincronização de remessas de pallet do Odoo.
+
+    Permite sincronizar por período específico ou dias retroativos.
+
+    JSON body:
+    - data_de: Data inicial (YYYY-MM-DD) - opcional
+    - data_ate: Data final (YYYY-MM-DD) - opcional
+    - dias_retroativos: Dias para trás (default: 30) - ignorado se data_de informado
+
+    Returns:
+        JSON com resumo da sincronização:
+        - remessas: {processados, novos, ja_existentes, erros}
+        - vendas: {processados, novos, ja_existentes, erros}
+        - devolucoes: {processados, novos, baixas_realizadas, erros}
+        - recusas: {processados, novos, baixas_realizadas, erros}
+        - total_novos: soma de novos registros
+        - total_baixas: soma de baixas realizadas
+    """
+    try:
+        # Obter parâmetros do JSON body
+        data = request.get_json() or {}
+        data_de = data.get('data_de')
+        data_ate = data.get('data_ate')
+        dias_retroativos = data.get('dias_retroativos', 30)
+
+        # Validar formato das datas se informadas
+        if data_de:
+            try:
+                datetime.strptime(data_de, '%Y-%m-%d')
+            except ValueError:
+                return jsonify({
+                    'error': 'data_de deve estar no formato YYYY-MM-DD'
+                }), 400
+
+        if data_ate:
+            try:
+                datetime.strptime(data_ate, '%Y-%m-%d')
+            except ValueError:
+                return jsonify({
+                    'error': 'data_ate deve estar no formato YYYY-MM-DD'
+                }), 400
+
+        # Importar e executar sincronização
+        from app.pallet.services.sync_odoo_service import PalletSyncService
+
+        logger.info(f"API Sync: Iniciando sincronização de pallet por {current_user.nome if hasattr(current_user, 'nome') else current_user.id}")
+
+        sync_service = PalletSyncService()
+        resultado = sync_service.sincronizar_tudo(
+            dias_retroativos=dias_retroativos,
+            data_de=data_de,
+            data_ate=data_ate
+        )
+
+        logger.info(f"API Sync: Concluído - {resultado.get('total_novos', 0)} novos, {resultado.get('total_baixas', 0)} baixas")
+
+        return jsonify({
+            'success': True,
+            'mensagem': f"Sincronização concluída: {resultado.get('total_novos', 0)} novos registros, {resultado.get('total_baixas', 0)} baixas",
+            'resultado': resultado
+        })
+
+    except Exception as e:
+        logger.exception("Erro na API de sincronização de pallet")
+        return jsonify({
+            'success': False,
+            'error': f'Erro na sincronização: {str(e)}'
+        }), 500
+
+
+@nf_remessa_bp.route('/api/sync/status')
+@login_required
+def api_sync_status():
+    """
+    Retorna status da sincronização de pallets.
+
+    Calcula estatísticas a partir dos registros no banco:
+    - Última NF sincronizada (proxy para última sincronização)
+    - Totais por tipo de NF
+    - Totais por status
+
+    Returns:
+        JSON com estatísticas:
+        - ultima_nf_remessa: data da NF de remessa mais recente
+        - ultima_nf_venda: data da última venda de pallet
+        - total_nfs_remessa: total de NFs de remessa
+        - total_nfs_ativas: NFs ainda pendentes
+        - total_nfs_resolvidas: NFs já resolvidas
+        - total_creditos: total de créditos gerados
+        - total_creditos_pendentes: créditos ainda abertos
+    """
+    try:
+        from sqlalchemy import func
+
+        # Última NF de remessa sincronizada
+        ultima_remessa = db.session.query(
+            func.max(PalletNFRemessa.criado_em)
+        ).filter(PalletNFRemessa.ativo == True).scalar()
+
+        # Total de NFs de remessa
+        total_remessas = PalletNFRemessa.query.filter(
+            PalletNFRemessa.ativo == True
+        ).count()
+
+        # Totais por status
+        total_ativas = PalletNFRemessa.query.filter(
+            PalletNFRemessa.ativo == True,
+            PalletNFRemessa.status == 'ATIVA'
+        ).count()
+
+        total_resolvidas = PalletNFRemessa.query.filter(
+            PalletNFRemessa.ativo == True,
+            PalletNFRemessa.status == 'RESOLVIDA'
+        ).count()
+
+        total_canceladas = PalletNFRemessa.query.filter(
+            PalletNFRemessa.ativo == True,
+            PalletNFRemessa.status == 'CANCELADA'
+        ).count()
+
+        # Última NF de remessa por data_emissao (mais recente no Odoo)
+        ultima_data_emissao = db.session.query(
+            func.max(PalletNFRemessa.data_emissao)
+        ).filter(PalletNFRemessa.ativo == True).scalar()
+
+        # Estatísticas de créditos
+        total_creditos = PalletCredito.query.filter(
+            PalletCredito.ativo == True
+        ).count()
+
+        creditos_pendentes = PalletCredito.query.filter(
+            PalletCredito.ativo == True,
+            PalletCredito.status == 'PENDENTE'
+        ).count()
+
+        creditos_baixados = PalletCredito.query.filter(
+            PalletCredito.ativo == True,
+            PalletCredito.status == 'BAIXADO'
+        ).count()
+
+        # Quantidade total de pallets
+        quantidade_total = db.session.query(
+            func.sum(PalletNFRemessa.quantidade)
+        ).filter(PalletNFRemessa.ativo == True).scalar() or 0
+
+        quantidade_pendente = db.session.query(
+            func.sum(PalletNFRemessa.quantidade - func.coalesce(PalletNFRemessa.quantidade_resolvida, 0))
+        ).filter(
+            PalletNFRemessa.ativo == True,
+            PalletNFRemessa.status == 'ATIVA'
+        ).scalar() or 0
+
+        return jsonify({
+            'ultima_sincronizacao': ultima_remessa.isoformat() if ultima_remessa else None,
+            'ultima_nf_data_emissao': ultima_data_emissao.isoformat() if ultima_data_emissao else None,
+            'nfs_remessa': {
+                'total': total_remessas,
+                'ativas': total_ativas,
+                'resolvidas': total_resolvidas,
+                'canceladas': total_canceladas
+            },
+            'creditos': {
+                'total': total_creditos,
+                'pendentes': creditos_pendentes,
+                'baixados': creditos_baixados
+            },
+            'quantidades': {
+                'total_pallets': int(quantidade_total),
+                'pendentes': int(quantidade_pendente)
+            }
+        })
+
+    except Exception as e:
+        logger.exception("Erro ao obter status de sincronização")
+        return jsonify({
+            'error': f'Erro ao obter status: {str(e)}'
+        }), 500
