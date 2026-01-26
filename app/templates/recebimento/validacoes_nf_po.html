@@ -542,7 +542,13 @@ function validarNf(dfeId) {
 function consolidarPos(validacaoId) {
     if (!confirm('Consolidar os POs desta NF?\n\nEsta acao ira:\n- Unificar POs em 1 principal\n- Criar POs de saldo se necessario\n- Cancelar POs vazios')) return;
 
-    fetch(`/api/recebimento/consolidar-pos/${validacaoId}`, {method: 'POST'})
+    fetch(`/api/recebimento/consolidar-pos/${validacaoId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''
+        }
+    })
         .then(r => r.json())
         .then(data => {
             if (data.sucesso) {
@@ -557,7 +563,13 @@ function consolidarPos(validacaoId) {
 function reverterConsolidacao(validacaoId) {
     if (!confirm('ATENCAO: Reverter consolidacao?\n\nEsta acao pode nao ser 100% reversivel.')) return;
 
-    fetch(`/api/recebimento/reverter-consolidacao/${validacaoId}`, {method: 'POST'})
+    fetch(`/api/recebimento/reverter-consolidacao/${validacaoId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''
+        }
+    })
         .then(r => r.json())
         .then(data => {
             if (data.sucesso) {
