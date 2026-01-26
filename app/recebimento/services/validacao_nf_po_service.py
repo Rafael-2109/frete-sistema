@@ -45,6 +45,7 @@ from app.recebimento.models import (
 from app.recebimento.services.depara_service import DeparaService
 from app.odoo.utils.connection import get_odoo_connection
 from app.manufatura.models import PedidoCompras
+from app.utils.cnpj_utils import obter_nome_empresa
 
 logger = logging.getLogger(__name__)
 
@@ -1130,7 +1131,8 @@ class ValidacaoNfPoService:
         cnpj = self._limpar_cnpj(dfe_data.get('nfe_infnfe_emit_cnpj', ''))
         razao = dfe_data.get('nfe_infnfe_emit_xnome', '')
         cnpj_empresa = self._limpar_cnpj(dfe_data.get('nfe_infnfe_dest_cnpj', ''))
-        razao_empresa = dfe_data.get('nfe_infnfe_dest_xnome', '')
+        # IMPORTANTE: nfe_infnfe_dest_xnome NÃO existe no Odoo, usar mapeamento centralizado
+        razao_empresa = obter_nome_empresa(cnpj_empresa)
 
         for item in itens:
             div = DivergenciaNfPo(
@@ -1162,7 +1164,8 @@ class ValidacaoNfPoService:
         cnpj = self._limpar_cnpj(dfe_data.get('nfe_infnfe_emit_cnpj', ''))
         razao = dfe_data.get('nfe_infnfe_emit_xnome', '')
         cnpj_empresa = self._limpar_cnpj(dfe_data.get('nfe_infnfe_dest_cnpj', ''))
-        razao_empresa = dfe_data.get('nfe_infnfe_dest_xnome', '')
+        # IMPORTANTE: nfe_infnfe_dest_xnome NÃO existe no Odoo, usar mapeamento centralizado
+        razao_empresa = obter_nome_empresa(cnpj_empresa)
 
         for item in itens:
             # Criar divergência
@@ -1214,7 +1217,8 @@ class ValidacaoNfPoService:
         cnpj = self._limpar_cnpj(dfe_data.get('nfe_infnfe_emit_cnpj', ''))
         razao = dfe_data.get('nfe_infnfe_emit_xnome', '')
         cnpj_empresa = self._limpar_cnpj(dfe_data.get('nfe_infnfe_dest_cnpj', ''))
-        razao_empresa = dfe_data.get('nfe_infnfe_dest_xnome', '')
+        # IMPORTANTE: nfe_infnfe_dest_xnome NÃO existe no Odoo, usar mapeamento centralizado
+        razao_empresa = obter_nome_empresa(cnpj_empresa)
 
         for resultado in itens_falha:
             item = resultado.get('item', {})
@@ -1299,7 +1303,8 @@ class ValidacaoNfPoService:
         cnpj = self._limpar_cnpj(dfe_data.get('nfe_infnfe_emit_cnpj', ''))
         razao = dfe_data.get('nfe_infnfe_emit_xnome', '')
         cnpj_empresa = self._limpar_cnpj(dfe_data.get('nfe_infnfe_dest_cnpj', ''))
-        razao_empresa = dfe_data.get('nfe_infnfe_dest_xnome', '')
+        # IMPORTANTE: nfe_infnfe_dest_xnome NÃO existe no Odoo, usar mapeamento centralizado
+        razao_empresa = obter_nome_empresa(cnpj_empresa)
 
         for resultado in itens_falha:
             item_agrupado = resultado.get('item_agrupado', {})
@@ -1444,7 +1449,8 @@ class ValidacaoNfPoService:
         validacao.cnpj_empresa_compradora = self._limpar_cnpj(
             dfe_data.get('nfe_infnfe_dest_cnpj', '')
         )
-        validacao.razao_empresa_compradora = dfe_data.get('nfe_infnfe_dest_xnome')
+        # IMPORTANTE: nfe_infnfe_dest_xnome NÃO existe no Odoo, usar mapeamento centralizado
+        validacao.razao_empresa_compradora = obter_nome_empresa(validacao.cnpj_empresa_compradora)
         validacao.data_nf = self._parse_date(dfe_data.get('nfe_infnfe_ide_dhemi', ''))
         validacao.valor_total_nf = dfe_data.get('nfe_infnfe_total_icmstot_vnf')
 

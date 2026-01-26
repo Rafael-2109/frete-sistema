@@ -195,7 +195,8 @@ class ValidacaoFiscalService:
 
             # 3.0.1. Extrair empresa compradora (destinatario da NF)
             cnpj_empresa_compradora = normalizar_cnpj(dfe.get('nfe_infnfe_dest_cnpj', ''))
-            razao_empresa_compradora = dfe.get('nfe_infnfe_dest_xnome', '')
+            # IMPORTANTE: nfe_infnfe_dest_xnome NÃO existe no Odoo, usar mapeamento centralizado
+            razao_empresa_compradora = obter_nome_empresa(cnpj_empresa_compradora)
 
             # 3.1. Extrair dados da NF
             crt = dfe.get('nfe_infnfe_emit_crt')
@@ -253,7 +254,10 @@ class ValidacaoFiscalService:
                     }
 
             # 3.4. Resolver nome da empresa compradora (usa mapeamento centralizado)
+            # IMPORTANTE: nfe_infnfe_dest_xnome NÃO existe no Odoo, usar mapeamento centralizado
             nome_empresa = obter_nome_empresa(cnpj_empresa_compradora) or razao_empresa_compradora
+            # 3.4.1. Atualizar dados_nf com nome resolvido (corrige bug de dados_nf com razao vazia)
+            dados_nf['razao_empresa_compradora'] = nome_empresa
 
             # 4. Validar cada linha
             for linha in linhas:

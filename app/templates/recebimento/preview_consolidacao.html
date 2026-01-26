@@ -301,7 +301,8 @@ function confirmarConsolidacao() {
         headers: {
             'Content-Type': 'application/json',
             'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''
-        }
+        },
+        body: JSON.stringify({})
     })
     .then(r => r.json())
     .then(data => {
