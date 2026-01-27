@@ -200,4 +200,85 @@
     border-right: 2px solid var(--border);
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   HOVER STATES
+   Theme-adaptive row highlighting with low-specificity selectors
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Base hover transition */
+.table > tbody > tr {
+    transition: background-color 0.15s ease;
+}
+
+/* Low-specificity hover using :where() - Phase 2 pattern */
+.table > tbody > tr:where(:hover) {
+    background-color: var(--_table-hover-bg);
+}
+
+/* Theme-specific hover intensities */
+/* Dark mode: lighter overlay for visibility */
+[data-bs-theme="dark"] .table {
+    --_table-hover-bg: hsla(0 0% 100% / 0.05);
+}
+
+/* Light mode: darker overlay */
+[data-bs-theme="light"] .table {
+    --_table-hover-bg: hsla(0 0% 0% / 0.04);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   STATUS ROW COLORS
+   Contextual row highlighting that works in both dark and light modes
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.table-success {
+    --_row-bg: hsla(145 50% 35% / 0.15);
+    --_row-hover-bg: hsla(145 50% 35% / 0.28);
+    background-color: var(--_row-bg);
+}
+
+.table-success:hover {
+    background-color: var(--_row-hover-bg);
+}
+
+.table-warning {
+    --_row-bg: hsla(45 90% 50% / 0.15);
+    --_row-hover-bg: hsla(45 90% 50% / 0.28);
+    background-color: var(--_row-bg);
+}
+
+.table-warning:hover {
+    background-color: var(--_row-hover-bg);
+}
+
+.table-primary {
+    --_row-bg: hsla(215 80% 50% / 0.15);
+    --_row-hover-bg: hsla(215 80% 50% / 0.28);
+    background-color: var(--_row-bg);
+}
+
+.table-primary:hover {
+    background-color: var(--_row-hover-bg);
+}
+
+.table-danger {
+    --_row-bg: hsla(0 70% 50% / 0.15);
+    --_row-hover-bg: hsla(0 70% 50% / 0.28);
+    background-color: var(--_row-bg);
+}
+
+.table-danger:hover {
+    background-color: var(--_row-hover-bg);
+}
+
+.table-info {
+    --_row-bg: hsla(190 70% 45% / 0.15);
+    --_row-hover-bg: hsla(190 70% 45% / 0.28);
+    background-color: var(--_row-bg);
+}
+
+.table-info:hover {
+    background-color: var(--_row-hover-bg);
+}
+
 } /* End of @layer components */
