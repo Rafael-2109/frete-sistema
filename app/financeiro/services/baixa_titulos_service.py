@@ -275,6 +275,10 @@ class BaixaTitulosService:
         item.valor_titulo_odoo = titulo.get('debit', 0)
         item.saldo_antes = titulo.get('amount_residual', 0)
 
+        # Guardar rateio aplicado (bug desconto duplicado Odoo)
+        # Se houve rateio, precisamos considerar nas validações de saldo em tempo real
+        rateio_aplicado = titulo.get('_rateio_aplicado', 0)
+
         # Extrair company_id do titulo (IMPORTANTE para multi-company)
         company_id = self._extrair_id(titulo.get('company_id'))
         company_name = self._extrair_nome(titulo.get('company_id'))
@@ -331,6 +335,8 @@ class BaixaTitulosService:
             titulo_atual = self._buscar_titulo_por_id(item.titulo_odoo_id)
             if titulo_atual:
                 saldo_atual_titulo = titulo_atual.get('amount_residual', 0)
+                # Adicionar rateio do desconto duplicado ao saldo (bug Odoo)
+                saldo_atual_titulo += rateio_aplicado
                 if item.valor_excel > saldo_atual_titulo + 0.01:
                     raise ValueError(
                         f"Saldo insuficiente no titulo para PRINCIPAL. "
@@ -390,6 +396,8 @@ class BaixaTitulosService:
             titulo_atual = self._buscar_titulo_por_id(item.titulo_odoo_id)
             if titulo_atual:
                 saldo_atual_titulo = titulo_atual.get('amount_residual', 0)
+                # Adicionar rateio do desconto duplicado ao saldo (bug Odoo)
+                saldo_atual_titulo += rateio_aplicado
                 if desconto_excel > saldo_atual_titulo + 0.01:
                     raise ValueError(
                         f"Saldo insuficiente no titulo para DESCONTO. "
@@ -423,6 +431,8 @@ class BaixaTitulosService:
             titulo_atual = self._buscar_titulo_por_id(item.titulo_odoo_id)
             if titulo_atual:
                 saldo_atual_titulo = titulo_atual.get('amount_residual', 0)
+                # Adicionar rateio do desconto duplicado ao saldo (bug Odoo)
+                saldo_atual_titulo += rateio_aplicado
                 if acordo_excel > saldo_atual_titulo + 0.01:
                     raise ValueError(
                         f"Saldo insuficiente no titulo para ACORDO. "
@@ -456,6 +466,8 @@ class BaixaTitulosService:
             titulo_atual = self._buscar_titulo_por_id(item.titulo_odoo_id)
             if titulo_atual:
                 saldo_atual_titulo = titulo_atual.get('amount_residual', 0)
+                # Adicionar rateio do desconto duplicado ao saldo (bug Odoo)
+                saldo_atual_titulo += rateio_aplicado
                 if devolucao_excel > saldo_atual_titulo + 0.01:
                     raise ValueError(
                         f"Saldo insuficiente no titulo para DEVOLUCAO. "
