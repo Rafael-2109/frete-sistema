@@ -211,3 +211,24 @@ body {
 [data-theme="light"] .text-muted {
     color: hsl(0 0% 45%) !important;
 }
+
+/* Bootstrap text colors - garantir contraste no light mode */
+[data-bs-theme="light"] .text-primary,
+[data-theme="light"] .text-primary {
+    color: hsl(45 100% 28%) !important;  /* Amarelo escuro */
+}
+
+[data-bs-theme="light"] .text-success,
+[data-theme="light"] .text-success {
+    color: hsl(145 70% 28%) !important;  /* Verde escuro */
+}
+
+[data-bs-theme="light"] .text-warning,
+[data-theme="light"] .text-warning {
+    color: hsl(45 100% 30%) !important;  /* Amarelo/laranja escuro */
+}
+
+[data-bs-theme="light"] .text-info,
+[data-theme="light"] .text-info {
+    color: hsl(0 0% 35%) !important;  /* Cinza escuro */
+}
