@@ -97,6 +97,7 @@ class ValidacaoRecebimentoJob:
             'sucesso': True,
             'sync_depara': {},
             'sync_pos_vinculados': {},
+            'correcao_status': {},
             'fase1_fiscal': {},
             'fase2_nf_po': {},
             'dfes_processados': 0,
@@ -108,15 +109,19 @@ class ValidacaoRecebimentoJob:
             logger.info(f"Janela: {janela} minutos")
 
             # 1. SYNC DE-PARA (Odoo -> Sistema)
-            logger.info("[1/4] Sincronizando De-Para do Odoo...")
+            logger.info("[1/5] Sincronizando De-Para do Odoo...")
             resultado['sync_depara'] = self._sync_depara_odoo()
 
             # 2. SYNC POs VINCULADOS (DFEs sem PO -> verifica se Odoo agora tem)
-            logger.info("[2/4] Sincronizando POs vinculados do Odoo...")
+            logger.info("[2/5] Sincronizando POs vinculados do Odoo...")
             resultado['sync_pos_vinculados'] = self._sync_pos_vinculados()
 
+            # 2.5 CORRIGIR STATUS DE DFEs APROVADOS COM PO JÁ FATURADO
+            logger.info("[2.5/5] Corrigindo status de DFEs aprovados com PO faturado...")
+            resultado['correcao_status'] = self._corrigir_status_aprovados_com_po_faturado()
+
             # 3. BUSCAR DFEs PENDENTES
-            logger.info("[3/4] Buscando DFEs de compra pendentes...")
+            logger.info("[3/5] Buscando DFEs de compra pendentes...")
             dfes = self._buscar_dfes_pendentes(janela)
 
             if not dfes:
@@ -126,7 +131,7 @@ class ValidacaoRecebimentoJob:
             logger.info(f"Encontrados {len(dfes)} DFEs para processar")
 
             # 4. PROCESSAR CADA DFE (Fase 1 + Fase 2)
-            logger.info("[4/4] Processando validacoes...")
+            logger.info("[4/5] Processando validacoes...")
 
             resultado['fase1_fiscal'] = {
                 'dfes_validados': 0,
@@ -407,6 +412,94 @@ class ValidacaoRecebimentoJob:
 
         except Exception as e:
             logger.error(f"Erro no sync POs vinculados: {e}")
+            db.session.rollback()
+            return {'erro': str(e)}
+
+    def _corrigir_status_aprovados_com_po_faturado(self) -> Dict[str, Any]:
+        """
+        Corrige status de DFEs que já têm PO vinculado mas ainda estão 'aprovado'.
+
+        Quando o PO está com invoice_status='invoiced', o DFE deveria ter
+        status='finalizado_odoo', não 'aprovado'.
+
+        Este método corrige registros existentes que foram vinculados antes
+        da correção de verificação de invoice_status.
+        """
+        resultado = {
+            'dfes_verificados': 0,
+            'dfes_corrigidos': 0,
+            'erros': 0
+        }
+
+        try:
+            # Buscar DFEs com status='aprovado' que JÁ têm PO vinculado
+            validacoes_aprovadas = ValidacaoNfPoDfe.query.filter(
+                ValidacaoNfPoDfe.status == 'aprovado',
+                ValidacaoNfPoDfe.odoo_po_vinculado_id.isnot(None)
+            ).all()
+
+            if not validacoes_aprovadas:
+                logger.info("Correção Status: Nenhum DFE aprovado com PO para verificar")
+                return resultado
+
+            logger.info(
+                f"Correção Status: Verificando {len(validacoes_aprovadas)} DFEs "
+                "aprovados com PO vinculado"
+            )
+            resultado['dfes_verificados'] = len(validacoes_aprovadas)
+
+            # Coletar IDs dos POs para consulta em batch
+            po_ids = [v.odoo_po_vinculado_id for v in validacoes_aprovadas if v.odoo_po_vinculado_id]
+            po_ids = list(set(po_ids))
+
+            if not po_ids:
+                return resultado
+
+            odoo = self._get_odoo()
+
+            # Buscar invoice_status de todos os POs em batch
+            pos_odoo = odoo.search_read(
+                'purchase.order',
+                [['id', 'in', po_ids]],
+                fields=['id', 'name', 'invoice_status']
+            )
+
+            # Criar mapa de PO ID -> invoice_status
+            po_status_map = {po['id']: po.get('invoice_status') for po in pos_odoo}
+
+            logger.info(f"Correção Status: {len(po_status_map)} POs consultados no Odoo")
+
+            # Processar validações
+            for validacao in validacoes_aprovadas:
+                try:
+                    invoice_status = po_status_map.get(validacao.odoo_po_vinculado_id)
+
+                    if invoice_status == 'invoiced':
+                        validacao.status = 'finalizado_odoo'
+                        resultado['dfes_corrigidos'] += 1
+                        logger.info(
+                            f"DFE {validacao.odoo_dfe_id} (NF {validacao.numero_nf}): "
+                            f"Status corrigido para finalizado_odoo "
+                            f"(PO {validacao.odoo_po_vinculado_name} já faturado)"
+                        )
+
+                except Exception as e:
+                    logger.error(
+                        f"Erro ao corrigir status DFE {validacao.odoo_dfe_id}: {e}"
+                    )
+                    resultado['erros'] += 1
+
+            db.session.commit()
+
+            logger.info(
+                f"Correção Status: corrigidos={resultado['dfes_corrigidos']}, "
+                f"erros={resultado['erros']}"
+            )
+
+            return resultado
+
+        except Exception as e:
+            logger.error(f"Erro na correção de status: {e}")
             db.session.rollback()
             return {'erro': str(e)}
 
