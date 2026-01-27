@@ -197,7 +197,7 @@ echo ""
 echo "⚡ Usando worker_render.py otimizado para evitar importações circulares"
 exec python worker_render.py \
     --workers $WORKER_COUNT \
-    --queues atacadao,odoo_lancamento,impostos,high,default \
+    --queues atacadao,odoo_lancamento,impostos,recebimento,high,default \
     --verbose
 
 
