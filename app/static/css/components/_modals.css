@@ -1,0 +1,107 @@
+/**
+ * _modals.css - Modal Component
+ *
+ * Modal Elevation Level:
+ * Modals use the ELEVATED level in the 3-tier elevation system:
+ * - Background (page): --bg-dark (0% dark, 90% light)
+ * - Surface (cards):   --bg (5% dark, 95% light)
+ * - Elevated (modals): --bg-light (10% dark, 100% light)
+ *
+ * This creates visual hierarchy where modals appear to float above cards.
+ * Note: We use solid --bg-light instead of var(--gradient) to ensure
+ * consistent theming and predictable layering across both themes.
+ *
+ * CSS Custom Property API:
+ * --_modal-bg, --_modal-border, --_modal-shadow
+ * Override these properties for custom modal variants.
+ */
+
+@layer components {
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MODAL CONTENT - Main container (elevated background)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.modal-content {
+    /* CSS Custom Property API */
+    --_modal-bg: var(--bg-light);
+    --_modal-border: var(--border);
+    --_modal-shadow: 0 4px 8px hsla(0 0% 0% / 0.15), 0 8px 16px hsla(0 0% 0% / 0.2);
+
+    background: var(--_modal-bg);
+    border: 1px solid var(--_modal-border);
+    box-shadow: var(--_modal-shadow);
+    border-radius: var(--radius-lg);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MODAL HEADER
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.modal-header {
+    background: transparent;
+    border-bottom: 1px solid var(--_modal-border);
+    color: var(--text);
+    padding: 1rem;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MODAL TITLE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.modal-title {
+    color: var(--text);
+    font-weight: 600;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MODAL BODY
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.modal-body {
+    color: var(--text);
+    padding: 1rem;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MODAL FOOTER
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.modal-footer {
+    background: transparent;
+    border-top: 1px solid var(--_modal-border);
+    padding: 1rem;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MODAL BACKDROP
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.modal-backdrop {
+    background-color: hsla(0 0% 0% / 0.5);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CLOSE BUTTON - Theme compatibility
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.modal .btn-close {
+    filter: var(--bs-btn-close-white-filter, invert(1) grayscale(100%) brightness(200%));
+}
+
+/* Light mode: reset close button filter */
+[data-bs-theme="light"] .modal .btn-close,
+[data-theme="light"] .modal .btn-close {
+    filter: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SIZES - Bootstrap handles widths, ensure consistent elevation
+   All modal sizes use the same elevated background via custom properties.
+   .modal-sm, .modal-lg, .modal-xl inherit from .modal-content
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* No additional size styles needed - Bootstrap's .modal-dialog-* classes
+   handle width, and our .modal-content styles apply to all sizes */
+
+} /* End of @layer components */
