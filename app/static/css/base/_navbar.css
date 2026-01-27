@@ -1,0 +1,436 @@
+@layer base {
+/* ==========================================================================
+   NACOM GOYA - Navbar Design System
+   Integra com bootstrap-overrides.css
+   ========================================================================== */
+
+/* ==========================================================================
+   NAVBAR BASE
+   ========================================================================== */
+
+.nc-navbar {
+    background: linear-gradient(180deg, var(--bs-secondary-bg) 0%, rgba(var(--bs-body-bg-rgb, 10, 22, 40), 0.95) 100%);
+    border-bottom: 1px solid var(--bs-border-color);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    min-height: 56px;
+    padding: 0.5rem 0;
+    position: sticky;
+    top: 0;
+    z-index: 1030;
+    transition: all 0.3s ease;
+}
+
+/* Light mode adjustments */
+[data-theme="light"] .nc-navbar,
+[data-bs-theme="light"] .nc-navbar {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.95) 100%);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* Light mode nav-links - cor mais escura para contraste */
+[data-theme="light"] .nc-navbar .nav-link:hover,
+[data-bs-theme="light"] .nc-navbar .nav-link:hover,
+[data-theme="light"] .nc-navbar .nav-link.active,
+[data-bs-theme="light"] .nc-navbar .nav-link.active {
+    color: hsl(45 100% 28%);
+}
+
+/* Atmospheric glow behind navbar */
+.nc-navbar::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 100%;
+    background: radial-gradient(
+        ellipse 80% 200% at 50% -50%,
+        rgba(var(--bs-primary-rgb), 0.08) 0%,
+        transparent 60%
+    );
+    pointer-events: none;
+    z-index: -1;
+}
+
+/* ==========================================================================
+   NAVBAR BRAND
+   ========================================================================== */
+
+.nc-navbar .navbar-brand {
+    font-family: 'Space Grotesk', var(--bs-font-sans-serif);
+    font-weight: 600;
+    font-size: 1.1rem;
+    letter-spacing: -0.02em;
+    color: var(--bs-body-color);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+    transition: all 0.2s ease;
+}
+
+.nc-navbar .navbar-brand:hover {
+    color: var(--bs-primary);
+}
+
+.nc-navbar .navbar-brand i {
+    font-size: 1.25rem;
+    color: var(--bs-primary);
+}
+
+/* ==========================================================================
+   NAV LINKS
+   ========================================================================== */
+
+.nc-navbar .nav-link {
+    font-family: var(--bs-font-sans-serif);
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--bs-body-color);
+    padding: 0.625rem 1rem;
+    border-radius: var(--bs-border-radius);
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.nc-navbar .nav-link:hover {
+    color: var(--bs-primary);
+    background: rgba(var(--bs-primary-rgb), 0.08);
+}
+
+.nc-navbar .nav-link.active {
+    color: var(--bs-primary);
+}
+
+/* Nav link icons */
+.nc-navbar .nav-link i {
+    margin-right: 0.375rem;
+    font-size: 0.9rem;
+    opacity: 0.8;
+    transition: opacity 0.2s ease;
+}
+
+.nc-navbar .nav-link:hover i {
+    opacity: 1;
+}
+
+/* ==========================================================================
+   DROPDOWN TOGGLE
+   ========================================================================== */
+
+.nc-navbar .dropdown-toggle::after {
+    margin-left: 0.5rem;
+    vertical-align: middle;
+    opacity: 0.6;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.nc-navbar .dropdown-toggle[aria-expanded="true"]::after {
+    transform: rotate(180deg);
+    opacity: 1;
+}
+
+/* ==========================================================================
+   DROPDOWN MENU - NAVBAR SPECIFIC
+   ========================================================================== */
+
+.nc-navbar .dropdown-menu {
+    background: var(--bs-secondary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius-lg);
+    box-shadow:
+        0 10px 40px rgba(0, 0, 0, 0.25),
+        0 0 0 1px rgba(var(--bs-primary-rgb), 0.05);
+    padding: 0.5rem;
+    min-width: 220px;
+    margin-top: 0.5rem !important;
+    animation: navDropdownFadeIn 0.2s ease-out;
+    z-index: 1050;
+}
+
+@keyframes navDropdownFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* Light mode dropdown */
+[data-theme="light"] .nc-navbar .dropdown-menu,
+[data-bs-theme="light"] .nc-navbar .dropdown-menu {
+    background: #ffffff;
+    box-shadow:
+        0 10px 40px rgba(0, 0, 0, 0.12),
+        0 0 0 1px rgba(0, 0, 0, 0.05);
+}
+
+/* Light mode dropdown items - cor mais escura para contraste */
+[data-theme="light"] .nc-navbar .dropdown-item:hover,
+[data-bs-theme="light"] .nc-navbar .dropdown-item:hover {
+    color: hsl(45 100% 28%);
+}
+
+[data-theme="light"] .nc-navbar .dropdown-item:hover i,
+[data-bs-theme="light"] .nc-navbar .dropdown-item:hover i {
+    color: hsl(45 100% 28%);
+}
+
+/* ==========================================================================
+   DROPDOWN ITEMS
+   ========================================================================== */
+
+.nc-navbar .dropdown-item {
+    font-size: 0.8125rem;
+    font-weight: 450;
+    color: var(--bs-body-color);
+    padding: 0.5rem 0.875rem;
+    border-radius: var(--bs-border-radius-sm);
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.nc-navbar .dropdown-item i {
+    width: 1.125rem;
+    text-align: center;
+    font-size: 0.8rem;
+    opacity: 0.65;
+    transition: all 0.15s ease;
+}
+
+.nc-navbar .dropdown-item:hover {
+    background: rgba(var(--bs-primary-rgb), 0.1);
+    color: var(--bs-primary);
+    transform: translateX(4px);
+}
+
+.nc-navbar .dropdown-item:hover i {
+    opacity: 1;
+    color: var(--bs-primary);
+}
+
+/* Active dropdown item */
+.nc-navbar .dropdown-item.active,
+.nc-navbar .dropdown-item:active {
+    background: var(--bs-primary);
+    color: hsl(0, 0%, 10%);
+}
+
+.nc-navbar .dropdown-item.active i {
+    opacity: 1;
+    color: hsl(0, 0%, 10%);
+}
+
+/* ==========================================================================
+   DROPDOWN HEADER (Seções do menu)
+   ========================================================================== */
+
+.nc-navbar .dropdown-header {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.75px;
+    color: var(--bs-secondary-color);
+    background: transparent;
+    padding: 0.5rem 0.875rem 0.25rem;
+    margin: 0.25rem 0;
+    border-bottom: 1px solid var(--bs-border-color);
+}
+
+.nc-navbar .dropdown-header:first-child {
+    margin-top: 0;
+}
+
+/* ==========================================================================
+   DROPDOWN DIVIDER
+   ========================================================================== */
+
+.nc-navbar .dropdown-divider {
+    border-color: var(--bs-border-color);
+    margin: 0.375rem 0.5rem;
+    opacity: 0.5;
+}
+
+/* ==========================================================================
+   BADGES IN NAVBAR
+   ========================================================================== */
+
+.nc-navbar .badge {
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 0.25em 0.5em;
+    border-radius: var(--bs-border-radius-pill);
+    margin-left: 0.375rem;
+    animation: badgePulse 2s ease-in-out infinite;
+}
+
+@keyframes badgePulse {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(var(--bs-danger-rgb), 0.4);
+    }
+    50% {
+        box-shadow: 0 0 0 4px rgba(var(--bs-danger-rgb), 0);
+    }
+}
+
+/* ==========================================================================
+   THEME TOGGLE BUTTON
+   ========================================================================== */
+
+.nc-theme-toggle {
+    background: transparent;
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+    padding: 0.5rem;
+    width: 38px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--bs-body-color);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.nc-theme-toggle:hover {
+    background: rgba(var(--bs-primary-rgb), 0.1);
+    border-color: var(--bs-primary);
+    color: var(--bs-primary);
+}
+
+.nc-theme-toggle i {
+    font-size: 1rem;
+    transition: all 0.3s ease;
+}
+
+/* Sun icon (visible in dark mode) */
+.nc-theme-toggle .fa-sun {
+    position: absolute;
+    opacity: 1;
+    transform: rotate(0deg);
+}
+
+/* Moon icon (visible in light mode) */
+.nc-theme-toggle .fa-moon {
+    position: absolute;
+    opacity: 0;
+    transform: rotate(-90deg);
+}
+
+/* Light mode - show moon, hide sun */
+[data-theme="light"] .nc-theme-toggle .fa-sun,
+[data-bs-theme="light"] .nc-theme-toggle .fa-sun {
+    opacity: 0;
+    transform: rotate(90deg);
+}
+
+[data-theme="light"] .nc-theme-toggle .fa-moon,
+[data-bs-theme="light"] .nc-theme-toggle .fa-moon {
+    opacity: 1;
+    transform: rotate(0deg);
+}
+
+/* ==========================================================================
+   NAVBAR TOGGLER (Mobile)
+   ========================================================================== */
+
+.nc-navbar .navbar-toggler {
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+    padding: 0.5rem 0.75rem;
+    transition: all 0.2s ease;
+}
+
+.nc-navbar .navbar-toggler:hover {
+    background: rgba(var(--bs-primary-rgb), 0.1);
+    border-color: var(--bs-primary);
+}
+
+.nc-navbar .navbar-toggler:focus {
+    box-shadow: 0 0 0 3px rgba(var(--bs-primary-rgb), 0.25);
+}
+
+.nc-navbar .navbar-toggler-icon {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(230, 237, 243, 0.85)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+}
+
+[data-theme="light"] .nc-navbar .navbar-toggler-icon,
+[data-bs-theme="light"] .nc-navbar .navbar-toggler-icon {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(30, 41, 59, 0.85)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+}
+
+/* ==========================================================================
+   RESPONSIVE STYLES
+   ========================================================================== */
+
+@media (max-width: 991.98px) {
+    .nc-navbar .navbar-collapse {
+        background: var(--bs-secondary-bg);
+        border-radius: var(--bs-border-radius-lg);
+        padding: 1rem;
+        margin-top: 0.75rem;
+        border: 1px solid var(--bs-border-color);
+        box-shadow: var(--bs-box-shadow-lg, 0 10px 25px rgba(0,0,0,0.2));
+    }
+
+    .nc-navbar .navbar-nav {
+        gap: 0.25rem;
+    }
+
+    .nc-navbar .nav-link {
+        padding: 0.75rem 1rem;
+    }
+
+    .nc-navbar .dropdown-menu {
+        border: none;
+        box-shadow: none;
+        padding-left: 1rem;
+        margin-top: 0 !important;
+        background: transparent;
+    }
+
+    .nc-navbar .dropdown-item {
+        padding: 0.5rem 1rem;
+    }
+
+    .nc-theme-toggle {
+        margin-top: 0.75rem;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .nc-navbar .navbar-brand {
+        font-size: 1rem;
+    }
+
+    .nc-navbar .navbar-brand span {
+        display: none;
+    }
+}
+
+/* ==========================================================================
+   REDUCED MOTION
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+    .nc-navbar,
+    .nc-navbar .nav-link,
+    .nc-navbar .dropdown-item,
+    .nc-navbar .dropdown-menu,
+    .nc-theme-toggle,
+    .nc-theme-toggle i,
+    .nc-navbar .badge {
+        animation: none !important;
+        transition: none !important;
+    }
+}
+
+} /* End of @layer base */
