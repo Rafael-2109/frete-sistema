@@ -212,17 +212,17 @@
   }
   
   @keyframes pulse-red {
-    0% { 
-      background-color: #dc3545; 
-      box-shadow: 0 0 3px rgba(220, 53, 69, 0.3);
+    0% {
+      background-color: var(--bs-danger);
+      box-shadow: 0 0 3px hsla(var(--bs-danger-rgb), 0.3);
     }
-    50% { 
-      background-color: #b02a37; 
-      box-shadow: 0 0 8px rgba(220, 53, 69, 0.6);
+    50% {
+      background-color: color-mix(in srgb, var(--bs-danger) 80%, black);
+      box-shadow: 0 0 8px hsla(var(--bs-danger-rgb), 0.6);
     }
-    100% { 
-      background-color: #dc3545; 
-      box-shadow: 0 0 3px rgba(220, 53, 69, 0.3);
+    100% {
+      background-color: var(--bs-danger);
+      box-shadow: 0 0 3px hsla(var(--bs-danger-rgb), 0.3);
     }
   }
   
@@ -790,11 +790,11 @@
     <div class="row mt-4">
       <div class="col-md-6 text-center">
         <label>Assinatura:</label><br>
-        <input type="text" style="border: none; border-bottom: 1px solid #000; width: 80%;">
+        <input type="text" class="emb-signature-field" style="width: 80%;">
       </div>
       <div class="col-md-6 text-center">
         <label>Data:</label><br>
-        <input type="text" style="border: none; border-bottom: 1px solid #000; width: 50%;">
+        <input type="text" class="emb-signature-field" style="width: 50%;">
       </div>
     </div>
 

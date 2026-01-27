@@ -20,6 +20,81 @@
      EXCLUDES: imprimir_*.html (print templates keep hardcoded colors)
      ═══════════════════════════════════════════════════════════════════════════ */
 
-  /* Placeholder - styles will be added as templates are migrated */
+  /* ---------------------------------------------------------------------------
+     Signature Fields (visualizar_embarque.html)
+     Used for motorista signature and date fields
+     --------------------------------------------------------------------------- */
+  .emb-signature-field {
+    border: none;
+    border-bottom: 1px solid var(--text);
+    background: transparent;
+  }
+
+  .emb-signature-field:focus {
+    outline: none;
+    border-bottom-color: var(--primary);
+  }
+
+  /* ---------------------------------------------------------------------------
+     Embarque Detail Section
+     Card-like sections in visualizar_embarque.html
+     --------------------------------------------------------------------------- */
+  .emb-detail-section {
+    background: var(--bg-light);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md, 0.375rem);
+    padding: 1rem;
+  }
+
+  .emb-detail-label {
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+
+  .emb-detail-value {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  /* ---------------------------------------------------------------------------
+     Status Row Colors (listar_embarques.html)
+     Theme-adaptive row backgrounds for different statuses
+     --------------------------------------------------------------------------- */
+  .emb-row--embarcado {
+    background: hsla(145, 50%, 40%, 0.1);
+  }
+
+  .emb-row--pendente {
+    background: hsla(45, 90%, 50%, 0.1);
+  }
+
+  .emb-row--cancelado {
+    background: hsla(0, 70%, 50%, 0.1);
+  }
+
+  /* ---------------------------------------------------------------------------
+     List Header (listar_embarques.html)
+     Filter and header area styling
+     --------------------------------------------------------------------------- */
+  .emb-list-header {
+    background: var(--bg-light);
+    border-bottom: 1px solid var(--border);
+    padding: 1rem;
+  }
+
+  /*
+   * ═══════════════════════════════════════════════════════════════════════════
+   * PRINT TEMPLATES - INTENTIONALLY EXCLUDED
+   * ═══════════════════════════════════════════════════════════════════════════
+   *
+   * The following templates keep hardcoded light mode colors for print reliability:
+   * - imprimir_completo.html (32 hardcoded colors)
+   * - imprimir_embarque.html (26 hardcoded colors)
+   * - imprimir_separacao.html (14 hardcoded colors)
+   *
+   * These templates do NOT extend base.html and should NOT be migrated to tokens.
+   * Print output requires consistent light backgrounds for all printers.
+   */
 
 } /* End @layer modules */
