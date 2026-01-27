@@ -15,11 +15,16 @@ Referencia: "/home/rafaelnascimento/.claude/plans/plano-validacao-nf-po.md"
 """
 
 import base64
+import logging
+from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, request, Response
 from flask_login import login_required, current_user
 
+from app import db
 from app.recebimento.models import DivergenciaFiscal, CadastroPrimeiraCompra, PerfilFiscalProdutoFornecedor
+
+logger = logging.getLogger(__name__)
 from app.recebimento.services.validacao_fiscal_service import ValidacaoFiscalService
 from app.odoo.utils.connection import get_odoo_connection
 from app.utils.cnpj_utils import normalizar_cnpj, formatar_cnpj, obter_nome_empresa, EMPRESAS_CNPJ_NOME
@@ -467,8 +472,6 @@ def importar_perfil_fiscal_excel():
             }), 400
 
         # 4.1. Buscar nomes em batch (empresa, fornecedor, produto) via Odoo
-        from app.odoo.services.odoo_client import OdooClient
-
         # EMPRESAS_CNPJ_NOME importado de app.utils.cnpj_utils
 
         # Coletar CNPJs e codigos unicos para busca em batch
@@ -487,7 +490,7 @@ def importar_perfil_fiscal_excel():
         mapa_fornecedor_nome = {}
         mapa_produto_nome = {}
         try:
-            odoo = OdooClient()
+            odoo = get_odoo_connection()
 
             # Fornecedores: buscar por CNPJ formatado
             if cnpjs_fornecedores_unicos:
@@ -497,7 +500,7 @@ def importar_perfil_fiscal_excel():
                     partners = odoo.search_read(
                         'res.partner',
                         [['l10n_br_cnpj', '=', cnpj_fmt]],
-                        fields=['id', 'name'],
+                        ['id', 'name'],
                         limit=1
                     )
                     if partners:
@@ -508,7 +511,7 @@ def importar_perfil_fiscal_excel():
                 produtos = odoo.search_read(
                     'product.product',
                     [['default_code', 'in', list(cod_produtos_unicos)]],
-                    fields=['id', 'default_code', 'name']
+                    ['id', 'default_code', 'name']
                 )
                 for p in produtos:
                     dc = str(p.get('default_code', '')).strip()
@@ -519,8 +522,6 @@ def importar_perfil_fiscal_excel():
             logger.warning(f"Erro ao buscar nomes no Odoo (importacao continuara sem nomes): {e}")
 
         # 5. Processar linha por linha
-        from app import db
-
         criados = 0
         atualizados = 0
         erros = []
