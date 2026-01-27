@@ -1,0 +1,101 @@
+/**
+ * _cards.css - Card Component
+ *
+ * Cards sit at the SURFACE level of the 3-level elevation system:
+ * - Background (page): --bg-dark (0% dark, 90% light)
+ * - Surface (cards): --bg (5% dark, 95% light)
+ * - Elevated (modals): --bg-light (10% dark, 100% light)
+ *
+ * Features:
+ * - CSS custom property API for easy theming
+ * - Subtle amber glow on hover
+ * - Semantic variants with colored left border
+ * - Structure components (header, body, footer)
+ */
+
+@layer components {
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     BASE CARD
+     Uses surface-level background that adapts to theme
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .card {
+    /* CSS Custom Property API - allows easy overrides */
+    --_card-bg: var(--bg);
+    --_card-border: var(--border);
+    --_card-radius: var(--radius-lg);
+    --_card-shadow: var(--shadow);
+
+    background: var(--_card-bg);
+    border: 1px solid var(--_card-border);
+    border-radius: var(--_card-radius);
+    box-shadow: var(--_card-shadow);
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     CARD HOVER
+     Uses :where() for lower specificity - easy to override
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .card:where(:hover) {
+    border-color: var(--amber-50);
+    box-shadow: 0 0 6px 1px hsla(50 100% 55% / 0.4);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     CARD STRUCTURE
+     Header, body, and footer with proper theming
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .card-header {
+    padding: 1rem;
+    border-bottom: 1px solid var(--_card-border);
+    background: transparent;
+    color: var(--text);
+  }
+
+  .card-body {
+    padding: 1rem;
+    color: var(--text);
+  }
+
+  .card-footer {
+    padding: 1rem;
+    border-top: 1px solid var(--_card-border);
+    background: transparent;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     CARD TITLE
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .card-title {
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     SEMANTIC VARIANTS
+     Colored left border for status indication
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .card-success {
+    border-left: 3px solid var(--semantic-success);
+  }
+
+  .card-warning {
+    border-left: 3px solid var(--amber-50);
+  }
+
+  .card-danger {
+    border-left: 3px solid var(--semantic-danger);
+  }
+
+  .card-info {
+    border-left: 3px solid var(--border);
+  }
+
+} /* End @layer components */
