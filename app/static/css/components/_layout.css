@@ -1,0 +1,136 @@
+@layer components {
+/* ═══════════════════════════════════════════════════════════════════════════
+   LAYOUT - Page structure utilities and z-index scale
+
+   Provides:
+   - Content overflow protection (.nc-content)
+   - Full-height page layout (.nc-page)
+   - Z-index scale documentation
+
+   Usage:
+   - Apply .nc-content to any container that may have wide content
+   - Apply .nc-page to main content wrapper for full-height layouts
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Z-INDEX SCALE
+
+   Bootstrap defaults:
+   1055 - Modals
+   1050 - Modal backdrop
+   1045 - Offcanvas
+   1040 - Offcanvas backdrop
+   1030 - Navbar (fixed/sticky)
+   1020 - Sticky elements (not navbar)
+   1000 - Dropdown menus
+
+   Custom additions:
+   1011 - Table sticky corner cell (th:first-child in sticky-both)
+   1010 - Table sticky headers (thead th)
+   1005 - Table sticky first column (tbody td:first-child)
+
+   Rule: Never use z-index values above 1055 unless for critical overlays.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CONTENT OVERFLOW PROTECTION
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Prevents horizontal overflow while allowing scroll when needed */
+.nc-content {
+    overflow-x: auto;
+    max-width: 100%;
+}
+
+/* Strict containment - clips overflow without scroll */
+.nc-content-clip {
+    overflow-x: hidden;
+    max-width: 100%;
+}
+
+/* Word break for long text content */
+.nc-content-wrap {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    hyphens: auto;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PAGE STRUCTURE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Full-height page layout accounting for navbar */
+.nc-page {
+    min-height: calc(100vh - 56px); /* 56px = navbar height */
+    display: flex;
+    flex-direction: column;
+}
+
+/* Modern viewport units with fallback */
+@supports (min-height: 100dvh) {
+    .nc-page {
+        min-height: calc(100dvh - 56px);
+    }
+}
+
+/* Main content area that fills remaining space */
+.nc-page-content {
+    flex: 1;
+    padding: 1rem;
+}
+
+/* Sticky footer pattern */
+.nc-page-footer {
+    margin-top: auto;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CONTAINER HELPERS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Remove Bootstrap container max-width for full-width layouts */
+.nc-container-full {
+    max-width: none;
+    width: 100%;
+}
+
+/* Centered content with readable line length */
+.nc-container-readable {
+    max-width: 75ch;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RESPONSIVE ADJUSTMENTS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 767.98px) {
+    .nc-page-content {
+        padding: 0.75rem;
+    }
+
+    /* Tighter margins on mobile */
+    .nc-container-readable {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   REDUCED MOTION
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+    .nc-content,
+    .nc-page {
+        transition: none;
+    }
+}
+
+} /* End @layer components */
