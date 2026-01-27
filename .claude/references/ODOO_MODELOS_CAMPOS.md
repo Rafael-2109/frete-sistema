@@ -201,8 +201,12 @@
 | Campo | Tipo | Descricao |
 |-------|------|-----------|
 | id | int | ID |
-| name | char | Nome do lote (UNIQUE com product_id) |
+| name | char | Nome do lote (UNIQUE com product_id + company_id) |
 | product_id | many2one | → product.product |
+| company_id | many2one | → res.company (OBRIGATORIO no create) |
+| expiration_date | datetime | Data de validade (formato: '2026-06-15 00:00:00') |
+
+> **IMPORTANTE:** Para produtos com `use_expiration_date=True`, e necessario criar o stock.lot MANUALMENTE via `create()` antes de usar `lot_id` no stock.move.line. O `lot_name` NAO propaga a data de validade.
 
 ---
 
@@ -254,6 +258,8 @@
 | balance | float | Saldo (debit - credit) |
 | partner_id | many2one | → res.partner |
 | reconciled | boolean | Se esta conciliado |
+| amount_residual | float | Saldo em aberto (nao pago/reconciliado) |
+| l10n_br_cobranca_parcela | int | Numero da parcela (1, 2, 3...) |
 
 ### account.payment
 
@@ -275,6 +281,21 @@
 | name | char | Nome |
 | type | selection | sale, purchase, bank, cash, general |
 | company_id | many2one | → res.company |
+
+### account.bank.statement.line (Extrato Bancario)
+
+| Campo | Tipo | Descricao |
+|-------|------|-----------|
+| id | int | ID |
+| date | date | Data da transacao |
+| amount | float | Valor (+ credito, - debito) |
+| amount_residual | float | Saldo nao reconciliado (suporta conciliacao 1:N) |
+| payment_ref | char | Referencia (contem CNPJ, nome - usar regex) |
+| partner_id | many2one | → res.partner (pode ser False) |
+| partner_name | char | Nome do parceiro do extrato |
+| journal_id | many2one | → account.journal |
+| move_id | many2one | → account.move (lancamento contabil) |
+| is_reconciled | boolean | Se esta totalmente conciliado |
 
 ---
 
@@ -304,6 +325,7 @@
 | categ_id | many2one | Categoria |
 | tracking | selection | none, lot, serial |
 | type | selection | consu, product, service |
+| use_expiration_date | boolean | Se produto usa data de validade (impacta criacao de lotes) |
 
 ### product.supplierinfo (De-Para Fornecedor)
 

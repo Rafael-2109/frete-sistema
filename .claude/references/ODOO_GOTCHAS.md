@@ -180,3 +180,44 @@ CLOSED ──5 falhas──→ OPEN ──30s──→ HALF_OPEN ──1 sucesso
 - **HALF_OPEN:** Testa uma chamada
 
 **Arquivo:** `app/odoo/utils/circuit_breaker.py`
+
+---
+
+## Lotes com Data de Validade
+
+| Gotcha | Impacto | Solucao |
+|--------|---------|---------|
+| `lot_name` NAO propaga `expiration_date` | Lote criado sem data de validade | Criar stock.lot manualmente primeiro |
+
+### Exemplo Correto - Criar Lote com Validade
+
+```python
+# Verificar se produto usa validade
+product = odoo.read('product.product', [product_id], ['tracking', 'use_expiration_date'])
+if product[0].get('use_expiration_date'):
+    # Verificar se lote ja existe
+    lote_existente = odoo.search('stock.lot', [
+        ['name', '=', nome_lote],
+        ['product_id', '=', product_id],
+        ['company_id', '=', company_id]
+    ], limit=1)
+
+    if lote_existente:
+        # Atualizar validade se necessario
+        odoo.write('stock.lot', lote_existente, {'expiration_date': '2026-06-15 00:00:00'})
+        lot_id = lote_existente[0]
+    else:
+        # Criar lote manualmente
+        lot_id = odoo.create('stock.lot', {
+            'name': nome_lote,
+            'product_id': product_id,
+            'company_id': company_id,
+            'expiration_date': '2026-06-15 00:00:00'  # Formato datetime string
+        })
+
+    # Usar lot_id (NAO lot_name!)
+    odoo.write('stock.move.line', [line_id], {'lot_id': lot_id, 'quantity': qtd})
+else:
+    # Produto sem validade - usar lot_name normalmente
+    odoo.write('stock.move.line', [line_id], {'lot_name': nome_lote, 'quantity': qtd})
+```

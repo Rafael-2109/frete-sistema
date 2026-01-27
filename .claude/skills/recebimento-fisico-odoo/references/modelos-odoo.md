@@ -59,9 +59,11 @@ domain = [
 | `picking_id` | many2one | Picking pai | Obrigatorio |
 | `lot_id` | many2one (stock.lot) | Lote existente | Opcional |
 | `lot_name` | char | Nome do lote (cria auto ao validar) | **PRINCIPAL** |
-| `quantity` | float | Quantidade recebida | **PRINCIPAL** |
-| `reserved_uom_qty` | float | Qtd reservada | Display |
+| `quantity` | float | Quantidade reservada/recebida | **PRINCIPAL** |
+| `qty_done` | float | Quantidade realizada | **PRINCIPAL** |
 | `product_uom_id` | many2one (uom.uom) | UOM | Contexto |
+
+> **ATENCAO:** `reserved_uom_qty` NAO EXISTE nesta versao do Odoo. Usar `quantity` para quantidade reservada e `qty_done` para quantidade realizada.
 | `location_id` | many2one (stock.location) | Origem | Obrigatorio em create |
 | `location_dest_id` | many2one (stock.location) | Destino | Obrigatorio em create |
 

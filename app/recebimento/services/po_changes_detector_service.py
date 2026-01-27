@@ -74,20 +74,22 @@ class PoChangesDetectorService:
             logger.info("✓ Nenhuma PO modificada no período")
             return {'status': 'ok', 'pos_verificadas': 0, 'dfes_marcados': 0}
 
-        # 2. Extrair odoo_ids das POs (podem ser string ou int)
+        # 2. Extrair odoo_purchase_order_ids das POs (ID do header purchase.order)
+        # CORRECAO: Usar odoo_purchase_order_id (header) em vez de odoo_id (linha)
+        # para comparar com MatchAlocacao.odoo_po_id que armazena o ID do header
         po_odoo_ids: Set[int] = set()
         for po in pos_modificados:
-            if po.odoo_id:
+            if po.odoo_purchase_order_id:
                 try:
-                    po_odoo_ids.add(int(po.odoo_id))
+                    po_odoo_ids.add(int(po.odoo_purchase_order_id))
                 except (ValueError, TypeError):
                     continue
 
         if not po_odoo_ids:
-            logger.info("✓ POs modificadas não têm odoo_id válido")
+            logger.info("✓ POs modificadas não têm odoo_purchase_order_id válido")
             return {'status': 'ok', 'pos_verificadas': len(pos_modificados), 'dfes_marcados': 0}
 
-        logger.info(f"📦 Encontradas {len(po_odoo_ids)} POs modificadas com odoo_id válido")
+        logger.info(f"📦 Encontradas {len(po_odoo_ids)} POs modificadas com odoo_purchase_order_id válido")
 
         # 3. Buscar alocações que usam essas POs
         alocacoes = MatchAlocacao.query.filter(

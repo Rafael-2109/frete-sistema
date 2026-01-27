@@ -886,7 +886,10 @@ class ValidacaoNfPoService:
 
                 # Atualizar dados do header (pega do primeiro registro)
                 if pos_agrupados[num_pedido]['id'] is None:
-                    pos_agrupados[num_pedido]['id'] = po.odoo_id  # ID da linha no Odoo
+                    # ✅ CORREÇÃO: Usar odoo_purchase_order_id (ID do HEADER purchase.order)
+                    # O campo odoo_id armazena o ID da LINHA (purchase.order.line)
+                    # que causava erro ao tentar copy() no consolidar_pos
+                    pos_agrupados[num_pedido]['id'] = int(po.odoo_purchase_order_id) if po.odoo_purchase_order_id else None
                     pos_agrupados[num_pedido]['name'] = po.num_pedido
                     pos_agrupados[num_pedido]['date_order'] = (
                         po.data_pedido_criacao.strftime('%Y-%m-%d') if po.data_pedido_criacao else None

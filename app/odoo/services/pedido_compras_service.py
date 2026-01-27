@@ -626,7 +626,8 @@ class PedidoComprasServiceOtimizado:
             # Identificação
             num_pedido=pedido_odoo['name'],
             company_id=company_name,  # ✅ NOVO: Empresa compradora
-            odoo_id=str(linha_odoo['id']),
+            odoo_id=str(linha_odoo['id']),  # ID da LINHA (purchase.order.line)
+            odoo_purchase_order_id=str(pedido_odoo['id']),  # ✅ ID do HEADER (purchase.order)
 
             # Fornecedor
             cnpj_fornecedor=cnpj_fornecedor,
@@ -702,6 +703,7 @@ class PedidoComprasServiceOtimizado:
             tipo_pedido=novo_pedido.tipo_pedido,
             importado_odoo=novo_pedido.importado_odoo,
             odoo_id=novo_pedido.odoo_id,
+            odoo_purchase_order_id=novo_pedido.odoo_purchase_order_id,  # ✅ ID do HEADER
             criado_em=novo_pedido.criado_em,
             atualizado_em=novo_pedido.atualizado_em
         )
@@ -739,6 +741,16 @@ class PedidoComprasServiceOtimizado:
                         self.logger.info(
                             f"   ✅ CNPJ preenchido: {pedido_existente.num_pedido} -> {novo_cnpj}"
                         )
+
+        # ✅ CORREÇÃO: Preencher odoo_purchase_order_id se estava vazio (registros antigos)
+        # O campo armazena o ID do HEADER (purchase.order), diferente de odoo_id que e o ID da LINHA
+        if not pedido_existente.odoo_purchase_order_id:
+            novo_po_id = str(pedido_odoo['id'])
+            pedido_existente.odoo_purchase_order_id = novo_po_id
+            alterado = True
+            self.logger.info(
+                f"   ✅ odoo_purchase_order_id preenchido: {pedido_existente.num_pedido} -> {novo_po_id}"
+            )
 
         # Verificar mudanças em quantidade
         nova_qtd = Decimal(str(linha_odoo.get('product_qty', 0)))
@@ -847,6 +859,7 @@ class PedidoComprasServiceOtimizado:
                 tipo_pedido=pedido_existente.tipo_pedido,
                 importado_odoo=pedido_existente.importado_odoo,
                 odoo_id=pedido_existente.odoo_id,
+                odoo_purchase_order_id=pedido_existente.odoo_purchase_order_id,  # ✅ ID do HEADER
                 criado_em=pedido_existente.criado_em,
                 atualizado_em=pedido_existente.atualizado_em
             )

@@ -204,7 +204,13 @@ class PedidoCompras(db.Model):
     tipo_pedido = db.Column(db.String(50), nullable=True, index=True)
 
     importado_odoo = db.Column(db.Boolean, default=False)
-    odoo_id = db.Column(db.String(50))
+    odoo_id = db.Column(db.String(50))  # ID da LINHA (purchase.order.line) no Odoo
+
+    # ✅ NOVO: ID do HEADER (purchase.order) no Odoo
+    # Corrige bug onde odoo_id (linha) era usado como se fosse ID do PO
+    # Esse campo armazena explicitamente o ID do header para uso em consolidacao
+    odoo_purchase_order_id = db.Column(db.String(50), nullable=True, index=True)
+
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
     atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)  # ✅ ADICIONADO
 
@@ -519,7 +525,8 @@ class HistoricoPedidoCompras(db.Model):
 
     # Vínculo com Odoo
     importado_odoo = db.Column(db.Boolean, default=False)
-    odoo_id = db.Column(db.String(50))
+    odoo_id = db.Column(db.String(50))  # ID da LINHA (purchase.order.line)
+    odoo_purchase_order_id = db.Column(db.String(50), nullable=True)  # ✅ ID do HEADER (purchase.order)
 
     # Datas originais
     criado_em = db.Column(db.DateTime)
