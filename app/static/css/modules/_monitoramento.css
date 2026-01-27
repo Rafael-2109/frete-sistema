@@ -1,0 +1,145 @@
+/**
+ * _monitoramento.css - Monitoramento Module Styles
+ *
+ * Component overrides and styles specific to the monitoramento module.
+ * Styles extracted from listar_entregas.html inline styles during migration.
+ *
+ * Token mapping:
+ * - Use var(--bg-light) for card backgrounds
+ * - Use var(--bg) for secondary backgrounds
+ * - Use var(--text) for primary text
+ * - Use var(--text-muted) for secondary text
+ * - Use var(--border) for borders
+ * - Use var(--semantic-success/danger/warning) for status colors
+ * - Use var(--amber-55) for accent/primary actions
+ *
+ * Templates using this module:
+ * - monitoramento/listar_entregas.html
+ * - monitoramento/visualizar_entrega.html
+ * - monitoramento/exportar_entregas.html
+ * - monitoramento/diagnostico.html
+ */
+
+@layer modules {
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     MONITORAMENTO - Observation Inline Input
+     Migrated from listar_entregas.html inline styles
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .obs-inline-wrapper {
+    position: relative;
+    width: 100%;
+    height: 22px;
+    z-index: 100;
+  }
+
+  .obs-inline-input {
+    width: 100%;
+    height: 100%;
+    padding: 2px 24px 2px 8px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    resize: none;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--text);
+    transition: all 0.2s ease;
+  }
+
+  .obs-inline-input::placeholder {
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
+  .obs-inline-input:hover {
+    border-color: var(--border);
+    background: var(--bg-light);
+  }
+
+  .obs-inline-input:focus {
+    outline: none;
+    border-color: var(--amber-55);
+    background: var(--bg-light);
+    box-shadow: 0 1px 4px hsla(45 100% 50% / 0.15);
+  }
+
+  /* Expanded state - grows upward */
+  .obs-inline-input.expanded {
+    height: 60px;
+    overflow-y: auto;
+    border-color: var(--amber-55);
+    background: var(--bg-light);
+    box-shadow: 0 2px 8px hsla(0 0% 0% / 0.15);
+  }
+
+  /* Wrapper expanded needs height adjustment */
+  .obs-inline-wrapper:has(.obs-inline-input.expanded) {
+    height: auto;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     MONITORAMENTO - Status Indicators
+     Migrated from listar_entregas.html inline styles
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .obs-inline-status {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.7rem;
+    pointer-events: none;
+    z-index: 101;
+  }
+
+  .obs-inline-status.salvando {
+    color: var(--text-muted);
+  }
+
+  .obs-inline-status.salvo {
+    color: var(--semantic-success);
+  }
+
+  .obs-inline-status.erro {
+    color: var(--semantic-danger);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     MONITORAMENTO - Loading Spinner
+     Migrated from listar_entregas.html inline styles
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .obs-spinner {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border: 2px solid var(--border);
+    border-top-color: var(--text-muted);
+    border-radius: 50%;
+    animation: obs-spin 0.8s linear infinite;
+  }
+
+  @keyframes obs-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     MONITORAMENTO - Filter Clear Button
+     Migrated from listar_entregas.html inline styles
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* Clear filter button - using amber accent instead of danger red */
+  nav.navbar .nav-link.text-danger {
+    color: var(--amber-55) !important;
+    font-weight: 600;
+  }
+
+  nav.navbar .nav-link.text-danger:hover {
+    background: hsla(45 100% 50% / 0.2);
+    color: var(--amber-60) !important;
+  }
+
+} /* End @layer modules */
