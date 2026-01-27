@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-01-26)
 
 **Core value:** Todas as telas devem ter cores e contraste funcionais em dark mode E mobile, sem CSS inline hardcoded.
-**Current focus:** Phase 4 - Layout Patterns (Plan 02 Complete)
+**Current focus:** Phase 4 - Layout Patterns - COMPLETE
 
 ## Current Position
 
-Phase: 4 of 7 (Layout Patterns)
+Phase: 4 of 7 (Layout Patterns) - COMPLETE
 Plan: 2 of 2 in current phase
-Status: Plan complete
-Last activity: 2026-01-27 - Completed 04-02-PLAN.md (Layout Utilities)
+Status: Phase complete
+Last activity: 2026-01-27 - Completed 04-01-PLAN.md (Mobile Touch Optimization)
 
-Progress: [█████░░░░░] 50%
+Progress: [█████░░░░░] 55%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 9
-- Average duration: 2.1 min
-- Total execution time: 19 min
+- Total plans completed: 10
+- Average duration: 2 min
+- Total execution time: 20 min
 
 **By Phase:**
 
@@ -30,11 +30,11 @@ Progress: [█████░░░░░] 50%
 | 01-layer-infrastructure | 3 | 8 min | 2.7 min |
 | 02-component-library | 3 | 6 min | 2 min |
 | 03-table-system | 2 | 3 min | 1.5 min |
-| 04-layout-patterns | 1 | 2 min | 2 min |
+| 04-layout-patterns | 2 | 3 min | 1.5 min |
 
 **Recent Trend:**
-- Last 5 plans: 02-03 (2 min), 03-01 (1 min), 03-02 (2 min), 04-02 (2 min)
-- Trend: Stable
+- Last 5 plans: 03-01 (1 min), 03-02 (2 min), 04-02 (2 min), 04-01 (1 min)
+- Trend: Stable, improving
 
 *Updated after each plan completion*
 
@@ -70,6 +70,9 @@ Recent decisions affecting current work:
 - [03-02]: Z-index hierarchy: corner (11) > header (10) > first column (5)
 - [03-02]: Hover uses :where() for low specificity, dark 5% white / light 4% black overlay
 - [03-02]: Status rows (success, warning, etc.) use hsla 15% base / 28% hover
+- [04-01]: Touch device detection via @media (hover: none) and (pointer: coarse)
+- [04-01]: Disable translateX hover effect on touch devices
+- [04-01]: Mobile menu max-height with overflow scroll for long menus
 - [04-02]: Z-index scale documents Bootstrap defaults (1000-1055) plus custom table values (1005-1011)
 - [04-02]: Page structure uses 56px navbar height assumption
 - [04-02]: Modern dvh units with calc(100vh - 56px) fallback for older browsers
@@ -89,8 +92,8 @@ None.
 ## Session Continuity
 
 Last session: 2026-01-27T13:44:00Z
-Stopped at: Completed 04-02-PLAN.md (Layout Utilities)
+Stopped at: Phase 4 complete - all plans executed
 Resume file: None
 
 ---
-*Next step: Phase 4 complete - ready for Phase 5 (Page Migration)*
+*Next step: Plan Phase 5 (Page Migration) - migrate existing module CSS to layers*
