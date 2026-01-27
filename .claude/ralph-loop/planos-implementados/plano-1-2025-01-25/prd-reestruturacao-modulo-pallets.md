@@ -236,6 +236,7 @@ Gerencia o **ciclo de vida documental** das NFs de remessa de pallet. Como a NF 
 ### 3.2 Estrutura Hierárquica
 
 ```
+<plano_original>
 DOMÍNIO B: TRATATIVA DAS NFs
 │
 ├── B.1 DIRECIONAMENTO DAS NFs
@@ -267,6 +268,41 @@ DOMÍNIO B: TRATATIVA DAS NFs
         └── Pode ser por recebimento ou emissão errada
         └── Manter registro para auditoria
         └── Dados: motivo_cancelamento, cancelado_em, cancelado_por
+
+</plano_original>
+
+
+<plano_alterado>
+DOMÍNIO B: TRATATIVA DAS NFs
+│
+├── B.1 DIRECIONAMENTO DAS NFs
+│   │
+│   ├── B.1.1 Vinculação NF Origem à NC
+│   │   └── Vincular NF de remessa à NC
+│   │   └── Automatico (NC é vinculada no Odoo, apenas importamos o vinculo para controle)
+│   │
+│   └── B.1.2 NFs Canceladas
+│       └── NFs que foram canceladas (Automaticamente)
+│       └── Mantidas para auditoria
+│
+└── B.2 SOLUÇÃO DAS NFs (Registro pelo usuario - controle antes de dar entrada na NF | Controle das NFs canceladas)
+    │
+    ├── B.2.1 Devolução
+    │   └── NF de devolução emitida pelo cliente
+    │   └── 1 NF Devolução pode referenciar N NFs de Remessa
+    │   └── Dados: nf_devolucao, nfs_remessa_vinculadas[], status_sugestao
+    │
+    ├── B.2.2 Retorno
+    │   └── NF de remessa recusada pelo cliente (Altere pois o cliente não emite NF de retorno, ele apenas recusa a NF - Usuario deverá registrar que a NF foi recusada)
+    │   └── Similar a devolução mas 1:1 e sem registro no DFe
+    │   └── Dados: nf_retorno (Não tem NF de retorno, é a própria NF de remessa recusada), nf_remessa_vinculada
+    │
+    └── B.2.3 Cancelamento
+        └── NF de remessa foi cancelada
+        └── Pode ser por recebimento ou emissão errada (Usuario deverá registrar agregando à informação importada automaticamente de cancelamento)
+        └── Manter registro para auditoria
+        └── Dados: motivo_cancelamento, cancelado_em, cancelado_por
+</plano_alterado>
 ```
 
 ### 3.3 Modelo de Dados - Domínio B

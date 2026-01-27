@@ -99,11 +99,15 @@
 
 .stat-icon.pendentes { background: hsla(45 100% 90% / 1); color: var(--amber-50); }
 .stat-icon.devolucoes { background: hsla(145 60% 90% / 1); color: var(--semantic-success); }
-.stat-icon.retornos { background: hsla(190 90% 92% / 1); color: hsl(190 85% 45%); }
+.stat-icon.recusas { background: hsla(0 70% 92% / 1); color: hsl(0 70% 45%); }
+.stat-icon.notas-credito { background: hsla(210 100% 92% / 1); color: hsl(210 85% 50%); }
+.stat-icon.cancelamentos { background: hsla(280 60% 90% / 1); color: hsl(280 60% 45%); }
 
 [data-bs-theme="dark"] .stat-icon.pendentes { background: hsla(45 100% 50% / 0.15); color: var(--amber-55); }
 [data-bs-theme="dark"] .stat-icon.devolucoes { background: hsla(145 65% 40% / 0.15); }
-[data-bs-theme="dark"] .stat-icon.retornos { background: hsla(190 85% 45% / 0.15); color: hsl(190 85% 60%); }
+[data-bs-theme="dark"] .stat-icon.recusas { background: hsla(0 70% 50% / 0.15); color: var(--semantic-danger); }
+[data-bs-theme="dark"] .stat-icon.notas-credito { background: hsla(210 85% 50% / 0.15); color: hsl(210 85% 65%); }
+[data-bs-theme="dark"] .stat-icon.cancelamentos { background: hsla(280 60% 50% / 0.15); color: hsl(280 60% 65%); }
 
 .stat-content h4 {
     font-size: 1.75rem;
@@ -375,18 +379,38 @@
     color: var(--semantic-success);
 }
 
-.tipo-badge.retorno {
-    background: hsla(190 90% 92% / 1);
-    color: hsl(190 85% 45%);
+.tipo-badge.recusa {
+    background: hsla(0 70% 92% / 1);
+    color: hsl(0 70% 45%);
+}
+
+.tipo-badge.nota-credito {
+    background: hsla(210 100% 92% / 1);
+    color: hsl(210 85% 50%);
+}
+
+.tipo-badge.cancelamento {
+    background: hsla(280 60% 90% / 1);
+    color: hsl(280 60% 45%);
 }
 
 [data-bs-theme="dark"] .tipo-badge.devolucao {
     background: hsla(145 65% 40% / 0.2);
 }
 
-[data-bs-theme="dark"] .tipo-badge.retorno {
-    background: hsla(190 85% 45% / 0.2);
-    color: hsl(190 85% 60%);
+[data-bs-theme="dark"] .tipo-badge.recusa {
+    background: hsla(0 70% 50% / 0.2);
+    color: var(--semantic-danger);
+}
+
+[data-bs-theme="dark"] .tipo-badge.nota-credito {
+    background: hsla(210 85% 50% / 0.2);
+    color: hsl(210 85% 65%);
+}
+
+[data-bs-theme="dark"] .tipo-badge.cancelamento {
+    background: hsla(280 60% 50% / 0.2);
+    color: hsl(280 60% 65%);
 }
 
 /* Score badge */
@@ -756,12 +780,30 @@
             </div>
         </div>
         <div class="stat-card">
-            <div class="stat-icon retornos">
-                <i class="fas fa-reply"></i>
+            <div class="stat-icon recusas">
+                <i class="fas fa-ban"></i>
             </div>
             <div class="stat-content">
-                <h4>{{ stats.retornos }}</h4>
-                <span>Retornos</span>
+                <h4>{{ stats.recusas }}</h4>
+                <span>Recusas</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon notas-credito">
+                <i class="fas fa-file-invoice-dollar"></i>
+            </div>
+            <div class="stat-content">
+                <h4>{{ stats.notas_credito }}</h4>
+                <span>Notas de Crédito</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon cancelamentos">
+                <i class="fas fa-times-circle"></i>
+            </div>
+            <div class="stat-content">
+                <h4>{{ stats.cancelamentos }}</h4>
+                <span>Cancelamentos</span>
             </div>
         </div>
     </div>
@@ -799,7 +841,9 @@
                     <select name="tipo" id="tipo" class="form-select">
                         <option value="">Todos</option>
                         <option value="DEVOLUCAO" {% if filtro_tipo == 'DEVOLUCAO' %}selected{% endif %}>Devolução</option>
-                        <option value="RETORNO" {% if filtro_tipo == 'RETORNO' %}selected{% endif %}>Retorno</option>
+                        <option value="RECUSA" {% if filtro_tipo == 'RECUSA' %}selected{% endif %}>Recusa</option>
+                        <option value="NOTA_CREDITO" {% if filtro_tipo == 'NOTA_CREDITO' %}selected{% endif %}>Nota de Crédito</option>
+                        <option value="CANCELAMENTO" {% if filtro_tipo == 'CANCELAMENTO' %}selected{% endif %}>Cancelamento</option>
                     </select>
                 </div>
                 <div class="filter-actions">
@@ -845,9 +889,21 @@
                             <span class="tipo-badge devolucao">
                                 <i class="fas fa-reply-all"></i> Devolução
                             </span>
+                            {% elif sugestao.tipo == 'RECUSA' %}
+                            <span class="tipo-badge recusa">
+                                <i class="fas fa-ban"></i> Recusa
+                            </span>
+                            {% elif sugestao.tipo == 'NOTA_CREDITO' %}
+                            <span class="tipo-badge nota-credito">
+                                <i class="fas fa-file-invoice-dollar"></i> Nota de Crédito
+                            </span>
+                            {% elif sugestao.tipo == 'CANCELAMENTO' %}
+                            <span class="tipo-badge cancelamento">
+                                <i class="fas fa-times-circle"></i> Cancelamento
+                            </span>
                             {% else %}
-                            <span class="tipo-badge retorno">
-                                <i class="fas fa-reply"></i> Retorno
+                            <span class="tipo-badge">
+                                <i class="fas fa-question"></i> {{ sugestao.tipo }}
                             </span>
                             {% endif %}
                         </td>
@@ -1166,7 +1222,13 @@
 // =============================================
 function openConfirmarModal(sugestaoId, nfRemessa, nfSolucao, tipo, quantidade, emitente) {
     document.getElementById('formConfirmar').action = '{{ url_for("pallet_v2.tratativa_nfs.confirmar_sugestao", sugestao_id=0) }}'.replace('/0', '/' + sugestaoId);
-    document.getElementById('confirmar_tipo').textContent = tipo === 'DEVOLUCAO' ? 'devolução' : 'retorno';
+    const tipoMap = {
+        'DEVOLUCAO': 'devolução',
+        'RECUSA': 'recusa',
+        'NOTA_CREDITO': 'nota de crédito',
+        'CANCELAMENTO': 'cancelamento'
+    };
+    document.getElementById('confirmar_tipo').textContent = tipoMap[tipo] || tipo;
     document.getElementById('confirmar_nf_remessa').textContent = 'NF ' + nfRemessa;
     document.getElementById('confirmar_nf_solucao').textContent = 'NF ' + (nfSolucao || '-');
     document.getElementById('confirmar_quantidade').textContent = quantidade;
@@ -1217,7 +1279,13 @@ function openDetalhesModal(sugestaoId) {
             // Preencher dados
             document.getElementById('det_nf_remessa').textContent = 'NF ' + (data.numero_nf_remessa || '-');
             document.getElementById('det_nf_remessa_id').textContent = 'ID: ' + data.nf_remessa_id;
-            document.getElementById('det_tipo').textContent = data.tipo === 'DEVOLUCAO' ? 'Devolução' : 'Retorno';
+            const tipoMap = {
+                'DEVOLUCAO': 'Devolução',
+                'RECUSA': 'Recusa',
+                'NOTA_CREDITO': 'Nota de Crédito',
+                'CANCELAMENTO': 'Cancelamento'
+            };
+            document.getElementById('det_tipo').textContent = tipoMap[data.tipo] || data.tipo;
             document.getElementById('det_vinculacao').textContent = 'Vinculação: ' + (data.vinculacao || '-');
             document.getElementById('det_nf_solucao').textContent = 'NF ' + (data.numero_nf_solucao || '-');
             document.getElementById('det_data_nf').textContent = 'Data: ' + (data.data_nf_solucao ? formatarData(data.data_nf_solucao) : '-');

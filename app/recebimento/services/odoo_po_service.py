@@ -41,6 +41,34 @@ from app.odoo.utils.connection import get_odoo_connection
 logger = logging.getLogger(__name__)
 
 
+def _obter_po_id_por_linha(po_line_id: int, po_id_fallback: int) -> int:
+    """
+    Busca o ID correto do purchase.order usando o ID da linha.
+
+    O campo odoo_po_id em match_nf_po_item/match_nf_po_alocacao pode conter
+    o ID da linha (purchase.order.line) ao invés do ID do pedido (purchase.order)
+    devido a um bug histórico. Esta função resolve o ID correto.
+
+    Args:
+        po_line_id: ID da purchase.order.line (armazenado em odoo_po_line_id)
+        po_id_fallback: Valor fallback se não encontrar na tabela local
+
+    Returns:
+        ID do purchase.order (odoo_purchase_order_id)
+    """
+    if not po_line_id:
+        return po_id_fallback
+
+    pedido_local = PedidoCompras.query.filter_by(
+        odoo_id=str(po_line_id)
+    ).first()
+
+    if pedido_local and pedido_local.odoo_purchase_order_id:
+        return int(pedido_local.odoo_purchase_order_id)
+
+    return po_id_fallback
+
+
 def _marcar_dfes_afetados_por_pos(po_ids: list) -> int:
     """
     Marca DFEs que usam POs modificadas para revalidação.
@@ -180,9 +208,11 @@ class OdooPoService:
                         valor_total_conciliador += qtd_alocada * preco
 
                         # Agrupar dados do PO Original (ficará como saldo)
-                        if aloc.odoo_po_id not in pos_originais:
-                            pos_originais[aloc.odoo_po_id] = {
-                                'po_id': aloc.odoo_po_id,
+                        # Buscar ID correto do purchase.order via tabela pedido_compras
+                        po_id_correto = _obter_po_id_por_linha(aloc.odoo_po_line_id, aloc.odoo_po_id)
+                        if po_id_correto not in pos_originais:
+                            pos_originais[po_id_correto] = {
+                                'po_id': po_id_correto,
                                 'po_name': aloc.odoo_po_name,
                                 'itens': []
                             }
@@ -200,7 +230,7 @@ class OdooPoService:
 
                         qtd_saldo = qtd_original - qtd_alocada
 
-                        pos_originais[aloc.odoo_po_id]['itens'].append({
+                        pos_originais[po_id_correto]['itens'].append({
                             'cod_produto': match.cod_produto_interno,
                             'nome_produto': match.nome_produto,
                             'po_line_id': aloc.odoo_po_line_id,
@@ -230,9 +260,11 @@ class OdooPoService:
                     itens_conciliador.append(item_conciliador)
                     valor_total_conciliador += qtd_nf * preco
 
-                    if match.odoo_po_id not in pos_originais:
-                        pos_originais[match.odoo_po_id] = {
-                            'po_id': match.odoo_po_id,
+                    # Buscar ID correto do purchase.order via tabela pedido_compras
+                    po_id_correto_fallback = _obter_po_id_por_linha(match.odoo_po_line_id, match.odoo_po_id)
+                    if po_id_correto_fallback not in pos_originais:
+                        pos_originais[po_id_correto_fallback] = {
+                            'po_id': po_id_correto_fallback,
                             'po_name': match.odoo_po_name,
                             'itens': []
                         }
@@ -242,7 +274,7 @@ class OdooPoService:
                         odoo_id=str(match.odoo_po_line_id)
                     ).first()
 
-                    pos_originais[match.odoo_po_id]['itens'].append({
+                    pos_originais[po_id_correto_fallback]['itens'].append({
                         'cod_produto': match.cod_produto_interno,
                         'nome_produto': match.nome_produto,
                         'po_line_id': match.odoo_po_line_id,
@@ -473,7 +505,13 @@ class OdooPoService:
             fornecedor_id = partner_ids[0]
 
             # PO de referencia para copiar configuracoes
-            po_referencia_id = pos_para_consolidar[0]['po_id']
+            # IMPORTANTE: O campo po_id pode conter ID da linha (bug histórico)
+            # Buscar ID correto do purchase.order via tabela pedido_compras
+            po_line_id_referencia = pos_para_consolidar[0].get('po_line_id')
+            po_id_fallback = pos_para_consolidar[0]['po_id']
+
+            po_referencia_id = _obter_po_id_por_linha(po_line_id_referencia, po_id_fallback)
+            logger.info(f"PO de referencia ID: {po_referencia_id} (linha: {po_line_id_referencia})")
 
             # Validar que PO de referencia existe no Odoo
             po_referencia = odoo.read('purchase.order', [po_referencia_id], ['name', 'state'])

@@ -477,15 +477,16 @@ class NFService:
 
         Tipos de solucao:
         - DEVOLUCAO: NF de devolucao emitida pelo destinatario (1:N com remessas)
-        - RETORNO: NF de retorno emitida pelo destinatario (1:1 com remessa)
-        - CANCELAMENTO: NF foi cancelada (registro para auditoria)
+        - RECUSA: NF recusada pelo destinatario (sem NF, registro manual)
+        - CANCELAMENTO: NF foi cancelada (importado do Odoo)
+        - NOTA_CREDITO: NC vinculada automaticamente via reversed_entry_id
 
         Args:
             nf_remessa_id: ID da NF de remessa
-            tipo: Tipo da solucao - DEVOLUCAO, RETORNO ou CANCELAMENTO
+            tipo: Tipo da solucao - DEVOLUCAO, RECUSA, CANCELAMENTO ou NOTA_CREDITO
             quantidade: Quantidade de pallets resolvidos nesta solucao
             dados: Dados adicionais da solucao. Campos esperados:
-                Para DEVOLUCAO e RETORNO:
+                Para DEVOLUCAO e NOTA_CREDITO:
                 - numero_nf_solucao (str): Numero da NF de devolucao/retorno
                 - serie_nf_solucao (str): Serie da NF (opcional)
                 - chave_nfe_solucao (str): Chave da NF-e (opcional)
@@ -519,7 +520,7 @@ class NFService:
             raise ValueError(f"NF de remessa #{nf_remessa_id} esta inativa")
 
         # Validar tipo
-        tipos_validos = ('DEVOLUCAO', 'RETORNO', 'CANCELAMENTO')
+        tipos_validos = ('DEVOLUCAO', 'RECUSA', 'CANCELAMENTO', 'NOTA_CREDITO')
         if tipo not in tipos_validos:
             raise ValueError(
                 f"Tipo de solucao invalido: {tipo}. "
@@ -571,30 +572,28 @@ class NFService:
                     observacao=dados.get('observacao')
                 )
 
-            elif tipo == 'RETORNO':
-                # Verificar duplicidade
-                if PalletNFSolucao.verificar_duplicidade(
-                    numero_nf=dados.get('numero_nf_solucao', ''),
-                    cnpj_emitente=dados.get('cnpj_emitente', ''),
-                    nf_remessa_id=nf_remessa_id
-                ):
-                    raise ValueError(
-                        f"Ja existe solucao para NF {dados.get('numero_nf_solucao')} "
-                        f"do emitente {dados.get('cnpj_emitente')}"
-                    )
+            elif tipo == 'RECUSA':
+                # RECUSA: NF recusada pelo cliente (sem NF, registro manual)
+                solucao = PalletNFSolucao.criar_recusa(
+                    nf_remessa_id=nf_remessa_id,
+                    quantidade=quantidade,
+                    usuario=usuario,
+                    motivo_recusa=dados.get('info_complementar', dados.get('motivo_recusa', '')),
+                    observacao=dados.get('observacao')
+                )
 
-                solucao = PalletNFSolucao.criar_retorno(
+            elif tipo == 'NOTA_CREDITO':
+                # NOTA_CREDITO: vinculado automaticamente via reversed_entry_id
+                solucao = PalletNFSolucao.criar_nota_credito(
                     nf_remessa_id=nf_remessa_id,
                     quantidade=quantidade,
                     numero_nf=dados.get('numero_nf_solucao', ''),
                     data_nf=dados.get('data_nf_solucao'),
-                    cnpj_emitente=dados.get('cnpj_emitente', ''),
-                    nome_emitente=dados.get('nome_emitente', ''),
+                    cnpj_destinatario=dados.get('cnpj_emitente', ''),
+                    nome_destinatario=dados.get('nome_emitente', ''),
+                    odoo_account_move_id=dados.get('odoo_account_move_id', 0),
                     usuario=usuario,
-                    vinculacao=vinculacao,
-                    info_complementar=dados.get('info_complementar'),
                     chave_nfe=dados.get('chave_nfe_solucao'),
-                    serie=dados.get('serie_nf_solucao'),
                     observacao=dados.get('observacao')
                 )
 

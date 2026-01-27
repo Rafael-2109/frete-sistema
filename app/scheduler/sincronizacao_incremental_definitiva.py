@@ -1018,6 +1018,8 @@ def executar_sincronizacao():
                     logger.info(f"   - Vendas novas: {resultado_pallets.get('vendas', {}).get('novos', 0)}")
                     logger.info(f"   - Devoluções novas: {resultado_pallets.get('devolucoes', {}).get('novos', 0)}")
                     logger.info(f"   - Recusas novas: {resultado_pallets.get('recusas', {}).get('novos', 0)}")
+                    logger.info(f"   - NCs vinculadas: {resultado_pallets.get('ncs', {}).get('ncs_vinculadas', 0)}")
+                    logger.info(f"   - Canceladas registradas: {resultado_pallets.get('canceladas', {}).get('canceladas_registradas', 0)}")
                     logger.info(f"   - Total novos: {resultado_pallets.get('total_novos', 0)}")
                     logger.info(f"   - Total baixas: {resultado_pallets.get('total_baixas', 0)}")
 

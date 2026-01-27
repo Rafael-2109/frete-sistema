@@ -182,8 +182,9 @@ def index():
 
     stats_nf_solucoes = {
         'DEVOLUCAO': {'count': 0, 'qtd': 0},
-        'RETORNO': {'count': 0, 'qtd': 0},
-        'CANCELAMENTO': {'count': 0, 'qtd': 0}
+        'RECUSA': {'count': 0, 'qtd': 0},
+        'CANCELAMENTO': {'count': 0, 'qtd': 0},
+        'NOTA_CREDITO': {'count': 0, 'qtd': 0}
     }
     for row in nf_solucoes_por_tipo:
         if row.tipo in stats_nf_solucoes:

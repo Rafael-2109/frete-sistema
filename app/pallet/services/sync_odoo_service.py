@@ -19,6 +19,7 @@ from decimal import Decimal
 from app import db
 from app.estoque.models import MovimentacaoEstoque
 from app.pallet.services.nf_service import NFService
+from app.pallet.services.match_service import MatchService
 
 logger = logging.getLogger(__name__)
 
@@ -846,16 +847,41 @@ class PalletSyncService:
         resumo_devolucoes = self.sincronizar_devolucoes(dias_retroativos, data_de=data_de, data_ate=data_ate)
         resumo_recusas = self.sincronizar_recusas(dias_retroativos, data_de=data_de, data_ate=data_ate)
 
+        # DOMÍNIO B: Processar NCs e Canceladas (vinculação automática)
+        resumo_ncs = {'ncs_vinculadas': 0, 'ncs_sem_remessa': 0, 'erros': 0}
+        resumo_canceladas = {'canceladas_registradas': 0, 'ja_existentes': 0, 'erros': 0}
+        try:
+            match_service = MatchService(odoo_client=self.odoo)
+            logger.info("📄 Processando NCs de pallet...")
+            resumo_ncs = match_service.processar_ncs_pallet(
+                data_de=data_de,
+                data_ate=data_ate
+            )
+            logger.info(f"   NCs vinculadas: {resumo_ncs.get('ncs_vinculadas', 0)}")
+
+            logger.info("📄 Processando NFs canceladas de pallet...")
+            resumo_canceladas = match_service.processar_canceladas_pallet(
+                data_de=data_de,
+                data_ate=data_ate
+            )
+            logger.info(f"   Canceladas registradas: {resumo_canceladas.get('canceladas_registradas', 0)}")
+        except Exception as e:
+            logger.error(f"Erro ao processar NCs/Canceladas: {e}")
+
         return {
             'remessas': resumo_remessas,
             'vendas': resumo_vendas,
             'devolucoes': resumo_devolucoes,
             'recusas': resumo_recusas,
+            'ncs': resumo_ncs,
+            'canceladas': resumo_canceladas,
             'total_novos': (
                 resumo_remessas.get('novos', 0) +
                 resumo_vendas.get('novos', 0) +
                 resumo_devolucoes.get('novos', 0) +
-                resumo_recusas.get('novos', 0)
+                resumo_recusas.get('novos', 0) +
+                resumo_ncs.get('ncs_vinculadas', 0) +
+                resumo_canceladas.get('canceladas_registradas', 0)
             ),
             'total_baixas': (
                 resumo_devolucoes.get('baixas_realizadas', 0) +

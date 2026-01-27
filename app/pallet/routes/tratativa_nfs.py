@@ -5,10 +5,16 @@ Gerencia o ciclo de vida documental das NFs:
 - GET /tratativa/direcionamento - NFs aguardando vinculação
 - GET /tratativa/sugestoes - Sugestões automáticas de match
 - POST /tratativa/vincular-devolucao - Vincular devolução (1:N)
-- POST /tratativa/vincular-retorno - Vincular retorno (1:1)
+- POST /tratativa/registrar-recusa - Registrar recusa (sem NF, apenas controle interno)
 - POST /tratativa/confirmar-sugestao/<id> - Confirmar sugestão
 - POST /tratativa/rejeitar-sugestao/<id> - Rejeitar sugestão
 - GET /tratativa/canceladas - NFs canceladas (histórico)
+
+Tipos de Solução (Domínio B):
+- DEVOLUCAO: NF de devolução emitida pelo cliente (1 devolução → N remessas)
+- RECUSA: NF recusada pelo cliente (sem NF, registro manual interno)
+- CANCELAMENTO: NF cancelada no Odoo (importado automaticamente)
+- NOTA_CREDITO: NC vinculada via reversed_entry_id (automático)
 
 Spec: .claude/ralph-loop/specs/prd-reestruturacao-modulo-pallets.md
 """
@@ -111,7 +117,7 @@ def listar_sugestoes():
     Lista sugestões automáticas de vinculação pendentes de confirmação.
 
     Query params:
-    - tipo: DEVOLUCAO, RETORNO
+    - tipo: DEVOLUCAO, RECUSA, NOTA_CREDITO
     - page: Página (default: 1)
     """
     tipo = request.args.get('tipo', '')
@@ -145,12 +151,16 @@ def listar_sugestoes():
         PalletNFSolucao.rejeitado == False
     ).group_by(PalletNFSolucao.tipo).all()
 
-    stats = {'total_pendentes': sugestoes.total, 'devolucoes': 0, 'retornos': 0}
+    stats = {'total_pendentes': sugestoes.total, 'devolucoes': 0, 'recusas': 0, 'notas_credito': 0, 'cancelamentos': 0}
     for tipo_stat, count in stats_query:
         if tipo_stat == 'DEVOLUCAO':
             stats['devolucoes'] = count
-        elif tipo_stat == 'RETORNO':
-            stats['retornos'] = count
+        elif tipo_stat == 'RECUSA':
+            stats['recusas'] = count
+        elif tipo_stat == 'NOTA_CREDITO':
+            stats['notas_credito'] = count
+        elif tipo_stat == 'CANCELAMENTO':
+            stats['cancelamentos'] = count
 
     return render_template(
         'pallet/v2/tratativa_nfs/sugestoes.html',
@@ -164,10 +174,10 @@ def listar_sugestoes():
 @login_required
 def listar_solucoes():
     """
-    Histórico de soluções de NF (devoluções e retornos registrados).
+    Histórico de soluções de NF (devoluções, recusas, cancelamentos, NCs).
 
     Query params:
-    - tipo: DEVOLUCAO, RETORNO, CANCELAMENTO
+    - tipo: DEVOLUCAO, RECUSA, CANCELAMENTO, NOTA_CREDITO
     - vinculacao: AUTOMATICO, MANUAL, SUGESTAO
     - data_de: Data inicial
     - data_ate: Data final
@@ -367,74 +377,62 @@ def vincular_devolucao():
     return redirect(request.referrer or url_for('pallet_v2.tratativa_nfs.direcionamento'))
 
 
-@tratativa_nfs_bp.route('/vincular-retorno', methods=['POST'])
+@tratativa_nfs_bp.route('/registrar-recusa', methods=['POST'])
 @login_required
-def vincular_retorno():
+def registrar_recusa():
     """
-    Vincula uma NF de retorno a uma NF de remessa (1:1).
+    Registra uma recusa de NF de remessa (sem NF de retorno).
 
-    REGRA 004: 1 NF retorno fecha apenas 1 NF remessa.
+    RECUSA: O cliente recusou a NF de remessa sem emitir NF de devolução.
+    Este é um registro manual interno para controle - não há documento fiscal associado.
 
     Form params:
-    - nf_remessa_id: ID da NF de remessa
-    - numero_nf_retorno: Número da NF de retorno
-    - chave_nfe_retorno: Chave da NF-e de retorno
-    - data_nf_retorno: Data da NF de retorno
-    - quantidade: Quantidade de pallets
-    - observacao: Observações
+    - nf_remessa_id: ID da NF de remessa recusada
+    - quantidade: Quantidade de pallets recusados
+    - motivo_recusa: Motivo da recusa (obrigatório)
+    - observacao: Observações adicionais
     """
     nf_remessa_id = request.form.get('nf_remessa_id', type=int)
-    numero_nf_retorno = request.form.get('numero_nf_retorno', '').strip()
+    motivo_recusa = request.form.get('motivo_recusa', '').strip()
 
-    if not nf_remessa_id or not numero_nf_retorno:
-        flash('NF de remessa e NF de retorno são obrigatórios!', 'danger')
+    if not nf_remessa_id:
+        flash('NF de remessa é obrigatória!', 'danger')
+        return redirect(request.referrer or url_for('pallet_v2.tratativa_nfs.direcionamento'))
+
+    if not motivo_recusa:
+        flash('Motivo da recusa é obrigatório!', 'danger')
         return redirect(request.referrer or url_for('pallet_v2.tratativa_nfs.direcionamento'))
 
     try:
-        # Parsear data
-        data_nf_retorno = None
-        data_str = request.form.get('data_nf_retorno', '').strip()
-        if data_str:
-            data_nf_retorno = datetime.strptime(data_str, '%Y-%m-%d')
-
         quantidade = request.form.get('quantidade', type=int)
+        observacao = request.form.get('observacao', '').strip() or None
 
         usuario = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
 
-        # Preparar dados com nomes de campos corretos para NFService.registrar_solucao_nf()
-        cnpj_raw = request.form.get('cnpj_emitente', '').strip()
-        cnpj_limpo = cnpj_raw.replace('.', '').replace('-', '').replace('/', '') if cnpj_raw else None
-
-        nf_retorno = {
-            'numero_nf_solucao': numero_nf_retorno,
-            'serie_nf_solucao': request.form.get('serie_nf_retorno', '').strip() or None,
-            'chave_nfe_solucao': request.form.get('chave_nfe_retorno', '').strip() or None,
-            'data_nf_solucao': data_nf_retorno,
-            'cnpj_emitente': cnpj_limpo,
-            'nome_emitente': request.form.get('nome_emitente', '').strip() or None,
-        }
-
-        # Usar MatchService para vincular
-        match_service = MatchService()
-        match_service.vincular_retorno_manual(
+        # Usar NFService para registrar a recusa
+        solucao = NFService.registrar_solucao_nf(
             nf_remessa_id=nf_remessa_id,
-            nf_retorno=nf_retorno,
+            tipo='RECUSA',
             quantidade=quantidade,
+            dados={
+                'info_complementar': motivo_recusa,
+                'observacao': observacao,
+            },
             usuario=usuario
         )
 
         nf_remessa = PalletNFRemessa.query.get(nf_remessa_id)
         flash(
-            f'Retorno vinculado com sucesso! '
-            f'NF {numero_nf_retorno} → NF remessa {nf_remessa.numero_nf if nf_remessa else nf_remessa_id}',
+            f'Recusa registrada com sucesso! '
+            f'NF remessa {nf_remessa.numero_nf if nf_remessa else nf_remessa_id} - {quantidade} pallets',
             'success'
         )
 
     except ValueError as e:
         flash(f'Erro de validação: {str(e)}', 'danger')
     except Exception as e:
-        logger.exception(f"Erro ao vincular retorno")
-        flash(f'Erro ao vincular retorno: {str(e)}', 'danger')
+        logger.exception(f"Erro ao registrar recusa")
+        flash(f'Erro ao registrar recusa: {str(e)}', 'danger')
 
     return redirect(request.referrer or url_for('pallet_v2.tratativa_nfs.direcionamento'))
 
@@ -548,7 +546,7 @@ def api_listar_sugestoes():
     API para listar sugestões pendentes.
 
     Query params:
-    - tipo: DEVOLUCAO, RETORNO
+    - tipo: DEVOLUCAO, RECUSA, NOTA_CREDITO, CANCELAMENTO
     - limit: Limite de resultados (default: 50)
     """
     tipo = request.args.get('tipo', '')

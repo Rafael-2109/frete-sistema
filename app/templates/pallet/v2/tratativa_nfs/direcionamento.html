@@ -442,18 +442,18 @@
     color: var(--semantic-success);
 }
 
-.btn-retorno {
-    background: hsla(190 90% 90% / 1);
-    color: hsl(190 80% 30%);
+.btn-recusa {
+    background: hsla(0 70% 92% / 1);
+    color: hsl(0 70% 35%);
 }
 
-.btn-retorno:hover {
-    background: hsla(190 90% 80% / 1);
+.btn-recusa:hover {
+    background: hsla(0 70% 85% / 1);
 }
 
-[data-bs-theme="dark"] .btn-retorno {
-    background: hsla(190 85% 45% / 0.2);
-    color: hsl(190 85% 60%);
+[data-bs-theme="dark"] .btn-recusa {
+    background: hsla(0 70% 50% / 0.2);
+    color: var(--semantic-danger);
 }
 
 .btn-detalhes {
@@ -584,12 +584,12 @@
     filter: brightness(0) invert(1);
 }
 
-.modal-header.modal-retorno {
-    background: linear-gradient(135deg, hsl(190 85% 45%) 0%, hsl(190 85% 38%) 100%);
+.modal-header.modal-recusa {
+    background: linear-gradient(135deg, var(--semantic-danger) 0%, hsl(0 70% 40%) 100%);
     color: white;
 }
 
-.modal-header.modal-retorno .btn-close {
+.modal-header.modal-recusa .btn-close {
     filter: brightness(0) invert(1);
 }
 
@@ -899,9 +899,9 @@
                                         onclick="openDevolucaoModal({{ nf.id }}, '{{ nf.numero_nf }}', '{{ nf.nome_destinatario or nf.cnpj_destinatario }}', {{ nf.qtd_pendente }})">
                                     <i class="fas fa-reply-all"></i>
                                 </button>
-                                <button type="button" class="btn-action btn-retorno" title="Vincular Retorno (1:1)"
-                                        onclick="openRetornoModal({{ nf.id }}, '{{ nf.numero_nf }}', '{{ nf.nome_destinatario or nf.cnpj_destinatario }}', {{ nf.qtd_pendente }})">
-                                    <i class="fas fa-reply"></i>
+                                <button type="button" class="btn-action btn-recusa" title="Registrar Recusa"
+                                        onclick="openRecusaModal({{ nf.id }}, '{{ nf.numero_nf }}', '{{ nf.nome_destinatario or nf.cnpj_destinatario }}', {{ nf.qtd_pendente }})">
+                                    <i class="fas fa-ban"></i>
                                 </button>
                                 <a href="{{ url_for('pallet_v2.nf_remessa.detalhe', nf_id=nf.id) }}" class="btn-action btn-detalhes" title="Ver Detalhes">
                                     <i class="fas fa-eye"></i>
@@ -1049,62 +1049,71 @@
 </div>
 
 <!-- =============================================
-     MODAL: VINCULAR RETORNO (1:1)
+     MODAL: REGISTRAR RECUSA (sem NF)
      ============================================= -->
-<div class="modal fade" id="modalRetorno" tabindex="-1" aria-labelledby="modalRetornoLabel" aria-hidden="true">
+<div class="modal fade" id="modalRecusa" tabindex="-1" aria-labelledby="modalRecusaLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
-            <div class="modal-header modal-retorno">
-                <h5 class="modal-title" id="modalRetornoLabel">
-                    <i class="fas fa-reply"></i> Vincular Retorno (1:1)
+            <div class="modal-header modal-recusa">
+                <h5 class="modal-title" id="modalRecusaLabel">
+                    <i class="fas fa-ban"></i> Registrar Recusa
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
             </div>
-            <form method="POST" action="{{ url_for('pallet_v2.tratativa_nfs.vincular_retorno') }}">
+            <form method="POST" action="{{ url_for('pallet_v2.tratativa_nfs.registrar_recusa') }}">
                 <div class="modal-body">
-                    <input type="hidden" name="nf_remessa_id" id="retorno_nf_remessa_id">
+                    <input type="hidden" name="nf_remessa_id" id="recusa_nf_remessa_id">
 
                     <!-- Info da NF de remessa -->
                     <div class="info-card">
-                        <h6>NF de Remessa</h6>
-                        <div class="info-value" id="retorno_info_nf">-</div>
-                        <div class="info-detail" id="retorno_info_destinatario">-</div>
-                        <div class="info-detail">Quantidade pendente: <strong id="retorno_info_qtd">-</strong> pallets</div>
+                        <h6>NF de Remessa Recusada</h6>
+                        <div class="info-value" id="recusa_info_nf">-</div>
+                        <div class="info-detail" id="recusa_info_destinatario">-</div>
+                        <div class="info-detail">Quantidade pendente: <strong id="recusa_info_qtd">-</strong> pallets</div>
                     </div>
 
-                    <div class="alert-info-action">
-                        <i class="fas fa-info-circle"></i>
-                        <strong>Retorno 1:1</strong>: Uma NF de retorno fecha apenas uma NF de remessa.
-                        Use esta opção quando a NF de retorno referencia diretamente esta NF de remessa.
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Recusa sem NF</strong>: O cliente recusou a NF de remessa sem emitir NF de devolução.
+                        Este é um registro manual interno para controle - não há documento fiscal associado.
                     </div>
 
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label for="retorno_numero_nf" class="form-label">Número da NF Retorno <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="retorno_numero_nf" name="numero_nf_retorno" required placeholder="Ex: 123456">
+                            <label for="recusa_quantidade" class="form-label">Quantidade Recusada <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" id="recusa_quantidade" name="quantidade" min="1" required>
                         </div>
                         <div class="col-md-6">
-                            <label for="retorno_quantidade" class="form-label">Quantidade <span class="text-danger">*</span></label>
-                            <input type="number" class="form-control" id="retorno_quantidade" name="quantidade" min="1" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label for="retorno_data" class="form-label">Data do Retorno</label>
-                            <input type="date" class="form-control" id="retorno_data" name="data_nf_retorno">
-                        </div>
-                        <div class="col-md-6">
-                            <label for="retorno_chave" class="form-label">Chave NFe</label>
-                            <input type="text" class="form-control" id="retorno_chave" name="chave_nfe_retorno" maxlength="44" placeholder="44 dígitos">
+                            <label for="recusa_data" class="form-label">Data da Recusa</label>
+                            <input type="date" class="form-control" id="recusa_data" name="data_recusa">
                         </div>
                         <div class="col-12">
-                            <label for="retorno_observacao" class="form-label">Observações</label>
-                            <textarea class="form-control" id="retorno_observacao" name="observacao" rows="2" placeholder="Observações adicionais..."></textarea>
+                            <label for="recusa_motivo" class="form-label">Motivo da Recusa <span class="text-danger">*</span></label>
+                            <select class="form-select" id="recusa_motivo_select" onchange="updateRecusaMotivoText(this)">
+                                <option value="">Selecione um motivo...</option>
+                                <option value="Mercadoria danificada">Mercadoria danificada</option>
+                                <option value="Pedido cancelado pelo cliente">Pedido cancelado pelo cliente</option>
+                                <option value="Divergência de quantidade">Divergência de quantidade</option>
+                                <option value="Cliente não localizou o pedido">Cliente não localizou o pedido</option>
+                                <option value="Prazo de entrega expirado">Prazo de entrega expirado</option>
+                                <option value="Outro">Outro motivo...</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label for="recusa_motivo_texto" class="form-label">Descrição do Motivo</label>
+                            <textarea class="form-control" id="recusa_motivo_texto" name="motivo_recusa" rows="2"
+                                      placeholder="Descreva o motivo da recusa..." required></textarea>
+                        </div>
+                        <div class="col-12">
+                            <label for="recusa_observacao" class="form-label">Observações Adicionais</label>
+                            <textarea class="form-control" id="recusa_observacao" name="observacao" rows="2" placeholder="Observações adicionais..."></textarea>
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-info">
-                        <i class="fas fa-reply"></i> Confirmar Retorno
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-ban"></i> Registrar Recusa
                     </button>
                 </div>
             </form>
@@ -1293,26 +1302,36 @@ function atualizarResumoDevolucao() {
 }
 
 // =============================================
-// MODAL RETORNO (1:1)
+// MODAL RECUSA (sem NF)
 // =============================================
-function openRetornoModal(nfId, numeroNf, destinatario, qtdPendente) {
-    document.getElementById('retorno_nf_remessa_id').value = nfId;
-    document.getElementById('retorno_info_nf').textContent = 'NF ' + numeroNf;
-    document.getElementById('retorno_info_destinatario').textContent = destinatario;
-    document.getElementById('retorno_info_qtd').textContent = qtdPendente;
-    document.getElementById('retorno_quantidade').max = qtdPendente;
-    document.getElementById('retorno_quantidade').value = qtdPendente;
+function openRecusaModal(nfId, numeroNf, destinatario, qtdPendente) {
+    document.getElementById('recusa_nf_remessa_id').value = nfId;
+    document.getElementById('recusa_info_nf').textContent = 'NF ' + numeroNf;
+    document.getElementById('recusa_info_destinatario').textContent = destinatario;
+    document.getElementById('recusa_info_qtd').textContent = qtdPendente;
+    document.getElementById('recusa_quantidade').max = qtdPendente;
+    document.getElementById('recusa_quantidade').value = qtdPendente;
 
     // Data padrão: hoje
     const hoje = new Date().toISOString().split('T')[0];
-    document.getElementById('retorno_data').value = hoje;
+    document.getElementById('recusa_data').value = hoje;
 
     // Limpar campos
-    document.getElementById('retorno_numero_nf').value = '';
-    document.getElementById('retorno_chave').value = '';
-    document.getElementById('retorno_observacao').value = '';
+    document.getElementById('recusa_motivo_select').value = '';
+    document.getElementById('recusa_motivo_texto').value = '';
+    document.getElementById('recusa_observacao').value = '';
 
-    new bootstrap.Modal(document.getElementById('modalRetorno')).show();
+    new bootstrap.Modal(document.getElementById('modalRecusa')).show();
+}
+
+function updateRecusaMotivoText(select) {
+    const textarea = document.getElementById('recusa_motivo_texto');
+    if (select.value && select.value !== 'Outro') {
+        textarea.value = select.value;
+    } else if (select.value === 'Outro') {
+        textarea.value = '';
+        textarea.focus();
+    }
 }
 
 // =============================================
