@@ -180,42 +180,6 @@ body {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   COMPONENTES - INPUTS
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-.form-control,
-.form-select {
-    background: var(--bg-light);
-    border: var(--border-card);
-    color: var(--text);
-    transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.form-control:focus,
-.form-select:focus {
-    border-color: hsl(50 100% 50%);
-    box-shadow: 0 0 6px 1px hsla(50 100% 55% / 0.6);
-    outline: none;
-}
-
-.form-control::placeholder {
-    color: var(--text-muted);
-}
-
-/* Estados de input */
-.input-state-warning {
-    border-color: var(--amber-50) !important;
-}
-
-.input-state-danger {
-    border-color: var(--semantic-danger) !important;
-}
-
-.input-state-success {
-    border-color: var(--semantic-success) !important;
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
    COMPONENTES - TABLES
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -248,28 +212,6 @@ body {
 
 .table > tbody > tr:hover {
     background: hsla(0 0% 50% / 0.05);
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   COMPONENTES - MODALS
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-.modal-content {
-    background: var(--gradient);
-    border: var(--border-card);
-    border-top: solid 1px var(--highlight);
-    box-shadow: var(--shadow);
-}
-
-.modal-header {
-    background: transparent;
-    border-bottom: 1px solid var(--border);
-    color: var(--text);
-}
-
-.modal-footer {
-    background: transparent;
-    border-top: 1px solid var(--border);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
