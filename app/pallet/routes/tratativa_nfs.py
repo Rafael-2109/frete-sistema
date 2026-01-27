@@ -117,11 +117,12 @@ def listar_sugestoes():
     tipo = request.args.get('tipo', '')
     page = request.args.get('page', 1, type=int)
 
-    # Query base: sugestões pendentes
+    # Query base: sugestões pendentes (usa confirmado=False, não confirmado_em IS NULL)
     query = PalletNFSolucao.query.filter(
         PalletNFSolucao.ativo == True,
         PalletNFSolucao.vinculacao == 'SUGESTAO',
-        PalletNFSolucao.confirmado_em.is_(None)
+        PalletNFSolucao.confirmado == False,
+        PalletNFSolucao.rejeitado == False
     )
 
     # Filtrar por tipo
@@ -133,22 +134,23 @@ def listar_sugestoes():
 
     sugestoes = query.paginate(page=page, per_page=50, error_out=False)
 
-    # Estatísticas
-    stats = {
-        'total_pendentes': sugestoes.total,
-        'devolucoes': PalletNFSolucao.query.filter(
-            PalletNFSolucao.ativo == True,
-            PalletNFSolucao.vinculacao == 'SUGESTAO',
-            PalletNFSolucao.confirmado_em.is_(None),
-            PalletNFSolucao.tipo == 'DEVOLUCAO'
-        ).count(),
-        'retornos': PalletNFSolucao.query.filter(
-            PalletNFSolucao.ativo == True,
-            PalletNFSolucao.vinculacao == 'SUGESTAO',
-            PalletNFSolucao.confirmado_em.is_(None),
-            PalletNFSolucao.tipo == 'RETORNO'
-        ).count()
-    }
+    # Estatísticas - query agregada para performance (1 query ao invés de 2)
+    stats_query = db.session.query(
+        PalletNFSolucao.tipo,
+        func.count(PalletNFSolucao.id)
+    ).filter(
+        PalletNFSolucao.ativo == True,
+        PalletNFSolucao.vinculacao == 'SUGESTAO',
+        PalletNFSolucao.confirmado == False,
+        PalletNFSolucao.rejeitado == False
+    ).group_by(PalletNFSolucao.tipo).all()
+
+    stats = {'total_pendentes': sugestoes.total, 'devolucoes': 0, 'retornos': 0}
+    for tipo_stat, count in stats_query:
+        if tipo_stat == 'DEVOLUCAO':
+            stats['devolucoes'] = count
+        elif tipo_stat == 'RETORNO':
+            stats['retornos'] = count
 
     return render_template(
         'pallet/v2/tratativa_nfs/sugestoes.html',
@@ -324,11 +326,17 @@ def vincular_devolucao():
 
         usuario = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
 
-        # Preparar dados
+        # Preparar dados com nomes de campos corretos para NFService.registrar_solucao_nf()
+        cnpj_raw = request.form.get('cnpj_emitente', '').strip()
+        cnpj_limpo = cnpj_raw.replace('.', '').replace('-', '').replace('/', '') if cnpj_raw else None
+
         nf_devolucao = {
-            'numero_nf': numero_nf_devolucao,
-            'chave_nfe': request.form.get('chave_nfe_devolucao', '').strip() or None,
-            'data_emissao': data_nf_devolucao
+            'numero_nf_solucao': numero_nf_devolucao,
+            'serie_nf_solucao': request.form.get('serie_nf_devolucao', '').strip() or None,
+            'chave_nfe_solucao': request.form.get('chave_nfe_devolucao', '').strip() or None,
+            'data_nf_solucao': data_nf_devolucao,
+            'cnpj_emitente': cnpj_limpo,
+            'nome_emitente': request.form.get('nome_emitente', '').strip() or None,
         }
 
         # Extrair IDs e quantidades
@@ -393,11 +401,17 @@ def vincular_retorno():
 
         usuario = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
 
-        # Preparar dados
+        # Preparar dados com nomes de campos corretos para NFService.registrar_solucao_nf()
+        cnpj_raw = request.form.get('cnpj_emitente', '').strip()
+        cnpj_limpo = cnpj_raw.replace('.', '').replace('-', '').replace('/', '') if cnpj_raw else None
+
         nf_retorno = {
-            'numero_nf': numero_nf_retorno,
-            'chave_nfe': request.form.get('chave_nfe_retorno', '').strip() or None,
-            'data_emissao': data_nf_retorno
+            'numero_nf_solucao': numero_nf_retorno,
+            'serie_nf_solucao': request.form.get('serie_nf_retorno', '').strip() or None,
+            'chave_nfe_solucao': request.form.get('chave_nfe_retorno', '').strip() or None,
+            'data_nf_solucao': data_nf_retorno,
+            'cnpj_emitente': cnpj_limpo,
+            'nome_emitente': request.form.get('nome_emitente', '').strip() or None,
         }
 
         # Usar MatchService para vincular
@@ -540,10 +554,12 @@ def api_listar_sugestoes():
     tipo = request.args.get('tipo', '')
     limit = request.args.get('limit', 50, type=int)
 
+    # Usa confirmado=False (boolean), não confirmado_em IS NULL (datetime)
     query = PalletNFSolucao.query.filter(
         PalletNFSolucao.ativo == True,
         PalletNFSolucao.vinculacao == 'SUGESTAO',
-        PalletNFSolucao.confirmado_em.is_(None)
+        PalletNFSolucao.confirmado == False,
+        PalletNFSolucao.rejeitado == False
     )
 
     if tipo:

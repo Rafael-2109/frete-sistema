@@ -751,15 +751,16 @@ class MatchService:
                 continue
 
             try:
+                # Aceita campos com nomes novos (numero_nf_solucao) ou antigos (numero_nf) para compatibilidade
                 solucao = NFService.registrar_solucao_nf(
                     nf_remessa_id=nf_remessa_id,
                     tipo='DEVOLUCAO',
                     quantidade=quantidade,
                     dados={
-                        'numero_nf_solucao': nf_devolucao.get('numero_nf', ''),
-                        'serie_nf_solucao': nf_devolucao.get('serie', ''),
-                        'chave_nfe_solucao': nf_devolucao.get('chave_nfe', ''),
-                        'data_nf_solucao': nf_devolucao.get('data_emissao'),
+                        'numero_nf_solucao': nf_devolucao.get('numero_nf_solucao') or nf_devolucao.get('numero_nf', ''),
+                        'serie_nf_solucao': nf_devolucao.get('serie_nf_solucao') or nf_devolucao.get('serie', ''),
+                        'chave_nfe_solucao': nf_devolucao.get('chave_nfe_solucao') or nf_devolucao.get('chave_nfe', ''),
+                        'data_nf_solucao': nf_devolucao.get('data_nf_solucao') or nf_devolucao.get('data_emissao'),
                         'cnpj_emitente': nf_devolucao.get('cnpj_emitente', ''),
                         'nome_emitente': nf_devolucao.get('nome_emitente', ''),
                         'info_complementar': nf_devolucao.get('info_complementar', ''),
@@ -810,15 +811,16 @@ class MatchService:
             f"a NF remessa #{nf_remessa_id} (usuario: {usuario})"
         )
 
+        # Aceita campos com nomes novos (numero_nf_solucao) ou antigos (numero_nf) para compatibilidade
         return NFService.registrar_solucao_nf(
             nf_remessa_id=nf_remessa_id,
             tipo='RETORNO',
             quantidade=quantidade,
             dados={
-                'numero_nf_solucao': nf_retorno.get('numero_nf', ''),
-                'serie_nf_solucao': nf_retorno.get('serie', ''),
-                'chave_nfe_solucao': nf_retorno.get('chave_nfe', ''),
-                'data_nf_solucao': nf_retorno.get('data_emissao'),
+                'numero_nf_solucao': nf_retorno.get('numero_nf_solucao') or nf_retorno.get('numero_nf', ''),
+                'serie_nf_solucao': nf_retorno.get('serie_nf_solucao') or nf_retorno.get('serie', ''),
+                'chave_nfe_solucao': nf_retorno.get('chave_nfe_solucao') or nf_retorno.get('chave_nfe', ''),
+                'data_nf_solucao': nf_retorno.get('data_nf_solucao') or nf_retorno.get('data_emissao'),
                 'cnpj_emitente': nf_retorno.get('cnpj_emitente', ''),
                 'nome_emitente': nf_retorno.get('nome_emitente', ''),
                 'info_complementar': nf_retorno.get('info_complementar', ''),

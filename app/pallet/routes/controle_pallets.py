@@ -540,11 +540,30 @@ def registrar_recebimento():
 
         usuario = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
 
+        # Buscar dados do responsável do crédito para preencher recebido_de e cnpj_entregador
+        credito_obj = PalletCredito.query.get(credito_id)
+        if not credito_obj:
+            flash(f'Crédito #{credito_id} não encontrado!', 'danger')
+            return redirect(request.referrer or url_for('pallet_v2.controle_pallets.listar_solucoes'))
+
+        # Preparar recebido_de e cnpj_entregador (do formulário ou do crédito)
+        recebido_de = request.form.get('recebido_de', '').strip()
+        if not recebido_de:
+            recebido_de = credito_obj.nome_responsavel or ''
+
+        cnpj_entregador = request.form.get('cnpj_entregador', '').strip()
+        if cnpj_entregador:
+            cnpj_entregador = cnpj_entregador.replace('.', '').replace('-', '').replace('/', '')
+        else:
+            cnpj_entregador = credito_obj.cnpj_responsavel or ''
+
         solucao, credito = SolucaoPalletService.registrar_recebimento(
             credito_id=credito_id,
             quantidade=quantidade,
             data_recebimento=data_recebimento,
-            local_recebimento=request.form.get('local_recebimento', '').strip() or None,
+            local_recebimento=request.form.get('local_recebimento', '').strip() or 'CD Nacom',
+            recebido_de=recebido_de,
+            cnpj_entregador=cnpj_entregador,
             usuario=usuario,
             observacao=request.form.get('observacao', '').strip() or None
         )

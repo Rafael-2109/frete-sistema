@@ -19,7 +19,7 @@ Data: 2025-12-10
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, date
 from typing import Dict, List, Optional, Tuple
 
 from app import db
@@ -114,6 +114,15 @@ def obter_journal_por_banco_cnab(banco_codigo: str) -> dict:
     }
 
 
+# =============================================================================
+# CONSTANTE PARA TRATAMENTO DE DESCONTO DUPLICADO (BUG ODOO)
+# =============================================================================
+# Quando cliente tem contrato financeiro (desconto concedido), o Odoo cria
+# um título extra com vencimento 01/01/2000 representando o desconto.
+# Este título deve ter seu valor rateado nos demais títulos da mesma NF.
+DATA_VENCIMENTO_DESCONTO_DUPLICADO = date(2000, 1, 1)
+
+
 # Campos criticos para snapshot do titulo
 CAMPOS_SNAPSHOT_TITULO = [
     'id', 'name', 'debit', 'credit', 'balance',
@@ -174,6 +183,9 @@ class BaixaTitulosService:
         logger.info(f"=" * 60)
         logger.info(f"PROCESSANDO LOTE {lote_id} - {lote.nome_arquivo}")
         logger.info(f"=" * 60)
+
+        # Limpar cache de títulos com rateio (para tratamento de desconto duplicado)
+        self._cache_titulos_rateio = {}
 
         # Buscar itens ativos e validos
         itens = BaixaTituloItem.query.filter_by(
@@ -529,11 +541,176 @@ class BaixaTitulosService:
 
         logger.info(f"  OK - Payments: {', '.join(pagamentos_criados)}, Saldo: {item.saldo_antes} -> {item.saldo_depois}")
 
+    # =========================================================================
+    # MÉTODOS DE BUSCA DE TÍTULOS COM TRATAMENTO DE DESCONTO DUPLICADO
+    # =========================================================================
+
+    def _converter_date_maturity(self, date_maturity) -> Optional[date]:
+        """
+        Converte date_maturity do Odoo para objeto date.
+
+        Args:
+            date_maturity: String no formato 'YYYY-MM-DD' ou objeto date
+
+        Returns:
+            Objeto date ou None se inválido
+        """
+        if not date_maturity:
+            return None
+        if isinstance(date_maturity, str):
+            return datetime.strptime(date_maturity, '%Y-%m-%d').date()
+        return date_maturity
+
+    def _buscar_titulos_nf_com_rateio(self, nf: str) -> Dict[int, Dict]:
+        """
+        Busca todos os títulos de uma NF e aplica rateio dos títulos com vencimento 01/01/2000.
+
+        Quando cliente tem contrato financeiro (desconto concedido), o Odoo cria
+        um título extra com vencimento 01/01/2000. Este valor deve ser rateado
+        igualmente entre os demais títulos (parcelas) da mesma NF.
+
+        Args:
+            nf: Número da NF-e
+
+        Returns:
+            Dict[parcela, titulo_com_rateio] onde o valor do título já inclui o rateio
+        """
+        # Buscar TODOS os títulos da NF
+        titulos = self.connection.search_read(
+            'account.move.line',
+            [
+                ['x_studio_nf_e', '=', nf],
+                ['account_type', '=', 'asset_receivable'],
+                ['parent_state', '=', 'posted']
+            ],
+            fields=CAMPOS_SNAPSHOT_TITULO,
+            limit=50
+        )
+
+        if not titulos:
+            return {}
+
+        # Separar títulos válidos dos títulos ano 2000
+        titulos_validos = []
+        titulos_ano_2000 = []
+
+        for t in titulos:
+            venc_date = self._converter_date_maturity(t.get('date_maturity'))
+            if venc_date == DATA_VENCIMENTO_DESCONTO_DUPLICADO:
+                titulos_ano_2000.append(t)
+            else:
+                titulos_validos.append(t)
+
+        # Se não há títulos ano 2000, retornar normalmente
+        if not titulos_ano_2000:
+            return {
+                t.get('l10n_br_cobranca_parcela', 1): t
+                for t in titulos_validos
+            }
+
+        # Calcular valor total dos títulos ano 2000
+        valor_total_ano_2000 = sum(
+            t.get('amount_residual', 0) or 0
+            for t in titulos_ano_2000
+        )
+
+        # Calcular rateio
+        qtd_titulos_validos = len(titulos_validos)
+        if qtd_titulos_validos == 0:
+            logger.warning(
+                f"NF {nf}: Apenas títulos ano 2000 encontrados, "
+                f"sem títulos válidos para rateio"
+            )
+            return {}
+
+        rateio_por_titulo = valor_total_ano_2000 / qtd_titulos_validos
+
+        logger.info(
+            f"NF {nf}: Rateio de desconto duplicado aplicado - "
+            f"Valor ano 2000: R$ {valor_total_ano_2000:.2f}, "
+            f"Títulos válidos: {qtd_titulos_validos}, "
+            f"Rateio/título: R$ {rateio_por_titulo:.2f}"
+        )
+
+        # Aplicar rateio e retornar por parcela
+        resultado = {}
+        for t in titulos_validos:
+            parcela = t.get('l10n_br_cobranca_parcela', 1)
+
+            # Criar cópia do título com valor ajustado
+            titulo_ajustado = dict(t)
+            valor_original = t.get('amount_residual', 0) or 0
+            titulo_ajustado['amount_residual'] = valor_original + rateio_por_titulo
+            titulo_ajustado['_rateio_aplicado'] = rateio_por_titulo
+            titulo_ajustado['_valor_original'] = valor_original
+
+            resultado[parcela] = titulo_ajustado
+
+            logger.debug(
+                f"  Parcela {parcela}: R$ {valor_original:.2f} + "
+                f"R$ {rateio_por_titulo:.2f} = R$ {titulo_ajustado['amount_residual']:.2f}"
+            )
+
+        return resultado
+
     def _buscar_titulo(self, nf: str, parcela: int) -> Optional[Dict]:
         """
         Busca titulo no Odoo por numero da NF-e e parcela.
+
+        IMPORTANTE: Aplica rateio de títulos com vencimento 01/01/2000
+        (bug de desconto duplicado do Odoo). Os títulos com essa data
+        têm seu valor rateado nos demais títulos da mesma NF.
+
+        Args:
+            nf: Número da NF-e
+            parcela: Número da parcela
+
+        Returns:
+            Dict com dados do título, já com rateio aplicado se houver
         """
-        # Buscar pelo campo x_studio_nf_e
+        # Usar cache de títulos com rateio
+        if not hasattr(self, '_cache_titulos_rateio'):
+            self._cache_titulos_rateio = {}
+
+        # Buscar todos os títulos da NF se não estiver em cache
+        if nf not in self._cache_titulos_rateio:
+            self._cache_titulos_rateio[nf] = self._buscar_titulos_nf_com_rateio(nf)
+
+        titulos_nf = self._cache_titulos_rateio.get(nf, {})
+
+        if parcela in titulos_nf:
+            titulo = titulos_nf[parcela]
+
+            # Log se houve rateio
+            if titulo.get('_rateio_aplicado'):
+                logger.info(
+                    f"Título NF={nf} P={parcela} com rateio: "
+                    f"Original={titulo['_valor_original']:.2f}, "
+                    f"Rateio={titulo['_rateio_aplicado']:.2f}, "
+                    f"Final={titulo['amount_residual']:.2f}"
+                )
+
+            return titulo
+
+        # Fallback: busca individual (sem rateio, para casos não mapeados)
+        logger.warning(
+            f"Título NF={nf} P={parcela} não encontrado no cache, "
+            f"buscando individualmente"
+        )
+        return self._buscar_titulo_individual(nf, parcela)
+
+    def _buscar_titulo_individual(self, nf: str, parcela: int) -> Optional[Dict]:
+        """
+        Busca título individual (fallback quando não está no cache).
+        Ignora títulos com vencimento 01/01/2000.
+
+        Args:
+            nf: Número da NF-e
+            parcela: Número da parcela
+
+        Returns:
+            Dict com dados do título ou None
+        """
         titulos = self.connection.search_read(
             'account.move.line',
             [
@@ -547,14 +724,22 @@ class BaixaTitulosService:
         )
 
         if titulos:
-            # Se encontrou mais de um, preferir empresa 1 (FB)
-            if len(titulos) > 1:
-                for t in titulos:
-                    company = t.get('company_id')
-                    if company and isinstance(company, (list, tuple)):
-                        if 'FB' in company[1]:
-                            return t
-            return titulos[0]
+            # Filtrar títulos ano 2000
+            for t in titulos:
+                venc_date = self._converter_date_maturity(t.get('date_maturity'))
+                if venc_date == DATA_VENCIMENTO_DESCONTO_DUPLICADO:
+                    logger.warning(
+                        f"Título ignorado (desconto duplicado): "
+                        f"NF={nf}, P={parcela}, ID={t.get('id')}"
+                    )
+                    continue
+
+                # Se encontrou mais de um válido, preferir empresa 1 (FB)
+                company = t.get('company_id')
+                if company and isinstance(company, (list, tuple)):
+                    if 'FB' in company[1]:
+                        return t
+                return t
 
         # Fallback: buscar pelo nome do move
         titulos = self.connection.search_read(
@@ -569,7 +754,12 @@ class BaixaTitulosService:
             limit=5
         )
 
-        return titulos[0] if titulos else None
+        for t in titulos or []:
+            venc_date = self._converter_date_maturity(t.get('date_maturity'))
+            if venc_date != DATA_VENCIMENTO_DESCONTO_DUPLICADO:
+                return t
+
+        return None
 
     def _buscar_titulo_por_id(self, titulo_id: int) -> Optional[Dict]:
         """Busca titulo por ID."""

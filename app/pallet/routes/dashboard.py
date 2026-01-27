@@ -192,11 +192,12 @@ def index():
                 'qtd': row.qtd_total or 0
             }
 
-    # Sugestões pendentes de confirmação
+    # Sugestões pendentes de confirmação (usa confirmado=False, não confirmado_em IS NULL)
     sugestoes_pendentes = PalletNFSolucao.query.filter(
         PalletNFSolucao.ativo == True,
         PalletNFSolucao.vinculacao == 'SUGESTAO',
-        PalletNFSolucao.confirmado_em.is_(None)
+        PalletNFSolucao.confirmado == False,
+        PalletNFSolucao.rejeitado == False
     ).count()
 
     return render_template(
@@ -271,11 +272,12 @@ def api_stats():
     for row in nfs_por_status:
         stats_nfs[row.status] = row.quantidade
 
-    # Sugestões pendentes
+    # Sugestões pendentes (usa confirmado=False, não confirmado_em IS NULL)
     sugestoes_pendentes = PalletNFSolucao.query.filter(
         PalletNFSolucao.ativo == True,
         PalletNFSolucao.vinculacao == 'SUGESTAO',
-        PalletNFSolucao.confirmado_em.is_(None)
+        PalletNFSolucao.confirmado == False,
+        PalletNFSolucao.rejeitado == False
     ).count()
 
     return jsonify({
