@@ -1,0 +1,24 @@
+/**
+ * _carteira.css - Carteira Module Overrides
+ *
+ * Component overrides specific to the carteira module.
+ * NOTE: agrupados.css exists but is NOT layered - consider consolidating.
+ *
+ * Token mapping:
+ * - Use var(--bg-light) for card backgrounds
+ * - Use var(--text) for primary text
+ * - Use var(--text-muted) for secondary text
+ * - Use var(--border) for borders
+ * - Use var(--semantic-success/danger) for status colors
+ */
+
+@layer modules {
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     CARTEIRA MODULE - Component overrides
+     Migrated from template inline styles
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* Placeholder - styles will be added as templates are migrated */
+
+} /* End @layer modules */

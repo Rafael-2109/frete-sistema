@@ -1,0 +1,25 @@
+/**
+ * _financeiro.css - Financeiro Module Overrides
+ *
+ * Component overrides specific to the financeiro module.
+ * Styles extracted from template <style> blocks during migration.
+ *
+ * Token mapping:
+ * - Use var(--bg-light) for card backgrounds
+ * - Use var(--text) for primary text
+ * - Use var(--text-muted) for secondary text
+ * - Use var(--border) for borders
+ * - Use var(--semantic-success/danger) for status colors
+ * - Use var(--amber-50/55) for accent colors
+ */
+
+@layer modules {
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     FINANCEIRO MODULE - Component overrides
+     Migrated from template inline styles
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* Placeholder - styles will be added as templates are migrated */
+
+} /* End @layer modules */

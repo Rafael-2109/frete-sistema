@@ -1,0 +1,25 @@
+/**
+ * _embarques.css - Embarques Module Overrides
+ *
+ * Component overrides specific to the embarques module.
+ * NOTE: Print templates (imprimir_*.html) are NOT migrated - they keep
+ * hardcoded light mode colors for print reliability.
+ *
+ * Token mapping:
+ * - Use var(--bg-light) for card backgrounds
+ * - Use var(--text) for primary text
+ * - Use var(--text-muted) for secondary text
+ * - Use var(--border) for borders
+ */
+
+@layer modules {
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     EMBARQUES MODULE - Component overrides
+     Migrated from template inline styles
+     EXCLUDES: imprimir_*.html (print templates keep hardcoded colors)
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* Placeholder - styles will be added as templates are migrated */
+
+} /* End @layer modules */
