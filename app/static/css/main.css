@@ -58,6 +58,14 @@
 @import url('./modules/_financeiro.css') layer(modules);
 @import url('./modules/_carteira.css') layer(modules);
 @import url('./modules/_embarques.css') layer(modules);
+@import url('./modules/_pallet.css') layer(modules);
+@import url('./modules/_recebimento.css') layer(modules);
+@import url('./modules/_portal.css') layer(modules);
+@import url('./modules/_fretes.css') layer(modules);
+@import url('./modules/_bi.css') layer(modules);
+@import url('./modules/_motochefe.css') layer(modules);
+@import url('./modules/_manufatura.css') layer(modules);
+@import url('./modules/_rastreamento.css') layer(modules);
 
 /* Utilities - Helper classes */
 @import url('./utilities/_utilities.css') layer(utilities);
