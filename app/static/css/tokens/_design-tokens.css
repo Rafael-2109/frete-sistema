@@ -180,39 +180,6 @@ body {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   COMPONENTES - CARDS
-   Hierarquia: --bg (5% dark / 95% light) = tom intermediário
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-.card {
-    background: var(--bg);
-    border: var(--border-card);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow);
-    transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.card:hover {
-    border-color: hsl(50 100% 50%);
-    box-shadow: 0 0 6px 1px hsla(50 100% 55% / 0.6);
-}
-
-.card-body {
-    color: var(--text);
-}
-
-.card-header {
-    background: transparent;
-    border-bottom: 1px solid var(--border);
-    color: var(--text);
-}
-
-.card-footer {
-    background: transparent;
-    border-top: 1px solid var(--border);
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
    COMPONENTES - INPUTS
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -246,60 +213,6 @@ body {
 
 .input-state-success {
     border-color: var(--semantic-success) !important;
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   COMPONENTES - BADGES (HSL direto)
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-.badge {
-    font-weight: 500;
-    font-size: 0.75rem;
-    padding: 0.35em 0.65em;
-    border-radius: var(--radius-sm);
-}
-
-/* SECONDARY - Cinza 40% */
-.badge-secondary, .badge.bg-secondary {
-    background: hsl(0 0% 40%) !important;
-    color: hsl(0 0% 100%) !important;
-}
-
-/* PRIMARY - Amarelo */
-.badge-primary, .badge.bg-primary {
-    background: hsl(45 100% 55%) !important;
-    color: hsl(0 0% 10%) !important;
-}
-
-/* SUCCESS - Verde */
-.badge-success, .badge.bg-success {
-    background: hsl(145 65% 40%) !important;
-    color: hsl(0 0% 100%) !important;
-}
-
-/* DANGER - Vermelho */
-.badge-danger, .badge.bg-danger {
-    background: hsl(0 70% 50%) !important;
-    color: hsl(0 0% 100%) !important;
-}
-
-/* WARNING - Amarelo escuro */
-.badge-warning, .badge.bg-warning {
-    background: hsl(45 100% 50%) !important;
-    color: hsl(0 0% 10%) !important;
-}
-
-/* INFO - Cinza 45% */
-.badge-info, .badge.bg-info {
-    background: hsl(0 0% 45%) !important;
-    color: hsl(0 0% 100%) !important;
-}
-
-/* LIGHT - Adaptativo */
-.badge.bg-light {
-    background: var(--bg-light) !important;
-    color: var(--text) !important;
-    border: 1px solid var(--border) !important;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
