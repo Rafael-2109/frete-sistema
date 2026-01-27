@@ -1,0 +1,59 @@
+/**
+ * main.css - CSS Entry Point for Nacom Goya Design System
+ *
+ * This file establishes the CSS cascade layer order and imports
+ * all stylesheets in the correct priority sequence.
+ *
+ * Layer Priority (lowest to highest):
+ * 1. reset     - Browser normalization
+ * 2. tokens    - Design tokens (colors, spacing, typography)
+ * 3. base      - Bootstrap overrides, global defaults
+ * 4. components - Reusable UI components (buttons, cards, etc.)
+ * 5. modules   - Feature-specific styles (carteira, financeiro, etc.)
+ * 6. utilities - Utility classes (spacing, visibility, etc.)
+ * 7. overrides - Temporary migration overrides (remove when complete)
+ *
+ * IMPORTANT: The @layer statement MUST be the first rule.
+ * All @import statements MUST come after @layer and before any other rules.
+ *
+ * Browser Support: 96%+ (all modern browsers since March 2022)
+ * Reference: https://developer.mozilla.org/en-US/docs/Web/CSS/@layer
+ */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LAYER ORDER DECLARATION (MUST BE FIRST)
+   Lower layers have lower specificity, higher layers can override without !important
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@layer reset, tokens, base, components, modules, utilities, overrides;
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LAYER IMPORTS
+   Note: Imports will be added in Plan 01-03 after wrapping existing CSS files
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Tokens - Design system variables (Phase 1, Plan 03)
+   @import url('./tokens/_design-tokens.css') layer(tokens);
+*/
+
+/* Base - Bootstrap overrides and global defaults (Phase 1, Plan 03)
+   @import url('./base/_bootstrap-overrides.css') layer(base);
+   @import url('./base/_navbar.css') layer(base);
+*/
+
+/* Components - Reusable UI patterns (Phase 2)
+   @import url('./components/_buttons.css') layer(components);
+   @import url('./components/_cards.css') layer(components);
+*/
+
+/* Utilities - Helper classes (Phase 1, Plan 03)
+   @import url('./utilities/_utilities.css') layer(utilities);
+*/
+
+/* Legacy - Temporary overrides during migration (remove after Phase 7)
+   @import url('./legacy/_inline-overrides.css') layer(overrides);
+*/
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   END OF IMPORTS - No additional rules should be added to this file
+   ═══════════════════════════════════════════════════════════════════════════ */
