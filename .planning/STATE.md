@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 ## Current Position
 
 Phase: 5 of 7 (High-Traffic Migration)
-Plan: 1 of 5 in current phase
+Plan: 4 of 5 in current phase (wave 2)
 Status: In progress
-Last activity: 2026-01-27 - Completed 05-01-PLAN.md (Module CSS Infrastructure)
+Last activity: 2026-01-27 - Completed 05-04-PLAN.md (Embarques Templates)
 
-Progress: [██████░░░░] 60%
+Progress: [███████░░░] 69%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 11
+- Total plans completed: 12
 - Average duration: 1.8 min
-- Total execution time: 21 min
+- Total execution time: 23 min
 
 **By Phase:**
 
@@ -31,10 +31,10 @@ Progress: [██████░░░░] 60%
 | 02-component-library | 3 | 6 min | 2 min |
 | 03-table-system | 2 | 3 min | 1.5 min |
 | 04-layout-patterns | 2 | 3 min | 1.5 min |
-| 05-high-traffic-migration | 1 | 1 min | 1 min |
+| 05-high-traffic-migration | 2 | 3 min | 1.5 min |
 
 **Recent Trend:**
-- Last 5 plans: 03-02 (2 min), 04-01 (1 min), 04-02 (2 min), 05-01 (1 min)
+- Last 5 plans: 04-01 (1 min), 04-02 (2 min), 05-01 (1 min), 05-04 (2 min)
 - Trend: Stable, fast execution
 
 *Updated after each plan completion*
@@ -79,6 +79,8 @@ Recent decisions affecting current work:
 - [04-02]: Modern dvh units with calc(100vh - 56px) fallback for older browsers
 - [05-01]: Module files placed directly in modules/ folder (not subdirectories)
 - [05-01]: Each module file includes token mapping documentation for migration guidance
+- [05-04]: Print templates (imprimir_*.html) intentionally excluded from token migration
+- [05-04]: CSS color-mix() for keyframe animation darkening instead of hardcoded values
 
 ### Pending Todos
 
@@ -94,9 +96,9 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-01-27T14:19:15Z
-Stopped at: Completed 05-01-PLAN.md
+Last session: 2026-01-27T14:24:03Z
+Stopped at: Completed 05-04-PLAN.md
 Resume file: None
 
 ---
-*Next step: Execute Plan 05-02 (Financeiro Templates)*
+*Next step: Continue wave 2 (05-02, 05-03, 05-05 in parallel)*
