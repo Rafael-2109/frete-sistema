@@ -1,0 +1,124 @@
+/**
+ * Bootstrap Theme Override
+ *
+ * Este arquivo DEVE ficar FORA do layer system (@layer) porque precisa
+ * sobrescrever as variáveis do Bootstrap CDN que também está fora de layers.
+ *
+ * CSS fora de layers tem prioridade sobre CSS dentro de layers (CSS spec).
+ *
+ * Carregado LOGO APÓS o Bootstrap CDN no base.html.
+ */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DARK MODE (Padrão) - Override Bootstrap
+   Hierarquia de elevação: body 0% → surfaces 5% → cards 10%
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root,
+[data-bs-theme="dark"],
+[data-theme="dark"] {
+    /* Core backgrounds - override Bootstrap's #212529 */
+    --bs-body-bg: hsl(0 0% 0%);
+    --bs-body-color: hsl(0 0% 95%);
+    --bs-secondary-bg: hsl(0 0% 10%);
+    --bs-tertiary-bg: hsl(0 0% 10%);
+    --bs-border-color: hsl(0 0% 30%);
+    --bs-secondary-color: hsl(0 0% 70%);
+
+    /* Card backgrounds */
+    --bs-card-bg: hsl(0 0% 5%);
+    --bs-card-border-color: hsl(0 0% 30%);
+
+    /* Table backgrounds */
+    --bs-table-bg: hsl(0 0% 10%);
+    --bs-table-color: hsl(0 0% 95%);
+    --bs-table-border-color: hsl(0 0% 30%);
+    --bs-table-striped-bg: hsl(0 0% 8%);
+    --bs-table-hover-bg: hsl(0 0% 12%);
+
+    /* Input backgrounds */
+    --bs-form-control-bg: hsl(0 0% 10%);
+
+    /* Modal backgrounds */
+    --bs-modal-bg: hsl(0 0% 5%);
+
+    /* Dropdown backgrounds */
+    --bs-dropdown-bg: hsl(0 0% 5%);
+    --bs-dropdown-border-color: hsl(0 0% 30%);
+    --bs-dropdown-link-color: hsl(0 0% 95%);
+    --bs-dropdown-link-hover-bg: hsl(0 0% 10%);
+
+    /* Primary colors */
+    --bs-primary: hsl(45 95% 55%);
+    --bs-primary-rgb: 255, 212, 38;
+    --bs-success: hsl(145 65% 40%);
+    --bs-success-rgb: 34, 197, 94;
+    --bs-danger: hsl(0 70% 50%);
+    --bs-danger-rgb: 239, 68, 68;
+    --bs-warning: hsl(45 100% 50%);
+    --bs-warning-rgb: 255, 200, 0;
+    --bs-link-color: hsl(45 95% 55%);
+
+    color-scheme: dark;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LIGHT MODE - Override Bootstrap
+   Hierarquia de elevação: body 85% → surfaces 92% → cards 100%
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+[data-bs-theme="light"],
+[data-theme="light"] {
+    /* Core backgrounds - override Bootstrap's #fff */
+    --bs-body-bg: hsl(0 0% 85%);
+    --bs-body-color: hsl(0 0% 5%);
+    --bs-secondary-bg: hsl(0 0% 100%);
+    --bs-tertiary-bg: hsl(0 0% 100%);
+    --bs-border-color: hsl(0 0% 78%);
+    --bs-secondary-color: hsl(0 0% 35%);
+
+    /* Card backgrounds - elevated (white) */
+    --bs-card-bg: hsl(0 0% 100%);
+    --bs-card-border-color: hsl(0 0% 85%);
+
+    /* Table backgrounds */
+    --bs-table-bg: hsl(0 0% 100%);
+    --bs-table-color: hsl(0 0% 5%);
+    --bs-table-border-color: hsl(0 0% 85%);
+    --bs-table-striped-bg: hsl(0 0% 97%);
+    --bs-table-hover-bg: hsl(0 0% 95%);
+
+    /* Input backgrounds */
+    --bs-form-control-bg: hsl(0 0% 100%);
+
+    /* Modal backgrounds */
+    --bs-modal-bg: hsl(0 0% 100%);
+
+    /* Dropdown backgrounds */
+    --bs-dropdown-bg: hsl(0 0% 100%);
+    --bs-dropdown-border-color: hsl(0 0% 85%);
+    --bs-dropdown-link-color: hsl(0 0% 5%);
+    --bs-dropdown-link-hover-bg: hsl(0 0% 95%);
+
+    /* Primary colors - darker for better contrast */
+    --bs-primary: hsl(45 100% 50%);
+    --bs-primary-rgb: 255, 204, 0;
+    --bs-success: hsl(145 70% 32%);
+    --bs-success-rgb: 34, 139, 84;
+    --bs-danger: hsl(0 75% 45%);
+    --bs-danger-rgb: 200, 57, 57;
+    --bs-warning: hsl(45 100% 50%);
+    --bs-warning-rgb: 255, 193, 7;
+    --bs-link-color: hsl(45 100% 28%);
+
+    color-scheme: light;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BODY STYLING - Apply background
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+body {
+    background-color: var(--bs-body-bg) !important;
+    color: var(--bs-body-color);
+}
