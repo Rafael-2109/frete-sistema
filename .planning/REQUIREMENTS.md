@@ -16,11 +16,11 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Components
 
-- [ ] **COMP-01**: Botoes com contraste correto em qualquer tema (dark/light)
-- [ ] **COMP-02**: Cards com bordas e sombras consistentes usando tokens
-- [ ] **COMP-03**: Badges com texto legivel (sem branco em fundo claro, sem preto em fundo escuro)
-- [ ] **COMP-04**: Modais seguindo padrao de cores do tema
-- [ ] **COMP-05**: Forms com estados de foco visiveis e cores corretas
+- [x] **COMP-01**: Botoes com contraste correto em qualquer tema (dark/light)
+- [x] **COMP-02**: Cards com bordas e sombras consistentes usando tokens
+- [x] **COMP-03**: Badges com texto legivel (sem branco em fundo claro, sem preto em fundo escuro)
+- [x] **COMP-04**: Modais seguindo padrao de cores do tema
+- [x] **COMP-05**: Forms com estados de foco visiveis e cores corretas
 
 ### Tables
 
@@ -83,11 +83,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FOUND-02 | Phase 1 | Complete |
 | FOUND-03 | Phase 1 | Complete |
 | FOUND-04 | Phase 1 | Complete |
-| COMP-01 | Phase 2 | Pending |
-| COMP-02 | Phase 2 | Pending |
-| COMP-03 | Phase 2 | Pending |
-| COMP-04 | Phase 2 | Pending |
-| COMP-05 | Phase 2 | Pending |
+| COMP-01 | Phase 2 | Complete |
+| COMP-02 | Phase 2 | Complete |
+| COMP-03 | Phase 2 | Complete |
+| COMP-04 | Phase 2 | Complete |
+| COMP-05 | Phase 2 | Complete |
 | TABL-01 | Phase 3 | Pending |
 | TABL-02 | Phase 3 | Pending |
 | TABL-03 | Phase 3 | Pending |
@@ -106,4 +106,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-26*
-*Last updated: 2026-01-27 after Phase 1 completion*
+*Last updated: 2026-01-27 after Phase 2 completion*
