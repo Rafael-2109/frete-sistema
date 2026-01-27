@@ -66,6 +66,7 @@
 @import url('./modules/_motochefe.css') layer(modules);
 @import url('./modules/_manufatura.css') layer(modules);
 @import url('./modules/_rastreamento.css') layer(modules);
+@import url('./modules/_rastreamento-standalone.css') layer(modules);
 @import url('./modules/_devolucao.css') layer(modules);
 @import url('./modules/_monitoramento.css') layer(modules);
 

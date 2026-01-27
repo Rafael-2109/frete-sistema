@@ -1,0 +1,911 @@
+/**
+ * _rastreamento-standalone.css - Standalone Page Styles
+ *
+ * For templates that DON'T extend base.html:
+ * - rastreamento/aceite_lgpd.html
+ * - rastreamento/app_inicio.html
+ * - rastreamento/confirmacao.html
+ * - rastreamento/erro.html
+ * - rastreamento/questionario_entrega.html
+ * - rastreamento/rastreamento_ativo.html
+ * - rastreamento/scanner_qrcode.html
+ * - rastreamento/upload_canhoto.html
+ * - devolucao/termo_descarte.html
+ *
+ * These templates must include this file directly via <link> tag.
+ * Design tokens are DUPLICATED here because main.css is not loaded.
+ *
+ * Brand: Green primary (delivery tracking theme)
+ */
+
+/* =============================================================================
+   DESIGN TOKENS (self-contained for standalone pages)
+   ============================================================================= */
+
+:root {
+  /* Core backgrounds */
+  --standalone-bg: hsl(210, 17%, 98%);
+  --standalone-bg-light: hsl(0, 0%, 100%);
+
+  /* Text colors */
+  --standalone-text: hsl(210, 11%, 15%);
+  --standalone-text-muted: hsl(210, 7%, 46%);
+
+  /* Border */
+  --standalone-border: hsl(210, 14%, 89%);
+
+  /* Rastreamento brand: Green primary (delivery tracking) */
+  --standalone-primary: hsl(145, 63%, 42%);
+  --standalone-primary-light: hsl(145, 63%, 42%, 0.15);
+  --standalone-primary-dark: hsl(145, 63%, 32%);
+
+  /* Secondary accent: Teal/Cyan for gradients */
+  --standalone-secondary: hsl(162, 73%, 46%);
+
+  /* Status colors */
+  --standalone-success: hsl(145, 63%, 42%);
+  --standalone-danger: hsl(354, 70%, 54%);
+  --standalone-warning: hsl(45, 100%, 51%);
+  --standalone-info: hsl(207, 90%, 54%);
+
+  /* Accent gradient (purple - used in some templates) */
+  --standalone-gradient-start: hsl(235, 72%, 66%);
+  --standalone-gradient-end: hsl(281, 44%, 46%);
+}
+
+/* Dark mode tokens */
+[data-bs-theme="dark"] {
+  /* Core backgrounds */
+  --standalone-bg: hsl(220, 13%, 10%);
+  --standalone-bg-light: hsl(220, 13%, 14%);
+
+  /* Text colors */
+  --standalone-text: hsl(210, 17%, 98%);
+  --standalone-text-muted: hsl(210, 14%, 72%);
+
+  /* Border */
+  --standalone-border: hsl(215, 14%, 34%);
+
+  /* Green primary adjusted for dark mode - brighter teal */
+  --standalone-primary: hsl(168, 76%, 42%);
+  --standalone-primary-light: hsl(168, 76%, 42%, 0.2);
+  --standalone-primary-dark: hsl(168, 80%, 52%);
+
+  /* Secondary accent */
+  --standalone-secondary: hsl(158, 64%, 52%);
+
+  /* Status colors adjusted for dark mode */
+  --standalone-success: hsl(168, 76%, 42%);
+  --standalone-danger: hsl(354, 70%, 60%);
+  --standalone-warning: hsl(45, 100%, 55%);
+  --standalone-info: hsl(207, 90%, 60%);
+}
+
+/* =============================================================================
+   BASE STYLES
+   ============================================================================= */
+
+body.standalone-page {
+  background: var(--standalone-bg);
+  color: var(--standalone-text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  min-height: 100vh;
+}
+
+/* Gradient backgrounds for mobile pages */
+.standalone-bg-gradient-green {
+  background: linear-gradient(135deg, var(--standalone-primary) 0%, var(--standalone-secondary) 100%);
+}
+
+.standalone-bg-gradient-purple {
+  background: linear-gradient(135deg, var(--standalone-gradient-start) 0%, var(--standalone-gradient-end) 100%);
+}
+
+.standalone-bg-gradient-danger {
+  background: linear-gradient(135deg, var(--standalone-danger) 0%, hsl(354, 70%, 46%) 100%);
+}
+
+.standalone-bg-dark {
+  background: hsl(0, 0%, 0%);
+}
+
+/* =============================================================================
+   CARDS
+   ============================================================================= */
+
+.standalone-card {
+  background: var(--standalone-bg-light);
+  border: 1px solid var(--standalone-border);
+  border-radius: 20px;
+  padding: 1.5rem;
+  box-shadow: 0 10px 40px hsla(0, 0%, 0%, 0.2);
+  animation: standalone-slideUp 0.5s ease;
+}
+
+.standalone-card-simple {
+  background: var(--standalone-bg-light);
+  border-radius: 15px;
+  padding: 20px;
+  box-shadow: 0 5px 15px hsla(0, 0%, 0%, 0.1);
+}
+
+@keyframes standalone-slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Header icon (circular green gradient) */
+.standalone-header-icon {
+  width: 80px;
+  height: 80px;
+  background: linear-gradient(135deg, var(--standalone-primary) 0%, var(--standalone-secondary) 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: -50px auto 20px;
+  box-shadow: 0 5px 20px hsla(145, 63%, 42%, 0.3);
+}
+
+.standalone-header-icon.large {
+  width: 100px;
+  height: 100px;
+  margin: -80px auto 20px;
+}
+
+.standalone-header-icon.success-icon {
+  width: 120px;
+  height: 120px;
+  animation: standalone-checkmark 0.8s ease;
+}
+
+@keyframes standalone-checkmark {
+  0% { transform: scale(0); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+.standalone-header-icon i {
+  font-size: 40px;
+  color: white;
+}
+
+.standalone-header-icon.large i {
+  font-size: 50px;
+}
+
+.standalone-header-icon.success-icon i {
+  font-size: 60px;
+}
+
+/* =============================================================================
+   BUTTONS
+   ============================================================================= */
+
+/* Primary button (green gradient) */
+.standalone-btn-primary {
+  width: 100%;
+  padding: 15px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  border-radius: 15px;
+  border: none;
+  background: linear-gradient(135deg, var(--standalone-primary) 0%, var(--standalone-secondary) 100%);
+  color: white;
+  box-shadow: 0 5px 20px hsla(145, 63%, 42%, 0.3);
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.standalone-btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px hsla(145, 63%, 42%, 0.4);
+}
+
+.standalone-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Secondary button (blue gradient for camera) */
+.standalone-btn-secondary {
+  width: 100%;
+  padding: 15px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  border-radius: 15px;
+  border: none;
+  background: linear-gradient(135deg, var(--standalone-info) 0%, hsl(207, 90%, 44%) 100%);
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+/* Danger button (red gradient) */
+.standalone-btn-danger {
+  width: 100%;
+  padding: 18px;
+  font-size: 1.2rem;
+  font-weight: 700;
+  border-radius: 15px;
+  border: none;
+  background: linear-gradient(135deg, var(--standalone-danger) 0%, hsl(354, 70%, 46%) 100%);
+  color: white;
+  box-shadow: 0 5px 25px hsla(354, 70%, 54%, 0.4);
+  cursor: pointer;
+}
+
+/* Option button (for questionnaire) */
+.standalone-btn-option {
+  width: 100%;
+  padding: 15px;
+  border: 2px solid var(--standalone-border);
+  border-radius: 15px;
+  background: var(--standalone-bg-light);
+  margin-bottom: 10px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  color: var(--standalone-text);
+}
+
+.standalone-btn-option:hover {
+  border-color: var(--standalone-primary);
+  background: var(--standalone-bg);
+}
+
+.standalone-btn-option.selected {
+  border-color: var(--standalone-primary);
+  background: var(--standalone-primary-light);
+  color: var(--standalone-primary-dark);
+}
+
+.standalone-btn-option.selected-no {
+  border-color: var(--standalone-danger);
+  background: hsla(354, 70%, 54%, 0.15);
+  color: hsl(354, 70%, 40%);
+}
+
+[data-bs-theme="dark"] .standalone-btn-option.selected-no {
+  color: var(--standalone-danger);
+}
+
+/* Ghost button (transparent with border) */
+.standalone-btn-ghost {
+  background: hsla(0, 0%, 100%, 0.15);
+  backdrop-filter: blur(10px);
+  border: 2px solid hsla(0, 0%, 100%, 0.3);
+  color: white;
+  padding: 12px 25px;
+  border-radius: 25px;
+  font-size: 15px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.standalone-btn-ghost:hover {
+  background: hsla(0, 0%, 100%, 0.25);
+}
+
+/* Back button */
+.standalone-btn-back {
+  background: hsla(0, 0%, 100%, 0.2);
+  border: none;
+  color: white;
+  padding: 8px 15px;
+  border-radius: 20px;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+/* =============================================================================
+   FORMS
+   ============================================================================= */
+
+.standalone-input {
+  width: 100%;
+  padding: 15px;
+  border: 2px solid var(--standalone-border);
+  border-radius: 10px;
+  font-size: 1rem;
+  background: var(--standalone-bg-light);
+  color: var(--standalone-text);
+  transition: border-color 0.2s;
+}
+
+.standalone-input:focus {
+  outline: none;
+  border-color: var(--standalone-primary);
+  box-shadow: 0 0 0 3px var(--standalone-primary-light);
+}
+
+.standalone-input.large {
+  font-size: 1.2rem;
+  text-align: center;
+}
+
+.standalone-textarea {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid var(--standalone-border);
+  border-radius: 10px;
+  resize: none;
+  height: 80px;
+  background: var(--standalone-bg-light);
+  color: var(--standalone-text);
+}
+
+.standalone-select {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid var(--standalone-border);
+  border-radius: 10px;
+  font-size: 1rem;
+  background: var(--standalone-bg-light);
+  color: var(--standalone-text);
+}
+
+/* Checkbox container (warning style) */
+.standalone-checkbox-container {
+  background: hsla(45, 100%, 51%, 0.15);
+  border: 2px solid var(--standalone-warning);
+  border-radius: 15px;
+  padding: 15px;
+  margin: 20px 0;
+}
+
+.standalone-checkbox-label {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--standalone-text);
+  cursor: pointer;
+  user-select: none;
+}
+
+/* =============================================================================
+   INFO BOXES
+   ============================================================================= */
+
+.standalone-info-box {
+  background: var(--standalone-bg);
+  border-radius: 15px;
+  padding: 15px;
+  margin-bottom: 20px;
+}
+
+.standalone-info-box strong {
+  color: var(--standalone-text);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.standalone-info-box .value {
+  color: var(--standalone-text);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+/* Alert info (blue left border) */
+.standalone-alert-info {
+  background: hsla(207, 90%, 54%, 0.1);
+  border-left: 4px solid var(--standalone-info);
+  padding: 12px;
+  border-radius: 0 10px 10px 0;
+  font-size: 0.9rem;
+  color: var(--standalone-text);
+  margin-top: 10px;
+}
+
+/* NF Badge */
+.standalone-nf-badge {
+  background: hsla(207, 90%, 54%, 0.15);
+  color: var(--standalone-info);
+  padding: 8px 15px;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  display: inline-block;
+}
+
+[data-bs-theme="dark"] .standalone-nf-badge {
+  background: hsla(207, 90%, 60%, 0.2);
+}
+
+/* =============================================================================
+   TERM/LEGAL BOX
+   ============================================================================= */
+
+.standalone-termo-box {
+  background: var(--standalone-bg-light);
+  border: 2px solid var(--standalone-border);
+  border-radius: 15px;
+  padding: 20px;
+  max-height: 350px;
+  overflow-y: auto;
+  margin: 20px 0;
+}
+
+.standalone-termo-box h5 {
+  color: var(--standalone-danger);
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 15px;
+}
+
+.standalone-termo-box p {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--standalone-text-muted);
+  margin-bottom: 12px;
+}
+
+.standalone-termo-box ul {
+  padding-left: 20px;
+  margin-bottom: 12px;
+}
+
+.standalone-termo-box li {
+  font-size: 0.9rem;
+  color: var(--standalone-text-muted);
+  margin-bottom: 8px;
+}
+
+/* Scrollbar for termo box */
+.standalone-termo-box::-webkit-scrollbar {
+  width: 8px;
+}
+
+.standalone-termo-box::-webkit-scrollbar-track {
+  background: var(--standalone-bg);
+  border-radius: 10px;
+}
+
+.standalone-termo-box::-webkit-scrollbar-thumb {
+  background: var(--standalone-text-muted);
+  border-radius: 10px;
+}
+
+/* =============================================================================
+   UPLOAD AREA
+   ============================================================================= */
+
+.standalone-upload-area {
+  border: 3px dashed var(--standalone-primary);
+  border-radius: 20px;
+  padding: 40px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: var(--standalone-bg);
+}
+
+.standalone-upload-area:hover {
+  background: var(--standalone-border);
+  border-color: var(--standalone-secondary);
+}
+
+.standalone-upload-area.dragging {
+  background: var(--standalone-primary-light);
+  border-color: var(--standalone-primary);
+}
+
+.standalone-upload-area i {
+  font-size: 3rem;
+  color: var(--standalone-primary);
+  margin-bottom: 10px;
+}
+
+/* Preview image */
+.standalone-preview-img {
+  max-width: 100%;
+  border-radius: 15px;
+  margin-top: 15px;
+  box-shadow: 0 5px 15px hsla(0, 0%, 0%, 0.1);
+}
+
+/* Coordenadas info */
+.standalone-coords-info {
+  background: hsla(207, 90%, 54%, 0.1);
+  border-radius: 10px;
+  padding: 10px;
+  margin-top: 15px;
+  font-size: 0.85rem;
+  color: var(--standalone-text);
+}
+
+/* =============================================================================
+   QUESTION CARD (questionario_entrega.html)
+   ============================================================================= */
+
+.standalone-question-card {
+  background: var(--standalone-bg-light);
+  border-radius: 20px;
+  padding: 25px;
+  margin-bottom: 15px;
+  box-shadow: 0 5px 20px hsla(0, 0%, 0%, 0.1);
+}
+
+.standalone-question-card h5 {
+  color: var(--standalone-text);
+  font-weight: 700;
+  margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.standalone-question-number {
+  background: var(--standalone-primary);
+  color: white;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+}
+
+/* Sub-question reveal */
+.standalone-sub-question {
+  display: none;
+  margin-top: 15px;
+  padding: 15px;
+  background: var(--standalone-bg);
+  border-radius: 15px;
+  border-left: 4px solid var(--standalone-primary);
+}
+
+.standalone-sub-question.show {
+  display: block;
+  animation: standalone-slideDown 0.3s ease;
+}
+
+@keyframes standalone-slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* =============================================================================
+   STATUS INDICATORS
+   ============================================================================= */
+
+/* Pulse icon (rastreamento_ativo.html) */
+.standalone-pulse-icon {
+  width: 100px;
+  height: 100px;
+  background: linear-gradient(135deg, var(--standalone-primary) 0%, var(--standalone-secondary) 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 15px;
+  animation: standalone-pulse 2s infinite;
+  position: relative;
+}
+
+.standalone-pulse-icon::before {
+  content: '';
+  position: absolute;
+  width: 120%;
+  height: 120%;
+  border-radius: 50%;
+  border: 3px solid var(--standalone-primary);
+  opacity: 0;
+  animation: standalone-ripple 2s infinite;
+}
+
+@keyframes standalone-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+@keyframes standalone-ripple {
+  0% {
+    transform: scale(0.8);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+
+.standalone-pulse-icon i {
+  font-size: 50px;
+  color: white;
+}
+
+/* Status badges */
+.standalone-status-badge {
+  display: inline-block;
+  padding: 8px 20px;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.standalone-status-ativo {
+  background: var(--standalone-primary-light);
+  color: var(--standalone-primary);
+}
+
+.standalone-status-proximo {
+  background: hsla(45, 100%, 51%, 0.2);
+  color: hsl(45, 80%, 35%);
+  animation: standalone-blink 1s infinite;
+}
+
+[data-bs-theme="dark"] .standalone-status-proximo {
+  color: var(--standalone-warning);
+}
+
+@keyframes standalone-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* GPS indicator */
+.standalone-gps-indicator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: hsla(207, 90%, 54%, 0.1);
+  border-radius: 10px;
+  margin-top: 15px;
+}
+
+.standalone-gps-dot {
+  width: 12px;
+  height: 12px;
+  background: var(--standalone-primary);
+  border-radius: 50%;
+  animation: standalone-blink-dot 1.5s infinite;
+}
+
+@keyframes standalone-blink-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* Battery indicator */
+.standalone-battery-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  color: var(--standalone-text-muted);
+}
+
+.standalone-battery-icon {
+  font-size: 1.2rem;
+}
+
+.standalone-battery-low {
+  color: var(--standalone-danger);
+}
+
+/* Metric item */
+.standalone-metric-item {
+  padding: 15px;
+  background: var(--standalone-bg);
+  border-radius: 15px;
+  margin-bottom: 10px;
+}
+
+.standalone-metric-label {
+  font-size: 0.85rem;
+  color: var(--standalone-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 5px;
+}
+
+.standalone-metric-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--standalone-text);
+}
+
+.standalone-metric-value.highlight {
+  color: var(--standalone-primary);
+}
+
+/* =============================================================================
+   LOADING & OVERLAYS
+   ============================================================================= */
+
+.standalone-loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: hsla(0, 0%, 100%, 0.95);
+  display: none;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  flex-direction: column;
+}
+
+[data-bs-theme="dark"] .standalone-loading-overlay {
+  background: hsla(220, 13%, 10%, 0.95);
+}
+
+.standalone-loading-overlay.show {
+  display: flex;
+}
+
+.standalone-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid var(--standalone-border);
+  border-top-color: var(--standalone-primary);
+  border-radius: 50%;
+  animation: standalone-spin 1s linear infinite;
+}
+
+.standalone-spinner.large {
+  width: 60px;
+  height: 60px;
+}
+
+@keyframes standalone-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Fixed alert */
+.standalone-alert-fixed {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  right: 20px;
+  z-index: 9998;
+  border-radius: 15px;
+  box-shadow: 0 5px 20px hsla(0, 0%, 0%, 0.2);
+}
+
+/* =============================================================================
+   SCANNER (scanner_qrcode.html)
+   ============================================================================= */
+
+.standalone-scanner-header {
+  background: linear-gradient(135deg, var(--standalone-primary) 0%, var(--standalone-secondary) 100%);
+  padding: 15px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 2px 10px hsla(0, 0%, 0%, 0.3);
+}
+
+.standalone-scanner-header h1 {
+  font-size: 18px;
+  font-weight: 600;
+  color: white;
+  margin: 0;
+}
+
+.standalone-scanner-container {
+  max-width: 600px;
+  margin: 20px auto;
+  padding: 0 20px;
+}
+
+#reader {
+  border-radius: 15px;
+  overflow: hidden;
+  box-shadow: 0 5px 20px hsla(145, 63%, 42%, 0.3);
+}
+
+.standalone-instructions {
+  background: hsla(0, 0%, 100%, 0.1);
+  backdrop-filter: blur(10px);
+  padding: 20px;
+  border-radius: 15px;
+  margin-top: 20px;
+  text-align: center;
+  color: white;
+}
+
+.standalone-instructions p {
+  margin: 10px 0;
+  line-height: 1.6;
+}
+
+.standalone-scanner-status {
+  background: hsla(145, 63%, 42%, 0.2);
+  padding: 15px;
+  border-radius: 10px;
+  margin-top: 20px;
+  text-align: center;
+  display: none;
+  color: white;
+}
+
+.standalone-scanner-status.error {
+  background: hsla(354, 70%, 54%, 0.2);
+}
+
+.standalone-scanner-status.success {
+  background: hsla(145, 63%, 42%, 0.3);
+  display: block;
+}
+
+/* =============================================================================
+   ERROR PAGE (erro.html)
+   ============================================================================= */
+
+.standalone-error-icon {
+  font-size: 80px;
+  color: var(--standalone-danger);
+  margin-bottom: 20px;
+}
+
+/* =============================================================================
+   TEXT UTILITIES
+   ============================================================================= */
+
+.standalone-text {
+  color: var(--standalone-text);
+}
+
+.standalone-text-muted {
+  color: var(--standalone-text-muted);
+}
+
+.standalone-text-primary {
+  color: var(--standalone-primary);
+}
+
+.standalone-text-success {
+  color: var(--standalone-success);
+}
+
+.standalone-text-danger {
+  color: var(--standalone-danger);
+}
+
+.standalone-text-warning {
+  color: var(--standalone-warning);
+}
+
+.standalone-text-info {
+  color: var(--standalone-info);
+}
+
+.standalone-text-white {
+  color: white;
+}
+
+/* Version text */
+.standalone-version {
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--standalone-text-muted);
+  margin-top: 15px;
+}
+
+/* =============================================================================
+   PRINT STYLES (termo_descarte.html)
+   Note: Print templates keep hardcoded colors for paper output
+   ============================================================================= */
+
+@media print {
+  .standalone-no-print {
+    display: none;
+  }
+}
