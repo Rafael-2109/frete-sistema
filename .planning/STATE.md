@@ -110,6 +110,9 @@ Recent decisions affecting current work:
 - [06-08]: Pallet module CSS extraction (1298 lines) with stat cards, badges, tables
 - [06-08]: BEM-like naming for pallet components (.pallet-stat__icon--total)
 - [06-08]: controle_pallets/, nf_remessa/, movimentacoes/ templates deferred (254 colors remaining)
+- [06-10]: Scoped DesignTokens utilities per JS file (PortalDesignTokens, ChartDesignTokens, etc.)
+- [06-10]: OdooTagColors mapping for 12 Odoo color indexes to design system tokens
+- [06-10]: Mobile native (Capacitor) uses hex fallback for Android notification API
 - [06-11]: Custom decorative colors (purple, gradients) use module-specific tokens with HSL values
 - [06-11]: Fallback patterns var(--bs-*, #hex) kept as valid defensive CSS practice
 - [06-11]: Dark mode vibrant feedback colors use --mfg-*-vibrant tokens
