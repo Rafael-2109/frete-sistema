@@ -94,15 +94,19 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. Financeiro dashboard and all child templates use tokens (no hardcoded colors)
   2. Carteira templates (dashboard, agrupados) use tokens for colors while preserving layout
-  3. Embarques templates including print views (imprimir_completo, imprimir_embarque) work in both themes
+  3. Embarques templates (listar, visualizar) work in both themes; print templates (imprimir_*) keep hardcoded light colors
   4. All migrated templates pass dark mode visual inspection
   5. All migrated templates work on mobile (tested on real device or accurate emulation)
-**Plans**: TBD
+**Plans**: 5 plans in 3 waves
 
 Plans:
-- [ ] 05-01: Migrate financeiro module templates
-- [ ] 05-02: Migrate carteira module templates
-- [ ] 05-03: Migrate embarques module templates
+- [ ] 05-01-PLAN.md - Create module CSS files and integrate into main.css (Wave 1)
+- [ ] 05-02-PLAN.md - Migrate financeiro templates (dashboard, cnab400_hub, cnab400_lote_detalhe) (Wave 2)
+- [ ] 05-03-PLAN.md - Migrate carteira templates (dashboard, agrupados_balanceado) (Wave 2)
+- [ ] 05-04-PLAN.md - Migrate embarques templates (listar, visualizar) - print templates EXCLUDED (Wave 2)
+- [ ] 05-05-PLAN.md - Visual verification checkpoint (Wave 3)
+
+**Note:** Print templates (imprimir_*.html) are intentionally EXCLUDED from migration. They keep hardcoded light mode colors for print reliability. JS files with hardcoded colors are DEFERRED to Phase 6.
 
 ### Phase 6: Medium-Traffic Migration
 **Goal**: Remaining modules (comercial, manufatura, portal, estoque, recebimento, etc.) migrated
@@ -149,11 +153,11 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | 2. Component Library | 3/3 | Complete | 2026-01-27 |
 | 3. Table System | 2/2 | Complete | 2026-01-27 |
 | 4. Layout Patterns | 2/2 | Complete | 2026-01-27 |
-| 5. High-Traffic Migration | 0/3 | Not started | - |
+| 5. High-Traffic Migration | 0/5 | Not started | - |
 | 6. Medium-Traffic Migration | 0/3 | Not started | - |
 | 7. Cleanup & Polish | 0/3 | Not started | - |
 
 ---
 *Roadmap created: 2026-01-26*
 *Phase 1 planned: 2026-01-26*
-*Total phases: 7 | Total plans: 18*
+*Total phases: 7 | Total plans: 20*
