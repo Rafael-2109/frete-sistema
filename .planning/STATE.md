@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 ## Current Position
 
 Phase: 6 of 7 (Medium-Traffic Migration)
-Plan: 4 of 8 in current phase
+Plan: 5 of 8 in current phase
 Status: In progress
-Last activity: 2026-01-27 - Completed 06-04 Recebimento/Fretes Migration
+Last activity: 2026-01-27 - Completed 06-05 Portal/Rastreamento Migration
 
-Progress: [██████████] 100% (18/18 plans complete)
+Progress: [███████████] 100% (19/19 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 18
-- Average duration: 2.3 min
-- Total execution time: 62 min
+- Total plans completed: 19
+- Average duration: 2.5 min
+- Total execution time: 69 min
 
 **By Phase:**
 
@@ -32,11 +32,11 @@ Progress: [██████████] 100% (18/18 plans complete)
 | 03-table-system | 2 | 3 min | 1.5 min |
 | 04-layout-patterns | 2 | 3 min | 1.5 min |
 | 05-high-traffic-migration | 5 | 25 min | 5 min |
-| 06-medium-traffic-migration | 4 | 46 min | 11.5 min |
+| 06-medium-traffic-migration | 5 | 53 min | 10.6 min |
 
 **Recent Trend:**
-- Last 5 plans: 06-01 (2 min), 06-02 (15 min), 06-03 (4 min), 06-04 (25 min)
-- Trend: High inline style count modules (recebimento 100, fretes 95) require more extraction work
+- Last 5 plans: 06-02 (15 min), 06-03 (4 min), 06-04 (25 min), 06-05 (7 min)
+- Trend: Portal/rastreamento faster due to CSS class extraction pattern established
 
 *Updated after each plan completion*
 
@@ -99,6 +99,9 @@ Recent decisions affecting current work:
 - [06-03]: Monitoramento listar_entregas.html had 39 colors migrated to tokens
 - [06-04]: Preserved existing class names in fretes (badge-status-*) to avoid template changes
 - [06-04]: Print styles kept hardcoded neutral colors (intentional - no theme on paper)
+- [06-05]: Portal brand colors migrated to design system tokens (consistent dark mode)
+- [06-05]: Rastreamento uses semantic-success as primary accent (green = delivery tracking brand)
+- [06-05]: 8 standalone rastreamento templates deferred to Wave 5 (06-09-PLAN.md)
 
 ### Pending Todos
 
@@ -115,8 +118,8 @@ None.
 ## Session Continuity
 
 Last session: 2026-01-27
-Stopped at: Completed 06-04-PLAN.md (Recebimento/Fretes Migration)
+Stopped at: Completed 06-05-PLAN.md (Portal/Rastreamento Migration)
 Resume file: None
 
 ---
-*Next step: Continue Phase 6 with remaining tier migrations (06-05 through 06-08)*
+*Next step: Continue Phase 6 with remaining tier migrations (06-06 through 06-08)*
