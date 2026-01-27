@@ -1,0 +1,64 @@
+/**
+ * _devolucao.css - Devolucao Module Styles
+ *
+ * Component overrides and styles specific to the devolucao module.
+ *
+ * Token mapping:
+ * - Use var(--bg-light) for card backgrounds
+ * - Use var(--bg) for secondary backgrounds
+ * - Use var(--text) for primary text
+ * - Use var(--text-muted) for secondary text
+ * - Use var(--border) for borders
+ * - Use var(--semantic-success/danger) for status colors
+ *
+ * Templates using this module:
+ * - devolucao/depara/index.html
+ * - devolucao/ocorrencias/index.html
+ * - devolucao/ocorrencias/detalhe.html
+ * - devolucao/registro/modal_nfd.html
+ *
+ * Note: termo_descarte.html is a standalone print template
+ * and uses hardcoded light-mode colors intentionally.
+ */
+
+@layer modules {
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     DEVOLUCAO - Card borders with semantic colors
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* Border left accent colors for stat cards */
+  .border-left-primary {
+    border-left: 4px solid var(--amber-55) !important;
+  }
+
+  .border-left-success {
+    border-left: 4px solid var(--semantic-success) !important;
+  }
+
+  .border-left-warning {
+    border-left: 4px solid var(--semantic-warning) !important;
+  }
+
+  .border-left-danger {
+    border-left: 4px solid var(--semantic-danger) !important;
+  }
+
+  .border-left-info {
+    border-left: 4px solid hsl(190 65% 45%) !important;
+  }
+
+  .border-left-secondary {
+    border-left: 4px solid var(--text-muted) !important;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     DEVOLUCAO - Loading overlay styles
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* Loading overlay - used in ocorrencias/index.html */
+  #loadingOverlay {
+    background: hsla(0 0% 0% / 0.7);
+  }
+
+} /* End @layer modules */
