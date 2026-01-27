@@ -24,7 +24,7 @@ Referencia: .claude/references/CONVERSAO_UOM_ODOO.md
 import logging
 from decimal import Decimal
 from typing import Dict, Any, Optional, List
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app import db
 from app.recebimento.models import ProdutoFornecedorDepara
@@ -923,7 +923,8 @@ class DeparaService:
     def importar_do_odoo(
         self,
         cnpj_fornecedor: Optional[str] = None,
-        limit: int = 100
+        limit: int = 100,
+        minutos_janela: int = 1440  # Buscar apenas modificados nas últimas 24h
     ) -> Dict[str, Any]:
         """
         Importa mapeamentos do Odoo (product.supplierinfo) para o local.
@@ -931,6 +932,7 @@ class DeparaService:
         Args:
             cnpj_fornecedor: Filtrar por CNPJ (opcional)
             limit: Limite de registros
+            minutos_janela: Janela de tempo em minutos para filtrar por write_date (padrão: 24h)
 
         Returns:
             Dict com estatisticas da importacao
@@ -946,6 +948,13 @@ class DeparaService:
                 ('product_id', '!=', False),      # Tem variante vinculada
                 ('product_tmpl_id', '!=', False)  # Ou tem template vinculado
             ]
+
+            # Filtrar por write_date (apenas modificados recentemente)
+            data_limite = datetime.utcnow() - timedelta(minutes=minutos_janela)
+            data_limite_str = data_limite.strftime('%Y-%m-%d %H:%M:%S')
+            domain.append(('write_date', '>=', data_limite_str))
+
+            logger.info(f"🔍 De-Para: Buscando supplierinfos modificados após {data_limite_str} (janela {minutos_janela} min)")
 
             if cnpj_fornecedor:
                 cnpj_limpo = self._limpar_cnpj(cnpj_fornecedor)
