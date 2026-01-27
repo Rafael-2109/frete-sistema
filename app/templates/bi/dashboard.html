@@ -201,6 +201,66 @@
     // Variáveis globais para os gráficos
     let chartEvolucao, chartRegional, chartDespesas;
 
+    // ChartColors utility - reads CSS custom properties for theme-aware charts
+    const ChartColors = {
+        get(name) {
+            return getComputedStyle(document.documentElement)
+                .getPropertyValue(`--chart-${name}`).trim();
+        },
+        primary: () => ChartColors.get('primary'),
+        secondary: () => ChartColors.get('secondary'),
+        success: () => ChartColors.get('success'),
+        danger: () => ChartColors.get('danger'),
+        info: () => ChartColors.get('info'),
+        warning: () => ChartColors.get('warning'),
+        bgPrimary: () => ChartColors.get('bg-primary'),
+        bgSecondary: () => ChartColors.get('bg-secondary'),
+        // Multi-series palette
+        series: (index) => ChartColors.get(`series-${(index % 5) + 1}`),
+        seriesArray: (count) => Array.from({length: count}, (_, i) => ChartColors.series(i)),
+        // Region colors
+        regionNorte: () => ChartColors.get('region-norte'),
+        regionNordeste: () => ChartColors.get('region-nordeste'),
+        regionCentroOeste: () => ChartColors.get('region-centro-oeste'),
+        regionSudeste: () => ChartColors.get('region-sudeste'),
+        regionSul: () => ChartColors.get('region-sul'),
+        regionArray: () => [
+            ChartColors.regionNorte(),
+            ChartColors.regionNordeste(),
+            ChartColors.regionCentroOeste(),
+            ChartColors.regionSudeste(),
+            ChartColors.regionSul()
+        ],
+        // Expense type colors
+        tipoReentrega: () => ChartColors.get('tipo-reentrega'),
+        tipoTde: () => ChartColors.get('tipo-tde'),
+        tipoDevolucao: () => ChartColors.get('tipo-devolucao'),
+        tipoComplemento: () => ChartColors.get('tipo-complemento'),
+        tipoOutros: () => ChartColors.get('tipo-outros'),
+        tipoArray: () => [
+            ChartColors.tipoReentrega(),
+            ChartColors.tipoTde(),
+            ChartColors.tipoDevolucao(),
+            ChartColors.tipoComplemento(),
+            ChartColors.tipoOutros()
+        ]
+    };
+
+    // Listen for theme changes and update all charts
+    const themeObserver = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            if (mutation.attributeName === 'data-bs-theme') {
+                // Update all Chart.js instances with new colors
+                Object.values(Chart.instances).forEach(chart => {
+                    if (chart && chart.update) {
+                        chart.update('none');
+                    }
+                });
+            }
+        });
+    });
+    themeObserver.observe(document.documentElement, { attributes: true });
+
     // Função para formatar valores em Reais
     function formatarMoeda(valor) {
         return new Intl.NumberFormat('pt-BR', {
@@ -274,14 +334,14 @@
                     datasets: [{
                         label: 'Custo Total',
                         data: data.map(d => d.custo_total),
-                        borderColor: '#667eea',
-                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        borderColor: ChartColors.primary(),
+                        backgroundColor: ChartColors.bgPrimary(),
                         tension: 0.4
                     }, {
                         label: 'Despesas Extras',
                         data: data.map(d => d.despesas),
-                        borderColor: '#f093fb',
-                        backgroundColor: 'rgba(240, 147, 251, 0.1)',
+                        borderColor: ChartColors.series(1),
+                        backgroundColor: ChartColors.bgSecondary(),
                         tension: 0.4
                     }]
                 },
@@ -381,13 +441,7 @@
                     datasets: [{
                         label: 'Custo Total',
                         data: data.map(d => d.custo_total),
-                        backgroundColor: [
-                            '#667eea',
-                            '#f093fb',
-                            '#4facfe',
-                            '#43e97b',
-                            '#fa709a'
-                        ]
+                        backgroundColor: ChartColors.seriesArray(5)
                     }]
                 },
                 options: {
@@ -435,16 +489,7 @@
                     labels: data.map(d => d.tipo),
                     datasets: [{
                         data: data.map(d => d.valor),
-                        backgroundColor: [
-                            '#FF6384',
-                            '#36A2EB',
-                            '#FFCE56',
-                            '#4BC0C0',
-                            '#9966FF',
-                            '#FF9F40',
-                            '#FF6384',
-                            '#C9CBCF'
-                        ]
+                        backgroundColor: ChartColors.seriesArray(data.length)
                     }]
                 },
                 options: {

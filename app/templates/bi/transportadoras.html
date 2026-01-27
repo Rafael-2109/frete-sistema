@@ -182,6 +182,33 @@
     let chartCustoKg, chartVolume, chartEvolucaoScore;
     let dadosTransportadoras = [];
 
+    // ChartColors utility - reads CSS custom properties for theme-aware charts
+    const ChartColors = {
+        get(name) {
+            return getComputedStyle(document.documentElement)
+                .getPropertyValue(`--chart-${name}`).trim();
+        },
+        primary: () => ChartColors.get('primary'),
+        secondary: () => ChartColors.get('secondary'),
+        success: () => ChartColors.get('success'),
+        danger: () => ChartColors.get('danger'),
+        info: () => ChartColors.get('info'),
+        series: (index) => ChartColors.get(`series-${(index % 5) + 1}`),
+        seriesArray: (count) => Array.from({length: count}, (_, i) => ChartColors.series(i))
+    };
+
+    // Listen for theme changes and update all charts
+    const themeObserver = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            if (mutation.attributeName === 'data-bs-theme') {
+                Object.values(Chart.instances).forEach(chart => {
+                    if (chart && chart.update) chart.update('none');
+                });
+            }
+        });
+    });
+    themeObserver.observe(document.documentElement, { attributes: true });
+
     // Função para formatar valores
     function formatarMoeda(valor) {
         return new Intl.NumberFormat('pt-BR', {
@@ -293,7 +320,7 @@
                 datasets: [{
                     label: 'Custo por KG',
                     data: data.slice(0, 10).map(d => d.custo_kg),
-                    backgroundColor: '#667eea'
+                    backgroundColor: ChartColors.primary()
                 }]
             },
             options: {
@@ -325,13 +352,7 @@
                 labels: data.slice(0, 5).map(d => d.transportadora.substring(0, 20)),
                 datasets: [{
                     data: data.slice(0, 5).map(d => d.peso_total),
-                    backgroundColor: [
-                        '#667eea',
-                        '#f093fb',
-                        '#4facfe',
-                        '#43e97b',
-                        '#fa709a'
-                    ]
+                    backgroundColor: ChartColors.seriesArray(5)
                 }]
             },
             options: {
@@ -360,7 +381,7 @@
         const datasets = data.slice(0, 3).map((transp, idx) => ({
             label: transp.transportadora.substring(0, 20),
             data: meses.map(() => 0),
-            borderColor: ['#667eea', '#f093fb', '#4facfe'][idx],
+            borderColor: ChartColors.series(idx),
             tension: 0.4
         }));
 

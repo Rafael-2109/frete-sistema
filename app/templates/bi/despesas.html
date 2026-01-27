@@ -212,6 +212,40 @@
     let chartTipos, chartSetores, chartEvolucao;
     let dadosDespesas = [];
 
+    // ChartColors utility - reads CSS custom properties for theme-aware charts
+    const ChartColors = {
+        get(name) {
+            return getComputedStyle(document.documentElement)
+                .getPropertyValue(`--chart-${name}`).trim();
+        },
+        primary: () => ChartColors.get('primary'),
+        // Expense type colors
+        tipoReentrega: () => ChartColors.get('tipo-reentrega'),
+        tipoTde: () => ChartColors.get('tipo-tde'),
+        tipoDevolucao: () => ChartColors.get('tipo-devolucao'),
+        tipoComplemento: () => ChartColors.get('tipo-complemento'),
+        tipoOutros: () => ChartColors.get('tipo-outros'),
+        tipoArray: () => [
+            ChartColors.tipoReentrega(),
+            ChartColors.tipoTde(),
+            ChartColors.tipoDevolucao(),
+            ChartColors.tipoComplemento(),
+            ChartColors.tipoOutros()
+        ]
+    };
+
+    // Listen for theme changes and update all charts
+    const themeObserver = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            if (mutation.attributeName === 'data-bs-theme') {
+                Object.values(Chart.instances).forEach(chart => {
+                    if (chart && chart.update) chart.update('none');
+                });
+            }
+        });
+    });
+    themeObserver.observe(document.documentElement, { attributes: true });
+
     // Formatar valores
     function formatarMoeda(valor) {
         return new Intl.NumberFormat('pt-BR', {
@@ -301,13 +335,7 @@
                 labels: data.map(d => d.tipo),
                 datasets: [{
                     data: data.map(d => d.valor),
-                    backgroundColor: [
-                        '#e74c3c',
-                        '#f39c12',
-                        '#9b59b6',
-                        '#3498db',
-                        '#95a5a6'
-                    ]
+                    backgroundColor: ChartColors.tipoArray()
                 }]
             },
             options: {
@@ -349,7 +377,7 @@
                 datasets: [{
                     label: 'Valor Total',
                     data: Object.values(setoresData),
-                    backgroundColor: '#667eea'
+                    backgroundColor: ChartColors.primary()
                 }]
             },
             options: {
@@ -383,20 +411,20 @@
                 datasets: [
                     {
                         label: 'REENTREGA',
-                        data: meses.map(() => 0), // Será atualizado com dados reais
-                        borderColor: '#e74c3c',
+                        data: meses.map(() => 0), // Sera atualizado com dados reais
+                        borderColor: ChartColors.tipoReentrega(),
                         tension: 0.4
                     },
                     {
                         label: 'TDE',
-                        data: meses.map(() => 0), // Será atualizado com dados reais
-                        borderColor: '#f39c12',
+                        data: meses.map(() => 0), // Sera atualizado com dados reais
+                        borderColor: ChartColors.tipoTde(),
                         tension: 0.4
                     },
                     {
-                        label: 'DEVOLUÇÃO',
-                        data: meses.map(() => 0), // Será atualizado com dados reais
-                        borderColor: '#9b59b6',
+                        label: 'DEVOLUCAO',
+                        data: meses.map(() => 0), // Sera atualizado com dados reais
+                        borderColor: ChartColors.tipoDevolucao(),
                         tension: 0.4
                     }
                 ]

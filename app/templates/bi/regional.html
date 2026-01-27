@@ -157,6 +157,48 @@
     let chartCustoRegiao, chartVolumeRegiao;
     let dadosRegionais = {};
 
+    // ChartColors utility - reads CSS custom properties for theme-aware charts
+    const ChartColors = {
+        get(name) {
+            return getComputedStyle(document.documentElement)
+                .getPropertyValue(`--chart-${name}`).trim();
+        },
+        primary: () => ChartColors.get('primary'),
+        regionNorte: () => ChartColors.get('region-norte'),
+        regionNordeste: () => ChartColors.get('region-nordeste'),
+        regionCentroOeste: () => ChartColors.get('region-centro-oeste'),
+        regionSudeste: () => ChartColors.get('region-sudeste'),
+        regionSul: () => ChartColors.get('region-sul'),
+        regionArray: () => [
+            ChartColors.regionNorte(),
+            ChartColors.regionNordeste(),
+            ChartColors.regionCentroOeste(),
+            ChartColors.regionSudeste(),
+            ChartColors.regionSul()
+        ]
+    };
+
+    // Map cost threshold colors (semantic meaning based on cost/kg levels)
+    const MapColors = {
+        getLow: () => ChartColors.regionNorte(),      // < 0.30/kg (green)
+        getMediumLow: () => ChartColors.regionSudeste(), // 0.30-0.50/kg (blue)
+        getMedium: () => ChartColors.regionCentroOeste(), // 0.50-0.70/kg (orange)
+        getMediumHigh: () => 'hsl(25 85% 50%)',       // 0.70-1.00/kg (darker orange)
+        getHigh: () => ChartColors.regionNordeste()   // > 1.00/kg (red)
+    };
+
+    // Listen for theme changes and update all charts
+    const themeObserver = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            if (mutation.attributeName === 'data-bs-theme') {
+                Object.values(Chart.instances).forEach(chart => {
+                    if (chart && chart.update) chart.update('none');
+                });
+            }
+        });
+    });
+    themeObserver.observe(document.documentElement, { attributes: true });
+
     // Coordenadas das capitais dos estados
     const coordenadasEstados = {
         'AC': [-8.77, -70.55], 'AL': [-9.71, -35.73], 'AP': [1.41, -51.77],
@@ -182,13 +224,13 @@
         return new Intl.NumberFormat('pt-BR').format(numero);
     }
 
-    // Obter cor baseada no custo/kg
+    // Obter cor baseada no custo/kg - uses CSS tokens via MapColors
     function getCorCusto(custoKg) {
-        if (custoKg < 0.3) return '#27ae60';
-        if (custoKg < 0.5) return '#3498db';
-        if (custoKg < 0.7) return '#f39c12';
-        if (custoKg < 1.0) return '#e67e22';
-        return '#e74c3c';
+        if (custoKg < 0.3) return MapColors.getLow();
+        if (custoKg < 0.5) return MapColors.getMediumLow();
+        if (custoKg < 0.7) return MapColors.getMedium();
+        if (custoKg < 1.0) return MapColors.getMediumHigh();
+        return MapColors.getHigh();
     }
 
     // Inicializar mapa
@@ -215,7 +257,7 @@
                     const circle = L.circleMarker(coordenadasEstados[uf], {
                         radius: Math.min(20, Math.max(8, dados.peso_total / 100000)),
                         fillColor: cor,
-                        color: '#fff',
+                        color: 'hsl(0 0% 100%)',
                         weight: 2,
                         opacity: 1,
                         fillOpacity: 0.8
@@ -322,13 +364,7 @@
                 datasets: [{
                     label: 'Custo Médio/kg',
                     data: data.map(d => d.custo_medio_kg || 0),
-                    backgroundColor: [
-                        '#27ae60',
-                        '#e74c3c',
-                        '#f39c12',
-                        '#3498db',
-                        '#9b59b6'
-                    ]
+                    backgroundColor: ChartColors.regionArray()
                 }]
             },
             options: {
@@ -360,13 +396,7 @@
                 labels: data.map(d => d.regiao),
                 datasets: [{
                     data: data.map(d => d.peso_total),
-                    backgroundColor: [
-                        '#27ae60',
-                        '#e74c3c',
-                        '#f39c12',
-                        '#3498db',
-                        '#9b59b6'
-                    ]
+                    backgroundColor: ChartColors.regionArray()
                 }]
             },
             options: {
