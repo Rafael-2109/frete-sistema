@@ -35,8 +35,8 @@ Progress: [████████████] 100% (25/21 plans complete)
 | 06-medium-traffic-migration | 11 | 78 min | 7.1 min |
 
 **Recent Trend:**
-- Last 5 plans: 06-07 (4 min), 06-08 (12 min), 06-09 (skipped), 06-10 (skipped), 06-11 (3 min)
-- Trend: Manufatura migration quick due to existing var(--bs-*) usage
+- Last 5 plans: 06-07 (4 min), 06-08 (12 min), 06-09 (7 min), 06-10 (skipped), 06-11 (3 min)
+- Trend: Standalone templates migration completed; Manufatura quick due to var(--bs-*) usage
 
 *Updated after each plan completion*
 
@@ -110,6 +110,9 @@ Recent decisions affecting current work:
 - [06-08]: Pallet module CSS extraction (1298 lines) with stat cards, badges, tables
 - [06-08]: BEM-like naming for pallet components (.pallet-stat__icon--total)
 - [06-08]: controle_pallets/, nf_remessa/, movimentacoes/ templates deferred (254 colors remaining)
+- [06-09]: Standalone pages include duplicated design tokens (no base.html dependency)
+- [06-09]: data-bs-theme="light" attribute added for future dark mode support
+- [06-09]: Green primary (--standalone-primary) preserved for delivery tracking brand
 - [06-10]: Scoped DesignTokens utilities per JS file (PortalDesignTokens, ChartDesignTokens, etc.)
 - [06-10]: OdooTagColors mapping for 12 Odoo color indexes to design system tokens
 - [06-10]: Mobile native (Capacitor) uses hex fallback for Android notification API
