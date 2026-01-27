@@ -1,6 +1,6 @@
 /**
  * ============================================
- * ANÁLISES DE FRETES - DRILL-DOWN DINÂMICO
+ * ANALISES DE FRETES - DRILL-DOWN DINAMICO
  * ============================================
  *
  * Sistema de análise drill-down interativo que permite
@@ -11,7 +11,18 @@
  * Data: 2025-01-16
  */
 
-// ========== CONFIGURAÇÃO GLOBAL ==========
+// ========== DESIGN TOKENS FOR CHART COLORS ==========
+const ChartDesignTokens = {
+    get(name) {
+        return getComputedStyle(document.documentElement)
+            .getPropertyValue(`--${name}`).trim();
+    },
+    // Chart colors - use design system tokens
+    primary: () => ChartDesignTokens.get('chart-primary') || ChartDesignTokens.get('bs-primary') || 'hsl(210 65% 55%)',
+    secondary: () => ChartDesignTokens.get('chart-secondary') || ChartDesignTokens.get('semantic-danger') || 'hsl(0 70% 55%)'
+};
+
+// ========== CONFIGURACAO GLOBAL ==========
 const CONFIG = {
     API_URL: '/fretes/analises/api/data',
     EXPORT_URL: '/fretes/analises/api/export-excel',
@@ -427,8 +438,8 @@ function renderChart() {
         width: '100%',
         height: 500,
         series: {
-            0: {targetAxisIndex: 0, color: '#3498db'},
-            1: {targetAxisIndex: 1, color: '#e74c3c'}
+            0: {targetAxisIndex: 0, color: ChartDesignTokens.primary()},
+            1: {targetAxisIndex: 1, color: ChartDesignTokens.secondary()}
         },
         vAxes: {
             0: {

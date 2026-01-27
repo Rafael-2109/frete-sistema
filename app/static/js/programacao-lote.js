@@ -8,12 +8,13 @@ function getCSSColor(varName) {
     return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
 }
 
-// Cores semânticas para uso em SweetAlert e outros componentes JS
+// Cores semanticas para uso em SweetAlert e outros componentes JS
+// Uses CSS custom properties with HSL fallbacks (no hex colors)
 const THEME_COLORS = {
-    get success() { return getCSSColor('--semantic-success') || '#28a745'; },
-    get danger() { return getCSSColor('--semantic-danger') || '#dc3545'; },
-    get warning() { return getCSSColor('--semantic-warning') || '#ffc107'; },
-    get secondary() { return getCSSColor('--bg-elevated') || '#6c757d'; }
+    get success() { return getCSSColor('--semantic-success') || 'hsl(145 65% 40%)'; },
+    get danger() { return getCSSColor('--semantic-danger') || 'hsl(0 70% 50%)'; },
+    get warning() { return getCSSColor('--semantic-warning') || 'hsl(45 100% 50%)'; },
+    get secondary() { return getCSSColor('--bg-elevated') || 'hsl(0 0% 50%)'; }
 };
 
 document.addEventListener('DOMContentLoaded', function () {

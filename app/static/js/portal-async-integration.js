@@ -7,6 +7,25 @@
  */
 
 // ========================================
+// DESIGN TOKENS UTILITY
+// ========================================
+const PortalDesignTokens = {
+    get(name) {
+        return getComputedStyle(document.documentElement)
+            .getPropertyValue(`--${name}`).trim();
+    },
+    // Semantic colors with fallbacks
+    info: () => PortalDesignTokens.get('bs-info') || 'hsl(0 0% 50%)',
+    success: () => PortalDesignTokens.get('semantic-success') || 'hsl(145 65% 40%)',
+    warning: () => PortalDesignTokens.get('amber-50') || 'hsl(45 100% 50%)',
+    error: () => PortalDesignTokens.get('semantic-danger') || 'hsl(0 70% 50%)',
+    processing: () => PortalDesignTokens.get('bs-primary') || 'hsl(45 95% 55%)',
+    textMuted: () => PortalDesignTokens.get('text-muted') || 'hsl(0 0% 70%)',
+    border: () => PortalDesignTokens.get('border') || 'hsl(0 0% 30%)',
+    bgLight: () => PortalDesignTokens.get('bg-light') || 'hsl(0 0% 10%)'
+};
+
+// ========================================
 // FUNÇÕES AUXILIARES (DEVEM VIR PRIMEIRO)
 // ========================================
 
@@ -55,13 +74,13 @@ function mostrarNotificacaoDiscreta(titulo, mensagem, tipo = 'info') {
         notificacaoAntiga.remove();
     }
 
-    // Cores por tipo
+    // Use design tokens for theme-aware colors
     const cores = {
-        info: '#17a2b8',
-        success: '#28a745',
-        warning: '#ffc107',
-        error: '#dc3545',
-        processing: '#007bff'
+        info: PortalDesignTokens.info(),
+        success: PortalDesignTokens.success(),
+        warning: PortalDesignTokens.warning(),
+        error: PortalDesignTokens.error(),
+        processing: PortalDesignTokens.processing()
     };
 
     // Criar nova notificação
@@ -86,6 +105,7 @@ function mostrarNotificacaoDiscreta(titulo, mensagem, tipo = 'info') {
     document.body.appendChild(notificacao);
 
     // Adicionar CSS se não existir
+    // Uses CSS custom properties for theme-aware styling
     if (!document.getElementById('portal-notificacao-styles')) {
         const style = document.createElement('style');
         style.id = 'portal-notificacao-styles';
@@ -95,9 +115,9 @@ function mostrarNotificacaoDiscreta(titulo, mensagem, tipo = 'info') {
                 top: 20px;
                 right: 20px;
                 width: 320px;
-                background: white;
+                background: var(--bg-light, hsl(0 0% 100%));
                 border-radius: 8px;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                box-shadow: var(--shadow, 0 4px 12px hsla(0 0% 0% / 0.15));
                 z-index: 9999;
                 animation: slideInRight 0.3s ease-out;
                 font-size: 14px;
@@ -138,7 +158,7 @@ function mostrarNotificacaoDiscreta(titulo, mensagem, tipo = 'info') {
             }
             .notificacao-mensagem {
                 flex: 1;
-                color: #495057;
+                color: var(--text-muted, hsl(0 0% 40%));
                 font-size: 13px;
             }
             .notificacao-spinner {
@@ -147,20 +167,20 @@ function mostrarNotificacaoDiscreta(titulo, mensagem, tipo = 'info') {
             .spinner-pequeno {
                 width: 16px;
                 height: 16px;
-                border: 2px solid #e9ecef;
-                border-top-color: #007bff;
+                border: 2px solid var(--border, hsl(0 0% 85%));
+                border-top-color: var(--bs-primary, hsl(45 95% 55%));
                 border-radius: 50%;
                 animation: spin 1s linear infinite;
             }
             .notificacao-progresso {
                 height: 3px;
-                background: #e9ecef;
+                background: var(--border, hsl(0 0% 85%));
                 border-radius: 0 0 8px 8px;
                 overflow: hidden;
             }
             .notificacao-progresso-bar {
                 height: 100%;
-                background: linear-gradient(90deg, #007bff, #28a745);
+                background: linear-gradient(90deg, var(--bs-primary, hsl(45 95% 55%)), var(--semantic-success, hsl(145 65% 40%)));
                 transition: width 0.3s ease;
             }
             @keyframes slideInRight {
@@ -408,151 +428,9 @@ async function monitorarStatusJob(jobId, integracaoId, referencia) {
 }
 
 // ========================================
-// FUNÇÕES DE NOTIFICAÇÃO DISCRETA (CANTO SUPERIOR DIREITO)
+// FUNÇÕES DE NOTIFICAÇÃO DUPLICADAS REMOVIDAS
+// (mantida apenas uma versão acima com design tokens)
 // ========================================
-
-function mostrarNotificacaoDiscreta(titulo, mensagem, tipo = 'info') {
-    // Remover notificação antiga se existir
-    const notificacaoAntiga = document.getElementById('portal-notificacao-discreta');
-    if (notificacaoAntiga) {
-        notificacaoAntiga.remove();
-    }
-    
-    // Cores por tipo
-    const cores = {
-        info: '#17a2b8',
-        success: '#28a745',
-        warning: '#ffc107',
-        error: '#dc3545',
-        processing: '#007bff'
-    };
-    
-    // Criar nova notificação
-    const notificacao = document.createElement('div');
-    notificacao.id = 'portal-notificacao-discreta';
-    notificacao.className = 'portal-notificacao-discreta';
-    notificacao.innerHTML = `
-        <div class="notificacao-header" style="background: ${cores[tipo]};">
-            <span class="notificacao-titulo">${titulo}</span>
-            <button class="notificacao-fechar" onclick="esconderNotificacaoDiscreta()">×</button>
-        </div>
-        <div class="notificacao-body">
-            <div class="notificacao-mensagem">${mensagem}</div>
-            <div class="notificacao-spinner">
-                <div class="spinner-pequeno"></div>
-            </div>
-        </div>
-        <div class="notificacao-progresso">
-            <div class="notificacao-progresso-bar" style="width: 0%"></div>
-        </div>
-    `;
-    document.body.appendChild(notificacao);
-    
-    // Adicionar CSS se não existir
-    if (!document.getElementById('portal-notificacao-styles')) {
-        const style = document.createElement('style');
-        style.id = 'portal-notificacao-styles';
-        style.textContent = `
-            .portal-notificacao-discreta {
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                width: 320px;
-                background: white;
-                border-radius: 8px;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-                z-index: 9999;
-                animation: slideInRight 0.3s ease-out;
-                font-size: 14px;
-            }
-            .notificacao-header {
-                padding: 10px 15px;
-                border-radius: 8px 8px 0 0;
-                color: white;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-            }
-            .notificacao-titulo {
-                font-weight: 600;
-                font-size: 14px;
-            }
-            .notificacao-fechar {
-                background: none;
-                border: none;
-                color: white;
-                font-size: 20px;
-                cursor: pointer;
-                padding: 0;
-                width: 20px;
-                height: 20px;
-                line-height: 18px;
-                opacity: 0.8;
-                transition: opacity 0.2s;
-            }
-            .notificacao-fechar:hover {
-                opacity: 1;
-            }
-            .notificacao-body {
-                padding: 12px 15px;
-                display: flex;
-                align-items: center;
-                gap: 10px;
-            }
-            .notificacao-mensagem {
-                flex: 1;
-                color: #495057;
-                font-size: 13px;
-            }
-            .notificacao-spinner {
-                flex-shrink: 0;
-            }
-            .spinner-pequeno {
-                width: 16px;
-                height: 16px;
-                border: 2px solid #e9ecef;
-                border-top-color: #007bff;
-                border-radius: 50%;
-                animation: spin 1s linear infinite;
-            }
-            .notificacao-progresso {
-                height: 3px;
-                background: #e9ecef;
-                border-radius: 0 0 8px 8px;
-                overflow: hidden;
-            }
-            .notificacao-progresso-bar {
-                height: 100%;
-                background: linear-gradient(90deg, #007bff, #28a745);
-                transition: width 0.3s ease;
-            }
-            @keyframes slideInRight {
-                from {
-                    transform: translateX(400px);
-                    opacity: 0;
-                }
-                to {
-                    transform: translateX(0);
-                    opacity: 1;
-                }
-            }
-            @keyframes spin {
-                to { transform: rotate(360deg); }
-            }
-            @keyframes slideOutRight {
-                from {
-                    transform: translateX(0);
-                    opacity: 1;
-                }
-                to {
-                    transform: translateX(400px);
-                    opacity: 0;
-                }
-            }
-        `;
-        document.head.appendChild(style);
-    }
-}
 
 function atualizarNotificacaoDiscreta(status, tentativa, maxTentativas) {
     const notificacao = document.getElementById('portal-notificacao-discreta');

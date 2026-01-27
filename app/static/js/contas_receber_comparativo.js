@@ -1,10 +1,21 @@
 /* =============================================
    JS: Contas a Receber - Modal Comparativo
-   Sistema de Dupla Conferência (Sistema × Odoo)
+   Sistema de Dupla Conferência (Sistema x Odoo)
    ============================================= */
 
 // ============================================
-// VARIÁVEIS GLOBAIS
+// DESIGN TOKENS UTILITY
+// ============================================
+const FinanceiroDesignTokens = {
+    get(name) {
+        return getComputedStyle(document.documentElement)
+            .getPropertyValue(`--${name}`).trim();
+    },
+    danger: () => FinanceiroDesignTokens.get('semantic-danger') || 'hsl(0 70% 50%)'
+};
+
+// ============================================
+// VARIAVEIS GLOBAIS
 // ============================================
 let comparativoContaId = null;
 let tiposAbatimentoCache = [];
@@ -451,7 +462,7 @@ function excluirAbatimentoSistema(abatimentoId) {
         text: 'Deseja excluir este abatimento do sistema?',
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonColor: '#dc3545',
+        confirmButtonColor: FinanceiroDesignTokens.danger(),
         confirmButtonText: 'Sim, excluir',
         cancelButtonText: 'Cancelar'
     }).then((result) => {

@@ -1,12 +1,30 @@
 /**
- * 🚀 SERVIÇO GPS HÍBRIDO - NACOM RASTREAMENTO
+ * SERVICO GPS HIBRIDO - NACOM RASTREAMENTO
  *
  * Detecta automaticamente se está rodando como:
- * - App Nativo (Capacitor) → Usa GPS Background Real
- * - Web Browser → Usa navigator.geolocation tradicional
+ * - App Nativo (Capacitor) -> Usa GPS Background Real
+ * - Web Browser -> Usa navigator.geolocation tradicional
  *
  * Integrado 100% com a lógica de negócio existente
  */
+
+// Design token helper for native notification colors
+// Note: Native Android needs hex colors, but we try CSS first
+const getNotificationColor = () => {
+    try {
+        const cssColor = getComputedStyle(document.documentElement)
+            .getPropertyValue('--semantic-success').trim();
+        // If CSS variable exists and is HSL, convert to hex (simplified)
+        if (cssColor && cssColor.startsWith('hsl')) {
+            // For native Android, use hardcoded hex as HSL parsing is complex
+            // This is the semantic-success equivalent
+            return '#22c55e';
+        }
+        return cssColor || '#22c55e';
+    } catch {
+        return '#22c55e'; // Fallback to green
+    }
+};
 
 class PlatformDetector {
     /**
@@ -138,10 +156,10 @@ class GPSServiceHibrido {
             fastestInterval: 60000,     // Mínimo de 1 minuto entre updates
             activitiesInterval: 300000, // Detecção de atividade a cada 5 min
 
-            // Notificação persistente (Android)
-            notificationTitle: '🚚 Rastreamento Ativo',
+            // Notificacao persistente (Android)
+            notificationTitle: 'Rastreamento Ativo',
             notificationText: 'Enviando localização para a empresa',
-            notificationIconColor: '#28a745',
+            notificationIconColor: getNotificationColor(),
             notificationIconLarge: 'ic_launcher',
             notificationIconSmall: 'ic_stat_icon',
 
