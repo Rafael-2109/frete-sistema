@@ -45,10 +45,9 @@
 @import url('./base/_bootstrap-overrides.css') layer(base);
 @import url('./base/_navbar.css') layer(base);
 
-/* Components - Reusable UI patterns (Phase 2)
-   @import url('./components/_buttons.css') layer(components);
-   @import url('./components/_cards.css') layer(components);
-*/
+/* Components - Reusable UI patterns */
+@import url('./components/_buttons.css') layer(components);
+/* @import url('./components/_cards.css') layer(components); */
 
 /* Utilities - Helper classes */
 @import url('./utilities/_utilities.css') layer(utilities);
