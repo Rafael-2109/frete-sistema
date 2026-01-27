@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-01-26)
 
 **Core value:** Todas as telas devem ter cores e contraste funcionais em dark mode E mobile, sem CSS inline hardcoded.
-**Current focus:** Phase 4 - Layout Patterns (Phase 3 Complete)
+**Current focus:** Phase 4 - Layout Patterns (Plan 02 Complete)
 
 ## Current Position
 
-Phase: 3 of 7 (Table System) - COMPLETE
+Phase: 4 of 7 (Layout Patterns)
 Plan: 2 of 2 in current phase
-Status: Phase complete
-Last activity: 2026-01-27 - Completed Phase 3 (Table System)
+Status: Plan complete
+Last activity: 2026-01-27 - Completed 04-02-PLAN.md (Layout Utilities)
 
-Progress: [████░░░░░░] 45%
+Progress: [█████░░░░░] 50%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 8
+- Total plans completed: 9
 - Average duration: 2.1 min
-- Total execution time: 17 min
+- Total execution time: 19 min
 
 **By Phase:**
 
@@ -30,9 +30,10 @@ Progress: [████░░░░░░] 45%
 | 01-layer-infrastructure | 3 | 8 min | 2.7 min |
 | 02-component-library | 3 | 6 min | 2 min |
 | 03-table-system | 2 | 3 min | 1.5 min |
+| 04-layout-patterns | 1 | 2 min | 2 min |
 
 **Recent Trend:**
-- Last 5 plans: 02-02 (2 min), 02-03 (2 min), 03-01 (1 min), 03-02 (2 min)
+- Last 5 plans: 02-03 (2 min), 03-01 (1 min), 03-02 (2 min), 04-02 (2 min)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -69,6 +70,9 @@ Recent decisions affecting current work:
 - [03-02]: Z-index hierarchy: corner (11) > header (10) > first column (5)
 - [03-02]: Hover uses :where() for low specificity, dark 5% white / light 4% black overlay
 - [03-02]: Status rows (success, warning, etc.) use hsla 15% base / 28% hover
+- [04-02]: Z-index scale documents Bootstrap defaults (1000-1055) plus custom table values (1005-1011)
+- [04-02]: Page structure uses 56px navbar height assumption
+- [04-02]: Modern dvh units with calc(100vh - 56px) fallback for older browsers
 
 ### Pending Todos
 
@@ -84,9 +88,9 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-01-27T13:25:00Z
-Stopped at: Phase 3 complete - verified 7/7 must-haves
+Last session: 2026-01-27T13:44:00Z
+Stopped at: Completed 04-02-PLAN.md (Layout Utilities)
 Resume file: None
 
 ---
-*Next step: Plan Phase 4 (Layout Patterns) - standardize sidebar and grid system*
+*Next step: Phase 4 complete - ready for Phase 5 (Page Migration)*
