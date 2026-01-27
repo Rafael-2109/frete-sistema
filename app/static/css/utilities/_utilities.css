@@ -47,6 +47,12 @@
 .text-status-success { color: var(--semantic-success) !important; }
 .text-status-danger { color: var(--semantic-danger) !important; }
 
+/* Light mode adjustments para cores semânticas */
+[data-bs-theme="light"] .text-status-success,
+[data-theme="light"] .text-status-success {
+    color: hsl(145 70% 28%) !important;  /* Verde mais escuro */
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    BORDAS
    ═══════════════════════════════════════════════════════════════════════════ */
