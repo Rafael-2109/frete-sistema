@@ -49,6 +49,8 @@
 @import url('./components/_buttons.css') layer(components);
 @import url('./components/_cards.css') layer(components);
 @import url('./components/_badges.css') layer(components);
+@import url('./components/_modals.css') layer(components);
+@import url('./components/_forms.css') layer(components);
 
 /* Utilities - Helper classes */
 @import url('./utilities/_utilities.css') layer(utilities);
