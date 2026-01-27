@@ -232,3 +232,21 @@ body {
 [data-theme="light"] .text-info {
     color: hsl(0 0% 35%) !important;  /* Cinza escuro */
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BUTTON PRIMARY - Garantir texto legível em light mode
+   Bootstrap btn-primary usa fundo azul #0d6efd - precisa de texto branco
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Light mode: botões primários com texto branco para contraste */
+[data-bs-theme="light"] .btn-primary,
+[data-theme="light"] .btn-primary {
+    color: hsl(0 0% 100%) !important;
+}
+
+[data-bs-theme="light"] .btn-primary:hover,
+[data-theme="light"] .btn-primary:hover,
+[data-bs-theme="light"] .btn-primary:focus,
+[data-theme="light"] .btn-primary:focus {
+    color: hsl(0 0% 100%) !important;
+}

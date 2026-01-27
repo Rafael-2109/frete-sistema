@@ -200,6 +200,16 @@ nav.navbar.navbar-light {
   color: var(--text);
 }
 
+/* Garantir que todas as células da tabela usem a mesma cor de fundo das sticky columns */
+.table tbody td {
+  background-color: var(--bg-light);
+}
+
+[data-theme="light"] .table tbody td,
+[data-bs-theme="light"] .table tbody td {
+  background-color: var(--bs-table-bg, hsl(0 0% 100%));
+}
+
 [data-theme="dark"] .table-striped tbody tr:nth-of-type(odd),
 [data-bs-theme="dark"] .table-striped tbody tr:nth-of-type(odd) {
   background-color: var(--bg);
