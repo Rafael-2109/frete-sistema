@@ -15,7 +15,7 @@
             <p class="text-muted mb-0">Produtos/fornecedores sem historico fiscal - Validacao manual obrigatoria</p>
         </div>
         <div>
-            <button type="button" class="btn btn-outline-primary" onclick="location.reload()">
+            <button type="button" class="btn btn-outline-primary" onclick="limparEAtualizar()" id="btnAtualizar">
                 <i class="fas fa-sync-alt"></i> Atualizar
             </button>
         </div>
@@ -833,5 +833,37 @@
     }
 
 })();
+
+// Função para limpar órfãos e atualizar a página
+function limparEAtualizar() {
+    const btn = document.getElementById('btnAtualizar');
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Verificando...';
+
+    // Primeiro limpa registros órfãos (que já têm perfil fiscal)
+    fetch('/api/recebimento/primeira-compra/limpar-orfaos', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+        }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.sucesso && data.removidos > 0) {
+            if (typeof toastr !== 'undefined') {
+                toastr.info(`${data.removidos} registro(s) órfão(s) removido(s)`);
+            }
+        }
+        // Recarrega a página após a limpeza
+        setTimeout(() => location.reload(), 300);
+    })
+    .catch(e => {
+        console.error('Erro ao limpar órfãos:', e);
+        // Mesmo com erro, recarrega a página
+        location.reload();
+    });
+}
 </script>
 {% endblock %}

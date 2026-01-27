@@ -267,6 +267,71 @@ def rejeitar_primeira_compra(cadastro_id):
         }), 500
 
 
+@validacao_fiscal_bp.route('/primeira-compra/limpar-orfaos', methods=['POST'])
+@login_required
+def limpar_primeiras_compras_orfas():
+    """
+    Remove/marca como validado registros de 1a compra que já possuem perfil fiscal.
+
+    Isso pode acontecer quando:
+    - Perfil foi criado via importação de Excel
+    - Perfil foi criado automaticamente por histórico consistente
+    - Mas o cadastro_primeira_compra não foi atualizado
+    """
+    try:
+        # Buscar registros pendentes que já têm perfil fiscal
+        from sqlalchemy import and_, exists
+
+        # Subquery para verificar se existe perfil
+        subquery = db.session.query(PerfilFiscalProdutoFornecedor.id).filter(
+            and_(
+                PerfilFiscalProdutoFornecedor.cnpj_empresa_compradora == CadastroPrimeiraCompra.cnpj_empresa_compradora,
+                PerfilFiscalProdutoFornecedor.cnpj_fornecedor == CadastroPrimeiraCompra.cnpj_fornecedor,
+                PerfilFiscalProdutoFornecedor.cod_produto == CadastroPrimeiraCompra.cod_produto,
+                PerfilFiscalProdutoFornecedor.ativo == True
+            )
+        ).exists()
+
+        # Buscar cadastros pendentes que têm perfil
+        orfaos = CadastroPrimeiraCompra.query.filter(
+            CadastroPrimeiraCompra.status == 'pendente',
+            subquery
+        ).all()
+
+        if not orfaos:
+            return jsonify({
+                'sucesso': True,
+                'mensagem': 'Nenhum registro órfão encontrado',
+                'removidos': 0
+            })
+
+        ids_atualizados = []
+        for cadastro in orfaos:
+            cadastro.status = 'validado'
+            cadastro.validado_por = 'LIMPEZA_AUTOMATICA'
+            cadastro.validado_em = datetime.now(timezone.utc)
+            cadastro.observacao = 'Perfil fiscal já existia - marcado como validado automaticamente'
+            ids_atualizados.append(cadastro.id)
+
+        db.session.commit()
+
+        logger.info(f"Limpeza de 1as compras órfãs: {len(ids_atualizados)} registros atualizados. IDs: {ids_atualizados}")
+
+        return jsonify({
+            'sucesso': True,
+            'mensagem': f'{len(ids_atualizados)} registros órfãos marcados como validados',
+            'removidos': len(ids_atualizados),
+            'ids': ids_atualizados
+        })
+
+    except Exception as e:
+        logger.error(f"Erro ao limpar 1as compras órfãs: {e}")
+        return jsonify({
+            'sucesso': False,
+            'erro': str(e)
+        }), 500
+
+
 # =============================================================================
 # PERFIS FISCAIS
 # =============================================================================

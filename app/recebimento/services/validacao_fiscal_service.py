@@ -880,6 +880,29 @@ class ValidacaoFiscalService:
         # Usar nome_produto_interno se disponível, senão usar nome do XML
         nome_produto = nome_produto_interno or linha.get('det_prod_xprod', '')
         dados_nf = dados_nf or {}
+        cnpj_empresa = dados_nf.get('cnpj_empresa_compradora')
+
+        # CORREÇÃO: Verificar se já existe PERFIL FISCAL para esta combinação
+        # Se existir, não precisa criar registro de 1a compra
+        if cnpj_empresa:
+            perfil_existente = PerfilFiscalProdutoFornecedor.query.filter_by(
+                cnpj_empresa_compradora=cnpj_empresa,
+                cnpj_fornecedor=cnpj,
+                cod_produto=cod_produto
+            ).first()
+
+            if perfil_existente:
+                logger.info(
+                    f"Perfil fiscal ja existe para empresa={cnpj_empresa}, "
+                    f"fornecedor={cnpj}, produto={cod_produto} - Ignorando 1a compra"
+                )
+                return {
+                    'id': None,
+                    'cod_produto': cod_produto,
+                    'nome_produto': nome_produto,
+                    'status': 'perfil_ja_existe',
+                    'perfil_id': perfil_existente.id
+                }
 
         # Verificar se ja existe registro pendente
         existente = CadastroPrimeiraCompra.query.filter_by(
@@ -1385,6 +1408,36 @@ class ValidacaoFiscalService:
 
         if cadastro.status != 'pendente':
             return {'sucesso': False, 'mensagem': f'Cadastro ja processado: {cadastro.status}'}
+
+        # CORREÇÃO: Verificar se perfil já existe (upsert)
+        perfil_existente = PerfilFiscalProdutoFornecedor.query.filter_by(
+            cnpj_empresa_compradora=cadastro.cnpj_empresa_compradora,
+            cnpj_fornecedor=cadastro.cnpj_fornecedor,
+            cod_produto=cadastro.cod_produto
+        ).first()
+
+        if perfil_existente:
+            # Perfil já existe - apenas marcar cadastro como validado
+            cadastro.status = 'validado'
+            cadastro.validado_por = usuario
+            cadastro.validado_em = datetime.utcnow()
+            cadastro.observacao = observacao or 'Perfil fiscal já existia'
+
+            db.session.commit()
+
+            logger.info(
+                f"1a compra validada (perfil já existia): cadastro={cadastro_id}, "
+                f"perfil_existente={perfil_existente.id}, produto={cadastro.cod_produto}"
+            )
+
+            return {
+                'sucesso': True,
+                'mensagem': 'Perfil fiscal já existia - cadastro marcado como validado',
+                'perfil_id': perfil_existente.id,
+                'perfil_ja_existia': True,
+                'propagados': 0,
+                'ids_propagados': []
+            }
 
         # Criar perfil fiscal com TODOS os campos disponíveis
         # Garantir que nome_empresa seja preenchido pelo mapeamento se não vier
