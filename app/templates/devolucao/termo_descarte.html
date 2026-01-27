@@ -1,6 +1,8 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-bs-theme="light">
 <head>
+    <!-- Standalone CSS with design tokens (for screen view) -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modules/_rastreamento-standalone.css') }}">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Termo de Autorizacao de Descarte - {{ descarte.numero_termo }}</title>

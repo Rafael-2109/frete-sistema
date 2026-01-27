@@ -1,10 +1,13 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-bs-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#28a745">
     <title>Rastreamento Nacom</title>
+
+    <!-- Standalone CSS with design tokens -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modules/_rastreamento-standalone.css') }}">
 
     <style>
         * {
@@ -15,7 +18,7 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            background: linear-gradient(135deg, var(--standalone-primary) 0%, var(--standalone-secondary) 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -45,7 +48,7 @@
             font-size: 32px;
             font-weight: 700;
             margin-bottom: 10px;
-            text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            text-shadow: 0 2px 10px hsla(0, 0%, 0%, 0.2);
         }
 
         .subtitle {
@@ -57,13 +60,13 @@
 
         .btn-scanner {
             background: white;
-            color: #28a745;
+            color: var(--standalone-primary);
             border: none;
             padding: 20px 40px;
             font-size: 20px;
             font-weight: 600;
             border-radius: 50px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            box-shadow: 0 10px 30px hsla(0, 0%, 0%, 0.3);
             cursor: pointer;
             transition: all 0.3s ease;
             display: inline-flex;
@@ -75,7 +78,7 @@
 
         .btn-scanner:hover {
             transform: translateY(-5px);
-            box-shadow: 0 15px 40px rgba(0,0,0,0.4);
+            box-shadow: 0 15px 40px hsla(0, 0%, 0%, 0.4);
         }
 
         .btn-scanner:active {
@@ -87,13 +90,13 @@
         }
 
         .instructions {
-            background: rgba(255, 255, 255, 0.15);
+            background: hsla(0, 0%, 100%, 0.15);
             backdrop-filter: blur(10px);
             padding: 25px;
             border-radius: 20px;
             margin-top: 30px;
             text-align: left;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            box-shadow: 0 5px 20px hsla(0, 0%, 0%, 0.1);
         }
 
         .instructions h3 {
@@ -129,7 +132,7 @@
         .spinner {
             width: 40px;
             height: 40px;
-            border: 4px solid rgba(255, 255, 255, 0.3);
+            border: 4px solid hsla(0, 0%, 100%, 0.3);
             border-top-color: white;
             border-radius: 50%;
             animation: spin 1s linear infinite;
@@ -167,33 +170,33 @@
 </head>
 <body>
     <div class="container">
-        <div class="logo">🚚</div>
+        <div class="logo">&#128666;</div>
         <h1>Rastreamento Nacom</h1>
         <p class="subtitle">Sistema de Rastreamento de Entregas</p>
 
         <button class="btn-scanner" onclick="iniciarScanner()">
-            <span class="icon">📷</span>
+            <span class="icon">&#128247;</span>
             <span>Escanear QR Code</span>
         </button>
 
         <div class="loading" id="loading">
             <div class="spinner"></div>
-            <p style="margin-top: 15px;">Abrindo câmera...</p>
+            <p style="margin-top: 15px;">Abrindo camera...</p>
         </div>
 
         <div class="instructions">
-            <h3>📋 Como usar:</h3>
+            <h3>&#128203; Como usar:</h3>
             <ol>
-                <li>Toque no botão acima para abrir a câmera</li>
+                <li>Toque no botao acima para abrir a camera</li>
                 <li>Aponte para o <strong>QR Code</strong> do embarque</li>
-                <li>Aguarde o reconhecimento automático</li>
+                <li>Aguarde o reconhecimento automatico</li>
                 <li>Aceite os termos de uso</li>
-                <li>Pronto! O rastreamento iniciará automaticamente</li>
+                <li>Pronto! O rastreamento iniciara automaticamente</li>
             </ol>
         </div>
 
         <div class="version">
-            <p>📱 Versão 1.0.0</p>
+            <p>&#128241; Versao 1.0.0</p>
             <p id="modo">Modo: Web</p>
         </div>
     </div>
@@ -202,7 +205,7 @@
     <script type="module" src="{{ url_for('static', filename='js/capacitor/capacitor.js') }}"></script>
 
     <script>
-        // Detectar se é app nativo ou web
+        // Detectar se e app nativo ou web
         function detectarPlataforma() {
             if (typeof window.Capacitor !== 'undefined' && window.Capacitor.isNativePlatform()) {
                 document.getElementById('modo').textContent =
@@ -215,7 +218,7 @@
         // Detectar plataforma ao carregar
         setTimeout(detectarPlataforma, 300);
 
-        // Função para iniciar o scanner
+        // Funcao para iniciar o scanner
         async function iniciarScanner() {
             const btnScanner = document.querySelector('.btn-scanner');
             const loading = document.getElementById('loading');
@@ -225,12 +228,12 @@
             loading.style.display = 'block';
 
             try {
-                // Verificar se é app nativo com plugin de QR Code
+                // Verificar se e app nativo com plugin de QR Code
                 if (typeof window.Capacitor !== 'undefined' &&
                     window.Capacitor.isNativePlatform() &&
                     window.BarcodeScanner) {
 
-                    // Usar plugin nativo de QR Code (se disponível)
+                    // Usar plugin nativo de QR Code (se disponivel)
                     const result = await window.BarcodeScanner.scan();
 
                     if (result.text) {
@@ -242,14 +245,14 @@
                     }
 
                 } else {
-                    // Fallback: redirecionar para página web com scanner
+                    // Fallback: redirecionar para pagina web com scanner
                     // Ou usar biblioteca JavaScript (html5-qrcode)
                     window.location.href = '/rastreamento/scanner';
                 }
 
             } catch (error) {
                 console.error('Erro ao abrir scanner:', error);
-                alert('Erro ao abrir câmera. Verifique as permissões do app.');
+                alert('Erro ao abrir camera. Verifique as permissoes do app.');
                 resetarBotao();
             }
         }
@@ -267,7 +270,7 @@
                     // Apenas o token
                     token = qrCodeText;
                 } else {
-                    throw new Error('QR Code inválido');
+                    throw new Error('QR Code invalido');
                 }
 
                 // Redirecionar para tela de aceite LGPD
@@ -275,12 +278,12 @@
 
             } catch (error) {
                 console.error('Erro ao processar QR Code:', error);
-                alert('QR Code inválido. Tente novamente.');
+                alert('QR Code invalido. Tente novamente.');
                 resetarBotao();
             }
         }
 
-        // Resetar botão para estado inicial
+        // Resetar botao para estado inicial
         function resetarBotao() {
             const btnScanner = document.querySelector('.btn-scanner');
             const loading = document.getElementById('loading');
@@ -290,7 +293,7 @@
         }
 
         // DESENVOLVIMENTO: detectar se URL tem token na hash
-        // Útil para testar sem QR Code (ex: #token=abc123)
+        // Util para testar sem QR Code (ex: #token=abc123)
         if (window.location.hash) {
             const hash = window.location.hash.substring(1);
             if (hash.startsWith('token=')) {

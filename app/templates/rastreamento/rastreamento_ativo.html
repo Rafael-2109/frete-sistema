@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-bs-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -10,34 +10,36 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Standalone CSS with design tokens -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modules/_rastreamento-standalone.css') }}">
 
-    <!-- 🚀 CAPACITOR - Detecta automaticamente se é app ou web -->
+    <!-- CAPACITOR - Detecta automaticamente se e app ou web -->
     <script type="module" src="{{ url_for('static', filename='js/capacitor/capacitor.js') }}" onerror="console.log('Rodando em modo WEB')"></script>
 
-    <!-- 📱 Serviço GPS Híbrido -->
+    <!-- Servico GPS Hibrido -->
     <script src="{{ url_for('static', filename='js/capacitor/gps-service-hibrido.js') }}"></script>
     <script src="{{ url_for('static', filename='js/capacitor/rastreamento-integration.js') }}"></script>
 
     <style>
         body {
-            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            background: linear-gradient(135deg, var(--standalone-primary) 0%, var(--standalone-secondary) 100%);
             min-height: 100vh;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             padding-bottom: 80px;
         }
 
         .status-header {
-            background: white;
+            background: var(--standalone-bg-light);
             border-radius: 0 0 30px 30px;
             padding: 20px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            box-shadow: 0 5px 20px hsla(0, 0%, 0%, 0.1);
             margin-bottom: 20px;
         }
 
         .pulse-icon {
             width: 100px;
             height: 100px;
-            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            background: linear-gradient(135deg, var(--standalone-primary) 0%, var(--standalone-secondary) 100%);
             border-radius: 50%;
             display: flex;
             align-items: center;
@@ -53,7 +55,7 @@
             width: 120%;
             height: 120%;
             border-radius: 50%;
-            border: 3px solid #28a745;
+            border: 3px solid var(--standalone-primary);
             opacity: 0;
             animation: ripple 2s infinite;
         }
@@ -80,23 +82,27 @@
         }
 
         .info-card {
-            background: white;
+            background: var(--standalone-bg-light);
             border-radius: 20px;
             padding: 20px;
             margin: 15px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            box-shadow: 0 5px 15px hsla(0, 0%, 0%, 0.1);
+        }
+
+        .info-card h5 {
+            color: var(--standalone-text);
         }
 
         .metric-item {
             padding: 15px;
-            background: #f8f9fa;
+            background: var(--standalone-bg);
             border-radius: 15px;
             margin-bottom: 10px;
         }
 
         .metric-label {
             font-size: 0.85rem;
-            color: #6c757d;
+            color: var(--standalone-text-muted);
             text-transform: uppercase;
             letter-spacing: 0.5px;
             margin-bottom: 5px;
@@ -105,11 +111,11 @@
         .metric-value {
             font-size: 1.5rem;
             font-weight: 700;
-            color: #212529;
+            color: var(--standalone-text);
         }
 
         .metric-value.destaque {
-            color: #28a745;
+            color: var(--standalone-primary);
         }
 
         .status-badge {
@@ -121,13 +127,13 @@
         }
 
         .status-ativo {
-            background: #d4edda;
-            color: #155724;
+            background: var(--standalone-primary-light);
+            color: var(--standalone-primary);
         }
 
         .status-proximo {
-            background: #fff3cd;
-            color: #856404;
+            background: hsla(45, 100%, 51%, 0.2);
+            color: hsl(45, 80%, 35%);
             animation: blink 1s infinite;
         }
 
@@ -146,9 +152,9 @@
             font-weight: 700;
             border-radius: 20px;
             border: none;
-            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+            background: linear-gradient(135deg, var(--standalone-danger) 0%, hsl(354, 70%, 46%) 100%);
             color: white;
-            box-shadow: 0 5px 25px rgba(220, 53, 69, 0.4);
+            box-shadow: 0 5px 25px hsla(354, 70%, 54%, 0.4);
             z-index: 1000;
         }
 
@@ -162,7 +168,7 @@
             align-items: center;
             gap: 10px;
             padding: 10px;
-            background: #e7f5ff;
+            background: hsla(207, 90%, 54%, 0.1);
             border-radius: 10px;
             margin-top: 15px;
         }
@@ -170,7 +176,7 @@
         .gps-dot {
             width: 12px;
             height: 12px;
-            background: #28a745;
+            background: var(--standalone-primary);
             border-radius: 50%;
             animation: blink-dot 1.5s infinite;
         }
@@ -185,7 +191,7 @@
             align-items: center;
             gap: 8px;
             font-size: 0.9rem;
-            color: #495057;
+            color: var(--standalone-text-muted);
         }
 
         .battery-icon {
@@ -193,7 +199,7 @@
         }
 
         .battery-low {
-            color: #dc3545;
+            color: var(--standalone-danger);
         }
 
         .loading-overlay {
@@ -202,7 +208,7 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(255,255,255,0.95);
+            background: hsla(0, 0%, 100%, 0.95);
             display: none;
             justify-content: center;
             align-items: center;
@@ -213,6 +219,10 @@
             display: flex;
         }
 
+        .loading-overlay p {
+            color: var(--standalone-text);
+        }
+
         .alert-fixed {
             position: fixed;
             top: 20px;
@@ -220,7 +230,11 @@
             right: 20px;
             z-index: 9998;
             border-radius: 15px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+            box-shadow: 0 5px 20px hsla(0, 0%, 0%, 0.2);
+        }
+
+        .text-muted {
+            color: var(--standalone-text-muted) !important;
         }
     </style>
 </head>
@@ -229,7 +243,7 @@
     <div class="loading-overlay" id="loadingOverlay">
         <div class="text-center">
             <div class="spinner-border text-success" style="width: 60px; height: 60px;" role="status"></div>
-            <p class="mt-3 fw-bold">Enviando localização...</p>
+            <p class="mt-3 fw-bold">Enviando localizacao...</p>
         </div>
     </div>
 
@@ -244,7 +258,7 @@
 
         <h4 class="text-center fw-bold mb-2">
             <span id="statusBadge" class="status-badge status-ativo">
-                ✅ RASTREAMENTO ATIVO
+                RASTREAMENTO ATIVO
             </span>
         </h4>
 
@@ -253,22 +267,22 @@
         </p>
     </div>
 
-    <!-- Card de Informações -->
+    <!-- Card de Informacoes -->
     <div class="info-card">
         <h5 class="fw-bold mb-3"><i class="fas fa-map-pin"></i> Destino</h5>
         <div class="metric-item">
             {% if embarque.itens and embarque.itens|length > 0 %}
-            <div class="metric-label">Localização</div>
+            <div class="metric-label">Localizacao</div>
             <div class="metric-value">
                 {{ embarque.itens[0].cidade_destino }} - {{ embarque.itens[0].uf_destino }}
             </div>
             {% else %}
-            <div class="metric-value">Destino não especificado</div>
+            <div class="metric-value">Destino nao especificado</div>
             {% endif %}
         </div>
 
         <div class="metric-item">
-            <div class="metric-label">Distância até o destino</div>
+            <div class="metric-label">Distancia ate o destino</div>
             <div class="metric-value destaque" id="distanciaDestino">
                 <i class="fas fa-spinner fa-spin"></i> Calculando...
             </div>
@@ -276,24 +290,24 @@
 
         <div class="gps-indicator">
             <div class="gps-dot"></div>
-            <span id="ultimaAtualizacao">Aguardando primeira localização...</span>
+            <span id="ultimaAtualizacao">Aguardando primeira localizacao...</span>
         </div>
     </div>
 
-    <!-- Card de Estatísticas -->
+    <!-- Card de Estatisticas -->
     <div class="info-card">
-        <h5 class="fw-bold mb-3"><i class="fas fa-chart-line"></i> Estatísticas</h5>
+        <h5 class="fw-bold mb-3"><i class="fas fa-chart-line"></i> Estatisticas</h5>
 
         <div class="row">
             <div class="col-6">
                 <div class="metric-item">
-                    <div class="metric-label">Atualizações</div>
+                    <div class="metric-label">Atualizacoes</div>
                     <div class="metric-value" id="totalPings">{{ rastreamento.pings.count() }}</div>
                 </div>
             </div>
             <div class="col-6">
                 <div class="metric-item">
-                    <div class="metric-label">Precisão GPS</div>
+                    <div class="metric-label">Precisao GPS</div>
                     <div class="metric-value" id="precisaoGPS">
                         {% if ultimo_ping %}
                             {{ ultimo_ping.precisao|round(0)|int }}m
@@ -313,7 +327,7 @@
         </div>
     </div>
 
-    <!-- Botão de Entrega -->
+    <!-- Botao de Entrega -->
     <button type="button" class="btn btn-entrega" id="btnEntregue">
         <i class="fas fa-clipboard-check"></i> ENTREGUEI O PEDIDO
     </button>
@@ -322,12 +336,12 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
-        // 🚀 NOVA IMPLEMENTAÇÃO HÍBRIDA - Usa GPSServiceHibrido
-        // Detecta automaticamente se é app nativo ou web browser
+        // NOVA IMPLEMENTACAO HIBRIDA - Usa GPSServiceHibrido
+        // Detecta automaticamente se e app nativo ou web browser
 
-        // Inicializar quando página carregar
+        // Inicializar quando pagina carregar
         document.addEventListener('DOMContentLoaded', function() {
-            // Configuração do rastreamento
+            // Configuracao do rastreamento
             inicializarRastreamento({
                 token: "{{ rastreamento.token_acesso }}",
                 intervaloPing: {{ intervalo_ping }}, // segundos
@@ -337,217 +351,15 @@
             });
         });
 
-        // ========== CÓDIGO LEGACY REMOVIDO ==========
-        // A lógica antiga foi substituída pelo GPS Service Híbrido
+        // ========== CODIGO LEGACY REMOVIDO ==========
+        // A logica antiga foi substituida pelo GPS Service Hibrido
         // Veja: /static/js/capacitor/gps-service-hibrido.js
         //       /static/js/capacitor/rastreamento-integration.js
 
-        // ========== MANTÉM APENAS FUNÇÕES DE UI ==========
+        // ========== MANTEM APENAS FUNCOES DE UI ==========
         const TOKEN = "{{ rastreamento.token_acesso }}";
         const INTERVALO_PING = {{ intervalo_ping }} * 1000;
         const DISTANCIA_CHEGADA = {{ config.distancia_chegada_metros }};
-
-        // ========== TODO CÓDIGO LEGACY COMENTADO ==========
-        // Foi substituído pelos novos módulos híbridos
-        /*
-        let watchId = null;
-        let intervalId = null;
-        let ultimaLocalizacao = null;
-        let totalPingsEnviados = {{ rastreamento.pings.count() }};
-
-        function iniciarRastreamento() {
-            // Opções de alta precisão
-            const opcoes = {
-                enableHighAccuracy: true,
-                timeout: 10000,
-                maximumAge: 0
-            };
-
-            // Watchposition para monitoramento contínuo
-            watchId = navigator.geolocation.watchPosition(
-                sucessoLocalizacao,
-                erroLocalizacao,
-                opcoes
-            );
-
-            // Intervalo fixo para envio de pings (a cada 2 minutos)
-            intervalId = setInterval(enviarPingAgora, INTERVALO_PING);
-
-            console.log('✅ Rastreamento iniciado com sucesso');
-        }
-
-        function sucessoLocalizacao(position) {
-            ultimaLocalizacao = {
-                latitude: position.coords.latitude,
-                longitude: position.coords.longitude,
-                precisao: position.coords.accuracy,
-                altitude: position.coords.altitude,
-                velocidade: position.coords.speed,
-                direcao: position.coords.heading,
-                timestamp: new Date(position.timestamp).toISOString()
-            };
-
-            // Atualizar UI
-            atualizarUI();
-
-            console.log('📍 Localização atualizada:', ultimaLocalizacao.latitude, ultimaLocalizacao.longitude);
-        }
-
-        function erroLocalizacao(error) {
-            console.error('❌ Erro de geolocalização:', error);
-
-            let mensagem = 'Erro ao obter localização.';
-            switch(error.code) {
-                case error.PERMISSION_DENIED:
-                    mensagem = 'Permissão de localização negada. Ative nas configurações do navegador.';
-                    break;
-                case error.POSITION_UNAVAILABLE:
-                    mensagem = 'Localização indisponível. Verifique se o GPS está ativo.';
-                    break;
-                case error.TIMEOUT:
-                    mensagem = 'Tempo esgotado ao obter localização. Tentando novamente...';
-                    break;
-            }
-
-            mostrarAlerta(mensagem, 'warning');
-        }
-
-        async function enviarPingAgora() {
-            if (!ultimaLocalizacao) {
-                console.log('⏳ Aguardando primeira localização...');
-                return;
-            }
-
-            loadingOverlay.classList.add('show');
-
-            try {
-                // Obter nível de bateria
-                let bateriaNivelAtual = null;
-                let bateriaCarregando = false;
-
-                if ('getBattery' in navigator) {
-                    const battery = await navigator.getBattery();
-                    bateriaNivelAtual = Math.round(battery.level * 100);
-                    bateriaCarregando = battery.charging;
-                }
-
-                const dadosPing = {
-                    ...ultimaLocalizacao,
-                    bateria_nivel: bateriaNivelAtual,
-                    bateria_carregando: bateriaCarregando
-                };
-
-                const response = await fetch(`/rastreamento/api/ping/${TOKEN}`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(dadosPing)
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    totalPingsEnviados = data.data.total_pings;
-                    totalPings.textContent = totalPingsEnviados;
-
-                    // Atualizar distância
-                    if (data.data.distancia_destino !== null) {
-                        distanciaDestino.innerHTML = `<i class="fas fa-location-arrow"></i> ${data.data.distancia_formatada}`;
-
-                        // Verificar se chegou próximo
-                        if (data.data.chegou_proximo) {
-                            statusBadge.className = 'status-badge status-proximo';
-                            statusBadge.innerHTML = '🎯 PRÓXIMO AO DESTINO!';
-                            mostrarAlerta('Você está próximo ao destino! Prepare-se para entregar.', 'success');
-                        }
-                    }
-
-                    console.log('✅ Ping enviado com sucesso:', data.data);
-                } else {
-                    console.error('❌ Erro ao enviar ping:', data.message);
-                    mostrarAlerta(data.message, 'danger');
-                }
-
-            } catch (error) {
-                console.error('❌ Erro de conexão:', error);
-                mostrarAlerta('Erro ao enviar localização. Verifique sua conexão.', 'danger');
-            } finally {
-                loadingOverlay.classList.remove('show');
-            }
-        }
-
-        function atualizarUI() {
-            // Atualizar precisão
-            if (ultimaLocalizacao.precisao) {
-                precisaoGPS.textContent = `${Math.round(ultimaLocalizacao.precisao)}m`;
-            }
-
-            // Atualizar última atualização
-            const agora = new Date();
-            ultimaAtualizacao.textContent = `Última atualização: ${agora.toLocaleTimeString('pt-BR')}`;
-        }
-
-        async function monitorarBateria() {
-            if ('getBattery' in navigator) {
-                const battery = await navigator.getBattery();
-
-                function atualizarBateria() {
-                    const nivel = Math.round(battery.level * 100);
-                    bateriaNivel.textContent = `Bateria: ${nivel}%`;
-
-                    // Atualizar ícone
-                    let icone = 'fa-battery-full';
-                    let classe = '';
-
-                    if (battery.charging) {
-                        icone = 'fa-battery-bolt';
-                    } else if (nivel <= 20) {
-                        icone = 'fa-battery-empty';
-                        classe = 'battery-low';
-                    } else if (nivel <= 50) {
-                        icone = 'fa-battery-half';
-                    }
-
-                    bateriaIndicator.innerHTML = `
-                        <i class="fas ${icone} battery-icon ${classe}"></i>
-                        <span id="bateriaNivel">Bateria: ${nivel}%</span>
-                    `;
-
-                    if (nivel <= 15 && !battery.charging) {
-                        mostrarAlerta('Bateria baixa! Conecte o carregador para continuar o rastreamento.', 'warning');
-                    }
-                }
-
-                atualizarBateria();
-
-                // Listeners de mudança
-                battery.addEventListener('levelchange', atualizarBateria);
-                battery.addEventListener('chargingchange', atualizarBateria);
-            }
-        }
-
-        function mostrarAlerta(mensagem, tipo) {
-            alertFixed.className = `alert alert-fixed alert-${tipo}`;
-            alertFixed.textContent = mensagem;
-            alertFixed.classList.remove('d-none');
-
-            setTimeout(() => {
-                alertFixed.classList.add('d-none');
-            }, 5000);
-        }
-
-        // Cleanup ao sair da página
-        window.addEventListener('beforeunload', function() {
-            if (watchId) {
-                navigator.geolocation.clearWatch(watchId);
-            }
-            if (intervalId) {
-                clearInterval(intervalId);
-            }
-        });
-        */
-        // ========== FIM DO CÓDIGO LEGACY ==========
     </script>
 </body>
 </html>
