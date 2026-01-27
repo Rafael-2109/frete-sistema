@@ -10,12 +10,12 @@
 
    VARIÁVEIS POR TEMA:
    DARK MODE:                    LIGHT MODE:
-   --bg-dark:  hsl(0 0% 0%)      --bg-dark:  hsl(0 0% 85%)  ← mais cinza
-   --bg:       hsl(0 0% 5%)      --bg:       hsl(0 0% 92%)  ← intermediário
+   --bg-dark:  hsl(0 0% 0%)      --bg-dark:  hsl(0 0% 95%)  ← sutil cinza
+   --bg:       hsl(0 0% 5%)      --bg:       hsl(0 0% 98%)  ← quase branco
    --bg-light: hsl(0 0% 10%)     --bg-light: hsl(0 0% 100%) ← branco (elevado)
-   --text:     hsl(0 0% 95%)     --text:     hsl(0 0% 5%)
-   --text-muted: hsl(0 0% 70%)   --text-muted: hsl(0 0% 35%)
-   --border:   hsl(0 0% 30%)     --border:   hsl(0 0% 78%)
+   --text:     hsl(0 0% 95%)     --text:     hsl(0 0% 10%)
+   --text-muted: hsl(0 0% 70%)   --text-muted: hsl(0 0% 40%)
+   --border:   hsl(0 0% 30%)     --border:   hsl(0 0% 85%)
 
    --gradient:       linear-gradient de --bg-light para --bg (topo→base)
    --gradient-hover: linear-gradient sólido --bg-light
@@ -66,7 +66,6 @@
    Hierarquia de elevação: body 0% → surfaces 5% → cards 10% (mais claro = elevado)
    ═══════════════════════════════════════════════════════════════════════════ */
 
-:root,
 [data-bs-theme="dark"],
 [data-theme="dark"] {
     /* 4 tons de background (0% → 5% → 10% → 15%) */
@@ -117,24 +116,24 @@
 
 /* ═══════════════════════════════════════════════════════════════════════════
    LIGHT MODE
-   Hierarquia de elevação: body 85% → surfaces 92% → cards 100% (mais claro = elevado)
+   Hierarquia sutil: body 95% → surfaces 98% → cards 100% (branco)
    ═══════════════════════════════════════════════════════════════════════════ */
 
 [data-bs-theme="light"],
 [data-theme="light"] {
-    /* 4 tons de background - hierarquia de elevação
-       Elementos elevados (cards) são MAIS CLAROS que o fundo */
-    --bg-dark: hsl(0 0% 85%);     /* body - base cinza */
-    --bg: hsl(0 0% 92%);          /* surfaces intermediárias */
+    /* 4 tons de background - hierarquia sutil
+       Body 95% (levemente cinza) → Cards 100% (branco) */
+    --bg-dark: hsl(0 0% 95%);     /* body - sutil cinza */
+    --bg: hsl(0 0% 98%);          /* surfaces intermediárias */
     --bg-light: hsl(0 0% 100%);   /* cards, inputs - elevados (branco) */
     --bg-button: hsl(0 0% 100%);  /* botões (máximo no light) */
 
-    /* 2 tons de texto (5% → 35%) */
-    --text: hsl(0 0% 5%);
-    --text-muted: hsl(0 0% 35%);
+    /* 2 tons de texto (10% → 40%) */
+    --text: hsl(0 0% 10%);
+    --text-muted: hsl(0 0% 40%);
 
-    /* Borda (78% - mais visível) */
-    --border: hsl(0 0% 78%);
+    /* Borda (85% - sutil) */
+    --border: hsl(0 0% 85%);
 
     /* Gradients e Detalhes */
     --gradient: linear-gradient(180deg, var(--bg-light), var(--bg));

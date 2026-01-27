@@ -1,10 +1,14 @@
 /**
  * _cards.css - Card Component
  *
- * Cards sit at the SURFACE level of the 3-level elevation system:
- * - Background (page): --bg-dark (0% dark, 90% light)
- * - Surface (cards): --bg (5% dark, 95% light)
- * - Elevated (modals): --bg-light (10% dark, 100% light)
+ * Cards sit at the ELEVATED level of the 3-level elevation system:
+ * - Background (page): --bg-dark (0% dark, 95% light)
+ * - Surface: --bg (5% dark, 98% light)
+ * - Elevated (cards): --bg-light (10% dark, 100% white light)
+ *
+ * HIERARQUIA: elementos elevados = mais claros
+ * Dark mode:  body 0% → cards 10%
+ * Light mode: body 95% → cards 100% (branco)
  *
  * Features:
  * - CSS custom property API for easy theming
@@ -22,7 +26,7 @@
 
   .card {
     /* CSS Custom Property API - allows easy overrides */
-    --_card-bg: var(--bg);
+    --_card-bg: var(--bg-light);  /* Cards são ELEVADOS = mais claros */
     --_card-border: var(--border);
     --_card-radius: var(--radius-lg);
     --_card-shadow: var(--shadow);

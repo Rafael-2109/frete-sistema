@@ -14,7 +14,6 @@
    Hierarquia de elevação: body 0% → surfaces 5% → cards 10%
    ═══════════════════════════════════════════════════════════════════════════ */
 
-:root,
 [data-bs-theme="dark"],
 [data-theme="dark"] {
     /* Core backgrounds - override Bootstrap's #212529 */
@@ -64,29 +63,30 @@
 
 /* ═══════════════════════════════════════════════════════════════════════════
    LIGHT MODE - Override Bootstrap
-   Hierarquia de elevação: body 85% → surfaces 92% → cards 100%
+   Hierarquia de elevação: body 95% → surfaces 98% → cards 100%
    ═══════════════════════════════════════════════════════════════════════════ */
 
 [data-bs-theme="light"],
 [data-theme="light"] {
-    /* Core backgrounds - override Bootstrap's #fff */
-    --bs-body-bg: hsl(0 0% 85%);
-    --bs-body-color: hsl(0 0% 5%);
+    /* Core backgrounds - hierarquia sutil
+       Body 95% (levemente cinza) → Cards 100% (branco) */
+    --bs-body-bg: hsl(0 0% 95%);
+    --bs-body-color: hsl(0 0% 10%);
     --bs-secondary-bg: hsl(0 0% 100%);
     --bs-tertiary-bg: hsl(0 0% 100%);
-    --bs-border-color: hsl(0 0% 78%);
-    --bs-secondary-color: hsl(0 0% 35%);
+    --bs-border-color: hsl(0 0% 85%);
+    --bs-secondary-color: hsl(0 0% 40%);
 
     /* Card backgrounds - elevated (white) */
     --bs-card-bg: hsl(0 0% 100%);
-    --bs-card-border-color: hsl(0 0% 85%);
+    --bs-card-border-color: hsl(0 0% 88%);
 
     /* Table backgrounds */
     --bs-table-bg: hsl(0 0% 100%);
-    --bs-table-color: hsl(0 0% 5%);
-    --bs-table-border-color: hsl(0 0% 85%);
-    --bs-table-striped-bg: hsl(0 0% 97%);
-    --bs-table-hover-bg: hsl(0 0% 95%);
+    --bs-table-color: hsl(0 0% 10%);
+    --bs-table-border-color: hsl(0 0% 88%);
+    --bs-table-striped-bg: hsl(0 0% 98%);
+    --bs-table-hover-bg: hsl(0 0% 96%);
 
     /* Input backgrounds */
     --bs-form-control-bg: hsl(0 0% 100%);
