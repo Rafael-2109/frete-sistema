@@ -1,0 +1,326 @@
+/**
+ * _buttons.css - Button Component
+ *
+ * Complete button system with all Bootstrap-standard variants:
+ * - 8 color variants (primary, secondary, success, danger, warning, info, light, dark)
+ * - 8 outline variants
+ * - 3 sizes (sm, md/default, lg)
+ * - Complete state handling (hover, active, focus, disabled)
+ *
+ * Uses CSS custom property API for easy theming and override.
+ * Compatible with both dark and light modes via design tokens.
+ */
+
+@layer components {
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BASE BUTTON STYLES
+   Uses CSS custom property API for variant composition
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.btn {
+    /* Custom property API - variants override these */
+    --_btn-bg: var(--bg-button);
+    --_btn-color: var(--text);
+    --_btn-border: var(--border);
+    --_btn-hover-bg: var(--bg-light);
+    --_btn-hover-border: var(--border);
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+
+    padding: 0.375rem 0.75rem;
+    font-weight: 600;
+    font-size: 1rem;
+    line-height: 1.5;
+    text-align: center;
+    text-decoration: none;
+    vertical-align: middle;
+    white-space: nowrap;
+
+    background: var(--_btn-bg);
+    color: var(--_btn-color);
+    border: 1px solid var(--_btn-border);
+    border-radius: var(--radius-md);
+
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.15s ease;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SIZE VARIANTS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.btn-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+    border-radius: var(--radius-sm);
+}
+
+.btn-lg {
+    padding: 0.5rem 1rem;
+    font-size: 1.125rem;
+    border-radius: var(--radius-md);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   COLOR VARIANTS - FILLED
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Primary - Amber accent */
+.btn-primary {
+    --_btn-bg: var(--amber-55);
+    --_btn-color: hsl(0 0% 10%);
+    --_btn-border: transparent;
+    --_btn-hover-bg: var(--amber-60);
+}
+
+.btn-primary:where(:hover:not(:disabled)) {
+    background: var(--amber-60);
+    box-shadow: 0 0 6px 1px hsla(50 100% 55% / 0.7);
+}
+
+/* Secondary - Neutral gray */
+.btn-secondary {
+    --_btn-bg: var(--bg-button);
+    --_btn-color: var(--text);
+    --_btn-border: var(--border);
+}
+
+.btn-secondary:where(:hover:not(:disabled)) {
+    background: var(--bg);
+    border-color: var(--amber-50);
+    box-shadow: 0 0 6px 1px hsla(50 100% 55% / 0.5);
+}
+
+/* Success - Green semantic */
+.btn-success {
+    --_btn-bg: var(--semantic-success);
+    --_btn-color: hsl(0 0% 100%);
+    --_btn-border: transparent;
+}
+
+/* Danger - Red semantic */
+.btn-danger {
+    --_btn-bg: var(--semantic-danger);
+    --_btn-color: hsl(0 0% 100%);
+    --_btn-border: transparent;
+}
+
+/* Warning - Amber 50 */
+.btn-warning {
+    --_btn-bg: var(--amber-50);
+    --_btn-color: hsl(0 0% 10%);
+    --_btn-border: transparent;
+}
+
+/* Info - Gray neutral */
+.btn-info {
+    --_btn-bg: hsl(0 0% 45%);
+    --_btn-color: hsl(0 0% 100%);
+    --_btn-border: transparent;
+}
+
+/* Light - Adaptive background */
+.btn-light {
+    --_btn-bg: var(--bg-light);
+    --_btn-color: var(--text);
+    --_btn-border: var(--border);
+}
+
+/* Dark - Dark background */
+.btn-dark {
+    --_btn-bg: hsl(0 0% 20%);
+    --_btn-color: hsl(0 0% 95%);
+    --_btn-border: transparent;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   OUTLINE VARIANTS
+   Transparent background with colored border, fills on hover
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.btn-outline-primary {
+    --_btn-bg: transparent;
+    --_btn-color: var(--amber-55);
+    --_btn-border: var(--amber-55);
+}
+
+.btn-outline-primary:where(:hover:not(:disabled)) {
+    background: var(--amber-55);
+    color: hsl(0 0% 10%);
+    border-color: var(--amber-55);
+}
+
+.btn-outline-secondary {
+    --_btn-bg: transparent;
+    --_btn-color: var(--text);
+    --_btn-border: var(--border);
+}
+
+.btn-outline-secondary:where(:hover:not(:disabled)) {
+    background: var(--bg-light);
+    border-color: var(--amber-50);
+}
+
+.btn-outline-success {
+    --_btn-bg: transparent;
+    --_btn-color: var(--semantic-success);
+    --_btn-border: var(--semantic-success);
+}
+
+.btn-outline-success:where(:hover:not(:disabled)) {
+    background: var(--semantic-success);
+    color: hsl(0 0% 100%);
+    border-color: var(--semantic-success);
+}
+
+.btn-outline-danger {
+    --_btn-bg: transparent;
+    --_btn-color: var(--semantic-danger);
+    --_btn-border: var(--semantic-danger);
+}
+
+.btn-outline-danger:where(:hover:not(:disabled)) {
+    background: var(--semantic-danger);
+    color: hsl(0 0% 100%);
+    border-color: var(--semantic-danger);
+}
+
+.btn-outline-warning {
+    --_btn-bg: transparent;
+    --_btn-color: var(--amber-50);
+    --_btn-border: var(--amber-50);
+}
+
+.btn-outline-warning:where(:hover:not(:disabled)) {
+    background: var(--amber-50);
+    color: hsl(0 0% 10%);
+    border-color: var(--amber-50);
+}
+
+.btn-outline-info {
+    --_btn-bg: transparent;
+    --_btn-color: hsl(0 0% 55%);
+    --_btn-border: hsl(0 0% 45%);
+}
+
+.btn-outline-info:where(:hover:not(:disabled)) {
+    background: hsl(0 0% 45%);
+    color: hsl(0 0% 100%);
+    border-color: hsl(0 0% 45%);
+}
+
+.btn-outline-light {
+    --_btn-bg: transparent;
+    --_btn-color: var(--text);
+    --_btn-border: var(--border);
+}
+
+.btn-outline-light:where(:hover:not(:disabled)) {
+    background: var(--bg-light);
+    border-color: var(--border);
+}
+
+.btn-outline-dark {
+    --_btn-bg: transparent;
+    --_btn-color: hsl(0 0% 30%);
+    --_btn-border: hsl(0 0% 30%);
+}
+
+.btn-outline-dark:where(:hover:not(:disabled)) {
+    background: hsl(0 0% 20%);
+    color: hsl(0 0% 95%);
+    border-color: hsl(0 0% 20%);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LINK VARIANT
+   Transparent, no border, link-like appearance
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.btn-link {
+    --_btn-bg: transparent;
+    --_btn-color: var(--bs-link-color);
+    --_btn-border: transparent;
+    font-weight: 400;
+    text-decoration: none;
+}
+
+.btn-link:where(:hover:not(:disabled)) {
+    background: transparent;
+    color: var(--bs-link-color);
+    text-decoration: underline;
+    filter: brightness(1.1);
+}
+
+.btn-link:where(:focus-visible) {
+    text-decoration: underline;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   INTERACTIVE STATES
+   Using :where() for easy override without specificity wars
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Hover - brightness increase for non-specific variants */
+.btn:where(:hover:not(:disabled)) {
+    filter: brightness(1.1);
+}
+
+/* Focus visible - amber outline for accessibility */
+.btn:where(:focus-visible) {
+    outline: 2px solid var(--amber-55);
+    outline-offset: 2px;
+}
+
+/* Active - subtle press effect */
+.btn:where(:active:not(:disabled)) {
+    transform: translateY(1px);
+}
+
+/* Disabled - reduced opacity, not-allowed cursor */
+.btn:where(:disabled),
+.btn.disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BUTTON GROUPS (for icon buttons in groups)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.btn-icon {
+    padding: 0.375rem;
+    aspect-ratio: 1;
+}
+
+.btn-icon.btn-sm {
+    padding: 0.25rem;
+}
+
+.btn-icon.btn-lg {
+    padding: 0.5rem;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CLOSE BUTTON OVERRIDE
+   Bootstrap's btn-close needs special handling
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.btn-close {
+    --_btn-bg: transparent;
+    --_btn-border: transparent;
+    filter: var(--bs-btn-close-white-filter, invert(1) grayscale(100%) brightness(200%));
+}
+
+[data-bs-theme="light"] .btn-close,
+[data-theme="light"] .btn-close {
+    filter: none;
+}
+
+} /* End of @layer components */
