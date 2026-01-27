@@ -8,76 +8,7 @@
 <!-- Leaflet para mapa -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<style>
-    .section-title {
-        border-left: 4px solid #667eea;
-        padding-left: 10px;
-        margin-bottom: 20px;
-    }
-    #mapaBrasil {
-        height: 500px;
-        border-radius: 10px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .region-card {
-        border-radius: 10px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        transition: transform 0.2s;
-        margin-bottom: 15px;
-    }
-    .region-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-    }
-    .region-header {
-        padding: 15px;
-        border-radius: 10px 10px 0 0;
-        color: white;
-        font-weight: bold;
-    }
-    .region-norte { background: #27ae60; }
-    .region-nordeste { background: #e74c3c; }
-    .region-centro-oeste, .region-centrooeste { background: #f39c12; }
-    .region-sudeste { background: #3498db; }
-    .region-sul { background: #9b59b6; }
-    .metric-row {
-        padding: 10px 15px;
-        border-bottom: 1px solid #ecf0f1;
-    }
-    .metric-row:last-child {
-        border-bottom: none;
-    }
-    .uf-badge {
-        display: inline-block;
-        padding: 5px 10px;
-        margin: 2px;
-        border-radius: 15px;
-        font-size: 0.85rem;
-    }
-    .chart-container {
-        position: relative;
-        height: 300px;
-        margin-top: 20px;
-    }
-    .legend-item {
-        display: flex;
-        align-items: center;
-        margin-bottom: 5px;
-    }
-    .legend-color {
-        width: 20px;
-        height: 20px;
-        border-radius: 3px;
-        margin-right: 10px;
-    }
-    .bi-header {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 1rem;
-        border-radius: 10px;
-        margin-bottom: 1.5rem;
-    }
-</style>
+<!-- BI Module styles are in main.css via _bi.css -->
 {% endblock %}
 
 {% block content %}
@@ -108,23 +39,23 @@
                 </div>
                 <div class="card-body">
                     <div class="legend-item">
-                        <div class="legend-color" style="background: #27ae60;"></div>
+                        <div class="legend-color legend-color-low"></div>
                         <span>Menor que R$ 0,30/kg</span>
                     </div>
                     <div class="legend-item">
-                        <div class="legend-color" style="background: #3498db;"></div>
+                        <div class="legend-color legend-color-medium-low"></div>
                         <span>R$ 0,30 - R$ 0,50/kg</span>
                     </div>
                     <div class="legend-item">
-                        <div class="legend-color" style="background: #f39c12;"></div>
+                        <div class="legend-color legend-color-medium"></div>
                         <span>R$ 0,50 - R$ 0,70/kg</span>
                     </div>
                     <div class="legend-item">
-                        <div class="legend-color" style="background: #e67e22;"></div>
+                        <div class="legend-color legend-color-medium-high"></div>
                         <span>R$ 0,70 - R$ 1,00/kg</span>
                     </div>
                     <div class="legend-item">
-                        <div class="legend-color" style="background: #e74c3c;"></div>
+                        <div class="legend-color legend-color-high"></div>
                         <span>Maior que R$ 1,00/kg</span>
                     </div>
 
