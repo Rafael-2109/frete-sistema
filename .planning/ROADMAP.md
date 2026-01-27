@@ -51,12 +51,12 @@ Plans:
   3. Status badges are legible in both themes (no white text on light backgrounds)
   4. Modals follow theme colors automatically (no hardcoded backgrounds)
   5. Form inputs have visible focus states that adapt to theme
-**Plans**: TBD
+**Plans**: 3 plans in 2 waves
 
 Plans:
-- [ ] 02-01: Extract button component variants from inline styles
-- [ ] 02-02: Extract card and badge patterns
-- [ ] 02-03: Extract modal and form patterns
+- [ ] 02-01-PLAN.md - Extract button component variants (Wave 1)
+- [ ] 02-02-PLAN.md - Extract card and badge patterns (Wave 1)
+- [ ] 02-03-PLAN.md - Extract modal and form patterns (Wave 2)
 
 ### Phase 3: Table System
 **Goal**: Data tables work correctly on mobile and desktop with proper theming
@@ -145,7 +145,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Layer Infrastructure | 3/3 | Complete | 2026-01-27 |
-| 2. Component Library | 0/3 | Not started | - |
+| 2. Component Library | 0/3 | Planned | - |
 | 3. Table System | 0/2 | Not started | - |
 | 4. Layout Patterns | 0/1 | Not started | - |
 | 5. High-Traffic Migration | 0/3 | Not started | - |
