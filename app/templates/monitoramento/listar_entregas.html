@@ -200,35 +200,49 @@ nav.navbar.navbar-light {
   color: var(--text);
 }
 
-/* Garantir que todas as células da tabela usem a mesma cor de fundo das sticky columns */
-.table tbody td {
+/* ═══════════════════════════════════════════════════════════════════════════
+   FIX: Garantir cor consistente entre sticky columns e células normais
+   Sticky columns herdam a cor da linha (striped ou normal)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Dark mode: todas as células usam --bg-light como base */
+[data-theme="dark"] .table tbody td,
+[data-bs-theme="dark"] .table tbody td {
   background-color: var(--bg-light);
 }
 
-[data-theme="light"] .table tbody td,
-[data-bs-theme="light"] .table tbody td {
-  background-color: var(--bs-table-bg, hsl(0 0% 100%));
-}
-
-[data-theme="dark"] .table-striped tbody tr:nth-of-type(odd),
-[data-bs-theme="dark"] .table-striped tbody tr:nth-of-type(odd) {
+/* Dark mode: linhas ímpares (striped) - inclui sticky columns */
+[data-theme="dark"] .table-striped tbody tr:nth-of-type(odd) td,
+[data-bs-theme="dark"] .table-striped tbody tr:nth-of-type(odd) td {
   background-color: var(--bg);
 }
 
-[data-theme="dark"] .table-hover tbody tr:hover,
-[data-bs-theme="dark"] .table-hover tbody tr:hover {
-  background-color: rgba(var(--bs-primary-rgb, 0, 212, 170), 0.05);
+/* Dark mode: hover sobrescreve tudo */
+[data-theme="dark"] .table-hover tbody tr:hover td,
+[data-bs-theme="dark"] .table-hover tbody tr:hover td {
+  background-color: hsla(0 0% 100% / 0.05);
 }
 
+/* Sticky columns - sombra e borda, mas herdam background da linha */
 [data-theme="dark"] .sticky-col,
 [data-theme="dark"] .sticky-col-2,
 [data-theme="dark"] .sticky-col-3,
 [data-bs-theme="dark"] .sticky-col,
 [data-bs-theme="dark"] .sticky-col-2,
 [data-bs-theme="dark"] .sticky-col-3 {
-  background: var(--bg-light) !important;
   box-shadow: 2px 0 5px hsla(0 0% 0% / 0.3);
   border-right: 1px solid var(--border) !important;
+}
+
+/* Light mode: consistência */
+[data-theme="light"] .table tbody td,
+[data-bs-theme="light"] .table tbody td {
+  background-color: var(--bs-table-bg, hsl(0 0% 100%));
+}
+
+[data-theme="light"] .table-striped tbody tr:nth-of-type(odd) td,
+[data-bs-theme="light"] .table-striped tbody tr:nth-of-type(odd) td {
+  background-color: var(--bs-table-striped-bg, hsl(0 0% 98%));
 }
 
 [data-theme="dark"] .btn-outline-secondary,
