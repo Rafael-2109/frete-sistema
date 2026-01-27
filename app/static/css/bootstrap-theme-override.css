@@ -191,3 +191,23 @@ body {
     background-color: hsl(0 0% 92%) !important;
     color: hsl(0 0% 20%) !important;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TEXT UTILITIES - Cores de texto que precisam adaptar ao tema
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Accent text - amarelo claro no dark, amarelo escuro no light */
+.text-accent {
+    color: hsl(45 95% 55%);
+}
+
+[data-bs-theme="light"] .text-accent,
+[data-theme="light"] .text-accent {
+    color: hsl(45 100% 28%) !important;  /* Amarelo escuro para contraste */
+}
+
+/* Muted text - adaptar ao tema */
+[data-bs-theme="light"] .text-muted,
+[data-theme="light"] .text-muted {
+    color: hsl(0 0% 45%) !important;
+}
