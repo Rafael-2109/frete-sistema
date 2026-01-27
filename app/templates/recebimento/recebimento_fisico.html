@@ -380,6 +380,55 @@ function formatarNumero(valor, decimais) {
 }
 
 // =====================================================
+// FORMATAÇÃO DE LOTES - Padrão ME {XXX}-{DDD}/{AA}
+// =====================================================
+
+/**
+ * Retorna a máscara do lote com dia/ano atuais (ex: "ME ___-027/26")
+ */
+function getMascaraLote() {
+    const hoje = new Date();
+    const inicioAno = new Date(hoje.getFullYear(), 0, 0);
+    const diff = hoje - inicioAno;
+    const diaDoAno = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const ddd = String(diaDoAno).padStart(3, '0');
+    const aa = String(hoje.getFullYear()).slice(-2);
+    return `ME ___-${ddd}/${aa}`;
+}
+
+/**
+ * Formata o código do lote no padrão ME {XXX}-{DDD}/{AA}
+ * @param {string} codigo - Código de 3 dígitos digitado pelo usuário
+ * @returns {string} Lote formatado ou string vazia se inválido
+ */
+function formatarLoteNome(codigo) {
+    const codigoLimpo = codigo.trim();
+    if (!/^\d{3}$/.test(codigoLimpo)) return '';
+
+    const hoje = new Date();
+    const inicioAno = new Date(hoje.getFullYear(), 0, 0);
+    const diff = hoje - inicioAno;
+    const diaDoAno = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const ddd = String(diaDoAno).padStart(3, '0');
+    const aa = String(hoje.getFullYear()).slice(-2);
+
+    return `ME ${codigoLimpo}-${ddd}/${aa}`;
+}
+
+/**
+ * Atualiza o campo lote-nome formatado quando o código muda
+ */
+function atualizarLoteFormatado(inputCodigo) {
+    const row = inputCodigo.closest('.lote-row');
+    const inputNome = row.querySelector('.lote-nome');
+    if (inputCodigo.value.length === 3) {
+        inputNome.value = formatarLoteNome(inputCodigo.value);
+    } else {
+        inputNome.value = getMascaraLote();  // Mostra máscara quando incompleto
+    }
+}
+
+// =====================================================
 // BUSCAR PICKINGS (com paginacao server-side)
 // =====================================================
 function buscarPickings(resetPagina = true) {
@@ -703,11 +752,18 @@ function renderProdutos(produtos) {
 
         let lotesHtml = '';
         if (prod.tracking === 'lot' || prod.tracking === 'serial') {
+            const mascaraLote = getMascaraLote();
             lotesHtml = `
                 <div class="lotes-container" id="lotes-${idx}">
                     <div class="lote-row" data-idx="0">
+                        <input type="text" class="form-control form-control-sm lote-codigo"
+                               placeholder="000" maxlength="3" pattern="\\d{3}"
+                               style="flex: 0.6; text-align: center; font-family: monospace; font-weight: bold;"
+                               oninput="this.value = this.value.replace(/[^\\d]/g, '').slice(0, 3); atualizarLoteFormatado(this)"
+                               title="Digite 3 dígitos numéricos">
                         <input type="text" class="form-control form-control-sm lote-nome"
-                               placeholder="Nome do lote" style="flex: 2;">
+                               readonly value="${mascaraLote}"
+                               style="flex: 1.6; font-family: monospace; background-color: var(--input-bg); opacity: 0.9;">
                         <input type="number" class="form-control form-control-sm lote-qtd"
                                placeholder="Qtd" step="0.001" min="0"
                                onchange="validarSomaLotes(${idx})" style="flex: 1;">
@@ -769,13 +825,20 @@ function adicionarLote(prodIdx) {
     const prodCard = container.closest('.produto-card');
     const useValidade = prodCard.dataset.useValidade === 'true' || prodCard.dataset.useValidade === 'True';
     const numLotes = container.querySelectorAll('.lote-row').length;
+    const mascaraLote = getMascaraLote();
 
     const row = document.createElement('div');
     row.className = 'lote-row';
     row.dataset.idx = numLotes;
     row.innerHTML = `
+        <input type="text" class="form-control form-control-sm lote-codigo"
+               placeholder="000" maxlength="3" pattern="\\d{3}"
+               style="flex: 0.6; text-align: center; font-family: monospace; font-weight: bold;"
+               oninput="this.value = this.value.replace(/[^\\d]/g, '').slice(0, 3); atualizarLoteFormatado(this)"
+               title="Digite 3 dígitos numéricos">
         <input type="text" class="form-control form-control-sm lote-nome"
-               placeholder="Nome do lote" style="flex: 2;">
+               readonly value="${mascaraLote}"
+               style="flex: 1.6; font-family: monospace; background-color: var(--input-bg); opacity: 0.9;">
         <input type="number" class="form-control form-control-sm lote-qtd"
                placeholder="Qtd" step="0.001" min="0"
                onchange="validarSomaLotes(${prodIdx})" style="flex: 1;">
@@ -923,10 +986,21 @@ function salvarRecebimento() {
 
             let somaLotes = 0;
             rows.forEach(row => {
+                const inputCodigo = row.querySelector('.lote-codigo');
                 const nome = row.querySelector('.lote-nome').value.trim();
                 const qtd = parseFloat(row.querySelector('.lote-qtd').value) || 0;
                 const validadeInput = row.querySelector('.lote-validade');
                 const validade = validadeInput ? validadeInput.value : null;
+
+                // Validar código de 3 dígitos para produtos com tracking
+                if (inputCodigo && tracking !== 'none') {
+                    const codigo = inputCodigo.value.trim();
+                    if (codigo.length !== 3 || !/^\d{3}$/.test(codigo)) {
+                        lotesValidos = false;
+                        toastr.error(`Código do lote deve ter 3 dígitos para: ${productName}`);
+                        return;
+                    }
+                }
 
                 if (!nome && tracking !== 'none') {
                     lotesValidos = false;

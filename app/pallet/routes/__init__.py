@@ -11,33 +11,31 @@ estruturadas por responsabilidade:
 - movimentacoes.py: Listagem consolidada de movimentações com filtros avançados
 
 Spec: .claude/ralph-loop/specs/prd-reestruturacao-modulo-pallets.md
+
+IMPORTANTE: Seguindo padrão do módulo devolucao/__init__.py
+Os sub-blueprints são registrados no momento do import (nível do módulo),
+NÃO dentro de uma função. Isso garante idempotência quando create_app()
+é chamado múltiplas vezes (ex: scheduler).
 """
 from flask import Blueprint
 
 # Blueprint principal do módulo pallet v2
 pallet_v2_bp = Blueprint('pallet_v2', __name__, url_prefix='/pallet/v2')
 
+# Importar sub-blueprints no nível do módulo (executa 1x no import)
+# Seguindo padrão de app/devolucao/__init__.py
+from .dashboard import dashboard_bp
+from .nf_remessa import nf_remessa_bp
+from .controle_pallets import controle_pallets_bp
+from .tratativa_nfs import tratativa_nfs_bp
+from .movimentacoes import movimentacoes_bp
 
-def init_routes():
-    """
-    Inicializa e registra todos os sub-blueprints do módulo pallet v2.
-
-    Esta função deve ser chamada pelo __init__.py do módulo pallet
-    para registrar todas as rotas.
-    """
-    # Importar sub-blueprints (lazy import para evitar circular)
-    from .dashboard import dashboard_bp
-    from .nf_remessa import nf_remessa_bp
-    from .controle_pallets import controle_pallets_bp
-    from .tratativa_nfs import tratativa_nfs_bp
-    from .movimentacoes import movimentacoes_bp
-
-    # Registrar sub-blueprints no blueprint principal
-    pallet_v2_bp.register_blueprint(dashboard_bp)
-    pallet_v2_bp.register_blueprint(nf_remessa_bp)
-    pallet_v2_bp.register_blueprint(controle_pallets_bp)
-    pallet_v2_bp.register_blueprint(tratativa_nfs_bp)
-    pallet_v2_bp.register_blueprint(movimentacoes_bp)
+# Registrar sub-blueprints no blueprint principal (executa 1x no import)
+pallet_v2_bp.register_blueprint(dashboard_bp)
+pallet_v2_bp.register_blueprint(nf_remessa_bp)
+pallet_v2_bp.register_blueprint(controle_pallets_bp)
+pallet_v2_bp.register_blueprint(tratativa_nfs_bp)
+pallet_v2_bp.register_blueprint(movimentacoes_bp)
 
 
 def register_blueprints(app):
@@ -47,13 +45,13 @@ def register_blueprints(app):
     Args:
         app: Flask application instance
     """
-    init_routes()
+    # Apenas registra o blueprint principal no app
+    # Os sub-blueprints já foram registrados no import
     app.register_blueprint(pallet_v2_bp)
 
 
 # Exportar para uso externo
 __all__ = [
     'pallet_v2_bp',
-    'init_routes',
     'register_blueprints'
 ]
