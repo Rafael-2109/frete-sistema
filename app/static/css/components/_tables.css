@@ -167,4 +167,37 @@
     padding: 0.25rem 0.25rem;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   STICKY HEADER
+   Position fixed header row that remains visible during vertical scroll
+   NOTE: Applied to <th> elements, not <thead> - CSS spec limitation
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.table > thead th {
+    position: sticky;
+    top: 0;
+    background: var(--bg-light);  /* MUST be solid, not transparent */
+    color: var(--text);
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    border-bottom: 2px solid var(--border);
+    z-index: 10;
+}
+
+/* Sticky both columns variant - for wide tables needing horizontal + vertical freeze */
+.table-sticky-both > thead th:first-child {
+    left: 0;
+    z-index: 11;  /* Corner cell highest */
+}
+
+.table-sticky-both > tbody td:first-child {
+    position: sticky;
+    left: 0;
+    background: var(--bg-light);
+    z-index: 5;
+    border-right: 2px solid var(--border);
+}
+
 } /* End of @layer components */
