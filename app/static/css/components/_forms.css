@@ -1,0 +1,211 @@
+/**
+ * _forms.css - Form Components
+ *
+ * Complete form state handling:
+ * - Default: Theme-aware background and borders
+ * - Focus: Amber glow visible in both dark and light themes
+ * - Valid: Green border and glow
+ * - Invalid: Red border and glow
+ * - Disabled: Reduced opacity with not-allowed cursor
+ *
+ * CSS Custom Property API:
+ * --_input-bg, --_input-border, --_input-color
+ * --_input-focus-border, --_input-focus-shadow
+ * Override these properties for custom input variants.
+ *
+ * Required Field Indicator:
+ * Add .required class to .form-label for red asterisk
+ */
+
+@layer components {
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BASE INPUT STYLES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.form-control,
+.form-select {
+    /* CSS Custom Property API */
+    --_input-bg: var(--bg-light);
+    --_input-border: var(--border);
+    --_input-color: var(--text);
+    --_input-focus-border: var(--amber-50);
+    --_input-focus-shadow: 0 0 6px 1px hsla(50 100% 55% / 0.6);
+
+    background: var(--_input-bg);
+    border: 1px solid var(--_input-border);
+    color: var(--_input-color);
+    transition: border-color 0.2s, box-shadow 0.2s;
+    border-radius: var(--radius-md);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   FOCUS STATE - Amber glow visible in both themes
+   Using :where() for low specificity, allowing easy overrides
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.form-control:where(:focus),
+.form-select:where(:focus) {
+    border-color: var(--_input-focus-border);
+    box-shadow: var(--_input-focus-shadow);
+    outline: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   VALIDATION STATES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Valid state - Green */
+.form-control.is-valid,
+.form-select.is-valid {
+    --_input-border: var(--semantic-success);
+    --_input-focus-shadow: 0 0 6px 1px hsla(145 65% 40% / 0.4);
+}
+
+/* Invalid state - Red */
+.form-control.is-invalid,
+.form-select.is-invalid {
+    --_input-border: var(--semantic-danger);
+    --_input-focus-shadow: 0 0 6px 1px hsla(0 70% 50% / 0.4);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DISABLED STATE
+   Using :where() for low specificity
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.form-control:where(:disabled),
+.form-select:where(:disabled) {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PLACEHOLDER STYLING
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.form-control::placeholder {
+    color: var(--text-muted);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   REQUIRED FIELD INDICATOR
+   Add .required class to .form-label for red asterisk
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.form-label {
+    color: var(--text);
+}
+
+.form-label.required::after {
+    content: " *";
+    color: var(--semantic-danger);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   FORM TEXT (help text below inputs)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.form-text {
+    color: var(--text-muted);
+    font-size: 0.875rem;
+}
+
+/* Validation feedback text */
+.valid-feedback {
+    color: var(--semantic-success);
+    font-size: 0.875rem;
+}
+
+.invalid-feedback {
+    color: var(--semantic-danger);
+    font-size: 0.875rem;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   INPUT GROUPS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.input-group-text {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CUSTOM STATE CLASSES (for manual state control)
+   Use these when you need to set state via JavaScript
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.input-state-warning {
+    --_input-border: var(--amber-50);
+}
+
+.input-state-danger {
+    --_input-border: var(--semantic-danger);
+}
+
+.input-state-success {
+    --_input-border: var(--semantic-success);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TEXTAREA SPECIFIC
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+textarea.form-control {
+    min-height: 100px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   FORM CHECK (Checkboxes and Radios)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.form-check-label {
+    color: var(--text);
+}
+
+.form-check-input {
+    background-color: var(--bg-light);
+    border-color: var(--border);
+}
+
+.form-check-input:checked {
+    background-color: var(--amber-50);
+    border-color: var(--amber-50);
+}
+
+.form-check-input:focus {
+    border-color: var(--amber-50);
+    box-shadow: 0 0 6px 1px hsla(50 100% 55% / 0.6);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   FORM SWITCH
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.form-switch .form-check-input {
+    background-color: var(--bg-light);
+    border-color: var(--border);
+}
+
+.form-switch .form-check-input:checked {
+    background-color: var(--amber-50);
+    border-color: var(--amber-50);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   FLOATING LABELS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.form-floating > label {
+    color: var(--text-muted);
+}
+
+.form-floating > .form-control:focus ~ label,
+.form-floating > .form-control:not(:placeholder-shown) ~ label,
+.form-floating > .form-select ~ label {
+    color: var(--text-muted);
+}
+
+} /* End of @layer components */
