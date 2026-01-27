@@ -5,32 +5,33 @@
 See: .planning/PROJECT.md (updated 2026-01-26)
 
 **Core value:** Todas as telas devem ter cores e contraste funcionais em dark mode E mobile, sem CSS inline hardcoded.
-**Current focus:** Phase 2 - Component Extraction (Phase 1 Complete)
+**Current focus:** Phase 2 - Component Extraction (Plan 01 of 05 complete)
 
 ## Current Position
 
-Phase: 1 of 7 (Layer Infrastructure) - COMPLETE
-Plan: 3 of 3 in current phase
-Status: Phase complete
-Last activity: 2026-01-27 - Completed 01-03-PLAN.md (Layer activation)
+Phase: 2 of 7 (Component Library)
+Plan: 1 of 5 in current phase
+Status: In progress
+Last activity: 2026-01-27 - Completed 02-01-PLAN.md (Button component)
 
-Progress: [███░░░░░░░] 15%
+Progress: [███░░░░░░░] 20%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
-- Average duration: 2.7 min
-- Total execution time: 8 min
+- Total plans completed: 4
+- Average duration: 2.5 min
+- Total execution time: 10 min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-layer-infrastructure | 3 | 8 min | 2.7 min |
+| 02-component-library | 1 | 2 min | 2 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (2 min), 01-02 (2 min), 01-03 (4 min)
+- Last 5 plans: 01-01 (2 min), 01-02 (2 min), 01-03 (4 min), 02-01 (2 min)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -51,6 +52,9 @@ Recent decisions affecting current work:
 - [01-03]: Fonts import as unlayered in main.css (available to all layers)
 - [01-03]: Original CSS files kept as backup until verified in production
 - [01-03]: premium-effects.css and style.css remain separate (migrated in Phase 5)
+- [02-01]: CSS custom property API (--_btn-bg, --_btn-color) for component variants
+- [02-01]: Use :where() for low-specificity state selectors
+- [02-01]: Zero !important in components - layer system handles specificity
 
 ### Pending Todos
 
@@ -66,9 +70,9 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-01-27T01:41:30Z
-Stopped at: Completed 01-03-PLAN.md (Phase 1 complete)
+Last session: 2026-01-27T12:27:37Z
+Stopped at: Completed 02-01-PLAN.md (Button component)
 Resume file: None
 
 ---
-*Next step: Execute Phase 2 (Component Extraction) - extract common component styles into components/ folder*
+*Next step: Execute 02-02-PLAN.md (Cards and Badges components)*
