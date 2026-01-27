@@ -40,22 +40,22 @@
 /* Module Categories - Theme-aware colors */
 .module-card.planning {
     --module-color: var(--bs-info);
-    --module-color-light: #6edff6;
+    --module-color-light: var(--mfg-info-light, hsl(187 77% 69%));
 }
 
 .module-card.production {
     --module-color: var(--bs-success);
-    --module-color-light: #75b798;
+    --module-color-light: var(--mfg-success-light, hsl(145 35% 59%));
 }
 
 .module-card.structure {
-    --module-color: #8b5cf6;
-    --module-color-light: #a78bfa;
+    --module-color: var(--mfg-purple, hsl(258 72% 66%));
+    --module-color-light: var(--mfg-purple-light, hsl(258 65% 76%));
 }
 
 .module-card.purchasing {
     --module-color: var(--bs-warning);
-    --module-color-light: #fbbf24;
+    --module-color-light: var(--mfg-warning-light, hsl(45 97% 56%));
 }
 
 .module-icon {
@@ -84,7 +84,7 @@
 
 /* Page header - Gradient with theme-aware fallback */
 .page-header {
-    background: linear-gradient(135deg, var(--bs-primary) 0%, #8b5cf6 100%);
+    background: linear-gradient(135deg, var(--bs-primary) 0%, var(--mfg-purple, hsl(258 72% 66%)) 100%);
     color: white;
     padding: 2rem;
     border-radius: 12px;

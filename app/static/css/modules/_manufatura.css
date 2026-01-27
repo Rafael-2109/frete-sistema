@@ -3,7 +3,7 @@
  *
  * Component overrides specific to the manufatura module.
  * NOTE: Already partially theme-aware (uses var(--bs-*)).
- * Only remaining hardcoded colors need migration.
+ * Module-specific custom colors defined below as CSS custom properties.
  * EXCLUDES: programacao_linhas_print.html (print template)
  *
  * Token mapping:
@@ -11,17 +11,45 @@
  * - Use var(--text) for primary text
  * - Use var(--text-muted) for secondary text
  * - Use var(--border) for borders
+ *
+ * Custom module colors (decorative, intentionally non-semantic):
+ * - --mfg-purple: Structure category accent (violet)
+ * - --mfg-pink/rose: Stats card gradient (pink category)
+ * - --mfg-cyan/teal: Stats card gradient (cyan/green category)
+ * - --mfg-*-light: Lighter variants for gradients
+ * - --mfg-*-vibrant: Dark mode vibrant text colors
+ *
+ * SweetAlert colors in JS contexts kept as hex per decision 06-02.
+ * Fallback patterns like var(--bs-primary, #007bff) are correct practice.
  */
 
 @layer modules {
 
   /* ═══════════════════════════════════════════════════════════════════════════
-     MANUFATURA MODULE - Component overrides
-     Migrated from template inline styles
-     Templates: 20 non-print (1 print template EXCLUDED)
-     NOTE: Partially theme-aware - verify existing var(--bs-*) work in dark mode
+     MANUFATURA MODULE CUSTOM COLORS
+     Decorative accent colors for visual categorization
+     These are intentional design choices, not semantic colors
      ═══════════════════════════════════════════════════════════════════════════ */
 
-  /* Placeholder - styles will be added as templates are migrated */
+  :root {
+    /* Category accent colors */
+    --mfg-purple: hsl(258 72% 66%);         /* #8b5cf6 - structure category */
+    --mfg-purple-light: hsl(258 65% 76%);   /* #a78bfa - purple gradient end */
+
+    /* Gradient colors for stats cards */
+    --mfg-pink: hsl(330 81% 60%);           /* #ec4899 - pink gradient start */
+    --mfg-rose: hsl(351 94% 60%);           /* #f43f5e - rose gradient end */
+    --mfg-cyan: hsl(188 91% 43%);           /* #06b6d4 - cyan gradient end */
+    --mfg-teal: hsl(168 76% 40%);           /* #14b8a6 - teal gradient end */
+
+    /* Module card light variants */
+    --mfg-info-light: hsl(187 77% 69%);     /* #6edff6 - planning category light */
+    --mfg-success-light: hsl(145 35% 59%);  /* #75b798 - production category light */
+    --mfg-warning-light: hsl(45 97% 56%);   /* #fbbf24 - purchasing category light */
+
+    /* Dark mode vibrant feedback colors */
+    --mfg-success-vibrant: hsl(145 72% 58%); /* #4ade80 - positive adjustments */
+    --mfg-danger-vibrant: hsl(0 90% 71%);    /* #f87171 - negative adjustments */
+  }
 
 } /* End @layer modules */
