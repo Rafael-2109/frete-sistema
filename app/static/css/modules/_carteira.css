@@ -2,7 +2,7 @@
  * _carteira.css - Carteira Module Overrides
  *
  * Component overrides specific to the carteira module.
- * NOTE: agrupados.css exists but is NOT layered - consider consolidating.
+ * Companion file to agrupados.css which handles carteira agrupada views.
  *
  * Token mapping:
  * - Use var(--bg-light) for card backgrounds
@@ -10,15 +10,165 @@
  * - Use var(--text-muted) for secondary text
  * - Use var(--border) for borders
  * - Use var(--semantic-success/danger) for status colors
+ *
+ * HSL color reference (from design tokens):
+ * - Success: hsla(145 65% 40% / alpha)
+ * - Danger:  hsla(0 70% 50% / alpha)
+ * - Warning/Amber: hsla(45 100% 50% / alpha)
+ * - Neutral: hsla(0 0% 50% / alpha)
  */
 
 @layer modules {
 
   /* ═══════════════════════════════════════════════════════════════════════════
-     CARTEIRA MODULE - Component overrides
-     Migrated from template inline styles
+     CARTEIRA DASHBOARD - Stat Cards and Actions
      ═══════════════════════════════════════════════════════════════════════════ */
 
-  /* Placeholder - styles will be added as templates are migrated */
+  /* Dashboard stat cards */
+  .cart-dashboard-stat {
+    background: var(--bg-light);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    transition: all 0.2s ease;
+  }
+
+  .cart-dashboard-stat:hover {
+    box-shadow: var(--shadow);
+    transform: translateY(-2px);
+  }
+
+  /* Action cards in dashboard modals */
+  .action-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    border-radius: var(--radius-md);
+    background: var(--bg-light);
+    border: 1px solid var(--border);
+    color: var(--text);
+    text-decoration: none;
+    transition: all 0.2s ease;
+  }
+
+  .action-card:hover {
+    background: hsla(45 100% 50% / 0.1);
+    border-color: var(--amber-50);
+    color: var(--text);
+    transform: translateY(-2px);
+  }
+
+  .action-card i {
+    color: var(--amber-55);
+    margin-bottom: 0.5rem;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     CARTEIRA FILTER BADGES - Semantic variants
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* Base filter badge */
+  .cart-filter-badge {
+    background: var(--bg-light);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 0.35rem 0.65rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .cart-filter-badge:hover {
+    background: hsla(0 0% 50% / 0.1);
+    border-color: var(--text-muted);
+  }
+
+  /* Active state - amber accent */
+  .cart-filter-badge--active {
+    background: var(--amber-55);
+    color: hsl(45 100% 10%);
+    border-color: var(--amber-55);
+  }
+
+  .cart-filter-badge--active:hover {
+    background: var(--amber-50);
+    border-color: var(--amber-50);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     CARTEIRA TABLE ROW STATES
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* Highlight row (temporary attention) */
+  .cart-row--highlight {
+    background: hsla(45 90% 50% / 0.1);
+  }
+
+  /* Selected row (user selection) */
+  .cart-row--selected {
+    background: hsla(45 90% 50% / 0.2);
+    border-left: 3px solid var(--amber-55);
+  }
+
+  /* Success row (completed/approved) */
+  .cart-row--success {
+    background: hsla(145 65% 40% / 0.1);
+  }
+
+  .cart-row--success:hover {
+    background: hsla(145 65% 40% / 0.15);
+  }
+
+  /* Warning row (attention needed) */
+  .cart-row--warning {
+    background: hsla(45 100% 50% / 0.1);
+  }
+
+  .cart-row--warning:hover {
+    background: hsla(45 100% 50% / 0.15);
+  }
+
+  /* Danger row (error/blocked) */
+  .cart-row--danger {
+    background: hsla(0 70% 50% / 0.1);
+  }
+
+  .cart-row--danger:hover {
+    background: hsla(0 70% 50% / 0.15);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     CARTEIRA WORKSPACE PREVIEW
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .workspace-preview {
+    background: var(--bg);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+  }
+
+  .workspace-preview .badge-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: center;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     CARTEIRA TEXT UTILITIES
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* Accent text color */
+  .text-accent {
+    color: var(--amber-55);
+  }
+
+  [data-bs-theme="light"] .text-accent,
+  [data-theme="light"] .text-accent {
+    color: var(--amber-40);
+  }
 
 } /* End @layer modules */
