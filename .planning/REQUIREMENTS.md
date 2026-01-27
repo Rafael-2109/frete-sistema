@@ -79,31 +79,31 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FOUND-01 | TBD | Pending |
-| FOUND-02 | TBD | Pending |
-| FOUND-03 | TBD | Pending |
-| FOUND-04 | TBD | Pending |
-| COMP-01 | TBD | Pending |
-| COMP-02 | TBD | Pending |
-| COMP-03 | TBD | Pending |
-| COMP-04 | TBD | Pending |
-| COMP-05 | TBD | Pending |
-| TABL-01 | TBD | Pending |
-| TABL-02 | TBD | Pending |
-| TABL-03 | TBD | Pending |
-| LAYO-01 | TBD | Pending |
-| LAYO-02 | TBD | Pending |
-| LAYO-03 | TBD | Pending |
-| MIGR-01 | TBD | Pending |
-| MIGR-02 | TBD | Pending |
-| MIGR-03 | TBD | Pending |
-| MIGR-04 | TBD | Pending |
+| FOUND-01 | Phase 1 | Pending |
+| FOUND-02 | Phase 1 | Pending |
+| FOUND-03 | Phase 1 | Pending |
+| FOUND-04 | Phase 1 | Pending |
+| COMP-01 | Phase 2 | Pending |
+| COMP-02 | Phase 2 | Pending |
+| COMP-03 | Phase 2 | Pending |
+| COMP-04 | Phase 2 | Pending |
+| COMP-05 | Phase 2 | Pending |
+| TABL-01 | Phase 3 | Pending |
+| TABL-02 | Phase 3 | Pending |
+| TABL-03 | Phase 3 | Pending |
+| LAYO-01 | Phase 3 | Pending |
+| LAYO-02 | Phase 4 | Pending |
+| LAYO-03 | Phase 4 | Pending |
+| MIGR-01 | Phase 5, 6, 7 | Pending |
+| MIGR-02 | Phase 5, 6, 7 | Pending |
+| MIGR-03 | Phase 7 | Pending |
+| MIGR-04 | Phase 5 | Pending |
 
 **Coverage:**
 - v1 requirements: 19 total
-- Mapped to phases: 0
-- Unmapped: 19
+- Mapped to phases: 19
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-01-26*
-*Last updated: 2026-01-26 after initial definition*
+*Last updated: 2026-01-26 after roadmap creation*
