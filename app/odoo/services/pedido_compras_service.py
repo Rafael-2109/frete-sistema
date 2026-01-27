@@ -403,15 +403,15 @@ class PedidoComprasServiceOtimizado:
         self.logger.info(f"   Buscando {len(dfe_ids)} DFEs em 1 query...")
         try:
             dfes = self.connection.search_read(
-                'l10n_br_fiscal.document',
+                'l10n_br_ciel_it_account.dfe',
                 [['id', 'in', dfe_ids]],
                 fields=[
                     'id',
-                    'document_number',    # Número da NF
-                    'document_serie',     # Série
-                    'document_key',       # Chave de acesso (44 dígitos)
-                    'document_date',      # Data de emissão
-                    'amount_total'        # Valor total
+                    'nfe_infnfe_ide_nnf',            # Número da NF
+                    'nfe_infnfe_ide_serie',          # Série
+                    'nfe_chNFe',                     # Chave de acesso (44 dígitos)
+                    'nfe_infnfe_ide_dhemi',          # Data de emissão
+                    'nfe_infnfe_total_icmstot_vnf'   # Valor total
                 ]
             )
 
@@ -706,13 +706,13 @@ class PedidoComprasServiceOtimizado:
             # Buscar dados completos do DFE no cache
             dfe_info = dfes_cache.get(dfe_data[0])
             if dfe_info:
-                nf_numero = dfe_info.get('document_number')
-                nf_serie = dfe_info.get('document_serie')
-                nf_chave_acesso = dfe_info.get('document_key')
-                nf_valor_total = Decimal(str(dfe_info.get('amount_total') or 0)) if dfe_info.get('amount_total') else None
+                nf_numero = dfe_info.get('nfe_infnfe_ide_nnf')
+                nf_serie = dfe_info.get('nfe_infnfe_ide_serie')
+                nf_chave_acesso = dfe_info.get('nfe_chNFe')
+                nf_valor_total = Decimal(str(dfe_info.get('nfe_infnfe_total_icmstot_vnf') or 0)) if dfe_info.get('nfe_infnfe_total_icmstot_vnf') else None
 
                 # Converter data de emissão
-                doc_date = dfe_info.get('document_date')
+                doc_date = dfe_info.get('nfe_infnfe_ide_dhemi')
                 if doc_date and doc_date is not False:
                     try:
                         nf_data_emissao = datetime.strptime(doc_date, '%Y-%m-%d').date()
@@ -908,22 +908,22 @@ class PedidoComprasServiceOtimizado:
             dfe_info = dfes_cache.get(dfe_data[0])
             if dfe_info:
                 # Atualizar campos de NF se mudaram
-                novo_nf_numero = dfe_info.get('document_number')
+                novo_nf_numero = dfe_info.get('nfe_infnfe_ide_nnf')
                 if novo_nf_numero and pedido_existente.nf_numero != novo_nf_numero:
                     pedido_existente.nf_numero = novo_nf_numero
                     alterado = True
 
-                novo_nf_serie = dfe_info.get('document_serie')
+                novo_nf_serie = dfe_info.get('nfe_infnfe_ide_serie')
                 if novo_nf_serie and pedido_existente.nf_serie != novo_nf_serie:
                     pedido_existente.nf_serie = novo_nf_serie
                     alterado = True
 
-                novo_nf_chave = dfe_info.get('document_key')
+                novo_nf_chave = dfe_info.get('nfe_chNFe')
                 if novo_nf_chave and pedido_existente.nf_chave_acesso != novo_nf_chave:
                     pedido_existente.nf_chave_acesso = novo_nf_chave
                     alterado = True
 
-                novo_nf_valor = dfe_info.get('amount_total')
+                novo_nf_valor = dfe_info.get('nfe_infnfe_total_icmstot_vnf')
                 if novo_nf_valor:
                     novo_nf_valor_dec = Decimal(str(novo_nf_valor))
                     if pedido_existente.nf_valor_total != novo_nf_valor_dec:
@@ -931,7 +931,7 @@ class PedidoComprasServiceOtimizado:
                         alterado = True
 
                 # Converter e atualizar data de emissão
-                doc_date = dfe_info.get('document_date')
+                doc_date = dfe_info.get('nfe_infnfe_ide_dhemi')
                 if doc_date and doc_date is not False:
                     try:
                         nova_nf_data = datetime.strptime(doc_date, '%Y-%m-%d').date()

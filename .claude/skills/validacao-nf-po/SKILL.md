@@ -161,21 +161,55 @@ O Odoo possui 3 formas de vincular um DFE (NF-e) a um PO:
 ```python
 # 2 queries no Odoo (batch):
 # Query 1: search_read('l10n_br_ciel_it_account.dfe', [['id','in',dfe_ids]], ['purchase_id','purchase_fiscal_id'])
-# Query 2: search_read('purchase.order', [['dfe_id','in',dfe_ids]], ['id','name','dfe_id'])
+# Query 2: search_read('purchase.order', [['dfe_id','in',dfe_ids]], ['id','name','dfe_id','invoice_status'])
 
 for validacao in validacoes_sem_po:
-    # Caminho 1: DFE.purchase_id (14.6%)
+    # Caminho 1: DFE.purchase_id (14.6%) → status='finalizado_odoo'
     if dfe_data.get('purchase_id'):
         validacao.odoo_po_vinculado_id = purchase_id_data[0]
+        validacao.status = 'finalizado_odoo'  # Vinculo direto = fatura gerada
 
-    # Caminho 2: DFE.purchase_fiscal_id (status=06)
+    # Caminho 2: DFE.purchase_fiscal_id (status=06) → status='finalizado_odoo'
     elif dfe_data.get('purchase_fiscal_id'):
         validacao.odoo_po_fiscal_id = purchase_fiscal_data[0]
+        validacao.status = 'finalizado_odoo'  # Vinculo fiscal = fatura gerada
 
     # Caminho 3: PO.dfe_id (85.4% dos status=04 - PRINCIPAL)
     elif pos_por_dfe.get(validacao.odoo_dfe_id):
         validacao.odoo_po_vinculado_id = po_inverso['id']
+        # Se PO ja faturado, marcar como finalizado
+        if po_inverso.get('invoice_status') == 'invoiced':
+            validacao.status = 'finalizado_odoo'
 ```
+
+### Verificacao de invoice_status (NOVO - Jan/2026)
+
+Quando o vinculo e via `PO.dfe_id` (Caminho 3), verificamos `PO.invoice_status`:
+
+| invoice_status | Significado | Acao |
+|----------------|-------------|------|
+| `no` | Nenhuma fatura | Manter status atual |
+| `to invoice` | Aguardando faturamento | Manter status atual |
+| `invoiced` | **JA FATURADO** | `status='finalizado_odoo'` |
+
+**Por que isso importa?**
+- NFs com PO ja faturado (`invoiced`) nao devem permitir consolidacao
+- Antes da correcao, essas NFs ficavam com `status='aprovado'` permitindo acoes indevidas
+- Exemplo real: NF 150602 / PO C2512302 vinculado ha 20h, mas status era `aprovado`
+
+### Atualizacao de PedidoCompras.dfe_id (NOVO - Jan/2026)
+
+Quando um vinculo PO <-> DFE e detectado, o job agora tambem atualiza a tabela `pedido_compras`:
+
+```python
+# Metodo: _atualizar_pedido_compras_dfe()
+# Campos atualizados:
+# - dfe_id (string do ID Odoo)
+# - nf_numero (se disponivel)
+# - nf_chave_acesso (se disponivel)
+```
+
+Isso mantem compatibilidade entre `ValidacaoNfPoDfe` e `PedidoCompras`.
 
 ### Por que o Caminho 3 e o principal?
 
@@ -228,6 +262,38 @@ minutos_janela = int((agora - dt_de).total_seconds() / 60)
 
 ### O que o botao AFETA:
 - `_buscar_dfes_pendentes()` (etapa 3) — usa minutos_janela para filtrar write_date
+
+## Sincronizacao PedidoCompras.dfe_id
+
+O scheduler de `PedidoCompras` (`pedido_compras_service.py`) tambem sincroniza campos de DFE/NF:
+
+### Campos Sincronizados pelo Scheduler:
+
+| Campo PedidoCompras | Fonte Odoo | Quando |
+|---------------------|------------|--------|
+| `dfe_id` | `PO.dfe_id[0]` | Se PO tem DFE vinculado |
+| `nf_numero` | `DFE.nfe_infnfe_ide_nnf` | Batch query em `l10n_br_ciel_it_account.dfe` |
+| `nf_serie` | `DFE.nfe_infnfe_ide_serie` | Batch query |
+| `nf_chave_acesso` | `DFE.nfe_chNFe` | Batch query |
+| `nf_data_emissao` | `DFE.nfe_infnfe_ide_dhemi` | Batch query |
+| `nf_valor_total` | `DFE.nfe_infnfe_total_icmstot_vnf` | Batch query |
+
+### Fluxo de Sincronizacao:
+
+```
+sincronizar_pedidos_incremental()
+    |
+    +-- _buscar_pedidos_odoo()  // inclui 'dfe_id', 'invoice_status'
+    |
+    +-- _buscar_dfes_batch()    // 1 query para TODOS os DFEs
+    |
+    +-- _processar_pedidos_otimizado()
+        |
+        +-- _criar_pedido()     // preenche dfe_id, nf_* em novos
+        +-- _atualizar_pedido() // atualiza dfe_id, nf_* em existentes
+```
+
+**IMPORTANTE**: O scheduler busca dados de `l10n_br_ciel_it_account.dfe` (modelo DFE do modulo CIEL IT).
 
 ## Referencias
 
