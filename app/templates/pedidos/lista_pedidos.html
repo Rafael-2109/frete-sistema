@@ -3,6 +3,12 @@
 {% block extra_css %}
 <style>
 /* Estilos específicos da página - usa design system */
+
+/* Forçar headers da tabela a não quebrar texto */
+.table thead th {
+    white-space: nowrap !important;
+}
+
 .sortable {
     cursor: pointer;
     user-select: none;
