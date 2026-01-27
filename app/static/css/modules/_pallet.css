@@ -2,8 +2,7 @@
  * _pallet.css - Pallet Module Overrides
  *
  * Component overrides specific to the pallet module.
- * NOTE: Pallet v2 templates have extensive inline CSS blocks with
- * stat cards, status badges, and page headers that need extraction.
+ * Styles extracted from template <style> blocks during migration.
  *
  * Token mapping:
  * - Use var(--bg-light) for card backgrounds
@@ -12,21 +11,1288 @@
  * - Use var(--border) for borders
  * - Use var(--semantic-success/danger) for status colors
  * - Use var(--amber-50/55) for accent colors
+ * - Use hsla() format for icon backgrounds (per decision 05-03)
  *
- * Pallet-specific patterns to extract:
- * - .pallet-stat-* for stat card icons
- * - .pallet-status-* for status badges
- * - .pallet-page-header for page headers
+ * Migrated templates:
+ * - pallet/v2/dashboard.html
+ * - pallet/v2/tratativa_nfs/direcionamento.html
+ * - pallet/v2/tratativa_nfs/sugestoes.html
+ * - pallet/v2/tratativa_nfs/solucoes.html
+ * - pallet/v2/tratativa_nfs/canceladas.html
+ * - pallet/v2/nf_remessa/listagem.html
+ * - pallet/v2/nf_remessa/detalhe.html
+ * - pallet/v2/movimentacoes/listagem.html
+ * - pallet/v2/controle_pallets/historico.html
+ * - pallet/v2/controle_pallets/solucoes.html
+ * - pallet/v2/controle_pallets/vales.html
+ * - pallet/index.html (minimal - uses Bootstrap classes)
+ * - pallet/*.html (other root templates)
  */
 
 @layer modules {
 
   /* ═══════════════════════════════════════════════════════════════════════════
-     PALLET MODULE - Component overrides
-     Migrated from template inline styles
-     Templates: 24 total (14 in v2/ with extensive inline CSS)
+     PALLET COMMON - Shared Components
+     Used across multiple pallet templates
      ═══════════════════════════════════════════════════════════════════════════ */
 
-  /* Placeholder - styles will be added as templates are migrated */
+  /* Page container */
+  .pallet-page {
+    padding: 1.5rem;
+    background-color: var(--bg);
+    min-height: calc(100vh - 60px);
+  }
+
+  /* Page Header */
+  .pallet-page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .pallet-page-header__title {
+    font-size: 1.75rem;
+    font-weight: 600;
+    color: var(--text);
+    margin: 0;
+  }
+
+  .pallet-page-header__title i {
+    margin-right: 0.5rem;
+  }
+
+  .pallet-page-header__subtitle {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+  }
+
+  /* Breadcrumb */
+  .pallet-breadcrumb {
+    margin-bottom: 1rem;
+  }
+
+  .pallet-breadcrumb .breadcrumb {
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    font-size: 0.875rem;
+  }
+
+  .pallet-breadcrumb .breadcrumb-item a {
+    color: var(--text-muted);
+    text-decoration: none;
+  }
+
+  .pallet-breadcrumb .breadcrumb-item a:hover {
+    color: var(--amber-55);
+  }
+
+  .pallet-breadcrumb .breadcrumb-item.active {
+    color: var(--text);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     PALLET STAT CARDS
+     Used in tratativa_nfs templates and dashboard
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .pallet-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .pallet-stat {
+    background: var(--bg-light);
+    border-radius: 12px;
+    padding: 1.25rem;
+    box-shadow: 0 2px 8px hsla(0 0% 0% / 0.08);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+
+  .pallet-stat:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px hsla(0 0% 0% / 0.12);
+  }
+
+  .pallet-stat__icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+  }
+
+  /* Icon variants using hsla() format */
+  .pallet-stat__icon--total {
+    background: hsla(210 100% 95% / 1);
+    color: hsl(210 100% 52%);
+  }
+
+  [data-bs-theme="dark"] .pallet-stat__icon--total {
+    background: hsla(210 100% 52% / 0.15);
+    color: hsl(210 100% 65%);
+  }
+
+  .pallet-stat__icon--transportadora {
+    background: hsla(190 90% 92% / 1);
+    color: hsl(190 85% 45%);
+  }
+
+  [data-bs-theme="dark"] .pallet-stat__icon--transportadora {
+    background: hsla(190 85% 45% / 0.15);
+    color: hsl(190 85% 60%);
+  }
+
+  .pallet-stat__icon--cliente {
+    background: hsla(145 60% 90% / 1);
+    color: var(--semantic-success);
+  }
+
+  [data-bs-theme="dark"] .pallet-stat__icon--cliente {
+    background: hsla(145 65% 40% / 0.15);
+    color: var(--semantic-success);
+  }
+
+  .pallet-stat__icon--pendente,
+  .pallet-stat__icon--pendentes {
+    background: hsla(45 100% 90% / 1);
+    color: var(--amber-50);
+  }
+
+  [data-bs-theme="dark"] .pallet-stat__icon--pendente,
+  [data-bs-theme="dark"] .pallet-stat__icon--pendentes {
+    background: hsla(45 100% 50% / 0.15);
+    color: var(--amber-55);
+  }
+
+  .pallet-stat__icon--devolucoes {
+    background: hsla(145 60% 90% / 1);
+    color: var(--semantic-success);
+  }
+
+  [data-bs-theme="dark"] .pallet-stat__icon--devolucoes {
+    background: hsla(145 65% 40% / 0.15);
+    color: var(--semantic-success);
+  }
+
+  .pallet-stat__icon--retornos {
+    background: hsla(190 90% 92% / 1);
+    color: hsl(190 85% 45%);
+  }
+
+  [data-bs-theme="dark"] .pallet-stat__icon--retornos {
+    background: hsla(190 85% 45% / 0.15);
+    color: hsl(190 85% 60%);
+  }
+
+  /* Bootstrap variant support (from dashboard.html) */
+  .pallet-stat__icon--primary {
+    background: hsla(210 100% 52% / 0.15);
+    color: var(--bs-primary);
+  }
+
+  .pallet-stat__icon--warning {
+    background: hsla(45 100% 50% / 0.15);
+    color: var(--bs-warning);
+  }
+
+  .pallet-stat__icon--success {
+    background: hsla(145 65% 40% / 0.15);
+    color: var(--bs-success);
+  }
+
+  .pallet-stat__icon--danger {
+    background: hsla(0 70% 50% / 0.15);
+    color: var(--bs-danger);
+  }
+
+  .pallet-stat__icon--info {
+    background: hsla(190 85% 45% / 0.15);
+    color: var(--bs-info);
+  }
+
+  .pallet-stat__value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1;
+    margin-bottom: 0.25rem;
+  }
+
+  .pallet-stat__label {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+  }
+
+  /* Dashboard stat card variant (with border accent) */
+  .pallet-stat--primary {
+    border-left: 4px solid var(--bs-primary);
+  }
+
+  .pallet-stat--warning {
+    border-left: 4px solid var(--bs-warning);
+  }
+
+  .pallet-stat--success {
+    border-left: 4px solid var(--bs-success);
+  }
+
+  .pallet-stat--danger {
+    border-left: 4px solid var(--bs-danger);
+  }
+
+  .pallet-stat--info {
+    border-left: 4px solid var(--bs-info);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     PALLET STATUS BADGES
+     Used in tables across all pallet templates
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .pallet-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .pallet-status--ativa {
+    background: hsla(45 90% 50% / 0.15);
+    color: var(--amber-50);
+  }
+
+  [data-bs-theme="light"] .pallet-status--ativa {
+    background: hsla(45 90% 70% / 0.4);
+    color: hsl(45 100% 30%);
+  }
+
+  .pallet-status--resolvida {
+    background: hsla(145 50% 40% / 0.15);
+    color: var(--semantic-success);
+  }
+
+  .pallet-status--cancelada {
+    background: hsla(0 0% 50% / 0.15);
+    color: var(--text-muted);
+  }
+
+  .pallet-status--pendente {
+    background: hsla(45 90% 50% / 0.15);
+    color: var(--amber-50);
+  }
+
+  [data-bs-theme="light"] .pallet-status--pendente {
+    background: hsla(45 90% 70% / 0.4);
+    color: hsl(45 100% 30%);
+  }
+
+  .pallet-status--parcial {
+    background: hsla(190 65% 45% / 0.15);
+    color: hsl(190 65% 45%);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     PALLET TIPO BADGES
+     Used in tratativa_nfs templates
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .pallet-tipo {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+
+  .pallet-tipo--transportadora {
+    background: hsla(190 90% 92% / 1);
+    color: hsl(190 85% 45%);
+  }
+
+  [data-bs-theme="dark"] .pallet-tipo--transportadora {
+    background: hsla(190 85% 45% / 0.2);
+    color: hsl(190 85% 60%);
+  }
+
+  .pallet-tipo--cliente {
+    background: hsla(145 60% 90% / 1);
+    color: var(--semantic-success);
+  }
+
+  [data-bs-theme="dark"] .pallet-tipo--cliente {
+    background: hsla(145 65% 40% / 0.2);
+    color: var(--semantic-success);
+  }
+
+  .pallet-tipo--devolucao {
+    background: hsla(145 60% 90% / 1);
+    color: var(--semantic-success);
+  }
+
+  [data-bs-theme="dark"] .pallet-tipo--devolucao {
+    background: hsla(145 65% 40% / 0.2);
+    color: var(--semantic-success);
+  }
+
+  .pallet-tipo--retorno {
+    background: hsla(190 90% 92% / 1);
+    color: hsl(190 85% 45%);
+  }
+
+  [data-bs-theme="dark"] .pallet-tipo--retorno {
+    background: hsla(190 85% 45% / 0.2);
+    color: hsl(190 85% 60%);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     PALLET EMPRESA BADGES
+     Used in direcionamento.html
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .pallet-empresa {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+  }
+
+  .pallet-empresa--cd {
+    background: hsla(210 100% 95% / 1);
+    color: hsl(210 100% 52%);
+  }
+
+  [data-bs-theme="dark"] .pallet-empresa--cd {
+    background: hsla(210 100% 52% / 0.2);
+    color: hsl(210 100% 65%);
+  }
+
+  .pallet-empresa--fb {
+    background: hsla(145 60% 90% / 1);
+    color: var(--semantic-success);
+  }
+
+  [data-bs-theme="dark"] .pallet-empresa--fb {
+    background: hsla(145 65% 40% / 0.2);
+    color: var(--semantic-success);
+  }
+
+  .pallet-empresa--sc {
+    background: hsla(45 100% 90% / 1);
+    color: hsl(45 100% 30%);
+  }
+
+  [data-bs-theme="dark"] .pallet-empresa--sc {
+    background: hsla(45 100% 50% / 0.2);
+    color: var(--amber-55);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     PALLET SCORE BADGES
+     Used in sugestoes.html
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .pallet-score {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    font-size: 0.875rem;
+    font-weight: 700;
+  }
+
+  .pallet-score--high {
+    background: hsla(145 60% 90% / 1);
+    color: var(--semantic-success);
+  }
+
+  [data-bs-theme="dark"] .pallet-score--high {
+    background: hsla(145 65% 40% / 0.2);
+    color: var(--semantic-success);
+  }
+
+  .pallet-score--medium {
+    background: hsla(45 100% 90% / 1);
+    color: hsl(45 100% 30%);
+  }
+
+  [data-bs-theme="dark"] .pallet-score--medium {
+    background: hsla(45 100% 50% / 0.2);
+    color: var(--amber-55);
+  }
+
+  .pallet-score--low {
+    background: hsla(0 70% 95% / 1);
+    color: hsl(0 70% 40%);
+  }
+
+  [data-bs-theme="dark"] .pallet-score--low {
+    background: hsla(0 70% 50% / 0.2);
+    color: var(--semantic-danger);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     PALLET FILTER CARD
+     Used in tratativa_nfs templates
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .pallet-filter {
+    background: var(--bg-light);
+    border-radius: 12px;
+    padding: 1.25rem;
+    box-shadow: 0 2px 8px hsla(0 0% 0% / 0.08);
+    border: 1px solid var(--border);
+    margin-bottom: 1.5rem;
+  }
+
+  .pallet-filter__title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 1rem;
+  }
+
+  .pallet-filter__row {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: flex-end;
+  }
+
+  .pallet-filter__group {
+    flex: 1;
+    min-width: 180px;
+  }
+
+  .pallet-filter__group label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 0.5rem;
+  }
+
+  .pallet-filter__group select,
+  .pallet-filter__group input {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.875rem;
+    background: var(--bg);
+    color: var(--text);
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .pallet-filter__group select:focus,
+  .pallet-filter__group input:focus {
+    border-color: var(--amber-55);
+    box-shadow: 0 0 0 3px hsla(45 100% 50% / 0.15);
+    outline: none;
+  }
+
+  .pallet-filter__actions {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  /* Filter buttons */
+  .pallet-btn-filter {
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.2s;
+    border: none;
+    cursor: pointer;
+  }
+
+  .pallet-btn-filter--primary {
+    background: var(--amber-55);
+    color: hsl(0 0% 10%);
+  }
+
+  .pallet-btn-filter--primary:hover {
+    background: var(--amber-60);
+    color: hsl(0 0% 10%);
+  }
+
+  .pallet-btn-filter--secondary {
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+
+  .pallet-btn-filter--secondary:hover {
+    background: var(--bg-light);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     PALLET TABLE CARD
+     Used in listing templates
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .pallet-table-card {
+    background: var(--bg-light);
+    border-radius: 12px;
+    box-shadow: 0 2px 8px hsla(0 0% 0% / 0.08);
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  .pallet-table-card__header {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--bg);
+  }
+
+  .pallet-table-card__title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text);
+    margin: 0;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     PALLET TABLE
+     Used in listing templates
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .pallet-table {
+    margin: 0;
+    width: 100%;
+  }
+
+  .pallet-table thead th {
+    background: var(--bg);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 0.75rem 1rem;
+    border-bottom: 2px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .pallet-table tbody td {
+    padding: 0.75rem 1rem;
+    vertical-align: middle;
+    font-size: 0.875rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+  }
+
+  .pallet-table tbody tr:hover {
+    background: hsla(45 100% 50% / 0.04);
+  }
+
+  .pallet-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  /* Table cells */
+  .pallet-cell-nf {
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .pallet-cell-destinatario {
+    max-width: 220px;
+  }
+
+  .pallet-cell-nome {
+    font-weight: 500;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+  }
+
+  .pallet-cell-cnpj {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+  }
+
+  .pallet-cell-qtd {
+    text-align: center;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--amber-55);
+  }
+
+  .pallet-cell-pendente {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     PALLET ACTION BUTTONS
+     Used in table actions
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .pallet-actions {
+    display: flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+  }
+
+  .pallet-btn-action {
+    padding: 0.35rem 0.65rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .pallet-btn-action--devolucao {
+    background: hsla(145 65% 85% / 1);
+    color: hsl(145 80% 25%);
+  }
+
+  .pallet-btn-action--devolucao:hover {
+    background: hsla(145 65% 75% / 1);
+  }
+
+  [data-bs-theme="dark"] .pallet-btn-action--devolucao {
+    background: hsla(145 65% 40% / 0.2);
+    color: var(--semantic-success);
+  }
+
+  [data-bs-theme="dark"] .pallet-btn-action--devolucao:hover {
+    background: hsla(145 65% 40% / 0.3);
+  }
+
+  .pallet-btn-action--retorno {
+    background: hsla(190 90% 90% / 1);
+    color: hsl(190 80% 30%);
+  }
+
+  .pallet-btn-action--retorno:hover {
+    background: hsla(190 90% 80% / 1);
+  }
+
+  [data-bs-theme="dark"] .pallet-btn-action--retorno {
+    background: hsla(190 85% 45% / 0.2);
+    color: hsl(190 85% 60%);
+  }
+
+  [data-bs-theme="dark"] .pallet-btn-action--retorno:hover {
+    background: hsla(190 85% 45% / 0.3);
+  }
+
+  .pallet-btn-action--confirmar {
+    background: hsla(145 65% 85% / 1);
+    color: hsl(145 80% 25%);
+  }
+
+  .pallet-btn-action--confirmar:hover {
+    background: hsla(145 65% 75% / 1);
+  }
+
+  [data-bs-theme="dark"] .pallet-btn-action--confirmar {
+    background: hsla(145 65% 40% / 0.2);
+    color: var(--semantic-success);
+  }
+
+  [data-bs-theme="dark"] .pallet-btn-action--confirmar:hover {
+    background: hsla(145 65% 40% / 0.3);
+  }
+
+  .pallet-btn-action--rejeitar {
+    background: hsla(0 70% 92% / 1);
+    color: hsl(0 70% 35%);
+  }
+
+  .pallet-btn-action--rejeitar:hover {
+    background: hsla(0 70% 85% / 1);
+  }
+
+  [data-bs-theme="dark"] .pallet-btn-action--rejeitar {
+    background: hsla(0 70% 50% / 0.2);
+    color: var(--semantic-danger);
+  }
+
+  [data-bs-theme="dark"] .pallet-btn-action--rejeitar:hover {
+    background: hsla(0 70% 50% / 0.3);
+  }
+
+  .pallet-btn-action--detalhes {
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+
+  .pallet-btn-action--detalhes:hover {
+    background: var(--bg-light);
+    color: var(--text);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     PALLET EMPTY STATE
+     Used when no data
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .pallet-empty {
+    padding: 3rem;
+    text-align: center;
+  }
+
+  .pallet-empty__icon {
+    font-size: 3rem;
+    color: var(--text-muted);
+    opacity: 0.3;
+    margin-bottom: 1rem;
+  }
+
+  .pallet-empty__title {
+    color: var(--text-muted);
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+  }
+
+  .pallet-empty__text {
+    color: var(--text-muted);
+    opacity: 0.7;
+    margin: 0;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     PALLET PAGINATION
+     Used in listing templates
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .pallet-pagination {
+    padding: 1rem 1.25rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .pallet-pagination__info {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+  }
+
+  .pallet-pagination .pagination {
+    margin: 0;
+  }
+
+  .pallet-pagination .page-link {
+    border-radius: 6px;
+    margin: 0 0.15rem;
+    border: none;
+    color: var(--text);
+    font-size: 0.875rem;
+    background: transparent;
+  }
+
+  .pallet-pagination .page-link:hover {
+    background: var(--bg);
+  }
+
+  .pallet-pagination .page-item.active .page-link {
+    background: var(--amber-55);
+    color: hsl(0 0% 10%);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     PALLET DASHBOARD SPECIFIC
+     Used in dashboard.html
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .pallet-dashboard {
+    padding: 1.5rem;
+  }
+
+  .pallet-dashboard__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+  }
+
+  .pallet-dashboard__title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--text);
+  }
+
+  .pallet-dashboard__subtitle {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+  }
+
+  /* Quick actions */
+  .pallet-quick-actions {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .pallet-quick-action {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 500;
+    transition: all 0.2s ease;
+  }
+
+  .pallet-quick-action:hover {
+    transform: translateY(-2px);
+  }
+
+  /* Tabs */
+  .pallet-tabs {
+    margin-bottom: 1.5rem;
+  }
+
+  .pallet-tabs .nav-link {
+    border-radius: 8px 8px 0 0;
+    padding: 0.75rem 1.25rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    border: 1px solid transparent;
+    border-bottom: none;
+  }
+
+  .pallet-tabs .nav-link:hover {
+    color: var(--amber-55);
+    background: hsla(45 100% 50% / 0.05);
+  }
+
+  .pallet-tabs .nav-link.active {
+    color: var(--amber-55);
+    background: var(--bg-light);
+    border-color: var(--border);
+  }
+
+  /* Tab content */
+  .pallet-tab-content {
+    background: var(--bg-light);
+    border-radius: 0 12px 12px 12px;
+    padding: 1.5rem;
+    border: 1px solid var(--border);
+  }
+
+  /* Section card */
+  .pallet-section {
+    background: var(--bg);
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    margin-bottom: 1rem;
+  }
+
+  .pallet-section__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .pallet-section__title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text);
+  }
+
+  .pallet-section__body {
+    padding: 1.25rem;
+  }
+
+  /* Mini stats */
+  .pallet-mini-stats {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .pallet-mini-stat {
+    text-align: center;
+  }
+
+  .pallet-mini-stat__value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--text);
+  }
+
+  .pallet-mini-stat__label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+
+  /* Alert vencimento */
+  .pallet-alert-vencimento {
+    background: hsla(0 70% 50% / 0.1);
+    border: 1px solid hsla(0 70% 50% / 0.3);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .pallet-alert-vencimento__header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    color: var(--semantic-danger);
+    margin-bottom: 0.5rem;
+  }
+
+  /* Sugestao card */
+  .pallet-sugestao {
+    background: hsla(190 85% 45% / 0.1);
+    border: 1px solid hsla(190 85% 45% / 0.3);
+    border-radius: 8px;
+    padding: 1rem;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     PALLET ACTION CARD
+     Used in sugestoes.html for DFe search
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .pallet-action-card {
+    background: linear-gradient(135deg, hsla(45 100% 85% / 1) 0%, hsla(45 100% 80% / 1) 100%);
+    border-radius: 12px;
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  [data-bs-theme="dark"] .pallet-action-card {
+    background: linear-gradient(135deg, hsla(45 100% 50% / 0.15) 0%, hsla(45 100% 50% / 0.2) 100%);
+  }
+
+  .pallet-action-card__title {
+    color: hsl(45 100% 25%);
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0 0 0.25rem 0;
+  }
+
+  [data-bs-theme="dark"] .pallet-action-card__title {
+    color: var(--amber-55);
+  }
+
+  .pallet-action-card__text {
+    color: hsl(45 80% 30%);
+    font-size: 0.875rem;
+    margin: 0;
+  }
+
+  [data-bs-theme="dark"] .pallet-action-card__text {
+    color: var(--text-muted);
+  }
+
+  .pallet-action-card__form {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .pallet-action-card__form input {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid hsla(45 80% 60% / 1);
+    border-radius: 8px;
+    font-size: 0.875rem;
+    width: 140px;
+    background: hsla(0 0% 100% / 0.8);
+  }
+
+  [data-bs-theme="dark"] .pallet-action-card__form input {
+    background: var(--bg);
+    border-color: var(--border);
+    color: var(--text);
+  }
+
+  .pallet-btn-processar {
+    background: hsl(45 100% 25%);
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.2s;
+    cursor: pointer;
+  }
+
+  .pallet-btn-processar:hover {
+    background: hsl(45 100% 20%);
+    color: white;
+  }
+
+  [data-bs-theme="dark"] .pallet-btn-processar {
+    background: var(--amber-55);
+    color: hsl(0 0% 10%);
+  }
+
+  [data-bs-theme="dark"] .pallet-btn-processar:hover {
+    background: var(--amber-60);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     PALLET MODAL STYLES
+     Used across pallet templates
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .pallet-modal .modal-content {
+    border-radius: 12px;
+    border: none;
+  }
+
+  .pallet-modal .modal-header {
+    border-radius: 12px 12px 0 0;
+  }
+
+  .pallet-modal .modal-header--devolucao {
+    background: linear-gradient(135deg, var(--semantic-success) 0%, hsl(145 65% 35%) 100%);
+    color: white;
+  }
+
+  .pallet-modal .modal-header--retorno {
+    background: linear-gradient(135deg, hsl(190 85% 45%) 0%, hsl(190 85% 38%) 100%);
+    color: white;
+  }
+
+  .pallet-modal .modal-header--confirmar {
+    background: linear-gradient(135deg, var(--semantic-success) 0%, hsl(145 65% 35%) 100%);
+    color: white;
+  }
+
+  .pallet-modal .modal-header--rejeitar {
+    background: linear-gradient(135deg, var(--semantic-danger) 0%, hsl(0 70% 40%) 100%);
+    color: white;
+  }
+
+  .pallet-modal .modal-header--primary {
+    background: linear-gradient(135deg, hsl(210 100% 52%) 0%, hsl(210 100% 45%) 100%);
+    color: white;
+  }
+
+  .pallet-modal .modal-header .btn-close {
+    filter: brightness(0) invert(1);
+  }
+
+  .pallet-modal .modal-footer {
+    border-top: 1px solid var(--border);
+  }
+
+  /* Info card inside modals */
+  .pallet-info-card {
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .pallet-info-card__label {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+  }
+
+  .pallet-info-card__value {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .pallet-info-card__detail {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+  }
+
+  /* Info grid */
+  .pallet-info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+
+  .pallet-info-grid .pallet-info-card {
+    margin-bottom: 0;
+  }
+
+  /* Alert info inside modals */
+  .pallet-alert-info {
+    background: hsla(210 100% 95% / 1);
+    border: 1px solid hsla(210 100% 80% / 1);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .pallet-alert-info i {
+    color: hsl(210 100% 52%);
+  }
+
+  [data-bs-theme="dark"] .pallet-alert-info {
+    background: hsla(210 100% 52% / 0.1);
+    border-color: hsla(210 100% 52% / 0.3);
+  }
+
+  /* Selecao resumo */
+  .pallet-selecao-resumo {
+    background: var(--bg);
+    color: var(--text);
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    margin-top: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border: 1px solid var(--border);
+  }
+
+  .pallet-selecao-resumo__total {
+    font-weight: 600;
+  }
+
+  /* NF selecionavel */
+  .pallet-nf-selecionavel {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 0.5rem;
+    transition: all 0.2s;
+    background: var(--bg);
+  }
+
+  .pallet-nf-selecionavel:hover {
+    border-color: var(--amber-55);
+    background: hsla(45 100% 50% / 0.05);
+  }
+
+  .pallet-nf-selecionavel--selecionada {
+    border-color: var(--amber-55);
+    background: hsla(45 100% 50% / 0.1);
+  }
+
+  .pallet-nf-selecionavel__info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .pallet-nf-selecionavel__checkbox {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+  }
+
+  .pallet-nf-selecionavel__qtd {
+    width: 80px;
+  }
+
+  .pallet-nf-selecionavel__qtd input {
+    width: 100%;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.875rem;
+    text-align: center;
+    background: var(--bg-light);
+    color: var(--text);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     PALLET RESPONSIVE
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  @media (max-width: 768px) {
+    .pallet-stats-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .pallet-page-header {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .pallet-dashboard__header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 1rem;
+    }
+
+    .pallet-filter__row {
+      flex-direction: column;
+    }
+
+    .pallet-filter__group {
+      min-width: 100%;
+    }
+
+    .pallet-action-card {
+      flex-direction: column;
+      text-align: center;
+    }
+
+    .pallet-action-card__form {
+      width: 100%;
+      justify-content: center;
+    }
+  }
 
 } /* End @layer modules */

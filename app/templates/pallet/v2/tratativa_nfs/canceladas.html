@@ -7,11 +7,12 @@
 /* ============================================
    NFs CANCELADAS - Tratativa de NFs v2
    Histórico de NFs canceladas para auditoria
+   Migrated to design tokens (06-08)
    ============================================ */
 
 .tratativa-canceladas {
     padding: 1.5rem;
-    background-color: #f8f9fa;
+    background-color: var(--bg);
     min-height: calc(100vh - 60px);
 }
 
@@ -28,12 +29,12 @@
 .page-header h1 {
     font-size: 1.75rem;
     font-weight: 600;
-    color: #212529;
+    color: var(--text);
     margin: 0;
 }
 
 .page-header h1 i {
-    color: #dc3545;
+    color: var(--semantic-danger);
     margin-right: 0.5rem;
 }
 
@@ -50,16 +51,16 @@
 }
 
 .breadcrumb-nav .breadcrumb-item a {
-    color: #6c757d;
+    color: var(--text-muted);
     text-decoration: none;
 }
 
 .breadcrumb-nav .breadcrumb-item a:hover {
-    color: #0d6efd;
+    color: var(--amber-55);
 }
 
 .breadcrumb-nav .breadcrumb-item.active {
-    color: #212529;
+    color: var(--text);
 }
 
 /* Stats Cards */
@@ -71,10 +72,11 @@
 }
 
 .stat-card {
-    background: white;
+    background: var(--bg-light);
     border-radius: 12px;
     padding: 1.25rem;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    box-shadow: 0 2px 8px hsla(0 0% 0% / 0.08);
+    border: 1px solid var(--border);
     display: flex;
     align-items: center;
     gap: 1rem;
@@ -83,7 +85,7 @@
 
 .stat-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    box-shadow: 0 4px 12px hsla(0 0% 0% / 0.12);
 }
 
 .stat-icon {
@@ -96,41 +98,47 @@
     font-size: 1.5rem;
 }
 
-.stat-icon.total { background: #f8d7da; color: #dc3545; }
-.stat-icon.transportadoras { background: #cff4fc; color: #0dcaf0; }
-.stat-icon.clientes { background: #fff3cd; color: #856404; }
+.stat-icon.total { background: hsla(0 70% 95% / 1); color: var(--semantic-danger); }
+.stat-icon.transportadoras { background: hsla(190 90% 92% / 1); color: hsl(190 85% 45%); }
+.stat-icon.clientes { background: hsla(45 100% 90% / 1); color: hsl(45 100% 30%); }
+
+[data-bs-theme="dark"] .stat-icon.total { background: hsla(0 70% 50% / 0.15); }
+[data-bs-theme="dark"] .stat-icon.transportadoras { background: hsla(190 85% 45% / 0.15); color: hsl(190 85% 60%); }
+[data-bs-theme="dark"] .stat-icon.clientes { background: hsla(45 100% 50% / 0.15); color: var(--amber-55); }
 
 .stat-content h4 {
     font-size: 1.75rem;
     font-weight: 700;
     margin: 0;
-    color: #212529;
+    color: var(--text);
 }
 
 .stat-content span {
     font-size: 0.875rem;
-    color: #6c757d;
+    color: var(--text-muted);
 }
 
 .stat-content small {
     display: block;
     font-size: 0.75rem;
-    color: #adb5bd;
+    color: var(--text-muted);
+    opacity: 0.7;
 }
 
 /* Filtros */
 .filter-card {
-    background: white;
+    background: var(--bg-light);
     border-radius: 12px;
     padding: 1.25rem;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    box-shadow: 0 2px 8px hsla(0 0% 0% / 0.08);
+    border: 1px solid var(--border);
     margin-bottom: 1.5rem;
 }
 
 .filter-card .filter-title {
     font-size: 0.875rem;
     font-weight: 600;
-    color: #6c757d;
+    color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-bottom: 1rem;
@@ -152,22 +160,24 @@
     display: block;
     font-size: 0.875rem;
     font-weight: 500;
-    color: #495057;
+    color: var(--text);
     margin-bottom: 0.5rem;
 }
 
 .filter-group input {
     width: 100%;
     padding: 0.5rem 0.75rem;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--border);
     border-radius: 8px;
     font-size: 0.875rem;
+    background: var(--bg);
+    color: var(--text);
     transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .filter-group input:focus {
-    border-color: #0d6efd;
-    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15);
+    border-color: var(--amber-55);
+    box-shadow: 0 0 0 3px hsla(45 100% 50% / 0.15);
     outline: none;
 }
 
@@ -185,37 +195,38 @@
 }
 
 .btn-filter-primary {
-    background: #0d6efd;
-    color: white;
+    background: var(--amber-55);
+    color: hsl(0 0% 10%);
     border: none;
 }
 
 .btn-filter-primary:hover {
-    background: #0b5ed7;
-    color: white;
+    background: var(--amber-60);
+    color: hsl(0 0% 10%);
 }
 
 .btn-filter-secondary {
-    background: #f8f9fa;
-    color: #495057;
-    border: 1px solid #dee2e6;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
 }
 
 .btn-filter-secondary:hover {
-    background: #e9ecef;
+    background: var(--bg-light);
 }
 
 /* Tabela de NFs Canceladas */
 .table-card {
-    background: white;
+    background: var(--bg-light);
     border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    box-shadow: 0 2px 8px hsla(0 0% 0% / 0.08);
+    border: 1px solid var(--border);
     overflow: hidden;
 }
 
 .table-header {
     padding: 1rem 1.25rem;
-    border-bottom: 1px solid #e9ecef;
+    border-bottom: 1px solid var(--border);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -224,7 +235,7 @@
 .table-header h3 {
     font-size: 1rem;
     font-weight: 600;
-    color: #212529;
+    color: var(--text);
     margin: 0;
 }
 
@@ -244,14 +255,14 @@
 }
 
 .table-canceladas thead th {
-    background: #f8f9fa;
+    background: var(--bg);
     font-size: 0.75rem;
     font-weight: 600;
-    color: #6c757d;
+    color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     padding: 0.75rem 1rem;
-    border-bottom: 2px solid #e9ecef;
+    border-bottom: 2px solid var(--border);
     position: sticky;
     top: 0;
     z-index: 10;
@@ -261,11 +272,12 @@
     padding: 0.75rem 1rem;
     vertical-align: middle;
     font-size: 0.875rem;
-    border-bottom: 1px solid #f1f3f4;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
 }
 
 .table-canceladas tbody tr:hover {
-    background-color: #fff8f8;
+    background-color: hsla(0 70% 50% / 0.03);
 }
 
 /* Célula de NF */
@@ -275,18 +287,19 @@
 
 .nf-numero {
     font-weight: 500;
-    color: #212529;
+    color: var(--text);
 }
 
 .nf-serie {
     font-size: 0.75rem;
-    color: #6c757d;
+    color: var(--text-muted);
 }
 
 .nf-chave {
     font-size: 0.65rem;
-    color: #adb5bd;
-    font-family: 'Monaco', 'Consolas', monospace;
+    color: var(--text-muted);
+    opacity: 0.7;
+    font-family: var(--font-mono);
     word-break: break-all;
     margin-top: 0.25rem;
 }
@@ -298,7 +311,7 @@
 
 .destinatario-nome {
     font-weight: 500;
-    color: #212529;
+    color: var(--text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -307,8 +320,8 @@
 
 .destinatario-cnpj {
     font-size: 0.75rem;
-    color: #6c757d;
-    font-family: 'Monaco', 'Consolas', monospace;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
 }
 
 /* Badge de tipo */
@@ -323,13 +336,23 @@
 }
 
 .tipo-badge.transportadora {
-    background: #cff4fc;
-    color: #0a5a6e;
+    background: hsla(190 90% 92% / 1);
+    color: hsl(190 85% 35%);
 }
 
 .tipo-badge.cliente {
-    background: #fff3cd;
-    color: #856404;
+    background: hsla(45 100% 90% / 1);
+    color: hsl(45 100% 30%);
+}
+
+[data-bs-theme="dark"] .tipo-badge.transportadora {
+    background: hsla(190 85% 45% / 0.2);
+    color: hsl(190 85% 60%);
+}
+
+[data-bs-theme="dark"] .tipo-badge.cliente {
+    background: hsla(45 100% 50% / 0.2);
+    color: var(--amber-55);
 }
 
 /* Célula de quantidade */
@@ -340,7 +363,7 @@
 .qtd-value {
     font-size: 1.25rem;
     font-weight: 700;
-    color: #dc3545;
+    color: var(--semantic-danger);
 }
 
 /* Célula de cancelamento */
@@ -350,12 +373,12 @@
 
 .cancelamento-data {
     font-weight: 500;
-    color: #dc3545;
+    color: var(--semantic-danger);
 }
 
 .cancelamento-usuario {
     font-size: 0.75rem;
-    color: #6c757d;
+    color: var(--text-muted);
 }
 
 /* Célula de motivo */
@@ -365,7 +388,7 @@
 
 .motivo-text {
     font-size: 0.85rem;
-    color: #495057;
+    color: var(--text);
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
@@ -375,12 +398,12 @@
 /* Data de emissão */
 .data-cell {
     font-size: 0.85rem;
-    color: #495057;
+    color: var(--text);
 }
 
 .data-cell small {
     display: block;
-    color: #6c757d;
+    color: var(--text-muted);
     font-size: 0.75rem;
 }
 
@@ -403,12 +426,13 @@
 }
 
 .btn-detalhes {
-    background: #e9ecef;
-    color: #495057;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
 }
 
 .btn-detalhes:hover {
-    background: #dee2e6;
+    background: var(--bg-light);
 }
 
 /* Empty state */
@@ -419,25 +443,27 @@
 
 .empty-state i {
     font-size: 3rem;
-    color: #dee2e6;
+    color: var(--text-muted);
+    opacity: 0.3;
     margin-bottom: 1rem;
 }
 
 .empty-state h4 {
-    color: #6c757d;
+    color: var(--text-muted);
     font-weight: 500;
     margin-bottom: 0.5rem;
 }
 
 .empty-state p {
-    color: #adb5bd;
+    color: var(--text-muted);
+    opacity: 0.7;
     margin: 0;
 }
 
 /* Paginação */
 .pagination-wrapper {
     padding: 1rem 1.25rem;
-    border-top: 1px solid #e9ecef;
+    border-top: 1px solid var(--border);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -445,7 +471,7 @@
 
 .pagination-info {
     font-size: 0.875rem;
-    color: #6c757d;
+    color: var(--text-muted);
 }
 
 .pagination {
@@ -456,22 +482,23 @@
     border-radius: 6px;
     margin: 0 0.15rem;
     border: none;
-    color: #495057;
+    color: var(--text);
     font-size: 0.875rem;
+    background: transparent;
 }
 
 .pagination .page-link:hover {
-    background: #e9ecef;
+    background: var(--bg);
 }
 
 .pagination .page-item.active .page-link {
-    background: #dc3545;
+    background: var(--semantic-danger);
     color: white;
 }
 
 /* Modal */
 .modal-header {
-    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    background: linear-gradient(135deg, var(--semantic-danger) 0%, hsl(0 70% 40%) 100%);
     color: white;
     border-radius: 12px 12px 0 0;
 }
@@ -483,22 +510,27 @@
 .modal-content {
     border-radius: 12px;
     border: none;
+    background: var(--bg-light);
+}
+
+.modal-body {
+    color: var(--text);
 }
 
 .modal-footer {
-    border-top: 1px solid #e9ecef;
+    border-top: 1px solid var(--border);
 }
 
 /* Info card no modal */
 .info-card {
-    background: #f8f9fa;
+    background: var(--bg);
     border-radius: 8px;
     padding: 1rem;
     margin-bottom: 1rem;
 }
 
 .info-card h6 {
-    color: #6c757d;
+    color: var(--text-muted);
     font-size: 0.75rem;
     text-transform: uppercase;
     margin-bottom: 0.5rem;
@@ -507,25 +539,35 @@
 .info-card .info-value {
     font-size: 1.25rem;
     font-weight: 600;
-    color: #212529;
+    color: var(--text);
 }
 
 .info-card .info-detail {
     font-size: 0.875rem;
-    color: #6c757d;
+    color: var(--text-muted);
 }
 
 .info-card.cancelamento-card {
-    background: #f8d7da;
-    border: 1px solid #f5c6cb;
+    background: hsla(0 70% 95% / 1);
+    border: 1px solid hsla(0 70% 80% / 1);
 }
 
 .info-card.cancelamento-card h6 {
-    color: #721c24;
+    color: hsl(0 70% 35%);
 }
 
 .info-card.cancelamento-card .info-value {
-    color: #721c24;
+    color: hsl(0 70% 35%);
+}
+
+[data-bs-theme="dark"] .info-card.cancelamento-card {
+    background: hsla(0 70% 50% / 0.1);
+    border-color: hsla(0 70% 50% / 0.3);
+}
+
+[data-bs-theme="dark"] .info-card.cancelamento-card h6,
+[data-bs-theme="dark"] .info-card.cancelamento-card .info-value {
+    color: var(--semantic-danger);
 }
 
 /* Responsivo */
