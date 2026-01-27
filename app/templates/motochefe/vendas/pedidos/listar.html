@@ -136,7 +136,7 @@
                                        {% else %}
                                        title="Imprimir Pedido"
                                        {% endif %}
-                                       style="color: #000; font-size: 1.1rem;">
+                                       style="color: var(--text); font-size: 1.1rem;">
                                         <i class="fas fa-print"></i>
                                     </a>
                                     <a href="{{ url_for('motochefe.detalhes_pedido', id=p.id) }}" class="btn btn-info">
@@ -629,18 +629,20 @@
     }
 
     function getCorHex(cor) {
+        // Use CSS custom properties for theme-adaptive colors
+        const style = getComputedStyle(document.documentElement);
         const cores = {
-            'Preta': '#000000',
-            'Branca': '#FFFFFF',
-            'Vermelha': '#DC3545',
-            'Azul': '#0D6EFD',
-            'Verde': '#198754',
-            'Amarela': '#FFC107',
+            'Preta': style.getPropertyValue('--text').trim() || '#000000',
+            'Branca': style.getPropertyValue('--bg-light').trim() || '#FFFFFF',
+            'Vermelha': style.getPropertyValue('--semantic-danger').trim() || '#DC3545',
+            'Azul': style.getPropertyValue('--bs-primary').trim() || '#0D6EFD',
+            'Verde': style.getPropertyValue('--semantic-success').trim() || '#198754',
+            'Amarela': style.getPropertyValue('--amber-50').trim() || '#FFC107',
             'Laranja': '#FD7E14',
-            'Cinza': '#6C757D',
+            'Cinza': style.getPropertyValue('--text-muted').trim() || '#6C757D',
             'Prata': '#ADB5BD'
         };
-        return cores[cor] || '#6C757D';
+        return cores[cor] || (style.getPropertyValue('--text-muted').trim() || '#6C757D');
     }
 
     function formatarValorBR(valor) {

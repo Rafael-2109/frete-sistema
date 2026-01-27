@@ -42,7 +42,7 @@
 
                     <div class="row">
                         <div class="col-md-6">
-                            <div class="card h-100" id="cardCompleto" style="cursor: pointer; border: 3px solid #28a745;">
+                            <div class="card h-100" id="cardCompleto" style="cursor: pointer; border: 3px solid var(--semantic-success);">
                                 <div class="card-body">
                                     <h5 class="text-success"><i class="fas fa-check-circle"></i> COMPLETO (Padrão)</h5>
                                     <p class="mb-2"><strong>Quando usar:</strong> Pedidos NOVOS criados pelo sistema</p>
@@ -58,7 +58,7 @@
                             </div>
                         </div>
                         <div class="col-md-6">
-                            <div class="card h-100" id="cardHistorico" style="cursor: pointer; border: 1px solid #dee2e6;">
+                            <div class="card h-100" id="cardHistorico" style="cursor: pointer; border: 1px solid var(--border);">
                                 <div class="card-body">
                                     <h5 class="text-muted"><i class="fas fa-history"></i> HISTORICO</h5>
                                     <p class="mb-2"><strong>Quando usar:</strong> Importação de dados históricos</p>
@@ -147,15 +147,15 @@
 
 <style>
 .card:hover {
-    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    box-shadow: 0 4px 8px hsla(0, 0%, 0%, 0.2);
 }
 
 #cardCompleto.selected {
-    border: 3px solid #28a745 !important;
+    border: 3px solid var(--semantic-success) !important;
 }
 
 #cardHistorico.selected {
-    border: 3px solid #ffc107 !important;
+    border: 3px solid var(--amber-50) !important;
 }
 
 .small {
@@ -183,15 +183,19 @@ function selecionarModo(modo) {
     document.getElementById('modoSelecionado').value = modo;
 
     // Atualizar visual dos cards
+    const successColor = getComputedStyle(document.documentElement).getPropertyValue('--semantic-success').trim() || '#28a745';
+    const amberColor = getComputedStyle(document.documentElement).getPropertyValue('--amber-50').trim() || '#ffc107';
+    const borderColor = getComputedStyle(document.documentElement).getPropertyValue('--border').trim() || '#dee2e6';
+
     if (modo === 'COMPLETO') {
-        document.getElementById('cardCompleto').style.border = '3px solid #28a745';
-        document.getElementById('cardHistorico').style.border = '1px solid #dee2e6';
+        document.getElementById('cardCompleto').style.border = '3px solid ' + successColor;
+        document.getElementById('cardHistorico').style.border = '1px solid ' + borderColor;
 
         document.getElementById('alertModo').className = 'alert alert-success mt-3';
         document.getElementById('textoModo').textContent = 'COMPLETO - Gera todos os títulos automaticamente';
     } else {
-        document.getElementById('cardCompleto').style.border = '1px solid #dee2e6';
-        document.getElementById('cardHistorico').style.border = '3px solid #ffc107';
+        document.getElementById('cardCompleto').style.border = '1px solid ' + borderColor;
+        document.getElementById('cardHistorico').style.border = '3px solid ' + amberColor;
 
         document.getElementById('alertModo').className = 'alert alert-warning mt-3';
         document.getElementById('textoModo').textContent = 'HISTORICO - Gera apenas VENDA + FRETE (complementar com Fases 5/6/7)';

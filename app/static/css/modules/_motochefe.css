@@ -3,14 +3,21 @@
  *
  * Component overrides specific to the motochefe module.
  * NOTE: Large subsystem with 47 templates.
- * EXCLUDES: imprimir_devolucao.html, imprimir.html (print templates)
+ * EXCLUDES: imprimir_devolucao.html, imprimir.html (print templates per 05-04 decision)
  *
- * Token mapping:
- * - Use var(--bg-light) for card backgrounds
- * - Use var(--text) for primary text
- * - Use var(--text-muted) for secondary text
- * - Use var(--border) for borders
- * - Use var(--semantic-success/danger) for status colors
+ * Token mapping applied:
+ * - #fff -> var(--bg-light)
+ * - #f8f9fa -> var(--bg)
+ * - #212529 -> var(--text)
+ * - #6c757d -> var(--text-muted)
+ * - #dee2e6 -> var(--border)
+ * - #28a745 -> var(--semantic-success)
+ * - #dc3545 -> var(--semantic-danger)
+ * - #ffc107 -> var(--amber-50)
+ * - rgba(0,0,0,0.x) -> hsla(0, 0%, 0%, x)
+ *
+ * JS Color Functions: Templates use getCorHex() that reads CSS custom properties
+ * at runtime for theme-adaptive colors in dynamically generated content.
  */
 
 @layer modules {
@@ -21,6 +28,251 @@
      Templates: 45 non-print (2 print templates EXCLUDED)
      ═══════════════════════════════════════════════════════════════════════════ */
 
-  /* Placeholder - styles will be added as templates are migrated */
+  /* ─────────────────────────────────────────────────────────────────────────────
+     STAT CARDS - Dashboard statistics cards
+     Used in: produtos/motos/listar.html
+     ───────────────────────────────────────────────────────────────────────────── */
+
+  .stat-card {
+    border-left: 4px solid var(--bs-primary);
+    transition: transform 0.2s ease;
+  }
+
+  .stat-card:hover {
+    transform: translateY(-2px);
+  }
+
+  .stat-card-success {
+    border-left-color: var(--semantic-success);
+  }
+
+  .stat-card-danger {
+    border-left-color: var(--semantic-danger);
+  }
+
+  .stat-card-warning {
+    border-left-color: var(--amber-50);
+  }
+
+  .stat-card h6 {
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .stat-card h3 {
+    color: var(--text);
+    font-weight: 600;
+    margin-bottom: 0;
+  }
+
+  /* ─────────────────────────────────────────────────────────────────────────────
+     RESULT BOXES - Import/upload feedback
+     Used in: carga_inicial/index.html, carga_inicial/historico.html
+     ───────────────────────────────────────────────────────────────────────────── */
+
+  .result-box {
+    padding: 15px;
+    border-radius: 5px;
+    margin-top: 10px;
+  }
+
+  .result-success {
+    background-color: hsla(var(--semantic-success-hsl), 0.15);
+    border: 1px solid hsla(var(--semantic-success-hsl), 0.3);
+    color: var(--semantic-success);
+  }
+
+  .result-error {
+    background-color: hsla(var(--semantic-danger-hsl), 0.15);
+    border: 1px solid hsla(var(--semantic-danger-hsl), 0.3);
+    color: var(--semantic-danger);
+  }
+
+  [data-bs-theme="dark"] .result-success {
+    background-color: hsla(var(--semantic-success-hsl), 0.2);
+    border-color: hsla(var(--semantic-success-hsl), 0.4);
+  }
+
+  [data-bs-theme="dark"] .result-error {
+    background-color: hsla(var(--semantic-danger-hsl), 0.2);
+    border-color: hsla(var(--semantic-danger-hsl), 0.4);
+  }
+
+  /* ─────────────────────────────────────────────────────────────────────────────
+     TABLE PREVIEWS - Data preview tables with sticky headers
+     Used in: carga_inicial/historico.html
+     ───────────────────────────────────────────────────────────────────────────── */
+
+  .table-preview {
+    font-size: 0.85rem;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  .table-preview th {
+    position: sticky;
+    top: 0;
+    background-color: var(--bg);
+    z-index: 1;
+  }
+
+  [data-bs-theme="dark"] .table-preview th {
+    background-color: var(--bg-light);
+  }
+
+  /* ─────────────────────────────────────────────────────────────────────────────
+     BADGE STYLES - Custom badge modifiers
+     Used in: carga_inicial/fase4.html
+     ───────────────────────────────────────────────────────────────────────────── */
+
+  .badge-fase {
+    font-size: 0.9rem;
+    padding: 0.5rem 1rem;
+  }
+
+  /* ─────────────────────────────────────────────────────────────────────────────
+     MODE SELECTION CARDS - COMPLETO vs HISTORICO toggle cards
+     Used in: carga_inicial/fase4.html
+     ───────────────────────────────────────────────────────────────────────────── */
+
+  #cardCompleto.selected,
+  #cardCompleto:has(+ input:checked) {
+    border: 3px solid var(--semantic-success) !important;
+  }
+
+  #cardHistorico.selected {
+    border: 3px solid var(--amber-50) !important;
+  }
+
+  /* Card hover effect with theme-adaptive shadow */
+  .carga-inicial .card:hover {
+    box-shadow: 0 4px 8px hsla(0, 0%, 0%, 0.2);
+  }
+
+  [data-bs-theme="dark"] .carga-inicial .card:hover {
+    box-shadow: 0 4px 8px hsla(0, 0%, 0%, 0.4);
+  }
+
+  /* ─────────────────────────────────────────────────────────────────────────────
+     TABLE ROW STATES - Enhanced table row highlighting
+     Used in: cadastros/equipes/gerenciar_precos.html
+     ───────────────────────────────────────────────────────────────────────────── */
+
+  .motochefe-table .table-success,
+  .gerenciar-precos .table-success {
+    background-color: hsla(var(--semantic-success-hsl), 0.15) !important;
+  }
+
+  [data-bs-theme="dark"] .motochefe-table .table-success,
+  [data-bs-theme="dark"] .gerenciar-precos .table-success {
+    background-color: hsla(var(--semantic-success-hsl), 0.2) !important;
+  }
+
+  /* ─────────────────────────────────────────────────────────────────────────────
+     INPUT GROUPS - Inline form groups
+     Used in: cadastros/equipes/gerenciar_precos.html
+     ───────────────────────────────────────────────────────────────────────────── */
+
+  .input-group-sm .form-control-sm {
+    font-size: 0.875rem;
+  }
+
+  /* ─────────────────────────────────────────────────────────────────────────────
+     ACCORDION STYLES - Agrupamento modal accordions
+     Used in: produtos/motos/listar.html, vendas/pedidos/form.html
+     ───────────────────────────────────────────────────────────────────────────── */
+
+  .motochefe-accordion .accordion-button {
+    background-color: var(--bg);
+    color: var(--text);
+  }
+
+  .motochefe-accordion .accordion-button:not(.collapsed) {
+    background-color: var(--bg-light);
+    color: var(--text);
+  }
+
+  .motochefe-accordion .accordion-body {
+    background-color: var(--bg);
+  }
+
+  [data-bs-theme="dark"] .motochefe-accordion .accordion-button {
+    background-color: var(--bg-light);
+  }
+
+  [data-bs-theme="dark"] .motochefe-accordion .accordion-button:not(.collapsed) {
+    background-color: var(--bg);
+  }
+
+  /* ─────────────────────────────────────────────────────────────────────────────
+     ALERT TOASTS - Floating feedback messages
+     Used in: cadastros/clientes/form.html (JavaScript generated)
+     ───────────────────────────────────────────────────────────────────────────── */
+
+  .moto-alert-toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 9999;
+    min-width: 300px;
+    border: none;
+    box-shadow: 0 4px 6px hsla(0, 0%, 0%, 0.3);
+  }
+
+  .moto-alert-toast.success {
+    background-color: var(--semantic-success);
+    color: white;
+  }
+
+  .moto-alert-toast.error {
+    background-color: var(--semantic-danger);
+    color: white;
+  }
+
+  [data-bs-theme="dark"] .moto-alert-toast {
+    box-shadow: 0 4px 6px hsla(0, 0%, 0%, 0.5);
+  }
+
+  /* ─────────────────────────────────────────────────────────────────────────────
+     PRINT BUTTON STATES - Pedidos list print status
+     Used in: vendas/pedidos/listar.html
+     ───────────────────────────────────────────────────────────────────────────── */
+
+  .btn-print-status {
+    color: var(--text);
+    font-size: 1.1rem;
+  }
+
+  .btn-print-status.printed {
+    background-color: var(--semantic-success);
+    border-color: var(--semantic-success);
+  }
+
+  .btn-print-status.not-printed {
+    background-color: var(--amber-50);
+    border-color: var(--amber-50);
+  }
+
+  /* ─────────────────────────────────────────────────────────────────────────────
+     FINANCIAL SUMMARY - Payment/Receipt breakdown
+     Used in: financeiro/detalhes_pagamento.html, financeiro/detalhes_recebimento.html
+     ───────────────────────────────────────────────────────────────────────────── */
+
+  .moto-financial-summary .valor-recebimento {
+    color: var(--semantic-success);
+  }
+
+  .moto-financial-summary .valor-pagamento {
+    color: var(--semantic-danger);
+  }
+
+  .moto-financial-summary .saldo-pendente {
+    color: var(--semantic-danger);
+  }
+
+  .moto-financial-summary .saldo-quitado {
+    color: var(--semantic-success);
+  }
 
 } /* End @layer modules */

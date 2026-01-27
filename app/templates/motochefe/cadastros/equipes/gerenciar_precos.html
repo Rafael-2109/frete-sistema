@@ -219,7 +219,11 @@
 <style>
 /* Destacar linhas com preço configurado */
 .table-success {
-    background-color: #d1f7d1 !important;
+    background-color: hsla(var(--semantic-success-hsl), 0.15) !important;
+}
+
+[data-bs-theme="dark"] .table-success {
+    background-color: hsla(var(--semantic-success-hsl), 0.2) !important;
 }
 
 /* Melhorar aparência dos inputs inline */

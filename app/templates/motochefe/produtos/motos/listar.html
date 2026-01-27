@@ -610,20 +610,21 @@
         return html;
     }
 
-    // Função auxiliar para cores
+    // Função auxiliar para cores - usa CSS custom properties para tema adaptativo
     function getCorHex(cor) {
+        const style = getComputedStyle(document.documentElement);
         const cores = {
-            'Preta': '#000000',
-            'Branca': '#FFFFFF',
-            'Vermelha': '#DC3545',
-            'Azul': '#0D6EFD',
-            'Verde': '#198754',
-            'Amarela': '#FFC107',
+            'Preta': style.getPropertyValue('--text').trim() || '#000000',
+            'Branca': style.getPropertyValue('--bg-light').trim() || '#FFFFFF',
+            'Vermelha': style.getPropertyValue('--semantic-danger').trim() || '#DC3545',
+            'Azul': style.getPropertyValue('--bs-primary').trim() || '#0D6EFD',
+            'Verde': style.getPropertyValue('--semantic-success').trim() || '#198754',
+            'Amarela': style.getPropertyValue('--amber-50').trim() || '#FFC107',
             'Laranja': '#FD7E14',
-            'Cinza': '#6C757D',
+            'Cinza': style.getPropertyValue('--text-muted').trim() || '#6C757D',
             'Prata': '#ADB5BD'
         };
-        return cores[cor] || '#6C757D';
+        return cores[cor] || (style.getPropertyValue('--text-muted').trim() || '#6C757D');
     }
 
     // Tornar função global para onclick
