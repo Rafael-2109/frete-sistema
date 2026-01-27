@@ -76,15 +76,16 @@ Plans:
 ### Phase 4: Layout Patterns
 **Goal**: Consistent page structure and navigation across all views
 **Depends on**: Phase 3
-**Requirements**: LAYO-02, LAYO-03
+**Requirements**: LAYO-02 (reinterpreted: navbar mobile responsiveness), LAYO-03
 **Success Criteria** (what must be TRUE):
-  1. Sidebar collapses correctly on mobile and expands on desktop
+  1. Navbar functions correctly on mobile (collapse, dropdowns, touch targets 44x44px)
   2. Grid system applies consistently (no competing grid implementations)
   3. Content area uses full available width without horizontal overflow
-**Plans**: TBD
+**Plans**: 2 plans in 1 wave
 
 Plans:
-- [ ] 04-01: Standardize sidebar behavior and grid system
+- [ ] 04-01-PLAN.md - Optimize navbar for mobile touch usability (Wave 1)
+- [ ] 04-02-PLAN.md - Create layout utilities with overflow protection and z-index scale (Wave 1)
 
 ### Phase 5: High-Traffic Migration
 **Goal**: Priority modules (financeiro, carteira, embarques) fully migrated to design system
