@@ -124,3 +124,70 @@ body {
     background-color: var(--bs-body-bg) !important;
     color: var(--bs-body-color);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BADGE OVERRIDES - Bootstrap usa color: #fff fixo que não adapta ao tema
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Base badge - herda cor do texto do tema */
+.badge {
+    color: inherit;
+}
+
+/* Badges com fundo colorido - texto escuro para contraste */
+.badge.bg-primary,
+.badge.bg-warning {
+    color: hsl(0 0% 10%) !important;
+}
+
+/* Badges com fundo escuro - texto claro */
+.badge.bg-secondary,
+.badge.bg-success,
+.badge.bg-danger,
+.badge.bg-info,
+.badge.bg-dark {
+    color: hsl(0 0% 100%) !important;
+}
+
+/* Badge light - adapta ao tema */
+.badge.bg-light {
+    color: var(--bs-body-color) !important;
+    background-color: var(--bs-secondary-bg) !important;
+    border: 1px solid var(--bs-border-color);
+}
+
+/* Light mode: ajustar success/info para melhor contraste */
+[data-bs-theme="light"] .badge.bg-success,
+[data-theme="light"] .badge.bg-success {
+    background-color: hsl(145 65% 35%) !important;
+}
+
+[data-bs-theme="light"] .badge.bg-info,
+[data-theme="light"] .badge.bg-info {
+    background-color: hsl(0 0% 40%) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BADGE STATUS - Classes específicas do sistema que precisam adaptar ao tema
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Badge status base - usa cores do tema */
+.badge-status {
+    background-color: var(--bs-secondary-bg) !important;
+    color: var(--bs-body-color) !important;
+    border: 1px solid var(--bs-border-color);
+}
+
+/* Badge status accent - destaque amarelo */
+.badge-status-accent {
+    background-color: hsl(45 95% 55%) !important;
+    color: hsl(0 0% 10%) !important;
+    border: none !important;
+}
+
+/* Light mode adjustments */
+[data-bs-theme="light"] .badge-status,
+[data-theme="light"] .badge-status {
+    background-color: hsl(0 0% 92%) !important;
+    color: hsl(0 0% 20%) !important;
+}
