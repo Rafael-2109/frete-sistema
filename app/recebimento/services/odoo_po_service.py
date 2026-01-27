@@ -475,6 +475,19 @@ class OdooPoService:
             # PO de referencia para copiar configuracoes
             po_referencia_id = pos_para_consolidar[0]['po_id']
 
+            # Validar que PO de referencia existe no Odoo
+            po_referencia = odoo.read('purchase.order', [po_referencia_id], ['name', 'state'])
+            if not po_referencia:
+                raise ValueError(
+                    f"PO de referencia {po_referencia_id} nao existe no Odoo. "
+                    f"Pode ter sido deletado ou arquivado. "
+                    f"Revalide a NF para buscar POs atualizados."
+                )
+            logger.info(
+                f"PO de referencia validado: {po_referencia[0].get('name')} "
+                f"(estado: {po_referencia[0].get('state')})"
+            )
+
             # =================================================================
             # PASSO 2: Criar PO Conciliador (vazio)
             # =================================================================
@@ -921,28 +934,37 @@ class OdooPoService:
                 logger.error("Falha ao duplicar PO via copy()")
                 return None
 
+            logger.info(f"✅ PO Conciliador criado com ID {novo_po_id}")
+
             # Verificar se copy() criou linhas indesejadas (fallback)
             # Em algumas versoes do Odoo, order_line=False pode nao funcionar
-            linhas_existentes = odoo.search(
-                'purchase.order.line',
-                [[('order_id', '=', novo_po_id)]]
-            )
-            if linhas_existentes:
-                logger.warning(
-                    f"copy() criou {len(linhas_existentes)} linhas indesejadas, removendo..."
+            # NOTA: Essa verificacao e opcional - se falhar, continuamos mesmo assim
+            try:
+                linhas_existentes = odoo.search(
+                    'purchase.order.line',
+                    [('order_id', '=', novo_po_id)]  # CORRIGIDO: era [[...]] causando IndexError
                 )
-                try:
-                    odoo.execute_kw(
-                        'purchase.order.line',
-                        'unlink',
-                        [linhas_existentes]
-                    )
-                    logger.info(f"Linhas indesejadas removidas do PO Conciliador")
-                except Exception as e_del:
+                if linhas_existentes:
                     logger.warning(
-                        f"Nao foi possivel remover linhas indesejadas: {e_del}. "
-                        f"Linhas serao sobrescritas pelas novas."
+                        f"copy() criou {len(linhas_existentes)} linhas indesejadas, removendo..."
                     )
+                    try:
+                        odoo.execute_kw(
+                            'purchase.order.line',
+                            'unlink',
+                            [linhas_existentes]
+                        )
+                        logger.info(f"Linhas indesejadas removidas do PO Conciliador")
+                    except Exception as e_del:
+                        logger.warning(
+                            f"Nao foi possivel remover linhas indesejadas: {e_del}. "
+                            f"Linhas serao sobrescritas pelas novas."
+                        )
+            except Exception as e_linhas:
+                logger.warning(
+                    f"Nao foi possivel verificar linhas indesejadas: {e_linhas}. "
+                    f"Continuando mesmo assim."
+                )
 
             # Buscar nome do novo PO
             novo_po = odoo.read('purchase.order', [novo_po_id], ['name'])
