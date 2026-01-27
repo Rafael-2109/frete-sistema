@@ -35,8 +35,13 @@
 .text-body { color: var(--text) !important; }
 .text-secondary-color { color: var(--text-muted) !important; }
 
-/* Accent */
+/* Accent - adapta ao tema */
 .text-accent { color: var(--amber-55) !important; }
+
+[data-bs-theme="light"] .text-accent,
+[data-theme="light"] .text-accent {
+    color: hsl(45 100% 28%) !important;  /* Amarelo escuro para contraste */
+}
 
 /* Semânticos */
 .text-status-success { color: var(--semantic-success) !important; }
