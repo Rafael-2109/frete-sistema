@@ -5,33 +5,33 @@
 See: .planning/PROJECT.md (updated 2026-01-26)
 
 **Core value:** Todas as telas devem ter cores e contraste funcionais em dark mode E mobile, sem CSS inline hardcoded.
-**Current focus:** Phase 2 - Component Extraction (Plan 01 of 05 complete)
+**Current focus:** Phase 2 - Component Extraction (Plan 02 of 05 complete)
 
 ## Current Position
 
 Phase: 2 of 7 (Component Library)
-Plan: 1 of 5 in current phase
+Plan: 2 of 5 in current phase
 Status: In progress
-Last activity: 2026-01-27 - Completed 02-01-PLAN.md (Button component)
+Last activity: 2026-01-27 - Completed 02-02-PLAN.md (Cards and Badges components)
 
-Progress: [███░░░░░░░] 20%
+Progress: [████░░░░░░] 25%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
-- Average duration: 2.5 min
-- Total execution time: 10 min
+- Total plans completed: 5
+- Average duration: 2.4 min
+- Total execution time: 12 min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-layer-infrastructure | 3 | 8 min | 2.7 min |
-| 02-component-library | 1 | 2 min | 2 min |
+| 02-component-library | 2 | 4 min | 2 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (2 min), 01-02 (2 min), 01-03 (4 min), 02-01 (2 min)
+- Last 5 plans: 01-02 (2 min), 01-03 (4 min), 02-01 (2 min), 02-02 (2 min)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -55,6 +55,9 @@ Recent decisions affecting current work:
 - [02-01]: CSS custom property API (--_btn-bg, --_btn-color) for component variants
 - [02-01]: Use :where() for low-specificity state selectors
 - [02-01]: Zero !important in components - layer system handles specificity
+- [02-02]: Cards use CSS custom property API (--_card-bg, --_card-border, etc.) for easy overrides
+- [02-02]: Badge outline variants use currentColor for border to match text color
+- [02-02]: Light mode adjustments for badge contrast (darker green for success)
 
 ### Pending Todos
 
@@ -70,9 +73,9 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-01-27T12:27:37Z
-Stopped at: Completed 02-01-PLAN.md (Button component)
+Last session: 2026-01-27T12:28:03Z
+Stopped at: Completed 02-02-PLAN.md (Cards and Badges components)
 Resume file: None
 
 ---
-*Next step: Execute 02-02-PLAN.md (Cards and Badges components)*
+*Next step: Execute 02-03-PLAN.md (Forms and Tables components)*
