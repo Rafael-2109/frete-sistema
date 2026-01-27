@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-01-26)
 
 **Core value:** Todas as telas devem ter cores e contraste funcionais em dark mode E mobile, sem CSS inline hardcoded.
-**Current focus:** Phase 5 - High-Traffic Migration (IN PROGRESS)
+**Current focus:** Phase 5 - High-Traffic Migration (COMPLETE)
 
 ## Current Position
 
 Phase: 5 of 7 (High-Traffic Migration)
-Plan: 4 of 5 in current phase (wave 2 complete)
-Status: In progress
-Last activity: 2026-01-27 - Completed 05-02-PLAN.md (Financeiro Templates)
+Plan: 5 of 5 in current phase (all waves complete)
+Status: Complete
+Last activity: 2026-01-27 - Completed 05-05 Visual Verification Checkpoint (with fixes)
 
-Progress: [████████░░] 80%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -31,11 +31,11 @@ Progress: [████████░░] 80%
 | 02-component-library | 3 | 6 min | 2 min |
 | 03-table-system | 2 | 3 min | 1.5 min |
 | 04-layout-patterns | 2 | 3 min | 1.5 min |
-| 05-high-traffic-migration | 4 | 10 min | 2.5 min |
+| 05-high-traffic-migration | 5 | 25 min | 5 min |
 
 **Recent Trend:**
-- Last 5 plans: 05-01 (1 min), 05-04 (2 min), 05-03 (3 min), 05-02 (4 min)
-- Trend: Stable execution
+- Last 5 plans: 05-01 (1 min), 05-04 (2 min), 05-03 (3 min), 05-02 (4 min), 05-05 (15 min with fixes)
+- Trend: Verification phase required significant fixes
 
 *Updated after each plan completion*
 
@@ -84,6 +84,11 @@ Recent decisions affecting current work:
 - [05-03]: Use hsla() format over rgba() for consistency with HSL color model in tokens
 - [05-03]: Cart-* prefix for carteira-specific semantic classes
 - [05-02]: Use hsla colors for non-semantic icon backgrounds (icon variants don't fit success/danger/amber patterns)
+- [05-05]: bootstrap-theme-override.css MUST be outside @layer to override Bootstrap CDN
+- [05-05]: Remove :root from dark mode selectors to avoid conflicts with light mode
+- [05-05]: Cards use --bg-light (100% white in light mode) for proper elevation hierarchy
+- [05-05]: .text-accent light mode: hsl(45 100% 28%) for contrast
+- [05-05]: Badge overrides needed in bootstrap-theme-override.css for theme-adaptive colors
 
 ### Pending Todos
 
@@ -99,9 +104,9 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-01-27T14:26:10Z
-Stopped at: Completed 05-02-PLAN.md (wave 2 complete)
+Last session: 2026-01-27
+Stopped at: Completed Phase 5 (all plans + visual verification with fixes)
 Resume file: None
 
 ---
-*Next step: Execute 05-05 (Documentation Audit) to complete Phase 5*
+*Next step: Start Phase 6 or verify Phase 5 completion with /gsd:verify-work*
