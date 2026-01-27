@@ -424,6 +424,8 @@ class ValidacaoRecebimentoJob:
 
         Este método corrige registros existentes que foram vinculados antes
         da correção de verificação de invoice_status.
+
+        OTIMIZAÇÃO: Só consulta Odoo se houver DFEs para verificar.
         """
         resultado = {
             'dfes_verificados': 0,
@@ -432,15 +434,21 @@ class ValidacaoRecebimentoJob:
         }
 
         try:
-            # Buscar DFEs com status='aprovado' que JÁ têm PO vinculado
+            # ⚡ OTIMIZAÇÃO: Contar primeiro (query leve)
+            count = ValidacaoNfPoDfe.query.filter(
+                ValidacaoNfPoDfe.status == 'aprovado',
+                ValidacaoNfPoDfe.odoo_po_vinculado_id.isnot(None)
+            ).count()
+
+            if count == 0:
+                logger.info("Correção Status: Nenhum DFE aprovado com PO (skip)")
+                return resultado
+
+            # Agora buscar os registros
             validacoes_aprovadas = ValidacaoNfPoDfe.query.filter(
                 ValidacaoNfPoDfe.status == 'aprovado',
                 ValidacaoNfPoDfe.odoo_po_vinculado_id.isnot(None)
             ).all()
-
-            if not validacoes_aprovadas:
-                logger.info("Correção Status: Nenhum DFE aprovado com PO para verificar")
-                return resultado
 
             logger.info(
                 f"Correção Status: Verificando {len(validacoes_aprovadas)} DFEs "
@@ -457,7 +465,7 @@ class ValidacaoRecebimentoJob:
 
             odoo = self._get_odoo()
 
-            # Buscar invoice_status de todos os POs em batch
+            # Buscar invoice_status de todos os POs em batch (1 query)
             pos_odoo = odoo.search_read(
                 'purchase.order',
                 [['id', 'in', po_ids]],
