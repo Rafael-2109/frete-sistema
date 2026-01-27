@@ -1,0 +1,15 @@
+/**
+ * CSS Layer Order Declaration
+ *
+ * Priority (lowest to highest):
+ * 1. reset     - Browser normalization (future)
+ * 2. tokens    - Design tokens (colors, spacing, typography)
+ * 3. base      - Bootstrap overrides, global defaults
+ * 4. components - Reusable UI components (buttons, cards, etc.)
+ * 5. modules   - Feature-specific styles (carteira, financeiro, etc.)
+ * 6. utilities - Utility classes (spacing, visibility, etc.)
+ * 7. overrides - Temporary migration overrides (remove when complete)
+ *
+ * Note: This file is for documentation only.
+ * The actual @layer statement lives in main.css
+ */
