@@ -2,7 +2,7 @@
  * _fretes.css - Fretes Module Overrides
  *
  * Component overrides specific to the fretes module.
- * NOTE: High inline style count - audit views need careful migration.
+ * Styles extracted from template inline styles during migration.
  *
  * Token mapping:
  * - Use var(--bg-light) for card backgrounds
@@ -10,16 +10,261 @@
  * - Use var(--text-muted) for secondary text
  * - Use var(--border) for borders
  * - Use var(--semantic-success/danger) for status colors
+ *
+ * Migrated templates:
+ * - fretes/visualizar_frete.html (06-04)
+ * - fretes/listar_fretes.html (06-04)
+ * - fretes/analise_diferencas.html (06-04)
  */
 
 @layer modules {
 
   /* ═══════════════════════════════════════════════════════════════════════════
-     FRETES MODULE - Component overrides
-     Migrated from template inline styles
-     Templates: 39 total
+     FRETES STATUS BADGES - Theme-aware badge colors
+     Migrated from visualizar_frete.html and listar_fretes.html inline styles
+     Using existing class names to avoid template changes
      ═══════════════════════════════════════════════════════════════════════════ */
 
-  /* Placeholder - styles will be added as templates are migrated */
+  /* Badge base */
+  .badge-status {
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.35em 0.65em;
+      border-radius: 0.375rem;
+  }
+
+  /* Status: PENDENTE - Amarelo with white text */
+  .badge-status-pendente {
+      background-color: var(--bs-warning);
+      color: white;
+  }
+
+  /* Status: EM_TRATATIVA - Info/Cyan with white text */
+  .badge-status-tratativa {
+      background-color: var(--bs-info);
+      color: white;
+  }
+
+  /* Status: APROVADO - Verde with white text */
+  .badge-status-aprovado {
+      background-color: var(--bs-success);
+      color: white;
+  }
+
+  /* Status: REJEITADO - Vermelho with white text */
+  .badge-status-rejeitado {
+      background-color: var(--bs-danger);
+      color: white;
+  }
+
+  /* Status: PAGO - Primario with dark text */
+  .badge-status-pago {
+      background-color: var(--bs-primary);
+      color: hsl(216 63% 9%);
+  }
+
+  /* Status: LANCADO - Theme-aware */
+  .badge-status-lancado {
+      background-color: var(--bs-tertiary-bg);
+      color: var(--bs-body-color);
+      border: 1px solid var(--bs-border-color);
+  }
+
+  /* Status: CANCELADO - Secundario with white text */
+  .badge-status-cancelado {
+      background-color: var(--bs-secondary);
+      color: white;
+  }
+
+  /* Valor badges */
+  .badge-valor-positivo {
+      background-color: var(--bs-danger);
+      color: white;
+  }
+
+  .badge-valor-negativo {
+      background-color: var(--bs-success);
+      color: white;
+  }
+
+  .badge-valor-info {
+      background-color: var(--bs-info);
+      color: white;
+  }
+
+  /* Movimento badges */
+  .badge-movimento-entrada {
+      background-color: var(--bs-success);
+      color: white;
+  }
+
+  .badge-movimento-saida {
+      background-color: var(--bs-danger);
+      color: white;
+  }
+
+  /* Odoo status badges */
+  .badge-odoo-ok {
+      background-color: var(--bs-success);
+      color: white;
+  }
+
+  .badge-odoo-pendente {
+      background-color: var(--bs-warning);
+      color: white;
+  }
+
+  /* Em dark mode, warning e mais claro entao texto escuro */
+  [data-bs-theme="dark"] .badge-odoo-pendente {
+      color: hsl(210 11% 15%);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     CARD HEADER AND TABLE - Theme-aware backgrounds
+     Migrated from visualizar_frete.html and listar_fretes.html inline styles
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .card-header-theme {
+      background-color: var(--bs-tertiary-bg);
+      color: var(--bs-body-color);
+      border-bottom: 1px solid var(--bs-border-color);
+  }
+
+  .table-thead-theme {
+      background-color: var(--bs-tertiary-bg);
+  }
+
+  .table-thead-theme th {
+      background-color: var(--bs-tertiary-bg);
+      color: var(--bs-body-color);
+      border-bottom: 2px solid var(--bs-border-color);
+      font-weight: 600;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     BORDER LEFT HIGHLIGHT
+     Migrated from visualizar_frete.html inline styles
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .border-left-success {
+      border-left: 4px solid var(--bs-success);
+  }
+
+  .border-left-info {
+      border-left: 4px solid var(--bs-info);
+  }
+
+  .border-left-warning {
+      border-left: 4px solid var(--bs-warning);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     ANALISE DIFERENCAS - Theme-aware styles
+     Migrated from analise_diferencas.html inline styles
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .card-header-theme-dark {
+      background: linear-gradient(135deg, var(--bs-tertiary-bg) 0%, var(--bs-secondary-bg) 100%);
+      color: var(--bs-body-color);
+      border-bottom: 1px solid var(--bs-border-color);
+  }
+
+  .card-header-theme-dark h5 {
+      color: var(--bs-body-color);
+  }
+
+  /* Light mode adjustment */
+  [data-bs-theme="light"] .card-header-theme-dark {
+      background: linear-gradient(135deg, var(--bs-secondary-bg) 0%, var(--bs-tertiary-bg) 100%);
+      color: var(--bs-body-color);
+  }
+
+  /* Badge valor calculado - theme-aware */
+  .badge-valor-calculado {
+      background-color: hsla(217 91% 60% / 0.15);
+      color: var(--bs-primary);
+      border: 1px solid hsla(217 91% 60% / 0.3);
+  }
+
+  /* Badge valor destaque */
+  .badge-valor-destaque {
+      background-color: hsla(145 65% 40% / 0.15);
+      color: var(--bs-success);
+      border: 1px solid hsla(145 65% 40% / 0.3);
+  }
+
+  /* Light mode badges - usar variaveis do tema */
+  [data-bs-theme="light"] .badge-valor-calculado {
+      background-color: hsla(217 91% 60% / 0.1);
+      color: var(--bs-primary);
+  }
+
+  [data-bs-theme="light"] .badge-valor-destaque {
+      background-color: hsla(145 65% 40% / 0.1);
+      color: var(--bs-success);
+  }
+
+  /* Table active theme-aware */
+  .table-active-theme,
+  tr.table-active-theme td {
+      background-color: var(--bs-tertiary-bg);
+  }
+
+  /* Destaque para componentes com valor minimo aplicado */
+  .tem-minimo-aplicado {
+      background-color: hsla(45 100% 50% / 0.15);
+  }
+
+  /* Table success theme-aware in dark mode */
+  [data-bs-theme="dark"] .table-success {
+      --bs-table-bg: hsla(158 64% 40% / 0.15);
+      --bs-table-color: var(--bs-body-color);
+      background-color: hsla(158 64% 40% / 0.15);
+  }
+
+  /* Table warning theme-aware in dark mode */
+  [data-bs-theme="dark"] .table-warning {
+      --bs-table-bg: hsla(38 92% 50% / 0.15);
+      --bs-table-color: var(--bs-body-color);
+      background-color: hsla(38 92% 50% / 0.15);
+  }
+
+  /* Badge sm for small badges */
+  .badge-sm {
+      font-size: 0.75rem;
+      padding: 0.25rem 0.5rem;
+      margin-left: 0.25rem;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     PRINT STYLES - For analise_diferencas.html
+     Print media uses neutral colors for readability
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  @media print {
+      .btn {
+          display: none;
+      }
+
+      .card {
+          border: 1px solid hsl(0 0% 20%);
+          margin-bottom: 1rem;
+      }
+
+      .card-header {
+          background-color: hsl(210 17% 98%);
+          color: hsl(0 0% 20%);
+          border-bottom: 1px solid hsl(0 0% 20%);
+      }
+
+      input[type="text"] {
+          border: 1px solid hsl(0 0% 20%);
+      }
+
+      .alert {
+          border: 1px solid hsl(0 0% 20%);
+          page-break-inside: avoid;
+      }
+  }
 
 } /* End @layer modules */
