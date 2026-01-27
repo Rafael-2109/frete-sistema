@@ -608,11 +608,11 @@
     
     /* Animação de código sendo digitado */
     @keyframes codeAppear {
-        from { 
+        from {
             opacity: 0;
-            background-color: #ffff00;
+            background-color: hsl(60, 100%, 50%);
         }
-        to { 
+        to {
             opacity: 1;
             background-color: transparent;
         }
@@ -644,8 +644,8 @@
     
     /* Destaque no accordion ativo */
     .accordion-button:not(.collapsed) {
-        background-color: #e3f2fd;
-        color: #1976d2;
+        background-color: hsla(207, 89%, 86%, 0.5);
+        color: hsl(210, 79%, 46%);
         font-weight: bold;
     }
     
@@ -659,10 +659,10 @@
         0%, 100% { opacity: 1; }
         50% { opacity: 0.5; }
     }
-    
+
     .badge-live {
-        background-color: #ff0000;
-        color: white;
+        background-color: hsl(0, 100%, 50%);
+        color: var(--bg-light);
         animation: live 1.5s infinite;
     }
 </style>

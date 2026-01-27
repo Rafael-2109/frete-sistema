@@ -4,26 +4,7 @@
 
 {% block extra_css %}
 <style>
-    .upload-area {
-        border: 2px dashed #007bff;
-        border-radius: 8px;
-        padding: 40px;
-        text-align: center;
-        background: #f8f9fa;
-        cursor: pointer;
-        transition: all 0.3s;
-    }
-
-    .upload-area:hover {
-        background: #e9ecef;
-        border-color: #0056b3;
-    }
-
-    .upload-area.dragging {
-        background: #d1ecf1;
-        border-color: #0c5460;
-    }
-
+    /* Styles extracted to _portal.css - using CSS classes */
     .result-section {
         margin-top: 20px;
         display: none;
@@ -45,62 +26,10 @@
         font-weight: bold;
     }
 
-    .status-confirmado {
-        background: #d4edda;
-        color: #155724;
-    }
-
-    .status-pendente {
-        background: #fff3cd;
-        color: #856404;
-    }
-
-    .status-nao-encontrado {
-        background: #f8d7da;
-        color: #721c24;
-    }
-
-    .status-divergencia {
-        background: #cce5ff;
-        color: #004085;
-    }
-
     .action-buttons {
         display: flex;
         gap: 10px;
         justify-content: center;
-    }
-
-    .summary-cards {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 15px;
-        margin: 20px 0;
-    }
-
-    .summary-card {
-        background: white;
-        border-radius: 8px;
-        padding: 15px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-
-    .summary-card h6 {
-        margin: 0 0 10px 0;
-        color: #666;
-    }
-
-    .summary-card .count {
-        font-size: 2em;
-        font-weight: bold;
-    }
-
-    .divergencia-info {
-        background: #e7f3ff;
-        border: 1px solid #b3d9ff;
-        padding: 10px;
-        border-radius: 4px;
-        margin: 10px 0;
     }
 </style>
 {% endblock %}
@@ -415,19 +344,19 @@ function exibirResumo(resultado) {
             <h6>Protocolos no Sistema</h6>
             <div class="count">${resultado.total_protocolos_sistema || 0}</div>
         </div>
-        <div class="summary-card" style="background: #d4edda;">
+        <div class="summary-card summary-success">
             <h6>Confirmados</h6>
             <div class="count text-success">${resultado.confirmados.length}</div>
         </div>
-        <div class="summary-card" style="background: #f8d7da;">
+        <div class="summary-card summary-danger">
             <h6>Não Encontrados</h6>
             <div class="count text-danger">${resultado.nao_encontrados.length}</div>
         </div>
-        <div class="summary-card" style="background: #fff3cd;">
+        <div class="summary-card summary-warning">
             <h6>Divergências</h6>
             <div class="count text-warning">${resultado.com_divergencia.length}</div>
         </div>
-        <div class="summary-card" style="background: #e2e3e5;">
+        <div class="summary-card summary-muted">
             <h6>Erros</h6>
             <div class="count text-secondary">${resultado.erros.length}</div>
         </div>

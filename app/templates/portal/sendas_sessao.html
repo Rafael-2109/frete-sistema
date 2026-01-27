@@ -181,12 +181,12 @@ let logContainer = document.getElementById('logs');
 function addLog(message, type = 'info') {
     const timestamp = new Date().toLocaleTimeString();
     const color = {
-        'info': '#17a2b8',
-        'success': '#28a745',
-        'error': '#dc3545',
-        'warning': '#ffc107'
-    }[type] || '#6c757d';
-    
+        'info': 'hsl(188, 78%, 41%)',
+        'success': 'hsl(134, 61%, 41%)',
+        'error': 'hsl(354, 70%, 54%)',
+        'warning': 'hsl(45, 100%, 51%)'
+    }[type] || 'hsl(210, 9%, 51%)';
+
     logContainer.innerHTML += `<div style="color: ${color}">[${timestamp}] ${message}</div>`;
     logContainer.scrollTop = logContainer.scrollHeight;
 }
