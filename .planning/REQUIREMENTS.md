@@ -31,8 +31,8 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Layout
 
 - [x] **LAYO-01**: Responsividade mobile sem cortes de botoes e conteudo
-- [ ] **LAYO-02**: Sidebar adaptativa ao tamanho de tela
-- [ ] **LAYO-03**: Grid system consistente em todas as telas
+- [x] **LAYO-02**: Sidebar adaptativa ao tamanho de tela (reinterpreted: navbar mobile responsiveness with 44x44px touch targets)
+- [x] **LAYO-03**: Grid system consistente em todas as telas (with overflow protection utilities)
 
 ### Migration
 
@@ -92,8 +92,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TABL-02 | Phase 3 | Complete |
 | TABL-03 | Phase 3 | Complete |
 | LAYO-01 | Phase 3 | Complete |
-| LAYO-02 | Phase 4 | Pending |
-| LAYO-03 | Phase 4 | Pending |
+| LAYO-02 | Phase 4 | Complete |
+| LAYO-03 | Phase 4 | Complete |
 | MIGR-01 | Phase 5, 6, 7 | Pending |
 | MIGR-02 | Phase 5, 6, 7 | Pending |
 | MIGR-03 | Phase 7 | Pending |
@@ -106,4 +106,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-26*
-*Last updated: 2026-01-27 after Phase 3 completion*
+*Last updated: 2026-01-27 after Phase 4 completion*

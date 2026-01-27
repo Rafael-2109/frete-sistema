@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Layer Infrastructure** - Establish CSS cascade control and standardize Bootstrap
 - [x] **Phase 2: Component Library** - Extract reusable button, card, badge, modal, and form patterns
 - [x] **Phase 3: Table System** - Implement responsive tables with sticky headers and mobile scroll
-- [ ] **Phase 4: Layout Patterns** - Standardize sidebar and grid system
+- [x] **Phase 4: Layout Patterns** - Standardize sidebar and grid system
 - [ ] **Phase 5: High-Traffic Migration** - Migrate financeiro, carteira, and embarques modules
 - [ ] **Phase 6: Medium-Traffic Migration** - Migrate comercial, manufatura, portal, and remaining modules
 - [ ] **Phase 7: Cleanup & Polish** - Remove !important declarations, legacy styles, and validate coverage
@@ -84,8 +84,8 @@ Plans:
 **Plans**: 2 plans in 1 wave
 
 Plans:
-- [ ] 04-01-PLAN.md - Optimize navbar for mobile touch usability (Wave 1)
-- [ ] 04-02-PLAN.md - Create layout utilities with overflow protection and z-index scale (Wave 1)
+- [x] 04-01-PLAN.md - Optimize navbar for mobile touch usability (Wave 1)
+- [x] 04-02-PLAN.md - Create layout utilities with overflow protection and z-index scale (Wave 1)
 
 ### Phase 5: High-Traffic Migration
 **Goal**: Priority modules (financeiro, carteira, embarques) fully migrated to design system
@@ -148,7 +148,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | 1. Layer Infrastructure | 3/3 | Complete | 2026-01-27 |
 | 2. Component Library | 3/3 | Complete | 2026-01-27 |
 | 3. Table System | 2/2 | Complete | 2026-01-27 |
-| 4. Layout Patterns | 0/1 | Not started | - |
+| 4. Layout Patterns | 2/2 | Complete | 2026-01-27 |
 | 5. High-Traffic Migration | 0/3 | Not started | - |
 | 6. Medium-Traffic Migration | 0/3 | Not started | - |
 | 7. Cleanup & Polish | 0/3 | Not started | - |
