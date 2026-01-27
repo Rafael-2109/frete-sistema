@@ -504,15 +504,15 @@
             <thead class="table-thead-theme">
                 <tr>
                     <!-- Checkbox do "selecionar todos" -->
-                    <th style="width: 30px;">
+                    <th class="text-nowrap">
                         <input type="checkbox" onclick="toggleAll(this)" title="Selecionar todos">
                     </th>
                     <!-- ✨ NOVA COLUNA: Status -->
-                    <th style="width: 80px;">
+                    <th class="text-nowrap">
                         <i class="fas fa-flag"></i> Status
                     </th>
                     <!-- ✅ COLUNAS ORDENÁVEIS -->
-                    <th style="width: 120px;" class="sortable" data-sort="num_pedido">
+                    <th class="sortable text-nowrap" data-sort="num_pedido">
                         <a href="{{ sort_url('num_pedido') }}" class="text-decoration-none">
                             Nº Pedido
                             {% if sort_by == 'num_pedido' %}
@@ -522,7 +522,7 @@
                             {% endif %}
                         </a>
                     </th>
-                    <th style="width: 140px;" class="sortable" data-sort="cnpj_cpf">
+                    <th class="sortable text-nowrap" data-sort="cnpj_cpf">
                         <a href="{{ sort_url('cnpj_cpf') }}" class="text-decoration-none">
                             CNPJ/CPF
                             {% if sort_by == 'cnpj_cpf' %}
@@ -532,7 +532,7 @@
                             {% endif %}
                         </a>
                     </th>
-                    <th class="sortable" data-sort="raz_social_red">
+                    <th class="sortable text-nowrap" data-sort="raz_social_red">
                         <a href="{{ sort_url('raz_social_red') }}" class="text-decoration-none">
                             Razão Social
                             {% if sort_by == 'raz_social_red' %}
@@ -542,7 +542,7 @@
                             {% endif %}
                         </a>
                     </th>
-                    <th class="sortable" data-sort="nome_cidade">
+                    <th class="sortable text-nowrap" data-sort="nome_cidade">
                         <a href="{{ sort_url('nome_cidade') }}" class="text-decoration-none">
                             Cidade
                             {% if sort_by == 'nome_cidade' %}
@@ -552,7 +552,7 @@
                             {% endif %}
                         </a>
                     </th>
-                    <th style="width: 40px;" class="sortable" data-sort="cod_uf">
+                    <th class="sortable text-nowrap" data-sort="cod_uf">
                         <a href="{{ sort_url('cod_uf') }}" class="text-decoration-none">
                             UF
                             {% if sort_by == 'cod_uf' %}
@@ -562,7 +562,7 @@
                             {% endif %}
                         </a>
                     </th>
-                    <th style="width: 100px;" class="sortable" data-sort="valor_saldo_total">
+                    <th class="sortable text-nowrap" data-sort="valor_saldo_total">
                         <a href="{{ sort_url('valor_saldo_total') }}" class="text-decoration-none">
                             Valor Total
                             {% if sort_by == 'valor_saldo_total' %}
@@ -572,7 +572,7 @@
                             {% endif %}
                         </a>
                     </th>
-                    <th style="width: 80px;" class="sortable" data-sort="peso_total">
+                    <th class="sortable text-nowrap" data-sort="peso_total">
                         <a href="{{ sort_url('peso_total') }}" class="text-decoration-none">
                             Peso (kg)
                             {% if sort_by == 'peso_total' %}
@@ -582,7 +582,7 @@
                             {% endif %}
                         </a>
                     </th>
-                    <th style="width: 70px;" class="sortable" data-sort="rota">
+                    <th class="sortable text-nowrap" data-sort="rota">
                         <a href="{{ sort_url('rota') }}" class="text-decoration-none">
                             Rota
                             {% if sort_by == 'rota' %}
@@ -592,7 +592,7 @@
                             {% endif %}
                         </a>
                     </th>
-                    <th style="width: 100px;" class="sortable" data-sort="expedicao">
+                    <th class="sortable text-nowrap" data-sort="expedicao">
                         <a href="{{ sort_url('expedicao') }}" class="text-decoration-none">
                             <i class="fas fa-truck"></i> Expedição
                             {% if sort_by == 'expedicao' %}
@@ -602,7 +602,7 @@
                             {% endif %}
                         </a>
                     </th>
-                    <th style="width: 100px;" class="sortable" data-sort="agendamento">
+                    <th class="sortable text-nowrap" data-sort="agendamento">
                         <a href="{{ sort_url('agendamento') }}" class="text-decoration-none">
                             <i class="fas fa-calendar"></i> Agenda
                             {% if sort_by == 'agendamento' %}
@@ -612,8 +612,8 @@
                             {% endif %}
                         </a>
                     </th>
-                    <th style="width: 90px;"><i class="fas fa-phone"></i> Agendamento</th>
-                    <th style="width: 80px;" class="sortable" data-sort="nf">
+                    <th class="text-nowrap"><i class="fas fa-phone"></i> Agendamento</th>
+                    <th class="sortable text-nowrap" data-sort="nf">
                         <a href="{{ sort_url('nf') }}" class="text-decoration-none">
                             NF
                             {% if sort_by == 'nf' %}
@@ -623,7 +623,7 @@
                             {% endif %}
                         </a>
                     </th>
-                    <th style="width: 70px;">Ações</th>
+                    <th class="text-nowrap">Ações</th>
 
                 </tr>
             </thead>
