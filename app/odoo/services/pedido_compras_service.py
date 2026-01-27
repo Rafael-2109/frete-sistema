@@ -114,16 +114,20 @@ class PedidoComprasServiceOtimizado:
             # PASSO 4: 🚀 BATCH LOADING de todos os produtos (1 query)
             produtos_cache = self._buscar_todos_produtos_batch(todas_linhas)
 
-            # PASSO 5: 🚀 CACHE de pedidos existentes (1 query)
+            # PASSO 5: 🚀 BATCH LOADING de DFEs/NFs vinculadas (1 query)
+            dfes_cache = self._buscar_dfes_batch(pedidos_odoo)
+
+            # PASSO 6: 🚀 CACHE de pedidos existentes (1 query)
             pedidos_existentes_cache = self._carregar_pedidos_existentes()
 
-            # PASSO 6: Processar pedidos com cache
+            # PASSO 7: Processar pedidos com cache
             resultado = self._processar_pedidos_otimizado(
                 pedidos_odoo,
                 todas_linhas,
                 produtos_cache,
                 pedidos_existentes_cache,
-                fornecedores_cache
+                fornecedores_cache,
+                dfes_cache
             )
 
             # PASSO 6: 🗑️ Detectar pedidos EXCLUÍDOS do Odoo (marcar como cancelados)
@@ -222,7 +226,9 @@ class PedidoComprasServiceOtimizado:
             'id', 'name', 'state', 'create_date', 'write_date',
             'date_order', 'date_planned', 'partner_id', 'company_id',
             'order_line', 'currency_id', 'amount_total', 'notes',
-            'l10n_br_tipo_pedido'  # ✅ ADICIONADO: Tipo de pedido (Brasil)
+            'l10n_br_tipo_pedido',  # ✅ Tipo de pedido (Brasil)
+            'dfe_id',               # ✅ NOVO: DFE vinculado (NF de entrada)
+            'invoice_status'        # ✅ NOVO: Status de faturamento
         ]
 
         pedidos = self.connection.search_read(
@@ -364,6 +370,62 @@ class PedidoComprasServiceOtimizado:
 
         return produtos_cache
 
+    def _buscar_dfes_batch(self, pedidos_odoo: List[Dict]) -> Dict[int, Dict]:
+        """
+        🚀 OTIMIZAÇÃO: Busca dados dos DFEs (NFs de entrada) em batch
+
+        Quando um PO tem dfe_id preenchido, significa que há uma NF vinculada.
+        Buscamos os dados da NF para preencher os campos nf_* no PedidoCompras.
+
+        Args:
+            pedidos_odoo: Lista de pedidos com possível dfe_id
+
+        Returns:
+            Dict mapeando dfe_id -> dados do DFE (numero, serie, chave, etc)
+        """
+        self.logger.info("🚀 Carregando DFEs (NFs de entrada) em batch...")
+
+        # Coletar todos os dfe_ids únicos (não nulos)
+        dfe_ids = []
+        for pedido in pedidos_odoo:
+            dfe_data = pedido.get('dfe_id')
+            if dfe_data and isinstance(dfe_data, (list, tuple)):
+                dfe_ids.append(dfe_data[0])
+
+        if not dfe_ids:
+            self.logger.info("   ⚠️  Nenhum DFE vinculado encontrado")
+            return {}
+
+        # Remover duplicatas
+        dfe_ids = list(set(dfe_ids))
+
+        # 🚀 UMA ÚNICA QUERY para buscar TODOS os DFEs
+        self.logger.info(f"   Buscando {len(dfe_ids)} DFEs em 1 query...")
+        try:
+            dfes = self.connection.search_read(
+                'l10n_br_fiscal.document',
+                [['id', 'in', dfe_ids]],
+                fields=[
+                    'id',
+                    'document_number',    # Número da NF
+                    'document_serie',     # Série
+                    'document_key',       # Chave de acesso (44 dígitos)
+                    'document_date',      # Data de emissão
+                    'amount_total'        # Valor total
+                ]
+            )
+
+            # Criar cache mapeando id -> dados
+            dfes_cache = {dfe['id']: dfe for dfe in dfes}
+
+            self.logger.info(f"   ✅ {len(dfes_cache)} DFEs carregados")
+
+            return dfes_cache
+
+        except Exception as e:
+            self.logger.warning(f"   ⚠️  Erro ao buscar DFEs: {e}")
+            return {}
+
     def _carregar_pedidos_existentes(self) -> Dict[str, PedidoCompras]:
         """
         🚀 OTIMIZAÇÃO 3: Carrega TODOS os pedidos existentes em 1 query
@@ -401,7 +463,8 @@ class PedidoComprasServiceOtimizado:
         linhas_por_pedido: Dict[int, List[Dict]],
         produtos_cache: Dict[int, Dict],
         pedidos_existentes_cache: Dict[str, Dict],
-        fornecedores_cache: Dict[int, Dict]
+        fornecedores_cache: Dict[int, Dict],
+        dfes_cache: Dict[int, Dict] = None
     ) -> Dict[str, int]:
         """
         Processa pedidos usando CACHE (sem queries adicionais)
@@ -412,6 +475,7 @@ class PedidoComprasServiceOtimizado:
         linhas_ignoradas = 0
         pedidos_grupo_ignorados = 0
         self._fornecedores_cache = fornecedores_cache
+        dfes_cache = dfes_cache or {}
 
         for pedido_odoo in pedidos_odoo:
             try:
@@ -447,7 +511,8 @@ class PedidoComprasServiceOtimizado:
                             pedido_odoo,
                             linha_odoo,
                             produtos_cache,
-                            pedidos_existentes_cache
+                            pedidos_existentes_cache,
+                            dfes_cache
                         )
 
                         if resultado_linha['processado']:
@@ -487,11 +552,13 @@ class PedidoComprasServiceOtimizado:
         pedido_odoo: Dict,
         linha_odoo: Dict,
         produtos_cache: Dict[int, Dict],
-        pedidos_existentes_cache: Dict[str, Dict]
+        pedidos_existentes_cache: Dict[str, Dict],
+        dfes_cache: Dict[int, Dict] = None
     ) -> Dict[str, bool]:
         """
         Processa uma linha de pedido usando CACHE (SEM queries adicionais)
         """
+        dfes_cache = dfes_cache or {}
         try:
             # ✅ PASSO 0: Verificar tipo de pedido (filtrar apenas relevantes)
             tipo_pedido = pedido_odoo.get('l10n_br_tipo_pedido')
@@ -552,12 +619,13 @@ class PedidoComprasServiceOtimizado:
                     pedido_existente,
                     pedido_odoo,
                     linha_odoo,
-                    produto_odoo
+                    produto_odoo,
+                    dfes_cache
                 )
                 return {'processado': True, 'nova': False, 'atualizada': atualizada}
             else:
                 # CRIAR NOVO
-                novo_pedido = self._criar_pedido(pedido_odoo, linha_odoo, produto_odoo)
+                novo_pedido = self._criar_pedido(pedido_odoo, linha_odoo, produto_odoo, dfes_cache)
 
                 # 🚀 Atualizar CACHE com novo pedido usando chave composta
                 if novo_pedido.odoo_id:
@@ -576,11 +644,14 @@ class PedidoComprasServiceOtimizado:
         self,
         pedido_odoo: Dict,
         linha_odoo: Dict,
-        produto_odoo: Dict
+        produto_odoo: Dict,
+        dfes_cache: Dict[int, Dict] = None
     ) -> PedidoCompras:
         """
         Cria um novo pedido de compra
         """
+        dfes_cache = dfes_cache or {}
+
         # Extrair dados do fornecedor
         partner_id = pedido_odoo.get('partner_id')
         cnpj_fornecedor = None
@@ -621,6 +692,33 @@ class PedidoComprasServiceOtimizado:
         if pedido_odoo.get('company_id'):
             company_name = pedido_odoo['company_id'][1] if len(pedido_odoo['company_id']) > 1 else None
 
+        # ✅ NOVO: Extrair dados do DFE/NF vinculada (se houver)
+        dfe_id = None
+        nf_numero = None
+        nf_serie = None
+        nf_chave_acesso = None
+        nf_data_emissao = None
+        nf_valor_total = None
+
+        dfe_data = pedido_odoo.get('dfe_id')
+        if dfe_data and isinstance(dfe_data, (list, tuple)):
+            dfe_id = str(dfe_data[0])
+            # Buscar dados completos do DFE no cache
+            dfe_info = dfes_cache.get(dfe_data[0])
+            if dfe_info:
+                nf_numero = dfe_info.get('document_number')
+                nf_serie = dfe_info.get('document_serie')
+                nf_chave_acesso = dfe_info.get('document_key')
+                nf_valor_total = Decimal(str(dfe_info.get('amount_total') or 0)) if dfe_info.get('amount_total') else None
+
+                # Converter data de emissão
+                doc_date = dfe_info.get('document_date')
+                if doc_date and doc_date is not False:
+                    try:
+                        nf_data_emissao = datetime.strptime(doc_date, '%Y-%m-%d').date()
+                    except (ValueError, TypeError):
+                        pass
+
         # Criar objeto
         novo_pedido = PedidoCompras(
             # Identificação
@@ -656,6 +754,14 @@ class PedidoComprasServiceOtimizado:
 
             # ✅ Tipo de pedido (l10n_br_tipo_pedido) — sanitizar False do Odoo
             tipo_pedido=pedido_odoo.get('l10n_br_tipo_pedido') or None,
+
+            # ✅ NOVO: Dados do DFE/NF vinculada
+            dfe_id=dfe_id,
+            nf_numero=nf_numero,
+            nf_serie=nf_serie,
+            nf_chave_acesso=nf_chave_acesso,
+            nf_data_emissao=nf_data_emissao,
+            nf_valor_total=nf_valor_total,
 
             # Controle
             importado_odoo=True
@@ -719,12 +825,14 @@ class PedidoComprasServiceOtimizado:
         pedido_existente: PedidoCompras,
         pedido_odoo: Dict,
         linha_odoo: Dict,
-        produto_odoo: Dict
+        produto_odoo: Dict,
+        dfes_cache: Dict[int, Dict] = None
     ) -> bool:
         """
         Atualiza um pedido existente se houver mudanças
         """
         alterado = False
+        dfes_cache = dfes_cache or {}
 
         # ✅ CORREÇÃO: Preencher CNPJ se estava vazio (registros antigos)
         if not pedido_existente.cnpj_fornecedor:
@@ -784,6 +892,54 @@ class PedidoComprasServiceOtimizado:
         if pedido_existente.cofins_produto_pedido != novo_cofins:
             pedido_existente.cofins_produto_pedido = novo_cofins
             alterado = True
+
+        # ✅ NOVO: Verificar/atualizar campos de DFE/NF
+        dfe_data = pedido_odoo.get('dfe_id')
+        if dfe_data and isinstance(dfe_data, (list, tuple)):
+            novo_dfe_id = str(dfe_data[0])
+            if pedido_existente.dfe_id != novo_dfe_id:
+                pedido_existente.dfe_id = novo_dfe_id
+                alterado = True
+                self.logger.info(
+                    f"   ✅ dfe_id preenchido: {pedido_existente.num_pedido} -> {novo_dfe_id}"
+                )
+
+            # Buscar dados completos do DFE no cache
+            dfe_info = dfes_cache.get(dfe_data[0])
+            if dfe_info:
+                # Atualizar campos de NF se mudaram
+                novo_nf_numero = dfe_info.get('document_number')
+                if novo_nf_numero and pedido_existente.nf_numero != novo_nf_numero:
+                    pedido_existente.nf_numero = novo_nf_numero
+                    alterado = True
+
+                novo_nf_serie = dfe_info.get('document_serie')
+                if novo_nf_serie and pedido_existente.nf_serie != novo_nf_serie:
+                    pedido_existente.nf_serie = novo_nf_serie
+                    alterado = True
+
+                novo_nf_chave = dfe_info.get('document_key')
+                if novo_nf_chave and pedido_existente.nf_chave_acesso != novo_nf_chave:
+                    pedido_existente.nf_chave_acesso = novo_nf_chave
+                    alterado = True
+
+                novo_nf_valor = dfe_info.get('amount_total')
+                if novo_nf_valor:
+                    novo_nf_valor_dec = Decimal(str(novo_nf_valor))
+                    if pedido_existente.nf_valor_total != novo_nf_valor_dec:
+                        pedido_existente.nf_valor_total = novo_nf_valor_dec
+                        alterado = True
+
+                # Converter e atualizar data de emissão
+                doc_date = dfe_info.get('document_date')
+                if doc_date and doc_date is not False:
+                    try:
+                        nova_nf_data = datetime.strptime(doc_date, '%Y-%m-%d').date()
+                        if pedido_existente.nf_data_emissao != nova_nf_data:
+                            pedido_existente.nf_data_emissao = nova_nf_data
+                            alterado = True
+                    except (ValueError, TypeError):
+                        pass
 
         # ✅ Verificar mudança de status (incluindo cancelamento)
         novo_status = pedido_odoo.get('state')

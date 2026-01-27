@@ -268,7 +268,7 @@ class ValidacaoRecebimentoJob:
                 pos_com_dfe = odoo.search_read(
                     'purchase.order',
                     [['dfe_id', 'in', dfe_ids]],
-                    fields=['id', 'name', 'dfe_id']
+                    fields=['id', 'name', 'dfe_id', 'invoice_status']
                 )
                 if pos_com_dfe:
                     for po in pos_com_dfe:
@@ -287,7 +287,7 @@ class ValidacaoRecebimentoJob:
                     tem_po = False
                     dfe_data = dfe_map.get(validacao.odoo_dfe_id, {})
 
-                    # Caminho 1: purchase_id
+                    # Caminho 1: purchase_id (vínculo direto no DFE)
                     purchase_id_data = dfe_data.get('purchase_id')
                     if purchase_id_data and isinstance(purchase_id_data, (list, tuple)):
                         validacao.odoo_po_vinculado_id = purchase_id_data[0]
@@ -300,7 +300,22 @@ class ValidacaoRecebimentoJob:
                             f"{validacao.odoo_po_vinculado_name}"
                         )
 
-                    # Caminho 2: purchase_fiscal_id
+                        # NOVO: Atualizar PedidoCompras com dfe_id
+                        self._atualizar_pedido_compras_dfe(
+                            po_name=validacao.odoo_po_vinculado_name,
+                            dfe_id=validacao.odoo_dfe_id,
+                            numero_nf=validacao.numero_nf,
+                            chave_nfe=validacao.chave_nfe
+                        )
+
+                        # NOVO: Vínculo direto significa fatura gerada - marcar como finalizado
+                        validacao.status = 'finalizado_odoo'
+                        logger.info(
+                            f"DFE {validacao.odoo_dfe_id}: Status alterado para finalizado_odoo "
+                            f"(PO {validacao.odoo_po_vinculado_name} via purchase_id direto)"
+                        )
+
+                    # Caminho 2: purchase_fiscal_id (vínculo fiscal no DFE)
                     if not tem_po:
                         purchase_fiscal_data = dfe_data.get('purchase_fiscal_id')
                         if purchase_fiscal_data and isinstance(purchase_fiscal_data, (list, tuple)):
@@ -314,6 +329,21 @@ class ValidacaoRecebimentoJob:
                                 f"{validacao.odoo_po_fiscal_name}"
                             )
 
+                            # NOVO: Atualizar PedidoCompras com dfe_id
+                            self._atualizar_pedido_compras_dfe(
+                                po_name=validacao.odoo_po_fiscal_name,
+                                dfe_id=validacao.odoo_dfe_id,
+                                numero_nf=validacao.numero_nf,
+                                chave_nfe=validacao.chave_nfe
+                            )
+
+                            # NOVO: Vínculo fiscal direto significa fatura gerada - marcar como finalizado
+                            validacao.status = 'finalizado_odoo'
+                            logger.info(
+                                f"DFE {validacao.odoo_dfe_id}: Status alterado para finalizado_odoo "
+                                f"(PO {validacao.odoo_po_fiscal_name} via purchase_fiscal_id direto)"
+                            )
+
                     # Caminho 3: PO.dfe_id (inverso)
                     if not tem_po:
                         po_inverso = pos_por_dfe.get(validacao.odoo_dfe_id)
@@ -325,6 +355,22 @@ class ValidacaoRecebimentoJob:
                                 f"DFE {validacao.odoo_dfe_id}: PO vinculado via PO.dfe_id - "
                                 f"{po_inverso['name']}"
                             )
+
+                            # NOVO: Atualizar PedidoCompras com dfe_id para manter compatibilidade
+                            self._atualizar_pedido_compras_dfe(
+                                po_name=po_inverso['name'],
+                                dfe_id=validacao.odoo_dfe_id,
+                                numero_nf=validacao.numero_nf,
+                                chave_nfe=validacao.chave_nfe
+                            )
+
+                            # NOVO: Se PO já está faturado, marcar como finalizado_odoo
+                            if po_inverso.get('invoice_status') == 'invoiced':
+                                validacao.status = 'finalizado_odoo'
+                                logger.info(
+                                    f"DFE {validacao.odoo_dfe_id}: Status alterado para finalizado_odoo "
+                                    f"(PO {po_inverso['name']} já faturado via invoice_status)"
+                                )
 
                     if tem_po:
                         validacao.pos_vinculados_importados_em = datetime.utcnow()
@@ -363,6 +409,64 @@ class ValidacaoRecebimentoJob:
             logger.error(f"Erro no sync POs vinculados: {e}")
             db.session.rollback()
             return {'erro': str(e)}
+
+    def _atualizar_pedido_compras_dfe(
+        self,
+        po_name: str,
+        dfe_id: int,
+        numero_nf: str = None,
+        chave_nfe: str = None
+    ) -> int:
+        """
+        Atualiza PedidoCompras com dfe_id para manter compatibilidade entre tabelas.
+
+        Quando um vínculo PO ↔ DFE é detectado no Odoo (via PO.dfe_id),
+        atualizamos também a tabela pedido_compras para manter os dados sincronizados.
+
+        Args:
+            po_name: Nome do PO (ex: 'C2512302')
+            dfe_id: ID do DFE no Odoo
+            numero_nf: Número da NF (opcional)
+            chave_nfe: Chave de acesso da NF-e (opcional)
+
+        Returns:
+            Número de registros atualizados
+        """
+        try:
+            from app.manufatura.models import PedidoCompras
+
+            pedidos_compra = PedidoCompras.query.filter_by(
+                num_pedido=po_name
+            ).all()
+
+            if not pedidos_compra:
+                return 0
+
+            dfe_id_str = str(dfe_id)
+            atualizados = 0
+
+            for pc in pedidos_compra:
+                if pc.dfe_id != dfe_id_str:
+                    pc.dfe_id = dfe_id_str
+                    if numero_nf:
+                        pc.nf_numero = numero_nf
+                    if chave_nfe:
+                        pc.nf_chave_acesso = chave_nfe
+                    atualizados += 1
+
+            if atualizados > 0:
+                logger.info(
+                    f"PedidoCompras {po_name}: Atualizado dfe_id={dfe_id_str} "
+                    f"({atualizados} linhas)"
+                )
+
+            return atualizados
+
+        except Exception as e:
+            logger.warning(
+                f"Erro ao atualizar PedidoCompras para PO {po_name}: {e}"
+            )
+            return 0
 
     def _deve_reprocessar_dfe(self, dfe: Dict, validacao: ValidacaoNfPoDfe) -> bool:
         """
