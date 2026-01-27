@@ -67,11 +67,11 @@ Plans:
   2. Long tables have sticky headers that remain visible while scrolling
   3. Table row hover states adapt to current theme (visible in both dark and light)
   4. Action buttons in table rows are fully accessible on mobile (not clipped)
-**Plans**: TBD
+**Plans**: 2 plans in 2 waves
 
 Plans:
-- [ ] 03-01: Implement responsive table wrapper component
-- [ ] 03-02: Implement sticky headers and theme-adaptive hover states
+- [ ] 03-01-PLAN.md - Create base table component with responsive wrapper and action column protection (Wave 1)
+- [ ] 03-02-PLAN.md - Add sticky headers, theme-adaptive hover states, and main.css integration (Wave 2)
 
 ### Phase 4: Layout Patterns
 **Goal**: Consistent page structure and navigation across all views
@@ -146,7 +146,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 |-------|----------------|--------|-----------|
 | 1. Layer Infrastructure | 3/3 | Complete | 2026-01-27 |
 | 2. Component Library | 3/3 | Complete | 2026-01-27 |
-| 3. Table System | 0/2 | Not started | - |
+| 3. Table System | 0/2 | Planned | - |
 | 4. Layout Patterns | 0/1 | Not started | - |
 | 5. High-Traffic Migration | 0/3 | Not started | - |
 | 6. Medium-Traffic Migration | 0/3 | Not started | - |
