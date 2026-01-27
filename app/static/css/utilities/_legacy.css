@@ -1,0 +1,79 @@
+/**
+ * _legacy.css - Legacy Component Overrides
+ *
+ * Estilos específicos de componentes UI migrados do antigo style.css.
+ * Estes são estilos únicos que não existem nos componentes do design system.
+ *
+ * TODO: Avaliar se podem ser movidos para componentes específicos ou removidos.
+ */
+
+@layer utilities {
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ENTREGUE POPUP - Hover effect para indicador de entrega
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.entregue-popup {
+    transition: all 0.2s ease-in-out;
+}
+
+.entregue-popup:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 10px hsla(210 100% 50% / 0.6);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   REAGENDAR BUTTON - Expand on hover
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.reagendar-btn {
+    position: relative;
+    width: 85px;
+    overflow: hidden;
+    white-space: nowrap;
+    transition: width 0.3s ease;
+    text-align: center;
+}
+
+.reagendar-btn span.text-completo {
+    display: none;
+}
+
+.reagendar-btn:hover {
+    width: 85px;
+}
+
+.reagendar-btn:hover span.text-curto {
+    display: none;
+}
+
+.reagendar-btn:hover span.text-completo {
+    display: inline;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TABLE DESCRIPTION COLUMN - Allow text wrap
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.table td.descricao {
+    white-space: normal;
+    word-wrap: break-word;
+    max-width: 400px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   POPOVER FIXES - Ensure proper sizing
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.popover {
+    max-width: none;
+    min-width: 320px;
+    white-space: normal;
+}
+
+.popover-body {
+    white-space: normal;
+    overflow: visible;
+}
+
+} /* End @layer utilities */

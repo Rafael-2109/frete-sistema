@@ -61,6 +61,7 @@
 
 /* Utilities - Helper classes */
 @import url('./utilities/_utilities.css') layer(utilities);
+@import url('./utilities/_legacy.css') layer(utilities);
 
 /* Legacy - Temporary overrides during migration (remove after Phase 7)
    @import url('./legacy/_inline-overrides.css') layer(overrides);
