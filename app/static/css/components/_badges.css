@@ -1,0 +1,211 @@
+/**
+ * _badges.css - Badge Component
+ *
+ * Badge theming approach:
+ * - CSS custom property API for consistent overrides
+ * - All 8 Bootstrap colors (primary through dark)
+ * - Filled variants with solid backgrounds
+ * - Outline variants with transparent backgrounds
+ * - Light mode adjustments for WCAG 4.5:1 contrast ratio
+ *
+ * Color mapping:
+ * - primary: amber (brand accent)
+ * - secondary: neutral gray
+ * - success: green (semantic)
+ * - danger: red (semantic)
+ * - warning: amber (semantic)
+ * - info: gray
+ * - light: adapts to theme
+ * - dark: fixed dark gray
+ */
+
+@layer components {
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     BASE BADGE
+     CSS custom property API for easy theming
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .badge {
+    /* CSS Custom Property API */
+    --_badge-bg: var(--bg-light);
+    --_badge-color: var(--text);
+    --_badge-border: transparent;
+
+    background: var(--_badge-bg);
+    color: var(--_badge-color);
+    border: 1px solid var(--_badge-border);
+    font-weight: 500;
+    font-size: 0.75rem;
+    padding: 0.35em 0.65em;
+    border-radius: var(--radius-sm);
+    display: inline-flex;
+    align-items: center;
+    line-height: 1;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     FILLED VARIANTS - All 8 Bootstrap colors
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* PRIMARY - Amber brand accent */
+  .badge-primary,
+  .badge.bg-primary {
+    --_badge-bg: var(--amber-55);
+    --_badge-color: hsl(0 0% 10%);
+  }
+
+  /* SECONDARY - Neutral gray */
+  .badge-secondary,
+  .badge.bg-secondary {
+    --_badge-bg: hsl(0 0% 40%);
+    --_badge-color: hsl(0 0% 100%);
+  }
+
+  /* SUCCESS - Green semantic */
+  .badge-success,
+  .badge.bg-success {
+    --_badge-bg: var(--semantic-success);
+    --_badge-color: hsl(0 0% 100%);
+  }
+
+  /* DANGER - Red semantic */
+  .badge-danger,
+  .badge.bg-danger {
+    --_badge-bg: var(--semantic-danger);
+    --_badge-color: hsl(0 0% 100%);
+  }
+
+  /* WARNING - Amber semantic */
+  .badge-warning,
+  .badge.bg-warning {
+    --_badge-bg: var(--amber-50);
+    --_badge-color: hsl(0 0% 10%);
+  }
+
+  /* INFO - Gray */
+  .badge-info,
+  .badge.bg-info {
+    --_badge-bg: hsl(0 0% 45%);
+    --_badge-color: hsl(0 0% 100%);
+  }
+
+  /* LIGHT - Adapts to theme */
+  .badge-light,
+  .badge.bg-light {
+    --_badge-bg: var(--bg-light);
+    --_badge-color: var(--text);
+    --_badge-border: var(--border);
+  }
+
+  /* DARK - Fixed dark */
+  .badge-dark,
+  .badge.bg-dark {
+    --_badge-bg: hsl(0 0% 20%);
+    --_badge-color: hsl(0 0% 95%);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     LIGHT MODE ADJUSTMENTS
+     Ensure WCAG 4.5:1 contrast ratio
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  [data-bs-theme="light"] .badge-success,
+  [data-bs-theme="light"] .badge.bg-success,
+  [data-theme="light"] .badge-success,
+  [data-theme="light"] .badge.bg-success {
+    --_badge-bg: hsl(145 65% 35%);
+  }
+
+  [data-bs-theme="light"] .badge-info,
+  [data-bs-theme="light"] .badge.bg-info,
+  [data-theme="light"] .badge-info,
+  [data-theme="light"] .badge.bg-info {
+    --_badge-bg: hsl(0 0% 40%);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     OUTLINE VARIANTS - Transparent background with colored border/text
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .badge-outline-primary {
+    --_badge-bg: transparent;
+    --_badge-color: var(--amber-55);
+    --_badge-border: currentColor;
+  }
+
+  .badge-outline-secondary {
+    --_badge-bg: transparent;
+    --_badge-color: hsl(0 0% 50%);
+    --_badge-border: currentColor;
+  }
+
+  .badge-outline-success {
+    --_badge-bg: transparent;
+    --_badge-color: var(--semantic-success);
+    --_badge-border: currentColor;
+  }
+
+  .badge-outline-danger {
+    --_badge-bg: transparent;
+    --_badge-color: var(--semantic-danger);
+    --_badge-border: currentColor;
+  }
+
+  .badge-outline-warning {
+    --_badge-bg: transparent;
+    --_badge-color: var(--amber-50);
+    --_badge-border: currentColor;
+  }
+
+  .badge-outline-info {
+    --_badge-bg: transparent;
+    --_badge-color: hsl(0 0% 50%);
+    --_badge-border: currentColor;
+  }
+
+  /* LIGHT outline - Uses border color for visibility in dark mode */
+  .badge-outline-light {
+    --_badge-bg: transparent;
+    --_badge-color: var(--border);
+    --_badge-border: currentColor;
+  }
+
+  /* DARK outline - Visible in light mode */
+  .badge-outline-dark {
+    --_badge-bg: transparent;
+    --_badge-color: hsl(0 0% 20%);
+    --_badge-border: currentColor;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     LIGHT MODE OUTLINE ADJUSTMENTS
+     Darker text colors for better contrast
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  [data-bs-theme="light"] .badge-outline-primary,
+  [data-theme="light"] .badge-outline-primary {
+    --_badge-color: var(--amber-40);
+  }
+
+  [data-bs-theme="light"] .badge-outline-success,
+  [data-theme="light"] .badge-outline-success {
+    --_badge-color: hsl(145 65% 30%);
+  }
+
+  [data-bs-theme="light"] .badge-outline-danger,
+  [data-theme="light"] .badge-outline-danger {
+    --_badge-color: hsl(0 70% 45%);
+  }
+
+  [data-bs-theme="light"] .badge-outline-warning,
+  [data-theme="light"] .badge-outline-warning {
+    --_badge-color: hsl(45 100% 35%);
+  }
+
+  [data-bs-theme="light"] .badge-outline-light,
+  [data-theme="light"] .badge-outline-light {
+    --_badge-color: hsl(0 0% 60%);
+  }
+
+} /* End @layer components */
