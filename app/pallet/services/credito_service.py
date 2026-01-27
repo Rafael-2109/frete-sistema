@@ -697,7 +697,8 @@ class CreditoService:
         cnpj_responsavel: str = None,
         tipo_responsavel: str = None,
         vencidos: bool = None,
-        limite: int = 100
+        limite: int = 100,
+        status: str = None
     ) -> List[PalletCredito]:
         """
         Lista créditos pendentes de resolução.
@@ -707,12 +708,25 @@ class CreditoService:
             tipo_responsavel: Filtrar por tipo ('TRANSPORTADORA' ou 'CLIENTE')
             vencidos: Se True, apenas vencidos; Se False, apenas não vencidos
             limite: Quantidade máxima de registros
+            status: Filtrar por status específico(s) separados por vírgula
+                    (ex: 'PENDENTE,PARCIAL'). Default: ['PENDENTE', 'PARCIAL']
 
         Returns:
             List[PalletCredito]: Créditos encontrados
         """
+        # Determinar lista de status a filtrar
+        if status:
+            status_list = [s.strip().upper() for s in status.split(',') if s.strip()]
+            # Validar status
+            valid_status = ['PENDENTE', 'PARCIAL', 'RESOLVIDO']
+            status_list = [s for s in status_list if s in valid_status]
+            if not status_list:
+                status_list = ['PENDENTE', 'PARCIAL']
+        else:
+            status_list = ['PENDENTE', 'PARCIAL']
+
         query = PalletCredito.query.filter(
-            PalletCredito.status.in_(['PENDENTE', 'PARCIAL']),
+            PalletCredito.status.in_(status_list),
             PalletCredito.ativo == True
         )
 
