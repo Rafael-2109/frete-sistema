@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 ## Current Position
 
 Phase: 6 of 7 (Medium-Traffic Migration)
-Plan: 7 of 12 in current phase
+Plan: 6 of 12 in current phase
 Status: In progress
-Last activity: 2026-01-27 - Completed 06-07 Motochefe Module Migration
+Last activity: 2026-01-27 - Completed 06-06 BI Module Migration
 
-Progress: [████████████] 100% (20/20 plans complete)
+Progress: [████████████] 100% (21/21 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 20
+- Total plans completed: 21
 - Average duration: 3.7 min
-- Total execution time: 73 min
+- Total execution time: 79 min
 
 **By Phase:**
 
@@ -32,11 +32,11 @@ Progress: [████████████] 100% (20/20 plans complete)
 | 03-table-system | 2 | 3 min | 1.5 min |
 | 04-layout-patterns | 2 | 3 min | 1.5 min |
 | 05-high-traffic-migration | 5 | 25 min | 5 min |
-| 06-medium-traffic-migration | 6 | 57 min | 9.5 min |
+| 06-medium-traffic-migration | 7 | 63 min | 9 min |
 
 **Recent Trend:**
-- Last 5 plans: 06-03 (4 min), 06-04 (25 min), 06-05 (7 min), 06-07 (4 min)
-- Trend: Motochefe faster due to established JS color function pattern
+- Last 5 plans: 06-04 (25 min), 06-05 (7 min), 06-06 (6 min), 06-07 (4 min)
+- Trend: BI/Motochefe faster with ChartColors pattern established
 
 *Updated after each plan completion*
 
@@ -102,6 +102,9 @@ Recent decisions affecting current work:
 - [06-05]: Portal brand colors migrated to design system tokens (consistent dark mode)
 - [06-05]: Rastreamento uses semantic-success as primary accent (green = delivery tracking brand)
 - [06-05]: 8 standalone rastreamento templates deferred to Wave 5 (06-09-PLAN.md)
+- [06-06]: ChartColors utility reads --chart-* CSS tokens via getComputedStyle
+- [06-06]: MutationObserver watches data-bs-theme for chart auto-update on theme change
+- [06-06]: Region/expense type/sector colors defined as CSS tokens for JS access
 - [06-07]: JS getCorHex() functions read CSS custom properties with hex fallbacks
 - [06-07]: Product colors (Laranja, Prata) kept as hex - represent physical motorcycle colors
 
@@ -120,8 +123,8 @@ None.
 ## Session Continuity
 
 Last session: 2026-01-27
-Stopped at: Completed 06-07-PLAN.md (Motochefe Module Migration)
+Stopped at: Completed 06-06-PLAN.md (BI Module Migration)
 Resume file: None
 
 ---
-*Next step: Continue Phase 6 with remaining tier migrations (06-08 through 06-12)*
+*Next step: Continue Phase 6 with remaining tier migrations (06-07 through 06-12)*
