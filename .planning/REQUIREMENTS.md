@@ -24,13 +24,13 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Tables
 
-- [ ] **TABL-01**: Scroll horizontal funcional no mobile (tabelas rolaveis)
-- [ ] **TABL-02**: Headers fixos (sticky) em tabelas longas
-- [ ] **TABL-03**: Hover states visiveis e adaptativos ao tema
+- [x] **TABL-01**: Scroll horizontal funcional no mobile (tabelas rolaveis)
+- [x] **TABL-02**: Headers fixos (sticky) em tabelas longas
+- [x] **TABL-03**: Hover states visiveis e adaptativos ao tema
 
 ### Layout
 
-- [ ] **LAYO-01**: Responsividade mobile sem cortes de botoes e conteudo
+- [x] **LAYO-01**: Responsividade mobile sem cortes de botoes e conteudo
 - [ ] **LAYO-02**: Sidebar adaptativa ao tamanho de tela
 - [ ] **LAYO-03**: Grid system consistente em todas as telas
 
@@ -88,10 +88,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | COMP-03 | Phase 2 | Complete |
 | COMP-04 | Phase 2 | Complete |
 | COMP-05 | Phase 2 | Complete |
-| TABL-01 | Phase 3 | Pending |
-| TABL-02 | Phase 3 | Pending |
-| TABL-03 | Phase 3 | Pending |
-| LAYO-01 | Phase 3 | Pending |
+| TABL-01 | Phase 3 | Complete |
+| TABL-02 | Phase 3 | Complete |
+| TABL-03 | Phase 3 | Complete |
+| LAYO-01 | Phase 3 | Complete |
 | LAYO-02 | Phase 4 | Pending |
 | LAYO-03 | Phase 4 | Pending |
 | MIGR-01 | Phase 5, 6, 7 | Pending |
@@ -106,4 +106,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-26*
-*Last updated: 2026-01-27 after Phase 2 completion*
+*Last updated: 2026-01-27 after Phase 3 completion*

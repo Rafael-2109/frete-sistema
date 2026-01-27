@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Layer Infrastructure** - Establish CSS cascade control and standardize Bootstrap
 - [x] **Phase 2: Component Library** - Extract reusable button, card, badge, modal, and form patterns
-- [ ] **Phase 3: Table System** - Implement responsive tables with sticky headers and mobile scroll
+- [x] **Phase 3: Table System** - Implement responsive tables with sticky headers and mobile scroll
 - [ ] **Phase 4: Layout Patterns** - Standardize sidebar and grid system
 - [ ] **Phase 5: High-Traffic Migration** - Migrate financeiro, carteira, and embarques modules
 - [ ] **Phase 6: Medium-Traffic Migration** - Migrate comercial, manufatura, portal, and remaining modules
@@ -70,8 +70,8 @@ Plans:
 **Plans**: 2 plans in 2 waves
 
 Plans:
-- [ ] 03-01-PLAN.md - Create base table component with responsive wrapper and action column protection (Wave 1)
-- [ ] 03-02-PLAN.md - Add sticky headers, theme-adaptive hover states, and main.css integration (Wave 2)
+- [x] 03-01-PLAN.md - Create base table component with responsive wrapper and action column protection (Wave 1)
+- [x] 03-02-PLAN.md - Add sticky headers, theme-adaptive hover states, and main.css integration (Wave 2)
 
 ### Phase 4: Layout Patterns
 **Goal**: Consistent page structure and navigation across all views
@@ -146,7 +146,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 |-------|----------------|--------|-----------|
 | 1. Layer Infrastructure | 3/3 | Complete | 2026-01-27 |
 | 2. Component Library | 3/3 | Complete | 2026-01-27 |
-| 3. Table System | 0/2 | Planned | - |
+| 3. Table System | 2/2 | Complete | 2026-01-27 |
 | 4. Layout Patterns | 0/1 | Not started | - |
 | 5. High-Traffic Migration | 0/3 | Not started | - |
 | 6. Medium-Traffic Migration | 0/3 | Not started | - |
