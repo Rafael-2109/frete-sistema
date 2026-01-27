@@ -12,7 +12,7 @@ This roadmap migrates the freight management system from scattered inline CSS (1
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Layer Infrastructure** - Establish CSS cascade control and standardize Bootstrap
+- [x] **Phase 1: Layer Infrastructure** - Establish CSS cascade control and standardize Bootstrap
 - [ ] **Phase 2: Component Library** - Extract reusable button, card, badge, modal, and form patterns
 - [ ] **Phase 3: Table System** - Implement responsive tables with sticky headers and mobile scroll
 - [ ] **Phase 4: Layout Patterns** - Standardize sidebar and grid system
@@ -35,9 +35,11 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 3 plans in 2 waves
 
 Plans:
-- [ ] 01-01-PLAN.md - Create main.css entry point with @layer declarations and folder structure (Wave 1)
-- [ ] 01-02-PLAN.md - Standardize Bootstrap 5.3.3 across all 10 templates (Wave 1)
-- [ ] 01-03-PLAN.md - Wrap existing CSS files in layers and update base.html (Wave 2)
+- [x] 01-01-PLAN.md - Create main.css entry point with @layer declarations and folder structure (Wave 1)
+- [x] 01-02-PLAN.md - Standardize Bootstrap 5.3.3 across all 10 templates (Wave 1)
+- [x] 01-03-PLAN.md - Wrap existing CSS files in layers and update base.html (Wave 2)
+
+**Note:** Pre-existing `modules/` directory with legacy CSS intentionally kept separate. Will be migrated in Phase 5-6.
 
 ### Phase 2: Component Library
 **Goal**: Reusable component CSS extracted from inline patterns, available for template migration
@@ -142,7 +144,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Layer Infrastructure | 0/3 | Planned | - |
+| 1. Layer Infrastructure | 3/3 | Complete | 2026-01-27 |
 | 2. Component Library | 0/3 | Not started | - |
 | 3. Table System | 0/2 | Not started | - |
 | 4. Layout Patterns | 0/1 | Not started | - |

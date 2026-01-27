@@ -9,10 +9,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Foundation
 
-- [ ] **FOUND-01**: Sistema de CSS Variables implementado (cores, espacamento, tipografia)
-- [ ] **FOUND-02**: Dark mode e light mode funcionais em todas as telas padronizadas
-- [ ] **FOUND-03**: CSS Cascade Layers (@layer) implementado para controle de especificidade
-- [ ] **FOUND-04**: Bootstrap padronizado na versao 5.3.3 em todos os templates
+- [x] **FOUND-01**: Sistema de CSS Variables implementado (cores, espacamento, tipografia)
+- [x] **FOUND-02**: Dark mode e light mode funcionais em todas as telas padronizadas
+- [x] **FOUND-03**: CSS Cascade Layers (@layer) implementado para controle de especificidade
+- [x] **FOUND-04**: Bootstrap padronizado na versao 5.3.3 em todos os templates
 
 ### Components
 
@@ -79,10 +79,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FOUND-01 | Phase 1 | Pending |
-| FOUND-02 | Phase 1 | Pending |
-| FOUND-03 | Phase 1 | Pending |
-| FOUND-04 | Phase 1 | Pending |
+| FOUND-01 | Phase 1 | Complete |
+| FOUND-02 | Phase 1 | Complete |
+| FOUND-03 | Phase 1 | Complete |
+| FOUND-04 | Phase 1 | Complete |
 | COMP-01 | Phase 2 | Pending |
 | COMP-02 | Phase 2 | Pending |
 | COMP-03 | Phase 2 | Pending |
@@ -106,4 +106,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-26*
-*Last updated: 2026-01-26 after roadmap creation*
+*Last updated: 2026-01-27 after Phase 1 completion*
