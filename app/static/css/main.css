@@ -54,6 +54,11 @@
 @import url('./components/_tables.css') layer(components);
 @import url('./components/_layout.css') layer(components);
 
+/* Modules - Feature-specific styles */
+@import url('./modules/_financeiro.css') layer(modules);
+@import url('./modules/_carteira.css') layer(modules);
+@import url('./modules/_embarques.css') layer(modules);
+
 /* Utilities - Helper classes */
 @import url('./utilities/_utilities.css') layer(utilities);
 
