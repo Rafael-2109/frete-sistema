@@ -3,455 +3,7 @@
 {% block title %}Lote #{{ lote.id }} - CNAB400{% endblock %}
 
 {% block extra_css %}
-<style>
-/* ================================================================== */
-/* CNAB400 LOTE DETALHE STYLES */
-/* ================================================================== */
-.lote-container {
-    padding: 1.5rem;
-    max-width: 1800px;
-    margin: 0 auto;
-}
-
-.lote-header {
-    margin-bottom: 1.5rem;
-}
-
-.lote-header__back {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    color: var(--text-muted, #6c757d);
-    text-decoration: none;
-    font-size: 0.9rem;
-    margin-bottom: 1rem;
-    transition: color 0.2s;
-}
-
-.lote-header__back:hover {
-    color: var(--primary-color, #4a6cf7);
-}
-
-.lote-header__row {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 1.5rem;
-}
-
-.lote-header__title {
-    font-size: 1.5rem;
-    font-weight: 600;
-    color: var(--text-color, #1a1a2e);
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-}
-
-.lote-header__title i {
-    color: var(--primary-color, #4a6cf7);
-}
-
-.lote-header__meta {
-    display: flex;
-    gap: 1.5rem;
-    margin-top: 0.5rem;
-    flex-wrap: wrap;
-}
-
-.lote-meta-item {
-    font-size: 0.9rem;
-    color: var(--text-muted, #6c757d);
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-}
-
-.lote-meta-item i {
-    color: var(--primary-color, #4a6cf7);
-}
-
-.lote-header__actions {
-    display: flex;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-}
-
-/* Status Badge */
-.status-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.4rem 0.85rem;
-    border-radius: 50px;
-    font-size: 0.8rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-}
-
-.status-badge--importado { background: rgba(108, 117, 125, 0.1); color: #6c757d; }
-.status-badge--aguardando_revisao { background: rgba(255, 193, 7, 0.15); color: #d39e00; }
-.status-badge--aprovado { background: rgba(23, 162, 184, 0.15); color: #117a8b; }
-.status-badge--processando { background: rgba(0, 123, 255, 0.15); color: #0056b3; }
-.status-badge--concluido { background: rgba(40, 167, 69, 0.15); color: #28a745; }
-.status-badge--parcial { background: rgba(255, 193, 7, 0.15); color: #d39e00; }
-.status-badge--erro { background: rgba(220, 53, 69, 0.15); color: #dc3545; }
-
-/* Stats Row */
-.lote-stats {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-}
-
-.lote-stat {
-    background: var(--card-bg, #fff);
-    border-radius: 12px;
-    padding: 1rem;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-    border: 1px solid var(--border-color, #e0e0e0);
-    text-align: center;
-}
-
-.lote-stat__value {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: var(--text-color, #1a1a2e);
-    line-height: 1;
-}
-
-.lote-stat__value--success { color: #28a745; }
-.lote-stat__value--warning { color: #ffc107; }
-.lote-stat__value--danger { color: #dc3545; }
-.lote-stat__value--info { color: #17a2b8; }
-
-.lote-stat__label {
-    font-size: 0.8rem;
-    color: var(--text-muted, #6c757d);
-    margin-top: 0.35rem;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-}
-
-/* Tabs */
-.lote-tabs {
-    display: flex;
-    gap: 0.5rem;
-    margin-bottom: 1.5rem;
-    border-bottom: 2px solid var(--border-color, #e0e0e0);
-    padding-bottom: 0;
-}
-
-.lote-tab {
-    padding: 0.75rem 1.25rem;
-    border: none;
-    background: transparent;
-    color: var(--text-muted, #6c757d);
-    font-size: 0.9rem;
-    font-weight: 500;
-    cursor: pointer;
-    border-bottom: 2px solid transparent;
-    margin-bottom: -2px;
-    transition: all 0.2s;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.lote-tab:hover {
-    color: var(--primary-color, #4a6cf7);
-}
-
-.lote-tab.active {
-    color: var(--primary-color, #4a6cf7);
-    border-bottom-color: var(--primary-color, #4a6cf7);
-}
-
-.lote-tab__badge {
-    background: var(--badge-bg, #e0e0e0);
-    color: var(--text-muted, #6c757d);
-    padding: 0.15rem 0.5rem;
-    border-radius: 50px;
-    font-size: 0.75rem;
-    font-weight: 600;
-}
-
-.lote-tab.active .lote-tab__badge {
-    background: var(--primary-color, #4a6cf7);
-    color: #fff;
-}
-
-/* Section Card */
-.lote-section {
-    background: var(--card-bg, #fff);
-    border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    border: 1px solid var(--border-color, #e0e0e0);
-    overflow: hidden;
-}
-
-.lote-section__header {
-    padding: 1rem 1.25rem;
-    border-bottom: 1px solid var(--border-color, #e0e0e0);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: var(--card-header-bg, #f8f9fa);
-}
-
-.lote-section__title {
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--text-color, #1a1a2e);
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-/* Table */
-.lote-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.875rem;
-}
-
-.lote-table th,
-.lote-table td {
-    padding: 0.75rem 0.875rem;
-    text-align: left;
-    border-bottom: 1px solid var(--border-color, #e0e0e0);
-}
-
-.lote-table th {
-    background: var(--table-header-bg, #f8f9fa);
-    font-weight: 600;
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    color: var(--text-muted, #6c757d);
-    letter-spacing: 0.5px;
-    position: sticky;
-    top: 0;
-}
-
-.lote-table tbody tr {
-    transition: background 0.15s;
-}
-
-.lote-table tbody tr:hover {
-    background: var(--table-hover-bg, rgba(74, 108, 247, 0.04));
-}
-
-.lote-table tbody tr:last-child td {
-    border-bottom: none;
-}
-
-/* Table Scroll Container */
-.table-scroll {
-    max-height: 600px;
-    overflow-y: auto;
-}
-
-/* Match Status Badge */
-.match-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    padding: 0.25rem 0.6rem;
-    border-radius: 50px;
-    font-size: 0.7rem;
-    font-weight: 600;
-    text-transform: uppercase;
-}
-
-.match-badge--encontrado { background: rgba(40, 167, 69, 0.15); color: #28a745; }
-.match-badge--sem_match { background: rgba(220, 53, 69, 0.15); color: #dc3545; }
-.match-badge--ja_pago { background: rgba(108, 117, 125, 0.15); color: #6c757d; }
-.match-badge--nao_aplicavel { background: rgba(108, 117, 125, 0.1); color: #adb5bd; }
-.match-badge--formato_invalido { background: rgba(255, 193, 7, 0.15); color: #d39e00; }
-.match-badge--pendente { background: rgba(0, 123, 255, 0.15); color: #0056b3; }
-.match-badge--processado { background: rgba(40, 167, 69, 0.2); color: #155724; }
-.match-badge--erro { background: rgba(220, 53, 69, 0.2); color: #721c24; }
-.match-badge--conciliado { background: rgba(23, 162, 184, 0.2); color: #117a8b; }
-
-/* Extrato Badge (similar ao match-badge) */
-.extrato-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    padding: 0.2rem 0.5rem;
-    border-radius: 50px;
-    font-size: 0.65rem;
-    font-weight: 600;
-    text-transform: uppercase;
-}
-
-.extrato-badge--match { background: rgba(23, 162, 184, 0.15); color: #117a8b; }
-.extrato-badge--sem_match { background: rgba(255, 193, 7, 0.12); color: #d39e00; }
-.extrato-badge--pendente { background: rgba(108, 117, 125, 0.1); color: #adb5bd; }
-.extrato-badge--conciliado { background: rgba(40, 167, 69, 0.15); color: #28a745; }
-.extrato-badge--nao_aplicavel { background: transparent; color: #ccc; }
-
-/* Occurrence Badge */
-.ocorrencia-badge {
-    display: inline-block;
-    padding: 0.3rem 0.6rem;
-    border-radius: 6px;
-    font-size: 0.8rem;
-    font-weight: 500;
-    white-space: nowrap;
-}
-
-.ocorrencia-badge--06 { background: rgba(40, 167, 69, 0.12); color: #28a745; } /* Liquidação */
-.ocorrencia-badge--09,
-.ocorrencia-badge--10 { background: rgba(108, 117, 125, 0.12); color: #6c757d; } /* Baixado */
-.ocorrencia-badge--17 { background: rgba(40, 167, 69, 0.12); color: #28a745; } /* Liquidação após baixa */
-
-/* Valor Display */
-.valor-display {
-    font-family: 'JetBrains Mono', monospace;
-    font-weight: 500;
-}
-
-.valor-display--positive { color: #28a745; }
-.valor-display--highlight { background: rgba(40, 167, 69, 0.08); padding: 0.2rem 0.4rem; border-radius: 4px; }
-
-/* Buttons */
-.btn-lote {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 1rem;
-    border-radius: 8px;
-    font-size: 0.875rem;
-    font-weight: 500;
-    text-decoration: none;
-    transition: all 0.2s;
-    border: none;
-    cursor: pointer;
-}
-
-.btn-lote--primary {
-    background: linear-gradient(135deg, #4a6cf7 0%, #3a5bd9 100%);
-    color: #fff;
-}
-
-.btn-lote--primary:hover:not(:disabled) {
-    background: linear-gradient(135deg, #3a5bd9 0%, #2a4bc9 100%);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(74, 108, 247, 0.3);
-}
-
-.btn-lote--success {
-    background: linear-gradient(135deg, #28a745 0%, #218838 100%);
-    color: #fff;
-}
-
-.btn-lote--success:hover:not(:disabled) {
-    background: linear-gradient(135deg, #218838 0%, #1e7e34 100%);
-    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
-}
-
-.btn-lote--outline {
-    background: transparent;
-    border: 1px solid var(--border-color, #dee2e6);
-    color: var(--text-color, #1a1a2e);
-}
-
-.btn-lote--outline:hover {
-    background: var(--table-hover-bg, #f8f9fa);
-    border-color: var(--primary-color, #4a6cf7);
-    color: var(--primary-color, #4a6cf7);
-}
-
-.btn-lote--sm {
-    padding: 0.35rem 0.65rem;
-    font-size: 0.8rem;
-}
-
-.btn-lote:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-}
-
-/* Alert Box */
-.alert-box {
-    padding: 1rem 1.25rem;
-    border-radius: 10px;
-    margin-bottom: 1.5rem;
-    display: flex;
-    align-items: flex-start;
-    gap: 0.75rem;
-}
-
-.alert-box--warning {
-    background: rgba(255, 193, 7, 0.1);
-    border: 1px solid rgba(255, 193, 7, 0.3);
-    color: #856404;
-}
-
-.alert-box--success {
-    background: rgba(40, 167, 69, 0.1);
-    border: 1px solid rgba(40, 167, 69, 0.3);
-    color: #155724;
-}
-
-.alert-box__icon {
-    font-size: 1.25rem;
-}
-
-.alert-box__content {
-    flex: 1;
-}
-
-.alert-box__title {
-    font-weight: 600;
-    margin-bottom: 0.25rem;
-}
-
-/* Error Tooltip */
-.error-tooltip {
-    position: relative;
-    cursor: help;
-}
-
-.error-tooltip__icon {
-    color: #ffc107;
-}
-
-.error-tooltip__text {
-    display: none;
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    background: #333;
-    color: #fff;
-    padding: 0.5rem 0.75rem;
-    border-radius: 6px;
-    font-size: 0.75rem;
-    white-space: nowrap;
-    z-index: 100;
-    margin-bottom: 0.5rem;
-}
-
-.error-tooltip:hover .error-tooltip__text {
-    display: block;
-}
-
-/* Dark Mode */
-[data-theme="dark"] {
-    --card-bg: #1e1e2d;
-    --card-header-bg: #252536;
-    --table-header-bg: #252536;
-    --table-hover-bg: rgba(74, 108, 247, 0.08);
-    --badge-bg: #2d2d3f;
-    --border-color: #2d2d3f;
-    --text-color: #e0e0e0;
-    --text-muted: #a0a0a0;
-}
-</style>
+{# Styles moved to modules/_financeiro.css #}
 {% endblock %}
 
 {% block content %}
@@ -494,13 +46,13 @@
                 </div>
             </div>
             <div class="lote-header__actions">
-                {# SIMPLIFICAÇÃO 21/01/2026: Removidos botões de ação manual #}
-                {# Baixa é automática durante importação CNAB #}
-                {# Reprocessamento é automático na sync de títulos e importação de extrato #}
+                {# SIMPLIFICACAO 21/01/2026: Removidos botoes de acao manual #}
+                {# Baixa e automatica durante importacao CNAB #}
+                {# Reprocessamento e automatico na sync de titulos e importacao de extrato #}
                 {% if stats.sem_match > 0 %}
                 <a href="{{ url_for('cnab400.lote_sem_match', lote_id=lote.id) }}"
                    class="btn-lote btn-lote--outline"
-                   title="Itens aguardando título ou extrato para match automático">
+                   title="Itens aguardando titulo ou extrato para match automatico">
                     <i class="fas fa-clock"></i>
                     Pendentes ({{ stats.sem_match }})
                 </a>
@@ -525,10 +77,10 @@
         </div>
         <div class="alert-box__content">
             <div class="alert-box__title">{{ stats.sem_match }} itens aguardando processamento</div>
-            <div>Estes itens serão processados automaticamente quando:
+            <div>Estes itens serao processados automaticamente quando:
                 <ul style="margin: 0.5rem 0 0 1rem; padding: 0;">
-                    <li>Títulos forem sincronizados do Odoo (itens sem título)</li>
-                    <li>Extrato bancário for importado (itens sem extrato)</li>
+                    <li>Titulos forem sincronizados do Odoo (itens sem titulo)</li>
+                    <li>Extrato bancario for importado (itens sem extrato)</li>
                 </ul>
             </div>
         </div>
@@ -541,7 +93,7 @@
             <i class="fas fa-check-circle"></i>
         </div>
         <div class="alert-box__content">
-            <div class="alert-box__title">Lote concluído com sucesso!</div>
+            <div class="alert-box__title">Lote concluido com sucesso!</div>
             <div>Todas as baixas foram executadas. Valor total liquidado: R$ {{ stats.valor_liquidado|numero_br(2) }}</div>
         </div>
     </div>
@@ -577,7 +129,7 @@
         </div>
         <div class="lote-stat">
             <div class="lote-stat__value lote-stat__value--warning">{{ stats.ja_pagos }}</div>
-            <div class="lote-stat__label">Já Pagos</div>
+            <div class="lote-stat__label">Ja Pagos</div>
         </div>
         <div class="lote-stat">
             <div class="lote-stat__value">{{ stats.processados }}</div>
@@ -606,22 +158,22 @@
                 <thead>
                     <tr>
                         <th>#</th>
-                        <th>Ocorrência</th>
-                        <th>Seu Número</th>
+                        <th>Ocorrencia</th>
+                        <th>Seu Numero</th>
                         <th>NF/Parcela</th>
                         <th>CNPJ Cliente</th>
                         <th>Data Ocorr.</th>
                         <th>Vencimento</th>
-                        <th>Valor Título</th>
+                        <th>Valor Titulo</th>
                         <th>Valor Pago</th>
-                        <th>Match Título</th>
+                        <th>Match Titulo</th>
                         <th>Extrato</th>
                         <th>Status</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for item in itens %}
-                    {# Ignorar entradas (código 02) e baixas sem valor (código 10 sem valor_pago) #}
+                    {# Ignorar entradas (codigo 02) e baixas sem valor (codigo 10 sem valor_pago) #}
                     {% if item.codigo_ocorrencia != '02' and not (item.codigo_ocorrencia == '10' and not item.valor_pago) %}
                     <tr>
                         <td>{{ item.numero_linha }}</td>
@@ -704,7 +256,7 @@
                             {% endif %}
                         </td>
                         <td>
-                            {# Status do match com extrato bancário #}
+                            {# Status do match com extrato bancario #}
                             {% set extrato_status = item.status_match_extrato or 'PENDENTE' %}
                             {% set extrato_class = {
                                 'MATCH_ENCONTRADO': 'match',
@@ -731,18 +283,18 @@
                             {% endif %}
                         </td>
                         <td>
-                            {# SIMPLIFICAÇÃO 21/01/2026: Status em vez de botões de ação #}
+                            {# SIMPLIFICACAO 21/01/2026: Status em vez de botoes de acao #}
                             {% if item.processado %}
                             <span class="match-badge match-badge--processado" title="Baixado automaticamente">
                                 <i class="fas fa-check-double"></i> Baixado
                             </span>
                             {% elif item.status_match == 'MATCH_ENCONTRADO' and item.extrato_item_id %}
-                            <span class="match-badge match-badge--pendente" title="Aguardando próxima importação">
+                            <span class="match-badge match-badge--pendente" title="Aguardando proxima importacao">
                                 <i class="fas fa-clock"></i> Aguardando
                             </span>
                             {% elif item.status_match == 'SEM_MATCH' %}
-                            <span class="match-badge match-badge--sem_match" title="Sincronize títulos do Odoo">
-                                <i class="fas fa-sync"></i> S/ Título
+                            <span class="match-badge match-badge--sem_match" title="Sincronize titulos do Odoo">
+                                <i class="fas fa-sync"></i> S/ Titulo
                             </span>
                             {% elif item.status_match == 'MATCH_ENCONTRADO' and not item.extrato_item_id %}
                             <span class="match-badge match-badge--pendente" title="Importe extrato para vincular">
@@ -761,8 +313,8 @@
     </div>
 </div>
 
-{# Modal de vinculação manual REMOVIDO (21/01/2026) #}
-{# Fluxo simplificado: matching e baixa são automáticos #}
+{# Modal de vinculacao manual REMOVIDO (21/01/2026) #}
+{# Fluxo simplificado: matching e baixa sao automaticos #}
 {% endblock %}
 
 {% block scripts %}
@@ -770,20 +322,20 @@
 /**
  * CNAB400 Lote Detalhe - JavaScript
  *
- * SIMPLIFICAÇÃO (21/01/2026):
- * - Removidos botões de ação manual (Reprocessar, Matching Extrato, Executar Baixas)
- * - Removidos botões individuais (Baixar Item, Vincular Item)
- * - Removido modal de vinculação manual
+ * SIMPLIFICACAO (21/01/2026):
+ * - Removidos botoes de acao manual (Reprocessar, Matching Extrato, Executar Baixas)
+ * - Removidos botoes individuais (Baixar Item, Vincular Item)
+ * - Removido modal de vinculacao manual
  *
- * O fluxo agora é 100% automático:
- * - Baixa automática durante importação CNAB
- * - Reprocessamento automático na sync de títulos
- * - Vinculação automática na importação de extrato
+ * O fluxo agora e 100% automatico:
+ * - Baixa automatica durante importacao CNAB
+ * - Reprocessamento automatico na sync de titulos
+ * - Vinculacao automatica na importacao de extrato
  *
- * Este script agora é apenas para exibição de dados.
+ * Este script agora e apenas para exibicao de dados.
  */
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('CNAB400 Lote Detalhe - Modo visualização (fluxo automático)');
+    console.log('CNAB400 Lote Detalhe - Modo visualizacao (fluxo automatico)');
     const loteId = {{ lote.id }};
     console.log('Lote ID:', loteId);
 

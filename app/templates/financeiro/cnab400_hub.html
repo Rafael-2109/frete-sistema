@@ -1,282 +1,9 @@
 {% extends "base.html" %}
 
-{% block title %}CNAB400 - Retorno Bancário{% endblock %}
+{% block title %}CNAB400 - Retorno Bancario{% endblock %}
 
 {% block extra_css %}
-<style>
-/* ================================================================== */
-/* CNAB400 HUB STYLES */
-/* ================================================================== */
-.cnab-container {
-    padding: 1.5rem;
-    max-width: 1600px;
-    margin: 0 auto;
-}
-
-.cnab-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1.5rem;
-    padding-bottom: 1rem;
-    border-bottom: 1px solid var(--border-color, #e0e0e0);
-}
-
-.cnab-header__title {
-    font-size: 1.75rem;
-    font-weight: 600;
-    color: var(--text-color, #1a1a2e);
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-}
-
-.cnab-header__title i {
-    color: var(--primary-color, #4a6cf7);
-}
-
-.cnab-header__subtitle {
-    color: var(--text-muted, #6c757d);
-    font-size: 0.9rem;
-    margin-top: 0.25rem;
-}
-
-.cnab-header__actions {
-    display: flex;
-    gap: 0.75rem;
-}
-
-/* Stats Cards */
-.cnab-stats {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-}
-
-.cnab-stat {
-    background: var(--card-bg, #fff);
-    border-radius: 12px;
-    padding: 1.25rem;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    border: 1px solid var(--border-color, #e0e0e0);
-    transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.cnab-stat:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
-}
-
-.cnab-stat__icon {
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-bottom: 0.75rem;
-    font-size: 1.1rem;
-}
-
-.cnab-stat__icon--primary { background: rgba(74, 108, 247, 0.1); color: #4a6cf7; }
-.cnab-stat__icon--warning { background: rgba(255, 193, 7, 0.1); color: #ffc107; }
-.cnab-stat__icon--success { background: rgba(40, 167, 69, 0.1); color: #28a745; }
-
-.cnab-stat__value {
-    font-size: 1.75rem;
-    font-weight: 700;
-    color: var(--text-color, #1a1a2e);
-    line-height: 1;
-}
-
-.cnab-stat__label {
-    font-size: 0.85rem;
-    color: var(--text-muted, #6c757d);
-    margin-top: 0.25rem;
-}
-
-/* Table Section */
-.cnab-section {
-    background: var(--card-bg, #fff);
-    border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    border: 1px solid var(--border-color, #e0e0e0);
-    overflow: hidden;
-}
-
-.cnab-section__header {
-    padding: 1rem 1.25rem;
-    border-bottom: 1px solid var(--border-color, #e0e0e0);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: var(--card-header-bg, #f8f9fa);
-}
-
-.cnab-section__title {
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: var(--text-color, #1a1a2e);
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-/* Table */
-.cnab-table {
-    width: 100%;
-    border-collapse: collapse;
-}
-
-.cnab-table th,
-.cnab-table td {
-    padding: 0.875rem 1rem;
-    text-align: left;
-    border-bottom: 1px solid var(--border-color, #e0e0e0);
-}
-
-.cnab-table th {
-    background: var(--table-header-bg, #f8f9fa);
-    font-weight: 600;
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    color: var(--text-muted, #6c757d);
-    letter-spacing: 0.5px;
-}
-
-.cnab-table tbody tr {
-    transition: background 0.15s;
-}
-
-.cnab-table tbody tr:hover {
-    background: var(--table-hover-bg, rgba(74, 108, 247, 0.04));
-}
-
-.cnab-table tbody tr:last-child td {
-    border-bottom: none;
-}
-
-/* Status Badge */
-.status-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.35rem 0.75rem;
-    border-radius: 50px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-}
-
-.status-badge--importado { background: rgba(108, 117, 125, 0.1); color: #6c757d; }
-.status-badge--aguardando { background: rgba(255, 193, 7, 0.15); color: #d39e00; }
-.status-badge--aprovado { background: rgba(23, 162, 184, 0.15); color: #117a8b; }
-.status-badge--processando { background: rgba(0, 123, 255, 0.15); color: #0056b3; }
-.status-badge--concluido { background: rgba(40, 167, 69, 0.15); color: #28a745; }
-.status-badge--parcial { background: rgba(255, 193, 7, 0.15); color: #d39e00; }
-.status-badge--erro { background: rgba(220, 53, 69, 0.15); color: #dc3545; }
-
-/* Buttons */
-.btn-cnab {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 1rem;
-    border-radius: 8px;
-    font-size: 0.875rem;
-    font-weight: 500;
-    text-decoration: none;
-    transition: all 0.2s;
-    border: none;
-    cursor: pointer;
-}
-
-.btn-cnab--primary {
-    background: linear-gradient(135deg, #4a6cf7 0%, #3a5bd9 100%);
-    color: #fff;
-}
-
-.btn-cnab--primary:hover {
-    background: linear-gradient(135deg, #3a5bd9 0%, #2a4bc9 100%);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(74, 108, 247, 0.3);
-}
-
-.btn-cnab--sm {
-    padding: 0.35rem 0.75rem;
-    font-size: 0.8rem;
-}
-
-.btn-cnab--outline {
-    background: transparent;
-    border: 1px solid var(--border-color, #dee2e6);
-    color: var(--text-color, #1a1a2e);
-}
-
-.btn-cnab--outline:hover {
-    background: var(--table-hover-bg, #f8f9fa);
-    border-color: var(--primary-color, #4a6cf7);
-    color: var(--primary-color, #4a6cf7);
-}
-
-/* Match Stats */
-.match-stats {
-    display: flex;
-    gap: 0.75rem;
-    font-size: 0.8rem;
-}
-
-.match-stat {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-}
-
-.match-stat--success { color: #28a745; }
-.match-stat--warning { color: #ffc107; }
-.match-stat--danger { color: #dc3545; }
-
-/* Empty State */
-.cnab-empty {
-    text-align: center;
-    padding: 3rem 1.5rem;
-    color: var(--text-muted, #6c757d);
-}
-
-.cnab-empty__icon {
-    font-size: 3rem;
-    margin-bottom: 1rem;
-    opacity: 0.5;
-}
-
-.cnab-empty__title {
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: var(--text-color, #1a1a2e);
-    margin-bottom: 0.5rem;
-}
-
-/* Value Display */
-.valor-display {
-    font-family: 'JetBrains Mono', monospace;
-    font-weight: 500;
-}
-
-.valor-display--success { color: #28a745; }
-
-/* Dark Mode */
-[data-theme="dark"] {
-    --card-bg: #1e1e2d;
-    --card-header-bg: #252536;
-    --table-header-bg: #252536;
-    --table-hover-bg: rgba(74, 108, 247, 0.08);
-    --border-color: #2d2d3f;
-    --text-color: #e0e0e0;
-    --text-muted: #a0a0a0;
-}
-</style>
+{# Styles moved to modules/_financeiro.css #}
 {% endblock %}
 
 {% block content %}
@@ -288,10 +15,10 @@
         <div>
             <h1 class="cnab-header__title">
                 <i class="fas fa-file-invoice-dollar"></i>
-                CNAB400 - Retorno Bancário
+                CNAB400 - Retorno Bancario
             </h1>
             <p class="cnab-header__subtitle">
-                Processe arquivos de retorno bancário e vincule com Contas a Receber
+                Processe arquivos de retorno bancario e vincule com Contas a Receber
             </p>
         </div>
         <div class="cnab-header__actions">
@@ -325,7 +52,7 @@
                 <i class="fas fa-check-circle"></i>
             </div>
             <div class="cnab-stat__value">{{ stats.lotes_concluidos }}</div>
-            <div class="cnab-stat__label">Concluídos</div>
+            <div class="cnab-stat__label">Concluidos</div>
         </div>
     </div>
 
@@ -352,7 +79,7 @@
                     <th>Match</th>
                     <th>Status</th>
                     <th>Processado Por</th>
-                    <th>Ações</th>
+                    <th>Acoes</th>
                 </tr>
             </thead>
             <tbody>
@@ -418,7 +145,7 @@
                 <i class="fas fa-inbox"></i>
             </div>
             <h3 class="cnab-empty__title">Nenhum arquivo importado</h3>
-            <p>Faça o upload de um arquivo .ret para começar</p>
+            <p>Faca o upload de um arquivo .ret para comecar</p>
             <a href="{{ url_for('cnab400.upload') }}" class="btn-cnab btn-cnab--primary" style="margin-top: 1rem;">
                 <i class="fas fa-upload"></i>
                 Fazer Upload
