@@ -379,14 +379,24 @@
         margin-top: 0.75rem;
         border: 1px solid var(--bs-border-color);
         box-shadow: var(--bs-box-shadow-lg, 0 10px 25px rgba(0,0,0,0.2));
+        /* Scroll for very long menus */
+        max-height: calc(100vh - 80px);
+        overflow-y: auto;
     }
 
     .nc-navbar .navbar-nav {
         gap: 0.25rem;
     }
 
+    /* Touch-friendly nav links - WCAG 2.5.5 compliant (44x44px minimum) */
     .nc-navbar .nav-link {
-        padding: 0.75rem 1rem;
+        min-height: 44px;
+        padding: 0.875rem 1rem;
+    }
+
+    /* Touch-friendly dropdown toggle */
+    .nc-navbar .dropdown-toggle {
+        min-height: 44px;
     }
 
     .nc-navbar .dropdown-menu {
@@ -397,8 +407,30 @@
         background: transparent;
     }
 
+    /* Touch-friendly dropdown items - WCAG 2.5.5 compliant (44x44px minimum) */
     .nc-navbar .dropdown-item {
-        padding: 0.5rem 1rem;
+        min-height: 44px;
+        padding: 0.75rem 1rem;
+        display: flex;
+        align-items: center;
+    }
+
+    /* Improved dropdown header visibility */
+    .nc-navbar .dropdown-header {
+        padding: 0.75rem 1rem 0.5rem;
+        font-size: 0.7rem;
+    }
+
+    /* Improved dropdown divider spacing */
+    .nc-navbar .dropdown-divider {
+        margin: 0.5rem 0;
+    }
+
+    /* Touch-friendly navbar toggler */
+    .nc-navbar .navbar-toggler {
+        min-width: 44px;
+        min-height: 44px;
+        padding: 0.5rem 0.75rem;
     }
 
     .nc-theme-toggle {
@@ -413,6 +445,26 @@
 
     .nc-navbar .navbar-brand span {
         display: none;
+    }
+}
+
+/* ==========================================================================
+   TOUCH DEVICE OPTIMIZATIONS
+   ========================================================================== */
+
+/* Remove hover-dependent effects on touch devices */
+@media (hover: none) {
+    .nc-navbar .dropdown-item:hover {
+        transform: none;  /* Disable translateX effect on touch */
+    }
+}
+
+/* Improve touch feedback */
+@media (hover: none) and (pointer: coarse) {
+    .nc-navbar .dropdown-item:active,
+    .nc-navbar .nav-link:active {
+        background: rgba(var(--bs-primary-rgb), 0.15);
+        transition: background-color 0.1s ease;
     }
 }
 
