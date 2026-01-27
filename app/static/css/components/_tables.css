@@ -1,0 +1,170 @@
+/**
+ * _tables.css - Table Component
+ *
+ * Base table styling with responsive wrapper enhancement and action column protection.
+ * Addresses:
+ * - TABL-01: Horizontal scroll on mobile without cutting off content
+ * - LAYO-01: Mobile responsiveness without content clipping
+ *
+ * Uses CSS custom property API for easy theming and override.
+ * Compatible with both dark and light modes via design tokens.
+ *
+ * NOTE: Sticky headers and hover states are in Plan 03-02.
+ */
+
+@layer components {
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BASE TABLE STYLES
+   Uses CSS custom property API for variant composition
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.table {
+    /* Custom property API - variants override these */
+    --_table-bg: var(--bg-light);
+    --_table-color: var(--text);
+    --_table-border-color: var(--border);
+
+    width: 100%;
+    margin-bottom: 1rem;
+    vertical-align: top;
+    border-color: var(--_table-border-color);
+
+    background-color: var(--_table-bg);
+    color: var(--_table-color);
+}
+
+.table > :not(caption) > * > * {
+    padding: 0.5rem 0.5rem;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--_table-border-color);
+}
+
+.table > thead {
+    vertical-align: bottom;
+}
+
+.table > tbody {
+    vertical-align: inherit;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RESPONSIVE CONTAINER
+   Horizontal scroll with visible, styled scrollbar
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+
+    /* Minimum width to prevent layout collapse */
+    min-width: 100%;
+}
+
+/* Styled scrollbar for visibility */
+.table-responsive::-webkit-scrollbar {
+    height: 6px;
+    background-color: transparent;
+}
+
+.table-responsive::-webkit-scrollbar-track {
+    background-color: transparent;
+    border-radius: 3px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb {
+    background-color: var(--border);
+    border-radius: 3px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb:hover {
+    background-color: var(--text-muted);
+}
+
+/* Firefox scrollbar styling */
+.table-responsive {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ACTION COLUMN PROTECTION
+   Prevents action buttons from being clipped on any screen size
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.table td.table-actions,
+.table th.table-actions {
+    min-width: 100px;
+    white-space: nowrap;
+    text-align: right;
+}
+
+/* Compact action buttons for table rows */
+.table .btn-table-action {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    line-height: 1.4;
+}
+
+/* Multiple action buttons spacing */
+.table-actions .btn + .btn,
+.table-actions .btn-table-action + .btn-table-action {
+    margin-left: 0.25rem;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MOBILE BREAKPOINT
+   Touch target compliance (WCAG 2.5.5 - 44x44px minimum)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 767.98px) {
+    /* Ensure touch-friendly action buttons on mobile */
+    .table .btn-table-action {
+        min-width: 44px;
+        min-height: 44px;
+        padding: 0.5rem;
+
+        /* Center icon/text in larger touch area */
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* Adjust action column for larger buttons */
+    .table td.table-actions,
+    .table th.table-actions {
+        min-width: 120px;
+    }
+
+    /* Reduce cell padding on mobile to save space */
+    .table > :not(caption) > * > * {
+        padding: 0.375rem 0.375rem;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TABLE VARIANTS
+   Optional styling variations using custom property overrides
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Bordered table */
+.table-bordered {
+    border: 1px solid var(--_table-border-color);
+}
+
+.table-bordered > :not(caption) > * > * {
+    border-width: 1px;
+    border-color: var(--_table-border-color);
+}
+
+/* Borderless table */
+.table-borderless > :not(caption) > * > * {
+    border-bottom-width: 0;
+}
+
+/* Small table */
+.table-sm > :not(caption) > * > * {
+    padding: 0.25rem 0.25rem;
+}
+
+} /* End of @layer components */
