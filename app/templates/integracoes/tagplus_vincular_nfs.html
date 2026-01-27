@@ -385,7 +385,12 @@
 
 <style>
     .table-success {
-        background-color: #d4edda !important;
+        background-color: hsla(134 40% 88% / 1) !important;
+    }
+
+    [data-bs-theme="dark"] .table-success,
+    [data-theme="dark"] .table-success {
+        background-color: hsla(134 40% 25% / 0.3) !important;
     }
 
     .nf-row {
@@ -393,7 +398,7 @@
     }
 
     .nf-row:hover {
-        background-color: #f8f9fa;
+        background-color: var(--bg);
     }
 </style>
 {% endblock %}

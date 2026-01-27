@@ -6,7 +6,7 @@
 <style>
 /* Hover simples e funcional no cabeçalho */
 #tabelaEstoque thead.table-dark th.sortable:hover {
-    background-color: #5a6268 !important;
+    background-color: var(--bs-secondary) !important;
     transition: background-color 0.2s;
 }
 </style>
@@ -744,10 +744,10 @@ function serverSort(coluna) {
 #modalProjecao .table th.text-end {
     padding-right: 15px;
 }
-/* Cores para status */
-.text-danger { color: #dc3545 !important; }
-.text-warning { color: #ffc107 !important; }
-.text-success { color: #198754 !important; }
+/* Cores para status - using Bootstrap variables for theme support */
+.text-danger { color: var(--bs-danger) !important; }
+.text-warning { color: var(--bs-warning) !important; }
+.text-success { color: var(--bs-success) !important; }
 </style>
 
 <!-- Modal Cardex -->

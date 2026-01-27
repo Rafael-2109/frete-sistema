@@ -606,7 +606,7 @@
 
                     <!-- SEÇÃO 5: VINCULAÇÃO PRODUÇÃO/CONSUMO -->
                     <div class="card mb-3">
-                        <div class="card-header text-white" style="background-color: var(--bs-purple, #6f42c1);">
+                        <div class="card-header text-white" style="background-color: var(--bs-purple);">
                             <h6 class="mb-0"><i class="fas fa-industry"></i> Vinculação Produção/Consumo</h6>
                         </div>
                         <div class="card-body">
@@ -809,8 +809,8 @@ function confirmarExclusao(id, codProduto, tipoMovimentacao) {
             text: `Deseja excluir a movimentação ${tipoMovimentacao} do produto ${codProduto}?`,
             icon: 'warning',
             showCancelButton: true,
-            confirmButtonColor: '#d33',
-            cancelButtonColor: '#3085d6',
+            confirmButtonColor: 'hsl(0 70% 50%)',
+            cancelButtonColor: 'hsl(210 70% 55%)',
             confirmButtonText: 'Sim, excluir!',
             cancelButtonText: 'Cancelar'
         }).then((result) => {
@@ -912,25 +912,25 @@ function updateRowCount() {
     top: 100%;
     left: 0;
     right: 0;
-    background: white;
-    border: 1px solid #ddd;
+    background: var(--bg-light);
+    border: 1px solid var(--border);
     border-top: none;
     border-radius: 0 0 4px 4px;
     max-height: 300px;
     overflow-y: auto;
     z-index: 1050;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 8px hsla(0 0% 0% / 0.1);
 }
 
 .suggestion-item {
     padding: 8px 12px;
     cursor: pointer;
-    border-bottom: 1px solid var(--bs-border-color, #f0f0f0);
+    border-bottom: 1px solid var(--border);
     transition: background-color 0.2s;
 }
 
 .suggestion-item:hover {
-    background-color: var(--bs-tertiary-bg, #f8f9fa);
+    background-color: var(--bg);
 }
 
 .suggestion-item:last-child {
@@ -938,12 +938,12 @@ function updateRowCount() {
 }
 
 .suggestion-item strong {
-    color: var(--bs-primary, #007bff);
+    color: var(--bs-primary);
 }
 
 .no-suggestions {
     padding: 8px 12px;
-    color: var(--bs-secondary-color, #6c757d);
+    color: var(--text-muted);
     font-style: italic;
 }
 </style>
