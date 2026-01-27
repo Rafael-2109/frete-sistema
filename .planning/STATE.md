@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-01-26)
 
 **Core value:** Todas as telas devem ter cores e contraste funcionais em dark mode E mobile, sem CSS inline hardcoded.
-**Current focus:** Phase 3 - Table System (Plan 01 Complete)
+**Current focus:** Phase 3 - Table System (Plan 02 Complete)
 
 ## Current Position
 
 Phase: 3 of 7 (Table System)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: In progress
-Last activity: 2026-01-27 - Completed 03-01-PLAN.md (Base Table Component)
+Last activity: 2026-01-27 - Completed 03-02-PLAN.md (Sticky Headers and Hover States)
 
-Progress: [████░░░░░░] 35%
+Progress: [████░░░░░░] 40%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 7
-- Average duration: 2.1 min
-- Total execution time: 15 min
+- Total plans completed: 8
+- Average duration: 2 min
+- Total execution time: 17 min
 
 **By Phase:**
 
@@ -29,10 +29,10 @@ Progress: [████░░░░░░] 35%
 |-------|-------|-------|----------|
 | 01-layer-infrastructure | 3 | 8 min | 2.7 min |
 | 02-component-library | 3 | 6 min | 2 min |
-| 03-table-system | 1 | 1 min | 1 min |
+| 03-table-system | 2 | 3 min | 1.5 min |
 
 **Recent Trend:**
-- Last 5 plans: 02-01 (2 min), 02-02 (2 min), 02-03 (2 min), 03-01 (1 min)
+- Last 5 plans: 02-02 (2 min), 02-03 (2 min), 03-01 (1 min), 03-02 (2 min)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -65,6 +65,10 @@ Recent decisions affecting current work:
 - [03-01]: Table custom property API (--_table-bg, --_table-color, --_table-border-color)
 - [03-01]: Scrollbar 6px height, 3px border-radius for visibility without intrusiveness
 - [03-01]: Mobile touch targets 44x44px minimum per WCAG 2.5.5
+- [03-02]: Sticky header on th elements (not thead) due to CSS spec limitation
+- [03-02]: Z-index hierarchy: corner (11) > header (10) > first column (5)
+- [03-02]: Hover uses :where() for low specificity, dark 5% white / light 4% black overlay
+- [03-02]: Status rows (success, warning, etc.) use hsla 15% base / 28% hover
 
 ### Pending Todos
 
@@ -80,9 +84,9 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-01-27T13:14:02Z
-Stopped at: Completed 03-01-PLAN.md
+Last session: 2026-01-27T13:17:14Z
+Stopped at: Completed 03-02-PLAN.md
 Resume file: None
 
 ---
-*Next step: Execute Plan 03-02 (Sticky Headers and Hover States)*
+*Next step: Execute Plan 03-03 (Table Text Truncation and Column Utilities)*
