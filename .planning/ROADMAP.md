@@ -100,11 +100,11 @@ Plans:
 **Plans**: 5 plans in 3 waves
 
 Plans:
-- [ ] 05-01-PLAN.md - Create module CSS files and integrate into main.css (Wave 1)
-- [ ] 05-02-PLAN.md - Migrate financeiro templates (dashboard, cnab400_hub, cnab400_lote_detalhe) (Wave 2)
-- [ ] 05-03-PLAN.md - Migrate carteira templates (dashboard, agrupados_balanceado) (Wave 2)
-- [ ] 05-04-PLAN.md - Migrate embarques templates (listar, visualizar) - print templates EXCLUDED (Wave 2)
-- [ ] 05-05-PLAN.md - Visual verification checkpoint (Wave 3)
+- [x] 05-01-PLAN.md - Create module CSS files and integrate into main.css (Wave 1)
+- [x] 05-02-PLAN.md - Migrate financeiro templates (dashboard, cnab400_hub, cnab400_lote_detalhe) (Wave 2)
+- [x] 05-03-PLAN.md - Migrate carteira templates (dashboard, agrupados_balanceado) (Wave 2)
+- [x] 05-04-PLAN.md - Migrate embarques templates (listar, visualizar) - print templates EXCLUDED (Wave 2)
+- [x] 05-05-PLAN.md - Visual verification checkpoint (Wave 3)
 
 **Note:** Print templates (imprimir_*.html) are intentionally EXCLUDED from migration. They keep hardcoded light mode colors for print reliability. JS files with hardcoded colors are DEFERRED to Phase 6.
 
@@ -118,12 +118,25 @@ Plans:
   3. Portal templates use tokens
   4. Estoque, recebimento, portaria, and remaining modules use tokens
   5. All migrated templates pass dark mode and mobile tests
-**Plans**: TBD
+  6. Standalone templates (rastreamento, devolucao) have self-contained design tokens
+  7. JS files (51 colors) read colors from CSS custom properties
+**Plans**: 12 plans in 6 waves
 
 Plans:
-- [ ] 06-01: Migrate comercial module templates
-- [ ] 06-02: Migrate manufatura module templates
-- [ ] 06-03: Migrate portal and remaining modules
+- [ ] 06-01-PLAN.md - Create module CSS files for Phase 6 modules (Wave 1)
+- [ ] 06-02-PLAN.md - Migrate low-complexity modules: comercial, estoque, cotacao, producao, custeio, portaria, integracoes (Wave 2)
+- [ ] 06-03-PLAN.md - Migrate devolucao, pedidos, monitoramento modules (Wave 2)
+- [ ] 06-04-PLAN.md - Migrate recebimento and fretes modules (high inline styles) (Wave 3)
+- [ ] 06-05-PLAN.md - Migrate portal submodules and rastreamento base-extending templates (Wave 3)
+- [ ] 06-06-PLAN.md - Migrate BI module with Chart.js color integration (Wave 4)
+- [ ] 06-07-PLAN.md - Migrate motochefe module (47 templates, 2 print excluded) (Wave 4)
+- [ ] 06-08-PLAN.md - Migrate pallet module (largest: 554 colors, 24 templates) (Wave 4)
+- [ ] 06-09-PLAN.md - Migrate standalone templates (rastreamento + devolucao) (Wave 5)
+- [ ] 06-10-PLAN.md - Migrate JS files with hardcoded colors (51 colors, 7 files) (Wave 5)
+- [ ] 06-11-PLAN.md - Complete manufatura migration and verify Tier 4 modules clean (Wave 5)
+- [ ] 06-12-PLAN.md - Visual verification checkpoint (Wave 6)
+
+**Note:** Print templates (7 total) intentionally EXCLUDED per Phase 5 decision [05-04]. Standalone templates get self-contained _rastreamento-standalone.css. Chart.js colors read from CSS custom properties via ChartColors utility.
 
 ### Phase 7: Cleanup & Polish
 **Goal**: Remove technical debt, validate complete coverage, prevent regression
@@ -153,11 +166,12 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | 2. Component Library | 3/3 | Complete | 2026-01-27 |
 | 3. Table System | 2/2 | Complete | 2026-01-27 |
 | 4. Layout Patterns | 2/2 | Complete | 2026-01-27 |
-| 5. High-Traffic Migration | 0/5 | Not started | - |
-| 6. Medium-Traffic Migration | 0/3 | Not started | - |
+| 5. High-Traffic Migration | 5/5 | Complete | 2026-01-27 |
+| 6. Medium-Traffic Migration | 0/12 | Not started | - |
 | 7. Cleanup & Polish | 0/3 | Not started | - |
 
 ---
 *Roadmap created: 2026-01-26*
 *Phase 1 planned: 2026-01-26*
-*Total phases: 7 | Total plans: 20*
+*Phase 6 planned: 2026-01-27*
+*Total phases: 7 | Total plans: 29*
