@@ -2,20 +2,20 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    DESIGN TOKENS - NACOM GOYA
 
-   HIERARQUIA DE LUMINOSIDADE (4 TONS DISTINTOS):
-   - body:    --bg-dark   (0% dark / 90% light)
-   - cards:   --bg        (5% dark / 95% light)
-   - tabela:  --bg-light  (10% dark / 100% light)
-   - buttons: --bg-button (15% dark / 100% light)
+   HIERARQUIA DE ELEVAÇÃO (elementos acima são mais claros):
+   - body:    --bg-dark   (mais escuro - base)
+   - surface: --bg        (intermediário)
+   - cards:   --bg-light  (mais claro - elevado)
+   - buttons: --bg-button (máximo no dark, branco no light)
 
    VARIÁVEIS POR TEMA:
    DARK MODE:                    LIGHT MODE:
-   --bg-dark:  hsl(0 0% 0%)      --bg-dark:  hsl(0 0% 90%)
-   --bg:       hsl(0 0% 5%)      --bg:       hsl(0 0% 95%)
-   --bg-light: hsl(0 0% 10%)     --bg-light: hsl(0 0% 100%)
+   --bg-dark:  hsl(0 0% 0%)      --bg-dark:  hsl(0 0% 85%)  ← mais cinza
+   --bg:       hsl(0 0% 5%)      --bg:       hsl(0 0% 92%)  ← intermediário
+   --bg-light: hsl(0 0% 10%)     --bg-light: hsl(0 0% 100%) ← branco (elevado)
    --text:     hsl(0 0% 95%)     --text:     hsl(0 0% 5%)
-   --text-muted: hsl(0 0% 70%)   --text-muted: hsl(0 0% 30%)
-   --border:   hsl(0 0% 30%)     --border:   hsl(0 0% 80%)
+   --text-muted: hsl(0 0% 70%)   --text-muted: hsl(0 0% 35%)
+   --border:   hsl(0 0% 30%)     --border:   hsl(0 0% 78%)
 
    --gradient:       linear-gradient de --bg-light para --bg (topo→base)
    --gradient-hover: linear-gradient sólido --bg-light
@@ -63,7 +63,7 @@
 
 /* ═══════════════════════════════════════════════════════════════════════════
    DARK MODE (Padrão)
-   bg-dark 0%, bg 5%, bg-light 10%, text 95%, text-muted 70%
+   Hierarquia de elevação: body 0% → surfaces 5% → cards 10% (mais claro = elevado)
    ═══════════════════════════════════════════════════════════════════════════ */
 
 :root,
@@ -117,23 +117,24 @@
 
 /* ═══════════════════════════════════════════════════════════════════════════
    LIGHT MODE
-   bg-dark 90%, bg 95%, bg-light 100%, text 5%, text-muted 30%
+   Hierarquia de elevação: body 85% → surfaces 92% → cards 100% (mais claro = elevado)
    ═══════════════════════════════════════════════════════════════════════════ */
 
 [data-bs-theme="light"],
 [data-theme="light"] {
-    /* 4 tons de background (90% → 95% → 100% → 100%) */
-    --bg-dark: hsl(0 0% 90%);     /* body */
-    --bg: hsl(0 0% 95%);          /* gradients */
-    --bg-light: hsl(0 0% 100%);   /* cards, inputs */
+    /* 4 tons de background - hierarquia de elevação
+       Elementos elevados (cards) são MAIS CLAROS que o fundo */
+    --bg-dark: hsl(0 0% 85%);     /* body - base cinza */
+    --bg: hsl(0 0% 92%);          /* surfaces intermediárias */
+    --bg-light: hsl(0 0% 100%);   /* cards, inputs - elevados (branco) */
     --bg-button: hsl(0 0% 100%);  /* botões (máximo no light) */
 
-    /* 2 tons de texto (5% → 30%) */
+    /* 2 tons de texto (5% → 35%) */
     --text: hsl(0 0% 5%);
-    --text-muted: hsl(0 0% 30%);
+    --text-muted: hsl(0 0% 35%);
 
-    /* Borda (80% - mais clara no light mode) */
-    --border: hsl(0 0% 80%);
+    /* Borda (78% - mais visível) */
+    --border: hsl(0 0% 78%);
 
     /* Gradients e Detalhes */
     --gradient: linear-gradient(180deg, var(--bg-light), var(--bg));
