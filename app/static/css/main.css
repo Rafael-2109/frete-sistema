@@ -28,27 +28,30 @@
 @layer reset, tokens, base, components, modules, utilities, overrides;
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   LAYER IMPORTS
-   Note: Imports will be added in Plan 01-03 after wrapping existing CSS files
+   FONTS (unlayered - must be available to all layers)
+   Moved from bootstrap-overrides.css
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Tokens - Design system variables (Phase 1, Plan 03)
-   @import url('./tokens/_design-tokens.css') layer(tokens);
-*/
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
-/* Base - Bootstrap overrides and global defaults (Phase 1, Plan 03)
-   @import url('./base/_bootstrap-overrides.css') layer(base);
-   @import url('./base/_navbar.css') layer(base);
-*/
+/* ═══════════════════════════════════════════════════════════════════════════
+   LAYER IMPORTS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Tokens - Design system variables */
+@import url('./tokens/_design-tokens.css') layer(tokens);
+
+/* Base - Bootstrap overrides and global defaults */
+@import url('./base/_bootstrap-overrides.css') layer(base);
+@import url('./base/_navbar.css') layer(base);
 
 /* Components - Reusable UI patterns (Phase 2)
    @import url('./components/_buttons.css') layer(components);
    @import url('./components/_cards.css') layer(components);
 */
 
-/* Utilities - Helper classes (Phase 1, Plan 03)
-   @import url('./utilities/_utilities.css') layer(utilities);
-*/
+/* Utilities - Helper classes */
+@import url('./utilities/_utilities.css') layer(utilities);
 
 /* Legacy - Temporary overrides during migration (remove after Phase 7)
    @import url('./legacy/_inline-overrides.css') layer(overrides);
