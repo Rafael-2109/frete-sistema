@@ -26,6 +26,7 @@
 
     /* Card backgrounds */
     --bs-card-bg: hsl(0 0% 5%);
+    --bs-card-cap-bg: transparent;  /* card-header igual ao card body */
     --bs-card-border-color: hsl(0 0% 30%);
 
     /* Table backgrounds */
@@ -79,6 +80,7 @@
 
     /* Card backgrounds - elevated (white) */
     --bs-card-bg: hsl(0 0% 100%);
+    --bs-card-cap-bg: transparent;  /* card-header igual ao card body */
     --bs-card-border-color: hsl(0 0% 88%);
 
     /* Table backgrounds */
