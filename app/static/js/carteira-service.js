@@ -410,20 +410,21 @@ const CarteiraService = {
 window.CarteiraService = CarteiraService;
 
 // Adicionar estilos para feedback visual
+// Using CSS custom properties for theme-aware colors
 const style = document.createElement('style');
 style.textContent = `
     .salvando {
-        background-color: #fff3cd !important;
+        background-color: var(--semantic-warning-subtle, hsla(45 100% 50% / 0.15)) !important;
         transition: background-color 0.3s;
     }
-    
+
     .salvo {
-        background-color: #d4edda !important;
+        background-color: var(--semantic-success-subtle, hsla(145 30% 50% / 0.15)) !important;
         transition: background-color 0.3s;
     }
-    
+
     .erro {
-        background-color: #f8d7da !important;
+        background-color: var(--semantic-danger-subtle, hsla(0 30% 50% / 0.15)) !important;
         transition: background-color 0.3s;
     }
 `;

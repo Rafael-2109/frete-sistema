@@ -6,6 +6,52 @@
 (function() {
     'use strict';
 
+    // ==============================================
+    // DESIGN TOKENS UTILITY
+    // Reads CSS custom properties for theme-aware styling
+    // ==============================================
+    const DesignTokens = {
+        get(name) {
+            return getComputedStyle(document.documentElement)
+                .getPropertyValue(`--${name}`).trim();
+        },
+        // Semantic colors
+        success: () => DesignTokens.get('semantic-success') || 'hsl(145 65% 40%)',
+        danger: () => DesignTokens.get('semantic-danger') || 'hsl(0 70% 50%)',
+        warning: () => DesignTokens.get('amber-50') || 'hsl(45 100% 50%)',
+        warningText: () => DesignTokens.get('text') || 'hsl(0 0% 10%)',
+        textMuted: () => DesignTokens.get('text-muted') || 'hsl(0 0% 70%)',
+        text: () => DesignTokens.get('text') || 'hsl(0 0% 95%)',
+        // Gray tones
+        secondary: () => DesignTokens.get('gray-50') || 'hsl(0 0% 50%)',
+        dark: () => DesignTokens.get('gray-25') || 'hsl(0 0% 25%)',
+        // Bootstrap colors
+        bsInfo: () => DesignTokens.get('bs-info') || 'hsl(0 0% 50%)',
+        bsPrimary: () => DesignTokens.get('bs-primary') || 'hsl(45 95% 55%)',
+        // Specific colors for Odoo tag mapping
+        cyan: () => DesignTokens.get('bs-info') || 'hsl(187 85% 53%)',
+        teal: () => DesignTokens.get('semantic-success') || 'hsl(145 65% 40%)',
+        orange: () => DesignTokens.get('amber-55') || 'hsl(45 90% 60%)',
+        purple: () => 'hsl(261 51% 51%)',
+        pink: () => 'hsl(330 81% 60%)'
+    };
+
+    // Odoo tag color mapping using design tokens
+    const OdooTagColors = {
+        0: () => DesignTokens.textMuted(),     // Cinza
+        1: () => DesignTokens.danger(),         // Vermelho
+        2: () => DesignTokens.orange(),         // Laranja
+        3: () => DesignTokens.warning(),        // Amarelo
+        4: () => DesignTokens.teal(),           // Verde-agua
+        5: () => DesignTokens.success(),        // Verde
+        6: () => DesignTokens.cyan(),           // Ciano
+        7: () => DesignTokens.bsPrimary(),      // Azul (primary)
+        8: () => DesignTokens.purple(),         // Roxo
+        9: () => DesignTokens.pink(),           // Rosa
+        10: () => DesignTokens.secondary(),     // Cinza escuro
+        11: () => DesignTokens.dark()           // Preto
+    };
+
     console.log('🚀 [Carteira Simples] JavaScript carregado e iniciado!');
 
     // ==============================================
@@ -3027,18 +3073,18 @@
         if (menor7dEl) {
             menor7dEl.textContent = Math.round(resultado.menor_estoque_d7);
 
-            // 🔴 HIERARQUIA DE CORES: Vermelho > Laranja > Verde
+            // HIERARQUIA DE CORES: Vermelho > Laranja > Verde
             // REGRA 1: NEGATIVO = VERMELHO (PRIORIDADE MÁXIMA)
             if (resultado.menor_estoque_d7 < 0) {
-                // 🔧 CORREÇÃO: Usar !important para sobrescrever classes de linha (table-warning, table-info)
-                menor7dEl.style.setProperty('background-color', '#dc3545', 'important'); // Vermelho
+                // Usar CSS custom properties for theme-aware colors
+                menor7dEl.style.setProperty('background-color', DesignTokens.danger(), 'important');
                 menor7dEl.style.setProperty('color', 'white', 'important');
                 menor7dEl.style.setProperty('font-weight', 'bold', 'important');
             }
             // REGRA 2: Baixo estoque (< 100) = Amarelo com texto preto
             else if (resultado.menor_estoque_d7 < 100) {
-                menor7dEl.style.setProperty('background-color', '#ffc107', 'important');
-                menor7dEl.style.setProperty('color', '#000000', 'important');
+                menor7dEl.style.setProperty('background-color', DesignTokens.warning(), 'important');
+                menor7dEl.style.setProperty('color', DesignTokens.warningText(), 'important');
                 menor7dEl.style.setProperty('font-weight', 'bold', 'important');
             }
             // REGRA 3: Estoque OK = Sem cor
@@ -3084,18 +3130,18 @@
 
             estDataEl.textContent = Math.round(estoqueDisponivel);
 
-            // 🔴 HIERARQUIA DE CORES: Vermelho > Laranja > Verde
+            // HIERARQUIA DE CORES: Vermelho > Laranja > Verde
             // REGRA 1: NEGATIVO = VERMELHO (PRIORIDADE MÁXIMA)
             if (estoqueDisponivel < 0) {
-                // 🔧 CORREÇÃO: Usar !important para sobrescrever classes de linha (table-warning, table-info)
-                estDataEl.style.setProperty('background-color', '#dc3545', 'important'); // Vermelho
+                // Use CSS custom properties for theme-aware colors
+                estDataEl.style.setProperty('background-color', DesignTokens.danger(), 'important');
                 estDataEl.style.setProperty('color', 'white', 'important');
                 estDataEl.style.setProperty('font-weight', 'bold', 'important');
             }
             // REGRA 2: Baixo estoque (< 100) = Amarelo com texto preto
             else if (estoqueDisponivel < 100) {
-                estDataEl.style.setProperty('background-color', '#ffc107', 'important');
-                estDataEl.style.setProperty('color', '#000000', 'important');
+                estDataEl.style.setProperty('background-color', DesignTokens.warning(), 'important');
+                estDataEl.style.setProperty('color', DesignTokens.warningText(), 'important');
                 estDataEl.style.setProperty('font-weight', 'bold', 'important');
             }
             // REGRA 3: Estoque OK = Sem cor
@@ -3232,26 +3278,12 @@
             const tags = JSON.parse(tagsJson);
             if (!tags || tags.length === 0) return '';
 
-            // Mapa de cores do Odoo para CSS
-            const coresOdoo = {
-                0: '#6c757d',   // Cinza
-                1: '#dc3545',   // Vermelho
-                2: '#fd7e14',   // Laranja
-                3: '#ffc107',   // Amarelo
-                4: '#20c997',   // Verde-água
-                5: '#198754',   // Verde
-                6: '#0dcaf0',   // Ciano
-                7: '#0d6efd',   // Azul
-                8: '#6f42c1',   // Roxo
-                9: '#d63384',   // Rosa
-                10: '#495057',  // Cinza escuro
-                11: '#343a40'   // Preto
-            };
-
             // Montar lista de badges para o popover
+            // Use OdooTagColors mapping for theme-aware colors
             const badgesHtml = tags.map(tag => {
-                const cor = coresOdoo[tag.color] || '#6c757d';
-                const corTexto = [3, 6].includes(tag.color) ? '#212529' : '#ffffff';
+                const cor = OdooTagColors[tag.color] ? OdooTagColors[tag.color]() : DesignTokens.textMuted();
+                // Light text on dark backgrounds, dark text on light backgrounds (yellow, cyan)
+                const corTexto = [3, 6].includes(tag.color) ? DesignTokens.warningText() : 'white';
                 return `<span class="badge me-1" style="background-color: ${cor}; color: ${corTexto}; font-size: 9px;">${escapeHtml(tag.name)}</span>`;
             }).join('');
 
