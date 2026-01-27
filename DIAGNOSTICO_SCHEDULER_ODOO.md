@@ -62,7 +62,7 @@ if [ -f "app/scheduler/sincronizacao_incremental_definitiva.py" ]; then
         echo "✅ Sincronização incremental iniciada e confirmada (PID: $SYNC_PID)"
     else
         echo "❌ ERRO: Scheduler falhou ao iniciar!"
-        tail -10 logs/sincronizacao_incremental.log
+        tail -100 logs/sincronizacao_incremental.log
     fi
 fi
 ```
