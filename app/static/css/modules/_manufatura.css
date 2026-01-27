@@ -1,0 +1,27 @@
+/**
+ * _manufatura.css - Manufatura Module Overrides
+ *
+ * Component overrides specific to the manufatura module.
+ * NOTE: Already partially theme-aware (uses var(--bs-*)).
+ * Only remaining hardcoded colors need migration.
+ * EXCLUDES: programacao_linhas_print.html (print template)
+ *
+ * Token mapping:
+ * - Use var(--bg-light) for card backgrounds
+ * - Use var(--text) for primary text
+ * - Use var(--text-muted) for secondary text
+ * - Use var(--border) for borders
+ */
+
+@layer modules {
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     MANUFATURA MODULE - Component overrides
+     Migrated from template inline styles
+     Templates: 20 non-print (1 print template EXCLUDED)
+     NOTE: Partially theme-aware - verify existing var(--bs-*) work in dark mode
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* Placeholder - styles will be added as templates are migrated */
+
+} /* End @layer modules */

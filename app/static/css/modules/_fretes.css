@@ -1,0 +1,25 @@
+/**
+ * _fretes.css - Fretes Module Overrides
+ *
+ * Component overrides specific to the fretes module.
+ * NOTE: High inline style count - audit views need careful migration.
+ *
+ * Token mapping:
+ * - Use var(--bg-light) for card backgrounds
+ * - Use var(--text) for primary text
+ * - Use var(--text-muted) for secondary text
+ * - Use var(--border) for borders
+ * - Use var(--semantic-success/danger) for status colors
+ */
+
+@layer modules {
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     FRETES MODULE - Component overrides
+     Migrated from template inline styles
+     Templates: 39 total
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* Placeholder - styles will be added as templates are migrated */
+
+} /* End @layer modules */

@@ -1,0 +1,26 @@
+/**
+ * _motochefe.css - Motochefe Module Overrides
+ *
+ * Component overrides specific to the motochefe module.
+ * NOTE: Large subsystem with 47 templates.
+ * EXCLUDES: imprimir_devolucao.html, imprimir.html (print templates)
+ *
+ * Token mapping:
+ * - Use var(--bg-light) for card backgrounds
+ * - Use var(--text) for primary text
+ * - Use var(--text-muted) for secondary text
+ * - Use var(--border) for borders
+ * - Use var(--semantic-success/danger) for status colors
+ */
+
+@layer modules {
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     MOTOCHEFE MODULE - Component overrides
+     Migrated from template inline styles
+     Templates: 45 non-print (2 print templates EXCLUDED)
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* Placeholder - styles will be added as templates are migrated */
+
+} /* End @layer modules */

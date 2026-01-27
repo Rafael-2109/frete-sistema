@@ -1,0 +1,42 @@
+/**
+ * _bi.css - BI Module Overrides
+ *
+ * Component overrides specific to the BI module.
+ * NOTE: Contains Chart.js integration with hardcoded colors.
+ * Chart colors should be read from CSS custom properties.
+ *
+ * Token mapping:
+ * - Use var(--bg-light) for card backgrounds
+ * - Use var(--text) for primary text
+ * - Use var(--text-muted) for secondary text
+ * - Use var(--border) for borders
+ *
+ * Chart-specific tokens (for JS to read):
+ * - --chart-primary: Primary chart color
+ * - --chart-secondary: Secondary chart color
+ * - --chart-success: Success color for charts
+ * - --chart-danger: Danger color for charts
+ */
+
+@layer modules {
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     BI MODULE - Component overrides
+     Migrated from template inline styles
+     Templates: 4 total (with Chart.js visualizations)
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* Chart color tokens for JS access */
+  :root {
+    --chart-primary: var(--amber-55);
+    --chart-secondary: var(--amber-40);
+    --chart-success: var(--semantic-success);
+    --chart-danger: var(--semantic-danger);
+    --chart-info: hsl(190 65% 45%);
+    --chart-bg-primary: hsla(45 100% 50% / 0.1);
+    --chart-bg-secondary: hsla(45 100% 50% / 0.05);
+  }
+
+  /* Placeholder - styles will be added as templates are migrated */
+
+} /* End @layer modules */

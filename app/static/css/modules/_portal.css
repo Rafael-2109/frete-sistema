@@ -1,0 +1,25 @@
+/**
+ * _portal.css - Portal Module Overrides
+ *
+ * Component overrides specific to the portal module.
+ * NOTE: Contains Sendas, Atacadao, and Tenda submodules.
+ *
+ * Token mapping:
+ * - Use var(--bg-light) for card backgrounds
+ * - Use var(--text) for primary text
+ * - Use var(--text-muted) for secondary text
+ * - Use var(--border) for borders
+ * - Use var(--semantic-success/danger) for status colors
+ */
+
+@layer modules {
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     PORTAL MODULE - Component overrides
+     Migrated from template inline styles
+     Templates: 32 total (Sendas, Atacadao, Tenda submodules)
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* Placeholder - styles will be added as templates are migrated */
+
+} /* End @layer modules */

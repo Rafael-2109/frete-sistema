@@ -1,0 +1,27 @@
+/**
+ * _rastreamento.css - Rastreamento Module Overrides
+ *
+ * Component overrides for rastreamento templates that extend base.html.
+ * NOTE: Only 3 templates extend base.html (detalhes, monitoramento, dashboard).
+ * The 8 standalone templates are handled by _rastreamento-standalone.css (Phase 6 Wave 5).
+ *
+ * Token mapping:
+ * - Use var(--bg-light) for card backgrounds
+ * - Use var(--text) for primary text
+ * - Use var(--text-muted) for secondary text
+ * - Use var(--border) for borders
+ * - Use var(--semantic-success) for primary accent (green theme)
+ */
+
+@layer modules {
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     RASTREAMENTO MODULE - Component overrides
+     Migrated from template inline styles
+     Templates: 3 base-extending (detalhes, monitoramento, dashboard)
+     NOTE: 8 standalone templates handled separately
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* Placeholder - styles will be added as templates are migrated */
+
+} /* End @layer modules */
