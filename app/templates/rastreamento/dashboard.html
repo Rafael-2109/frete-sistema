@@ -5,28 +5,13 @@
 {% block extra_css %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
-    #mapa {
-        height: 600px;
-        border-radius: 15px;
-        box-shadow: 0 5px 20px rgba(0,0,0,0.1);
-    }
-    .card-rastreamento {
-        transition: all 0.3s ease;
-        cursor: pointer;
-    }
-    .card-rastreamento:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 25px rgba(0,0,0,0.15);
-    }
+    /* Styles extracted to _rastreamento.css */
     .status-badge {
         padding: 5px 15px;
         border-radius: 20px;
         font-size: 0.85rem;
         font-weight: 600;
     }
-    .status-ativo { background: #d4edda; color: #155724; }
-    .status-proximo { background: #fff3cd; color: #856404; }
-    .status-entregue { background: #d1ecf1; color: #0c5460; }
 </style>
 {% endblock %}
 
@@ -220,7 +205,7 @@
 
     // ========== MARCADOR DA ORIGEM (CD NACOM GOYA) ==========
     const iconeOrigem = L.divIcon({
-        html: '<i class="fas fa-warehouse" style="color: #6c757d; font-size: 32px;"></i>',
+        html: '<i class="fas fa-warehouse" style="color: hsl(210, 9%, 51%); font-size: 32px;"></i>',
         className: 'custom-marker-origem',
         iconSize: [40, 40],
         iconAnchor: [20, 40]
@@ -242,8 +227,8 @@
     dadosMapa.forEach(function(dados) {
         // 1. MARCADOR DO MOTORISTA (CAMINHÃO)
         const iconeTruck = dados.status === 'CHEGOU_DESTINO'
-            ? '<i class="fas fa-truck" style="color: orange; font-size: 32px;"></i>'
-            : '<i class="fas fa-truck" style="color: #28a745; font-size: 32px;"></i>';
+            ? '<i class="fas fa-truck" style="color: hsl(39, 100%, 50%); font-size: 32px;"></i>'
+            : '<i class="fas fa-truck" style="color: hsl(134, 61%, 41%); font-size: 32px;"></i>';
 
         const markerMotorista = L.marker([dados.motorista.lat, dados.motorista.lng], {
             icon: L.divIcon({
@@ -268,7 +253,7 @@
 
         // 2. MARCADORES DOS DESTINOS
         const iconeDestino = L.divIcon({
-            html: '<i class="fas fa-map-pin" style="color: #dc3545; font-size: 28px;"></i>',
+            html: '<i class="fas fa-map-pin" style="color: hsl(354, 70%, 54%); font-size: 28px;"></i>',
             className: 'custom-marker-destino',
             iconSize: [35, 35],
             iconAnchor: [17, 35]
@@ -298,7 +283,7 @@
 
         // Linha tracejada verde
         L.polyline(pontos, {
-            color: '#28a745',
+            color: 'hsl(134, 61%, 41%)',
             weight: 3,
             opacity: 0.7,
             dashArray: '10, 10'
@@ -309,7 +294,7 @@
             [origemCD.lat, origemCD.lng],
             [dados.motorista.lat, dados.motorista.lng]
         ], {
-            color: '#0d6efd',
+            color: 'hsl(211, 97%, 52%)',
             weight: 4,
             opacity: 0.8
         }).addTo(mapa);

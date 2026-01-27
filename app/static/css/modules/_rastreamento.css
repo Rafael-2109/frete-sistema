@@ -3,14 +3,17 @@
  *
  * Component overrides for rastreamento templates that extend base.html.
  * NOTE: Only 3 templates extend base.html (detalhes, monitoramento, dashboard).
- * The 8 standalone templates are handled by _rastreamento-standalone.css (Phase 6 Wave 5).
+ * The 8 standalone templates are handled separately in Phase 6 Wave 5.
  *
  * Token mapping:
- * - Use var(--bg-light) for card backgrounds
- * - Use var(--text) for primary text
- * - Use var(--text-muted) for secondary text
- * - Use var(--border) for borders
- * - Use var(--semantic-success) for primary accent (green theme)
+ * - var(--bg-light) for card backgrounds
+ * - var(--text) for primary text
+ * - var(--text-muted) for secondary text
+ * - var(--border) for borders
+ * - var(--semantic-success) for primary accent (green theme - delivery tracking)
+ *
+ * Note: Rastreamento uses GREEN as primary brand color (delivery tracking).
+ * All semantic-success variations represent the primary accent for this module.
  */
 
 @layer modules {
@@ -19,9 +22,459 @@
      RASTREAMENTO MODULE - Component overrides
      Migrated from template inline styles
      Templates: 3 base-extending (detalhes, monitoramento, dashboard)
-     NOTE: 8 standalone templates handled separately
      ═══════════════════════════════════════════════════════════════════════════ */
 
-  /* Placeholder - styles will be added as templates are migrated */
+  /* ----------------------------------
+     Map Container
+     ---------------------------------- */
+  #mapa-detalhes,
+  #mapa,
+  #mapa-monitoramento {
+    border-radius: 15px;
+    box-shadow: 0 5px 20px hsla(0, 0%, 0%, 0.1);
+  }
+
+  #mapa-detalhes {
+    height: 500px;
+    width: 100%;
+    margin-bottom: 20px;
+  }
+
+  #mapa {
+    height: 600px;
+  }
+
+  /* ----------------------------------
+     Timeline (detalhes.html)
+     ---------------------------------- */
+  .timeline {
+    position: relative;
+    padding: 20px 0;
+  }
+
+  .timeline-item {
+    padding: 20px;
+    background: var(--bg);
+    border-left: 3px solid var(--semantic-success);
+    margin-bottom: 20px;
+    border-radius: 5px;
+  }
+
+  .timeline-item.chegada {
+    border-left-color: var(--amber-50);
+  }
+
+  .timeline-item.entregue {
+    border-left-color: hsl(188, 78%, 41%);
+  }
+
+  .timeline-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+
+  .timeline-title {
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .timeline-time {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+
+  /* ----------------------------------
+     Status Cards (detalhes.html)
+     Gradient backgrounds for status display
+     ---------------------------------- */
+  .rastr-status-card {
+    color: var(--bg-light);
+    padding: 20px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+  }
+
+  .rastr-status-card.default {
+    background: linear-gradient(135deg, hsl(235, 72%, 66%) 0%, hsl(281, 44%, 46%) 100%);
+  }
+
+  .rastr-status-card.ativo {
+    background: linear-gradient(135deg, var(--semantic-success) 0%, hsl(162, 73%, 46%) 100%);
+  }
+
+  .rastr-status-card.proximo {
+    background: linear-gradient(135deg, var(--amber-50) 0%, hsl(33, 100%, 50%) 100%);
+  }
+
+  .rastr-status-card.entregue {
+    background: linear-gradient(135deg, hsl(188, 78%, 41%) 0%, hsl(188, 65%, 40%) 100%);
+  }
+
+  /* ----------------------------------
+     Metric Box (detalhes.html)
+     ---------------------------------- */
+  .metric-box {
+    text-align: center;
+    padding: 15px;
+    background: hsla(0, 0%, 100%, 0.2);
+    border-radius: 8px;
+    margin-bottom: 10px;
+  }
+
+  .metric-label {
+    font-size: 0.8rem;
+    opacity: 0.9;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .metric-value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin-top: 5px;
+  }
+
+  /* ----------------------------------
+     Canhoto Preview (detalhes.html)
+     ---------------------------------- */
+  .canhoto-preview {
+    max-width: 100%;
+    border-radius: 10px;
+    box-shadow: 0 5px 15px hsla(0, 0%, 0%, 0.2);
+  }
+
+  /* ----------------------------------
+     Monitoramento Layout
+     ---------------------------------- */
+  .monitoramento-container {
+    display: grid;
+    grid-template-columns: 1fr 400px;
+    gap: 20px;
+    height: calc(100vh - 160px);
+  }
+
+  @media (max-width: 1200px) {
+    .monitoramento-container {
+      grid-template-columns: 1fr;
+      height: auto;
+    }
+  }
+
+  .painel-lateral {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    overflow-y: auto;
+    max-height: calc(100vh - 160px);
+  }
+
+  /* ----------------------------------
+     Stats Row (monitoramento.html)
+     ---------------------------------- */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+
+  .stat-card {
+    background: var(--bg-light);
+    border-radius: 12px;
+    padding: 15px;
+    text-align: center;
+    box-shadow: 0 2px 10px hsla(0, 0%, 0%, 0.05);
+    transition: all 0.3s ease;
+  }
+
+  .stat-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px hsla(0, 0%, 0%, 0.1);
+  }
+
+  .stat-card h3 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin: 0;
+  }
+
+  .stat-card p {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin: 5px 0 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .stat-card.success h3 { color: var(--semantic-success); }
+  .stat-card.warning h3 { color: var(--amber-50); }
+  .stat-card.danger h3 { color: var(--semantic-danger); }
+  .stat-card.info h3 { color: hsl(190, 90%, 50%); }
+
+  /* ----------------------------------
+     Alerta Dificuldade (monitoramento.html)
+     ---------------------------------- */
+  .alerta-dificuldade {
+    background: linear-gradient(135deg, var(--semantic-danger) 0%, hsl(354, 70%, 46%) 100%);
+    color: var(--bg-light);
+    border-radius: 15px;
+    padding: 15px 20px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 5px 20px hsla(354, 70%, 54%, 0.3);
+  }
+
+  .alerta-dificuldade:hover {
+    transform: scale(1.02);
+  }
+
+  .alerta-dificuldade.sem-dificuldade {
+    background: linear-gradient(135deg, var(--semantic-success) 0%, hsl(162, 73%, 46%) 100%);
+    box-shadow: 0 5px 20px hsla(134, 61%, 41%, 0.3);
+  }
+
+  .alerta-dificuldade h5 {
+    margin: 0;
+    font-weight: 600;
+  }
+
+  .alerta-dificuldade .badge-numero {
+    background: var(--bg-light);
+    color: var(--semantic-danger);
+    font-size: 1.5rem;
+    font-weight: 700;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: pulse-alert 2s infinite;
+  }
+
+  .alerta-dificuldade.sem-dificuldade .badge-numero {
+    color: var(--semantic-success);
+    animation: none;
+  }
+
+  @keyframes pulse-alert {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+  }
+
+  /* ----------------------------------
+     Lista Rastreamentos (monitoramento.html)
+     ---------------------------------- */
+  .lista-rastreamentos {
+    background: var(--bg-light);
+    border-radius: 15px;
+    overflow: hidden;
+    box-shadow: 0 2px 10px hsla(0, 0%, 0%, 0.05);
+    flex: 1;
+  }
+
+  .lista-rastreamentos-header {
+    background: linear-gradient(135deg, var(--semantic-success) 0%, hsl(162, 73%, 46%) 100%);
+    color: var(--bg-light);
+    padding: 15px 20px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .lista-rastreamentos-body {
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  .item-rastreamento {
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .item-rastreamento:hover {
+    background: var(--bg);
+  }
+
+  .item-rastreamento:last-child {
+    border-bottom: none;
+  }
+
+  .item-rastreamento .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+
+  .item-rastreamento .embarque-numero {
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .item-rastreamento .status-badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .item-rastreamento .info-row {
+    display: flex;
+    gap: 15px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+
+  .item-rastreamento .info-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .item-rastreamento .clientes {
+    margin-top: 8px;
+    font-size: 0.8rem;
+    color: var(--text);
+  }
+
+  /* ----------------------------------
+     Status Badges (shared across templates)
+     ---------------------------------- */
+  .status-ativo {
+    background: hsla(var(--semantic-success-h), var(--semantic-success-s), var(--semantic-success-l), 0.2);
+    color: var(--semantic-success);
+  }
+
+  .status-proximo {
+    background: hsla(var(--amber-h), var(--amber-s), 50%, 0.2);
+    color: var(--amber-50);
+  }
+
+  .status-entregue {
+    background: hsla(188, 78%, 41%, 0.2);
+    color: hsl(188, 78%, 41%);
+  }
+
+  .status-dificuldade {
+    background: hsla(var(--semantic-danger-h), var(--semantic-danger-s), var(--semantic-danger-l), 0.2);
+    color: var(--semantic-danger);
+    animation: blink 1s infinite;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+
+  /* Dark mode adjustments */
+  [data-bs-theme="dark"] .status-ativo {
+    background: hsla(var(--semantic-success-h), var(--semantic-success-s), var(--semantic-success-l), 0.25);
+  }
+
+  [data-bs-theme="dark"] .status-proximo {
+    background: hsla(var(--amber-h), var(--amber-s), 50%, 0.25);
+  }
+
+  [data-bs-theme="dark"] .status-entregue {
+    background: hsla(188, 78%, 41%, 0.25);
+  }
+
+  [data-bs-theme="dark"] .status-dificuldade {
+    background: hsla(var(--semantic-danger-h), var(--semantic-danger-s), var(--semantic-danger-l), 0.25);
+  }
+
+  /* ----------------------------------
+     Modal Dificuldade (monitoramento.html)
+     ---------------------------------- */
+  .modal-dificuldade .modal-header {
+    background: linear-gradient(135deg, var(--semantic-danger) 0%, hsl(354, 70%, 46%) 100%);
+    color: var(--bg-light);
+  }
+
+  .modal-dificuldade .table {
+    margin: 0;
+  }
+
+  .modal-dificuldade .tempo-cell {
+    font-weight: 700;
+    color: var(--semantic-danger);
+  }
+
+  /* ----------------------------------
+     Leaflet Marker Override
+     ---------------------------------- */
+  .leaflet-marker-icon {
+    background: transparent !important;
+    border: none !important;
+  }
+
+  .custom-marker-truck i,
+  .custom-marker-destino i,
+  .custom-marker-origem i {
+    filter: drop-shadow(2px 2px 3px hsla(0, 0%, 0%, 0.3));
+  }
+
+  /* ----------------------------------
+     Loading Overlay (monitoramento.html)
+     ---------------------------------- */
+  .loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: hsla(0, 0%, 100%, 0.8);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    border-radius: 15px;
+  }
+
+  .loading-overlay.show {
+    display: flex;
+  }
+
+  [data-bs-theme="dark"] .loading-overlay {
+    background: hsla(220, 13%, 10%, 0.8);
+  }
+
+  /* ----------------------------------
+     Refresh Indicator (monitoramento.html)
+     ---------------------------------- */
+  .refresh-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+
+  .refresh-indicator .spinner-border {
+    width: 16px;
+    height: 16px;
+    border-width: 2px;
+  }
+
+  /* ----------------------------------
+     Card Rastreamento (dashboard.html)
+     ---------------------------------- */
+  .card-rastreamento {
+    transition: all 0.3s ease;
+    cursor: pointer;
+  }
+
+  .card-rastreamento:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px hsla(0, 0%, 0%, 0.15);
+  }
 
 } /* End @layer modules */

@@ -5,100 +5,9 @@
 {% block extra_css %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
-    #mapa-detalhes {
-        height: 500px;
-        width: 100%;
-        border-radius: 10px;
-        margin-bottom: 20px;
-    }
-
-    .timeline {
-        position: relative;
-        padding: 20px 0;
-    }
-
-    .timeline-item {
-        padding: 20px;
-        background: #f8f9fa;
-        border-left: 3px solid #28a745;
-        margin-bottom: 20px;
-        border-radius: 5px;
-    }
-
-    .timeline-item.chegada {
-        border-left-color: #ffc107;
-    }
-
-    .timeline-item.entregue {
-        border-left-color: #17a2b8;
-    }
-
-    .timeline-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 10px;
-    }
-
-    .timeline-title {
-        font-weight: 600;
-        color: #495057;
-    }
-
-    .timeline-time {
-        font-size: 0.85rem;
-        color: #6c757d;
-    }
-
-    .status-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 20px;
-        border-radius: 10px;
-        margin-bottom: 20px;
-    }
-
-    .status-card.ativo {
-        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-    }
-
-    .status-card.proximo {
-        background: linear-gradient(135deg, #ffc107 0%, #ff8b00 100%);
-    }
-
-    .status-card.entregue {
-        background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
-    }
-
-    .metric-box {
-        text-align: center;
-        padding: 15px;
-        background: rgba(255, 255, 255, 0.2);
-        border-radius: 8px;
-        margin-bottom: 10px;
-    }
-
-    .metric-label {
-        font-size: 0.8rem;
-        opacity: 0.9;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-    }
-
-    .metric-value {
-        font-size: 1.8rem;
-        font-weight: 700;
-        margin-top: 5px;
-    }
-
+    /* Styles extracted to _rastreamento.css */
     .table-pings {
         font-size: 0.9rem;
-    }
-
-    .canhoto-preview {
-        max-width: 100%;
-        border-radius: 10px;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.2);
     }
 </style>
 {% endblock %}
@@ -133,7 +42,7 @@
             </div>
 
             <!-- Card de Status -->
-            <div class="status-card {% if rastreamento.status == 'ATIVO' %}ativo{% elif rastreamento.status == 'CHEGOU_DESTINO' %}proximo{% elif rastreamento.status == 'ENTREGUE' %}entregue{% endif %}">
+            <div class="rastr-status-card {% if rastreamento.status == 'ATIVO' %}ativo{% elif rastreamento.status == 'CHEGOU_DESTINO' %}proximo{% elif rastreamento.status == 'ENTREGUE' %}entregue{% else %}default{% endif %}">
                 <div class="row">
                     <div class="col-md-3">
                         <div class="metric-box">
@@ -368,7 +277,7 @@
         // Criar polyline com a rota
         const coordenadas = historicoRota.map(p => [p.latitude, p.longitude]);
         const polyline = L.polyline(coordenadas, {
-            color: '#28a745',
+            color: 'hsl(134, 61%, 41%)',
             weight: 4,
             opacity: 0.7
         }).addTo(mapaDetalhes);
@@ -407,8 +316,8 @@
             if (index > 0 && index < historicoRota.length - 1 && index % 10 === 0) {
                 L.circleMarker([ponto.latitude, ponto.longitude], {
                     radius: 4,
-                    fillColor: '#007bff',
-                    color: '#fff',
+                    fillColor: 'hsl(211, 100%, 50%)',
+                    color: 'hsl(0, 0%, 100%)',
                     weight: 1,
                     opacity: 1,
                     fillOpacity: 0.8
