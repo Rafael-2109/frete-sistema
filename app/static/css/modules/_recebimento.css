@@ -2,7 +2,7 @@
  * _recebimento.css - Recebimento Module Overrides
  *
  * Component overrides specific to the recebimento module.
- * NOTE: High inline style count - fiscal forms need careful migration.
+ * Styles extracted from template inline styles during migration.
  *
  * Token mapping:
  * - Use var(--bg-light) for card backgrounds
@@ -10,16 +10,144 @@
  * - Use var(--text-muted) for secondary text
  * - Use var(--border) for borders
  * - Use var(--semantic-success/danger) for status colors
+ *
+ * Migrated templates:
+ * - recebimento/central_compras.html (06-04)
+ * - recebimento/central_fiscal.html (06-04)
+ * - recebimento/primeira_compra.html (06-04)
+ * - recebimento/divergencias.html (06-04)
+ * - recebimento/preview_consolidacao.html (06-04)
  */
 
 @layer modules {
 
   /* ═══════════════════════════════════════════════════════════════════════════
-     RECEBIMENTO MODULE - Component overrides
-     Migrated from template inline styles
-     Templates: 14 total
+     CENTRAL COMPRAS/FISCAL - Hub Dashboard Grid
+     Migrated from central_compras.html and central_fiscal.html inline styles
      ═══════════════════════════════════════════════════════════════════════════ */
 
-  /* Placeholder - styles will be added as templates are migrated */
+  .compras-dashboard-grid,
+  .fiscal-dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 1.5rem;
+      margin-top: 2rem;
+  }
+
+  /* Icon variants for section cards - extracted from inline styles */
+  /* Blue variant (Pedidos, Relatorios) */
+  .fin-section-card__icon--blue {
+      background: linear-gradient(135deg, hsla(214 95% 93% / 1), hsla(214 95% 87% / 1));
+      color: hsl(217 91% 60%);
+  }
+
+  /* Green variant (Validacoes, IBS/CBS) */
+  .fin-section-card__icon--green {
+      background: linear-gradient(135deg, hsla(152 81% 91% / 1), hsla(152 81% 83% / 1));
+      color: hsl(161 94% 30%);
+  }
+
+  /* Purple variant (Cadastros) */
+  .fin-section-card__icon--purple {
+      background: linear-gradient(135deg, hsla(267 84% 95% / 1), hsla(267 84% 90% / 1));
+      color: hsl(263 70% 50%);
+  }
+
+  /* Amber/Orange variant (Validacao Compras, Recebimento) */
+  .fin-section-card__icon--amber {
+      background: linear-gradient(135deg, var(--amber-50), var(--amber-60));
+      color: var(--amber-28);
+  }
+
+  /* Light mode adjustments for central hub pages */
+  [data-bs-theme="light"] .fin-section-card {
+      background: var(--bg-light);
+      border-color: var(--border);
+  }
+
+  [data-bs-theme="light"] .fin-section-link {
+      background: var(--bg);
+  }
+
+  [data-bs-theme="light"] .fin-section-link:hover {
+      background: var(--amber-50);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     NF GROUPING ROWS - Alternating row colors for NF grouping
+     Migrated from primeira_compra.html and divergencias.html inline styles
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* Row alternation - theme adaptive */
+  .rec-row-blue {
+      background-color: hsla(214 100% 95% / 1);
+  }
+
+  .rec-row-gray {
+      background-color: var(--bg);
+  }
+
+  /* Dark mode adjustments */
+  [data-bs-theme="dark"] .rec-row-blue {
+      background-color: hsla(214 50% 20% / 0.3);
+  }
+
+  [data-bs-theme="dark"] .rec-row-gray {
+      background-color: hsla(0 0% 50% / 0.1);
+  }
+
+  /* Border left for NF grouping */
+  .rec-border-blue {
+      border-left: 5px solid hsl(217 91% 60%);
+  }
+
+  .rec-border-gray {
+      border-left: 5px solid hsl(210 14% 69%);
+  }
+
+  /* NF separator row */
+  .rec-nf-separator td {
+      height: 8px;
+      background: linear-gradient(to bottom, var(--border), var(--bg));
+      padding: 0;
+      border: none;
+      box-shadow: 0 2px 4px hsla(0 0% 0% / 0.1);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     PREVIEW CONSOLIDACAO - Timeline and Status
+     Migrated from preview_consolidacao.html inline styles
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .rec-timeline {
+      position: relative;
+  }
+
+  .rec-timeline-item:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      left: 15px;
+      width: 2px;
+      height: calc(100% - 32px);
+      background: var(--border);
+      margin-top: 36px;
+  }
+
+  /* Border left utilities for status cards */
+  .rec-border-left-success {
+      border-left: 4px solid var(--semantic-success);
+  }
+
+  .rec-border-left-warning {
+      border-left: 4px solid var(--amber-50);
+  }
+
+  .rec-border-left-info {
+      border-left: 4px solid hsl(197 71% 52%);
+  }
+
+  .rec-border-left-primary {
+      border-left: 4px solid hsl(217 91% 60%);
+  }
 
 } /* End @layer modules */

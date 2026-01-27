@@ -217,9 +217,9 @@
             <h6 class="mb-0"><i class="fas fa-list-ol me-2"></i>Ações que Serão Executadas no Odoo ({{ preview.acoes|length }} ações)</h6>
         </div>
         <div class="card-body">
-            <div class="timeline">
+            <div class="rec-timeline">
                 {% for acao in preview.acoes %}
-                <div class="timeline-item d-flex mb-3">
+                <div class="rec-timeline-item d-flex mb-3">
                     <div class="timeline-marker me-3">
                         <span class="badge bg-{{ acao.cor }} rounded-circle" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">
                             <i class="{{ acao.icone }}"></i>
@@ -264,26 +264,7 @@
     {% endif %}
 </div>
 
-<style>
-.timeline {
-    position: relative;
-}
-.timeline-item:not(:last-child)::after {
-    content: '';
-    position: absolute;
-    left: 15px;
-    width: 2px;
-    height: calc(100% - 32px);
-    background: #e9ecef;
-    margin-top: 36px;
-}
-.border-left-success {
-    border-left: 4px solid #28a745 !important;
-}
-.border-left-warning {
-    border-left: 4px solid #ffc107 !important;
-}
-</style>
+{# Styles moved to app/static/css/modules/_recebimento.css #}
 
 <script>
 function confirmarConsolidacao() {

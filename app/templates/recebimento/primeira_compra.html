@@ -1,12 +1,7 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<style>
-    /* Cores alternadas para agrupamento por NF */
-    .bg-light-blue { background-color: #e7f1ff !important; }
-    .bg-light-gray { background-color: #f8f9fa !important; }
-    .nf-separator td { box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-</style>
+{# Styles moved to app/static/css/modules/_recebimento.css #}
 <div class="container-fluid mt-4">
     <!-- Header -->
     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -127,13 +122,13 @@
                         {% if item.odoo_dfe_id != ns.last_dfe_id %}
                             {% if not ns.is_first %}
                             <!-- Linha separadora entre NFs -->
-                            <tr class="nf-separator"><td colspan="11" style="height: 8px; background: linear-gradient(to bottom, #dee2e6, #f8f9fa); padding: 0; border: none;"></td></tr>
+                            <tr class="rec-nf-separator"><td colspan="11"></td></tr>
                             {% endif %}
                             {% set ns.color_idx = (ns.color_idx + 1) % 2 %}
                             {% set ns.last_dfe_id = item.odoo_dfe_id %}
                             {% set ns.is_first = false %}
                         {% endif %}
-                        <tr data-item-id="{{ item.id }}" class="{{ 'bg-light-blue' if ns.color_idx == 0 else 'bg-light-gray' }}" style="border-left: 5px solid {{ '#0d6efd' if ns.color_idx == 0 else '#adb5bd' }};">
+                        <tr data-item-id="{{ item.id }}" class="{{ 'rec-row-blue rec-border-blue' if ns.color_idx == 0 else 'rec-row-gray rec-border-gray' }}">
                             <td>
                                 <a href="{{ url_for('validacao_fiscal.obter_pdf_nf', dfe_id=item.odoo_dfe_id) }}"
                                    target="_blank" class="text-primary fw-bold" title="Ver PDF da NF">

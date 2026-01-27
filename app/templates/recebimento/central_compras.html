@@ -3,119 +3,7 @@
 {% block title %}Central Compras{% endblock %}
 
 {% block extra_css %}
-<style>
-/* Central Compras - Hub com Cards */
-.compras-dashboard-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-    gap: 1.5rem;
-    margin-top: 2rem;
-}
-
-.fin-section-card {
-    background: var(--bg-light, #1a1a2e);
-    border-radius: 12px;
-    padding: 1.5rem;
-    border: 1px solid var(--border, rgba(255,255,255,0.1));
-}
-
-.fin-section-card__header {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    margin-bottom: 1.25rem;
-    padding-bottom: 0.75rem;
-    border-bottom: 1px solid var(--border, rgba(255,255,255,0.1));
-}
-
-.fin-section-card__icon {
-    width: 42px;
-    height: 42px;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.25rem;
-}
-
-.fin-section-card__title {
-    font-size: 1.1rem;
-    font-weight: 600;
-    margin: 0;
-    color: var(--text, #fff);
-}
-
-.fin-section-card__desc {
-    font-size: 0.85rem;
-    color: var(--text-muted, #888);
-    margin: 0;
-}
-
-.fin-section-links {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-}
-
-.fin-section-link {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.75rem 1rem;
-    border-radius: 8px;
-    background: var(--bg, #0f0f1a);
-    color: var(--text, #fff);
-    text-decoration: none;
-    transition: all 0.2s ease;
-    border: 1px solid transparent;
-}
-
-.fin-section-link:hover {
-    background: var(--amber-50, #fffbeb);
-    color: var(--amber-700, #b45309);
-    border-color: var(--amber-200, #fde68a);
-    transform: translateX(4px);
-}
-
-.fin-section-link__icon {
-    width: 32px;
-    height: 32px;
-    border-radius: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(255,255,255,0.05);
-    font-size: 0.9rem;
-}
-
-.fin-section-link__text {
-    flex: 1;
-}
-
-.fin-section-link__title {
-    font-weight: 500;
-    font-size: 0.95rem;
-}
-
-.fin-section-link__subtitle {
-    font-size: 0.75rem;
-    opacity: 0.7;
-}
-
-/* Dark mode adjustments */
-[data-bs-theme="light"] .fin-section-card {
-    background: #fff;
-    border-color: #e5e7eb;
-}
-
-[data-bs-theme="light"] .fin-section-link {
-    background: #f9fafb;
-}
-
-[data-bs-theme="light"] .fin-section-link:hover {
-    background: var(--amber-50, #fffbeb);
-}
-</style>
+{# Styles moved to app/static/css/modules/_recebimento.css #}
 {% endblock %}
 
 {% block content %}
@@ -144,7 +32,7 @@
         <!-- PEDIDOS -->
         <div class="fin-section-card">
             <div class="fin-section-card__header">
-                <div class="fin-section-card__icon" style="background: linear-gradient(135deg, #dbeafe, #bfdbfe); color: #2563eb;">
+                <div class="fin-section-card__icon fin-section-card__icon--blue">
                     <i class="fas fa-file-alt"></i>
                 </div>
                 <div>
@@ -168,7 +56,7 @@
         <!-- VALIDACOES -->
         <div class="fin-section-card">
             <div class="fin-section-card__header">
-                <div class="fin-section-card__icon" style="background: linear-gradient(135deg, #d1fae5, #a7f3d0); color: #059669;">
+                <div class="fin-section-card__icon fin-section-card__icon--green">
                     <i class="fas fa-check-double"></i>
                 </div>
                 <div>
@@ -210,7 +98,7 @@
         <!-- CADASTROS -->
         <div class="fin-section-card">
             <div class="fin-section-card__header">
-                <div class="fin-section-card__icon" style="background: linear-gradient(135deg, #ede9fe, #ddd6fe); color: #7c3aed;">
+                <div class="fin-section-card__icon fin-section-card__icon--purple">
                     <i class="fas fa-exchange-alt"></i>
                 </div>
                 <div>
@@ -234,7 +122,7 @@
         <!-- RECEBIMENTO -->
         <div class="fin-section-card">
             <div class="fin-section-card__header">
-                <div class="fin-section-card__icon" style="background: linear-gradient(135deg, #fef3c7, #fde68a); color: #b45309;">
+                <div class="fin-section-card__icon fin-section-card__icon--amber">
                     <i class="fas fa-boxes"></i>
                 </div>
                 <div>
