@@ -1,15 +1,17 @@
 /**
  * _tables.css - Table Component
  *
- * Base table styling with responsive wrapper enhancement and action column protection.
+ * Complete table styling system with responsive wrapper, sticky headers,
+ * and theme-adaptive hover states.
+ *
  * Addresses:
  * - TABL-01: Horizontal scroll on mobile without cutting off content
+ * - TABL-02: Sticky headers that remain visible during vertical scroll
+ * - TABL-03: Theme-adaptive hover states for dark/light modes
  * - LAYO-01: Mobile responsiveness without content clipping
  *
  * Uses CSS custom property API for easy theming and override.
  * Compatible with both dark and light modes via design tokens.
- *
- * NOTE: Sticky headers and hover states are in Plan 03-02.
  */
 
 @layer components {
