@@ -32,12 +32,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Existing `_design-tokens.css` is wrapped in `@layer tokens` and loads correctly
   4. Dark mode toggle works on all existing templates without flash (FOWT prevention verified)
   5. New CSS file structure exists: `layers/`, `tokens/`, `base/`, `components/`, `modules/`, `utilities/`
-**Plans**: TBD
+**Plans**: 3 plans in 2 waves
 
 Plans:
-- [ ] 01-01: Create main.css entry point with @layer declarations and folder structure
-- [ ] 01-02: Standardize Bootstrap 5.3.3 across all templates
-- [ ] 01-03: Wrap existing CSS files in appropriate layers
+- [ ] 01-01-PLAN.md - Create main.css entry point with @layer declarations and folder structure (Wave 1)
+- [ ] 01-02-PLAN.md - Standardize Bootstrap 5.3.3 across all 10 templates (Wave 1)
+- [ ] 01-03-PLAN.md - Wrap existing CSS files in layers and update base.html (Wave 2)
 
 ### Phase 2: Component Library
 **Goal**: Reusable component CSS extracted from inline patterns, available for template migration
@@ -142,7 +142,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Layer Infrastructure | 0/3 | Not started | - |
+| 1. Layer Infrastructure | 0/3 | Planned | - |
 | 2. Component Library | 0/3 | Not started | - |
 | 3. Table System | 0/2 | Not started | - |
 | 4. Layout Patterns | 0/1 | Not started | - |
@@ -152,4 +152,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 
 ---
 *Roadmap created: 2026-01-26*
+*Phase 1 planned: 2026-01-26*
 *Total phases: 7 | Total plans: 18*
