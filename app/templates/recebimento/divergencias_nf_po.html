@@ -54,8 +54,9 @@
         </div>
         <div class="card-body">
             <form method="GET" action="{{ url_for('recebimento_views.divergencias_nf_po') }}">
-                <div class="row">
-                    <div class="col-md-3">
+                <div class="row g-2">
+                    <!-- Linha 1: Status, Tipo, NF, CNPJ Fornecedor -->
+                    <div class="col-md-2">
                         <label class="form-label">Status</label>
                         <select name="status" class="form-select form-select-sm">
                             <option value="">Todos</option>
@@ -64,7 +65,7 @@
                             <option value="rejeitada" {% if filtros.status == 'rejeitada' %}selected{% endif %}>Rejeitadas</option>
                         </select>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <label class="form-label">Tipo Divergencia</label>
                         <select name="tipo" class="form-select form-select-sm">
                             <option value="">Todos</option>
@@ -75,12 +76,49 @@
                             {% endfor %}
                         </select>
                     </div>
+                    <div class="col-md-2">
+                        <label class="form-label">NF</label>
+                        <input type="text" name="numero_nf" class="form-control form-control-sm"
+                               value="{{ filtros.numero_nf }}" placeholder="Numero...">
+                    </div>
                     <div class="col-md-3">
                         <label class="form-label">CNPJ Fornecedor</label>
                         <input type="text" name="cnpj" class="form-control form-control-sm"
-                               value="{{ filtros.cnpj }}" placeholder="Digite o CNPJ...">
+                               value="{{ filtros.cnpj }}" placeholder="CNPJ...">
                     </div>
-                    <div class="col-md-3 d-flex align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label">Nome Fornecedor</label>
+                        <input type="text" name="nome_fornecedor" class="form-control form-control-sm"
+                               value="{{ filtros.nome_fornecedor }}" placeholder="Razao social...">
+                    </div>
+                </div>
+                <div class="row g-2 mt-2">
+                    <!-- Linha 2: Produto (autocomplete), Empresa, Botoes -->
+                    <div class="col-md-4">
+                        <label class="form-label">Produto (Codigo/Nome)</label>
+                        <div class="position-relative">
+                            <input type="text" name="cod_produto" id="filtro_produto"
+                                   class="form-control form-control-sm"
+                                   value="{{ filtros.cod_produto }}"
+                                   placeholder="Digite codigo ou nome..."
+                                   autocomplete="off">
+                            <div id="autocomplete_produtos" class="list-group position-absolute w-100 shadow-sm"
+                                 style="z-index: 1050; display: none; max-height: 250px; overflow-y: auto;">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Empresa</label>
+                        <select name="empresa" class="form-select form-select-sm">
+                            <option value="">Todas</option>
+                            {% for e in empresas_opcoes %}
+                            <option value="{{ e.cnpj }}" {% if filtros.empresa == e.cnpj %}selected{% endif %}>
+                                {{ e.label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-5 d-flex align-items-end">
                         <button type="submit" class="btn btn-primary btn-sm me-2">
                             <i class="fas fa-search"></i> Buscar
                         </button>
@@ -171,7 +209,12 @@
                                 <i class="fas fa-arrow-right text-muted mx-1"></i>
                                 <code class="text-success">{{ item.cod_produto_interno }}</code>
                                 {% endif %}
-                                <br><small class="text-muted">{{ item.nome_produto or 'N/A' }}</small>
+                                <br>
+                                {# Se tem De-Para com nome interno, exibir nome interno em verde #}
+                                {# Senao, exibir nome do produto da NF (fornecedor) #}
+                                <small class="{% if item.nome_produto_interno %}text-success{% else %}text-muted{% endif %}">
+                                    {{ item.nome_produto_interno or item.nome_produto or 'N/A' }}
+                                </small>
                             </td>
                             <!-- Qtd -->
                             <td class="text-center" style="font-size: 0.85em;">
@@ -384,7 +427,7 @@
         <ul class="pagination justify-content-center">
             {% if paginacao.page > 1 %}
             <li class="page-item">
-                <a class="page-link" href="?page={{ paginacao.page - 1 }}&status={{ filtros.status }}&tipo={{ filtros.tipo }}&cnpj={{ filtros.cnpj }}">
+                <a class="page-link" href="?page={{ paginacao.page - 1 }}&status={{ filtros.status }}&tipo={{ filtros.tipo }}&cnpj={{ filtros.cnpj }}&numero_nf={{ filtros.numero_nf }}&nome_fornecedor={{ filtros.nome_fornecedor }}&cod_produto={{ filtros.cod_produto }}&empresa={{ filtros.empresa }}">
                     <i class="fas fa-chevron-left"></i>
                 </a>
             </li>
@@ -392,13 +435,13 @@
 
             {% for p in range(1, paginacao.pages + 1) %}
             <li class="page-item {% if p == paginacao.page %}active{% endif %}">
-                <a class="page-link" href="?page={{ p }}&status={{ filtros.status }}&tipo={{ filtros.tipo }}&cnpj={{ filtros.cnpj }}">{{ p }}</a>
+                <a class="page-link" href="?page={{ p }}&status={{ filtros.status }}&tipo={{ filtros.tipo }}&cnpj={{ filtros.cnpj }}&numero_nf={{ filtros.numero_nf }}&nome_fornecedor={{ filtros.nome_fornecedor }}&cod_produto={{ filtros.cod_produto }}&empresa={{ filtros.empresa }}">{{ p }}</a>
             </li>
             {% endfor %}
 
             {% if paginacao.page < paginacao.pages %}
             <li class="page-item">
-                <a class="page-link" href="?page={{ paginacao.page + 1 }}&status={{ filtros.status }}&tipo={{ filtros.tipo }}&cnpj={{ filtros.cnpj }}">
+                <a class="page-link" href="?page={{ paginacao.page + 1 }}&status={{ filtros.status }}&tipo={{ filtros.tipo }}&cnpj={{ filtros.cnpj }}&numero_nf={{ filtros.numero_nf }}&nome_fornecedor={{ filtros.nome_fornecedor }}&cod_produto={{ filtros.cod_produto }}&empresa={{ filtros.empresa }}">
                     <i class="fas fa-chevron-right"></i>
                 </a>
             </li>

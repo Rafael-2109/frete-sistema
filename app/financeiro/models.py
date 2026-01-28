@@ -2292,6 +2292,9 @@ class CnabRetornoLote(db.Model):
     # Hash para verificação de duplicação (SHA256)
     hash_arquivo = db.Column(db.String(64), unique=True, index=True)
 
+    # Batch de upload (agrupa múltiplos arquivos enviados juntos)
+    batch_id = db.Column(db.String(36), index=True, nullable=True)  # UUID do batch
+
     # Auditoria
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -2340,6 +2343,7 @@ class CnabRetornoLote(db.Model):
             'status': self.status,
             'processado_por': self.processado_por,
             'erro_mensagem': self.erro_mensagem,
+            'batch_id': self.batch_id,
         }
 
 

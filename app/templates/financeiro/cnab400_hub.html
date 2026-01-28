@@ -4,10 +4,76 @@
 
 {% block extra_css %}
 {# Styles moved to modules/_financeiro.css #}
+<style>
+.cnab-batch-progresso {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    color: white;
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+}
+.cnab-batch-progresso__header {
+    padding: 12px 16px;
+    font-size: 0.95rem;
+}
+.cnab-batch-progresso__body {
+    background: rgba(255, 255, 255, 0.95);
+    color: #333;
+    padding: 12px 16px;
+}
+.cnab-batch-progresso__footer {
+    background: rgba(255, 255, 255, 0.9);
+    padding: 12px 16px;
+    border-top: 1px solid #e5e7eb;
+    text-align: right;
+}
+.cnab-batch-progresso.concluido {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+}
+.cnab-batch-progresso.parcial {
+    background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+}
+.cnab-batch-progresso.erro {
+    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+}
+</style>
 {% endblock %}
 
 {% block content %}
 <div class="cnab-container">
+    <!-- ================================================================== -->
+    <!-- PAINEL DE PROGRESSO (se houver batch em andamento) -->
+    <!-- ================================================================== -->
+    <div id="batch-progresso-hub" class="cnab-batch-progresso" style="display: none;">
+        <div class="cnab-batch-progresso__header">
+            <i class="fas fa-cog fa-spin me-2"></i>
+            <strong>Processamento em Andamento</strong>
+            <span id="batch-arquivo-atual" class="ms-2 text-muted"></span>
+        </div>
+        <div class="cnab-batch-progresso__body">
+            <div class="progress mb-2" style="height: 10px;">
+                <div id="batch-barra" class="progress-bar progress-bar-striped progress-bar-animated"
+                     role="progressbar" style="width: 0%"></div>
+            </div>
+            <div class="d-flex justify-content-between small">
+                <div>
+                    <span class="text-success"><i class="fas fa-check me-1"></i><span id="batch-sucesso">0</span></span>
+                    <span class="text-danger ms-3"><i class="fas fa-times me-1"></i><span id="batch-erro">0</span></span>
+                </div>
+                <span id="batch-contagem">0/0 arquivos</span>
+            </div>
+        </div>
+        <div id="batch-footer" class="cnab-batch-progresso__footer" style="display: none;">
+            <button onclick="fecharPainelBatch()" class="btn btn-sm btn-outline-secondary">
+                <i class="fas fa-times"></i> Fechar
+            </button>
+            <button onclick="location.reload()" class="btn btn-sm btn-primary ms-2">
+                <i class="fas fa-sync"></i> Atualizar Lista
+            </button>
+        </div>
+    </div>
+
     <!-- ================================================================== -->
     <!-- HEADER -->
     <!-- ================================================================== -->
@@ -154,4 +220,92 @@
         {% endif %}
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const painel = document.getElementById('batch-progresso-hub');
+    const batchId = localStorage.getItem('cnab_batch_id');
+    let pollInterval = null;
+
+    if (batchId) {
+        painel.style.display = 'block';
+        startPolling();
+    }
+
+    function startPolling() {
+        if (pollInterval) clearInterval(pollInterval);
+
+        // Polling a cada 2 segundos
+        checkBatchStatus();
+        pollInterval = setInterval(checkBatchStatus, 2000);
+    }
+
+    async function checkBatchStatus() {
+        const batchId = localStorage.getItem('cnab_batch_id');
+        if (!batchId) {
+            if (pollInterval) clearInterval(pollInterval);
+            return;
+        }
+
+        try {
+            const response = await fetch(`/cnab400/api/batch/${batchId}/status`);
+            const data = await response.json();
+
+            atualizarPainelHub(data);
+
+            if (data.status === 'concluido' || data.status === 'erro' || data.status === 'parcial' || data.status === 'nao_encontrado') {
+                clearInterval(pollInterval);
+                finalizarPainelHub(data);
+            }
+        } catch (e) {
+            console.error('Erro ao verificar status do batch:', e);
+        }
+    }
+
+    function atualizarPainelHub(data) {
+        const total = data.total_arquivos || 0;
+        const processados = data.arquivos_processados || 0;
+        const sucesso = data.arquivos_sucesso || 0;
+        const erro = data.arquivos_erro || 0;
+
+        const percent = total > 0 ? Math.round((processados / total) * 100) : 0;
+
+        document.getElementById('batch-arquivo-atual').textContent = data.arquivo_atual || '';
+        document.getElementById('batch-barra').style.width = percent + '%';
+        document.getElementById('batch-sucesso').textContent = sucesso;
+        document.getElementById('batch-erro').textContent = erro;
+        document.getElementById('batch-contagem').textContent = `${processados}/${total} arquivos`;
+    }
+
+    function finalizarPainelHub(data) {
+        const painel = document.getElementById('batch-progresso-hub');
+        const barra = document.getElementById('batch-barra');
+
+        barra.classList.remove('progress-bar-animated');
+
+        if (data.status === 'concluido') {
+            painel.classList.add('concluido');
+            document.getElementById('batch-arquivo-atual').textContent = 'Concluido!';
+        } else if (data.status === 'parcial') {
+            painel.classList.add('parcial');
+            document.getElementById('batch-arquivo-atual').textContent = 'Concluido com avisos';
+        } else if (data.status === 'nao_encontrado') {
+            // Batch nao encontrado - limpar localStorage
+            localStorage.removeItem('cnab_batch_id');
+            painel.style.display = 'none';
+            return;
+        } else {
+            painel.classList.add('erro');
+            document.getElementById('batch-arquivo-atual').textContent = 'Erro no processamento';
+        }
+
+        document.getElementById('batch-footer').style.display = 'block';
+    }
+
+    window.fecharPainelBatch = function() {
+        localStorage.removeItem('cnab_batch_id');
+        document.getElementById('batch-progresso-hub').style.display = 'none';
+    };
+});
+</script>
 {% endblock %}

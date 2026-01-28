@@ -654,6 +654,7 @@ class ValidacaoNfPoService:
                 'dfe_line_id': line['id'],
                 'cod_produto_fornecedor': cod_forn,
                 'cod_produto_interno': depara['cod_produto_interno'],
+                'nome_produto_interno': depara.get('nome_produto_interno'),  # Nome interno (nosso nome)
                 'odoo_product_id': depara.get('odoo_product_id'),
                 'nome_produto': line.get('det_prod_xprod', ''),
                 'qtd_original': qtd_original,
@@ -1199,6 +1200,7 @@ class ValidacaoNfPoService:
                 odoo_dfe_line_id=item.get('dfe_line_id'),
                 cod_produto_fornecedor=item.get('cod_produto_fornecedor'),
                 cod_produto_interno=item.get('cod_produto_interno'),
+                nome_produto_interno=item.get('nome_produto_interno'),  # Nome interno (nosso nome)
                 nome_produto=item.get('nome_produto'),
                 qtd_nf=float(item.get('qtd_convertida', 0)) if item.get('qtd_convertida') else None,
                 preco_nf=float(item.get('preco_convertido', 0)) if item.get('preco_convertido') else None,
@@ -1399,6 +1401,7 @@ class ValidacaoNfPoService:
             odoo_dfe_line_id=item.get('dfe_line_id'),
             cod_produto_fornecedor=item.get('cod_produto_fornecedor'),
             cod_produto_interno=item.get('cod_produto_interno'),
+            nome_produto_interno=item.get('nome_produto_interno'),  # Nome interno (nosso nome)
             nome_produto=item.get('nome_produto'),
             qtd_nf=float(item.get('qtd_convertida', 0)),
             preco_nf=float(item.get('preco_convertido', 0)),
@@ -1934,6 +1937,7 @@ class ValidacaoNfPoService:
             odoo_dfe_line_id=item.get('dfe_line_id'),
             cod_produto_fornecedor=item.get('cod_produto_fornecedor'),
             cod_produto_interno=item.get('cod_produto_interno'),
+            nome_produto_interno=item.get('nome_produto_interno'),  # Nome interno (nosso nome)
             nome_produto=item.get('nome_produto'),
             um_nf=item.get('um_nf'),
             fator_conversao=float(item.get('fator_conversao', 1)) if item.get('fator_conversao') else 1,

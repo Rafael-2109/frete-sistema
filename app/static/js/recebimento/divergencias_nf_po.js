@@ -697,4 +697,124 @@ function initValidacaoDatas() {
 // Inicializar datas ao carregar pagina
 document.addEventListener('DOMContentLoaded', function() {
     initValidacaoDatas();
+    initAutocompleteProduto();
 });
+
+
+// =============================================================================
+// AUTOCOMPLETE DE PRODUTOS (FILTRO)
+// =============================================================================
+
+let autocompleteTimeout = null;
+
+function initAutocompleteProduto() {
+    const inputProduto = document.getElementById('filtro_produto');
+    const listaProdutos = document.getElementById('autocomplete_produtos');
+
+    if (!inputProduto || !listaProdutos) return;
+
+    // Evento de digitacao com debounce
+    inputProduto.addEventListener('input', function() {
+        const termo = this.value.trim();
+
+        // Limpar timeout anterior
+        if (autocompleteTimeout) {
+            clearTimeout(autocompleteTimeout);
+        }
+
+        // Esconder lista se termo menor que 2 caracteres
+        if (termo.length < 2) {
+            listaProdutos.style.display = 'none';
+            return;
+        }
+
+        // Debounce de 300ms
+        autocompleteTimeout = setTimeout(() => {
+            buscarProdutosAutocomplete(termo);
+        }, 300);
+    });
+
+    // Fechar lista ao clicar fora
+    document.addEventListener('click', function(e) {
+        if (!inputProduto.contains(e.target) && !listaProdutos.contains(e.target)) {
+            listaProdutos.style.display = 'none';
+        }
+    });
+
+    // Navegacao por teclado
+    inputProduto.addEventListener('keydown', function(e) {
+        const items = listaProdutos.querySelectorAll('.list-group-item');
+        const ativo = listaProdutos.querySelector('.list-group-item.active');
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (!ativo && items.length > 0) {
+                items[0].classList.add('active');
+            } else if (ativo && ativo.nextElementSibling) {
+                ativo.classList.remove('active');
+                ativo.nextElementSibling.classList.add('active');
+            }
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (ativo && ativo.previousElementSibling) {
+                ativo.classList.remove('active');
+                ativo.previousElementSibling.classList.add('active');
+            }
+        } else if (e.key === 'Enter') {
+            if (ativo) {
+                e.preventDefault();
+                ativo.click();
+            }
+        } else if (e.key === 'Escape') {
+            listaProdutos.style.display = 'none';
+        }
+    });
+
+    console.log('[AUTOCOMPLETE] Inicializado para filtro de produto');
+}
+
+function buscarProdutosAutocomplete(termo) {
+    const listaProdutos = document.getElementById('autocomplete_produtos');
+
+    fetch(`/api/recebimento/autocomplete-produtos?termo=${encodeURIComponent(termo)}&limit=15`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.erro) {
+                console.error('Erro autocomplete:', data.erro);
+                return;
+            }
+
+            if (data.length === 0) {
+                listaProdutos.innerHTML = `
+                    <div class="list-group-item text-muted small py-2">
+                        <i class="fas fa-search me-2"></i>Nenhum produto encontrado
+                    </div>
+                `;
+                listaProdutos.style.display = 'block';
+                return;
+            }
+
+            listaProdutos.innerHTML = data.map(p => `
+                <a href="#" class="list-group-item list-group-item-action py-2"
+                   data-cod="${p.cod_produto}" data-nome="${p.nome_produto || ''}">
+                    <strong class="text-primary">${p.cod_produto}</strong>
+                    <br><small class="text-muted">${p.nome_produto || '-'}</small>
+                </a>
+            `).join('');
+
+            // Adicionar eventos de clique
+            listaProdutos.querySelectorAll('.list-group-item').forEach(item => {
+                item.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const cod = this.dataset.cod;
+                    document.getElementById('filtro_produto').value = cod;
+                    listaProdutos.style.display = 'none';
+                });
+            });
+
+            listaProdutos.style.display = 'block';
+        })
+        .catch(err => {
+            console.error('Erro ao buscar produtos:', err);
+        });
+}

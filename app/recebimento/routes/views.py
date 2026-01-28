@@ -26,6 +26,8 @@ from datetime import datetime
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for
 from flask_login import login_required, current_user
 
+from sqlalchemy import or_
+
 from app.recebimento.models import (
     DivergenciaFiscal,
     CadastroPrimeiraCompra,
@@ -1354,7 +1356,11 @@ def divergencias_nf_po():
     filtros = {
         'status': request.args.get('status', 'pendente'),
         'tipo': request.args.get('tipo', ''),
-        'cnpj': request.args.get('cnpj', '')
+        'cnpj': request.args.get('cnpj', ''),
+        'numero_nf': request.args.get('numero_nf', ''),
+        'nome_fornecedor': request.args.get('nome_fornecedor', ''),
+        'cod_produto': request.args.get('cod_produto', ''),
+        'empresa': request.args.get('empresa', '')
     }
 
     # Query base com JOIN para pegar dados da validacao (numero_nf)
@@ -1373,6 +1379,32 @@ def divergencias_nf_po():
     if filtros['cnpj']:
         query = query.filter(
             DivergenciaNfPo.cnpj_fornecedor.ilike(f"%{filtros['cnpj']}%")
+        )
+
+    if filtros['numero_nf']:
+        query = query.filter(
+            ValidacaoNfPoDfe.numero_nf.ilike(f"%{filtros['numero_nf']}%")
+        )
+
+    if filtros['nome_fornecedor']:
+        query = query.filter(
+            DivergenciaNfPo.razao_fornecedor.ilike(f"%{filtros['nome_fornecedor']}%")
+        )
+
+    if filtros['cod_produto']:
+        # Buscar por codigo OU nome do produto
+        query = query.filter(
+            or_(
+                DivergenciaNfPo.cod_produto_interno.ilike(f"%{filtros['cod_produto']}%"),
+                DivergenciaNfPo.nome_produto.ilike(f"%{filtros['cod_produto']}%")
+            )
+        )
+
+    if filtros['empresa']:
+        # Limpar CNPJ para comparacao
+        cnpj_limpo = ''.join(c for c in filtros['empresa'] if c.isdigit())
+        query = query.filter(
+            DivergenciaNfPo.cnpj_empresa_compradora.ilike(f"%{cnpj_limpo}%")
         )
 
     # Ordenar
@@ -1441,7 +1473,8 @@ def divergencias_nf_po():
             'qtd_nf': None,
             'preco_nf': None,
             'um_nf': None,
-            'fator_conversao': 1
+            'fator_conversao': 1,
+            'nome_produto_interno': None  # Nome interno (nosso nome) - preenchido via MatchNfPoItem
         }
 
         # Buscar dados da validacao (numero_nf, data_nf)
@@ -1465,6 +1498,7 @@ def divergencias_nf_po():
                 item['preco_nf'] = float(match.preco_nf) if match.preco_nf else None
                 item['um_nf'] = match.um_nf
                 item['fator_conversao'] = float(match.fator_conversao) if match.fator_conversao else 1
+                item['nome_produto_interno'] = match.nome_produto_interno  # Nome interno (nosso nome)
 
         # Se nao encontrou match, buscar qualquer match da mesma validacao
         # com o mesmo codigo de produto fornecedor
@@ -1479,6 +1513,7 @@ def divergencias_nf_po():
                 item['preco_nf'] = float(match.preco_nf) if match.preco_nf else None
                 item['um_nf'] = match.um_nf
                 item['fator_conversao'] = float(match.fator_conversao) if match.fator_conversao else 1
+                item['nome_produto_interno'] = match.nome_produto_interno  # Nome interno (nosso nome)
 
         # Se ainda nao encontrou, marcar para buscar do Odoo
         # (sera feito em batch depois para performance)
@@ -1541,6 +1576,14 @@ def divergencias_nf_po():
     # URL base do Odoo para links externos
     odoo_base_url = 'https://odoo.nacomgoya.com.br/web'
 
+    # Empresas para filtro
+    empresas_opcoes = [
+        {'cnpj': '61724241000330', 'label': 'NACOM GOYA - CD'},
+        {'cnpj': '61724241000178', 'label': 'NACOM GOYA - FB'},
+        {'cnpj': '61724241000259', 'label': 'NACOM GOYA - SC'},
+        {'cnpj': '18467441000163', 'label': 'LA FAMIGLIA - LF'},
+    ]
+
     return render_template(
         'recebimento/divergencias_nf_po.html',
         items=items_enriquecidos,
@@ -1553,6 +1596,7 @@ def divergencias_nf_po():
         filtros=filtros,
         stats=stats,
         tipos_divergencia=tipos_divergencia,
+        empresas_opcoes=empresas_opcoes,
         odoo_base_url=odoo_base_url
     )
 
@@ -1733,7 +1777,10 @@ def validacoes_nf_po():
     # Filtros
     filtros = {
         'status': request.args.get('status', ''),
-        'cnpj': request.args.get('cnpj', '')
+        'cnpj': request.args.get('cnpj', ''),
+        'numero_nf': request.args.get('numero_nf', ''),
+        'nome_fornecedor': request.args.get('nome_fornecedor', ''),
+        'empresa': request.args.get('empresa', '')
     }
 
     # Query base
@@ -1746,6 +1793,23 @@ def validacoes_nf_po():
     if filtros['cnpj']:
         query = query.filter(
             ValidacaoNfPoDfe.cnpj_fornecedor.ilike(f"%{filtros['cnpj']}%")
+        )
+
+    if filtros['numero_nf']:
+        query = query.filter(
+            ValidacaoNfPoDfe.numero_nf.ilike(f"%{filtros['numero_nf']}%")
+        )
+
+    if filtros['nome_fornecedor']:
+        query = query.filter(
+            ValidacaoNfPoDfe.razao_fornecedor.ilike(f"%{filtros['nome_fornecedor']}%")
+        )
+
+    if filtros['empresa']:
+        # Limpar CNPJ para comparacao
+        cnpj_limpo = ''.join(c for c in filtros['empresa'] if c.isdigit())
+        query = query.filter(
+            ValidacaoNfPoDfe.cnpj_empresa_compradora.ilike(f"%{cnpj_limpo}%")
         )
 
     # Ordenar
@@ -1803,6 +1867,14 @@ def validacoes_nf_po():
         {'valor': 'erro', 'label': 'Erro'}
     ]
 
+    # Empresas para filtro
+    empresas_opcoes = [
+        {'cnpj': '61724241000330', 'label': 'NACOM GOYA - CD'},
+        {'cnpj': '61724241000178', 'label': 'NACOM GOYA - FB'},
+        {'cnpj': '61724241000259', 'label': 'NACOM GOYA - SC'},
+        {'cnpj': '18467441000163', 'label': 'LA FAMIGLIA - LF'},
+    ]
+
     return render_template(
         'recebimento/validacoes_nf_po.html',
         items=paginacao.items,
@@ -1816,6 +1888,7 @@ def validacoes_nf_po():
         filtros=filtros,
         stats=stats,
         status_opcoes=status_opcoes,
+        empresas_opcoes=empresas_opcoes,
         recebimentos_map=recebimentos_map,
         pickings_map=pickings_map
     )

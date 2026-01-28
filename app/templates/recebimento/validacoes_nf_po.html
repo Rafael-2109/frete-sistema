@@ -77,8 +77,9 @@
         </div>
         <div class="card-body">
             <form method="GET" action="{{ url_for('recebimento_views.validacoes_nf_po') }}">
-                <div class="row">
-                    <div class="col-md-4">
+                <div class="row g-2">
+                    <!-- Linha 1: Status, NF, CNPJ Fornecedor, Nome Fornecedor -->
+                    <div class="col-md-2">
                         <label class="form-label">Status</label>
                         <select name="status" class="form-select form-select-sm">
                             <option value="">Todos</option>
@@ -89,12 +90,36 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-2">
+                        <label class="form-label">NF</label>
+                        <input type="text" name="numero_nf" class="form-control form-control-sm"
+                               value="{{ filtros.numero_nf }}" placeholder="Numero...">
+                    </div>
+                    <div class="col-md-2">
                         <label class="form-label">CNPJ Fornecedor</label>
                         <input type="text" name="cnpj" class="form-control form-control-sm"
-                               value="{{ filtros.cnpj }}" placeholder="Digite o CNPJ...">
+                               value="{{ filtros.cnpj }}" placeholder="CNPJ...">
                     </div>
-                    <div class="col-md-4 d-flex align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label">Nome Fornecedor</label>
+                        <input type="text" name="nome_fornecedor" class="form-control form-control-sm"
+                               value="{{ filtros.nome_fornecedor }}" placeholder="Razao social...">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Empresa</label>
+                        <select name="empresa" class="form-select form-select-sm">
+                            <option value="">Todas</option>
+                            {% for e in empresas_opcoes %}
+                            <option value="{{ e.cnpj }}" {% if filtros.empresa == e.cnpj %}selected{% endif %}>
+                                {{ e.label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="row g-2 mt-2">
+                    <!-- Linha 2: Botoes -->
+                    <div class="col-12 d-flex">
                         <button type="submit" class="btn btn-primary btn-sm me-2">
                             <i class="fas fa-search"></i> Buscar
                         </button>
@@ -304,7 +329,7 @@
         <ul class="pagination justify-content-center">
             {% if paginacao.page > 1 %}
             <li class="page-item">
-                <a class="page-link" href="?page={{ paginacao.page - 1 }}&status={{ filtros.status }}&cnpj={{ filtros.cnpj }}">
+                <a class="page-link" href="?page={{ paginacao.page - 1 }}&status={{ filtros.status }}&cnpj={{ filtros.cnpj }}&numero_nf={{ filtros.numero_nf }}&nome_fornecedor={{ filtros.nome_fornecedor }}&empresa={{ filtros.empresa }}">
                     <i class="fas fa-chevron-left"></i>
                 </a>
             </li>
@@ -312,13 +337,13 @@
 
             {% for p in range(1, paginacao.pages + 1) %}
             <li class="page-item {% if p == paginacao.page %}active{% endif %}">
-                <a class="page-link" href="?page={{ p }}&status={{ filtros.status }}&cnpj={{ filtros.cnpj }}">{{ p }}</a>
+                <a class="page-link" href="?page={{ p }}&status={{ filtros.status }}&cnpj={{ filtros.cnpj }}&numero_nf={{ filtros.numero_nf }}&nome_fornecedor={{ filtros.nome_fornecedor }}&empresa={{ filtros.empresa }}">{{ p }}</a>
             </li>
             {% endfor %}
 
             {% if paginacao.page < paginacao.pages %}
             <li class="page-item">
-                <a class="page-link" href="?page={{ paginacao.page + 1 }}&status={{ filtros.status }}&cnpj={{ filtros.cnpj }}">
+                <a class="page-link" href="?page={{ paginacao.page + 1 }}&status={{ filtros.status }}&cnpj={{ filtros.cnpj }}&numero_nf={{ filtros.numero_nf }}&nome_fornecedor={{ filtros.nome_fornecedor }}&empresa={{ filtros.empresa }}">
                     <i class="fas fa-chevron-right"></i>
                 </a>
             </li>
@@ -607,7 +632,10 @@ function renderizarDetalhes(data) {
                 <td>
                     <code>${m.cod_produto_fornecedor || 'N/A'}</code>
                     ${m.cod_produto_interno ? `<i class="fas fa-arrow-right mx-1"></i><code class="text-success">${m.cod_produto_interno}</code>` : ''}
-                    <br><small>${m.nome_produto || ''}</small>
+                    <br>
+                    <small class="${m.nome_produto_interno ? 'text-success' : ''}">
+                        ${m.nome_produto_interno || m.nome_produto || ''}
+                    </small>
                 </td>
                 <td class="text-end">${m.qtd_nf != null ? parseFloat(m.qtd_nf).toFixed(2) : 'N/A'}</td>
                 <td class="text-end">${m.preco_nf != null ? parseFloat(m.preco_nf).toFixed(4) : 'N/A'}</td>

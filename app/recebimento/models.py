@@ -819,6 +819,7 @@ class MatchNfPoItem(db.Model):
 
     # Dados convertidos (apos De-Para)
     cod_produto_interno = db.Column(db.String(50), nullable=True)
+    nome_produto_interno = db.Column(db.String(255), nullable=True)  # Nome interno (nosso nome)
     fator_conversao = db.Column(db.Numeric(10, 4), nullable=True)
 
     # Valores da NF (apos conversao)

@@ -47,7 +47,8 @@ class Cnab400ProcessorService:
         self,
         arquivo_conteudo: str,
         arquivo_nome: str,
-        usuario: str
+        usuario: str,
+        batch_id: str = None
     ) -> CnabRetornoLote:
         """
         Processa arquivo CNAB400 completo.
@@ -56,6 +57,7 @@ class Cnab400ProcessorService:
             arquivo_conteudo: Conteúdo do arquivo .ret (encoding latin-1)
             arquivo_nome: Nome do arquivo para registro
             usuario: Nome do usuário que está processando
+            batch_id: UUID do batch (para uploads múltiplos via job assíncrono)
 
         Returns:
             CnabRetornoLote criado com todos os itens processados
@@ -114,7 +116,8 @@ class Cnab400ProcessorService:
             total_registros=len(dados['detalhes']),
             processado_por=usuario,
             status='IMPORTADO',
-            hash_arquivo=hash_arquivo  # Hash para verificação de duplicação
+            hash_arquivo=hash_arquivo,  # Hash para verificação de duplicação
+            batch_id=batch_id  # UUID do batch para uploads múltiplos
         )
         db.session.add(lote)
         db.session.flush()  # Gera ID do lote

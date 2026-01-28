@@ -51,8 +51,74 @@ from app.recebimento.models import ( # noqa: E402
 from app.recebimento.services.depara_service import DeparaService # noqa: E402
 from app.recebimento.services.validacao_nf_po_service import ValidacaoNfPoService # noqa: E402
 from app.recebimento.services.odoo_po_service import OdooPoService # noqa: E402
+from sqlalchemy import or_, case, func # noqa: E402
 
 validacao_nf_po_bp = Blueprint('validacao_nf_po', __name__, url_prefix='/api/recebimento')
+
+
+# =============================================================================
+# AUTOCOMPLETE DE PRODUTOS
+# =============================================================================
+
+@validacao_nf_po_bp.route('/autocomplete-produtos', methods=['GET'])
+@login_required
+def autocomplete_produtos_recebimento():
+    """
+    Autocomplete para busca de produtos no recebimento.
+    Busca na tabela ProdutoFornecedorDepara (De-Para de produtos).
+
+    Retorna produtos DISTINTOS por cod_produto_interno para evitar duplicatas
+    (mesmo produto pode ter multiplos fornecedores).
+
+    Query params:
+    - termo: string (min 2 caracteres)
+    - limit: int (default 20)
+
+    Returns:
+    - Lista de {cod_produto, nome_produto}
+    """
+    try:
+        termo = request.args.get('termo', '').strip()
+        limit = int(request.args.get('limit', 20))
+
+        # Minimo 2 caracteres para buscar
+        if not termo or len(termo) < 2:
+            return jsonify([])
+
+        # Buscar produtos DISTINTOS na ProdutoFornecedorDepara
+        # Agrupa por cod_produto_interno para evitar duplicatas de fornecedores diferentes
+        query = db.session.query(
+            ProdutoFornecedorDepara.cod_produto_interno.label('cod_produto'),
+            func.min(ProdutoFornecedorDepara.nome_produto_interno).label('nome_produto')
+        ).filter(
+            ProdutoFornecedorDepara.ativo == True,
+            or_(
+                ProdutoFornecedorDepara.cod_produto_interno.ilike(f'%{termo}%'),
+                ProdutoFornecedorDepara.nome_produto_interno.ilike(f'%{termo}%')
+            )
+        ).group_by(
+            ProdutoFornecedorDepara.cod_produto_interno
+        ).order_by(
+            # Priorizar codigos que comecam com o termo
+            case(
+                (ProdutoFornecedorDepara.cod_produto_interno.ilike(f'{termo}%'), 0),
+                else_=1
+            ),
+            ProdutoFornecedorDepara.cod_produto_interno
+        ).limit(limit).all()
+
+        resultado = [{
+            'cod_produto': row.cod_produto,
+            'nome_produto': row.nome_produto or ''
+        } for row in query]
+
+        logger.debug(f"[AUTOCOMPLETE-RECEB] Termo: '{termo}' -> {len(resultado)} produtos")
+
+        return jsonify(resultado)
+
+    except Exception as e:
+        logger.error(f"[AUTOCOMPLETE-RECEB] Erro: {e}", exc_info=True)
+        return jsonify({'erro': str(e)}), 500
 
 
 # =============================================================================
@@ -740,6 +806,7 @@ def detalhe_validacao_nf_po(validacao_id):
                 'odoo_dfe_line_id': m.odoo_dfe_line_id,
                 'cod_produto_fornecedor': m.cod_produto_fornecedor,
                 'cod_produto_interno': m.cod_produto_interno,
+                'nome_produto_interno': m.nome_produto_interno,  # Nome interno (nosso nome)
                 'nome_produto': m.nome_produto,
                 'qtd_nf': float(m.qtd_nf) if m.qtd_nf else None,
                 'preco_nf': float(m.preco_nf) if m.preco_nf else None,

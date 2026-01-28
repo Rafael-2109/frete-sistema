@@ -9,6 +9,7 @@ Funcionalidades:
 - Análise de itens sem match
 """
 
+import uuid
 from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
@@ -591,6 +592,175 @@ def api_revalidar_extratos():
         resultado = service.revalidar_todos_extratos_pendentes()
 
         return jsonify(resultado)
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+# =============================================================================
+# UPLOAD EM BATCH (MÚLTIPLOS ARQUIVOS)
+# =============================================================================
+
+@cnab400_bp.route('/api/upload-batch', methods=['POST'])
+@login_required
+def api_upload_batch():
+    """
+    API: Upload de múltiplos arquivos CNAB400 para processamento assíncrono.
+
+    Aceita N arquivos .ret via multipart/form-data.
+    Enfileira job no Redis Queue e retorna batch_id para acompanhamento.
+
+    Parâmetros:
+        arquivos: Lista de arquivos .ret (via request.files.getlist)
+
+    Retorna:
+        JSON com batch_id, job_id e total de arquivos enfileirados
+    """
+    from app.portal.workers import enqueue_job
+    from app.financeiro.workers.cnab400_batch_jobs import processar_batch_cnab400_job
+
+    # Verificar se arquivos foram enviados
+    arquivos = request.files.getlist('arquivos')
+
+    if not arquivos or len(arquivos) == 0:
+        return jsonify({
+            'success': False,
+            'error': 'Nenhum arquivo enviado'
+        }), 400
+
+    # Verificar se pelo menos um arquivo é válido
+    arquivos_validos = [
+        a for a in arquivos
+        if a.filename and a.filename.lower().endswith('.ret')
+    ]
+
+    if not arquivos_validos:
+        return jsonify({
+            'success': False,
+            'error': 'Nenhum arquivo válido (.ret) enviado'
+        }), 400
+
+    try:
+        # Gerar batch_id único
+        batch_id = str(uuid.uuid4())
+
+        # Preparar dados dos arquivos (ler conteúdo antes de enfileirar)
+        arquivos_data = []
+        for arquivo in arquivos_validos:
+            try:
+                conteudo = arquivo.read().decode('latin-1')
+                arquivos_data.append({
+                    'nome': secure_filename(arquivo.filename),
+                    'conteudo': conteudo
+                })
+            except Exception as e:
+                # Se não conseguir ler um arquivo, ignorar e continuar
+                pass
+
+        if not arquivos_data:
+            return jsonify({
+                'success': False,
+                'error': 'Não foi possível ler nenhum arquivo'
+            }), 400
+
+        # Nome do usuário para registro
+        usuario_nome = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
+
+        # Enfileirar job
+        job = enqueue_job(
+            processar_batch_cnab400_job,
+            batch_id,
+            arquivos_data,
+            usuario_nome,
+            queue='default',
+            timeout=1800  # 30 minutos
+        )
+
+        return jsonify({
+            'success': True,
+            'batch_id': batch_id,
+            'job_id': job.id if job else None,
+            'total_arquivos': len(arquivos_data),
+            'arquivos': [a['nome'] for a in arquivos_data],
+            'message': f'{len(arquivos_data)} arquivo(s) enfileirado(s) para processamento'
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Erro ao enfileirar processamento: {str(e)}'
+        }), 500
+
+
+@cnab400_bp.route('/api/batch/<batch_id>/status')
+@login_required
+def api_batch_status(batch_id):
+    """
+    API: Retorna status de um batch de arquivos CNAB400.
+
+    Consulta primeiro o Redis (progresso em tempo real) e depois o banco.
+
+    Parâmetros:
+        batch_id: UUID do batch
+
+    Retorna:
+        JSON com status completo do batch, incluindo:
+        - status: 'processando' | 'concluido' | 'erro' | 'parcial' | 'nao_encontrado'
+        - total_arquivos, arquivos_processados, arquivos_sucesso, arquivos_erro
+        - lotes: lista de lotes criados com seus IDs e status
+    """
+    from app.financeiro.workers.cnab400_batch_jobs import verificar_status_batch
+
+    try:
+        resultado = verificar_status_batch(batch_id)
+        return jsonify(resultado)
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'batch_id': batch_id,
+            'status': 'erro',
+            'error': str(e)
+        }), 500
+
+
+@cnab400_bp.route('/api/batch/<batch_id>/arquivos')
+@login_required
+def api_batch_arquivos(batch_id):
+    """
+    API: Retorna lista detalhada dos arquivos de um batch.
+
+    Busca lotes no banco que possuem o batch_id especificado.
+
+    Parâmetros:
+        batch_id: UUID do batch
+
+    Retorna:
+        JSON com lista de lotes e seus detalhes
+    """
+    try:
+        lotes = CnabRetornoLote.query.filter_by(batch_id=batch_id).order_by(
+            CnabRetornoLote.data_processamento.asc()
+        ).all()
+
+        if not lotes:
+            return jsonify({
+                'success': True,
+                'batch_id': batch_id,
+                'total': 0,
+                'lotes': [],
+                'message': 'Nenhum lote encontrado para este batch'
+            })
+
+        return jsonify({
+            'success': True,
+            'batch_id': batch_id,
+            'total': len(lotes),
+            'lotes': [lote.to_dict() for lote in lotes]
+        })
 
     except Exception as e:
         return jsonify({

@@ -3,7 +3,7 @@
 {% block title %}Upload CNAB400{% endblock %}
 
 {% block content %}
-<div class="container py-4" style="max-width: 600px;">
+<div class="container py-4" style="max-width: 800px;">
     <!-- Header -->
     <div class="mb-4">
         <a href="{{ url_for('cnab400.index') }}" class="text-muted text-decoration-none">
@@ -11,52 +11,384 @@
         </a>
         <h2 class="mt-2">
             <i class="fas fa-upload text-primary"></i>
-            Upload de Arquivo CNAB400
+            Upload de Arquivos CNAB400
         </h2>
-        <p class="text-muted">Selecione um arquivo de retorno bancário (.ret) para processar</p>
+        <p class="text-muted">Selecione um ou mais arquivos de retorno bancário (.ret) para processar</p>
+    </div>
+
+    <!-- Painel de Progresso (oculto inicialmente) -->
+    <div id="painel-progresso" class="card shadow-sm mb-4" style="display: none;">
+        <div class="card-header bg-primary text-white">
+            <strong><i class="fas fa-cog fa-spin me-2"></i> Processando Arquivos</strong>
+        </div>
+        <div class="card-body">
+            <!-- Barra de progresso geral -->
+            <div class="mb-3">
+                <div class="d-flex justify-content-between mb-1">
+                    <span id="progresso-texto">Iniciando...</span>
+                    <span id="progresso-contagem">0/0</span>
+                </div>
+                <div class="progress" style="height: 20px;">
+                    <div id="progresso-barra" class="progress-bar progress-bar-striped progress-bar-animated"
+                         role="progressbar" style="width: 0%">0%</div>
+                </div>
+            </div>
+
+            <!-- Estatisticas -->
+            <div class="row text-center mb-3">
+                <div class="col-4">
+                    <div class="bg-light rounded p-2">
+                        <div class="fs-4 fw-bold text-success" id="stat-sucesso">0</div>
+                        <small class="text-muted">Sucesso</small>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="bg-light rounded p-2">
+                        <div class="fs-4 fw-bold text-danger" id="stat-erro">0</div>
+                        <small class="text-muted">Erro</small>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="bg-light rounded p-2">
+                        <div class="fs-4 fw-bold text-warning" id="stat-duplicado">0</div>
+                        <small class="text-muted">Duplicado</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lista de arquivos -->
+            <div id="lista-arquivos" class="small" style="max-height: 300px; overflow-y: auto;">
+                <!-- Populada via JavaScript -->
+            </div>
+        </div>
+        <div class="card-footer" id="progresso-footer" style="display: none;">
+            <a href="{{ url_for('cnab400.index') }}" class="btn btn-primary">
+                <i class="fas fa-list"></i> Ver Todos os Lotes
+            </a>
+        </div>
     </div>
 
     <!-- Card de Upload -->
-    <div class="card shadow-sm">
+    <div id="card-upload" class="card shadow-sm">
         <div class="card-header bg-light">
-            <strong><i class="fas fa-file-alt"></i> Selecionar Arquivo</strong>
+            <strong><i class="fas fa-file-alt"></i> Selecionar Arquivos</strong>
         </div>
         <div class="card-body">
-            <form method="POST" enctype="multipart/form-data" action="{{ url_for('cnab400.upload') }}">
-                <div class="mb-3">
-                    <label for="arquivo" class="form-label">Arquivo de Retorno (.ret)</label>
-                    <input type="file"
-                           class="form-control"
-                           name="arquivo"
-                           id="arquivo"
-                           accept=".ret"
-                           required>
-                    <div class="form-text">Apenas arquivos com extensão .ret são aceitos</div>
-                </div>
+            <!-- Zona de Drag & Drop -->
+            <div id="drop-zone" class="border border-2 border-dashed rounded p-5 text-center mb-3"
+                 style="cursor: pointer; transition: all 0.2s;">
+                <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                <p class="mb-1">Arraste arquivos aqui ou clique para selecionar</p>
+                <small class="text-muted">Apenas arquivos .ret - Selecione quantos arquivos desejar</small>
+                <input type="file"
+                       id="input-arquivos"
+                       accept=".ret"
+                       multiple
+                       style="display: none;">
+            </div>
 
-                <div class="d-flex gap-2">
-                    <a href="{{ url_for('cnab400.index') }}" class="btn btn-secondary">
-                        Cancelar
-                    </a>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-upload"></i> Processar Arquivo
+            <!-- Lista de arquivos selecionados -->
+            <div id="arquivos-selecionados" style="display: none;">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <strong><i class="fas fa-list me-1"></i> Arquivos Selecionados</strong>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-limpar">
+                        <i class="fas fa-times"></i> Limpar
                     </button>
                 </div>
-            </form>
+                <div id="lista-selecionados" class="list-group list-group-flush small" style="max-height: 200px; overflow-y: auto;">
+                    <!-- Populada via JavaScript -->
+                </div>
+            </div>
+
+            <hr>
+
+            <div class="d-flex gap-2">
+                <a href="{{ url_for('cnab400.index') }}" class="btn btn-secondary">
+                    Cancelar
+                </a>
+                <button type="button" id="btn-processar" class="btn btn-primary" disabled>
+                    <i class="fas fa-upload"></i> Processar <span id="contagem-arquivos">(0 arquivos)</span>
+                </button>
+            </div>
         </div>
     </div>
 
     <!-- Info -->
     <div class="card mt-4 border-info">
         <div class="card-body">
-            <h6 class="card-title"><i class="fas fa-info-circle text-info"></i> O que acontece após o upload?</h6>
+            <h6 class="card-title"><i class="fas fa-info-circle text-info"></i> Como funciona?</h6>
             <ul class="mb-0 small text-muted">
-                <li>O arquivo será analisado e os registros extraídos automaticamente</li>
-                <li>Títulos de liquidação serão vinculados com Contas a Receber via NF/Parcela</li>
-                <li>Você poderá revisar os matches antes de executar as baixas</li>
-                <li>Registros sem match serão listados para análise manual</li>
+                <li>Selecione quantos arquivos .ret desejar (sem limite)</li>
+                <li>Os arquivos serao processados em paralelo pelos workers disponiveis</li>
+                <li>Arquivos duplicados serao detectados automaticamente (por hash)</li>
+                <li>Voce pode acompanhar o progresso em tempo real</li>
+                <li>O progresso e salvo no seu navegador - pode fechar e voltar depois</li>
             </ul>
         </div>
     </div>
 </div>
+
+<style>
+#drop-zone.dragover {
+    border-color: #0d6efd !important;
+    background-color: rgba(13, 110, 253, 0.05);
+}
+.arquivo-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid #eee;
+}
+.arquivo-item:last-child {
+    border-bottom: none;
+}
+.arquivo-status {
+    min-width: 100px;
+    text-align: right;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const dropZone = document.getElementById('drop-zone');
+    const inputArquivos = document.getElementById('input-arquivos');
+    const arquivosSelecionados = document.getElementById('arquivos-selecionados');
+    const listaSelecionados = document.getElementById('lista-selecionados');
+    const btnProcessar = document.getElementById('btn-processar');
+    const btnLimpar = document.getElementById('btn-limpar');
+    const contagemArquivos = document.getElementById('contagem-arquivos');
+    const cardUpload = document.getElementById('card-upload');
+    const painelProgresso = document.getElementById('painel-progresso');
+
+    let arquivos = [];
+    let batchId = null;
+    let pollInterval = null;
+
+    // Verificar se ha batch em andamento no localStorage
+    const batchSalvo = localStorage.getItem('cnab_batch_id');
+    if (batchSalvo) {
+        batchId = batchSalvo;
+        mostrarProgresso();
+        startPolling();
+    }
+
+    // Drop zone events
+    dropZone.addEventListener('click', () => inputArquivos.click());
+
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('dragover');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.classList.remove('dragover');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        handleFiles(e.dataTransfer.files);
+    });
+
+    inputArquivos.addEventListener('change', (e) => {
+        handleFiles(e.target.files);
+    });
+
+    function handleFiles(fileList) {
+        for (let file of fileList) {
+            if (file.name.toLowerCase().endsWith('.ret')) {
+                // Evitar duplicados
+                if (!arquivos.find(a => a.name === file.name && a.size === file.size)) {
+                    arquivos.push(file);
+                }
+            }
+        }
+        atualizarListaSelecionados();
+    }
+
+    function atualizarListaSelecionados() {
+        if (arquivos.length === 0) {
+            arquivosSelecionados.style.display = 'none';
+            btnProcessar.disabled = true;
+            contagemArquivos.textContent = '(0 arquivos)';
+            return;
+        }
+
+        arquivosSelecionados.style.display = 'block';
+        btnProcessar.disabled = false;
+        contagemArquivos.textContent = `(${arquivos.length} arquivo${arquivos.length > 1 ? 's' : ''})`;
+
+        listaSelecionados.innerHTML = arquivos.map((a, i) => `
+            <div class="list-group-item d-flex justify-content-between align-items-center py-2">
+                <span><i class="fas fa-file-code text-primary me-2"></i> ${a.name}</span>
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="removerArquivo(${i})">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `).join('');
+    }
+
+    window.removerArquivo = function(index) {
+        arquivos.splice(index, 1);
+        atualizarListaSelecionados();
+    };
+
+    btnLimpar.addEventListener('click', () => {
+        arquivos = [];
+        inputArquivos.value = '';
+        atualizarListaSelecionados();
+    });
+
+    btnProcessar.addEventListener('click', processarArquivos);
+
+    async function processarArquivos() {
+        if (arquivos.length === 0) return;
+
+        btnProcessar.disabled = true;
+        btnProcessar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+
+        const formData = new FormData();
+        arquivos.forEach(a => formData.append('arquivos', a));
+
+        try {
+            const response = await fetch('{{ url_for("cnab400.api_upload_batch") }}', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                batchId = data.batch_id;
+                localStorage.setItem('cnab_batch_id', batchId);
+
+                // Inicializar UI de progresso
+                inicializarProgressoUI(data.arquivos);
+                mostrarProgresso();
+                startPolling();
+            } else {
+                alert('Erro: ' + (data.error || 'Erro desconhecido'));
+                resetBotao();
+            }
+        } catch (e) {
+            alert('Erro ao enviar arquivos: ' + e.message);
+            resetBotao();
+        }
+    }
+
+    function resetBotao() {
+        btnProcessar.disabled = false;
+        btnProcessar.innerHTML = '<i class="fas fa-upload"></i> Processar <span id="contagem-arquivos">' + contagemArquivos.textContent + '</span>';
+    }
+
+    function mostrarProgresso() {
+        cardUpload.style.display = 'none';
+        painelProgresso.style.display = 'block';
+    }
+
+    function inicializarProgressoUI(nomes) {
+        document.getElementById('lista-arquivos').innerHTML = nomes.map(nome => `
+            <div class="arquivo-item" id="arquivo-${nome.replace(/[^a-zA-Z0-9]/g, '_')}">
+                <span><i class="fas fa-clock text-muted me-2"></i> ${nome}</span>
+                <span class="arquivo-status text-muted">Aguardando...</span>
+            </div>
+        `).join('');
+    }
+
+    function startPolling() {
+        if (pollInterval) clearInterval(pollInterval);
+
+        pollInterval = setInterval(async () => {
+            try {
+                const response = await fetch(`/cnab400/api/batch/${batchId}/status`);
+                const data = await response.json();
+
+                atualizarProgressoUI(data);
+
+                if (data.status === 'concluido' || data.status === 'erro' || data.status === 'parcial') {
+                    clearInterval(pollInterval);
+                    finalizarProgresso(data);
+                }
+            } catch (e) {
+                console.error('Erro no polling:', e);
+            }
+        }, 2000);
+    }
+
+    function atualizarProgressoUI(data) {
+        const total = data.total_arquivos || 0;
+        const processados = data.arquivos_processados || 0;
+        const sucesso = data.arquivos_sucesso || 0;
+        const erro = data.arquivos_erro || 0;
+
+        const percent = total > 0 ? Math.round((processados / total) * 100) : 0;
+
+        document.getElementById('progresso-texto').textContent = data.arquivo_atual || 'Processando...';
+        document.getElementById('progresso-contagem').textContent = `${processados}/${total}`;
+        document.getElementById('progresso-barra').style.width = percent + '%';
+        document.getElementById('progresso-barra').textContent = percent + '%';
+
+        document.getElementById('stat-sucesso').textContent = sucesso;
+        document.getElementById('stat-erro').textContent = erro;
+
+        // Contar duplicados
+        const duplicados = (data.lotes || []).filter(l => l.status === 'duplicado').length;
+        document.getElementById('stat-duplicado').textContent = duplicados;
+
+        // Atualizar lista de arquivos
+        if (data.lotes) {
+            data.lotes.forEach(lote => {
+                const elementId = 'arquivo-' + lote.arquivo_nome.replace(/[^a-zA-Z0-9]/g, '_');
+                const el = document.getElementById(elementId);
+                if (el) {
+                    let icon, status, cor;
+                    if (lote.status === 'sucesso') {
+                        icon = 'check-circle';
+                        status = `Lote #${lote.lote_id}`;
+                        cor = 'success';
+                    } else if (lote.status === 'duplicado') {
+                        icon = 'copy';
+                        status = 'Duplicado';
+                        cor = 'warning';
+                    } else {
+                        icon = 'times-circle';
+                        status = 'Erro';
+                        cor = 'danger';
+                    }
+
+                    el.innerHTML = `
+                        <span><i class="fas fa-${icon} text-${cor} me-2"></i> ${lote.arquivo_nome}</span>
+                        <span class="arquivo-status text-${cor}">
+                            ${lote.status === 'sucesso' ? `<a href="/cnab400/lote/${lote.lote_id}">${status}</a>` : status}
+                        </span>
+                    `;
+                }
+            });
+        }
+    }
+
+    function finalizarProgresso(data) {
+        const barra = document.getElementById('progresso-barra');
+        barra.classList.remove('progress-bar-animated');
+
+        if (data.status === 'concluido') {
+            barra.classList.remove('bg-primary');
+            barra.classList.add('bg-success');
+            document.getElementById('progresso-texto').textContent = 'Processamento concluido!';
+        } else if (data.status === 'parcial') {
+            barra.classList.remove('bg-primary');
+            barra.classList.add('bg-warning');
+            document.getElementById('progresso-texto').textContent = 'Processamento concluido com avisos';
+        } else {
+            barra.classList.remove('bg-primary');
+            barra.classList.add('bg-danger');
+            document.getElementById('progresso-texto').textContent = 'Erro no processamento';
+        }
+
+        document.getElementById('progresso-footer').style.display = 'block';
+        localStorage.removeItem('cnab_batch_id');
+    }
+});
+</script>
 {% endblock %}
