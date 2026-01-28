@@ -507,7 +507,9 @@ class OdooPoService:
             # PO de referencia para copiar configuracoes
             # IMPORTANTE: O campo po_id pode conter ID da linha (bug histórico)
             # Buscar ID correto do purchase.order via tabela pedido_compras
-            po_line_id_referencia = pos_para_consolidar[0].get('po_line_id')
+            # po_line_id está dentro de 'linhas', não no nível raiz
+            linhas_po = pos_para_consolidar[0].get('linhas', [])
+            po_line_id_referencia = linhas_po[0].get('po_line_id') if linhas_po else None
             po_id_fallback = pos_para_consolidar[0]['po_id']
 
             po_referencia_id = _obter_po_id_por_linha(po_line_id_referencia, po_id_fallback)
