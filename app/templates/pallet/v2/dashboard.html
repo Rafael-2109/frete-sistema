@@ -722,12 +722,16 @@
                     <div class="pallet-mini-stat__label">Devolucoes ({{ stats_nf_solucoes.DEVOLUCAO.qtd }} pal)</div>
                 </div>
                 <div class="pallet-mini-stat">
-                    <div class="pallet-mini-stat__value text-info">{{ stats_nf_solucoes.RETORNO.count }}</div>
-                    <div class="pallet-mini-stat__label">Retornos ({{ stats_nf_solucoes.RETORNO.qtd }} pal)</div>
+                    <div class="pallet-mini-stat__value text-danger">{{ stats_nf_solucoes.RECUSA.count }}</div>
+                    <div class="pallet-mini-stat__label">Recusas ({{ stats_nf_solucoes.RECUSA.qtd }} pal)</div>
                 </div>
                 <div class="pallet-mini-stat">
                     <div class="pallet-mini-stat__value text-secondary">{{ stats_nf_solucoes.CANCELAMENTO.count }}</div>
                     <div class="pallet-mini-stat__label">Cancelamentos</div>
+                </div>
+                <div class="pallet-mini-stat">
+                    <div class="pallet-mini-stat__value text-info">{{ stats_nf_solucoes.NOTA_CREDITO.count }}</div>
+                    <div class="pallet-mini-stat__label">Notas de Credito ({{ stats_nf_solucoes.NOTA_CREDITO.qtd }} pal)</div>
                 </div>
                 <div class="pallet-mini-stat">
                     <div class="pallet-mini-stat__value text-warning">{{ sugestoes_pendentes }}</div>

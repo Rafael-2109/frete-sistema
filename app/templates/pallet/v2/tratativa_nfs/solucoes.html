@@ -99,12 +99,14 @@
 
 .stat-icon.total { background: hsla(210 100% 95% / 1); color: hsl(210 100% 52%); }
 .stat-icon.devolucoes { background: hsla(145 60% 90% / 1); color: var(--semantic-success); }
-.stat-icon.retornos { background: hsla(190 90% 92% / 1); color: hsl(190 85% 45%); }
+.stat-icon.recusas { background: hsla(30 90% 92% / 1); color: hsl(30 85% 45%); }
+.stat-icon.notas-credito { background: hsla(270 60% 92% / 1); color: hsl(270 60% 50%); }
 .stat-icon.cancelamentos { background: hsla(0 70% 95% / 1); color: var(--semantic-danger); }
 
 [data-bs-theme="dark"] .stat-icon.total { background: hsla(210 100% 52% / 0.15); color: hsl(210 100% 65%); }
 [data-bs-theme="dark"] .stat-icon.devolucoes { background: hsla(145 65% 40% / 0.15); }
-[data-bs-theme="dark"] .stat-icon.retornos { background: hsla(190 85% 45% / 0.15); color: hsl(190 85% 60%); }
+[data-bs-theme="dark"] .stat-icon.recusas { background: hsla(30 85% 45% / 0.15); color: hsl(30 85% 60%); }
+[data-bs-theme="dark"] .stat-icon.notas-credito { background: hsla(270 60% 50% / 0.15); color: hsl(270 60% 65%); }
 [data-bs-theme="dark"] .stat-icon.cancelamentos { background: hsla(0 70% 50% / 0.15); }
 
 .stat-content h4 {
@@ -299,9 +301,14 @@
     color: var(--semantic-success);
 }
 
-.tipo-badge.retorno {
-    background: hsla(190 90% 92% / 1);
-    color: hsl(190 85% 45%);
+.tipo-badge.recusa {
+    background: hsla(30 90% 92% / 1);
+    color: hsl(30 85% 45%);
+}
+
+.tipo-badge.nota-credito {
+    background: hsla(270 60% 92% / 1);
+    color: hsl(270 60% 50%);
 }
 
 .tipo-badge.cancelamento {
@@ -313,9 +320,14 @@
     background: hsla(145 65% 40% / 0.2);
 }
 
-[data-bs-theme="dark"] .tipo-badge.retorno {
-    background: hsla(190 85% 45% / 0.2);
-    color: hsl(190 85% 60%);
+[data-bs-theme="dark"] .tipo-badge.recusa {
+    background: hsla(30 85% 45% / 0.2);
+    color: hsl(30 85% 60%);
+}
+
+[data-bs-theme="dark"] .tipo-badge.nota-credito {
+    background: hsla(270 60% 50% / 0.2);
+    color: hsl(270 60% 65%);
 }
 
 [data-bs-theme="dark"] .tipo-badge.cancelamento {
@@ -662,8 +674,8 @@
 
     <!-- Stats Cards -->
     <div class="stats-row">
-        {% set total_count = (stats.get('DEVOLUCAO', {}).get('count', 0) or 0) + (stats.get('RETORNO', {}).get('count', 0) or 0) + (stats.get('CANCELAMENTO', {}).get('count', 0) or 0) %}
-        {% set total_qtd = (stats.get('DEVOLUCAO', {}).get('qtd', 0) or 0) + (stats.get('RETORNO', {}).get('qtd', 0) or 0) + (stats.get('CANCELAMENTO', {}).get('qtd', 0) or 0) %}
+        {% set total_count = (stats.get('DEVOLUCAO', {}).get('count', 0) or 0) + (stats.get('RECUSA', {}).get('count', 0) or 0) + (stats.get('CANCELAMENTO', {}).get('count', 0) or 0) + (stats.get('NOTA_CREDITO', {}).get('count', 0) or 0) %}
+        {% set total_qtd = (stats.get('DEVOLUCAO', {}).get('qtd', 0) or 0) + (stats.get('RECUSA', {}).get('qtd', 0) or 0) + (stats.get('CANCELAMENTO', {}).get('qtd', 0) or 0) + (stats.get('NOTA_CREDITO', {}).get('qtd', 0) or 0) %}
         <div class="stat-card">
             <div class="stat-icon total">
                 <i class="fas fa-layer-group"></i>
@@ -685,13 +697,23 @@
             </div>
         </div>
         <div class="stat-card">
-            <div class="stat-icon retornos">
-                <i class="fas fa-reply"></i>
+            <div class="stat-icon recusas">
+                <i class="fas fa-hand-paper"></i>
             </div>
             <div class="stat-content">
-                <h4>{{ stats.get('RETORNO', {}).get('count', 0) or 0 }}</h4>
-                <span>Retornos</span>
-                <small>{{ stats.get('RETORNO', {}).get('qtd', 0) or 0 }} pallets</small>
+                <h4>{{ stats.get('RECUSA', {}).get('count', 0) or 0 }}</h4>
+                <span>Recusas</span>
+                <small>{{ stats.get('RECUSA', {}).get('qtd', 0) or 0 }} pallets</small>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon notas-credito">
+                <i class="fas fa-file-invoice-dollar"></i>
+            </div>
+            <div class="stat-content">
+                <h4>{{ stats.get('NOTA_CREDITO', {}).get('count', 0) or 0 }}</h4>
+                <span>Notas de Crédito</span>
+                <small>{{ stats.get('NOTA_CREDITO', {}).get('qtd', 0) or 0 }} pallets</small>
             </div>
         </div>
         <div class="stat-card">
@@ -718,8 +740,9 @@
                     <select name="tipo" id="tipo" class="form-select">
                         <option value="">Todos</option>
                         <option value="DEVOLUCAO" {% if filtro_tipo == 'DEVOLUCAO' %}selected{% endif %}>Devolução</option>
-                        <option value="RETORNO" {% if filtro_tipo == 'RETORNO' %}selected{% endif %}>Retorno</option>
+                        <option value="RECUSA" {% if filtro_tipo == 'RECUSA' %}selected{% endif %}>Recusa</option>
                         <option value="CANCELAMENTO" {% if filtro_tipo == 'CANCELAMENTO' %}selected{% endif %}>Cancelamento</option>
+                        <option value="NOTA_CREDITO" {% if filtro_tipo == 'NOTA_CREDITO' %}selected{% endif %}>Nota de Crédito</option>
                     </select>
                 </div>
                 <div class="filter-group">
@@ -783,9 +806,13 @@
                             <span class="tipo-badge devolucao">
                                 <i class="fas fa-reply-all"></i> Devolução
                             </span>
-                            {% elif solucao.tipo == 'RETORNO' %}
-                            <span class="tipo-badge retorno">
-                                <i class="fas fa-reply"></i> Retorno
+                            {% elif solucao.tipo == 'RECUSA' %}
+                            <span class="tipo-badge recusa">
+                                <i class="fas fa-hand-paper"></i> Recusa
+                            </span>
+                            {% elif solucao.tipo == 'NOTA_CREDITO' %}
+                            <span class="tipo-badge nota-credito">
+                                <i class="fas fa-file-invoice-dollar"></i> Nota de Crédito
                             </span>
                             {% else %}
                             <span class="tipo-badge cancelamento">
@@ -1056,8 +1083,9 @@ function openDetalhesModal(solucaoId) {
             // Tipo com formatação
             let tipoTexto = data.tipo;
             if (data.tipo === 'DEVOLUCAO') tipoTexto = 'Devolução';
-            else if (data.tipo === 'RETORNO') tipoTexto = 'Retorno';
+            else if (data.tipo === 'RECUSA') tipoTexto = 'Recusa';
             else if (data.tipo === 'CANCELAMENTO') tipoTexto = 'Cancelamento';
+            else if (data.tipo === 'NOTA_CREDITO') tipoTexto = 'Nota de Crédito';
             document.getElementById('det_tipo').textContent = tipoTexto;
 
             // Vinculação

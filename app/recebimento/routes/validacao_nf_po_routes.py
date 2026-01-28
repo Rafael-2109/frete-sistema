@@ -44,7 +44,9 @@ from app.recebimento.models import ( # noqa: E402
     ProdutoFornecedorDepara,
     ValidacaoNfPoDfe,
     MatchNfPoItem,
-    DivergenciaNfPo
+    DivergenciaNfPo,
+    RecebimentoFisico,
+    PickingRecebimento
 )
 from app.recebimento.services.depara_service import DeparaService # noqa: E402
 from app.recebimento.services.validacao_nf_po_service import ValidacaoNfPoService # noqa: E402
@@ -674,6 +676,34 @@ def detalhe_validacao_nf_po(validacao_id):
         # Buscar divergencias
         divergencias = db.session.query(DivergenciaNfPo).filter_by(validacao_id=validacao_id).all()
 
+        # Buscar dados de recebimento fisico
+        recebimento = RecebimentoFisico.query.filter_by(
+            validacao_id=validacao_id
+        ).order_by(RecebimentoFisico.criado_em.desc()).first()
+
+        # Se nao tiver RecebimentoFisico, buscar PickingRecebimento via PO
+        picking = None
+        if not recebimento:
+            po_id = validacao.po_consolidado_id or validacao.odoo_po_vinculado_id
+            if po_id:
+                picking = PickingRecebimento.query.filter_by(
+                    odoo_purchase_order_id=po_id
+                ).order_by(PickingRecebimento.write_date.desc()).first()
+
+        # Montar dados de recebimento
+        recebimento_data = None
+        if recebimento or picking:
+            recebimento_data = {
+                'tem_recebimento': recebimento is not None,
+                'recebimento_id': recebimento.id if recebimento else None,
+                'status': recebimento.status if recebimento else None,
+                'odoo_status': recebimento.odoo_status if recebimento else (picking.state if picking else None),
+                'picking_name': recebimento.odoo_picking_name if recebimento else (picking.odoo_picking_name if picking else None),
+                'picking_id': recebimento.odoo_picking_id if recebimento else (picking.odoo_picking_id if picking else None),
+                'processado_em': recebimento.processado_em.strftime('%d/%m/%Y %H:%M') if recebimento and recebimento.processado_em else None,
+                'erro_mensagem': recebimento.erro_mensagem if recebimento else None
+            }
+
         return jsonify({
             'sucesso': True,
             'validacao': {
@@ -738,7 +768,8 @@ def detalhe_validacao_nf_po(validacao_id):
                 'status': d.status,
                 'resolucao': d.resolucao,
                 'justificativa': d.justificativa
-            } for d in divergencias]
+            } for d in divergencias],
+            'recebimento': recebimento_data
         })
 
     except Exception as e:

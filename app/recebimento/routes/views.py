@@ -1728,7 +1728,7 @@ def validacoes_nf_po():
     Tela de validacoes NF x PO.
     Mostra status de cada NF processada.
     """
-    from app.recebimento.models import ValidacaoNfPoDfe
+    from app.recebimento.models import ValidacaoNfPoDfe, RecebimentoFisico, PickingRecebimento
 
     # Filtros
     filtros = {
@@ -1755,6 +1755,33 @@ def validacoes_nf_po():
     page = request.args.get('page', 1, type=int)
     per_page = 50
     paginacao = query.paginate(page=page, per_page=per_page, error_out=False)
+
+    # Buscar dados de recebimento para os itens da pagina
+    validacao_ids = [v.id for v in paginacao.items]
+    po_ids = [
+        v.po_consolidado_id or v.odoo_po_vinculado_id
+        for v in paginacao.items
+        if v.po_consolidado_id or v.odoo_po_vinculado_id
+    ]
+
+    # Mapa: validacao_id -> RecebimentoFisico
+    recebimentos_map = {}
+    if validacao_ids:
+        recebimentos = RecebimentoFisico.query.filter(
+            RecebimentoFisico.validacao_id.in_(validacao_ids)
+        ).all()
+        for r in recebimentos:
+            recebimentos_map[r.validacao_id] = r
+
+    # Mapa: po_id -> PickingRecebimento (para NFs sem RecebimentoFisico)
+    pickings_map = {}
+    if po_ids:
+        pickings = PickingRecebimento.query.filter(
+            PickingRecebimento.odoo_purchase_order_id.in_(po_ids)
+        ).order_by(PickingRecebimento.write_date.desc()).all()
+        for p in pickings:
+            if p.odoo_purchase_order_id not in pickings_map:
+                pickings_map[p.odoo_purchase_order_id] = p
 
     # Estatisticas
     stats = {
@@ -1788,7 +1815,9 @@ def validacoes_nf_po():
         },
         filtros=filtros,
         stats=stats,
-        status_opcoes=status_opcoes
+        status_opcoes=status_opcoes,
+        recebimentos_map=recebimentos_map,
+        pickings_map=pickings_map
     )
 
 

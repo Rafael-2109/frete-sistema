@@ -181,6 +181,49 @@
                                 {% else %}
                                 <span class="badge bg-secondary">{{ item.status }}</span>
                                 {% endif %}
+
+                                {# Badge de Recebimento Fisico #}
+                                {% set receb = recebimentos_map.get(item.id) %}
+                                {% set po_id = item.po_consolidado_id or item.odoo_po_vinculado_id %}
+                                {% set picking = pickings_map.get(po_id) if po_id and not receb else None %}
+
+                                {% if receb %}
+                                    {% if receb.odoo_status == 'done' or receb.status == 'processado' %}
+                                    <br><span class="badge bg-success mt-1" title="Recebido em {{ receb.processado_em.strftime('%d/%m %H:%M') if receb.processado_em else '-' }}">
+                                        <i class="fas fa-check-double me-1"></i>Recebido
+                                    </span>
+                                    {% elif receb.status == 'processando' %}
+                                    <br><span class="badge bg-info mt-1">
+                                        <i class="fas fa-spinner fa-spin me-1"></i>Processando
+                                    </span>
+                                    {% elif receb.status == 'erro' %}
+                                    <br><span class="badge bg-danger mt-1" title="{{ receb.erro_mensagem[:50] if receb.erro_mensagem else 'Erro no processamento' }}">
+                                        <i class="fas fa-exclamation-circle me-1"></i>Erro Receb.
+                                    </span>
+                                    {% elif receb.status == 'pendente' %}
+                                    <br><span class="badge bg-warning text-dark mt-1">
+                                        <i class="fas fa-clock me-1"></i>Aguard. Receb.
+                                    </span>
+                                    {% endif %}
+                                {% elif picking %}
+                                    {% if picking.state == 'done' %}
+                                    <br><span class="badge bg-success mt-1" title="{{ picking.odoo_picking_name }}">
+                                        <i class="fas fa-check-double me-1"></i>Recebido
+                                    </span>
+                                    {% elif picking.state == 'assigned' %}
+                                    <br><span class="badge bg-primary mt-1" title="{{ picking.odoo_picking_name }}">
+                                        <i class="fas fa-box-open me-1"></i>Pronto Receber
+                                    </span>
+                                    {% elif picking.state in ['waiting', 'confirmed'] %}
+                                    <br><span class="badge bg-secondary mt-1" title="{{ picking.odoo_picking_name }}">
+                                        <i class="fas fa-hourglass-half me-1"></i>Aguard. Estoque
+                                    </span>
+                                    {% endif %}
+                                {% elif item.status in ['consolidado', 'finalizado_odoo'] %}
+                                    <br><span class="badge bg-light text-muted mt-1 border">
+                                        <i class="fas fa-hourglass-start me-1"></i>Sem Picking
+                                    </span>
+                                {% endif %}
                             </td>
                             <td>
                                 {% if item.po_consolidado_name %}
@@ -437,6 +480,84 @@ function renderizarDetalhes(data) {
                 <h6 class="mb-2"><i class="fas fa-object-group me-2"></i>PO Consolidado</h6>
                 <p class="mb-0">PO Conciliador: <strong>${v.po_consolidado_name}</strong></p>
                 ${v.consolidado_em ? `<small class="text-muted">Consolidado em: ${v.consolidado_em}</small>` : ''}
+            </div>
+        `;
+    }
+
+    // Secao de Recebimento Fisico
+    if (data.recebimento) {
+        const r = data.recebimento;
+        let recebBadge = '';
+        let recebIcon = 'fas fa-boxes';
+
+        if (r.odoo_status === 'done' || r.status === 'processado') {
+            recebBadge = '<span class="badge bg-success ms-2">Recebido</span>';
+            recebIcon = 'fas fa-check-double text-success';
+        } else if (r.status === 'processando') {
+            recebBadge = '<span class="badge bg-info ms-2">Processando</span>';
+            recebIcon = 'fas fa-spinner fa-spin text-info';
+        } else if (r.status === 'erro') {
+            recebBadge = '<span class="badge bg-danger ms-2">Erro</span>';
+            recebIcon = 'fas fa-exclamation-circle text-danger';
+        } else if (r.status === 'pendente') {
+            recebBadge = '<span class="badge bg-warning ms-2">Pendente</span>';
+            recebIcon = 'fas fa-clock text-warning';
+        } else if (r.odoo_status === 'assigned') {
+            recebBadge = '<span class="badge bg-primary ms-2">Pronto Receber</span>';
+            recebIcon = 'fas fa-box-open text-primary';
+        } else if (r.odoo_status) {
+            recebBadge = `<span class="badge bg-secondary ms-2">${r.odoo_status}</span>`;
+        }
+
+        html += `
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card border-info">
+                        <div class="card-header bg-info bg-opacity-10">
+                            <h6 class="mb-0">
+                                <i class="${recebIcon} me-2"></i>Recebimento Fisico ${recebBadge}
+                            </h6>
+                        </div>
+                        <div class="card-body py-2">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <small class="text-muted">Picking</small>
+                                    <div><strong>${r.picking_name || 'N/A'}</strong></div>
+                                </div>
+                                <div class="col-md-4">
+                                    <small class="text-muted">Status Odoo</small>
+                                    <div>${r.odoo_status || 'N/A'}</div>
+                                </div>
+                                <div class="col-md-4">
+                                    <small class="text-muted">Processado em</small>
+                                    <div>${r.processado_em || '-'}</div>
+                                </div>
+                            </div>
+                            ${r.erro_mensagem ? `
+                                <div class="alert alert-danger mt-2 mb-0 py-1 small">
+                                    <i class="fas fa-exclamation-triangle me-1"></i>${r.erro_mensagem}
+                                </div>
+                            ` : ''}
+                            ${r.picking_id ? `
+                                <a href="https://nacomgoya.odoo.com/web#id=${r.picking_id}&model=stock.picking&view_type=form"
+                                   class="btn btn-sm btn-outline-info mt-2" target="_blank">
+                                    <i class="fas fa-external-link-alt me-1"></i>Abrir no Odoo
+                                </a>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    } else if (v.status === 'consolidado' || v.status === 'finalizado_odoo') {
+        html += `
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="alert alert-secondary mb-0">
+                        <i class="fas fa-boxes me-2"></i>
+                        <strong>Recebimento Fisico:</strong> Aguardando picking no Odoo ou recebimento nao iniciado.
+                    </div>
+                </div>
             </div>
         `;
     }

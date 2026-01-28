@@ -2526,7 +2526,7 @@ class ValidacaoNfPoService:
             1 for item in itens_nf
             if item.get('cod_produto_interno') and
             any(
-                any(l.get('match_item_nf') == item['cod_produto_fornecedor'] for l in po['linhas'])
+                any(line.get('match_item_nf') == item['cod_produto_fornecedor'] for line in po['linhas'])
                 for po in pos_candidatos
             )
         )

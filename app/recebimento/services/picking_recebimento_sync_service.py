@@ -736,7 +736,7 @@ class PickingRecebimentoSyncService:
     def _parse_datetime(self, value) -> datetime:
         """Converte string datetime do Odoo para datetime Python."""
         if not value:
-            return None
+            return None # type: ignore
         if isinstance(value, datetime):
             return value
         try:
@@ -745,4 +745,4 @@ class PickingRecebimentoSyncService:
             try:
                 return datetime.strptime(str(value)[:19], '%Y-%m-%dT%H:%M:%S')
             except (ValueError, TypeError):
-                return None
+                return None # type: ignore

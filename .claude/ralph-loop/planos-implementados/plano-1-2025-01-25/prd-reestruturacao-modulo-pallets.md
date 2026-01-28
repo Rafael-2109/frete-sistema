@@ -275,7 +275,7 @@ DOMÍNIO B: TRATATIVA DAS NFs
 <plano_alterado>
 DOMÍNIO B: TRATATIVA DAS NFs
 │
-├── B.1 DIRECIONAMENTO DAS NFs
+├── B.1 SOLUÇÃO DAS NFs (Fechamento Fiscal)
 │   │
 │   ├── B.1.1 Vinculação NF Origem à NC
 │   │   └── Vincular NF de remessa à NC
@@ -285,17 +285,16 @@ DOMÍNIO B: TRATATIVA DAS NFs
 │       └── NFs que foram canceladas (Automaticamente)
 │       └── Mantidas para auditoria
 │
-└── B.2 SOLUÇÃO DAS NFs (Registro pelo usuario - controle antes de dar entrada na NF | Controle das NFs canceladas)
+└── B.2 DIRECIONAMENTO DAS NFs (Registro pelo usuario - controle antes de dar entrada na NF | Controle das NFs canceladas)
     │
     ├── B.2.1 Devolução
     │   └── NF de devolução emitida pelo cliente
     │   └── 1 NF Devolução pode referenciar N NFs de Remessa
     │   └── Dados: nf_devolucao, nfs_remessa_vinculadas[], status_sugestao
     │
-    ├── B.2.2 Retorno
+    ├── B.2.2 Recusada
     │   └── NF de remessa recusada pelo cliente (Altere pois o cliente não emite NF de retorno, ele apenas recusa a NF - Usuario deverá registrar que a NF foi recusada)
     │   └── Similar a devolução mas 1:1 e sem registro no DFe
-    │   └── Dados: nf_retorno (Não tem NF de retorno, é a própria NF de remessa recusada), nf_remessa_vinculada
     │
     └── B.2.3 Cancelamento
         └── NF de remessa foi cancelada
