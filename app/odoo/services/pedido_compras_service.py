@@ -834,21 +834,45 @@ class PedidoComprasServiceOtimizado:
         alterado = False
         dfes_cache = dfes_cache or {}
 
-        # ✅ CORREÇÃO: Preencher CNPJ se estava vazio (registros antigos)
-        if not pedido_existente.cnpj_fornecedor:
-            partner_id = pedido_odoo.get('partner_id')
-            if partner_id:
-                parceiro_id = partner_id[0] if isinstance(partner_id, list) else partner_id
-                fornecedor = self._fornecedores_cache.get(parceiro_id)
-                if fornecedor:
-                    # Odoo retorna False para campos vazios — sanitizar
-                    novo_cnpj = fornecedor.get('l10n_br_cnpj')
-                    if novo_cnpj and novo_cnpj is not False:
+        # ✅ Verificar mudança de fornecedor (CNPJ e razão social)
+        partner_id = pedido_odoo.get('partner_id')
+        if partner_id:
+            parceiro_id = partner_id[0] if isinstance(partner_id, list) else partner_id
+            fornecedor = self._fornecedores_cache.get(parceiro_id)
+            if fornecedor:
+                # Verificar CNPJ
+                novo_cnpj = fornecedor.get('l10n_br_cnpj')
+                if novo_cnpj and novo_cnpj is not False:
+                    if pedido_existente.cnpj_fornecedor != novo_cnpj:
+                        cnpj_antigo = pedido_existente.cnpj_fornecedor
                         pedido_existente.cnpj_fornecedor = novo_cnpj
                         alterado = True
-                        self.logger.info(
-                            f"   ✅ CNPJ preenchido: {pedido_existente.num_pedido} -> {novo_cnpj}"
-                        )
+                        if cnpj_antigo:
+                            self.logger.warning(
+                                f"   ⚠️ CNPJ ALTERADO: {pedido_existente.num_pedido} "
+                                f"({cnpj_antigo} -> {novo_cnpj})"
+                            )
+                        else:
+                            self.logger.info(
+                                f"   ✅ CNPJ preenchido: {pedido_existente.num_pedido} -> {novo_cnpj}"
+                            )
+
+                # Verificar Razão Social
+                nova_raz_social = fornecedor.get('name')
+                if nova_raz_social and nova_raz_social is not False:
+                    if pedido_existente.raz_social != nova_raz_social:
+                        raz_social_antiga = pedido_existente.raz_social
+                        pedido_existente.raz_social = nova_raz_social
+                        alterado = True
+                        if raz_social_antiga:
+                            self.logger.warning(
+                                f"   ⚠️ FORNECEDOR ALTERADO: {pedido_existente.num_pedido} "
+                                f"({raz_social_antiga} -> {nova_raz_social})"
+                            )
+                        else:
+                            self.logger.info(
+                                f"   ✅ Razão social preenchida: {pedido_existente.num_pedido} -> {nova_raz_social}"
+                            )
 
         # ✅ CORREÇÃO: Preencher odoo_purchase_order_id se estava vazio (registros antigos)
         # O campo armazena o ID do HEADER (purchase.order), diferente de odoo_id que e o ID da LINHA
