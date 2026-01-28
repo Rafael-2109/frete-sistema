@@ -4014,6 +4014,83 @@ def cancelar_cte(frete_id):
         return redirect(url_for("fretes.visualizar_frete", frete_id=frete_id))
 
 
+@fretes_bp.route("/<int:frete_id>/desvincular_fatura", methods=["POST"])
+@login_required
+def desvincular_frete_fatura(frete_id):
+    """Desvincula um frete da fatura (cancela CTe se existir e remove vínculo)"""
+    frete = Frete.query.get_or_404(frete_id)
+
+    try:
+        # Guarda referência da fatura para redirect
+        fatura_id = frete.fatura_frete_id
+
+        # Verifica se fatura está conferida
+        if frete.fatura_frete and frete.fatura_frete.status_conferencia == "CONFERIDO":
+            flash("❌ Não é possível remover frete de fatura conferida!", "error")
+            if fatura_id:
+                return redirect(url_for("fretes.visualizar_fatura", fatura_id=fatura_id))
+            return redirect(url_for("fretes.visualizar_frete", frete_id=frete_id))
+
+        # Verifica se está vinculado a alguma fatura
+        if not frete.fatura_frete_id:
+            flash("❌ Este frete não está vinculado a nenhuma fatura!", "error")
+            return redirect(url_for("fretes.visualizar_frete", frete_id=frete_id))
+
+        # Salva dados para o flash
+        numero_cte = frete.numero_cte or f"Frete #{frete.id}"
+        cliente = frete.nome_cliente
+        numero_fatura = frete.fatura_frete.numero_fatura if frete.fatura_frete else "N/A"
+        tinha_cte = frete.numero_cte is not None
+
+        # ✅ DESVINCULA DA FATURA E CANCELA CTe SE EXISTIR
+        frete.fatura_frete_id = None
+        frete.vencimento = None
+        frete.status = "PENDENTE"
+
+        # Se tinha CTe, limpa os dados do CTe
+        if tinha_cte:
+            frete.numero_cte = None
+            frete.valor_cte = None
+            frete.data_emissao_cte = None
+
+        # Limpa campos de aprovação
+        frete.aprovado_por = None
+        frete.aprovado_em = None
+        frete.observacoes_aprovacao = None
+        frete.requer_aprovacao = False
+
+        # Remove movimentações da conta corrente relacionadas
+        ContaCorrenteTransportadora.query.filter_by(frete_id=frete_id).delete()
+
+        # Remove aprovações relacionadas
+        AprovacaoFrete.query.filter_by(frete_id=frete_id).delete()
+
+        db.session.commit()
+
+        if tinha_cte:
+            flash(
+                f"✅ Frete removido da fatura {numero_fatura}! CTe {numero_cte} cancelado. Cliente: {cliente}",
+                "success",
+            )
+        else:
+            flash(
+                f"✅ Frete #{frete.id} removido da fatura {numero_fatura}! Cliente: {cliente}",
+                "success",
+            )
+
+        # Retorna para a fatura
+        if fatura_id:
+            return redirect(url_for("fretes.visualizar_fatura", fatura_id=fatura_id))
+        return redirect(url_for("fretes.listar_faturas"))
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Erro ao desvincular frete da fatura: {str(e)}", "error")
+        if frete.fatura_frete_id:
+            return redirect(url_for("fretes.visualizar_fatura", fatura_id=frete.fatura_frete_id))
+        return redirect(url_for("fretes.visualizar_frete", frete_id=frete_id))
+
+
 @fretes_bp.route("/despesas/<int:despesa_id>/excluir", methods=["POST"])
 @login_required
 def excluir_despesa_extra(despesa_id):

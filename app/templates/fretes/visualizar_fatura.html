@@ -229,6 +229,14 @@
                                     class="btn btn-sm btn-outline-primary" title="Ver Frete">
                                     <i class="fas fa-eye"></i>
                                 </a>
+                                {% if fatura.status_conferencia != 'CONFERIDO' %}
+                                <button type="button"
+                                        class="btn btn-sm btn-outline-danger"
+                                        title="Remover da Fatura"
+                                        onclick="confirmarRemoverFrete({{ frete.id }}, '{{ frete.numero_cte or 'Sem CTe' }}', '{{ frete.nome_cliente[:30] }}')">
+                                    <i class="fas fa-unlink"></i>
+                                </button>
+                                {% endif %}
                             </td>
                         </tr>
                         {% endfor %}
@@ -468,6 +476,42 @@
         </div>
     </div>
     {% endif %}
+
+    <!-- Modal de Confirmação de Remoção de Frete -->
+    <div class="modal fade" id="modalRemoverFrete" tabindex="-1" aria-labelledby="modalRemoverFreteLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title" id="modalRemoverFreteLabel">
+                        <i class="fas fa-unlink"></i> Remover Frete da Fatura
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <h6><i class="fas fa-exclamation-triangle"></i> Atenção!</h6>
+                        <p class="mb-0">Esta ação irá:</p>
+                        <ul class="mb-0">
+                            <li>Desvincular o frete desta fatura</li>
+                            <li>Cancelar o CTe (se existir)</li>
+                            <li>Limpar os dados de valor CTe e vencimento</li>
+                            <li>Voltar o frete para status PENDENTE</li>
+                        </ul>
+                    </div>
+                    <p><strong>Frete:</strong> <span id="modalFreteNumero"></span></p>
+                    <p><strong>Cliente:</strong> <span id="modalFreteCliente"></span></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times"></i> Cancelar
+                    </button>
+                    <button type="button" class="btn btn-danger" id="btnConfirmarRemover" onclick="executarRemoverFrete()">
+                        <i class="fas fa-unlink"></i> Confirmar Remoção
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -722,6 +766,63 @@ function confirmarLancamentoOdoo() {
         alert('Erro ao comunicar com o servidor. Tente novamente.');
         btnConfirmar.disabled = false;
         btnConfirmar.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Confirmar Lançamento';
+    });
+}
+
+// ========================================
+// REMOVER FRETE DA FATURA
+// ========================================
+
+let freteParaRemover = null;
+
+function confirmarRemoverFrete(freteId, numeroCte, nomeCliente) {
+    freteParaRemover = freteId;
+
+    // Atualiza dados no modal
+    document.getElementById('modalFreteNumero').textContent = numeroCte;
+    document.getElementById('modalFreteCliente').textContent = nomeCliente;
+
+    // Abre modal
+    const modal = new bootstrap.Modal(document.getElementById('modalRemoverFrete'));
+    modal.show();
+}
+
+function executarRemoverFrete() {
+    if (!freteParaRemover) {
+        alert('Erro: Frete não identificado.');
+        return;
+    }
+
+    const btnConfirmar = document.getElementById('btnConfirmarRemover');
+    btnConfirmar.disabled = true;
+    btnConfirmar.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Removendo...';
+
+    // Chama a API de desvincular frete da fatura
+    fetch(`/fretes/${freteParaRemover}/desvincular_fatura`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        }
+    })
+    .then(response => {
+        // Verifica se foi redirecionado (comportamento normal da rota)
+        if (response.redirected) {
+            // Sucesso - recarrega a página atual para ver o resultado
+            location.reload();
+            return;
+        }
+        return response.text();
+    })
+    .then(data => {
+        // Se chegou aqui sem redirect, recarrega para ver flash messages
+        location.reload();
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro ao comunicar com o servidor. Tente novamente.');
+        btnConfirmar.disabled = false;
+        btnConfirmar.innerHTML = '<i class="fas fa-unlink"></i> Confirmar Remoção';
     });
 }
 </script>
