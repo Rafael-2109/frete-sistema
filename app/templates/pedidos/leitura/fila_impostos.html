@@ -447,7 +447,7 @@ $(document).ready(function() {
             tbody.append(`
                 <tr>
                     <td><strong>${job.args.order_name || '-'}</strong></td>
-                    <td><a href="https://nacomgoya.odoo.com/web#id=${job.args.order_id}&model=sale.order&view_type=form" target="_blank"><code>${job.args.order_id || '-'}</code></a></td>
+                    <td><a href="https://odoo.nacomgoya.com.br/web#id=${job.args.order_id}&model=sale.order&view_type=form" target="_blank"><code>${job.args.order_id || '-'}</code></a></td>
                     <td>${formatarData(job.criado_em)}</td>
                     <td><span class="badge bg-warning text-dark">${job.status}</span></td>
                 </tr>
@@ -474,7 +474,7 @@ $(document).ready(function() {
             tbody.append(`
                 <tr>
                     <td><strong>${job.args.order_name || '-'}</strong></td>
-                    <td><a href="https://nacomgoya.odoo.com/web#id=${job.args.order_id}&model=sale.order&view_type=form" target="_blank"><code>${job.args.order_id || '-'}</code></a></td>
+                    <td><a href="https://odoo.nacomgoya.com.br/web#id=${job.args.order_id}&model=sale.order&view_type=form" target="_blank"><code>${job.args.order_id || '-'}</code></a></td>
                     <td>${formatarData(job.iniciado_em)}</td>
                     <td>
                         <span class="badge bg-primary">
@@ -510,7 +510,7 @@ $(document).ready(function() {
             tbody.append(`
                 <tr class="${sucesso ? '' : 'table-warning'}">
                     <td><strong>${job.args.order_name || '-'}</strong></td>
-                    <td><a href="https://nacomgoya.odoo.com/web#id=${job.args.order_id}&model=sale.order&view_type=form" target="_blank"><code>${job.args.order_id || '-'}</code></a></td>
+                    <td><a href="https://odoo.nacomgoya.com.br/web#id=${job.args.order_id}&model=sale.order&view_type=form" target="_blank"><code>${job.args.order_id || '-'}</code></a></td>
                     <td>${formatarData(job.finalizado_em)}</td>
                     <td>
                         <span class="badge ${sucesso ? 'bg-success' : 'bg-warning text-dark'}">
@@ -546,7 +546,7 @@ $(document).ready(function() {
             tbody.append(`
                 <tr class="table-danger">
                     <td><strong>${job.args.order_name || '-'}</strong></td>
-                    <td><a href="https://nacomgoya.odoo.com/web#id=${job.args.order_id}&model=sale.order&view_type=form" target="_blank"><code>${job.args.order_id || '-'}</code></a></td>
+                    <td><a href="https://odoo.nacomgoya.com.br/web#id=${job.args.order_id}&model=sale.order&view_type=form" target="_blank"><code>${job.args.order_id || '-'}</code></a></td>
                     <td>${formatarData(job.finalizado_em)}</td>
                     <td>
                         <span class="badge bg-danger">Falhou</span>

@@ -250,7 +250,7 @@ if __name__ == "__main__":
 
 ## 📚 Referências Úteis
 
-- [Documentação Oficial Odoo - Sale Order](https://www.odoo.com/documentation/16.0/developer/reference/backend/orm.html)
+- [Documentação Oficial Odoo - Sale Order](https://odoo.nacomgoya.com.br/documentation/16.0/developer/reference/backend/orm.html)
 - Modelo: `sale.order` (Cotações/Pedidos de Venda)
 - Modelo de Linhas: `sale.order.line` (Itens da Cotação)
 - Cliente: `res.partner` (Parceiros/Clientes)

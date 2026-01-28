@@ -223,7 +223,7 @@ tail -50 logs/sincronizacao_incremental.log
 tail -f logs/sincronizacao_incremental.log
 
 # Verificar conexão com Odoo
-curl -I https://seu-odoo.com/web/database/selector
+curl -I https://odoo.nacomgoya.com.br/web/database/selector
 
 # Verificar conexão com banco
 psql $DATABASE_URL -c "SELECT 1;"
