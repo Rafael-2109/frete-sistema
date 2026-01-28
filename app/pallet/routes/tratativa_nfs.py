@@ -456,13 +456,20 @@ def vincular_devolucao():
         cnpj_raw = request.form.get('cnpj_emitente', '').strip()
         cnpj_limpo = cnpj_raw.replace('.', '').replace('-', '').replace('/', '') if cnpj_raw else None
 
+        # Quantidade total da NF de devolução (para validação 1:N)
+        quantidade_devolucao = request.form.get('quantidade_devolucao', '0')
+        try:
+            quantidade_devolucao = int(quantidade_devolucao)
+        except ValueError:
+            quantidade_devolucao = 0
+
         nf_devolucao = {
             'numero_nf_solucao': numero_nf_devolucao,
             'serie_nf_solucao': request.form.get('serie_nf_devolucao', '').strip() or None,
-            'chave_nfe_solucao': request.form.get('chave_nfe_devolucao', '').strip() or None,
             'data_nf_solucao': data_nf_devolucao,
             'cnpj_emitente': cnpj_limpo,
             'nome_emitente': request.form.get('nome_emitente', '').strip() or None,
+            'quantidade': quantidade_devolucao,  # Para validação no MatchService
         }
 
         # Extrair IDs e quantidades

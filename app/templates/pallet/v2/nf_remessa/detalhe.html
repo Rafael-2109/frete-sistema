@@ -813,7 +813,7 @@
         <div class="pallet-info-card__body">
             {% set all_solucoes = [] %}
             {% for credito in creditos %}
-                {% for solucao in credito.solucoes.filter_by(ativo=True).order_by(None).all() %}
+                {% for solucao in credito.solucoes if solucao.ativo %}
                     {% do all_solucoes.append(solucao) %}
                 {% endfor %}
             {% endfor %}

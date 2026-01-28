@@ -99,10 +99,14 @@ class PalletNFRemessa(db.Model):
     ativo = db.Column(db.Boolean, default=True, nullable=False)
 
     # Relacionamentos
-    creditos = db.relationship('PalletCredito', backref='nf_remessa', lazy='dynamic',
-                               foreign_keys='PalletCredito.nf_remessa_id')
-    solucoes_nf = db.relationship('PalletNFSolucao', backref='nf_remessa', lazy='dynamic',
-                                   foreign_keys='PalletNFSolucao.nf_remessa_id')
+    creditos = db.relationship(
+        'PalletCredito', backref='nf_remessa', lazy='select',
+        foreign_keys='PalletCredito.nf_remessa_id'
+    )
+    solucoes_nf = db.relationship(
+        'PalletNFSolucao', backref='nf_remessa', lazy='select',
+        foreign_keys='PalletNFSolucao.nf_remessa_id'
+    )
     embarque = db.relationship('Embarque', foreign_keys=[embarque_id])
     embarque_item = db.relationship('EmbarqueItem', foreign_keys=[embarque_item_id])
 

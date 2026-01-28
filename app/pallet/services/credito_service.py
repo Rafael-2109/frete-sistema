@@ -651,8 +651,8 @@ class CreditoService:
             'percentual_resolvido': credito.percentual_resolvido,
             'status': credito.status,
             'totais_por_solucao': totais_solucao,
-            'documentos_count': credito.documentos.count(),
-            'solucoes_count': credito.solucoes.count()
+            'documentos_count': len([d for d in credito.documentos if d.ativo]),
+            'solucoes_count': len([s for s in credito.solucoes if s.ativo])
         }
 
     @staticmethod

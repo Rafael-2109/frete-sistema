@@ -87,11 +87,19 @@ class PalletCredito(db.Model):
     ativo = db.Column(db.Boolean, default=True, nullable=False)
 
     # Relacionamentos
-    documentos = db.relationship('PalletDocumento', backref='credito', lazy='dynamic',
-                                  foreign_keys='PalletDocumento.credito_id')
-    solucoes = db.relationship('PalletSolucao', backref='credito', lazy='dynamic',
-                                foreign_keys='PalletSolucao.credito_id',
-                                primaryjoin='PalletCredito.id == PalletSolucao.credito_id')
+    documentos = db.relationship(
+        'PalletDocumento',
+        backref='credito',
+        lazy='select',
+        foreign_keys='PalletDocumento.credito_id'
+    )
+    solucoes = db.relationship(
+        'PalletSolucao',
+        backref='credito',
+        lazy='select',
+        foreign_keys='PalletSolucao.credito_id',
+        primaryjoin='PalletCredito.id == PalletSolucao.credito_id'
+    )
     # Soluções de substituição onde este crédito é o DESTINO
     substituicoes_recebidas = db.relationship(
         'PalletSolucao',

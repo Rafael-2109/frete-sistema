@@ -626,10 +626,15 @@ def registrar_substituicao():
                 )
                 credito_destino_id = novo_credito.id
 
+        motivo = request.form.get('motivo', '').strip()
+        if not motivo:
+            motivo = "Substituição de responsabilidade"  # Motivo padrão
+
         solucao, credito_origem = SolucaoPalletService.registrar_substituicao(
             credito_origem_id=credito_origem_id,
             credito_destino_id=credito_destino_id,
             quantidade=quantidade,
+            motivo=motivo,
             usuario=usuario,
             observacao=request.form.get('observacao', '').strip() or None
         )
