@@ -40,6 +40,11 @@ from app.odoo.utils.connection import get_odoo_connection
 
 logger = logging.getLogger(__name__)
 
+# Tolerância para ajuste de quantidade do PO Conciliador
+# Quando qtd_nf > soma_alocacoes mas dentro deste percentual,
+# usar qtd_nf para manter integridade com o DFe
+TOLERANCIA_QTD_PERCENTUAL = Decimal('10.0')
+
 
 def _obter_po_id_por_linha(po_line_id: int, po_id_fallback: int) -> int:
     """
@@ -188,9 +193,30 @@ class OdooPoService:
                 ).order_by(MatchAlocacao.ordem).all()
 
                 if alocacoes:
+                    # =============================================================
+                    # AJUSTE DE TOLERÂNCIA (Preview): Se qtd_nf > soma_alocacoes
+                    # mas dentro de 10%, mostrar qtd_nf no preview
+                    # =============================================================
+                    qtd_nf = Decimal(str(match.qtd_nf or 0))
+                    soma_alocacoes = sum(Decimal(str(aloc.qtd_alocada or 0)) for aloc in alocacoes)
+                    diferenca_tolerancia = qtd_nf - soma_alocacoes
+
+                    usa_qtd_nf = False
+                    if diferenca_tolerancia > 0:
+                        tolerancia_limite = soma_alocacoes * (TOLERANCIA_QTD_PERCENTUAL / Decimal('100'))
+                        if diferenca_tolerancia <= tolerancia_limite:
+                            usa_qtd_nf = True
+
                     # NOVO: Processar cada alocacao (split multi-PO)
-                    for aloc in alocacoes:
+                    for idx, aloc in enumerate(alocacoes):
                         qtd_alocada = Decimal(str(aloc.qtd_alocada or 0))
+
+                        # Aplicar ajuste de tolerância na primeira alocação
+                        if usa_qtd_nf and idx == 0:
+                            qtd_para_conciliador = qtd_alocada + diferenca_tolerancia
+                        else:
+                            qtd_para_conciliador = qtd_alocada
+
                         preco = Decimal(str(aloc.preco_po or match.preco_nf or 0))
 
                         # Dados para o PO Conciliador
@@ -199,13 +225,15 @@ class OdooPoService:
                             'alocacao_id': aloc.id,
                             'cod_produto': match.cod_produto_interno,
                             'nome_produto': match.nome_produto,
-                            'qtd': float(qtd_alocada),
+                            'qtd': float(qtd_para_conciliador),  # Usa qtd ajustada
+                            'qtd_original_alocacao': float(qtd_alocada),  # Para referência
+                            'ajuste_tolerancia': float(diferenca_tolerancia) if usa_qtd_nf and idx == 0 else 0,
                             'preco': float(preco),
-                            'valor': float(qtd_alocada * preco),
+                            'valor': float(qtd_para_conciliador * preco),
                             'po_origem': aloc.odoo_po_name
                         }
                         itens_conciliador.append(item_conciliador)
-                        valor_total_conciliador += qtd_alocada * preco
+                        valor_total_conciliador += qtd_para_conciliador * preco
 
                         # Agrupar dados do PO Original (ficará como saldo)
                         # Buscar ID correto do purchase.order via tabela pedido_compras
@@ -566,13 +594,45 @@ class OdooPoService:
                 ).order_by(MatchAlocacao.ordem).all()
 
                 if alocacoes:
+                    # =============================================================
+                    # AJUSTE DE TOLERÂNCIA: Se qtd_nf > soma_alocacoes mas dentro
+                    # de 10%, usar qtd_nf para o PO Conciliador
+                    # Isso garante integridade entre DFe -> PO Conciliador -> Picking
+                    # =============================================================
+                    qtd_nf = Decimal(str(match.qtd_nf or 0))
+                    soma_alocacoes = sum(Decimal(str(aloc.qtd_alocada or 0)) for aloc in alocacoes)
+                    diferenca_tolerancia = qtd_nf - soma_alocacoes
+
+                    usa_qtd_nf = False
+                    if diferenca_tolerancia > 0:
+                        tolerancia_limite = soma_alocacoes * (TOLERANCIA_QTD_PERCENTUAL / Decimal('100'))
+                        if diferenca_tolerancia <= tolerancia_limite:
+                            usa_qtd_nf = True
+                            logger.info(
+                                f"📊 Produto {match.cod_produto_interno}: ajuste de tolerância aplicado - "
+                                f"usando qtd_nf ({qtd_nf}) em vez de soma_alocacoes ({soma_alocacoes}). "
+                                f"Diferença: {diferenca_tolerancia} (limite: {tolerancia_limite})"
+                            )
+
                     # NOVO FLUXO: Processar cada alocacao (multi-PO split)
-                    for aloc in alocacoes:
+                    for idx, aloc in enumerate(alocacoes):
                         if not aloc.odoo_po_line_id:
                             logger.warning(f"Alocacao {aloc.id} sem po_line_id, pulando")
                             continue
 
                         qtd_alocada = Decimal(str(aloc.qtd_alocada or 0))
+
+                        # Se usa_qtd_nf e é a primeira alocação, adicionar a diferença
+                        # para que o PO Conciliador tenha a quantidade exata da NF
+                        if usa_qtd_nf and idx == 0:
+                            qtd_para_conciliador = qtd_alocada + diferenca_tolerancia
+                            logger.debug(
+                                f"Alocação {aloc.id}: qtd_alocada={qtd_alocada} + "
+                                f"diferenca={diferenca_tolerancia} = qtd_para_conciliador={qtd_para_conciliador}"
+                            )
+                        else:
+                            qtd_para_conciliador = qtd_alocada
+
                         preco = float(aloc.preco_po or match.preco_nf or 0)
 
                         # Buscar product_id da linha original
@@ -594,12 +654,14 @@ class OdooPoService:
 
                         # ---------------------------------------------------------
                         # 3a) Criar linha no PO Conciliador
+                        # NOTA: Usa qtd_para_conciliador que pode incluir ajuste
+                        # de tolerância para manter integridade com o DFe
                         # ---------------------------------------------------------
                         nova_linha_id = self._criar_linha_po_conciliador(
                             odoo,
                             po_conciliador_id,
                             product_id,
-                            float(qtd_alocada),
+                            float(qtd_para_conciliador),  # Usa qtd ajustada
                             preco,
                             aloc.odoo_po_line_id
                         )
@@ -609,7 +671,9 @@ class OdooPoService:
                                 'linha_id': nova_linha_id,
                                 'produto': match.cod_produto_interno,
                                 'nome': match.nome_produto,
-                                'qtd': float(qtd_alocada),
+                                'qtd': float(qtd_para_conciliador),  # Registra qtd ajustada
+                                'qtd_original_alocacao': float(qtd_alocada),  # Para auditoria
+                                'ajuste_tolerancia': float(qtd_para_conciliador - qtd_alocada) if qtd_para_conciliador != qtd_alocada else 0,
                                 'preco': preco,
                                 'po_origem': aloc.odoo_po_name,
                                 'alocacao_id': aloc.id
@@ -715,6 +779,51 @@ class OdooPoService:
                 logger.warning(
                     f"Nao foi possivel confirmar PO Conciliador automaticamente: {e}"
                 )
+
+            # =================================================================
+            # PASSO 4.5: Registrar partner_ref nos POs Originais (rastreabilidade)
+            # Formato: "PO Cons. {nome_1} | {nome_2} | ..."
+            # =================================================================
+            pos_originais_atualizados = set()
+            for ajuste in linhas_ajustadas_originais:
+                po_original_id = ajuste.get('po_id')
+                po_original_name = ajuste.get('po_name')
+
+                # Evitar atualizar o mesmo PO múltiplas vezes
+                if po_original_id and po_original_id not in pos_originais_atualizados:
+                    pos_originais_atualizados.add(po_original_id)
+
+                    try:
+                        # Buscar partner_ref atual
+                        po_atual = odoo.read(
+                            'purchase.order',
+                            [po_original_id],
+                            ['partner_ref']
+                        )
+                        ref_atual = (po_atual[0].get('partner_ref') or '') if po_atual else ''
+
+                        # Construir nova referência (concatenando se já existir)
+                        if ref_atual and ref_atual.startswith('PO Cons.'):
+                            # Adicionar novo consolidador à lista existente
+                            nova_ref = f"{ref_atual} | {po_conciliador_name}"
+                        else:
+                            # Primeira consolidação
+                            nova_ref = f"PO Cons. {po_conciliador_name}"
+
+                        odoo.write(
+                            'purchase.order',
+                            po_original_id,
+                            {'partner_ref': nova_ref}
+                        )
+                        logger.info(
+                            f"📎 PO Original {po_original_name} (ID {po_original_id}) "
+                            f"marcado com partner_ref: {nova_ref}"
+                        )
+                    except Exception as e_ref:
+                        logger.warning(
+                            f"⚠️ Não foi possível atualizar partner_ref do PO "
+                            f"{po_original_name} (ID {po_original_id}): {e_ref}"
+                        )
 
             # =================================================================
             # PASSO 5: Vincular NF ao PO Conciliador
@@ -1196,27 +1305,54 @@ class OdooPoService:
         po_id: int
     ) -> bool:
         """
-        Vincula um DFE a um PO no Odoo.
+        Vincula um DFE a um PO no Odoo de forma bidirecional.
+
+        Cria vínculos em ambas as direções para rastreabilidade:
+        - PO.dfe_id -> DFE (vínculo existente)
+        - DFE.purchase_id -> PO (NOVO)
+        - DFE.purchase_fiscal_id -> PO (NOVO)
 
         Args:
             odoo: Conexao Odoo
             dfe_id: ID do DFE
-            po_id: ID do PO
+            po_id: ID do PO Consolidador
 
         Returns:
             True se vinculou com sucesso
         """
         try:
-            # Atualizar DFE com referencia ao PO
-            # NOTA: O campo exato depende da customizacao do Odoo
-            # Tentar dfe_id no PO
+            # 1. Vínculo PO -> DFE (existente)
             odoo.write(
                 'purchase.order',
                 po_id,
                 {'dfe_id': dfe_id}
             )
+            logger.info(f"✅ PO {po_id} vinculado ao DFE {dfe_id}")
 
-            logger.info(f"DFE {dfe_id} vinculado ao PO {po_id}")
+            # 2. NOVO: Vínculo DFE -> PO Consolidador
+            # Campos do modelo l10n_br_ciel_it_account.dfe:
+            # - purchase_id: Pedido de Compra
+            # - purchase_fiscal_id: Pedido de Compra (Escrituração)
+            try:
+                odoo.write(
+                    'l10n_br_ciel_it_account.dfe',
+                    dfe_id,
+                    {
+                        'purchase_id': po_id,
+                        'purchase_fiscal_id': po_id
+                    }
+                )
+                logger.info(
+                    f"✅ DFE {dfe_id} vinculado bidirecionalmente ao PO Consolidador {po_id} "
+                    f"(purchase_id e purchase_fiscal_id)"
+                )
+            except Exception as e_dfe:
+                logger.warning(
+                    f"⚠️ Não foi possível vincular DFE {dfe_id} ao PO {po_id} "
+                    f"(campos purchase_id/purchase_fiscal_id): {e_dfe}"
+                )
+                # Continua mesmo se falhar - o vínculo PO->DFE já foi feito
+
             return True
 
         except Exception as e:
