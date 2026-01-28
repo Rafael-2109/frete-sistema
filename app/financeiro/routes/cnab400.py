@@ -675,8 +675,8 @@ def api_upload_batch():
             batch_id,
             arquivos_data,
             usuario_nome,
-            queue='default',
-            timeout=1800  # 30 minutos
+            queue_name='default',
+            timeout='30m'  # 30 minutos
         )
 
         return jsonify({
