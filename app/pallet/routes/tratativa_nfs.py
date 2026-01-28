@@ -24,9 +24,10 @@ from datetime import datetime
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for
 from flask_login import login_required, current_user
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 
 from app import db
-from app.pallet.models import PalletNFRemessa, PalletNFSolucao
+from app.pallet.models import PalletNFRemessa, PalletNFSolucao, PalletCredito, PalletDocumento, PalletSolucao
 from app.pallet.services import NFService, MatchService
 
 logger = logging.getLogger(__name__)
@@ -50,14 +51,24 @@ def direcionamento():
     - cnpj: CNPJ do destinatário
     - empresa: CD, FB, SC
     - page: Página (default: 1)
+
+    Colunas enriquecidas:
+    - Vales: Canhoto e Vale Pallet com quantidades (via PalletCredito → PalletDocumento)
+    - Solução Pallets: Progresso de resolução (via PalletCredito → PalletSolucao)
+    - Odoo: Soluções automáticas (PalletNFSolucao com vinculacao='AUTOMATICO')
+    - Controle: Soluções manuais (PalletNFSolucao com vinculacao='MANUAL')
     """
     tipo_destinatario = request.args.get('tipo_destinatario', '')
     cnpj = request.args.get('cnpj', '').strip()
     empresa = request.args.get('empresa', '')
     page = request.args.get('page', 1, type=int)
 
-    # Query base: NFs ativas (pendentes de vinculação)
-    query = PalletNFRemessa.query.filter(
+    # Query base com eager loading para dados relacionados
+    query = PalletNFRemessa.query.options(
+        joinedload(PalletNFRemessa.creditos).joinedload(PalletCredito.documentos),
+        joinedload(PalletNFRemessa.creditos).joinedload(PalletCredito.solucoes),
+        joinedload(PalletNFRemessa.solucoes_nf)
+    ).filter(
         PalletNFRemessa.ativo == True,
         PalletNFRemessa.status == 'ATIVA'
     )
@@ -85,6 +96,18 @@ def direcionamento():
 
     nfs = query.paginate(page=page, per_page=50, error_out=False)
 
+    # Enriquecer cada NF com dados calculados para as novas colunas
+    nfs_enriquecidas = []
+    for nf in nfs.items:
+        nf_data = {
+            'nf': nf,
+            'vales': _calcular_dados_vales(nf),
+            'solucao_pallets': _calcular_dados_solucao_pallets(nf),
+            'odoo': _filtrar_solucoes_nf(nf, vinculacao='AUTOMATICO'),
+            'controle': _filtrar_solucoes_nf(nf, vinculacao='MANUAL')
+        }
+        nfs_enriquecidas.append(nf_data)
+
     # Estatísticas
     stats = {
         'total_ativas': nfs.total,
@@ -103,6 +126,7 @@ def direcionamento():
     return render_template(
         'pallet/v2/tratativa_nfs/direcionamento.html',
         nfs=nfs,
+        nfs_enriquecidas=nfs_enriquecidas,
         stats=stats,
         filtro_tipo_destinatario=tipo_destinatario,
         filtro_cnpj=cnpj,
@@ -110,63 +134,155 @@ def direcionamento():
     )
 
 
+def _calcular_dados_vales(nf: PalletNFRemessa) -> dict:
+    """
+    Calcula dados de vales (canhoto e vale_pallet) para uma NF de remessa.
+
+    Returns:
+        dict: {
+            'canhoto': {'qtd_total': int, 'qtd_recebidos': int},
+            'vale_pallet': {'qtd_total': int, 'qtd_recebidos': int}
+        }
+    """
+    resultado = {
+        'canhoto': {'qtd_total': 0, 'qtd_recebidos': 0},
+        'vale_pallet': {'qtd_total': 0, 'qtd_recebidos': 0}
+    }
+
+    # Iterar sobre créditos da NF (já carregados via eager loading)
+    for credito in nf.creditos:
+        for doc in credito.documentos:
+            if not doc.ativo:
+                continue
+
+            if doc.tipo == 'CANHOTO':
+                resultado['canhoto']['qtd_total'] += doc.quantidade or 0
+                if doc.recebido:
+                    resultado['canhoto']['qtd_recebidos'] += doc.quantidade or 0
+            elif doc.tipo == 'VALE_PALLET':
+                resultado['vale_pallet']['qtd_total'] += doc.quantidade or 0
+                if doc.recebido:
+                    resultado['vale_pallet']['qtd_recebidos'] += doc.quantidade or 0
+
+    return resultado
+
+
+def _calcular_dados_solucao_pallets(nf: PalletNFRemessa) -> dict:
+    """
+    Calcula dados de soluções de pallets (Domínio A) para uma NF de remessa.
+
+    Tipos de solução: BAIXA, VENDA, RECEBIMENTO, SUBSTITUICAO
+
+    Returns:
+        dict: {
+            'qtd_original': int,
+            'qtd_resolvida': int,
+            'qtd_pendente': int,
+            'percentual': float
+        }
+    """
+    qtd_original = 0
+    qtd_resolvida = 0
+
+    # Iterar sobre créditos da NF (já carregados via eager loading)
+    for credito in nf.creditos:
+        if not credito.ativo:
+            continue
+
+        qtd_original += credito.qtd_original or 0
+
+        # Somar soluções do crédito (BAIXA, VENDA, RECEBIMENTO, SUBSTITUICAO)
+        for solucao in credito.solucoes:
+            if solucao.ativo:
+                qtd_resolvida += solucao.quantidade or 0
+
+    percentual = 0.0
+    if qtd_original > 0:
+        percentual = round((qtd_resolvida / qtd_original) * 100, 1)
+
+    return {
+        'qtd_original': qtd_original,
+        'qtd_resolvida': qtd_resolvida,
+        'qtd_pendente': qtd_original - qtd_resolvida,
+        'percentual': percentual
+    }
+
+
+def _filtrar_solucoes_nf(nf: PalletNFRemessa, vinculacao: str) -> list:
+    """
+    Filtra soluções documentais (Domínio B) por tipo de vinculação.
+
+    Args:
+        nf: NF de remessa
+        vinculacao: 'AUTOMATICO' (Odoo) ou 'MANUAL' (Controle)
+
+    Returns:
+        list: Lista de dicts com dados das soluções
+    """
+    solucoes = []
+
+    for solucao in nf.solucoes_nf:
+        if not solucao.ativo or solucao.vinculacao != vinculacao:
+            continue
+        if solucao.rejeitado:
+            continue
+
+        solucoes.append({
+            'id': solucao.id,
+            'tipo': solucao.tipo,
+            'tipo_display': solucao.tipo_display,
+            'quantidade': solucao.quantidade,
+            'numero_nf': solucao.numero_nf_solucao,
+            'data': solucao.data_nf_solucao,
+            'info_complementar': solucao.info_complementar,  # Motivo da recusa
+            'criado_em': solucao.criado_em
+        })
+
+    return solucoes
+
+
 @tratativa_nfs_bp.route('/sugestoes')
 @login_required
 def listar_sugestoes():
     """
-    Lista sugestões automáticas de vinculação pendentes de confirmação.
+    Lista devoluções de pallet do DFe pendentes de entrada (não têm NC).
+
+    Apenas devoluções DEVOLUCAO são listadas como sugestões, pois:
+    - RECUSA: é registro manual (não existe NF fiscal)
+    - CANCELAMENTO: é importado automaticamente do Odoo
+    - NOTA_CREDITO: é vinculada automaticamente via reversed_entry_id
 
     Query params:
-    - tipo: DEVOLUCAO, RECUSA, NOTA_CREDITO
     - page: Página (default: 1)
     """
-    tipo = request.args.get('tipo', '')
     page = request.args.get('page', 1, type=int)
 
-    # Query base: sugestões pendentes (usa confirmado=False, não confirmado_em IS NULL)
+    # Query base: sugestões pendentes - APENAS DEVOLUCAO
+    # RECUSA e CANCELAMENTO são registros manuais, não sugestões do DFe
     query = PalletNFSolucao.query.filter(
         PalletNFSolucao.ativo == True,
         PalletNFSolucao.vinculacao == 'SUGESTAO',
         PalletNFSolucao.confirmado == False,
-        PalletNFSolucao.rejeitado == False
+        PalletNFSolucao.rejeitado == False,
+        PalletNFSolucao.tipo == 'DEVOLUCAO'  # Apenas devoluções pendentes de entrada
     )
-
-    # Filtrar por tipo
-    if tipo:
-        query = query.filter(PalletNFSolucao.tipo == tipo)
 
     # Ordenar por data de criação (mais antigas primeiro)
     query = query.order_by(PalletNFSolucao.criado_em.asc())
 
     sugestoes = query.paginate(page=page, per_page=50, error_out=False)
 
-    # Estatísticas - query agregada para performance (1 query ao invés de 2)
-    stats_query = db.session.query(
-        PalletNFSolucao.tipo,
-        func.count(PalletNFSolucao.id)
-    ).filter(
-        PalletNFSolucao.ativo == True,
-        PalletNFSolucao.vinculacao == 'SUGESTAO',
-        PalletNFSolucao.confirmado == False,
-        PalletNFSolucao.rejeitado == False
-    ).group_by(PalletNFSolucao.tipo).all()
-
-    stats = {'total_pendentes': sugestoes.total, 'devolucoes': 0, 'recusas': 0, 'notas_credito': 0, 'cancelamentos': 0}
-    for tipo_stat, count in stats_query:
-        if tipo_stat == 'DEVOLUCAO':
-            stats['devolucoes'] = count
-        elif tipo_stat == 'RECUSA':
-            stats['recusas'] = count
-        elif tipo_stat == 'NOTA_CREDITO':
-            stats['notas_credito'] = count
-        elif tipo_stat == 'CANCELAMENTO':
-            stats['cancelamentos'] = count
+    # Estatísticas simplificadas - apenas devoluções
+    stats = {
+        'total_pendentes': sugestoes.total,
+        'devolucoes': sugestoes.total
+    }
 
     return render_template(
         'pallet/v2/tratativa_nfs/sugestoes.html',
         sugestoes=sugestoes,
         stats=stats,
-        filtro_tipo=tipo
+        filtro_tipo='DEVOLUCAO'  # Sempre DEVOLUCAO agora
     )
 
 
@@ -353,9 +469,9 @@ def vincular_devolucao():
         nf_remessa_ids = [item['nf_remessa_id'] for item in nfs_remessa]
         quantidades = {item['nf_remessa_id']: item['quantidade'] for item in nfs_remessa}
 
-        # Usar MatchService para vincular
+        # Usar MatchService para vincular (método 1:N para múltiplas NFs)
         match_service = MatchService()
-        resultado = match_service.vincular_devolucao_manual(
+        solucoes = match_service.vincular_devolucao_manual_multiplas(
             nf_remessa_ids=nf_remessa_ids,
             nf_devolucao=nf_devolucao,
             quantidades=quantidades,
@@ -364,7 +480,7 @@ def vincular_devolucao():
 
         flash(
             f'Devolução vinculada com sucesso! '
-            f'NF {numero_nf_devolucao} → {len(resultado["vinculacoes"])} NF(s) de remessa',
+            f'NF {numero_nf_devolucao} → {len(solucoes)} NF(s) de remessa',
             'success'
         )
 

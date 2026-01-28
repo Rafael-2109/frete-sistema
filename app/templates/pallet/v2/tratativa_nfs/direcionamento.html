@@ -466,6 +466,218 @@
     background: var(--bg-light);
 }
 
+/* ============================================
+   NOVAS COLUNAS: Vales, Solução Pallets, Odoo, Controle
+   ============================================ */
+
+/* Coluna Vales */
+.vales-cell {
+    min-width: 140px;
+}
+
+.vale-item {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.8rem;
+    margin-bottom: 0.25rem;
+}
+
+.vale-item:last-child {
+    margin-bottom: 0;
+}
+
+.vale-item i {
+    font-size: 0.75rem;
+    width: 16px;
+    text-align: center;
+}
+
+.vale-item .vale-icon-canhoto {
+    color: hsl(210 80% 50%);
+}
+
+.vale-item .vale-icon-vale {
+    color: hsl(280 60% 50%);
+}
+
+.vale-item .qtd-info {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.vale-item .qtd-badge {
+    background: hsla(145 60% 90% / 1);
+    color: var(--semantic-success);
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 0.7rem;
+}
+
+.vale-item .qtd-badge.pendente {
+    background: hsla(45 100% 90% / 1);
+    color: hsl(45 100% 30%);
+}
+
+.vale-item .qtd-badge.vazio {
+    background: var(--bg);
+    color: var(--text-muted);
+}
+
+[data-bs-theme="dark"] .vale-item .qtd-badge {
+    background: hsla(145 65% 40% / 0.2);
+}
+
+[data-bs-theme="dark"] .vale-item .qtd-badge.pendente {
+    background: hsla(45 100% 50% / 0.2);
+    color: var(--amber-55);
+}
+
+.vales-vazio {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-style: italic;
+}
+
+/* Coluna Solução Pallets */
+.solucao-cell {
+    min-width: 120px;
+}
+
+.solucao-progress {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.solucao-info {
+    display: flex;
+    align-items: baseline;
+    gap: 0.25rem;
+    font-size: 0.85rem;
+}
+
+.solucao-info .qtd-resolvida {
+    font-weight: 700;
+    color: var(--semantic-success);
+}
+
+.solucao-info .qtd-total {
+    color: var(--text-muted);
+}
+
+.solucao-bar {
+    height: 6px;
+    background: var(--bg);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.solucao-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--semantic-success) 0%, hsl(145 65% 45%) 100%);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+.solucao-bar-fill.parcial {
+    background: linear-gradient(90deg, var(--amber-50) 0%, var(--amber-55) 100%);
+}
+
+.solucao-bar-fill.vazio {
+    background: var(--text-muted);
+    opacity: 0.3;
+}
+
+.solucao-vazio {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-style: italic;
+}
+
+/* Colunas Odoo e Controle */
+.solucoes-nf-cell {
+    min-width: 130px;
+}
+
+.solucao-nf-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    margin-right: 0.25rem;
+    margin-bottom: 0.25rem;
+}
+
+.solucao-nf-item.devolucao {
+    background: hsla(145 60% 90% / 1);
+    color: hsl(145 80% 25%);
+}
+
+.solucao-nf-item.recusa {
+    background: hsla(0 70% 92% / 1);
+    color: hsl(0 70% 35%);
+}
+
+.solucao-nf-item.cancelamento {
+    background: hsla(0 0% 85% / 1);
+    color: hsl(0 0% 35%);
+}
+
+.solucao-nf-item.nota_credito {
+    background: hsla(210 100% 92% / 1);
+    color: hsl(210 100% 40%);
+}
+
+[data-bs-theme="dark"] .solucao-nf-item.devolucao {
+    background: hsla(145 65% 40% / 0.2);
+    color: var(--semantic-success);
+}
+
+[data-bs-theme="dark"] .solucao-nf-item.recusa {
+    background: hsla(0 70% 50% / 0.2);
+    color: var(--semantic-danger);
+}
+
+[data-bs-theme="dark"] .solucao-nf-item.cancelamento {
+    background: hsla(0 0% 50% / 0.2);
+    color: var(--text-muted);
+}
+
+[data-bs-theme="dark"] .solucao-nf-item.nota_credito {
+    background: hsla(210 100% 52% / 0.2);
+    color: hsl(210 100% 65%);
+}
+
+.solucoes-nf-counter {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.solucoes-nf-counter:hover {
+    background: var(--bg-light);
+    border-color: var(--amber-55);
+}
+
+.solucoes-nf-vazio {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
 /* Empty state */
 .empty-state {
     padding: 3rem;
@@ -819,7 +1031,7 @@
             <span class="badge bg-primary">{{ nfs.total }} registro(s)</span>
         </div>
 
-        {% if nfs.items %}
+        {% if nfs_enriquecidas %}
         <div class="table-responsive">
             <table class="table table-nfs">
                 <thead>
@@ -830,12 +1042,20 @@
                         <th>Tipo</th>
                         <th>Destinatário</th>
                         <th class="text-center">Qtd</th>
-                        <th>Status</th>
+                        <th>Vales</th>
+                        <th>Sol. Pallets</th>
+                        <th>Odoo</th>
+                        <th>Controle</th>
                         <th>Ações</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for nf in nfs.items %}
+                    {% for item in nfs_enriquecidas %}
+                    {% set nf = item.nf %}
+                    {% set vales = item.vales %}
+                    {% set solucao_pallets = item.solucao_pallets %}
+                    {% set odoo = item.odoo %}
+                    {% set controle = item.controle %}
                     <tr data-nf-id="{{ nf.id }}">
                         <td>
                             <strong>{{ nf.numero_nf }}</strong>
@@ -878,21 +1098,99 @@
                             </div>
                             {% endif %}
                         </td>
-                        <td>
-                            {% if nf.status == 'ATIVA' %}
-                            <span class="status-badge ativa">
-                                <i class="fas fa-clock"></i> Ativa
-                            </span>
-                            {% elif nf.status == 'RESOLVIDA' %}
-                            <span class="status-badge resolvida">
-                                <i class="fas fa-check"></i> Resolvida
-                            </span>
-                            {% elif nf.status == 'CANCELADA' %}
-                            <span class="status-badge cancelada">
-                                <i class="fas fa-ban"></i> Cancelada
-                            </span>
+
+                        <!-- COLUNA: Vales (Canhoto e Vale Pallet) -->
+                        <td class="vales-cell">
+                            {% if vales.canhoto.qtd_total > 0 or vales.vale_pallet.qtd_total > 0 %}
+                                {% if vales.canhoto.qtd_total > 0 %}
+                                <div class="vale-item">
+                                    <i class="fas fa-file-signature vale-icon-canhoto"></i>
+                                    <span>Canhoto:</span>
+                                    <span class="qtd-info">
+                                        {% if vales.canhoto.qtd_recebidos >= vales.canhoto.qtd_total %}
+                                        <span class="qtd-badge">{{ vales.canhoto.qtd_recebidos }}/{{ vales.canhoto.qtd_total }} <i class="fas fa-check"></i></span>
+                                        {% else %}
+                                        <span class="qtd-badge pendente">{{ vales.canhoto.qtd_recebidos }}/{{ vales.canhoto.qtd_total }}</span>
+                                        {% endif %}
+                                    </span>
+                                </div>
+                                {% endif %}
+                                {% if vales.vale_pallet.qtd_total > 0 %}
+                                <div class="vale-item">
+                                    <i class="fas fa-ticket-alt vale-icon-vale"></i>
+                                    <span>Vale:</span>
+                                    <span class="qtd-info">
+                                        {% if vales.vale_pallet.qtd_recebidos >= vales.vale_pallet.qtd_total %}
+                                        <span class="qtd-badge">{{ vales.vale_pallet.qtd_recebidos }}/{{ vales.vale_pallet.qtd_total }} <i class="fas fa-check"></i></span>
+                                        {% else %}
+                                        <span class="qtd-badge pendente">{{ vales.vale_pallet.qtd_recebidos }}/{{ vales.vale_pallet.qtd_total }}</span>
+                                        {% endif %}
+                                    </span>
+                                </div>
+                                {% endif %}
+                            {% else %}
+                            <span class="vales-vazio">—</span>
                             {% endif %}
                         </td>
+
+                        <!-- COLUNA: Solução Pallets (Progresso) -->
+                        <td class="solucao-cell">
+                            {% if solucao_pallets.qtd_original > 0 %}
+                            <div class="solucao-progress">
+                                <div class="solucao-info">
+                                    <span class="qtd-resolvida">{{ solucao_pallets.qtd_resolvida }}</span>
+                                    <span class="qtd-total">/ {{ solucao_pallets.qtd_original }} plt</span>
+                                </div>
+                                <div class="solucao-bar">
+                                    {% set bar_class = 'vazio' if solucao_pallets.percentual == 0 else ('parcial' if solucao_pallets.percentual < 100 else '') %}
+                                    <div class="solucao-bar-fill {{ bar_class }}" style="width: {{ [solucao_pallets.percentual, 100]|min }}%"></div>
+                                </div>
+                            </div>
+                            {% else %}
+                            <span class="solucao-vazio">—</span>
+                            {% endif %}
+                        </td>
+
+                        <!-- COLUNA: Odoo (Soluções Automáticas) -->
+                        <td class="solucoes-nf-cell">
+                            {% if odoo|length > 0 %}
+                                {% if odoo|length <= 2 %}
+                                    {% for sol in odoo %}
+                                    <span class="solucao-nf-item {{ sol.tipo|lower }}" title="{{ sol.tipo_display }}: {{ sol.quantidade }} pallet(s)">
+                                        <i class="fas fa-{% if sol.tipo == 'DEVOLUCAO' %}reply{% elif sol.tipo == 'NOTA_CREDITO' %}file-invoice{% elif sol.tipo == 'CANCELAMENTO' %}times{% else %}question{% endif %}"></i>
+                                        {{ sol.tipo_display[:3] }}. {{ sol.quantidade }}
+                                    </span>
+                                    {% endfor %}
+                                {% else %}
+                                <span class="solucoes-nf-counter" title="Clique para ver detalhes" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-html="true" data-bs-content="{% for sol in odoo %}<div>{{ sol.tipo_display }}: {{ sol.quantidade }} plt</div>{% endfor %}">
+                                    <i class="fas fa-layer-group"></i> {{ odoo|length }} soluções
+                                </span>
+                                {% endif %}
+                            {% else %}
+                            <span class="solucoes-nf-vazio">—</span>
+                            {% endif %}
+                        </td>
+
+                        <!-- COLUNA: Controle (Soluções Manuais) -->
+                        <td class="solucoes-nf-cell">
+                            {% if controle|length > 0 %}
+                                {% if controle|length <= 2 %}
+                                    {% for sol in controle %}
+                                    <span class="solucao-nf-item {{ sol.tipo|lower }}" title="{{ sol.tipo_display }}: {{ sol.quantidade }} pallet(s){% if sol.info_complementar %} - {{ sol.info_complementar }}{% endif %}">
+                                        <i class="fas fa-{% if sol.tipo == 'DEVOLUCAO' %}reply{% elif sol.tipo == 'RECUSA' %}ban{% elif sol.tipo == 'CANCELAMENTO' %}times{% else %}question{% endif %}"></i>
+                                        {{ sol.tipo_display[:3] }}. {{ sol.quantidade }}
+                                    </span>
+                                    {% endfor %}
+                                {% else %}
+                                <span class="solucoes-nf-counter" title="Clique para ver detalhes" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-html="true" data-bs-content="{% for sol in controle %}<div>{{ sol.tipo_display }}: {{ sol.quantidade }} plt</div>{% endfor %}">
+                                    <i class="fas fa-layer-group"></i> {{ controle|length }} soluções
+                                </span>
+                                {% endif %}
+                            {% else %}
+                            <span class="solucoes-nf-vazio">—</span>
+                            {% endif %}
+                        </td>
+
                         <td>
                             <div class="action-buttons">
                                 <button type="button" class="btn-action btn-devolucao" title="Vincular Devolução (1:N)"
@@ -1132,6 +1430,12 @@ let nfsSelecionadas = [];
 
 // Inicializar dados das NFs da página atual
 document.addEventListener('DOMContentLoaded', function() {
+    // Inicializar popovers do Bootstrap (para colunas Odoo/Controle com múltiplas soluções)
+    const popoverTriggerList = document.querySelectorAll('[data-bs-toggle="popover"]');
+    popoverTriggerList.forEach(el => {
+        new bootstrap.Popover(el);
+    });
+
     // Extrair dados das NFs da tabela
     document.querySelectorAll('.table-nfs tbody tr').forEach(tr => {
         const nfId = parseInt(tr.dataset.nfId);

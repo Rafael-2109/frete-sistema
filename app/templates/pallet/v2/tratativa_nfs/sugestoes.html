@@ -1,12 +1,12 @@
 {% extends 'base.html' %}
 
-{% block title %}Sugestões de Vinculação | Tratativa de NFs v2{% endblock %}
+{% block title %}Devoluções DFe Pendentes | Tratativa de NFs v2{% endblock %}
 
 {% block extra_css %}
 <style>
 /* ============================================
-   SUGESTÕES DE VINCULAÇÃO - Tratativa de NFs v2
-   Migrated to design tokens (06-08)
+   DEVOLUÇÕES DFE PENDENTES - Tratativa de NFs v2
+   Simplificado: apenas devoluções do DFe pendentes de entrada
    ============================================ */
 
 .tratativa-sugestoes {
@@ -742,13 +742,13 @@
                 </a>
             </li>
             <li class="breadcrumb-item">Tratativa de NFs</li>
-            <li class="breadcrumb-item active" aria-current="page">Sugestões</li>
+            <li class="breadcrumb-item active" aria-current="page">Devoluções DFe</li>
         </ol>
     </nav>
 
     <!-- Header -->
     <div class="page-header">
-        <h1><i class="fas fa-lightbulb"></i> Sugestões de Vinculação</h1>
+        <h1><i class="fas fa-lightbulb"></i> Devoluções DFe Pendentes</h1>
         <div class="d-flex gap-2">
             <a href="{{ url_for('pallet_v2.tratativa_nfs.direcionamento') }}" class="btn btn-outline-primary">
                 <i class="fas fa-route"></i> Direcionamento
@@ -759,7 +759,7 @@
         </div>
     </div>
 
-    <!-- Stats Cards -->
+    <!-- Stats Card Simplificado - Apenas Devoluções DFe -->
     <div class="stats-row">
         <div class="stat-card">
             <div class="stat-icon pendentes">
@@ -767,52 +767,24 @@
             </div>
             <div class="stat-content">
                 <h4>{{ stats.total_pendentes }}</h4>
-                <span>Pendentes</span>
+                <span>Devoluções DFe Pendentes</span>
             </div>
         </div>
-        <div class="stat-card">
-            <div class="stat-icon devolucoes">
-                <i class="fas fa-reply-all"></i>
-            </div>
-            <div class="stat-content">
-                <h4>{{ stats.devolucoes }}</h4>
-                <span>Devoluções</span>
-            </div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-icon recusas">
-                <i class="fas fa-ban"></i>
-            </div>
-            <div class="stat-content">
-                <h4>{{ stats.recusas }}</h4>
-                <span>Recusas</span>
-            </div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-icon notas-credito">
-                <i class="fas fa-file-invoice-dollar"></i>
-            </div>
-            <div class="stat-content">
-                <h4>{{ stats.notas_credito }}</h4>
-                <span>Notas de Crédito</span>
-            </div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-icon cancelamentos">
-                <i class="fas fa-times-circle"></i>
-            </div>
-            <div class="stat-content">
-                <h4>{{ stats.cancelamentos }}</h4>
-                <span>Cancelamentos</span>
-            </div>
-        </div>
+    </div>
+
+    <!-- Info Card: Propósito da tela -->
+    <div class="alert alert-info mb-4">
+        <i class="fas fa-info-circle me-2"></i>
+        <strong>Devoluções DFe Pendentes de Entrada:</strong>
+        Esta tela mostra NFs de devolução de pallet emitidas pelo cliente que ainda não têm NC vinculada.
+        Confirme a vinculação quando a devolução estiver correta ou rejeite se houver divergência.
     </div>
 
     <!-- Ação: Buscar Devoluções no DFe -->
     <div class="action-card">
         <div class="action-card-content">
             <h5><i class="fas fa-search"></i> Buscar Devoluções no DFe</h5>
-            <p>Processa NFs de devolução/retorno de pallet no DFe e cria sugestões de vinculação automática.</p>
+            <p>Processa NFs de devolução de pallet no DFe e cria sugestões de vinculação automática.</p>
         </div>
         <form method="POST" action="{{ url_for('pallet_v2.tratativa_nfs.processar_devolucoes') }}" class="action-card-form">
             <div>
@@ -829,40 +801,11 @@
         </form>
     </div>
 
-    <!-- Filtros -->
-    <div class="filter-card">
-        <div class="filter-title">
-            <i class="fas fa-filter"></i> Filtros
-        </div>
-        <form method="GET" action="{{ url_for('pallet_v2.tratativa_nfs.listar_sugestoes') }}">
-            <div class="filter-row">
-                <div class="filter-group">
-                    <label for="tipo">Tipo de Sugestão</label>
-                    <select name="tipo" id="tipo" class="form-select">
-                        <option value="">Todos</option>
-                        <option value="DEVOLUCAO" {% if filtro_tipo == 'DEVOLUCAO' %}selected{% endif %}>Devolução</option>
-                        <option value="RECUSA" {% if filtro_tipo == 'RECUSA' %}selected{% endif %}>Recusa</option>
-                        <option value="NOTA_CREDITO" {% if filtro_tipo == 'NOTA_CREDITO' %}selected{% endif %}>Nota de Crédito</option>
-                        <option value="CANCELAMENTO" {% if filtro_tipo == 'CANCELAMENTO' %}selected{% endif %}>Cancelamento</option>
-                    </select>
-                </div>
-                <div class="filter-actions">
-                    <button type="submit" class="btn btn-filter btn-filter-primary">
-                        <i class="fas fa-search"></i> Filtrar
-                    </button>
-                    <a href="{{ url_for('pallet_v2.tratativa_nfs.listar_sugestoes') }}" class="btn btn-filter btn-filter-secondary">
-                        <i class="fas fa-times"></i> Limpar
-                    </a>
-                </div>
-            </div>
-        </form>
-    </div>
-
     <!-- Tabela de Sugestões -->
     <div class="table-card">
         <div class="table-header">
             <h3>
-                <i class="fas fa-lightbulb"></i> Sugestões Pendentes de Confirmação
+                <i class="fas fa-lightbulb"></i> Devoluções DFe Pendentes de Confirmação
             </h3>
             <span class="badge bg-warning text-dark">{{ sugestoes.total }} registro(s)</span>
         </div>

@@ -1079,7 +1079,7 @@ class MatchService:
     # VINCULAÇÃO MANUAL
     # =========================================================================
 
-    def vincular_devolucao_manual(
+    def vincular_devolucao_manual_multiplas(
         self,
         nf_remessa_ids: List[int],
         nf_devolucao: Dict,
