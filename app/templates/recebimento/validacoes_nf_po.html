@@ -173,7 +173,7 @@
                                 {% elif item.status == 'consolidado' %}
                                 <span class="badge bg-primary">Consolidado</span>
                                 {% elif item.status == 'finalizado_odoo' %}
-                                <span class="badge bg-dark" title="DFE ja possui PO vinculado no Odoo">
+                                <span class="badge bg-success" title="DFE ja possui PO vinculado no Odoo">
                                     <i class="fas fa-check-circle me-1"></i>Finalizado Odoo
                                 </span>
                                 {% elif item.status == 'erro' %}
@@ -381,7 +381,7 @@ function renderizarDetalhes(data) {
         'aprovado': '<span class="badge bg-success">Aprovado</span>',
         'bloqueado': '<span class="badge bg-danger">Bloqueado</span>',
         'consolidado': '<span class="badge bg-primary">Consolidado</span>',
-        'finalizado_odoo': '<span class="badge bg-dark">Finalizado</span>',
+        'finalizado_odoo': '<span class="badge bg-success">Finalizado</span>',
         'pendente': '<span class="badge bg-secondary">Pendente</span>',
         'erro': '<span class="badge bg-danger">Erro</span>'
     };
