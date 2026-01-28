@@ -161,7 +161,9 @@ function renderizarTabelaItensNf(itensNf, posCandidatos) {
             <tr class="${rowClass}">
                 <td>${item.nitem || (idx + 1)}</td>
                 <td><code class="text-primary">${item.cod_produto_fornecedor || '-'}</code></td>
-                <td class="text-truncate" style="max-width: 180px;" title="${item.nome_produto}">${item.nome_produto || '-'}</td>
+                <td class="text-truncate" style="max-width: 180px;" title="${item.nome_produto_interno || item.nome_produto}">
+                    <span class="${item.nome_produto_interno ? 'text-success' : ''}">${item.nome_produto_interno || item.nome_produto || '-'}</span>
+                </td>
                 <td class="text-end">${formatarNumero(item.qtd_nf, 3)}</td>
                 <td class="text-end">${formatarMoeda4(item.preco_nf)}</td>
                 <td class="text-end ${temConversao ? 'text-info fw-bold' : ''}">${formatarNumero(item.qtd_convertida, 3)}</td>

@@ -2246,6 +2246,7 @@ class ValidacaoNfPoService:
                         'cod_produto_fornecedor': item.cod_produto_fornecedor,
                         'cod_produto_interno': item.cod_produto_interno,
                         'nome_produto': item.nome_produto,
+                        'nome_produto_interno': item.nome_produto_interno,  # Nome interno (nosso nome)
                         'qtd_original': qtd_convertida / fator if fator else qtd_convertida,
                         'qtd_convertida': qtd_convertida,
                         'um_nf': item.um_nf or '',
@@ -2259,6 +2260,7 @@ class ValidacaoNfPoService:
                         'dfe_line_id': item.odoo_dfe_line_id,
                         'cod_produto_fornecedor': item.cod_produto_fornecedor,
                         'nome_produto': item.nome_produto,
+                        'nome_produto_interno': None,  # Sem De-Para = sem nome interno
                         'qtd_original': Decimal(str(item.qtd_nf or 0)),
                         'um_nf': item.um_nf or '',
                         'preco_original': Decimal(str(item.preco_nf or 0))
@@ -2491,6 +2493,7 @@ class ValidacaoNfPoService:
                 'nitem': item.get('nitem'),
                 'cod_produto_fornecedor': item['cod_produto_fornecedor'],
                 'nome_produto': item['nome_produto'],
+                'nome_produto_interno': item.get('nome_produto_interno'),  # Nome interno (nosso nome)
                 'qtd_nf': float(item['qtd_original']),
                 'preco_nf': float(item['preco_original']),
                 'um_nf': item.get('um_nf', ''),
@@ -2507,6 +2510,7 @@ class ValidacaoNfPoService:
                 'nitem': item.get('nitem'),
                 'cod_produto_fornecedor': item['cod_produto_fornecedor'],
                 'nome_produto': item['nome_produto'],
+                'nome_produto_interno': None,  # Sem De-Para = sem nome interno
                 'qtd_nf': float(item['qtd_original']),
                 'preco_nf': float(item['preco_original']),
                 'um_nf': item.get('um_nf', ''),
