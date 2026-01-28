@@ -9,6 +9,9 @@
             <p class="text-muted mb-0">Status de validacao de NF-e contra Pedidos de Compra</p>
         </div>
         <div>
+            <a href="{{ url_for('recebimento_fisico_views.index') }}" class="btn btn-outline-success me-2">
+                <i class="fas fa-boxes"></i> Recebimento Físico
+            </a>
             <a href="{{ url_for('recebimento_views.divergencias_nf_po') }}" class="btn btn-outline-warning me-2">
                 <i class="fas fa-exclamation-triangle"></i> Ver Divergencias
             </a>
@@ -250,6 +253,15 @@
                                         title="Ver detalhes">
                                     <i class="fas fa-eye"></i>
                                 </button>
+                                {# Botao Recebimento Fisico - apenas se picking pronto para receber #}
+                                {% if picking and picking.state == 'assigned' and (not receb or receb.status not in ['processado', 'processando']) %}
+                                <a href="{{ url_for('recebimento_fisico_views.index') }}?company_id={{ picking.company_id }}&filtro_nf={{ item.numero_nf or picking.odoo_picking_name }}"
+                                   class="btn btn-sm btn-outline-success"
+                                   title="Ir para Recebimento Físico"
+                                   target="_blank">
+                                    <i class="fas fa-boxes"></i>
+                                </a>
+                                {% endif %}
                                 {% if item.status == 'pendente' %}
                                 <button class="btn btn-sm btn-primary" onclick="validarNf({{ item.odoo_dfe_id }})"
                                         title="Validar">

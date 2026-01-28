@@ -9,6 +9,9 @@
             <p class="text-muted mb-0">Preencher lotes, quantidades e verificações de qualidade</p>
         </div>
         <div>
+            <a href="{{ url_for('recebimento_views.validacoes_nf_po') }}" class="btn btn-outline-info me-2">
+                <i class="fas fa-clipboard-check"></i> Validações NF x PO
+            </a>
             <button class="btn btn-outline-primary me-2" data-bs-toggle="modal" data-bs-target="#modalSync">
                 <i class="fas fa-sync-alt"></i> Sincronizar
             </button>
@@ -1323,6 +1326,34 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Inicializar datas do modal de sync
     initSyncDatas();
+
+    // Ler query params da URL e pre-preencher filtros
+    const urlParams = new URLSearchParams(window.location.search);
+    const companyId = urlParams.get('company_id');
+    const filtroNf = urlParams.get('filtro_nf');
+
+    if (companyId) {
+        const selectEmpresa = document.getElementById('filtroEmpresa');
+        if (selectEmpresa) {
+            // Verificar se a empresa existe no select
+            const option = selectEmpresa.querySelector(`option[value="${companyId}"]`);
+            if (option) {
+                selectEmpresa.value = companyId;
+            }
+        }
+    }
+
+    if (filtroNf) {
+        const inputFiltroNf = document.getElementById('filtroNf');
+        if (inputFiltroNf) {
+            inputFiltroNf.value = filtroNf;
+        }
+    }
+
+    // Se veio com filtros na URL, buscar automaticamente
+    if (companyId || filtroNf) {
+        buscarPickings();
+    }
 });
 </script>
 {% endblock %}
