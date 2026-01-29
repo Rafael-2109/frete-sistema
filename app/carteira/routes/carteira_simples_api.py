@@ -465,6 +465,12 @@ def obter_dados():
             )
         )
 
+        # 🔧 CORREÇÃO: Aplicar filtro de produto também nas separações
+        if cod_produto:
+            separacoes_base = separacoes_base.filter(
+                Separacao.cod_produto.ilike(f'%{cod_produto}%')
+            )
+
         # 🔧 APLICAR FILTROS DE ROTA E SUB-ROTA também nas separações (com incoterm FOB/RED)
         if rota:
             # 🆕 Se filtro é FOB ou RED, buscar por incoterm nas separações também
