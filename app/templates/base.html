@@ -262,7 +262,16 @@
                 </a></li>
               {% endif %}
               {% endif %}
-        
+
+              {# ================================================================= #}
+              {# RELATÓRIO DE ANÁLISE DE FRETES                                   #}
+              {# ================================================================= #}
+              {% if current_user.pode_acessar_financeiro() or current_user.perfil == 'administrador' %}
+              <li><hr class="dropdown-divider"></li>
+              <li><a class="dropdown-item" href="{{ url_for('fretes.relatorio_analise_fretes') }}">
+                  <i class="fas fa-chart-bar text-success"></i> Análise de Fretes
+                </a></li>
+              {% endif %}
 
               {# ================================================================= #}
               {# CENTRAL FISCAL - Hub com cards                                    #}

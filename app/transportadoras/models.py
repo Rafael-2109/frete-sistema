@@ -31,6 +31,9 @@ class Transportadora(db.Model):
     # Controle de NF de Pallet
     nao_aceita_nf_pallet = db.Column(db.Boolean, default=False, nullable=False)  # Transportadora não aceita NF de pallet
 
+    # Motorista próprio da empresa (não terceirizado)
+    motorista_proprio = db.Column(db.Boolean, default=False, nullable=False)
+
     # ===== CAMPOS FINANCEIROS =====
     banco = db.Column(db.String(100), nullable=True)
     agencia = db.Column(db.String(20), nullable=True)

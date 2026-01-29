@@ -581,6 +581,20 @@
                             </div>
                         </div>
                     </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="edit_motorista_proprio" name="motorista_proprio">
+                                    <label class="form-check-label" for="edit_motorista_proprio">
+                                        <strong>Motorista Próprio</strong>
+                                        <br>
+                                        <small class="text-muted">Marque se esta transportadora utiliza motorista próprio da empresa</small>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
                     <!-- Dados Financeiros -->
                     <hr>
@@ -751,12 +765,14 @@ function editarTransportadora(id) {
                 const freteiro = data.transportadora.freteiro === true || data.transportadora.freteiro === 'true';
                 const ativo = data.transportadora.ativo !== false; // Default true se não existir
                 const nao_aceita_nf_pallet = data.transportadora.nao_aceita_nf_pallet === true || data.transportadora.nao_aceita_nf_pallet === 'true';
+                const motorista_proprio = data.transportadora.motorista_proprio === true || data.transportadora.motorista_proprio === 'true';
 
                 document.getElementById('edit_optante').value = optante ? 'True' : 'False';
                 document.getElementById('edit_freteiro').value = freteiro ? 'True' : 'False';
                 document.getElementById('edit_condicao_pgto').value = data.transportadora.condicao_pgto || '';
                 document.getElementById('edit_ativo').checked = ativo;
                 document.getElementById('edit_nao_aceita_nf_pallet').checked = nao_aceita_nf_pallet;
+                document.getElementById('edit_motorista_proprio').checked = motorista_proprio;
 
                 // Campos financeiros
                 document.getElementById('edit_banco').value = data.transportadora.banco || '';

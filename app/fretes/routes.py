@@ -5926,3 +5926,76 @@ def exportar_fechamento_freteiros():
     response.headers["Content-Disposition"] = f"attachment; filename=fechamento_freteiros_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
     return response
+
+
+# =============================================================================
+# RELATÓRIO DE ANÁLISE DE FRETES
+# =============================================================================
+
+@fretes_bp.route("/relatorios/analise-fretes")
+@login_required
+@require_financeiro()
+def relatorio_analise_fretes():
+    """Página do relatório de análise de fretes"""
+    transportadoras = Transportadora.query.filter_by(ativo=True).order_by(Transportadora.razao_social).all()
+    return render_template(
+        "fretes/relatorio_analise_fretes.html",
+        transportadoras=transportadoras
+    )
+
+
+@fretes_bp.route("/api/relatorios/analise-fretes", methods=["POST"])
+@login_required
+@require_financeiro()
+def api_relatorio_analise_fretes():
+    """API para gerar relatório Excel de análise de fretes"""
+    from app.fretes.services.relatorio_analise_fretes_service import (
+        buscar_dados_relatorio,
+        gerar_excel_relatorio
+    )
+
+    try:
+        data = request.json or {}
+        data_inicio = data.get("data_inicio")
+        data_fim = data.get("data_fim")
+        transportadora_id = data.get("transportadora_id")
+        abrir_despesa_tipo = data.get("abrir_despesa_tipo", False)
+
+        # Validações
+        if not data_inicio or not data_fim:
+            return jsonify({"error": "Período obrigatório (data_inicio e data_fim)"}), 400
+
+        # Converter transportadora_id para int se informado
+        if transportadora_id:
+            try:
+                transportadora_id = int(transportadora_id)
+            except (ValueError, TypeError):
+                transportadora_id = None
+
+        logger.info(f"Gerando relatório de análise de fretes: {data_inicio} a {data_fim}, transportadora={transportadora_id}, abrir_despesa_tipo={abrir_despesa_tipo}")
+
+        # Buscar dados e gerar Excel
+        dados = buscar_dados_relatorio(data_inicio, data_fim, transportadora_id)
+
+        # Verificar se há dados
+        if not dados['fretes']:
+            return jsonify({
+                "error": f"Nenhum frete encontrado no período {data_inicio} a {data_fim}. "
+                         f"Foram encontradas {len(dados['faturamento_por_nf'])} NFs no faturamento, "
+                         "mas nenhuma está associada a um frete cadastrado."
+            }), 404
+
+        output = gerar_excel_relatorio(dados, data_inicio, data_fim, abrir_despesa_tipo=abrir_despesa_tipo)
+
+        filename = f"analise_fretes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+
+        return send_file(
+            output,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            as_attachment=True,
+            download_name=filename
+        )
+
+    except Exception as e:
+        logger.exception(f"Erro ao gerar relatório de análise de fretes: {e}")
+        return jsonify({"error": f"Erro ao gerar relatório: {str(e)}"}), 500

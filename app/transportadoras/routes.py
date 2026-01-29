@@ -115,6 +115,7 @@ def dados_transportadora(id):
         optante_valor = transportadora.optante if transportadora.optante is not None else False
         freteiro_valor = transportadora.freteiro if transportadora.freteiro is not None else False
         nao_aceita_nf_pallet_valor = transportadora.nao_aceita_nf_pallet if hasattr(transportadora, 'nao_aceita_nf_pallet') and transportadora.nao_aceita_nf_pallet is not None else False
+        motorista_proprio_valor = transportadora.motorista_proprio if hasattr(transportadora, 'motorista_proprio') and transportadora.motorista_proprio is not None else False
 
         return jsonify({
             'success': True,
@@ -129,6 +130,7 @@ def dados_transportadora(id):
                 'condicao_pgto': transportadora.condicao_pgto or '',
                 'ativo': transportadora.ativo if hasattr(transportadora, 'ativo') else True,
                 'nao_aceita_nf_pallet': nao_aceita_nf_pallet_valor,
+                'motorista_proprio': motorista_proprio_valor,
                 # Campos financeiros
                 'banco': transportadora.banco or '',
                 'agencia': transportadora.agencia or '',
@@ -177,6 +179,8 @@ def editar_transportadora_ajax(id):
         transportadora.ativo = request.form.get('ativo') == 'on'
         # Campo NF de pallet - checkbox envia 'on' quando marcado
         transportadora.nao_aceita_nf_pallet = request.form.get('nao_aceita_nf_pallet') == 'on'
+        # Campo motorista próprio - checkbox envia 'on' quando marcado
+        transportadora.motorista_proprio = request.form.get('motorista_proprio') == 'on'
 
         # Campos financeiros
         transportadora.banco = request.form.get('banco', '').strip() or None

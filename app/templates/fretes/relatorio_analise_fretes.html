@@ -1,0 +1,278 @@
+{% extends "base.html" %}
+
+{% block title %}Relatório de Análise de Fretes{% endblock %}
+
+{% block extra_css %}
+<style>
+    .filter-card {
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .filter-card .card-header {
+        background: linear-gradient(135deg, #4472C4 0%, #2F5496 100%);
+        color: white;
+        border-radius: 8px 8px 0 0;
+        padding: 0.75rem 1rem;
+    }
+
+    .filter-card .card-body {
+        padding: 1.5rem;
+    }
+
+    .btn-gerar {
+        background: linear-gradient(135deg, #28a745 0%, #20803a 100%);
+        border: none;
+        padding: 0.75rem 2rem;
+        font-size: 1rem;
+        font-weight: 500;
+    }
+
+    .btn-gerar:hover {
+        background: linear-gradient(135deg, #20803a 0%, #186a2e 100%);
+    }
+
+    .info-box {
+        background-color: #e7f3ff;
+        border-left: 4px solid #4472C4;
+        padding: 1rem;
+        border-radius: 4px;
+        margin-top: 1.5rem;
+    }
+
+    .info-box h6 {
+        color: #2F5496;
+        margin-bottom: 0.5rem;
+    }
+
+    .info-box ul {
+        margin-bottom: 0;
+        padding-left: 1.25rem;
+    }
+
+    .info-box li {
+        margin-bottom: 0.25rem;
+    }
+
+    .loading-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 9999;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .loading-overlay.show {
+        display: flex;
+    }
+
+    .loading-content {
+        background: white;
+        padding: 2rem 3rem;
+        border-radius: 8px;
+        text-align: center;
+    }
+
+    .loading-content .spinner-border {
+        width: 3rem;
+        height: 3rem;
+        color: #4472C4;
+    }
+
+    .loading-content p {
+        margin-top: 1rem;
+        margin-bottom: 0;
+        color: #333;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+    <!-- Cabeçalho -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="h3">
+                <i class="fas fa-chart-bar text-primary"></i> Relatório de Análise de Fretes
+            </h1>
+            <p class="text-muted">
+                Análise detalhada de fretes com rateio por NF, despesas extras e devoluções
+            </p>
+        </div>
+    </div>
+
+    <!-- Card de Filtros -->
+    <div class="row">
+        <div class="col-lg-8 col-xl-6">
+            <div class="card filter-card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-filter"></i> Filtros do Relatório
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form id="formRelatorio">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="data_inicio" class="form-label">
+                                    <i class="fas fa-calendar"></i> Data Início
+                                </label>
+                                <input type="date" class="form-control" id="data_inicio" name="data_inicio" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="data_fim" class="form-label">
+                                    <i class="fas fa-calendar"></i> Data Fim
+                                </label>
+                                <input type="date" class="form-control" id="data_fim" name="data_fim" required>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-12">
+                                <label for="transportadora_id" class="form-label">
+                                    <i class="fas fa-truck"></i> Transportadora (opcional)
+                                </label>
+                                <select class="form-select" id="transportadora_id" name="transportadora_id">
+                                    <option value="">Todas as transportadoras</option>
+                                    {% for t in transportadoras %}
+                                    <option value="{{ t.id }}">{{ t.razao_social }} ({{ t.cnpj }})</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="abrir_despesa_tipo" name="abrir_despesa_tipo">
+                                    <label class="form-check-label" for="abrir_despesa_tipo">
+                                        <i class="fas fa-list-ul"></i> Exibir despesas abertas por tipo na aba "Por Mês e UF"
+                                    </label>
+                                    <small class="form-text text-muted d-block mt-1">
+                                        Se marcado, a aba "Por Mês e UF" terá uma coluna para cada tipo de despesa (12 tipos)
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-success btn-gerar">
+                                <i class="fas fa-file-excel"></i> Gerar Relatório Excel
+                            </button>
+                        </div>
+                    </form>
+
+                    <!-- Informações sobre o relatório -->
+                    <div class="info-box">
+                        <h6><i class="fas fa-info-circle"></i> O relatório inclui:</h6>
+                        <ul>
+                            <li><strong>Aba 1 - Expandida (NF+Produto):</strong> Uma linha por NF + Produto com frete líquido, despesas por tipo e devoluções rateadas</li>
+                            <li><strong>Aba 2 - Por NF:</strong> Consolidado por NF com frete líquido e despesas por tipo (sem transportadora)</li>
+                            <li><strong>Aba 3 - Por Frete + NF:</strong> Uma linha por combinação Frete + NF, com transportadora e motorista próprio</li>
+                            <li><strong>Aba 4 - Por Mês e UF:</strong> Totais mensais por UF com % Frete, % Orçado e Diferença</li>
+                        </ul>
+                        <small class="text-muted mt-2 d-block">
+                            <i class="fas fa-calculator"></i>
+                            Frete e despesas são exibidos como valores <strong>líquidos</strong> (após dedução de ICMS e freteiro)
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-content">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Carregando...</span>
+        </div>
+        <p>Gerando relatório, aguarde...</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('formRelatorio');
+    const loadingOverlay = document.getElementById('loadingOverlay');
+
+    // Definir datas padrão (últimos 30 dias do último registro de faturamento: até 22/12/2025)
+    // Período sugerido: julho/2025 que tem maior volume de dados com fretes
+    document.getElementById('data_inicio').value = '2025-07-01';
+    document.getElementById('data_fim').value = '2025-07-31';
+
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const dataInicio = document.getElementById('data_inicio').value;
+        const dataFim = document.getElementById('data_fim').value;
+        const transportadoraId = document.getElementById('transportadora_id').value;
+        const abrirDespesaTipo = document.getElementById('abrir_despesa_tipo').checked;
+
+        // Validação
+        if (!dataInicio || !dataFim) {
+            alert('Por favor, preencha as datas de início e fim.');
+            return;
+        }
+
+        if (new Date(dataInicio) > new Date(dataFim)) {
+            alert('A data de início não pode ser maior que a data de fim.');
+            return;
+        }
+
+        // Mostrar loading
+        loadingOverlay.classList.add('show');
+
+        try {
+            const response = await fetch('{{ url_for("fretes.api_relatorio_analise_fretes") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token() }}'
+                },
+                body: JSON.stringify({
+                    data_inicio: dataInicio,
+                    data_fim: dataFim,
+                    transportadora_id: transportadoraId || null,
+                    abrir_despesa_tipo: abrirDespesaTipo
+                })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Erro ao gerar relatório');
+            }
+
+            // Download do arquivo
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `analise_fretes_${dataInicio}_${dataFim}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            a.remove();
+
+        } catch (error) {
+            console.error('Erro:', error);
+            alert('Erro ao gerar relatório: ' + error.message);
+        } finally {
+            // Esconder loading
+            loadingOverlay.classList.remove('show');
+        }
+    });
+});
+</script>
+{% endblock %}
