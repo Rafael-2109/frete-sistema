@@ -14,6 +14,7 @@ from app import db
 from app.carteira.models import CarteiraPrincipal
 from app.producao.models import CadastroPalletizacao
 from app.veiculos.models import Veiculo
+from app.separacao.models import Separacao
 import logging
 
 logger = logging.getLogger(__name__)
@@ -144,11 +145,236 @@ class MapaService:
                     logger.warning(f"Não foi possível geocodificar o endereço do pedido {pedido.num_pedido}")
                     
             return pedidos_mapa
-            
+
         except Exception as e:
             logger.error(f"Erro ao obter pedidos para mapa: {str(e)}")
             return []
-            
+
+    def obter_clientes_para_mapa(self, pedido_ids: List[str]) -> List[Dict[str, Any]]:
+        """
+        Obtém dados dos clientes (agrupados por CNPJ + endereço) para exibição no mapa.
+        Cada cliente pode ter múltiplos pedidos.
+
+        FONTE DE DADOS:
+        - Valores (valor_saldo, peso, pallet): Separacao (sincronizado_nf=False)
+          Motivo: CarteiraPrincipal.qtd_saldo_produto_pedido é zerada após separação,
+          resultando em valor 0 e peso 0 se calculado a partir dela.
+        - Endereço de entrega: CarteiraPrincipal (campos cep_endereco_ent, rua_endereco_ent, etc.)
+          Motivo: Separacao não possui campos detalhados de endereço de entrega.
+
+        Args:
+            pedido_ids: Lista de num_pedido dos pedidos selecionados
+
+        Returns:
+            Lista de dicionários com dados dos clientes e seus pedidos
+        """
+        try:
+            # 1. Buscar separações ativas (fonte de verdade para valores)
+            separacoes = Separacao.query.filter(
+                Separacao.num_pedido.in_(pedido_ids),
+                Separacao.sincronizado_nf == False
+            ).all()
+
+            if not separacoes:
+                logger.warning(f"Nenhuma separação ativa encontrada para pedidos: {pedido_ids}")
+                return []
+
+            # Agrupar separações por num_pedido (um pedido pode ter múltiplos itens na separação)
+            sep_por_pedido = {}
+            for sep in separacoes:
+                if sep.num_pedido not in sep_por_pedido:
+                    sep_por_pedido[sep.num_pedido] = []
+                sep_por_pedido[sep.num_pedido].append(sep)
+
+            # 2. Buscar endereços de entrega de CarteiraPrincipal (Separacao não tem esses campos)
+            enderecos_raw = db.session.query(
+                CarteiraPrincipal.num_pedido,
+                CarteiraPrincipal.cnpj_endereco_ent,
+                CarteiraPrincipal.empresa_endereco_ent,
+                CarteiraPrincipal.cep_endereco_ent,
+                CarteiraPrincipal.nome_cidade,
+                CarteiraPrincipal.cod_uf,
+                CarteiraPrincipal.bairro_endereco_ent,
+                CarteiraPrincipal.rua_endereco_ent,
+                CarteiraPrincipal.endereco_ent,
+                CarteiraPrincipal.telefone_endereco_ent,
+                CarteiraPrincipal.municipio,
+                CarteiraPrincipal.estado
+            ).filter(
+                CarteiraPrincipal.num_pedido.in_(list(sep_por_pedido.keys()))
+            ).distinct(
+                CarteiraPrincipal.num_pedido
+            ).all()
+
+            enderecos_dict = {}
+            for e in enderecos_raw:
+                enderecos_dict[e.num_pedido] = e
+
+            # 3. Agrupar pedidos por cliente (CNPJ + endereço)
+            clientes_dict = {}
+
+            for num_pedido, seps in sep_por_pedido.items():
+                # Pegar a primeira separação como referência para dados do pedido
+                sep_ref = seps[0]
+
+                # Somar valores de todas as separações deste pedido
+                valor_total = sum(float(s.valor_saldo or 0) for s in seps)
+                peso_total = sum(float(s.peso or 0) for s in seps)
+                pallet_total = sum(float(s.pallet or 0) for s in seps)
+                total_itens = len(seps)
+
+                # Dados de agendamento (pegar o primeiro que tiver)
+                expedicao = None
+                agendamento = None
+                agendamento_confirmado = False
+                protocolo = None
+                separacao_lote_id = None
+
+                for s in seps:
+                    if s.expedicao and not expedicao:
+                        expedicao = s.expedicao.strftime('%d/%m/%Y')
+                    if s.agendamento and not agendamento:
+                        agendamento = s.agendamento.strftime('%d/%m/%Y')
+                    if s.agendamento_confirmado:
+                        agendamento_confirmado = True
+                    if s.protocolo and not protocolo:
+                        protocolo = s.protocolo
+                    if s.separacao_lote_id and not separacao_lote_id:
+                        separacao_lote_id = s.separacao_lote_id
+
+                # Obter endereço de entrega de CarteiraPrincipal
+                endereco_data = enderecos_dict.get(num_pedido)
+
+                # Dados de endereço: preferir CarteiraPrincipal, fallback para Separacao
+                cnpj = sep_ref.cnpj_cpf or ''
+                if endereco_data:
+                    cep = endereco_data.cep_endereco_ent or ''
+                    numero = endereco_data.endereco_ent or ''
+                    rua = endereco_data.rua_endereco_ent
+                    bairro = endereco_data.bairro_endereco_ent
+                    cidade = endereco_data.nome_cidade or endereco_data.municipio or sep_ref.nome_cidade
+                    uf = endereco_data.cod_uf or endereco_data.estado or sep_ref.cod_uf
+                    empresa = endereco_data.empresa_endereco_ent
+                    telefone = endereco_data.telefone_endereco_ent
+                else:
+                    cep = ''
+                    numero = ''
+                    rua = None
+                    bairro = None
+                    cidade = sep_ref.nome_cidade
+                    uf = sep_ref.cod_uf
+                    empresa = None
+                    telefone = None
+
+                # Criar chave única por CNPJ + CEP + número do endereço
+                cliente_key = hashlib.md5(f"{cnpj}_{cep}_{numero}".encode()).hexdigest()[:12]
+
+                # Montar endereço completo para geocodificação
+                partes_endereco = []
+                if rua:
+                    partes_endereco.append(rua)
+                if numero:
+                    partes_endereco.append(f"nº {numero}")
+                if bairro:
+                    partes_endereco.append(bairro)
+                if cidade:
+                    partes_endereco.append(cidade)
+                if uf:
+                    partes_endereco.append(uf)
+                if cep:
+                    partes_endereco.append(f"CEP {cep}")
+                partes_endereco.append("Brasil")
+                endereco_completo = ", ".join(filter(None, partes_endereco))
+
+                # Dados do pedido
+                pedido_info = {
+                    'num_pedido': num_pedido,
+                    'valor': valor_total,
+                    'peso': peso_total,
+                    'pallet': pallet_total,
+                    'itens': total_itens,
+                    'observacoes': sep_ref.observ_ped_1,
+                    'expedicao': expedicao,
+                    'agendamento': agendamento,
+                    'agendamento_confirmado': agendamento_confirmado,
+                    'protocolo': protocolo,
+                    'separacao_lote_id': separacao_lote_id
+                }
+
+                if cliente_key not in clientes_dict:
+                    clientes_dict[cliente_key] = {
+                        'cliente_id': cliente_key,
+                        'cliente': {
+                            'cnpj': cnpj,
+                            'nome': sep_ref.raz_social_red or empresa or 'Cliente',
+                            'telefone': telefone
+                        },
+                        'endereco': {
+                            'completo': endereco_completo,
+                            'rua': rua,
+                            'numero': numero,
+                            'bairro': bairro,
+                            'cidade': cidade,
+                            'uf': uf,
+                            'cep': cep
+                        },
+                        'pedidos': [],
+                        'totais': {
+                            'valor': 0,
+                            'peso': 0,
+                            'pallet': 0,
+                            'itens': 0,
+                            'qtd_pedidos': 0
+                        },
+                        'coordenadas': None  # Será preenchido após geocodificação
+                    }
+
+                # Adicionar pedido ao cliente
+                clientes_dict[cliente_key]['pedidos'].append(pedido_info)
+                clientes_dict[cliente_key]['totais']['valor'] += pedido_info['valor']
+                clientes_dict[cliente_key]['totais']['peso'] += pedido_info['peso']
+                clientes_dict[cliente_key]['totais']['pallet'] += pedido_info['pallet']
+                clientes_dict[cliente_key]['totais']['itens'] += pedido_info['itens']
+                clientes_dict[cliente_key]['totais']['qtd_pedidos'] += 1
+
+            # 4. Geocodificar endereços e montar lista final
+            clientes_mapa = []
+
+            for cliente_key, cliente_data in clientes_dict.items():
+                endereco = cliente_data['endereco']['completo']
+                lat, lng = self.geocodificar_endereco(endereco)
+
+                if lat and lng:
+                    cliente_data['coordenadas'] = {'lat': lat, 'lng': lng}
+
+                    # Determinar status visual baseado nos pedidos
+                    cliente_data['status'] = self._determinar_status_cliente(cliente_data['pedidos'])
+
+                    clientes_mapa.append(cliente_data)
+                else:
+                    logger.warning(f"Não foi possível geocodificar endereço do cliente {cliente_data['cliente']['nome']}")
+
+            return clientes_mapa
+
+        except Exception as e:
+            logger.error(f"Erro ao obter clientes para mapa: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return []
+
+    def _determinar_status_cliente(self, pedidos: List[Dict]) -> str:
+        """Determina o status visual do cliente baseado nos pedidos"""
+        # Se algum pedido tem agendamento confirmado -> verde (agendado)
+        # Se algum pedido tem agendamento mas não confirmado -> amarelo (urgente)
+        # Senão -> pendente
+        for pedido in pedidos:
+            if pedido.get('agendamento_confirmado'):
+                return 'agendado'
+        for pedido in pedidos:
+            if pedido.get('agendamento'):
+                return 'urgente'
+        return 'pendente'
+
     def _montar_endereco_completo(self, pedido) -> str:
         """Monta o endereço completo para geocodificação"""
         partes = []
@@ -345,11 +571,148 @@ class MapaService:
                     }
                     
             return {'erro': 'Não foi possível calcular a rota'}
-            
+
         except Exception as e:
             logger.error(f"Erro ao calcular rota otimizada: {str(e)}")
             return {'erro': str(e)}
-            
+
+    def calcular_rota_clientes(self, clientes: List[Dict[str, Any]], origem: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Calcula a rota otimizada para entrega aos clientes (agrupados).
+
+        Args:
+            clientes: Lista de dicionários de clientes com coordenadas
+            origem: Endereço de origem (padrão: CD Nacom Goya)
+
+        Returns:
+            Dicionário com a rota otimizada e estatísticas
+        """
+        try:
+            if not clientes:
+                return {'erro': 'Nenhum cliente fornecido'}
+
+            # Usar CD Nacom Goya como origem padrão
+            if not origem:
+                origem = self.endereco_cd
+
+            # Preparar waypoints (um por cliente)
+            waypoints = []
+            for cliente in clientes:
+                if cliente.get('coordenadas'):
+                    waypoints.append({
+                        'location': f"{cliente['coordenadas']['lat']},{cliente['coordenadas']['lng']}",
+                        'cliente_id': cliente['cliente_id']
+                    })
+
+            if len(waypoints) == 0:
+                return {'erro': 'Nenhum cliente com coordenadas válidas'}
+
+            # Otimizar rota usando Google Directions API
+            if len(waypoints) == 1:
+                destination = waypoints[0]['location']
+                waypoints_param = None
+            else:
+                # Usar o último waypoint como destino (não voltar ao CD)
+                destination = waypoints[-1]['location']
+                waypoints_param = 'optimize:true|' + '|'.join([w['location'] for w in waypoints[:-1]])
+
+            params = {
+                'origin': origem,
+                'destination': destination,
+                'key': self.api_key,
+                'language': 'pt-BR',
+                'mode': 'driving',
+                'units': 'metric',
+                'avoid': 'ferries'
+            }
+
+            if waypoints_param:
+                params['waypoints'] = waypoints_param
+
+            response = requests.get(self.base_directions_url, params=params, timeout=30)
+
+            if response.status_code == 200:
+                data = response.json()
+
+                if data['status'] == 'OK' and data['routes']:
+                    route = data['routes'][0]
+
+                    # Processar ordem otimizada de clientes
+                    ordem_clientes = []
+                    if 'waypoint_order' in route:
+                        for idx in route['waypoint_order']:
+                            ordem_clientes.append(waypoints[idx]['cliente_id'])
+                        # Adicionar o último waypoint (que foi usado como destino)
+                        ordem_clientes.append(waypoints[-1]['cliente_id'])
+                    else:
+                        # Se só tem 1 waypoint
+                        ordem_clientes = [w['cliente_id'] for w in waypoints]
+
+                    # Extrair informações da rota
+                    total_distance = sum(leg['distance']['value'] for leg in route['legs'])
+                    total_duration = sum(leg['duration']['value'] for leg in route['legs'])
+
+                    # Calcular totais consolidados
+                    peso_total = sum(c['totais']['peso'] for c in clientes)
+                    valor_total = sum(c['totais']['valor'] for c in clientes)
+                    pallet_total = sum(c['totais']['pallet'] for c in clientes)
+                    total_pedidos = sum(c['totais']['qtd_pedidos'] for c in clientes)
+
+                    # Selecionar veículo
+                    veiculo_selecionado = self._selecionar_veiculo_adequado(peso_total)
+
+                    # Calcular pedágio estimado
+                    pedagio_estimado = self._calcular_pedagio_estimado(
+                        total_distance / 1000,
+                        veiculo_selecionado
+                    )
+
+                    return {
+                        'sucesso': True,
+                        'rota': {
+                            'ordem_clientes': ordem_clientes,
+                            'ordem_pedidos': ordem_clientes,  # Mantido para compatibilidade
+                            'distancia_total_km': total_distance / 1000,
+                            'tempo_total_minutos': total_duration / 60,
+                            'tempo_formatado': self._formatar_tempo(total_duration),
+                            'polyline': route['overview_polyline']['points'],
+                            'bounds': route['bounds'],
+                            'legs': [
+                                {
+                                    'distancia': leg['distance']['text'],
+                                    'duracao': leg['duration']['text'],
+                                    'endereco_inicio': leg['start_address'],
+                                    'endereco_fim': leg['end_address']
+                                }
+                                for leg in route['legs']
+                            ]
+                        },
+                        'estatisticas': {
+                            'total_clientes': len(clientes),
+                            'total_pedidos': total_pedidos,
+                            'valor_total': valor_total,
+                            'peso_total': peso_total,
+                            'pallet_total': pallet_total,
+                            'custo_estimado_km': (total_distance / 1000) * 2.5
+                        },
+                        'veiculo': {
+                            'nome': veiculo_selecionado.nome if veiculo_selecionado else 'Não definido',
+                            'peso_maximo': veiculo_selecionado.peso_maximo if veiculo_selecionado else 0,
+                            'tipo': veiculo_selecionado.tipo_veiculo if veiculo_selecionado else 'Não definido',
+                            'eixos': veiculo_selecionado.qtd_eixos if veiculo_selecionado else 2,
+                            'multiplicador_pedagio': veiculo_selecionado.multiplicador_pedagio if veiculo_selecionado else 1.0
+                        },
+                        'pedagio': pedagio_estimado
+                    }
+
+            return {'erro': 'Não foi possível calcular a rota'}
+
+        except Exception as e:
+            logger.error(f"Erro ao calcular rota de clientes: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {'erro': str(e)}
+
     def _formatar_tempo(self, segundos: int) -> str:
         """Formata tempo em segundos para formato legível"""
         horas = segundos // 3600

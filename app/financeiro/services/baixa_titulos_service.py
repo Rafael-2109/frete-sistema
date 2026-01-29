@@ -149,6 +149,7 @@ class BaixaTitulosService:
 
     def __init__(self, connection=None):
         self._connection = connection
+        self._nfs_corrigidas_2000 = set()
         self.estatisticas = {
             'processados': 0,
             'sucesso': 0,

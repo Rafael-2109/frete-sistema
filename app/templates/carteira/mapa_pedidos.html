@@ -105,6 +105,34 @@
             border-left-color: #dc3545;
         }
 
+        /* Estilos para cliente na rota (verde) */
+        .cliente-item.na-rota {
+            border-left-color: #10b981 !important;
+            background: rgba(16, 185, 129, 0.1) !important;
+        }
+
+        .cliente-item.na-rota::before {
+            content: '✓';
+            position: absolute;
+            right: 10px;
+            top: 10px;
+            color: #10b981;
+            font-weight: bold;
+        }
+
+        .cliente-item {
+            position: relative;
+        }
+
+        /* Sub-itens de pedido dentro do cliente */
+        .pedido-sub-item {
+            border-left-color: #6c757d;
+        }
+
+        .pedido-sub-item:hover {
+            background: rgba(0, 0, 0, 0.05);
+        }
+
         /* InfoWindow Customizado */
         .info-window {
             min-width: 300px;
@@ -338,11 +366,11 @@
                             <button class="btn btn-warning control-btn" onclick="calcularMatrizDistancias()">
                                 <i class="fas fa-table"></i> Matriz
                             </button>
-                            <button class="btn btn-secondary control-btn" onclick="alternarClustering()">
-                                <i class="fas fa-object-group"></i> Clustering
+                            <button class="btn btn-success control-btn" onclick="cotarFrete()">
+                                <i class="fas fa-dollar-sign"></i> Cotar Frete
                             </button>
-                            <button class="btn btn-dark control-btn" onclick="exportarDados()">
-                                <i class="fas fa-download"></i> Exportar
+                            <button class="btn btn-dark control-btn" onclick="exportarExcel()">
+                                <i class="fas fa-file-excel"></i> Exportar Excel
                             </button>
                         </div>
                         <div class="col-md-4 text-end">
@@ -413,14 +441,14 @@
                 <div class="side-panel" id="sidePanel" style="display: none;">
                     <div class="side-panel-header">
                         <div class="d-flex justify-content-between align-items-center">
-                            <h5 class="mb-0">Pedidos no Mapa</h5>
+                            <h5 class="mb-0"><i class="fas fa-building"></i> Entregas no Mapa</h5>
                             <button class="btn btn-sm btn-light" onclick="toggleSidePanel()">
                                 <i class="fas fa-times"></i>
                             </button>
                         </div>
                     </div>
                     <div class="side-panel-content" id="pedidosList">
-                        <!-- Lista de pedidos será inserida aqui -->
+                        <!-- Lista de clientes/entregas será inserida aqui -->
                     </div>
                 </div>
 
@@ -481,8 +509,9 @@
         let directionsService;
         let directionsRenderer;
         let infoWindow;
-        let pedidosData = [];
+        let clientesData = [];  // Renomeado de pedidosData para clientesData
         let rotaPolyline;
+        let rotaCalculada = null;  // Armazenar última rota calculada
         let heatmap;
         let cdMarker;
         let cdData = null;
@@ -520,10 +549,50 @@
 
             infoWindow = new google.maps.InfoWindow();
 
+            // Ajustar tamanho dos markers com base no zoom para melhor clicabilidade
+            map.addListener('zoom_changed', ajustarTamanhoMarkers);
+
             // Carregar pedidos automaticamente se houver selecionados
             if (pedidosSelecionados.length > 0) {
                 carregarPedidos();
             }
+        }
+
+        // Ajustar tamanho dos markers conforme o nível de zoom
+        function ajustarTamanhoMarkers() {
+            const zoom = map.getZoom();
+            // Quanto menor o zoom (mais distante), maior o marker para facilitar clique
+            let scaleWidth, scaleHeight;
+            if (zoom < 8) {
+                scaleWidth = 60;
+                scaleHeight = 84;
+            } else if (zoom < 10) {
+                scaleWidth = 55;
+                scaleHeight = 77;
+            } else if (zoom < 12) {
+                scaleWidth = 50;
+                scaleHeight = 70;
+            } else if (zoom < 14) {
+                scaleWidth = 45;
+                scaleHeight = 63;
+            } else {
+                scaleWidth = 40;
+                scaleHeight = 56;
+            }
+
+            // Atualizar tamanho dos markers principais (clientes)
+            markers.forEach((marker) => {
+                if (marker.clienteData) {  // Apenas markers de cliente
+                    const currentIcon = marker.getIcon();
+                    if (currentIcon && currentIcon.scaledSize) {
+                        marker.setIcon({
+                            ...currentIcon,
+                            scaledSize: new google.maps.Size(scaleWidth, scaleHeight),
+                            anchor: new google.maps.Point(scaleWidth / 2, scaleHeight)
+                        });
+                    }
+                }
+            });
         }
 
         // Obter CSRF token
@@ -540,12 +609,12 @@
             return cookieValue || '';
         }
 
-        // Carregar pedidos no mapa
+        // Carregar clientes (agrupados por CNPJ+endereço) no mapa
         function carregarPedidos() {
             showLoading();
 
             $.ajax({
-                url: '/carteira/mapa/api/pedidos',
+                url: '/carteira/mapa/api/clientes',  // Nova API que agrupa por cliente
                 method: 'POST',
                 contentType: 'application/json',
                 headers: {
@@ -554,21 +623,21 @@
                 data: JSON.stringify({ pedidos: pedidosSelecionados }),
                 success: function (response) {
                     if (response.sucesso) {
-                        pedidosData = response.pedidos;
+                        clientesData = response.clientes;
                         cdData = response.cd;
-                        plotarPedidosNoMapa(response.pedidos);
+                        plotarClientesNoMapa(clientesData);
                         if (cdData) {
                             plotarCDNoMapa();
                         }
                         atualizarEstatisticas(response.resumo);
-                        atualizarListaPedidos(response.pedidos);
+                        atualizarListaClientes(clientesData);
                         $('#sidePanel').show();
                     }
                     hideLoading();
                 },
                 error: function (xhr) {
                     hideLoading();
-                    Swal.fire('Erro', xhr.responseJSON?.erro || 'Erro ao carregar pedidos', 'error');
+                    Swal.fire('Erro', xhr.responseJSON?.erro || 'Erro ao carregar clientes', 'error');
                 }
             });
         }
@@ -624,8 +693,8 @@
             markers.push(cdMarker);
         }
 
-        // Plotar pedidos no mapa
-        function plotarPedidosNoMapa(pedidos) {
+        // Plotar clientes no mapa (agrupados por CNPJ+endereço)
+        function plotarClientesNoMapa(clientes) {
             // Limpar markers anteriores
             limparMarkers();
 
@@ -639,54 +708,58 @@
                 });
             }
 
-            pedidos.forEach((pedido, index) => {
+            clientes.forEach((cliente, index) => {
                 const position = {
-                    lat: pedido.coordenadas.lat,
-                    lng: pedido.coordenadas.lng
+                    lat: cliente.coordenadas.lat,
+                    lng: cliente.coordenadas.lng
                 };
 
                 // Determinar cor do marker baseado no status
-                const markerColor = getMarkerColor(pedido.status);
+                const markerColor = getMarkerColor(cliente.status);
 
-                // Criar marker customizado
+                // Formatar peso para exibição
+                const pesoFormatado = formatarPeso(cliente.totais.peso);
+
+                // Criar marker customizado com número e peso
                 const marker = new google.maps.Marker({
                     position: position,
                     map: map,
-                    title: `${pedido.num_pedido} - ${pedido.cliente.nome}`,
+                    title: `${cliente.cliente.nome} - ${cliente.totais.qtd_pedidos} pedido(s)`,
                     icon: {
-                        url: `https://maps.google.com/mapfiles/ms/icons/${markerColor}-dot.png`,
-                        scaledSize: new google.maps.Size(40, 40)
+                        url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+                            <svg xmlns="http://www.w3.org/2000/svg" width="50" height="70" viewBox="0 0 50 70">
+                                <!-- Círculo principal com número -->
+                                <circle cx="25" cy="20" r="18" fill="${getMarkerHexColor(cliente.status)}" stroke="white" stroke-width="2"/>
+                                <text x="25" y="26" fill="white" font-size="16" font-weight="bold" text-anchor="middle">${index + 1}</text>
+                                <!-- Badge de quantidade de pedidos -->
+                                ${cliente.totais.qtd_pedidos > 1 ? `
+                                <circle cx="40" cy="8" r="8" fill="#ef4444" stroke="white" stroke-width="1"/>
+                                <text x="40" y="12" fill="white" font-size="10" font-weight="bold" text-anchor="middle">${cliente.totais.qtd_pedidos}</text>
+                                ` : ''}
+                                <!-- Retângulo com peso -->
+                                <rect x="3" y="42" width="44" height="16" rx="4" fill="#1e40af"/>
+                                <text x="25" y="54" fill="white" font-size="9" text-anchor="middle">${pesoFormatado}</text>
+                            </svg>
+                        `),
+                        scaledSize: new google.maps.Size(50, 70),
+                        anchor: new google.maps.Point(25, 70)
                     },
                     animation: google.maps.Animation.DROP,
-                    pedidoData: pedido
-                });
-
-                // Adicionar label ao marker
-                const label = new google.maps.Marker({
-                    position: position,
-                    map: map,
-                    icon: {
-                        url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(
-                            `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="20">
-                                <text x="15" y="15" font-size="12" font-weight="bold" text-anchor="middle" fill="white" stroke="black" stroke-width="1">${index + 1}</text>
-                            </svg>`
-                        ),
-                        anchor: new google.maps.Point(15, 40)
-                    }
+                    clienteData: cliente,
+                    optimized: false  // Melhora clicabilidade em zoom out
                 });
 
                 // Adicionar evento de clique
                 marker.addListener('click', function () {
-                    mostrarInfoWindow(marker, pedido);
+                    mostrarInfoWindowCliente(marker, cliente);
                 });
 
                 markers.push(marker);
-                markers.push(label);
                 bounds.extend(position);
             });
 
             // Ajustar zoom para mostrar todos os markers
-            if (pedidos.length > 0) {
+            if (clientes.length > 0) {
                 map.fitBounds(bounds);
 
                 // Ajustar zoom se estiver muito próximo
@@ -696,6 +769,51 @@
                     }
                 });
             }
+        }
+
+        // Formatar peso para exibição compacta
+        function formatarPeso(peso) {
+            if (peso >= 1000) {
+                return (peso / 1000).toFixed(1) + 't';
+            }
+            return peso.toFixed(0) + 'kg';
+        }
+
+        // Obter cor hexadecimal do marker baseado no status
+        function getMarkerHexColor(status) {
+            switch (status) {
+                case 'agendado': return '#22c55e';  // Verde
+                case 'urgente': return '#eab308';   // Amarelo
+                case 'atrasado': return '#ef4444';  // Vermelho
+                case 'pendente': return '#f97316';  // Laranja
+                default: return '#3b82f6';          // Azul
+            }
+        }
+
+        // Manter função antiga para compatibilidade (redireciona para a nova)
+        function plotarPedidosNoMapa(pedidos) {
+            // Converter formato antigo para novo se necessário
+            const clientes = pedidos.map((p, i) => ({
+                cliente_id: p.num_pedido,
+                cliente: p.cliente,
+                endereco: p.endereco,
+                coordenadas: p.coordenadas,
+                pedidos: [{
+                    num_pedido: p.num_pedido,
+                    valor: p.valores.total,
+                    peso: p.valores.peso,
+                    pallet: p.valores.pallet,
+                    observacoes: p.observacoes
+                }],
+                totais: {
+                    valor: p.valores.total,
+                    peso: p.valores.peso,
+                    pallet: p.valores.pallet,
+                    qtd_pedidos: 1
+                },
+                status: p.status
+            }));
+            plotarClientesNoMapa(clientes);
         }
 
         // Obter cor do marker baseado no status
@@ -709,75 +827,79 @@
             }
         }
 
-        // Mostrar InfoWindow
-        function mostrarInfoWindow(marker, pedido) {
+        // Mostrar InfoWindow para cliente (com lista de pedidos)
+        function mostrarInfoWindowCliente(marker, cliente) {
+            // Gerar lista de pedidos do cliente
+            let pedidosHtml = '';
+            cliente.pedidos.forEach((pedido, idx) => {
+                const statusAgend = pedido.agendamento_confirmado
+                    ? '<span class="badge bg-success">Confirmado</span>'
+                    : (pedido.agendamento ? '<span class="badge bg-warning text-dark">Aguardando</span>' : '');
+
+                pedidosHtml += `
+                    <div class="border-start border-2 ps-2 mb-2 ${idx > 0 ? 'mt-2' : ''}">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <strong>${pedido.num_pedido}</strong>
+                            ${statusAgend}
+                        </div>
+                        <div class="small text-muted">
+                            R$ ${(pedido.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} |
+                            ${(pedido.peso || 0).toFixed(2)} kg
+                        </div>
+                        ${pedido.expedicao ? `<div class="small">Exp: ${pedido.expedicao}</div>` : ''}
+                        ${pedido.agendamento ? `<div class="small">Agend: ${pedido.agendamento}</div>` : ''}
+                    </div>
+                `;
+            });
+
             const content = `
-                <div class="info-window">
-                    <div class="info-window-header">
-                        <h6 class="mb-0">Pedido ${pedido.num_pedido}</h6>
+                <div class="info-window" style="max-width: 350px;">
+                    <div class="info-window-header" style="background: ${getMarkerHexColor(cliente.status)};">
+                        <h6 class="mb-0 text-white">
+                            <i class="fas fa-building"></i> ${cliente.cliente.nome}
+                            <span class="badge bg-light text-dark ms-2">${cliente.totais.qtd_pedidos} pedido(s)</span>
+                        </h6>
                     </div>
                     <div class="info-window-content">
                         <div class="info-row">
-                            <span class="info-label">Cliente:</span>
-                            <span class="info-value">${pedido.cliente.nome}</span>
-                        </div>
-                        <div class="info-row">
                             <span class="info-label">CNPJ:</span>
-                            <span class="info-value">${pedido.cliente.cnpj}</span>
+                            <span class="info-value">${cliente.cliente.cnpj || '-'}</span>
                         </div>
                         <div class="info-row">
                             <span class="info-label">Endereço:</span>
-                            <span class="info-value">${pedido.endereco.completo}</span>
+                            <span class="info-value">${cliente.endereco.completo}</span>
                         </div>
-                        ${pedido.cliente.telefone ? `
+                        ${cliente.cliente.telefone ? `
                         <div class="info-row">
                             <span class="info-label">Telefone:</span>
-                            <span class="info-value">${pedido.cliente.telefone}</span>
+                            <span class="info-value">${cliente.cliente.telefone}</span>
                         </div>` : ''}
+
                         <hr>
-                        <div class="info-row">
-                            <span class="info-label">Valor:</span>
-                            <span class="info-value">R$ ${pedido.valores.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        <h6 class="mb-2"><i class="fas fa-calculator"></i> Totais</h6>
+                        <div class="row text-center small">
+                            <div class="col-4">
+                                <div class="fw-bold text-primary">R$ ${cliente.totais.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                                <div class="text-muted">Valor</div>
+                            </div>
+                            <div class="col-4">
+                                <div class="fw-bold text-success">${cliente.totais.peso.toFixed(2)} kg</div>
+                                <div class="text-muted">Peso</div>
+                            </div>
+                            <div class="col-4">
+                                <div class="fw-bold text-info">${cliente.totais.pallet.toFixed(2)}</div>
+                                <div class="text-muted">Pallets</div>
+                            </div>
                         </div>
-                        <div class="info-row">
-                            <span class="info-label">Peso:</span>
-                            <span class="info-value">${pedido.valores.peso.toFixed(2)} kg</span>
-                        </div>
-                        <div class="info-row">
-                            <span class="info-label">Pallets:</span>
-                            <span class="info-value">${pedido.valores.pallet.toFixed(2)}</span>
-                        </div>
-                        <div class="info-row">
-                            <span class="info-label">Itens:</span>
-                            <span class="info-value">${pedido.valores.itens}</span>
-                        </div>
-                        ${pedido.datas.expedicao ? `
+
                         <hr>
-                        <div class="info-row">
-                            <span class="info-label">Expedição:</span>
-                            <span class="info-value">${pedido.datas.expedicao}</span>
-                        </div>` : ''}
-                        ${pedido.datas.agendamento ? `
-                        <div class="info-row">
-                            <span class="info-label">Agendamento:</span>
-                            <span class="info-value">${pedido.datas.agendamento}</span>
-                        </div>` : ''}
-                        ${pedido.datas.protocolo ? `
-                        <div class="info-row">
-                            <span class="info-label">Protocolo:</span>
-                            <span class="info-value">${pedido.datas.protocolo}</span>
-                        </div>` : ''}
-                        ${pedido.observacoes ? `
-                        <hr>
-                        <div class="info-row">
-                            <span class="info-label">Observações:</span>
-                            <span class="info-value">${pedido.observacoes}</span>
-                        </div>` : ''}
+                        <h6 class="mb-2"><i class="fas fa-file-alt"></i> Pedidos</h6>
+                        <div style="max-height: 200px; overflow-y: auto;">
+                            ${pedidosHtml}
+                        </div>
+
                         <div class="mt-3 text-center">
-                            <button class="btn btn-sm btn-primary" onclick="verDetalhesPedido('${pedido.num_pedido}')">
-                                <i class="fas fa-eye"></i> Ver Detalhes
-                            </button>
-                            <button class="btn btn-sm btn-success" onclick="navegarAte(${pedido.coordenadas.lat}, ${pedido.coordenadas.lng})">
+                            <button class="btn btn-sm btn-success" onclick="navegarAte(${cliente.coordenadas.lat}, ${cliente.coordenadas.lng})">
                                 <i class="fas fa-directions"></i> Navegar
                             </button>
                         </div>
@@ -787,6 +909,34 @@
 
             infoWindow.setContent(content);
             infoWindow.open(map, marker);
+        }
+
+        // Manter função antiga para compatibilidade
+        function mostrarInfoWindow(marker, pedido) {
+            // Converter para formato de cliente se necessário
+            const cliente = pedido.cliente_id ? pedido : {
+                cliente_id: pedido.num_pedido,
+                cliente: pedido.cliente,
+                endereco: pedido.endereco,
+                coordenadas: pedido.coordenadas,
+                pedidos: [{
+                    num_pedido: pedido.num_pedido,
+                    valor: pedido.valores?.total || 0,
+                    peso: pedido.valores?.peso || 0,
+                    pallet: pedido.valores?.pallet || 0,
+                    expedicao: pedido.datas?.expedicao,
+                    agendamento: pedido.datas?.agendamento,
+                    agendamento_confirmado: false
+                }],
+                totais: {
+                    valor: pedido.valores?.total || 0,
+                    peso: pedido.valores?.peso || 0,
+                    pallet: pedido.valores?.pallet || 0,
+                    qtd_pedidos: 1
+                },
+                status: pedido.status
+            };
+            mostrarInfoWindowCliente(marker, cliente);
         }
 
         // Limpar markers
@@ -801,29 +951,121 @@
             }
         }
 
-        // Atualizar estatísticas
+        // Atualizar estatísticas (suporta formato antigo e novo)
         function atualizarEstatisticas(resumo) {
-            $('#totalPedidos').text(pedidosData.length);
-            $('#valorTotal').text('R$ ' + resumo.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
-            $('#pesoTotal').text(resumo.peso_total.toFixed(2) + ' kg');
-            $('#palletTotal').text(resumo.pallet_total.toFixed(2));
+            // Exibir total de pedidos (não de clientes)
+            const totalPedidos = resumo.total_pedidos || clientesData.reduce((acc, c) => acc + (c.totais?.qtd_pedidos || 1), 0);
+            $('#totalPedidos').text(totalPedidos);
+            $('#valorTotal').text('R$ ' + (resumo.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
+            $('#pesoTotal').text((resumo.peso_total || 0).toFixed(2) + ' kg');
+            $('#palletTotal').text((resumo.pallet_total || 0).toFixed(2));
         }
 
-        // Atualizar lista de pedidos
-        function atualizarListaPedidos(pedidos) {
-            let html = '';
+        // Recalcular totais baseado nos clientes selecionados (checkboxes)
+        function recalcularTotais() {
+            const selecionados = getClientesSelecionados();
+            let totalPedidos = 0, valorTotal = 0, pesoTotal = 0, palletTotal = 0;
 
-            pedidos.forEach((pedido, index) => {
-                html += `
-                    <div class="pedido-item ${pedido.status}" onclick="focusPedido(${index})">
-                        <div class="d-flex justify-content-between">
-                            <strong>${index + 1}. ${pedido.num_pedido}</strong>
-                            <span class="badge bg-primary">${pedido.status}</span>
+            selecionados.forEach(cliente => {
+                totalPedidos += cliente.totais.qtd_pedidos;
+                valorTotal += cliente.totais.valor;
+                pesoTotal += cliente.totais.peso;
+                palletTotal += cliente.totais.pallet;
+            });
+
+            $('#totalPedidos').text(totalPedidos);
+            $('#valorTotal').text('R$ ' + valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
+            $('#pesoTotal').text(pesoTotal.toFixed(2) + ' kg');
+            $('#palletTotal').text(palletTotal.toFixed(2));
+        }
+
+        // Obter clientes selecionados (todos os marcados no checkbox)
+        function getClientesSelecionados() {
+            const selecionados = [];
+            $('.cliente-checkbox:checked').each(function() {
+                const clienteId = $(this).data('cliente-id');
+                const cliente = clientesData.find(c => c.cliente_id === clienteId);
+                if (cliente) {
+                    selecionados.push(cliente);
+                }
+            });
+            // Se nenhum checkbox estiver marcado, retornar todos
+            if (selecionados.length === 0) {
+                return clientesData;
+            }
+            return selecionados;
+        }
+
+        // Atualizar lista de clientes (agrupados)
+        function atualizarListaClientes(clientes) {
+            let html = `
+                <div class="mb-3 border-bottom pb-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <input type="checkbox" id="selectAllClientes" checked onchange="toggleSelectAll(this)">
+                            <label for="selectAllClientes" class="ms-1 small">Selecionar Todos</label>
                         </div>
-                        <div class="small mt-1">
-                            <div>${pedido.cliente.nome}</div>
-                            <div>${pedido.endereco.cidade}/${pedido.endereco.uf}</div>
-                            <div class="text-muted">R$ ${pedido.valores.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                        <span class="badge bg-secondary">${clientes.length} entregas</span>
+                    </div>
+                </div>
+            `;
+
+            clientes.forEach((cliente, index) => {
+                const statusClass = cliente.status || 'pendente';
+                const statusBadge = cliente.status === 'agendado'
+                    ? '<span class="badge bg-success">Agendado</span>'
+                    : (cliente.status === 'urgente'
+                        ? '<span class="badge bg-warning text-dark">Urgente</span>'
+                        : '<span class="badge bg-secondary">Pendente</span>');
+
+                // Lista de pedidos do cliente
+                let pedidosHtml = '';
+                cliente.pedidos.forEach(pedido => {
+                    const agendStatus = pedido.agendamento_confirmado
+                        ? '<i class="fas fa-check-circle text-success" title="Confirmado"></i>'
+                        : (pedido.agendamento ? '<i class="fas fa-clock text-warning" title="Aguardando"></i>' : '');
+
+                    pedidosHtml += `
+                        <div class="pedido-sub-item small py-1 ps-3 border-start">
+                            <div class="d-flex justify-content-between">
+                                <span>${pedido.num_pedido}</span>
+                                ${agendStatus}
+                            </div>
+                            <div class="text-muted">R$ ${(pedido.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                        </div>
+                    `;
+                });
+
+                html += `
+                    <div class="cliente-item ${statusClass} ${cliente.na_rota ? 'na-rota' : ''}" data-cliente-id="${cliente.cliente_id}">
+                        <div class="d-flex align-items-start">
+                            <input type="checkbox" class="cliente-checkbox me-2 mt-1"
+                                   data-cliente-id="${cliente.cliente_id}"
+                                   checked
+                                   onchange="recalcularTotais()">
+                            <div class="flex-grow-1" onclick="focusCliente(${index})">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <strong>${index + 1}. ${cliente.cliente.nome || 'Cliente'}</strong>
+                                    <span class="badge bg-info">${cliente.totais.qtd_pedidos} ped.</span>
+                                </div>
+                                <div class="small mt-1">
+                                    <div class="text-muted">${cliente.endereco.cidade || ''}/${cliente.endereco.uf || ''}</div>
+                                    <div class="d-flex justify-content-between">
+                                        <span>R$ ${cliente.totais.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                        <span>${cliente.totais.peso.toFixed(0)} kg</span>
+                                    </div>
+                                </div>
+                                ${cliente.totais.qtd_pedidos > 1 ? `
+                                <div class="mt-2">
+                                    <a class="small text-primary" data-bs-toggle="collapse" href="#pedidos-${cliente.cliente_id}" role="button">
+                                        <i class="fas fa-chevron-down"></i> Ver pedidos
+                                    </a>
+                                    <div class="collapse mt-2" id="pedidos-${cliente.cliente_id}">
+                                        ${pedidosHtml}
+                                    </div>
+                                </div>
+                                ` : ''}
+                            </div>
                         </div>
                     </div>
                 `;
@@ -832,45 +1074,87 @@
             $('#pedidosList').html(html);
         }
 
-        // Focar em pedido específico
-        function focusPedido(index) {
-            const pedido = pedidosData[index];
-            const marker = markers[index * 2]; // *2 porque temos marker + label
+        // Toggle selecionar todos os clientes
+        function toggleSelectAll(checkbox) {
+            $('.cliente-checkbox').prop('checked', checkbox.checked);
+            recalcularTotais();
+        }
+
+        // Manter função antiga para compatibilidade
+        function atualizarListaPedidos(pedidos) {
+            // Converter para formato de clientes
+            const clientes = pedidos.map((p, i) => ({
+                cliente_id: p.num_pedido,
+                cliente: p.cliente,
+                endereco: p.endereco,
+                coordenadas: p.coordenadas,
+                pedidos: [{
+                    num_pedido: p.num_pedido,
+                    valor: p.valores?.total || 0,
+                    peso: p.valores?.peso || 0
+                }],
+                totais: {
+                    valor: p.valores?.total || 0,
+                    peso: p.valores?.peso || 0,
+                    pallet: p.valores?.pallet || 0,
+                    qtd_pedidos: 1
+                },
+                status: p.status
+            }));
+            atualizarListaClientes(clientes);
+        }
+
+        // Focar em cliente específico
+        function focusCliente(index) {
+            const cliente = clientesData[index];
+            const marker = markers[index];  // Agora 1 marker por cliente
+
+            if (!cliente || !marker) return;
 
             map.setCenter({
-                lat: pedido.coordenadas.lat,
-                lng: pedido.coordenadas.lng
+                lat: cliente.coordenadas.lat,
+                lng: cliente.coordenadas.lng
             });
             map.setZoom(15);
 
             // Abrir InfoWindow
-            mostrarInfoWindow(marker, pedido);
+            mostrarInfoWindowCliente(marker, cliente);
 
             // Destacar na lista
-            $('.pedido-item').removeClass('selected');
-            $('.pedido-item').eq(index).addClass('selected');
+            $('.cliente-item').removeClass('selected');
+            $('.cliente-item').eq(index).addClass('selected');
         }
 
-        // Calcular rota otimizada
+        // Manter função antiga para compatibilidade
+        function focusPedido(index) {
+            focusCliente(index);
+        }
+
+        // Calcular rota otimizada (usando clientes agrupados)
         function calcularRotaOtimizada() {
-            if (pedidosData.length < 2) {
-                Swal.fire('Aviso', 'Selecione pelo menos 2 pedidos para calcular a rota', 'warning');
+            const clientesSelecionados = getClientesSelecionados();
+
+            if (clientesSelecionados.length < 2) {
+                Swal.fire('Aviso', 'Selecione pelo menos 2 entregas para calcular a rota', 'warning');
                 return;
             }
 
             showLoading();
 
             $.ajax({
-                url: '/carteira/mapa/api/rota-otimizada',
+                url: '/carteira/mapa/api/rota-clientes',
                 method: 'POST',
                 contentType: 'application/json',
                 headers: {
                     'X-CSRFToken': getCSRFToken()
                 },
-                data: JSON.stringify({ pedidos: pedidosSelecionados }),
+                data: JSON.stringify({ clientes: clientesSelecionados }),
                 success: function (response) {
                     if (response.sucesso) {
-                        exibirRotaOtimizada(response.rota);
+                        // Armazenar rota calculada para exportação
+                        rotaCalculada = response.rota;
+
+                        exibirRotaOtimizadaClientes(response.rota, clientesSelecionados);
 
                         // Atualizar informações do veículo e pedágio
                         if (response.veiculo) {
@@ -885,6 +1169,9 @@
                                 `${response.pedagio.num_pracas_estimado} praça(s) × R$ ${response.pedagio.valor_medio_praca.toFixed(2)}`);
                         }
 
+                        // Reordenar painel lateral conforme ordem da rota
+                        reordenarPainelLateral(response.rota.ordem_clientes);
+
                         mostrarEstatisticasRotaCompleta(response.rota, response.estatisticas, response.veiculo, response.pedagio);
                     }
                     hideLoading();
@@ -896,11 +1183,195 @@
             });
         }
 
+        // Reordenar painel lateral conforme ordem da rota otimizada
+        function reordenarPainelLateral(ordemClientes) {
+            // Reordenar clientesData com base na ordem da rota
+            const novosClientes = [];
+
+            // Primeiro, adicionar os clientes na ordem da rota
+            ordemClientes.forEach(clienteId => {
+                const cliente = clientesData.find(c => c.cliente_id === clienteId);
+                if (cliente) {
+                    cliente.na_rota = true;  // Flag para destacar (cor verde)
+                    novosClientes.push(cliente);
+                }
+            });
+
+            // Depois, adicionar clientes que não estão na rota (desmarcados)
+            clientesData.forEach(c => {
+                if (!novosClientes.includes(c)) {
+                    c.na_rota = false;
+                    novosClientes.push(c);
+                }
+            });
+
+            clientesData = novosClientes;
+            atualizarListaClientes(clientesData);
+        }
+
         // Variáveis para armazenar marcadores de ordem e pedágio
         let ordemMarkers = [];
         let pedagioMarkers = [];
 
-        // Exibir rota otimizada
+        // Exibir rota otimizada para clientes
+        function exibirRotaOtimizadaClientes(rota, clientes) {
+            // Limpar rota anterior
+            if (rotaPolyline) {
+                rotaPolyline.setMap(null);
+            }
+
+            // Limpar marcadores de ordem anteriores
+            ordemMarkers.forEach(marker => marker.setMap(null));
+            ordemMarkers = [];
+
+            // Limpar marcadores de pedágio anteriores
+            pedagioMarkers.forEach(marker => marker.setMap(null));
+            pedagioMarkers = [];
+
+            // Decodificar polyline
+            const path = google.maps.geometry.encoding.decodePath(rota.polyline);
+
+            // Criar nova polyline com cor personalizada
+            rotaPolyline = new google.maps.Polyline({
+                path: path,
+                geodesic: true,
+                strokeColor: '#10b981',  // Verde esmeralda
+                strokeOpacity: 0.9,
+                strokeWeight: 5,
+                icons: [{
+                    icon: {
+                        path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+                        scale: 3,
+                        strokeColor: '#065f46',
+                        strokeWeight: 2,
+                        fillColor: '#10b981',
+                        fillOpacity: 1
+                    },
+                    offset: '100%',
+                    repeat: '150px'
+                }],
+                map: map
+            });
+
+            // Adicionar marcadores de ordem para cada cliente
+            if (rota.ordem_clientes && rota.legs) {
+                const temposAcumulados = [];
+                let tempoTotal = 0;
+
+                // Calcular tempo acumulado para cada ponto
+                for (let i = 0; i <= rota.ordem_clientes.length && i < rota.legs.length; i++) {
+                    const duracaoTexto = rota.legs[i]?.duracao || '0 min';
+                    const match = duracaoTexto.match(/\d+/);
+                    if (match) {
+                        tempoTotal += parseInt(match[0]);
+                    }
+                    temposAcumulados.push(tempoTotal);
+                }
+
+                rota.ordem_clientes.forEach((clienteId, index) => {
+                    const cliente = clientes.find(c => c.cliente_id === clienteId);
+
+                    if (cliente) {
+                        const tempoAcumulado = temposAcumulados[index] || 0;
+                        const pesoFormatado = formatarPeso(cliente.totais.peso);
+
+                        // Criar marcador customizado com ordem (DESTAQUE PRINCIPAL)
+                        const ordemLabel = new google.maps.Marker({
+                            position: {
+                                lat: cliente.coordenadas.lat,
+                                lng: cliente.coordenadas.lng
+                            },
+                            map: map,
+                            icon: {
+                                url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="50" height="70" viewBox="0 0 50 70">
+                                        <!-- Círculo principal com número - VERDE para indicar na rota -->
+                                        <circle cx="25" cy="20" r="18" fill="#10b981" stroke="white" stroke-width="3"/>
+                                        <text x="25" y="26" fill="white" font-size="16" font-weight="bold" text-anchor="middle">${index + 1}</text>
+                                        <!-- Badge de quantidade de pedidos -->
+                                        ${cliente.totais.qtd_pedidos > 1 ? `
+                                        <circle cx="40" cy="8" r="8" fill="#3b82f6" stroke="white" stroke-width="1"/>
+                                        <text x="40" y="12" fill="white" font-size="10" font-weight="bold" text-anchor="middle">${cliente.totais.qtd_pedidos}</text>
+                                        ` : ''}
+                                        <!-- Retângulo com peso -->
+                                        <rect x="3" y="42" width="44" height="16" rx="4" fill="#1e40af"/>
+                                        <text x="25" y="54" fill="white" font-size="9" text-anchor="middle">${pesoFormatado}</text>
+                                    </svg>
+                                `),
+                                scaledSize: new google.maps.Size(50, 70),
+                                anchor: new google.maps.Point(25, 70)
+                            },
+                            title: `${index + 1}º - ${cliente.cliente.nome}`,
+                            zIndex: 1200 + index
+                        });
+
+                        // Criar label com tempo estimado
+                        const tempoLabel = new google.maps.Marker({
+                            position: {
+                                lat: cliente.coordenadas.lat + 0.0025,
+                                lng: cliente.coordenadas.lng
+                            },
+                            map: map,
+                            icon: {
+                                url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="70" height="22">
+                                        <rect x="3" y="2" width="64" height="18" rx="9" fill="#1e40af" stroke="#ffffff" stroke-width="1" opacity="0.85"/>
+                                        <text x="35" y="14" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle" font-weight="bold">
+                                            ${tempoAcumulado > 0 ? `${tempoAcumulado} min` : 'PARTIDA'}
+                                        </text>
+                                    </svg>
+                                `),
+                                anchor: new google.maps.Point(35, 22)
+                            },
+                            zIndex: 1000 + index
+                        });
+
+                        // InfoWindow ao clicar
+                        ordemLabel.addListener('click', () => {
+                            // Listar todos os pedidos deste cliente
+                            const pedidosStr = cliente.pedidos.map(p => p.num_pedido).join(', ');
+
+                            const infoContent = `
+                                <div style="padding: 10px;">
+                                    <h6 class="mb-2"><strong>${index + 1}ª Entrega</strong></h6>
+                                    <p class="mb-1"><strong>Cliente:</strong> ${cliente.cliente.nome}</p>
+                                    <p class="mb-1"><strong>CNPJ:</strong> ${cliente.cliente.cnpj || '-'}</p>
+                                    <p class="mb-1"><strong>Pedidos (${cliente.totais.qtd_pedidos}):</strong> ${pedidosStr}</p>
+                                    <p class="mb-1"><strong>Valor Total:</strong> R$ ${cliente.totais.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                    <p class="mb-1"><strong>Peso Total:</strong> ${cliente.totais.peso.toFixed(2)} kg</p>
+                                    <p class="mb-1"><strong>Tempo até aqui:</strong> ${tempoAcumulado > 0 ? `${tempoAcumulado} minutos` : 'Ponto de partida'}</p>
+                                    ${index < rota.legs.length ? `<p class="mb-1"><strong>Próximo trecho:</strong> ${rota.legs[index].distancia} - ${rota.legs[index].duracao}</p>` : ''}
+                                </div>
+                            `;
+
+                            if (infoWindow) {
+                                infoWindow.close();
+                            }
+
+                            infoWindow = new google.maps.InfoWindow({
+                                content: infoContent
+                            });
+
+                            infoWindow.open(map, ordemLabel);
+                        });
+
+                        ordemMarkers.push(ordemLabel);
+                        ordemMarkers.push(tempoLabel);
+                    }
+                });
+            }
+
+            // Adicionar marcadores de pedágio estimados
+            adicionarMarcadoresPedagio(path, rota.distancia_total_km);
+
+            // Ajustar bounds
+            const bounds = new google.maps.LatLngBounds();
+            bounds.extend(new google.maps.LatLng(rota.bounds.southwest.lat, rota.bounds.southwest.lng));
+            bounds.extend(new google.maps.LatLng(rota.bounds.northeast.lat, rota.bounds.northeast.lng));
+            map.fitBounds(bounds);
+        }
+
+        // Função antiga mantida para compatibilidade
         function exibirRotaOtimizada(rota) {
             // Limpar rota anterior
             if (rotaPolyline) {
@@ -999,7 +1470,7 @@
                             }
                         }
 
-                        // Criar marcador customizado com ordem (menor tamanho)
+                        // Criar marcador customizado com ordem (DESTAQUE PRINCIPAL)
                         const ordemLabel = new google.maps.Marker({
                             position: {
                                 lat: pedido.coordenadas.lat + offsetLat,
@@ -1008,41 +1479,41 @@
                             map: map,
                             icon: {
                                 path: google.maps.SymbolPath.CIRCLE,
-                                scale: 12,  // Reduzido de 20 para 12
+                                scale: 18,  // Aumentado para destaque
                                 fillColor: '#dc2626',  // Vermelho
-                                fillOpacity: 0.9,
+                                fillOpacity: 0.95,
                                 strokeColor: '#ffffff',
-                                strokeWeight: 2
+                                strokeWeight: 3
                             },
                             label: {
                                 text: String(index + 1),
                                 color: '#ffffff',
-                                fontSize: '11px',  // Reduzido de 14px
+                                fontSize: '14px',  // Aumentado para visibilidade
                                 fontWeight: 'bold'
                             },
                             title: `${index + 1}º - ${pedido.num_pedido}`,
-                            zIndex: 1000 + index
+                            zIndex: 1200 + index  // zIndex mais alto para ficar acima de tudo
                         });
 
-                        // Criar label com tempo estimado (posicionado ACIMA do marcador)
+                        // Criar label com tempo estimado (posicionado ACIMA do marcador - menos destaque)
                         const tempoLabel = new google.maps.Marker({
                             position: {
-                                lat: pedido.coordenadas.lat + offsetLat + 0.002,  // Bem acima do marcador
+                                lat: pedido.coordenadas.lat + offsetLat + 0.0025,  // Bem acima do marcador
                                 lng: pedido.coordenadas.lng + offsetLng
                             },
                             map: map,
                             icon: {
                                 url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="90" height="28">
-                                        <rect x="5" y="3" width="80" height="22" rx="11" fill="#1e40af" stroke="#ffffff" stroke-width="1" opacity="0.95"/>
-                                        <text x="45" y="17" font-family="Arial, sans-serif" font-size="12" fill="white" text-anchor="middle" font-weight="bold">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="70" height="22">
+                                        <rect x="3" y="2" width="64" height="18" rx="9" fill="#1e40af" stroke="#ffffff" stroke-width="1" opacity="0.85"/>
+                                        <text x="35" y="14" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle" font-weight="bold">
                                             ${tempoAcumulado > 0 ? `${tempoAcumulado} min` : 'PARTIDA'}
                                         </text>
                                     </svg>
                                 `),
-                                anchor: new google.maps.Point(45, 25)  // Ancorar na parte inferior do SVG
+                                anchor: new google.maps.Point(35, 22)  // Ancorar na parte inferior do SVG
                             },
-                            zIndex: 1100 + index  // Maior zIndex para ficar acima
+                            zIndex: 1000 + index  // zIndex menor que o marcador de ordem
                         });
 
                         // InfoWindow ao clicar
@@ -1113,24 +1584,24 @@
                 const pointIndex = Math.min(i * interval, totalPoints - 1);
                 const position = path[pointIndex];
 
-                // Criar marcador de pedágio
+                // Criar marcador de pedágio (menor destaque que marcador de entrega)
                 const pedagioMarker = new google.maps.Marker({
                     position: position,
                     map: map,
                     icon: {
                         url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-                            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
-                                <!-- Fundo circular amarelo -->
-                                <circle cx="20" cy="20" r="18" fill="#fbbf24" stroke="#f59e0b" stroke-width="2"/>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28">
+                                <!-- Fundo circular amarelo claro -->
+                                <circle cx="14" cy="14" r="12" fill="#fde68a" stroke="#fbbf24" stroke-width="1.5" opacity="0.9"/>
                                 <!-- Símbolo de dinheiro -->
-                                <text x="20" y="27" font-family="Arial, sans-serif" font-size="20" fill="#7c2d12" text-anchor="middle" font-weight="bold">$</text>
+                                <text x="14" y="19" font-family="Arial, sans-serif" font-size="14" fill="#92400e" text-anchor="middle" font-weight="bold">$</text>
                             </svg>
                         `),
-                        anchor: new google.maps.Point(20, 20),
-                        scaledSize: new google.maps.Size(40, 40)
+                        anchor: new google.maps.Point(14, 14),
+                        scaledSize: new google.maps.Size(28, 28)
                     },
                     title: `Praça de Pedágio ${i}`,
-                    zIndex: 800
+                    zIndex: 800  // Bem abaixo do marcador de entrega (1200)
                 });
 
                 // Adicionar InfoWindow ao clicar
@@ -1169,27 +1640,70 @@
 
                 const labelPedagio = new google.maps.Marker({
                     position: {
-                        lat: position.lat() - 0.0008,  // Posicionar abaixo
+                        lat: position.lat() - 0.0006,  // Posicionar abaixo
                         lng: position.lng()
                     },
                     map: map,
                     icon: {
                         url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-                            <svg xmlns="http://www.w3.org/2000/svg" width="60" height="25">
-                                <rect x="0" y="0" width="60" height="20" rx="10" fill="#fbbf24" opacity="0.9"/>
-                                <text x="30" y="14" font-family="Arial, sans-serif" font-size="11" fill="#7c2d12" text-anchor="middle" font-weight="bold">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="50" height="18">
+                                <rect x="0" y="0" width="50" height="16" rx="8" fill="#fde68a" opacity="0.85"/>
+                                <text x="25" y="12" font-family="Arial, sans-serif" font-size="9" fill="#92400e" text-anchor="middle" font-weight="bold">
                                     R$ ${valorPorPraca}
                                 </text>
                             </svg>
                         `),
-                        anchor: new google.maps.Point(30, 10)
+                        anchor: new google.maps.Point(25, 8)
                     },
-                    zIndex: 799
+                    zIndex: 799  // Abaixo do marcador de entrega
                 });
 
                 pedagioMarkers.push(pedagioMarker);
                 pedagioMarkers.push(labelPedagio);
             }
+        }
+
+        // Gerar HTML da ordem de entrega (agrupada por cliente)
+        function gerarOrdemEntregaHtml(rota) {
+            let html = '';
+            const ordemIds = rota.ordem_clientes || rota.ordem_pedidos || [];
+
+            ordemIds.forEach((id, idx) => {
+                // Tentar encontrar como cliente primeiro
+                const cliente = clientesData.find(c => c.cliente_id === id);
+
+                if (cliente) {
+                    // É um cliente agrupado
+                    const pedidosStr = cliente.pedidos.map(p => p.num_pedido).join(', ');
+                    const agendStatus = cliente.pedidos.some(p => p.agendamento_confirmado)
+                        ? '<span class="badge bg-success ms-2">Confirmado</span>'
+                        : (cliente.pedidos.some(p => p.agendamento)
+                            ? '<span class="badge bg-warning text-dark ms-2">Aguardando</span>'
+                            : '');
+
+                    html += `
+                        <div class="entrega-item border-start border-3 border-success ps-2 mb-2">
+                            <strong>${idx + 1}. ${cliente.cliente.nome}</strong>
+                            <span class="badge bg-info ms-2">${cliente.totais.qtd_pedidos} pedido(s)</span>
+                            ${agendStatus}
+                            <div class="small text-muted mt-1">
+                                <div>📍 ${cliente.endereco.cidade || ''}/${cliente.endereco.uf || ''}</div>
+                                <div>📦 Pedidos: ${pedidosStr}</div>
+                                <div>💰 R$ ${cliente.totais.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} | ⚖️ ${cliente.totais.peso.toFixed(2)} kg</div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    // Fallback para formato antigo (pedido individual)
+                    html += `
+                        <div class="entrega-item border-start border-3 border-secondary ps-2 mb-2">
+                            <strong>${idx + 1}. Pedido ${id}</strong>
+                        </div>
+                    `;
+                }
+            });
+
+            return html || '<p class="text-muted">Nenhuma entrega na rota</p>';
         }
 
         // Mostrar estatísticas da rota (versão simplificada mantida para compatibilidade)
@@ -1305,9 +1819,7 @@
                         ${pedagioHtml}
                         
                         <h5 class="mt-3">📦 Ordem de Entrega</h5>
-                        <ol>
-                            ${rota.ordem_pedidos.map(p => `<li>Pedido ${p}</li>`).join('')}
-                        </ol>
+                        ${gerarOrdemEntregaHtml(rota)}
                         
                         <h5 class="mt-3">🛣️ Trechos</h5>
                         <table class="table table-sm">
@@ -1368,11 +1880,13 @@
             // Preparar dados para heatmap
             const heatmapData = [];
 
-            pedidosData.forEach(pedido => {
-                heatmapData.push({
-                    location: new google.maps.LatLng(pedido.coordenadas.lat, pedido.coordenadas.lng),
-                    weight: pedido.valores.total / 1000 // Peso baseado no valor
-                });
+            clientesData.forEach(cliente => {
+                if (cliente.coordenadas) {
+                    heatmapData.push({
+                        location: new google.maps.LatLng(cliente.coordenadas.lat, cliente.coordenadas.lng),
+                        weight: cliente.totais.valor / 1000 // Peso baseado no valor
+                    });
+                }
             });
 
             // Remover heatmap anterior
@@ -1583,23 +2097,6 @@
             });
         }
 
-        // Alternar clustering
-        function alternarClustering() {
-            if (markerCluster) {
-                markerCluster.clearMarkers();
-                markerCluster = null;
-                plotarPedidosNoMapa(pedidosData);
-                Swal.fire('Clustering Desativado', '', 'info');
-            } else {
-                // Ativar clustering
-                markerCluster = new MarkerClusterer(map, markers.filter((m, i) => i % 2 === 0), {
-                    imagePath: 'https://developers.google.com/maps/documentation/javascript/examples/markerclusterer/m',
-                    maxZoom: 15,
-                    gridSize: 60
-                });
-                Swal.fire('Clustering Ativado', '', 'success');
-            }
-        }
 
         // Mudar tipo de mapa
         function mudarTipoMapa(tipo) {
@@ -1618,13 +2115,15 @@
                 });
             }
 
-            // Incluir pedidos nos bounds
-            if (pedidosData.length > 0) {
-                pedidosData.forEach(pedido => {
-                    bounds.extend({
-                        lat: pedido.coordenadas.lat,
-                        lng: pedido.coordenadas.lng
-                    });
+            // Incluir clientes nos bounds
+            if (clientesData.length > 0) {
+                clientesData.forEach(cliente => {
+                    if (cliente.coordenadas) {
+                        bounds.extend({
+                            lat: cliente.coordenadas.lat,
+                            lng: cliente.coordenadas.lng
+                        });
+                    }
                 });
             }
 
@@ -1671,44 +2170,102 @@
             $('.fab-btn i').toggleClass('fa-plus fa-times');
         }
 
-        // Exportar dados
-        function exportarDados() {
+        // Exportar dados em Excel
+        function exportarExcel() {
+            const selecionados = getClientesSelecionados();
+            if (selecionados.length === 0) {
+                Swal.fire('Aviso', 'Selecione ao menos um cliente para exportar', 'warning');
+                return;
+            }
+
             showLoading();
 
+            // Preparar dados incluindo rota se calculada
+            const dadosExport = {
+                clientes: selecionados,
+                rota: rotaCalculada || null
+            };
+
             $.ajax({
-                url: '/carteira/mapa/api/exportar-mapa',
+                url: '/carteira/mapa/api/exportar-excel',
                 method: 'POST',
                 contentType: 'application/json',
                 headers: {
                     'X-CSRFToken': getCSRFToken()
                 },
-                data: JSON.stringify({
-                    pedidos: pedidosSelecionados,
-                    incluir_rota: true,
-                    incluir_densidade: true
-                }),
-                success: function (response) {
-                    if (response.sucesso) {
-                        // Criar download
-                        const dataStr = JSON.stringify(response.dados, null, 2);
-                        const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
-
-                        const exportFileDefaultName = `mapa_pedidos_${new Date().toISOString().slice(0, 10)}.json`;
-
-                        const linkElement = document.createElement('a');
-                        linkElement.setAttribute('href', dataUri);
-                        linkElement.setAttribute('download', exportFileDefaultName);
-                        linkElement.click();
-
-                        Swal.fire('Sucesso', 'Dados exportados com sucesso', 'success');
-                    }
+                data: JSON.stringify(dadosExport),
+                xhrFields: { responseType: 'blob' },
+                success: function (blob) {
                     hideLoading();
+                    // Download do arquivo
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `mapa_pedidos_${new Date().toISOString().slice(0, 10)}.xlsx`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    a.remove();
+                    Swal.fire('Sucesso', 'Arquivo exportado com sucesso!', 'success');
+                },
+                error: function () {
+                    hideLoading();
+                    Swal.fire('Erro', 'Falha ao exportar arquivo', 'error');
+                }
+            });
+        }
+
+        // Cotar frete para clientes selecionados
+        function cotarFrete() {
+            const selecionados = getClientesSelecionados();
+            if (selecionados.length === 0) {
+                Swal.fire('Aviso', 'Selecione ao menos um cliente para cotar frete', 'warning');
+                return;
+            }
+
+            // Coletar todos os num_pedido dos clientes selecionados
+            const pedidos = [];
+            selecionados.forEach(c => {
+                c.pedidos.forEach(p => pedidos.push(p.num_pedido));
+            });
+
+            showLoading();
+
+            $.ajax({
+                url: '/carteira/mapa/api/cotar-frete',
+                method: 'POST',
+                contentType: 'application/json',
+                headers: {
+                    'X-CSRFToken': getCSRFToken()
+                },
+                data: JSON.stringify({ pedidos: pedidos }),
+                success: function (response) {
+                    hideLoading();
+                    if (response.sucesso) {
+                        Swal.fire({
+                            title: 'Cotação de Frete',
+                            text: `${response.total_lotes} lote(s) de separação encontrado(s). Deseja prosseguir para a cotação?`,
+                            icon: 'success',
+                            showCancelButton: true,
+                            confirmButtonText: 'Prosseguir',
+                            cancelButtonText: 'Cancelar'
+                        }).then((result) => {
+                            if (result.isConfirmed) {
+                                window.location.href = response.redirect;
+                            }
+                        });
+                    }
                 },
                 error: function (xhr) {
                     hideLoading();
-                    Swal.fire('Erro', 'Erro ao exportar dados', 'error');
+                    Swal.fire('Erro', xhr.responseJSON?.erro || 'Erro ao processar cotação', 'error');
                 }
             });
+        }
+
+        // Função antiga mantida para compatibilidade
+        function exportarDados() {
+            exportarExcel();
         }
 
         // Show/Hide loading
@@ -1742,11 +2299,6 @@
                 e.preventDefault();
                 calcularMatrizDistancias();
             }
-            // C - Clustering
-            if (e.key === 'c' && !$(e.target).is('input, textarea')) {
-                e.preventDefault();
-                alternarClustering();
-            }
             // ESC - Fechar panels
             if (e.key === 'Escape') {
                 $('#sidePanel').hide();
@@ -1760,8 +2312,6 @@
         src="https://maps.googleapis.com/maps/api/js?key={{ api_key }}&callback=initMap&libraries=geometry,visualization,places&language=pt-BR">
         </script>
 
-    <!-- MarkerClusterer -->
-    <script src="https://unpkg.com/@googlemaps/markerclusterer/dist/index.min.js"></script>
 </body>
 
 </html>
