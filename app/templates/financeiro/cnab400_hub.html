@@ -88,6 +88,12 @@
             </p>
         </div>
         <div class="cnab-header__actions">
+            <a href="{{ url_for('cnab400.api_exportar_todas_pendencias') }}"
+               class="btn-cnab btn-cnab--outline"
+               title="Exportar todas as pendências em Excel">
+                <i class="fas fa-file-excel"></i>
+                Exportar Pendências
+            </a>
             <a href="{{ url_for('cnab400.upload') }}" class="btn-cnab btn-cnab--primary">
                 <i class="fas fa-upload"></i>
                 Upload de Arquivo

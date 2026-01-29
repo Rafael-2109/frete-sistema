@@ -398,6 +398,157 @@ def _exportar_contas_pagar(data_inicio: date = None, data_fim: date = None, stat
     )
 
 
+def _exportar_cnab_pendencias_todas():
+    """
+    Exporta itens CNAB com pendências de TODOS os lotes para Excel.
+
+    Pendências incluem:
+    - SEM_MATCH: Título não encontrado
+    - FORMATO_INVALIDO: Seu Número não parseável
+    - ERRO: Erro no processamento
+    - MATCH_ENCONTRADO sem extrato vinculado
+    - MATCH_ENCONTRADO com extrato SEM_MATCH
+
+    Returns:
+        Arquivo Excel para download
+    """
+    from app.financeiro.models import CnabRetornoItem, CnabRetornoLote
+    from sqlalchemy import and_
+    from sqlalchemy.orm import joinedload
+
+    # Query com eager loading para performance
+    query = CnabRetornoItem.query.join(CnabRetornoLote).options(
+        joinedload(CnabRetornoItem.lote),
+        joinedload(CnabRetornoItem.conta_a_receber),
+        joinedload(CnabRetornoItem.extrato_item)
+    ).filter(
+        or_(
+            # Sem título vinculado
+            CnabRetornoItem.status_match == 'SEM_MATCH',
+            # Formato inválido
+            CnabRetornoItem.status_match == 'FORMATO_INVALIDO',
+            # Erro no processamento
+            CnabRetornoItem.status_match == 'ERRO',
+            # Com título mas sem extrato
+            and_(
+                CnabRetornoItem.status_match == 'MATCH_ENCONTRADO',
+                CnabRetornoItem.extrato_item_id.is_(None)
+            ),
+            # Com título mas extrato sem match
+            and_(
+                CnabRetornoItem.status_match == 'MATCH_ENCONTRADO',
+                CnabRetornoItem.status_match_extrato == 'SEM_MATCH'
+            ),
+        )
+    ).order_by(
+        CnabRetornoLote.data_arquivo.desc(),
+        CnabRetornoItem.numero_linha
+    )
+
+    itens = query.all()
+
+    # Montar DataFrame
+    dados = []
+    for item in itens:
+        lote = item.lote
+        titulo = item.conta_a_receber
+        extrato = item.extrato_item
+
+        # Calcular motivo e ação
+        motivo, acao = _calcular_motivo_pendencia(item)
+
+        dados.append({
+            # Dados do Lote
+            'Lote ID': lote.id if lote else '',
+            'Arquivo': lote.arquivo_nome if lote else '',
+            'Banco': f"{lote.banco_codigo} - {lote.banco_nome}" if lote else '',
+            'Data Arquivo': lote.data_arquivo.strftime('%d/%m/%Y') if lote and lote.data_arquivo else '',
+
+            # Dados do Item CNAB
+            'Linha': item.numero_linha or '',
+            'Seu Número': item.seu_numero or '',
+            'Nosso Número': item.nosso_numero or '',
+            'Código Ocorrência': item.codigo_ocorrencia or '',
+            'Descrição Ocorrência': item.descricao_ocorrencia or '',
+            'Data Ocorrência': item.data_ocorrencia.strftime('%d/%m/%Y') if item.data_ocorrencia else '',
+            'Vencimento CNAB': item.data_vencimento.strftime('%d/%m/%Y') if item.data_vencimento else '',
+            'Valor Título CNAB': float(item.valor_titulo) if item.valor_titulo else 0,
+            'Valor Pago': float(item.valor_pago) if item.valor_pago else 0,
+            'Valor Juros': float(item.valor_juros) if item.valor_juros else 0,
+            'Valor Desconto': float(item.valor_desconto) if item.valor_desconto else 0,
+            'NF Extraída': item.nf_extraida or '',
+            'Parcela Extraída': item.parcela_extraida or '',
+            'CNPJ Pagador': item.cnpj_pagador or '',
+
+            # Dados do Título (se vinculado)
+            'Título ID': titulo.id if titulo else '',
+            'Empresa': titulo.empresa_nome if titulo else '',
+            'NF Título': titulo.titulo_nf if titulo else '',
+            'Parcela Título': titulo.parcela if titulo else '',
+            'CNPJ Cliente': titulo.cnpj if titulo else '',
+            'Razão Social': titulo.raz_social_red if titulo else '',
+            'Valor Título': float(titulo.valor_titulo) if titulo and titulo.valor_titulo else '',
+            'Vencimento Título': titulo.vencimento.strftime('%d/%m/%Y') if titulo and titulo.vencimento else '',
+            'Título Pago?': 'Sim' if titulo and titulo.parcela_paga else 'Não',
+
+            # Dados do Extrato (se vinculado)
+            'Extrato ID': extrato.id if extrato else '',
+            'Data Transação': extrato.data_transacao.strftime('%d/%m/%Y') if extrato and extrato.data_transacao else '',
+            'Valor Extrato': float(extrato.valor) if extrato and extrato.valor else '',
+            'Payment Ref': extrato.payment_ref[:100] if extrato and extrato.payment_ref else '',
+            'Status Extrato': extrato.status if extrato else '',
+
+            # Status e Pendências
+            'Status Match Título': item.status_match or '',
+            'Match Score': item.match_score or '',
+            'Match Critério': item.match_criterio or '',
+            'Status Match Extrato': item.status_match_extrato or '',
+            'Motivo Pendência': motivo,
+            'Ação Sugerida': acao,
+            'Erro': item.erro_mensagem or '',
+        })
+
+    # Criar Excel
+    df = pd.DataFrame(dados)
+    output = _gerar_excel(df, 'Pendências CNAB')
+
+    filename = f'cnab_pendencias_{date.today().strftime("%Y-%m-%d")}.xlsx'
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=filename
+    )
+
+
+def _calcular_motivo_pendencia(item):
+    """
+    Calcula o motivo da pendência e ação sugerida para um item CNAB.
+
+    Args:
+        item: CnabRetornoItem
+
+    Returns:
+        Tuple[str, str]: (motivo, ação sugerida)
+    """
+    if item.status_match == 'SEM_MATCH':
+        return 'Título não encontrado no sistema', 'Verificar se NF existe no Contas a Receber ou sincronizar do Odoo'
+
+    if item.status_match == 'FORMATO_INVALIDO':
+        return 'Seu Número não tem formato NF/Parcela válido', 'Vincular manualmente ao título correto'
+
+    if item.status_match == 'ERRO':
+        return f'Erro: {item.erro_mensagem or "desconhecido"}', 'Analisar erro e reprocessar'
+
+    if item.status_match == 'MATCH_ENCONTRADO':
+        if not item.extrato_item_id:
+            return 'Título vinculado, mas sem extrato bancário', 'Importar extrato ou aguardar sincronização'
+        if item.status_match_extrato == 'SEM_MATCH':
+            return 'Título OK, mas extrato não encontrou match', 'Verificar data/valor/CNPJ do extrato'
+
+    return 'Pendência não classificada', 'Analisar manualmente'
+
+
 # ========================================
 # FUNÇÕES AUXILIARES
 # ========================================

@@ -767,3 +767,27 @@ def api_batch_arquivos(batch_id):
             'success': False,
             'error': str(e)
         }), 500
+
+
+# =============================================================================
+# EXPORTAÇÃO DE PENDÊNCIAS
+# =============================================================================
+
+@cnab400_bp.route('/api/exportar-todas-pendencias')
+@login_required
+def api_exportar_todas_pendencias():
+    """
+    API: Exporta itens CNAB com pendências de TODOS os lotes em Excel.
+
+    Pendências incluem:
+    - SEM_MATCH: Título não encontrado
+    - FORMATO_INVALIDO: Seu Número não parseável
+    - ERRO: Erro no processamento
+    - MATCH_ENCONTRADO sem extrato vinculado
+    - MATCH_ENCONTRADO com extrato SEM_MATCH
+
+    Returns:
+        Arquivo Excel para download
+    """
+    from app.financeiro.routes.exportacao import _exportar_cnab_pendencias_todas
+    return _exportar_cnab_pendencias_todas()
