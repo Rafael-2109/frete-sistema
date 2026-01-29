@@ -636,8 +636,10 @@ class BaixaTitulosService:
         Este método corrige diretamente no Odoo:
         1. Despublica a fatura (button_draft)
         2. Zera os títulos ano 2000
-        3. Ajusta o título válido para o valor correto (soma dos títulos)
+        3. Rateia o desconto proporcionalmente entre TODAS as parcelas válidas
         4. Republica a fatura (action_post)
+
+        SUPORTA NFs com N parcelas (não apenas 1).
 
         IMPORTANTE: O Odoo PERMITE despublicar/republicar faturas com pagamentos.
         As reconciliações existentes são PRESERVADAS.
@@ -667,9 +669,26 @@ class BaixaTitulosService:
             )
 
             if not titulos:
-                # Sem títulos, marcar como OK
-                self._nfs_corrigidas_2000.add(nf)
-                return True
+                # Verificar se há títulos em DRAFT (fatura presa por erro anterior)
+                recuperou = self._recuperar_fatura_draft(nf)
+                if recuperou:
+                    # Fatura recuperada, rebuscar títulos agora posted
+                    titulos = self.connection.search_read(
+                        'account.move.line',
+                        [
+                            ['x_studio_nf_e', '=', nf],
+                            ['account_type', '=', 'asset_receivable'],
+                            ['parent_state', '=', 'posted'],
+                            ['debit', '>', 0]
+                        ],
+                        fields=['id', 'debit', 'date_maturity', 'move_id', 'amount_residual'],
+                        limit=20
+                    )
+
+                if not titulos:
+                    # Realmente sem títulos (nem posted nem draft)
+                    self._nfs_corrigidas_2000.add(nf)
+                    return True
 
             # Identificar títulos ano 2000
             titulos_2000 = [
@@ -682,16 +701,16 @@ class BaixaTitulosService:
                 self._nfs_corrigidas_2000.add(nf)
                 return True
 
-            # Identificar título válido (não ano 2000)
-            titulo_valido = next(
-                (t for t in titulos if t.get('date_maturity', '')[:4] != '2000'),
-                None
-            )
+            # Identificar TODAS as parcelas válidas (não ano 2000)
+            parcelas_validas = [
+                t for t in titulos
+                if t.get('date_maturity', '')[:4] != '2000'
+            ]
 
-            if not titulo_valido:
+            if not parcelas_validas:
                 logger.warning(
                     f"[ANO_2000] NF {nf}: Encontrado título ano 2000, "
-                    f"mas não há título válido para corrigir"
+                    f"mas não há parcelas válidas para corrigir"
                 )
                 self._nfs_corrigidas_2000.add(nf)
                 return True
@@ -701,13 +720,18 @@ class BaixaTitulosService:
             if isinstance(move_id, (list, tuple)):
                 move_id = move_id[0]
 
-            # Calcular valor correto (soma de todos os títulos)
-            valor_titulo_correto = sum(t['debit'] for t in titulos)
+            # Calcular desconto total a ratear (soma dos débitos dos títulos 2000)
+            desconto_total = sum(t['debit'] for t in titulos_2000)
+
+            # Calcular soma dos débitos das parcelas válidas (para rateio proporcional)
+            soma_parcelas = sum(t['debit'] for t in parcelas_validas)
 
             logger.info(
                 f"[ANO_2000] NF {nf}: Detectado bug de título ano 2000. "
                 f"Move ID: {move_id}, Títulos 2000: {len(titulos_2000)}, "
-                f"Valor correto: R$ {valor_titulo_correto:.2f}"
+                f"Parcelas válidas: {len(parcelas_validas)}, "
+                f"Desconto a ratear: R$ {desconto_total:.2f}, "
+                f"Soma parcelas: R$ {soma_parcelas:.2f}"
             )
 
             # PASSO 1: Despublicar fatura
@@ -730,20 +754,34 @@ class BaixaTitulosService:
                 except Exception as e:
                     logger.error(f"[ANO_2000] Erro ao zerar título {t['id']}: {e}")
 
-            # PASSO 3: Ajustar título válido para o valor correto
-            try:
-                self.connection.execute_kw(
-                    'account.move.line', 'write',
-                    [[titulo_valido['id']], {'debit': valor_titulo_correto}]
-                )
-                logger.debug(
-                    f"[ANO_2000] Título válido {titulo_valido['id']} ajustado "
-                    f"para R$ {valor_titulo_correto:.2f}"
-                )
-            except Exception as e:
-                logger.error(
-                    f"[ANO_2000] Erro ao ajustar título {titulo_valido['id']}: {e}"
-                )
+            # PASSO 3: Ratear desconto proporcionalmente entre TODAS as parcelas válidas
+            desconto_rateado_total = 0.0
+            for i, parcela in enumerate(parcelas_validas):
+                if i < len(parcelas_validas) - 1:
+                    # Rateio proporcional
+                    proporcao = parcela['debit'] / soma_parcelas
+                    desconto_parcela = round(desconto_total * proporcao, 2)
+                else:
+                    # Última parcela recebe o residual (evita diferença de centavos)
+                    desconto_parcela = round(desconto_total - desconto_rateado_total, 2)
+
+                novo_debit = round(parcela['debit'] + desconto_parcela, 2)
+                desconto_rateado_total += desconto_parcela
+
+                try:
+                    self.connection.execute_kw(
+                        'account.move.line', 'write',
+                        [[parcela['id']], {'debit': novo_debit}]
+                    )
+                    logger.debug(
+                        f"[ANO_2000] Parcela {parcela['id']}: "
+                        f"debit {parcela['debit']:.2f} → {novo_debit:.2f} "
+                        f"(+{desconto_parcela:.2f} desconto rateado)"
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"[ANO_2000] Erro ao ajustar parcela {parcela['id']}: {e}"
+                    )
 
             # PASSO 4: Verificar equilíbrio
             lines = self.connection.search_read(
@@ -822,8 +860,8 @@ class BaixaTitulosService:
 
             logger.info(
                 f"[ANO_2000] NF {nf} corrigida com sucesso. "
-                f"Título válido: {titulo_valido['id']}, "
-                f"Valor: R$ {valor_titulo_correto:.2f}"
+                f"Parcelas ajustadas: {len(parcelas_validas)}, "
+                f"Desconto rateado: R$ {desconto_total:.2f}"
             )
 
             return True
@@ -832,6 +870,155 @@ class BaixaTitulosService:
             logger.error(f"[ANO_2000] Erro inesperado ao corrigir NF {nf}: {e}")
             # Marcar como processada para não tentar novamente
             self._nfs_corrigidas_2000.add(nf)
+            return False
+
+    def _recuperar_fatura_draft(self, nf: str) -> bool:
+        """
+        Recupera fatura presa em DRAFT por erro anterior de _corrigir_titulo_ano_2000.
+
+        Quando a correção anterior falhou (ex: fatura desbalanceada com N parcelas),
+        a fatura ficou em draft e nunca foi republicada. Este método:
+        1. Busca títulos em draft para esta NF
+        2. Zera títulos ano 2000 remanescentes
+        3. Reequilibra débito/crédito distribuindo proporcionalmente entre parcelas
+        4. Republica a fatura
+
+        Args:
+            nf: Número da NF-e
+
+        Returns:
+            True se recuperou a fatura, False se não havia fatura em draft
+        """
+        try:
+            titulos_draft = self.connection.search_read(
+                'account.move.line',
+                [
+                    ['x_studio_nf_e', '=', nf],
+                    ['account_type', '=', 'asset_receivable'],
+                    ['parent_state', '=', 'draft'],
+                    ['debit', '>', 0]
+                ],
+                fields=['id', 'debit', 'date_maturity', 'move_id', 'amount_residual'],
+                limit=20
+            )
+
+            if not titulos_draft:
+                return False
+
+            # Fatura presa em draft encontrada!
+            move_id = titulos_draft[0]['move_id']
+            if isinstance(move_id, (list, tuple)):
+                move_id = move_id[0]
+
+            logger.warning(
+                f"[ANO_2000] NF {nf}: Fatura {move_id} encontrada em DRAFT "
+                f"(provavelmente presa por erro anterior). Tentando recuperar..."
+            )
+
+            # Zerar títulos ano 2000 que possam existir em draft
+            titulos_2000_draft = [
+                t for t in titulos_draft
+                if t.get('date_maturity', '')[:4] == '2000'
+            ]
+            for t in titulos_2000_draft:
+                try:
+                    self.connection.execute_kw(
+                        'account.move.line', 'write',
+                        [[t['id']], {'debit': 0, 'credit': 0}]
+                    )
+                    logger.debug(f"[ANO_2000] Título draft {t['id']} zerado")
+                except Exception as e:
+                    logger.error(f"[ANO_2000] Erro ao zerar título draft {t['id']}: {e}")
+
+            # Verificar equilíbrio antes de republicar
+            lines = self.connection.search_read(
+                'account.move.line',
+                [['move_id', '=', move_id]],
+                fields=['id', 'debit', 'credit', 'date_maturity', 'account_type'],
+                limit=100
+            )
+            total_debito = sum(line['debit'] for line in lines)
+            total_credito = sum(line['credit'] for line in lines)
+
+            # Se desbalanceada, recalcular parcelas válidas
+            if abs(total_debito - total_credito) > 0.01:
+                logger.warning(
+                    f"[ANO_2000] Fatura {move_id} em DRAFT desbalanceada. "
+                    f"Débito: {total_debito:.2f}, Crédito: {total_credito:.2f}. "
+                    f"Recalculando parcelas..."
+                )
+
+                # Parcelas válidas = receivable + debit > 0 + não ano 2000
+                parcelas_validas_draft = [
+                    line for line in lines
+                    if line.get('account_type') == 'asset_receivable'
+                    and line['debit'] > 0
+                    and line.get('date_maturity', '')[:4] != '2000'
+                ]
+
+                if parcelas_validas_draft:
+                    # Distribuir total_credito entre parcelas proporcionalmente
+                    soma_debits = sum(p['debit'] for p in parcelas_validas_draft)
+                    rateado_total = 0.0
+
+                    for i, parcela in enumerate(parcelas_validas_draft):
+                        if i < len(parcelas_validas_draft) - 1:
+                            if soma_debits > 0:
+                                proporcao = parcela['debit'] / soma_debits
+                            else:
+                                proporcao = 1.0 / len(parcelas_validas_draft)
+                            novo_debit = round(total_credito * proporcao, 2)
+                        else:
+                            # Última parcela recebe residual
+                            novo_debit = round(total_credito - rateado_total, 2)
+
+                        rateado_total += novo_debit
+
+                        try:
+                            self.connection.execute_kw(
+                                'account.move.line', 'write',
+                                [[parcela['id']], {'debit': novo_debit}]
+                            )
+                            logger.debug(
+                                f"[ANO_2000] Parcela draft {parcela['id']}: "
+                                f"debit {parcela['debit']:.2f} → {novo_debit:.2f}"
+                            )
+                        except Exception as e:
+                            logger.error(
+                                f"[ANO_2000] Erro ao ajustar parcela draft {parcela['id']}: {e}"
+                            )
+
+            # Tentar republicar
+            try:
+                self.connection.execute_kw('account.move', 'action_post', [[move_id]])
+                logger.info(
+                    f"[ANO_2000] Fatura {move_id} republicada com sucesso "
+                    f"(recuperação de draft)"
+                )
+                return True
+            except Exception as e:
+                if "cannot marshal None" in str(e):
+                    # Verificar se postou mesmo com erro XML-RPC
+                    move_check = self.connection.search_read(
+                        'account.move',
+                        [['id', '=', move_id]],
+                        fields=['state'],
+                        limit=1
+                    )
+                    if move_check and move_check[0]['state'] == 'posted':
+                        logger.info(
+                            f"[ANO_2000] Fatura {move_id} republicada "
+                            f"(ignorando erro XML-RPC)"
+                        )
+                        return True
+
+                logger.error(
+                    f"[ANO_2000] Falha ao republicar fatura {move_id} em draft: {e}"
+                )
+                return False
+
+        except Exception as e:
+            logger.error(f"[ANO_2000] Erro ao recuperar fatura draft NF {nf}: {e}")
             return False
 
     def _buscar_titulo_por_id(self, titulo_id: int) -> Optional[Dict]:

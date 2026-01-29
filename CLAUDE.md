@@ -122,15 +122,6 @@ R$ {{ item.preco_nf|numero_br(4) }}
 R$ {{ (item.qtd * item.preco)|numero_br(2) }}
 ```
 
-### NUNCA usar format do Python em templates:
-```jinja
-{# ERRADO - formato americano #}
-{{ "%.2f"|format(valor) }}
-
-{# CORRETO - formato brasileiro #}
-{{ valor|numero_br(2) }}
-```
-
 ---
 
 # INDICE DE REFERENCIAS
@@ -639,47 +630,6 @@ Usuario: "Como fazer bulk insert com SQLAlchemy?"
 | `ralph-wiggum` | `.claude/skills/ralph-wiggum/` | Loops autonomos de desenvolvimento com IA (Ralph Wiggum technique) |
 | `prd-generator` | `.claude/skills/prd-generator/` | Gera specs/PRDs para Ralph Loop via perguntas iterativas |
 
-## Ralph Wiggum (Loops Autonomos)
-
-O Ralph Wiggum e uma tecnica de desenvolvimento autonomo com loops de IA. Permite que o Claude execute tarefas em ciclos automaticos com planejamento, implementacao e validacao.
-
-### Arquivos do Ralph Wiggum 
-
-Localizados em: `.claude/ralph-loop/`
-
-| Arquivo | Descricao |
-|---------|-----------|
-| `ralph-loop.sh` | Script principal do loop |
-| `PROMPT_plan.md` | Prompt para modo planejamento |
-| `PROMPT_build.md` | Prompt para modo construcao |
-| `AGENTS.md` | Guia operacional (comandos, padroes) |
-| `IMPLEMENTATION_PLAN.md` | Plano priorizado (gerado automaticamente) |
-| `specs/` | Diretorio de especificacoes |
-
-### Uso Rapido
-
-```bash
-# Modo planejamento (3 iteracoes)
-./ralph-loop.sh plan 3
-
-# Modo construcao (10 iteracoes)
-./ralph-loop.sh 10
-
-# Com Docker (RECOMENDADO para seguranca)
-docker-compose -f docker-compose.ralph.yml run ralph
-./ralph-loop.sh plan 3
-```
-
-### Quando Usar
-
-- Implementar features com multiplos arquivos
-- Tarefas repetitivas que requerem contexto fresco
-- Desenvolvimento autonomo com backpressure (testes)
-- Quando precisar de planejamento antes de implementacao
-
-### Seguranca
-
-⚠️ O Ralph usa `--dangerously-skip-permissions`. **SEMPRE usar Docker** para isolar credenciais.
 
 ---
 

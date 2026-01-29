@@ -25,7 +25,8 @@ import sys
 import os
 import argparse
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
 from typing import Dict, List, Set, Optional, Any
 from collections import defaultdict
 
@@ -84,7 +85,8 @@ def extrair_mapeamento_completo(
     data_inicio: str,
     data_fim: str,
     limit: int = 50000,
-    apenas_pagamentos: bool = False
+    apenas_pagamentos: bool = False,
+    margem_meses: int = 1
 ) -> Dict:
     """
     Extrai mapeamento completo de vínculos financeiros.
@@ -95,15 +97,27 @@ def extrair_mapeamento_completo(
         data_fim: Data fim (YYYY-MM-DD)
         limit: Limite por tipo de registro
         apenas_pagamentos: Se True, filtra apenas extratos < 0 (pagamentos)
+        margem_meses: Meses extras ANTES de data_inicio para extrato (default: 1)
     """
+    # Calcular data expandida para extratos (com margem)
+    dt_inicio = datetime.strptime(data_inicio, '%Y-%m-%d')
+    dt_inicio_expandido = dt_inicio - relativedelta(months=margem_meses)
+    data_inicio_extrato = dt_inicio_expandido.strftime('%Y-%m-%d')
+
     print(f"\n{'='*70}", file=sys.stderr)
     print(f"MAPEAMENTO COMPLETO DE VÍNCULOS FINANCEIROS", file=sys.stderr)
-    print(f"Período: {data_inicio} a {data_fim}", file=sys.stderr)
+    print(f"Período faturas: {data_inicio} a {data_fim}", file=sys.stderr)
+    print(f"Período extratos: {data_inicio_extrato} a {data_fim} (margem: -{margem_meses} mês)", file=sys.stderr)
     print(f"Filtro: {'Apenas pagamentos (< 0)' if apenas_pagamentos else 'Todos'}", file=sys.stderr)
     print(f"{'='*70}", file=sys.stderr)
 
     resultado = {
-        'periodo': {'data_inicio': data_inicio, 'data_fim': data_fim},
+        'periodo': {
+            'data_inicio': data_inicio,
+            'data_fim': data_fim,
+            'data_inicio_extrato': data_inicio_extrato,
+            'margem_meses': margem_meses
+        },
         'timestamp': datetime.now().isoformat(),
         'extratos': [],
         'titulos': [],
@@ -114,12 +128,12 @@ def extrair_mapeamento_completo(
     }
 
     # =========================================================================
-    # ETAPA 1: EXTRAIR LINHAS DE EXTRATO
+    # ETAPA 1: EXTRAIR LINHAS DE EXTRATO (com margem expandida)
     # =========================================================================
-    print(f"\n[1/11] Buscando linhas de extrato...", file=sys.stderr)
+    print(f"\n[1/11] Buscando linhas de extrato (desde {data_inicio_extrato})...", file=sys.stderr)
 
     domain_extrato = [
-        ('date', '>=', data_inicio),
+        ('date', '>=', data_inicio_extrato),
         ('date', '<=', data_fim),
     ]
     if apenas_pagamentos:
@@ -314,13 +328,16 @@ def extrair_mapeamento_completo(
 
     # =========================================================================
     # ETAPA 7: BUSCAR FATURAS E NOTAS DE CRÉDITO
+    #   ESTRATÉGIA: buscar por DATA do período expandido + por VÍNCULO
+    #   (titulo_move_ids vindos da cadeia de conciliação, sem filtro de data)
     # =========================================================================
-    print(f"[7/11] Buscando faturas do período...", file=sys.stderr)
+    print(f"[7/11] Buscando faturas do período + vinculadas...", file=sys.stderr)
 
+    # 7a: Faturas do período (com margem expandida, mesma do extrato)
     domain_fatura = [
         ('move_type', 'in', ['in_invoice', 'in_refund']),
         ('state', '=', 'posted'),
-        ('invoice_date', '>=', data_inicio),
+        ('invoice_date', '>=', data_inicio_extrato),
         ('invoice_date', '<=', data_fim),
     ]
 
@@ -334,15 +351,45 @@ def extrair_mapeamento_completo(
         ],
         limit=limit
     )
+    faturas_ids_ja_obtidos = set(f['id'] for f in faturas_raw)
+    print(f"    Faturas por data: {len(faturas_raw)}", file=sys.stderr)
+
+    # 7b: Faturas vinculadas via cadeia de conciliação (titulo_move_ids)
+    #     Estas são faturas cujos títulos foram encontrados nas etapas 2-6,
+    #     mas que podem ter data FORA do período. Ex: fatura de junho/2024
+    #     conciliada com extrato de agosto/2024.
+    faturas_vinculadas_ids = [
+        mid for mid in titulo_move_ids if mid not in faturas_ids_ja_obtidos
+    ]
+
+    if faturas_vinculadas_ids:
+        print(f"    Buscando {len(faturas_vinculadas_ids)} faturas vinculadas fora do período...", file=sys.stderr)
+        for chunk in chunked(list(faturas_vinculadas_ids), 100):
+            faturas_extra = odoo.search_read(
+                'account.move',
+                [
+                    ('id', 'in', chunk),
+                    ('move_type', 'in', ['in_invoice', 'in_refund']),
+                    ('state', '=', 'posted'),
+                ],
+                fields=[
+                    'id', 'name', 'ref', 'move_type', 'partner_id', 'invoice_date',
+                    'amount_total', 'amount_residual', 'payment_state', 'invoice_origin',
+                    'reversed_entry_id', 'l10n_br_numero_nota_fiscal', 'l10n_br_chave_nf'
+                ],
+                limit=len(chunk)
+            )
+            faturas_raw.extend(faturas_extra)
+            faturas_ids_ja_obtidos.update(f['id'] for f in faturas_extra)
+        print(f"    Faturas extra vinculadas: {len(faturas_raw) - len(faturas_ids_ja_obtidos) + len(faturas_vinculadas_ids)}", file=sys.stderr)
 
     # Separar faturas e notas de crédito
     faturas_lista = [f for f in faturas_raw if f.get('move_type') == 'in_invoice']
     notas_credito_lista = [f for f in faturas_raw if f.get('move_type') == 'in_refund']
 
-    print(f"    Faturas: {len(faturas_lista)}, Notas de crédito: {len(notas_credito_lista)}", file=sys.stderr)
+    print(f"    TOTAL: Faturas: {len(faturas_lista)}, Notas de crédito: {len(notas_credito_lista)}", file=sys.stderr)
 
     fatura_ids = [f['id'] for f in faturas_lista]
-    nc_ids = [nc['id'] for nc in notas_credito_lista]
 
     # =========================================================================
     # ETAPA 8: BUSCAR TÍTULOS DAS FATURAS
@@ -844,11 +891,17 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Exemplos:
-  # Extrato de 2024 até hoje
+  # Extrato de 2024 até hoje (com -1 mês margem = desde jun/2024)
   python mapeamento_vinculos_completo.py --inicio 2024-07-01 --fim 2025-12-31
 
   # Apenas pagamentos (< 0)
   python mapeamento_vinculos_completo.py --inicio 2024-07-01 --fim 2025-12-31 --pagamentos
+
+  # Com margem de 2 meses (busca extratos desde mai/2024)
+  python mapeamento_vinculos_completo.py --inicio 2024-07-01 --fim 2025-12-31 --margem 2
+
+  # Sem margem (comportamento antigo)
+  python mapeamento_vinculos_completo.py --inicio 2024-07-01 --fim 2025-12-31 --margem 0
 
   # Exportar JSON completo
   python mapeamento_vinculos_completo.py --inicio 2024-07-01 --fim 2025-12-31 --json
@@ -862,6 +915,9 @@ Exemplos:
     parser.add_argument('--fim', type=str, required=True, help='Data fim (YYYY-MM-DD)')
     parser.add_argument('--limit', type=int, default=50000, help='Limite por tipo (default: 50000)')
     parser.add_argument('--pagamentos', action='store_true', help='Apenas extratos < 0 (pagamentos)')
+    parser.add_argument('--margem', type=int, default=1,
+                        help='Meses de margem ANTES de data_inicio para extratos (default: 1). '
+                             'Permite capturar extratos que vinculam a faturas anteriores ao período.')
     parser.add_argument('--json', action='store_true', help='Saída em JSON completo')
     parser.add_argument('--excel', action='store_true', help='Saída em JSON tabular (para Excel)')
 
@@ -884,7 +940,8 @@ Exemplos:
         args.inicio,
         args.fim,
         args.limit,
-        args.pagamentos
+        args.pagamentos,
+        args.margem
     )
 
     if args.json:

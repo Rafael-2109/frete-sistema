@@ -284,6 +284,15 @@
                 </a></li>
               {% endif %}
 
+              {# ================================================================= #}
+              {# COMPROVANTES DE PAGAMENTO DE BOLETO                               #}
+              {# ================================================================= #}
+              {% if current_user.pode_acessar_financeiro() or current_user.perfil == 'administrador' %}
+              <li><a class="dropdown-item" href="{{ url_for('financeiro.comprovantes_hub') }}">
+                  <i class="fas fa-receipt text-warning"></i> Comprovantes Boleto
+                </a></li>
+              {% endif %}
+
             </ul>
           </li>
           {% endif %}

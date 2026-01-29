@@ -17,6 +17,7 @@ Estrutura:
 - extrato.py             - Conciliação via extrato bancário (NEW)
 - pagamentos_baixas.py   - Baixa de pagamentos via extrato (NEW)
 - dashboard.py           - Dashboard central financeiro (NEW)
+- comprovantes.py        - Upload e listagem de comprovantes de pagamento de boleto (NEW)
 """
 
 import os
@@ -45,3 +46,4 @@ from app.financeiro.routes import pagamentos_baixas
 from app.financeiro.routes import contas_pagar
 from app.financeiro.routes import exportacao
 from app.financeiro.routes import dashboard
+from app.financeiro.routes import comprovantes

@@ -1,0 +1,870 @@
+{% extends "base.html" %}
+
+{% block title %}Comprovantes de Pagamento{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
+<style>
+    .status-novo { color: var(--bs-success); }
+    .status-duplicado { color: var(--bs-warning); }
+    .status-erro { color: var(--bs-danger); }
+    .status-vinculado { color: var(--bs-info); }
+    .status-sem_match { color: var(--bs-secondary); }
+    .status-ja_vinculado { color: var(--bs-warning); }
+    .badge-ofx { font-size: 0.7em; }
+    .badge-odoo { font-size: 0.7em; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4" style="max-width: 1400px;">
+
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-0">
+                <i class="fas fa-receipt text-warning"></i>
+                Comprovantes de Pagamento de Boleto
+            </h2>
+            <small class="text-muted">
+                <span id="total-comprovantes">{{ total_comprovantes }}</span> comprovante(s) importado(s)
+            </small>
+        </div>
+        <a href="{{ url_for('financeiro.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-arrow-left"></i> Central Financeira
+        </a>
+    </div>
+
+    <!-- Painel de Progresso (oculto) -->
+    <div id="painel-progresso" class="card shadow-sm mb-4" style="display: none;">
+        <div class="card-header bg-primary text-white">
+            <strong><i class="fas fa-cog fa-spin me-2"></i> Processando Comprovantes</strong>
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <div class="d-flex justify-content-between mb-1">
+                    <span id="progresso-texto">Iniciando...</span>
+                    <span id="progresso-contagem">0/0</span>
+                </div>
+                <div class="progress" style="height: 20px;">
+                    <div id="progresso-barra" class="progress-bar progress-bar-striped progress-bar-animated"
+                         role="progressbar" style="width: 0%">0%</div>
+                </div>
+            </div>
+            <div class="row text-center mb-3">
+                <div class="col-4">
+                    <div class="rounded p-2" style="background: var(--bs-success-bg-subtle);">
+                        <div class="fs-4 fw-bold text-success" id="stat-novos">0</div>
+                        <small class="text-muted">Novos</small>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="rounded p-2" style="background: var(--bs-warning-bg-subtle);">
+                        <div class="fs-4 fw-bold text-warning" id="stat-duplicados">0</div>
+                        <small class="text-muted">Duplicados</small>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="rounded p-2" style="background: var(--bs-danger-bg-subtle);">
+                        <div class="fs-4 fw-bold text-danger" id="stat-erros">0</div>
+                        <small class="text-muted">Erros</small>
+                    </div>
+                </div>
+            </div>
+            <div id="lista-resultados" class="small" style="max-height: 250px; overflow-y: auto;"></div>
+        </div>
+        <div class="card-footer" id="progresso-footer" style="display: none;">
+            <button class="btn btn-outline-secondary btn-sm" onclick="fecharProgresso()">
+                <i class="fas fa-times"></i> Fechar
+            </button>
+        </div>
+    </div>
+
+    <!-- Card de Upload -->
+    <div id="card-upload" class="card shadow-sm mb-4">
+        <div class="card-header bg-light">
+            <strong><i class="fas fa-cloud-upload-alt"></i> Importar Comprovantes</strong>
+        </div>
+        <div class="card-body">
+            <!-- Inputs ocultos (fora de qualquer container clicável) -->
+            <input type="file" id="input-arquivos" accept=".pdf" multiple style="display: none;">
+            <input type="file" id="input-pasta" webkitdirectory style="display: none;">
+
+            <!-- Botões de seleção -->
+            <div class="d-flex gap-2 mb-3">
+                <button type="button" class="btn btn-outline-secondary" id="btn-selecionar-arquivos">
+                    <i class="fas fa-file-pdf"></i> Selecionar Arquivo(s)
+                </button>
+                <button type="button" class="btn btn-outline-secondary" id="btn-selecionar-pasta">
+                    <i class="fas fa-folder-open"></i> Selecionar Pasta
+                </button>
+            </div>
+
+            <!-- Lista de arquivos selecionados -->
+            <div id="arquivos-selecionados" style="display: none;">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <strong><i class="fas fa-list me-1"></i> Arquivos Selecionados</strong>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-limpar">
+                        <i class="fas fa-times"></i> Limpar
+                    </button>
+                </div>
+                <div id="lista-selecionados" class="list-group list-group-flush small"
+                     style="max-height: 200px; overflow-y: auto;"></div>
+            </div>
+
+            <hr>
+            <button type="button" id="btn-processar" class="btn btn-primary" disabled>
+                <i class="fas fa-upload"></i> Processar <span id="contagem-arquivos">(0 arquivos)</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Card de Upload OFX -->
+    <div id="card-upload-ofx" class="card shadow-sm mb-4">
+        <div class="card-header bg-light">
+            <strong><i class="fas fa-file-code text-info"></i> Importar Extrato OFX</strong>
+            <small class="text-muted ms-2">Vincular comprovantes com extrato bancario e Odoo</small>
+        </div>
+        <div class="card-body">
+            <input type="file" id="input-ofx" accept=".ofx" style="display: none;">
+
+            <div class="d-flex gap-2 mb-3">
+                <button type="button" class="btn btn-outline-info" id="btn-selecionar-ofx">
+                    <i class="fas fa-file-code"></i> Selecionar Arquivo OFX
+                </button>
+            </div>
+
+            <div id="ofx-arquivo-selecionado" style="display: none;" class="mb-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-file-code text-info me-2"></i> <strong id="ofx-nome-arquivo"></strong></span>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-limpar-ofx">
+                        <i class="fas fa-times"></i> Limpar
+                    </button>
+                </div>
+            </div>
+
+            <button type="button" id="btn-processar-ofx" class="btn btn-info text-white" disabled>
+                <i class="fas fa-link"></i> Importar e Vincular
+            </button>
+        </div>
+        <!-- Resultado da vinculação OFX -->
+        <div id="ofx-resultado" class="card-footer" style="display: none;">
+            <div class="row text-center mb-2">
+                <div class="col">
+                    <div class="fs-5 fw-bold text-info" id="ofx-stat-total">0</div>
+                    <small class="text-muted">Transacoes</small>
+                </div>
+                <div class="col">
+                    <div class="fs-5 fw-bold text-success" id="ofx-stat-vinculados">0</div>
+                    <small class="text-muted">Vinculados</small>
+                </div>
+                <div class="col">
+                    <div class="fs-5 fw-bold text-primary" id="ofx-stat-odoo">0</div>
+                    <small class="text-muted">Com Odoo</small>
+                </div>
+                <div class="col">
+                    <div class="fs-5 fw-bold text-warning" id="ofx-stat-sem-comp">0</div>
+                    <small class="text-muted">Sem Comprovante</small>
+                </div>
+                <div class="col">
+                    <div class="fs-5 fw-bold text-secondary" id="ofx-stat-sem-odoo">0</div>
+                    <small class="text-muted">Sem Odoo</small>
+                </div>
+                <div class="col">
+                    <div class="fs-5 fw-bold text-muted" id="ofx-stat-ja-vinculados">0</div>
+                    <small class="text-muted">Ja Vinculados</small>
+                </div>
+            </div>
+            <div id="ofx-lista-detalhes" class="small" style="max-height: 200px; overflow-y: auto;"></div>
+        </div>
+    </div>
+
+    <!-- Tabela de Comprovantes -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+            <strong><i class="fas fa-table"></i> Comprovantes Importados</strong>
+            <button class="btn btn-sm btn-outline-primary" onclick="recarregarTabela()">
+                <i class="fas fa-sync"></i> Atualizar
+            </button>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table id="tabela-comprovantes" class="table table-striped table-hover mb-0" style="width: 100%;">
+                    <thead>
+                        <tr>
+                            <th>Data Pgto</th>
+                            <th>Beneficiário</th>
+                            <th>Pagador</th>
+                            <th>N. Documento</th>
+                            <th>N. Agendamento</th>
+                            <th>OFX</th>
+                            <th>Odoo</th>
+                            <th class="text-end">Vl. Documento</th>
+                            <th class="text-end">Desconto</th>
+                            <th class="text-end">Juros/Multa</th>
+                            <th class="text-end">Vl. Pago</th>
+                            <th>Vencimento</th>
+                            <th>Arquivo</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // =========================================================================
+    // SELEÇÃO DE ARQUIVOS / PASTA
+    // =========================================================================
+    const inputArquivos = document.getElementById('input-arquivos');
+    const inputPasta = document.getElementById('input-pasta');
+    const listaSelecionados = document.getElementById('lista-selecionados');
+    const divSelecionados = document.getElementById('arquivos-selecionados');
+    const btnProcessar = document.getElementById('btn-processar');
+    const contagemArquivos = document.getElementById('contagem-arquivos');
+    const btnLimpar = document.getElementById('btn-limpar');
+
+    let arquivosSelecionados = [];
+
+    // Botão "Selecionar Arquivo(s)"
+    document.getElementById('btn-selecionar-arquivos').addEventListener('click', () => {
+        inputArquivos.click();
+    });
+
+    // Botão "Selecionar Pasta"
+    document.getElementById('btn-selecionar-pasta').addEventListener('click', () => {
+        inputPasta.click();
+    });
+
+    inputArquivos.addEventListener('change', () => {
+        const files = Array.from(inputArquivos.files);
+        adicionarArquivos(files);
+        inputArquivos.value = '';
+    });
+
+    inputPasta.addEventListener('change', () => {
+        const files = Array.from(inputPasta.files).filter(f => f.name.toLowerCase().endsWith('.pdf'));
+        adicionarArquivos(files);
+        inputPasta.value = '';
+    });
+
+    btnLimpar.addEventListener('click', () => {
+        arquivosSelecionados = [];
+        atualizarLista();
+    });
+
+    function adicionarArquivos(files) {
+        for (const f of files) {
+            // Evitar duplicados pelo nome
+            if (!arquivosSelecionados.find(a => a.name === f.name)) {
+                arquivosSelecionados.push(f);
+            }
+        }
+        atualizarLista();
+    }
+
+    function atualizarLista() {
+        if (arquivosSelecionados.length === 0) {
+            divSelecionados.style.display = 'none';
+            btnProcessar.disabled = true;
+            contagemArquivos.textContent = '(0 arquivos)';
+            return;
+        }
+
+        divSelecionados.style.display = 'block';
+        btnProcessar.disabled = false;
+        contagemArquivos.textContent = `(${arquivosSelecionados.length} arquivo${arquivosSelecionados.length > 1 ? 's' : ''})`;
+
+        listaSelecionados.innerHTML = arquivosSelecionados.map((f, i) => `
+            <div class="list-group-item d-flex justify-content-between align-items-center py-1">
+                <span><i class="fas fa-file-pdf text-danger me-2"></i>${f.name}</span>
+                <button class="btn btn-sm btn-link text-danger p-0" onclick="removerArquivo(${i})">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `).join('');
+    }
+
+    window.removerArquivo = function(idx) {
+        arquivosSelecionados.splice(idx, 1);
+        atualizarLista();
+    };
+
+    // =========================================================================
+    // FETCH COM RETRY (proteção SSL/conexão)
+    // =========================================================================
+    async function fetchComRetry(url, options, maxRetries = 3) {
+        for (let i = 0; i < maxRetries; i++) {
+            try {
+                const resp = await fetch(url, options);
+                return resp;
+            } catch (err) {
+                console.warn(`Tentativa ${i + 1}/${maxRetries} falhou: ${err.message}`);
+                if (i < maxRetries - 1) {
+                    await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+                    continue;
+                }
+                throw err;
+            }
+        }
+    }
+
+    // =========================================================================
+    // CSRF HEADER
+    // =========================================================================
+    function getCsrfHeaders() {
+        const csrf = document.querySelector('meta[name="csrf-token"]');
+        return csrf ? { 'X-CSRFToken': csrf.content } : {};
+    }
+
+    // =========================================================================
+    // UPLOAD / PROCESSAMENTO — DECISÃO AUTOMÁTICA
+    // =========================================================================
+    const LIMITE_MODO_SINCRONO = 5;   // Até 5 arquivos → síncrono
+    const CHUNK_SIZE = 50;            // PDFs por request no modo batch
+
+    btnProcessar.addEventListener('click', async () => {
+        if (arquivosSelecionados.length === 0) return;
+
+        if (arquivosSelecionados.length <= LIMITE_MODO_SINCRONO) {
+            await processarSincrono();
+        } else {
+            await processarBatch();
+        }
+    });
+
+    // =========================================================================
+    // MODO SÍNCRONO (1-5 PDFs — uso diário)
+    // =========================================================================
+    async function processarSincrono() {
+        iniciarPainel();
+
+        const barra = document.getElementById('progresso-barra');
+        const texto = document.getElementById('progresso-texto');
+        const contagem = document.getElementById('progresso-contagem');
+        const statNovos = document.getElementById('stat-novos');
+        const statDuplicados = document.getElementById('stat-duplicados');
+        const statErros = document.getElementById('stat-erros');
+        const listaResultados = document.getElementById('lista-resultados');
+
+        let totalNovos = 0, totalDuplicados = 0, totalErros = 0;
+        const total = arquivosSelecionados.length;
+
+        for (let i = 0; i < total; i++) {
+            const arquivo = arquivosSelecionados[i];
+            const pct = Math.round(((i) / total) * 100);
+
+            texto.textContent = `Processando: ${arquivo.name}`;
+            contagem.textContent = `${i + 1}/${total}`;
+            barra.style.width = pct + '%';
+            barra.textContent = pct + '%';
+
+            const formData = new FormData();
+            formData.append('arquivos', arquivo);
+
+            try {
+                const resp = await fetchComRetry(
+                    '{{ url_for("financeiro.comprovantes_api_upload") }}',
+                    { method: 'POST', body: formData, headers: getCsrfHeaders() }
+                );
+
+                const data = await resp.json();
+
+                if (data.sucesso) {
+                    totalNovos += data.novos;
+                    totalDuplicados += data.duplicados;
+                    totalErros += data.erros;
+
+                    if (data.arquivos && data.arquivos.length > 0) {
+                        for (const det of data.arquivos[0].detalhes) {
+                            adicionarDetalhe(listaResultados, det, arquivo.name);
+                        }
+                    }
+                } else {
+                    totalErros++;
+                    listaResultados.innerHTML += `
+                        <div class="status-erro mb-1">
+                            &#x274C; <strong>${arquivo.name}</strong> — ${data.mensagem || 'Erro desconhecido'}
+                        </div>`;
+                }
+            } catch (err) {
+                totalErros++;
+                listaResultados.innerHTML += `
+                    <div class="status-erro mb-1">
+                        &#x274C; <strong>${arquivo.name}</strong> — Erro de conexão: ${err.message}
+                    </div>`;
+            }
+
+            statNovos.textContent = totalNovos;
+            statDuplicados.textContent = totalDuplicados;
+            statErros.textContent = totalErros;
+        }
+
+        finalizarPainel('Concluído!', total, total);
+    }
+
+    // =========================================================================
+    // MODO BATCH (>5 PDFs — via RQ + polling Redis)
+    // =========================================================================
+    async function processarBatch() {
+        iniciarPainel();
+
+        const barra = document.getElementById('progresso-barra');
+        const texto = document.getElementById('progresso-texto');
+        const contagem = document.getElementById('progresso-contagem');
+        const statNovos = document.getElementById('stat-novos');
+        const statDuplicados = document.getElementById('stat-duplicados');
+        const statErros = document.getElementById('stat-erros');
+        const listaResultados = document.getElementById('lista-resultados');
+
+        const total = arquivosSelecionados.length;
+        const totalChunks = Math.ceil(total / CHUNK_SIZE);
+
+        texto.textContent = `Enviando ${total} arquivo(s) em ${totalChunks} lote(s)...`;
+        contagem.textContent = `0/${total}`;
+
+        // ---- ETAPA 1: Enviar chunks para o servidor ----
+        let batchIds = [];
+        let totalEnviados = 0;
+
+        for (let c = 0; c < totalChunks; c++) {
+            const inicio = c * CHUNK_SIZE;
+            const chunk = arquivosSelecionados.slice(inicio, inicio + CHUNK_SIZE);
+
+            const formData = new FormData();
+            for (const arq of chunk) {
+                formData.append('arquivos', arq);
+            }
+
+            texto.textContent = `Enviando lote ${c + 1}/${totalChunks} (${chunk.length} arquivo(s))...`;
+
+            try {
+                const resp = await fetchComRetry(
+                    '{{ url_for("financeiro.comprovantes_api_upload_batch") }}',
+                    { method: 'POST', body: formData, headers: getCsrfHeaders() }
+                );
+
+                const data = await resp.json();
+
+                if (data.sucesso) {
+                    batchIds.push({
+                        id: data.batch_id,
+                        total: data.total_arquivos,
+                    });
+                    totalEnviados += data.total_arquivos;
+                    listaResultados.innerHTML += `
+                        <div class="text-info mb-1">
+                            <i class="fas fa-check-circle"></i> Lote ${c + 1} enviado: ${data.total_arquivos} arquivo(s) enfileirado(s)
+                        </div>`;
+                } else {
+                    listaResultados.innerHTML += `
+                        <div class="status-erro mb-1">
+                            &#x274C; Lote ${c + 1} falhou: ${data.mensagem || 'Erro desconhecido'}
+                        </div>`;
+                }
+            } catch (err) {
+                listaResultados.innerHTML += `
+                    <div class="status-erro mb-1">
+                        &#x274C; Lote ${c + 1} — Erro de conexão: ${err.message}
+                    </div>`;
+            }
+
+            // Progresso de envio (fase de upload)
+            const pctEnvio = Math.round(((c + 1) / totalChunks) * 10); // 0-10% é envio
+            barra.style.width = pctEnvio + '%';
+            barra.textContent = pctEnvio + '%';
+        }
+
+        if (batchIds.length === 0) {
+            texto.textContent = 'Nenhum lote foi enviado com sucesso.';
+            barra.classList.remove('progress-bar-animated');
+            barra.classList.add('bg-danger');
+            document.getElementById('progresso-footer').style.display = 'block';
+            arquivosSelecionados = [];
+            atualizarLista();
+            return;
+        }
+
+        // ---- ETAPA 2: Polling de progresso via Redis ----
+        texto.textContent = `Processando ${totalEnviados} arquivo(s) no servidor...`;
+
+        // Armazena detalhes já exibidos para evitar repetição
+        let detalhesExibidos = 0;
+
+        const pollingInterval = setInterval(async () => {
+            try {
+                // Acumular progresso de todos os batches
+                let acum = {
+                    arquivos_processados: 0,
+                    total_arquivos: 0,
+                    novos: 0,
+                    duplicados: 0,
+                    erros: 0,
+                    arquivo_atual: null,
+                    status: 'processando',
+                    detalhes: [],
+                    concluidos: 0,
+                };
+
+                for (const batch of batchIds) {
+                    try {
+                        const resp = await fetch(
+                            `/financeiro/comprovantes/api/batch/${batch.id}/status`
+                        );
+                        if (resp.ok) {
+                            const status = await resp.json();
+                            acum.arquivos_processados += (status.arquivos_processados || 0);
+                            acum.total_arquivos += (status.total_arquivos || batch.total);
+                            acum.novos += (status.novos || 0);
+                            acum.duplicados += (status.duplicados || 0);
+                            acum.erros += (status.erros || 0);
+
+                            if (status.detalhes) {
+                                acum.detalhes = acum.detalhes.concat(status.detalhes);
+                            }
+
+                            if (status.arquivo_atual) {
+                                acum.arquivo_atual = status.arquivo_atual;
+                            }
+
+                            if (status.status === 'concluido' || status.status === 'erro' || status.status === 'parcial') {
+                                acum.concluidos++;
+                            }
+                        }
+                    } catch (e) {
+                        // Erro de polling (rede) — ignora e tenta novamente
+                        console.warn(`Erro ao consultar batch ${batch.id}:`, e);
+                    }
+                }
+
+                // Atualizar UI
+                const pct = acum.total_arquivos > 0
+                    ? Math.round(10 + (acum.arquivos_processados / acum.total_arquivos) * 90)
+                    : 10;
+
+                barra.style.width = pct + '%';
+                barra.textContent = pct + '%';
+                contagem.textContent = `${acum.arquivos_processados}/${acum.total_arquivos}`;
+                statNovos.textContent = acum.novos;
+                statDuplicados.textContent = acum.duplicados;
+                statErros.textContent = acum.erros;
+
+                if (acum.arquivo_atual) {
+                    texto.textContent = `Processando: ${acum.arquivo_atual}`;
+                }
+
+                // Exibir novos detalhes
+                if (acum.detalhes.length > detalhesExibidos) {
+                    const novosDetalhes = acum.detalhes.slice(detalhesExibidos);
+                    for (const det of novosDetalhes) {
+                        adicionarDetalhe(listaResultados, det, det.arquivo || '');
+                    }
+                    detalhesExibidos = acum.detalhes.length;
+                    // Auto-scroll para o final
+                    listaResultados.scrollTop = listaResultados.scrollHeight;
+                }
+
+                // Verificar conclusão de TODOS os batches
+                if (acum.concluidos >= batchIds.length) {
+                    clearInterval(pollingInterval);
+                    finalizarPainel(
+                        `Concluído! ${acum.novos} novo(s), ${acum.duplicados} duplicado(s), ${acum.erros} erro(s)`,
+                        acum.arquivos_processados,
+                        acum.total_arquivos
+                    );
+                    recarregarTabela();
+                }
+            } catch (err) {
+                console.warn('Erro no polling de progresso:', err);
+            }
+        }, 2000); // Polling a cada 2 segundos
+
+        // Resetar seleção (arquivos já foram enviados ao servidor)
+        arquivosSelecionados = [];
+        atualizarLista();
+    }
+
+    // =========================================================================
+    // FUNÇÕES AUXILIARES DE UI
+    // =========================================================================
+    function iniciarPainel() {
+        const painel = document.getElementById('painel-progresso');
+        painel.style.display = 'block';
+        document.getElementById('card-upload').style.display = 'none';
+        document.getElementById('progresso-footer').style.display = 'none';
+
+        const barra = document.getElementById('progresso-barra');
+        barra.style.width = '0%';
+        barra.textContent = '0%';
+        barra.className = 'progress-bar progress-bar-striped progress-bar-animated';
+
+        document.getElementById('progresso-texto').textContent = 'Iniciando...';
+        document.getElementById('progresso-contagem').textContent = '0/0';
+        document.getElementById('stat-novos').textContent = '0';
+        document.getElementById('stat-duplicados').textContent = '0';
+        document.getElementById('stat-erros').textContent = '0';
+        document.getElementById('lista-resultados').innerHTML = '';
+    }
+
+    function finalizarPainel(mensagem, processados, total) {
+        const barra = document.getElementById('progresso-barra');
+        barra.style.width = '100%';
+        barra.textContent = '100%';
+        barra.classList.remove('progress-bar-animated');
+        barra.classList.add('bg-success');
+
+        document.getElementById('progresso-texto').textContent = mensagem;
+        document.getElementById('progresso-contagem').textContent = `${processados}/${total}`;
+        document.getElementById('progresso-footer').style.display = 'block';
+
+        arquivosSelecionados = [];
+        atualizarLista();
+        recarregarTabela();
+    }
+
+    function adicionarDetalhe(container, det, nomeArquivo) {
+        const icon = det.status === 'novo' ? '&#x2705;' :
+                     det.status === 'duplicado' ? '&#x26A0;&#xFE0F;' : '&#x274C;';
+        container.innerHTML += `
+            <div class="status-${det.status} mb-1">
+                ${icon} <strong>${nomeArquivo}</strong>
+                ${det.pagina ? ' p.' + det.pagina : ''}
+                — ${det.mensagem || det.status}
+                ${det.numero_agendamento ? '(Agend: ' + det.numero_agendamento + ')' : ''}
+            </div>`;
+    }
+
+    window.fecharProgresso = function() {
+        document.getElementById('painel-progresso').style.display = 'none';
+        document.getElementById('card-upload').style.display = 'block';
+    };
+
+    // =========================================================================
+    // DATATABLE
+    // =========================================================================
+    const tabela = $('#tabela-comprovantes').DataTable({
+        ajax: {
+            url: '{{ url_for("financeiro.comprovantes_api_dados") }}',
+            dataSrc: 'dados',
+        },
+        columns: [
+            { data: 'data_pagamento', defaultContent: '-' },
+            {
+                data: 'beneficiario_razao_social',
+                render: function(val, type, row) {
+                    if (!val) return '-';
+                    var html = '<div>' + val + '</div>';
+                    if (row.beneficiario_cnpj_cpf) {
+                        html += '<small class="text-muted">' + row.beneficiario_cnpj_cpf + '</small>';
+                    }
+                    return html;
+                },
+                defaultContent: '-',
+            },
+            {
+                data: 'pagador_razao_social',
+                render: function(val, type, row) {
+                    if (!val) return '-';
+                    var html = '<div>' + val + '</div>';
+                    if (row.pagador_cnpj_cpf) {
+                        html += '<small class="text-muted">' + row.pagador_cnpj_cpf + '</small>';
+                    }
+                    return html;
+                },
+                defaultContent: '-',
+            },
+            { data: 'numero_documento', defaultContent: '-' },
+            { data: 'numero_agendamento', defaultContent: '-' },
+            {
+                data: 'ofx_fitid',
+                render: function(val, type, row) {
+                    if (!val) return '<span class="badge bg-light text-muted badge-ofx">—</span>';
+                    return '<span class="badge bg-info badge-ofx" title="FITID: ' + val + '">' +
+                           '<i class="fas fa-link me-1"></i>OFX</span>';
+                },
+                defaultContent: '-',
+                className: 'text-center',
+            },
+            {
+                data: 'odoo_statement_line_id',
+                render: function(val, type, row) {
+                    if (!val) {
+                        if (row.ofx_fitid) {
+                            return '<span class="badge bg-warning text-dark badge-odoo" title="FITID vinculado mas sem linha no Odoo">' +
+                                   '<i class="fas fa-exclamation-triangle me-1"></i>Pendente</span>';
+                        }
+                        return '<span class="badge bg-light text-muted badge-odoo">—</span>';
+                    }
+                    var title = 'Line ID: ' + val;
+                    if (row.odoo_move_id) title += ' | Move: ' + row.odoo_move_id;
+                    if (row.odoo_is_reconciled) title += ' | Conciliado';
+                    return '<span class="badge bg-success badge-odoo" title="' + title + '">' +
+                           '<i class="fas fa-check-circle me-1"></i>Odoo</span>';
+                },
+                defaultContent: '-',
+                className: 'text-center',
+            },
+            {
+                data: 'valor_documento',
+                render: function(val) {
+                    if (val == null) return '-';
+                    return 'R$ ' + val.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                },
+                className: 'text-end',
+            },
+            {
+                data: 'valor_desconto_abatimento',
+                render: function(val) {
+                    if (val == null || val === 0) return '-';
+                    return 'R$ ' + val.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                },
+                className: 'text-end',
+            },
+            {
+                data: 'valor_juros_multa',
+                render: function(val) {
+                    if (val == null || val === 0) return '-';
+                    return 'R$ ' + val.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                },
+                className: 'text-end',
+            },
+            {
+                data: 'valor_pago',
+                render: function(val) {
+                    if (val == null) return '-';
+                    return 'R$ ' + val.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                },
+                className: 'text-end fw-bold',
+            },
+            { data: 'data_vencimento', defaultContent: '-' },
+            { data: 'arquivo_origem', defaultContent: '-' },
+        ],
+        order: [[0, 'desc']],
+        language: {
+            url: 'https://cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json',
+        },
+        pageLength: 25,
+        responsive: true,
+    });
+
+    window.recarregarTabela = function() {
+        tabela.ajax.reload(function() {
+            const info = tabela.page.info();
+            document.getElementById('total-comprovantes').textContent = info.recordsTotal;
+        });
+    };
+
+    // =========================================================================
+    // UPLOAD OFX — Vincular com comprovantes e Odoo
+    // =========================================================================
+    const inputOfx = document.getElementById('input-ofx');
+    const btnProcessarOfx = document.getElementById('btn-processar-ofx');
+    const btnLimparOfx = document.getElementById('btn-limpar-ofx');
+    const ofxNomeArquivo = document.getElementById('ofx-nome-arquivo');
+    const ofxArquivoSelecionado = document.getElementById('ofx-arquivo-selecionado');
+
+    let arquivoOfx = null;
+
+    // Botão "Selecionar Arquivo OFX"
+    document.getElementById('btn-selecionar-ofx').addEventListener('click', () => {
+        inputOfx.click();
+    });
+
+    inputOfx.addEventListener('change', () => {
+        if (inputOfx.files.length > 0) {
+            selecionarOfx(inputOfx.files[0]);
+        }
+        inputOfx.value = '';
+    });
+
+    btnLimparOfx.addEventListener('click', () => {
+        arquivoOfx = null;
+        ofxArquivoSelecionado.style.display = 'none';
+        btnProcessarOfx.disabled = true;
+    });
+
+    function selecionarOfx(file) {
+        arquivoOfx = file;
+        ofxNomeArquivo.textContent = file.name;
+        ofxArquivoSelecionado.style.display = 'block';
+        btnProcessarOfx.disabled = false;
+    }
+
+    btnProcessarOfx.addEventListener('click', async () => {
+        if (!arquivoOfx) return;
+
+        btnProcessarOfx.disabled = true;
+        btnProcessarOfx.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+
+        const formData = new FormData();
+        formData.append('arquivo_ofx', arquivoOfx);
+
+        try {
+            const resp = await fetchComRetry(
+                '{{ url_for("financeiro.comprovantes_api_upload_ofx") }}',
+                { method: 'POST', body: formData, headers: getCsrfHeaders() }
+            );
+
+            const data = await resp.json();
+
+            // Mostrar resultado
+            const resultado = document.getElementById('ofx-resultado');
+            resultado.style.display = 'block';
+
+            document.getElementById('ofx-stat-total').textContent = data.total_transacoes || 0;
+            document.getElementById('ofx-stat-vinculados').textContent = data.vinculados_comprovante || 0;
+            document.getElementById('ofx-stat-odoo').textContent = data.vinculados_odoo || 0;
+            document.getElementById('ofx-stat-sem-comp').textContent = data.sem_comprovante || 0;
+            document.getElementById('ofx-stat-sem-odoo').textContent = data.sem_odoo || 0;
+            document.getElementById('ofx-stat-ja-vinculados').textContent = data.ja_vinculados || 0;
+
+            // Detalhes
+            const listaDetalhes = document.getElementById('ofx-lista-detalhes');
+            listaDetalhes.innerHTML = '';
+
+            if (data.detalhes && data.detalhes.length > 0) {
+                for (const det of data.detalhes) {
+                    const iconComp = det.status_comprovante === 'vinculado' ? '&#x2705;' :
+                                     det.status_comprovante === 'ja_vinculado' ? '&#x26A0;&#xFE0F;' :
+                                     det.status_comprovante === 'sem_match' ? '&#x2796;' : '&#x274C;';
+                    const iconOdoo = det.status_odoo === 'vinculado' ? '&#x2705;' :
+                                     det.status_odoo === 'sem_match' ? '&#x2796;' :
+                                     det.status_odoo === 'nao_buscou' ? '&#x2B1C;' : '&#x274C;';
+
+                    const valorStr = det.valor != null
+                        ? 'R$ ' + Math.abs(det.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})
+                        : '';
+
+                    listaDetalhes.innerHTML += `
+                        <div class="mb-1 border-bottom pb-1">
+                            <span title="Comprovante">${iconComp}</span>
+                            <span title="Odoo">${iconOdoo}</span>
+                            <strong>CHECKNUM ${det.checknum || '?'}</strong>
+                            ${det.data ? ' — ' + det.data : ''}
+                            ${valorStr ? ' — ' + valorStr : ''}
+                            <br><small class="text-muted">${det.mensagem || ''}</small>
+                        </div>`;
+                }
+            }
+
+            // Recarregar tabela para mostrar novas vinculações
+            recarregarTabela();
+
+        } catch (err) {
+            alert('Erro ao processar OFX: ' + err.message);
+        } finally {
+            btnProcessarOfx.disabled = false;
+            btnProcessarOfx.innerHTML = '<i class="fas fa-link"></i> Importar e Vincular';
+        }
+    });
+});
+</script>
+{% endblock %}

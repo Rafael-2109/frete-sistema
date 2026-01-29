@@ -1,0 +1,298 @@
+# -*- coding: utf-8 -*-
+"""
+Jobs assíncronos para processamento de comprovantes de pagamento em lote
+========================================================================
+
+Executados via Redis Queue na fila 'default'.
+
+Fluxo:
+1. Usuário faz upload de N PDFs via navegador
+2. Rota salva PDFs em disco e enfileira job com batch_id (UUID)
+3. Worker processa cada PDF ISOLADAMENTE via OCR
+4. Progresso armazenado no Redis para acompanhamento em tempo real
+5. PDFs removidos do disco após processamento
+
+Timeout: 60 minutos para batch completo (OCR é CPU-intensivo)
+
+TRATAMENTO DE ERROS:
+- Erro em arquivo 1 NÃO afeta processamento dos demais
+- Cada comprovante tem commit isolado (via service)
+- Retry automático em erros de SSL/conexão
+"""
+
+import json
+import logging
+import os
+import traceback
+from contextlib import contextmanager
+from datetime import datetime
+from typing import Any, Dict, List
+
+logger = logging.getLogger(__name__)
+
+# Timeout para batch completo (60 minutos — OCR consome tempo)
+TIMEOUT_BATCH = 3600
+
+
+# ========================================
+# PROGRESSO EM TEMPO REAL VIA REDIS
+# ========================================
+
+def _get_redis_connection():
+    """Obtém conexão Redis do RQ."""
+    try:
+        from app.portal.workers import get_redis_connection
+        return get_redis_connection()
+    except Exception:
+        return None
+
+
+def _atualizar_progresso(batch_id: str, progresso: dict):
+    """
+    Atualiza progresso do batch no Redis.
+
+    Estrutura do progresso:
+    {
+        'batch_id': str,
+        'status': 'processando' | 'concluido' | 'erro' | 'parcial',
+        'total_arquivos': int,
+        'arquivos_processados': int,
+        'novos': int,
+        'duplicados': int,
+        'erros': int,
+        'arquivo_atual': str,
+        'ultimo_update': str,
+        'detalhes': [...],
+        'iniciado_em': str,
+        'concluido_em': str | None
+    }
+    """
+    try:
+        redis_conn = _get_redis_connection()
+        if redis_conn:
+            progresso['ultimo_update'] = datetime.now().isoformat()
+            key = f'comprovante_batch_progresso:{batch_id}'
+            redis_conn.setex(key, 3600, json.dumps(progresso))  # Expira em 1 hora
+    except Exception as e:
+        logger.warning(f"Erro ao atualizar progresso do batch comprovante: {e}")
+
+
+def obter_progresso_batch(batch_id: str) -> dict | None:
+    """Obtém progresso do batch do Redis."""
+    try:
+        redis_conn = _get_redis_connection()
+        if redis_conn:
+            key = f'comprovante_batch_progresso:{batch_id}'
+            data = redis_conn.get(key)
+            if data:
+                return json.loads(data)
+    except Exception as e:
+        logger.warning(f"Erro ao obter progresso do batch comprovante: {e}")
+    return None
+
+
+# ========================================
+# CONTEXT MANAGER SEGURO
+# ========================================
+
+@contextmanager
+def _app_context_safe():
+    """
+    Context manager seguro para execução no worker.
+
+    Verifica se já existe um contexto ativo para evitar
+    criar contextos aninhados que podem causar travamentos.
+    """
+    import sys
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
+
+    from flask import has_app_context
+
+    # Se já existe contexto ativo, apenas executa
+    if has_app_context():
+        logger.debug("[Context] Reutilizando contexto Flask existente")
+        yield
+        return
+
+    # Criar novo contexto
+    from app import create_app
+    app = create_app()
+    logger.debug("[Context] Novo contexto Flask criado para comprovante batch")
+
+    with app.app_context():
+        yield
+
+
+# ========================================
+# JOB PRINCIPAL: PROCESSAR BATCH DE PDFs
+# ========================================
+
+def processar_batch_comprovantes_job(
+    batch_id: str,
+    arquivos_info: List[Dict[str, str]],
+    usuario_nome: str
+) -> Dict[str, Any]:
+    """
+    Processa batch de comprovantes PDF de forma assíncrona.
+
+    Cada arquivo é processado ISOLADAMENTE:
+    - OCR via tesserocr
+    - Commit separado por comprovante
+    - Erro em um não afeta os demais
+    - Progresso atualizado no Redis após cada arquivo
+    - PDFs removidos do disco após processamento
+
+    Args:
+        batch_id: UUID do batch
+        arquivos_info: Lista de dicts com caminho e nome dos PDFs:
+            [{'nome': 'comprovante.pdf', 'caminho': '/path/to/file.pdf'}, ...]
+        usuario_nome: Nome do usuário que fez upload
+
+    Returns:
+        Dict com resultado consolidado
+    """
+    logger.info(f"[Comprovante Batch] Iniciando - batch_id: {batch_id}")
+    logger.info(f"[Comprovante Batch] Total de arquivos: {len(arquivos_info)}")
+    logger.info(f"[Comprovante Batch] Usuário: {usuario_nome}")
+
+    resultado = {
+        'success': False,
+        'batch_id': batch_id,
+        'total_arquivos': len(arquivos_info),
+        'novos': 0,
+        'duplicados': 0,
+        'erros': 0,
+        'detalhes': [],
+        'erro_geral': None,
+    }
+
+    # Inicializar progresso
+    progresso = {
+        'batch_id': batch_id,
+        'status': 'processando',
+        'total_arquivos': len(arquivos_info),
+        'arquivos_processados': 0,
+        'novos': 0,
+        'duplicados': 0,
+        'erros': 0,
+        'arquivo_atual': None,
+        'detalhes': [],
+        'iniciado_em': datetime.now().isoformat(),
+        'concluido_em': None,
+    }
+    _atualizar_progresso(batch_id, progresso)
+
+    try:
+        with _app_context_safe():
+            from app.financeiro.services.comprovante_service import processar_pdf_comprovantes
+
+            for idx, arq in enumerate(arquivos_info, 1):
+                nome = arq.get('nome', f'arquivo_{idx}.pdf')
+                caminho = arq.get('caminho', '')
+
+                logger.info(f"[Comprovante Batch] Processando {idx}/{len(arquivos_info)}: {nome}")
+
+                # Atualizar progresso — arquivo atual
+                progresso['arquivo_atual'] = f"{nome} ({idx}/{len(arquivos_info)})"
+                _atualizar_progresso(batch_id, progresso)
+
+                try:
+                    # Ler PDF do disco
+                    if not os.path.exists(caminho):
+                        raise FileNotFoundError(f"Arquivo não encontrado: {caminho}")
+
+                    with open(caminho, 'rb') as f:
+                        pdf_bytes = f.read()
+
+                    # Processar via service (OCR + persistência com retry)
+                    res = processar_pdf_comprovantes(
+                        arquivo_bytes=pdf_bytes,
+                        nome_arquivo=nome,
+                        usuario=usuario_nome,
+                    )
+
+                    # Acumular stats
+                    resultado['novos'] += res['novos']
+                    resultado['duplicados'] += res['duplicados']
+                    resultado['erros'] += res['erros']
+
+                    progresso['novos'] += res['novos']
+                    progresso['duplicados'] += res['duplicados']
+                    progresso['erros'] += res['erros']
+
+                    # Adicionar detalhes (limitar a últimos 200 para não estourar Redis)
+                    for det in res['detalhes']:
+                        det['arquivo'] = nome
+                    resultado['detalhes'].extend(res['detalhes'])
+                    progresso['detalhes'] = resultado['detalhes'][-200:]
+
+                    logger.info(
+                        f"[Comprovante Batch] ✅ {nome}: "
+                        f"{res['novos']} novo(s), {res['duplicados']} dup, {res['erros']} erro(s)"
+                    )
+
+                except Exception as e:
+                    logger.error(f"[Comprovante Batch] ❌ {nome}: {e}")
+                    logger.error(traceback.format_exc())
+
+                    resultado['erros'] += 1
+                    progresso['erros'] += 1
+
+                    erro_det = {
+                        'pagina': 0,
+                        'status': 'erro',
+                        'mensagem': str(e),
+                        'numero_agendamento': None,
+                        'arquivo': nome,
+                    }
+                    resultado['detalhes'].append(erro_det)
+                    progresso['detalhes'] = resultado['detalhes'][-200:]
+
+                finally:
+                    # Limpar PDF do disco após processar
+                    try:
+                        if caminho and os.path.exists(caminho):
+                            os.remove(caminho)
+                    except Exception as e:
+                        logger.warning(f"Erro ao remover PDF temporário {caminho}: {e}")
+
+                # Atualizar progresso — arquivo processado
+                progresso['arquivos_processados'] = idx
+                _atualizar_progresso(batch_id, progresso)
+
+        # Finalizar
+        resultado['success'] = True
+        progresso['status'] = 'concluido'
+        progresso['concluido_em'] = datetime.now().isoformat()
+        progresso['arquivo_atual'] = None
+
+    except Exception as e:
+        logger.error(f"[Comprovante Batch] Erro geral: {e}")
+        logger.error(traceback.format_exc())
+
+        resultado['erro_geral'] = str(e)
+        progresso['status'] = 'erro'
+        progresso['concluido_em'] = datetime.now().isoformat()
+        progresso['arquivo_atual'] = f"ERRO: {str(e)}"
+
+    _atualizar_progresso(batch_id, progresso)
+
+    # Limpar pasta do batch
+    try:
+        if arquivos_info:
+            pasta_batch = os.path.dirname(arquivos_info[0].get('caminho', ''))
+            if pasta_batch and os.path.isdir(pasta_batch) and 'batch_' in pasta_batch:
+                # Remover arquivos restantes (em caso de erro)
+                for f in os.listdir(pasta_batch):
+                    os.remove(os.path.join(pasta_batch, f))
+                os.rmdir(pasta_batch)
+                logger.info(f"[Comprovante Batch] Pasta temporária removida: {pasta_batch}")
+    except Exception as e:
+        logger.warning(f"Erro ao limpar pasta batch: {e}")
+
+    logger.info(
+        f"[Comprovante Batch] Concluído - batch_id: {batch_id} | "
+        f"Novos: {resultado['novos']}, Dup: {resultado['duplicados']}, Erros: {resultado['erros']}"
+    )
+
+    return resultado
