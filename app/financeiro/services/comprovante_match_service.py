@@ -102,6 +102,21 @@ def _extrair_raiz_cnpj(cnpj_limpo: str) -> Optional[str]:
     return cnpj_limpo[:8]
 
 
+def _formatar_cnpj(cnpj_limpo: str) -> Optional[str]:
+    """Formata CNPJ (14 digitos) para XX.XXX.XXX/XXXX-XX.
+
+    O Odoo armazena l10n_br_cnpj formatado, entao precisamos
+    formatar antes de buscar com operador '='.
+    """
+    if not cnpj_limpo:
+        return None
+    # Garantir que temos apenas digitos
+    digitos = re.sub(r'\D', '', cnpj_limpo)
+    if len(digitos) != 14:
+        return cnpj_limpo  # Retorna como esta se nao for CNPJ valido
+    return f"{digitos[:2]}.{digitos[2:5]}.{digitos[5:8]}/{digitos[8:12]}-{digitos[12:14]}"
+
+
 # =============================================================================
 # CLASSE PRINCIPAL
 # =============================================================================
@@ -493,6 +508,22 @@ class ComprovanteMatchService:
                 faturas = []
             logger.info(f"Fornecedor direto partner_id={partner_id}. Faturas: {len(faturas)}")
 
+        # Pre-filtrar por faixa de valor razoavel quando financeira
+        # Evita trazer candidatos com valores absurdamente diferentes
+        if e_financeira and faturas:
+            valor_comp = float(comp.valor_documento or comp.valor_pago or 0)
+            if valor_comp > 0:
+                margem = max(valor_comp * 5, 500)  # 5x o valor ou R$500 minimo
+                faturas_filtradas = [
+                    f for f in faturas
+                    if abs(float(f.get('credit', 0) or 0)) <= margem
+                ]
+                logger.info(
+                    f"Pre-filtro valor (financeira): {len(faturas)} -> {len(faturas_filtradas)} "
+                    f"(margem R$ {margem:.2f} para comp R$ {valor_comp:.2f})"
+                )
+                faturas = faturas_filtradas
+
         if not faturas:
             return []
 
@@ -595,16 +626,37 @@ class ComprovanteMatchService:
         }
 
         try:
-            # Buscar partner no Odoo por CNPJ
+            # Buscar partner no Odoo por CNPJ formatado
+            # O campo l10n_br_cnpj no Odoo armazena formatado (XX.XXX.XXX/XXXX-XX)
+            cnpj_formatado = _formatar_cnpj(cnpj_beneficiario)
             partners = self.connection.search_read(
                 'res.partner',
-                [['l10n_br_cnpj', '=', cnpj_beneficiario]],
+                [['l10n_br_cnpj', '=', cnpj_formatado]],
                 fields=['id', 'name', 'l10n_br_cnpj'],
                 limit=5,
             )
 
+            # Fallback: buscar pela raiz com ilike (caso formato diferente)
+            if not partners:
+                raiz = _extrair_raiz_cnpj(cnpj_beneficiario)
+                if raiz:
+                    logger.info(
+                        f"CNPJ formatado '{cnpj_formatado}' nao encontrado. "
+                        f"Tentando raiz '{raiz}' com ilike."
+                    )
+                    partners = self.connection.search_read(
+                        'res.partner',
+                        [['l10n_br_cnpj', 'ilike', raiz]],
+                        fields=['id', 'name', 'l10n_br_cnpj'],
+                        limit=5,
+                    )
+
             if not partners:
                 # CNPJ nao encontrado no Odoo -> pode ser financeira ou nao cadastrado
+                logger.info(
+                    f"Beneficiario CNPJ '{cnpj_beneficiario}' nao encontrado no Odoo "
+                    f"(tentou formatado='{cnpj_formatado}' e raiz). Classificado como financeira."
+                )
                 resultado['e_financeira'] = True
                 self._cache_partners[cache_key] = resultado
                 return resultado
@@ -1051,7 +1103,8 @@ class ComprovanteMatchService:
             'odoo_partner_id': partner_id,
             'odoo_partner_name': partner_name,
             'odoo_company_id': company_id,
-            'nf_numero': parse_result.get('nf'),
+            'nf_numero': str(fatura.get('x_studio_nf_e') or parse_result.get('nf') or ''),
+            'nf_parseada': parse_result.get('nf'),
             'parcela': fatura.get('l10n_br_cobranca_parcela'),
             'odoo_valor_original': valor_odoo,
             'odoo_valor_residual': abs(float(fatura.get('amount_residual', 0))),
