@@ -636,17 +636,21 @@ class ComprovanteMatchService:
                 limit=5,
             )
 
-            # Fallback: buscar pela raiz com ilike (caso formato diferente)
+            # Fallback: buscar pela raiz FORMATADA com ilike
+            # O campo l10n_br_cnpj armazena "33.652.456/0001-95", entao
+            # ilike com "33652456" (limpo) NAO funciona.
+            # Precisamos formatar a raiz: "33.652.456"
             if not partners:
-                raiz = _extrair_raiz_cnpj(cnpj_beneficiario)
-                if raiz:
+                raiz_limpa = _extrair_raiz_cnpj(cnpj_beneficiario)
+                if raiz_limpa and len(raiz_limpa) == 8:
+                    raiz_formatada = f"{raiz_limpa[:2]}.{raiz_limpa[2:5]}.{raiz_limpa[5:8]}"
                     logger.info(
                         f"CNPJ formatado '{cnpj_formatado}' nao encontrado. "
-                        f"Tentando raiz '{raiz}' com ilike."
+                        f"Tentando raiz formatada '{raiz_formatada}' com ilike."
                     )
                     partners = self.connection.search_read(
                         'res.partner',
-                        [['l10n_br_cnpj', 'ilike', raiz]],
+                        [['l10n_br_cnpj', 'ilike', raiz_formatada]],
                         fields=['id', 'name', 'l10n_br_cnpj'],
                         limit=5,
                     )
