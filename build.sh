@@ -4,14 +4,17 @@
 
 echo "=== INICIANDO DEPLOY NO RENDER ==="
 
-# 0. Instalar dependências de sistema (Tesseract OCR para comprovantes)
-echo "Instalando Tesseract OCR e dependências de sistema..."
-apt-get update && apt-get install -y \
-    tesseract-ocr \
-    libtesseract-dev \
-    libleptonica-dev \
-    tesseract-ocr-por \
-    || echo "Falha ao instalar Tesseract (pode não ter permissão apt-get), continuando..."
+# 0. Baixar dados de treinamento do Tesseract OCR (para OCR de comprovantes)
+# O wheel tesserocr já inclui a lib C compilada. Falta apenas o por.traineddata.
+# apt-get não funciona no Render, então baixamos direto do GitHub.
+TESSDATA_DIR="/opt/render/project/src/tessdata"
+mkdir -p "$TESSDATA_DIR"
+echo "Baixando dados Tesseract (por.traineddata)..."
+curl -fsSL -o "$TESSDATA_DIR/por.traineddata" \
+    "https://github.com/tesseract-ocr/tessdata_fast/raw/main/por.traineddata" \
+    && echo "✅ Tesseract tessdata baixado com sucesso em $TESSDATA_DIR" \
+    || echo "⚠️ Falha ao baixar tessdata, OCR pode não funcionar"
+export TESSDATA_PREFIX="$TESSDATA_DIR"
 
 # 1. Instalar dependências
 echo "Instalando dependências..."
