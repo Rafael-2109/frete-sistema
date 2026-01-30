@@ -142,3 +142,9 @@ pillow==11.0.0           # Processamento de imagens (requerido por qrcode)
 haversine==2.9.0         # Distância entre coordenadas GPS
 # Geocoding agora usa Google Maps API (mesma do mapa_service.py)
 weasyprint==67.0         # Geração de PDFs
+
+# ==========================================
+# OCR / PDF PROCESSING (Comprovantes)
+# ==========================================
+pypdfium2==5.1.0           # Renderização de PDF para imagem (leitor comprovantes)
+tesserocr==2.9.2           # OCR via Tesseract C API (requer tesseract-ocr no sistema)

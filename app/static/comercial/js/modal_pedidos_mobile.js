@@ -207,7 +207,7 @@ function carregarDocumentosPedidoMobile(numPedido, cnpj, pedidoId) {
 function renderizarDocumentosMobile(data, docsDiv) {
     if (data.documentos.length === 0) {
         docsDiv.innerHTML = `
-            <div class="alert m-2 bg-tertiary-custom border-custom text-secondary-color">
+            <div class="alert m-2 text-secondary-color">
                 <i class="fas fa-info-circle"></i> Nenhum documento encontrado
             </div>
         `;
@@ -399,7 +399,7 @@ function carregarProdutosMobile(docId, tipo, identificador, numPedido) {
 function renderizarProdutosMobile(data, prodsDiv) {
     if (!data.produtos || data.produtos.length === 0) {
         prodsDiv.innerHTML = `
-            <div class="alert m-2 bg-tertiary-custom border-custom text-secondary-color" style="font-size: 0.85rem;">
+            <div class="alert m-2 text-secondary-color" style="font-size: 0.85rem;">
                 <i class="fas fa-info-circle"></i> Nenhum produto encontrado
             </div>
         `;

@@ -592,7 +592,9 @@ class BaixaTitulosService:
                 ['account_type', '=', 'asset_receivable'],
                 ['parent_state', '=', 'posted'],
                 # Ignorar títulos ano 2000 (já corrigidos antes)
-                ['date_maturity', '!=', '2000-01-01']
+                ['date_maturity', '!=', '2000-01-01'],
+                # Proteção: só fatura de venda (exclui devoluções série 300)
+                ['move_id.move_type', '=', 'out_invoice']
             ],
             fields=CAMPOS_SNAPSHOT_TITULO,
             limit=5
@@ -615,7 +617,9 @@ class BaixaTitulosService:
                 ['l10n_br_cobranca_parcela', '=', parcela],
                 ['account_type', '=', 'asset_receivable'],
                 ['parent_state', '=', 'posted'],
-                ['date_maturity', '!=', '2000-01-01']
+                ['date_maturity', '!=', '2000-01-01'],
+                # Proteção: só fatura de venda (exclui devoluções série 300)
+                ['move_id.move_type', '=', 'out_invoice']
             ],
             fields=CAMPOS_SNAPSHOT_TITULO,
             limit=5
@@ -662,7 +666,9 @@ class BaixaTitulosService:
                     ['x_studio_nf_e', '=', nf],
                     ['account_type', '=', 'asset_receivable'],
                     ['parent_state', '=', 'posted'],
-                    ['debit', '>', 0]
+                    ['debit', '>', 0],
+                    # Proteção: só fatura de venda (exclui devoluções série 300)
+                    ['move_id.move_type', '=', 'out_invoice']
                 ],
                 fields=['id', 'debit', 'date_maturity', 'move_id', 'amount_residual'],
                 limit=20
@@ -679,7 +685,9 @@ class BaixaTitulosService:
                             ['x_studio_nf_e', '=', nf],
                             ['account_type', '=', 'asset_receivable'],
                             ['parent_state', '=', 'posted'],
-                            ['debit', '>', 0]
+                            ['debit', '>', 0],
+                            # Proteção: só fatura de venda (exclui devoluções série 300)
+                            ['move_id.move_type', '=', 'out_invoice']
                         ],
                         fields=['id', 'debit', 'date_maturity', 'move_id', 'amount_residual'],
                         limit=20

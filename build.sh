@@ -4,6 +4,15 @@
 
 echo "=== INICIANDO DEPLOY NO RENDER ==="
 
+# 0. Instalar dependências de sistema (Tesseract OCR para comprovantes)
+echo "Instalando Tesseract OCR e dependências de sistema..."
+apt-get update && apt-get install -y \
+    tesseract-ocr \
+    libtesseract-dev \
+    libleptonica-dev \
+    tesseract-ocr-por \
+    || echo "Falha ao instalar Tesseract (pode não ter permissão apt-get), continuando..."
+
 # 1. Instalar dependências
 echo "Instalando dependências..."
 pip install -r requirements.txt

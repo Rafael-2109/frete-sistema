@@ -574,6 +574,16 @@
     border-color: var(--bs-border-color);
 }
 
+/* ==========================================================================
+   TOAST TOTAIS DA SEPARAÇÃO
+   ========================================================================== */
+.toast-totais-separacao .toast-body {
+    background-color: var(--bs-body-bg);
+    color: var(--bs-body-color);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 8px;
+}
+
 /* Linha de totais */
 .linha-total-pedido {
     background-color: var(--bs-secondary-bg);

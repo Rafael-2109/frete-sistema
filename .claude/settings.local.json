@@ -47,7 +47,8 @@
       "WebSearch",
       "mcp__plugin_context7_context7__resolve-library-id",
       "WebFetch(domain:gomakethings.com)",
-      "WebFetch(domain:css-tricks.com)"
+      "WebFetch(domain:css-tricks.com)",
+      "mcp__render__list_log_label_values"
     ],
     "deny": []
   },

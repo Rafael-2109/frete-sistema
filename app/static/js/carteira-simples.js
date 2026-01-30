@@ -547,7 +547,7 @@
                 btnLimparFiltros.innerHTML = `
                     <i class="fas fa-times-circle"></i>
                     Limpar Filtros
-                    <span class="badge bg-dark">${qtdFiltros}</span>
+                    <span class="badge badge-secondary">${qtdFiltros}</span>
                 `;
             }
 
@@ -3519,11 +3519,11 @@
 
         // Criar toast HTML
         const toastHtml = `
-            <div class="toast align-items-center border-0 shadow-lg" role="alert" aria-live="assertive" aria-atomic="true"
+            <div class="toast align-items-center border-0 shadow-lg toast-totais-separacao" role="alert" aria-live="assertive" aria-atomic="true"
                  style="position: fixed; top: 80px; right: 20px; z-index: 1050; min-width: 320px;"
                  id="toast-totais-separacao">
                 <div class="d-flex">
-                    <div class="toast-body bg-tertiary-custom" style="border-radius: 8px;">
+                    <div class="toast-body">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <strong style="font-size: 13px;">📦 TOTAIS DA SEPARAÇÃO</strong>
                             <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
