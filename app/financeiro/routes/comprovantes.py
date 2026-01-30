@@ -20,6 +20,7 @@ Data: 2026-01-29
 import os
 import uuid
 import logging
+from io import BytesIO
 
 from flask import render_template, request, jsonify
 from flask_login import login_required, current_user
@@ -28,6 +29,7 @@ from werkzeug.utils import secure_filename
 
 from app.financeiro.routes import financeiro_bp, UPLOAD_FOLDER
 from app.financeiro.models_comprovante import ComprovantePagamentoBoleto
+from app.utils.file_storage import get_file_storage
 
 logger = logging.getLogger(__name__)
 
@@ -98,10 +100,25 @@ def comprovantes_api_upload():
         try:
             arquivo_bytes = arquivo.read()
 
+            # Upload PDF ao S3 (antes do processamento OCR)
+            s3_path = None
+            try:
+                storage = get_file_storage()
+                pdf_io = BytesIO(arquivo_bytes)
+                pdf_io.name = nome
+                s3_path = storage.save_file(
+                    file=pdf_io,
+                    folder='comprovantes_pagamento',
+                    allowed_extensions=['pdf'],
+                )
+            except Exception as e:
+                logger.warning(f"Erro ao salvar PDF no S3: {nome}: {e}")
+
             resultado = processar_pdf_comprovantes(
                 arquivo_bytes=arquivo_bytes,
                 nome_arquivo=nome,
                 usuario=current_user.nome if hasattr(current_user, 'nome') else current_user.username,
+                arquivo_s3_path=s3_path,
             )
 
             resumo_geral['novos'] += resultado['novos']
@@ -343,3 +360,49 @@ def comprovantes_api_dados():
         'dados': [c.to_dict() for c in comprovantes],
         'total': len(comprovantes),
     })
+
+
+# =============================================================================
+# API - Presigned URL do PDF original
+# =============================================================================
+
+@financeiro_bp.route('/comprovantes/api/<int:comprovante_id>/pdf')
+@login_required
+def comprovantes_api_pdf(comprovante_id):
+    """
+    Gera presigned URL (1h) do PDF original do comprovante no S3.
+
+    Retorna JSON: { sucesso, url, arquivo, pagina }
+    O frontend abre a URL em nova aba.
+    """
+    comp = ComprovantePagamentoBoleto.query.get_or_404(comprovante_id)
+
+    if not comp.arquivo_s3_path:
+        return jsonify({
+            'sucesso': False,
+            'mensagem': 'PDF nao disponivel no storage',
+        }), 404
+
+    try:
+        storage = get_file_storage()
+        url = storage.get_file_url(comp.arquivo_s3_path)
+
+        if not url:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Erro ao gerar URL do arquivo',
+            }), 500
+
+        return jsonify({
+            'sucesso': True,
+            'url': url,
+            'arquivo': comp.arquivo_origem,
+            'pagina': comp.pagina_origem,
+        })
+
+    except Exception as e:
+        logger.error(f"Erro ao gerar URL PDF comprovante {comprovante_id}: {e}")
+        return jsonify({
+            'sucesso': False,
+            'mensagem': str(e),
+        }), 500

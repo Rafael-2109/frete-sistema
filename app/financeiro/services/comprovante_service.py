@@ -202,7 +202,8 @@ def _truncar_campos_seguros(comp) -> None:
 def processar_pdf_comprovantes(
     arquivo_bytes: bytes,
     nome_arquivo: str,
-    usuario: str
+    usuario: str,
+    arquivo_s3_path: str = None,
 ) -> dict:
     """
     Processa um PDF de comprovantes e persiste os dados no banco.
@@ -331,6 +332,7 @@ def processar_pdf_comprovantes(
                 arquivo_origem=nome_arquivo,
                 pagina_origem=comp.pagina,
                 importado_por=usuario,
+                arquivo_s3_path=arquivo_s3_path,
             )
             db.session.add(registro)
 

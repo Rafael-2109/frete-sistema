@@ -13,6 +13,15 @@
     .status-ja_vinculado { color: var(--bs-warning); }
     .badge-ofx { font-size: 0.7em; }
     .badge-odoo { font-size: 0.7em; }
+    .badge-match { font-size: 0.7em; cursor: pointer; }
+    .score-alto { background-color: #198754 !important; }
+    .score-medio { background-color: #fd7e14 !important; }
+    .score-baixo { background-color: #dc3545 !important; }
+    .match-candidato { border-left: 4px solid transparent; padding: 10px; margin-bottom: 8px; cursor: pointer; }
+    .match-candidato:hover { background-color: #f0f8ff; }
+    .match-candidato.score-alto-border { border-left-color: #198754; }
+    .match-candidato.score-medio-border { border-left-color: #fd7e14; }
+    .match-candidato.score-baixo-border { border-left-color: #dc3545; }
 </style>
 {% endblock %}
 
@@ -179,6 +188,65 @@
         </div>
     </div>
 
+    <!-- Card de Match com Odoo -->
+    <div id="card-match" class="card shadow-sm mb-4">
+        <div class="card-header bg-light">
+            <strong><i class="fas fa-search-dollar text-success"></i> Match com Faturas Odoo</strong>
+            <small class="text-muted ms-2">Vincular comprovantes com faturas de fornecedor</small>
+        </div>
+        <div class="card-body">
+            <div class="row align-items-end mb-3">
+                <div class="col-md-3">
+                    <label class="form-label small">Data Inicio</label>
+                    <input type="date" id="match-data-inicio" class="form-control form-control-sm">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small">Data Fim</label>
+                    <input type="date" id="match-data-fim" class="form-control form-control-sm">
+                </div>
+                <div class="col-md-6">
+                    <button type="button" id="btn-executar-match" class="btn btn-success">
+                        <i class="fas fa-search-dollar"></i> Executar Match (Todos Pendentes)
+                    </button>
+                </div>
+            </div>
+            <div id="match-progresso" style="display: none;">
+                <div class="d-flex align-items-center mb-2">
+                    <div class="spinner-border spinner-border-sm text-success me-2" role="status"></div>
+                    <span id="match-progresso-texto">Enfileirando...</span>
+                    <span class="ms-auto small text-muted" id="match-progresso-contagem"></span>
+                </div>
+                <div class="progress" style="height: 8px;">
+                    <div id="match-progresso-barra" class="progress-bar progress-bar-striped progress-bar-animated bg-success"
+                         role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                    </div>
+                </div>
+                <div class="mt-1 small text-muted" id="match-progresso-detalhe"></div>
+            </div>
+        </div>
+        <!-- Resultado do Match -->
+        <div id="match-resultado" class="card-footer" style="display: none;">
+            <div class="row text-center mb-2">
+                <div class="col">
+                    <div class="fs-5 fw-bold text-primary" id="match-stat-processados">0</div>
+                    <small class="text-muted">Processados</small>
+                </div>
+                <div class="col">
+                    <div class="fs-5 fw-bold text-success" id="match-stat-com-match">0</div>
+                    <small class="text-muted">Com Match</small>
+                </div>
+                <div class="col">
+                    <div class="fs-5 fw-bold text-warning" id="match-stat-sem-match">0</div>
+                    <small class="text-muted">Sem Match</small>
+                </div>
+                <div class="col">
+                    <div class="fs-5 fw-bold text-danger" id="match-stat-erros">0</div>
+                    <small class="text-muted">Erros</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Tabela de Comprovantes -->
     <div class="card shadow-sm">
         <div class="card-header bg-light d-flex justify-content-between align-items-center">
@@ -199,16 +267,108 @@
                             <th>N. Agendamento</th>
                             <th>OFX</th>
                             <th>Odoo</th>
+                            <th>Match</th>
                             <th class="text-end">Vl. Documento</th>
                             <th class="text-end">Desconto</th>
                             <th class="text-end">Juros/Multa</th>
                             <th class="text-end">Vl. Pago</th>
                             <th>Vencimento</th>
                             <th>Arquivo</th>
+                            <th>PDF</th>
                         </tr>
                     </thead>
                     <tbody></tbody>
                 </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Candidatos de Match -->
+    <div class="modal fade" id="modalCandidatos" tabindex="-1" aria-labelledby="modalCandidatosLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalCandidatosLabel">
+                        <i class="fas fa-search-dollar text-success"></i> Candidatos de Match
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Info do comprovante -->
+                    <div class="card mb-3">
+                        <div class="card-body py-2">
+                            <div class="row small">
+                                <div class="col-md-4">
+                                    <strong>Beneficiario:</strong> <span id="modal-benef"></span>
+                                </div>
+                                <div class="col-md-2">
+                                    <strong>CNPJ:</strong> <span id="modal-cnpj"></span>
+                                </div>
+                                <div class="col-md-2">
+                                    <strong>N. Doc:</strong> <span id="modal-doc"></span>
+                                </div>
+                                <div class="col-md-2">
+                                    <strong>Valor:</strong> <span id="modal-valor" class="fw-bold"></span>
+                                </div>
+                                <div class="col-md-2">
+                                    <strong>Vencimento:</strong> <span id="modal-venc"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Loading -->
+                    <div id="modal-loading" class="text-center py-4">
+                        <div class="spinner-border text-success" role="status"></div>
+                        <div class="mt-2">Buscando candidatos no Odoo...</div>
+                    </div>
+
+                    <!-- Lista de candidatos -->
+                    <div id="modal-candidatos-lista" style="display: none;"></div>
+
+                    <!-- Sem candidatos -->
+                    <div id="modal-sem-candidatos" style="display: none;" class="text-center py-4 text-muted">
+                        <i class="fas fa-inbox fa-3x mb-3"></i>
+                        <div>Nenhum candidato encontrado no Odoo.</div>
+                    </div>
+
+                    <!-- Vinculacao manual -->
+                    <hr>
+                    <div class="card">
+                        <div class="card-header bg-light py-2">
+                            <strong class="small"><i class="fas fa-edit"></i> Vinculacao Manual</strong>
+                        </div>
+                        <div class="card-body py-2">
+                            <div class="row g-2 align-items-end">
+                                <div class="col-md-3">
+                                    <label class="form-label small">NF</label>
+                                    <input type="text" id="manual-nf" class="form-control form-control-sm" placeholder="Ex: 12345">
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label small">Parcela</label>
+                                    <input type="number" id="manual-parcela" class="form-control form-control-sm" value="1" min="1">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small">Empresa</label>
+                                    <select id="manual-company" class="form-select form-select-sm">
+                                        <option value="1">NACOM GOYA - FB (1)</option>
+                                        <option value="3">NACOM GOYA - SC (3)</option>
+                                        <option value="4">NACOM GOYA - CD (4)</option>
+                                        <option value="5">LA FAMIGLIA - LF (5)</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <button type="button" id="btn-vincular-manual" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-link"></i> Vincular Manual
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                </div>
             </div>
         </div>
     </div>
@@ -713,6 +873,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 className: 'text-center',
             },
             {
+                data: 'id',
+                render: function(val, type, row) {
+                    return '<button class="btn btn-sm btn-outline-success badge-match" ' +
+                           'onclick="abrirModalMatch(' + val + ')" title="Buscar match no Odoo">' +
+                           '<i class="fas fa-search-dollar"></i></button>';
+                },
+                className: 'text-center',
+                orderable: false,
+            },
+            {
                 data: 'valor_documento',
                 render: function(val) {
                     if (val == null) return '-';
@@ -746,6 +916,18 @@ document.addEventListener('DOMContentLoaded', function() {
             },
             { data: 'data_vencimento', defaultContent: '-' },
             { data: 'arquivo_origem', defaultContent: '-' },
+            {
+                data: 'arquivo_s3_path',
+                render: function(val, type, row) {
+                    if (!val) return '<span class="text-muted">\u2014</span>';
+                    return '<button class="btn btn-sm btn-outline-primary" ' +
+                           'onclick="abrirPdfComprovante(' + row.id + ')" ' +
+                           'title="Abrir PDF (p. ' + (row.pagina_origem || '?') + ')">' +
+                           '<i class="fas fa-file-pdf"></i></button>';
+                },
+                className: 'text-center',
+                orderable: false,
+            },
         ],
         order: [[0, 'desc']],
         language: {
@@ -760,6 +942,24 @@ document.addEventListener('DOMContentLoaded', function() {
             const info = tabela.page.info();
             document.getElementById('total-comprovantes').textContent = info.recordsTotal;
         });
+    };
+
+    // =========================================================================
+    // ABRIR PDF DO COMPROVANTE (via presigned URL)
+    // =========================================================================
+    window.abrirPdfComprovante = async function(comprovanteId) {
+        try {
+            const resp = await fetch(`/financeiro/comprovantes/api/${comprovanteId}/pdf`);
+            const data = await resp.json();
+
+            if (data.sucesso && data.url) {
+                window.open(data.url, '_blank');
+            } else {
+                alert('PDF nao disponivel: ' + (data.mensagem || 'Erro desconhecido'));
+            }
+        } catch (err) {
+            alert('Erro ao abrir PDF: ' + err.message);
+        }
     };
 
     // =========================================================================
@@ -863,6 +1063,384 @@ document.addEventListener('DOMContentLoaded', function() {
         } finally {
             btnProcessarOfx.disabled = false;
             btnProcessarOfx.innerHTML = '<i class="fas fa-link"></i> Importar e Vincular';
+        }
+    });
+
+    // =========================================================================
+    // MATCH COM FATURAS ODOO
+    // =========================================================================
+
+    // --- Executar Match Batch (via RQ + polling) ---
+    let matchPollingInterval = null;
+
+    document.getElementById('btn-executar-match').addEventListener('click', async () => {
+        const btnMatch = document.getElementById('btn-executar-match');
+        const progresso = document.getElementById('match-progresso');
+        const resultado = document.getElementById('match-resultado');
+
+        btnMatch.disabled = true;
+        btnMatch.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enfileirando...';
+        progresso.style.display = 'block';
+        resultado.style.display = 'none';
+
+        const dataInicio = document.getElementById('match-data-inicio').value;
+        const dataFim = document.getElementById('match-data-fim').value;
+
+        const body = {};
+        if (dataInicio) body.data_inicio = dataInicio;
+        if (dataFim) body.data_fim = dataFim;
+
+        try {
+            const resp = await fetchComRetry(
+                '/financeiro/comprovantes/api/match/executar',
+                {
+                    method: 'POST',
+                    body: JSON.stringify(body),
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...getCsrfHeaders()
+                    }
+                }
+            );
+
+            const data = await resp.json();
+
+            if (data.sucesso && data.batch_id) {
+                btnMatch.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando em background...';
+                document.getElementById('match-progresso-texto').textContent = 'Iniciando matching...';
+                document.getElementById('match-progresso-contagem').textContent = '';
+                document.getElementById('match-progresso-detalhe').textContent = '';
+                document.getElementById('match-progresso-barra').style.width = '0%';
+
+                // Iniciar polling de progresso
+                iniciarPollingMatch(data.batch_id, btnMatch, progresso, resultado);
+            } else {
+                alert('Erro ao enfileirar: ' + (data.erro || 'Erro desconhecido'));
+                finalizarMatchUI(btnMatch, progresso);
+            }
+        } catch (err) {
+            alert('Erro de conexao: ' + err.message);
+            finalizarMatchUI(btnMatch, progresso);
+        }
+    });
+
+    function iniciarPollingMatch(batchId, btnMatch, progresso, resultado) {
+        if (matchPollingInterval) clearInterval(matchPollingInterval);
+
+        matchPollingInterval = setInterval(async () => {
+            try {
+                const resp = await fetch(`/financeiro/comprovantes/api/match/progresso/${batchId}`);
+                const data = await resp.json();
+
+                if (data.status === 'processando') {
+                    const processados = data.processados || 0;
+                    const total = data.total || 0;
+                    const pct = total > 0 ? Math.round((processados / total) * 100) : 0;
+
+                    document.getElementById('match-progresso-barra').style.width = pct + '%';
+                    document.getElementById('match-progresso-texto').textContent = `Processando comprovantes...`;
+                    document.getElementById('match-progresso-contagem').textContent = `${processados}/${total} (${pct}%)`;
+
+                    const comMatch = data.com_match || 0;
+                    const semMatch = data.sem_match || 0;
+                    const erros = data.erros || 0;
+                    const ultimoDoc = data.ultimo_doc || '';
+                    document.getElementById('match-progresso-detalhe').textContent =
+                        `${comMatch} com match, ${semMatch} sem match, ${erros} erros` +
+                        (ultimoDoc ? ` | Doc: ${ultimoDoc}` : '');
+
+                    // Atualizar stats parciais
+                    document.getElementById('match-stat-processados').textContent = processados;
+                    document.getElementById('match-stat-com-match').textContent = comMatch;
+                    document.getElementById('match-stat-sem-match').textContent = semMatch;
+                    document.getElementById('match-stat-erros').textContent = erros;
+                    resultado.style.display = 'block';
+
+                } else if (data.status === 'concluido') {
+                    clearInterval(matchPollingInterval);
+                    matchPollingInterval = null;
+
+                    const stats = data.estatisticas || {};
+                    document.getElementById('match-stat-processados').textContent = stats.processados || 0;
+                    document.getElementById('match-stat-com-match').textContent = stats.com_match || 0;
+                    document.getElementById('match-stat-sem-match').textContent = stats.sem_match || 0;
+                    document.getElementById('match-stat-erros').textContent = stats.erros || 0;
+                    resultado.style.display = 'block';
+
+                    document.getElementById('match-progresso-barra').style.width = '100%';
+                    document.getElementById('match-progresso-barra').classList.remove('progress-bar-animated');
+                    document.getElementById('match-progresso-texto').textContent = 'Matching concluido!';
+                    document.getElementById('match-progresso-contagem').textContent = '';
+                    document.getElementById('match-progresso-detalhe').textContent = '';
+
+                    setTimeout(() => {
+                        finalizarMatchUI(btnMatch, progresso);
+                        recarregarTabela();
+                    }, 2000);
+
+                } else if (data.status === 'erro') {
+                    clearInterval(matchPollingInterval);
+                    matchPollingInterval = null;
+
+                    document.getElementById('match-progresso-texto').textContent = 'Erro no processamento';
+                    document.getElementById('match-progresso-barra').classList.add('bg-danger');
+                    document.getElementById('match-progresso-barra').classList.remove('bg-success');
+                    document.getElementById('match-progresso-detalhe').textContent = data.ultimo_doc || '';
+
+                    setTimeout(() => {
+                        finalizarMatchUI(btnMatch, progresso);
+                        recarregarTabela();
+                    }, 3000);
+
+                } else if (data.status === 'nao_encontrado') {
+                    // Job ainda nao comecou — aguardar
+                    document.getElementById('match-progresso-texto').textContent = 'Aguardando worker...';
+                }
+
+            } catch (err) {
+                console.warn('Erro no polling de progresso match:', err);
+            }
+        }, 2000); // Polling a cada 2 segundos
+    }
+
+    function finalizarMatchUI(btnMatch, progresso) {
+        btnMatch.disabled = false;
+        btnMatch.innerHTML = '<i class="fas fa-search-dollar"></i> Executar Match (Todos Pendentes)';
+        progresso.style.display = 'none';
+
+        // Resetar barra
+        const barra = document.getElementById('match-progresso-barra');
+        barra.style.width = '0%';
+        barra.classList.add('progress-bar-animated');
+        barra.classList.remove('bg-danger');
+        barra.classList.add('bg-success');
+    }
+
+    // --- Modal de Candidatos ---
+    let comprovanteAtualId = null;
+
+    window.abrirModalMatch = async function(comprovanteId) {
+        comprovanteAtualId = comprovanteId;
+
+        const modal = new bootstrap.Modal(document.getElementById('modalCandidatos'));
+        document.getElementById('modal-loading').style.display = 'block';
+        document.getElementById('modal-candidatos-lista').style.display = 'none';
+        document.getElementById('modal-sem-candidatos').style.display = 'none';
+
+        // Limpar info anterior
+        document.getElementById('modal-benef').textContent = '...';
+        document.getElementById('modal-cnpj').textContent = '...';
+        document.getElementById('modal-doc').textContent = '...';
+        document.getElementById('modal-valor').textContent = '...';
+        document.getElementById('modal-venc').textContent = '...';
+
+        modal.show();
+
+        try {
+            const resp = await fetch(`/financeiro/comprovantes/api/match/${comprovanteId}/candidatos`);
+            const data = await resp.json();
+
+            document.getElementById('modal-loading').style.display = 'none';
+
+            if (data.sucesso && data.comprovante) {
+                const comp = data.comprovante;
+                document.getElementById('modal-benef').textContent = comp.beneficiario_razao_social || '-';
+                document.getElementById('modal-cnpj').textContent = comp.beneficiario_cnpj_cpf || '-';
+                document.getElementById('modal-doc').textContent = comp.numero_documento || '-';
+                document.getElementById('modal-valor').textContent = comp.valor_documento != null
+                    ? 'R$ ' + comp.valor_documento.toLocaleString('pt-BR', {minimumFractionDigits: 2})
+                    : '-';
+                document.getElementById('modal-venc').textContent = comp.data_vencimento || '-';
+            }
+
+            if (data.candidatos && data.candidatos.length > 0) {
+                renderizarCandidatos(data.candidatos);
+            } else {
+                document.getElementById('modal-sem-candidatos').style.display = 'block';
+            }
+
+        } catch (err) {
+            document.getElementById('modal-loading').style.display = 'none';
+            document.getElementById('modal-sem-candidatos').style.display = 'block';
+            document.getElementById('modal-sem-candidatos').innerHTML =
+                '<i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>' +
+                '<div class="text-danger">Erro: ' + err.message + '</div>';
+        }
+    };
+
+    function renderizarCandidatos(candidatos) {
+        const container = document.getElementById('modal-candidatos-lista');
+        container.style.display = 'block';
+        container.innerHTML = '';
+
+        for (const cand of candidatos) {
+            const scoreClass = cand.score >= 85 ? 'score-alto-border' :
+                               cand.score >= 60 ? 'score-medio-border' : 'score-baixo-border';
+            const scoreBg = cand.score >= 85 ? 'score-alto' :
+                            cand.score >= 60 ? 'score-medio' : 'score-baixo';
+            const financeira = cand.beneficiario_e_financeira
+                ? '<span class="badge bg-warning text-dark ms-2">Financeira</span>' : '';
+
+            const valorOriginal = cand.odoo_valor_original != null
+                ? 'R$ ' + cand.odoo_valor_original.toLocaleString('pt-BR', {minimumFractionDigits: 2})
+                : '-';
+            const valorRecalc = cand.odoo_valor_recalculado != null
+                ? '<br><small class="text-info">Recalc: R$ ' +
+                  cand.odoo_valor_recalculado.toLocaleString('pt-BR', {minimumFractionDigits: 2}) +
+                  '</small>'
+                : '';
+            const diff = cand.diferenca_valor != null
+                ? 'R$ ' + cand.diferenca_valor.toLocaleString('pt-BR', {minimumFractionDigits: 2})
+                : '-';
+
+            container.innerHTML += `
+                <div class="match-candidato ${scoreClass} border rounded" data-move-line-id="${cand.odoo_move_line_id}">
+                    <div class="row align-items-center">
+                        <div class="col-md-1 text-center">
+                            <span class="badge ${scoreBg} fs-6">${cand.score}%</span>
+                        </div>
+                        <div class="col-md-3">
+                            <strong>${cand.odoo_partner_name || '-'}</strong>${financeira}
+                            <br><small class="text-muted">Move: ${cand.odoo_move_name || '-'}</small>
+                        </div>
+                        <div class="col-md-2">
+                            <strong>NF:</strong> ${cand.nf_numero || '-'}
+                            <br><strong>Parcela:</strong> ${cand.parcela || '-'}
+                        </div>
+                        <div class="col-md-2">
+                            <strong>Valor:</strong> ${valorOriginal}${valorRecalc}
+                        </div>
+                        <div class="col-md-1">
+                            <strong>Diff:</strong> ${diff}
+                        </div>
+                        <div class="col-md-1">
+                            <strong>Venc:</strong><br>
+                            <small>${cand.odoo_vencimento_fmt || '-'}</small>
+                        </div>
+                        <div class="col-md-2 text-end">
+                            <button class="btn btn-sm btn-success"
+                                    onclick="salvarEConfirmarMatch(${comprovanteAtualId}, ${JSON.stringify(cand).replace(/"/g, '&quot;')})">
+                                <i class="fas fa-check"></i> Confirmar
+                            </button>
+                        </div>
+                    </div>
+                    <div class="mt-1">
+                        <small class="text-muted">${(cand.criterios || []).join(' | ')}</small>
+                    </div>
+                </div>`;
+        }
+    }
+
+    window.salvarEConfirmarMatch = async function(comprovanteId, candidato) {
+        if (!confirm('Confirmar este match?\n\nFornecedor: ' + (candidato.odoo_partner_name || '-') +
+                      '\nNF: ' + (candidato.nf_numero || '-') + ' / Parcela: ' + (candidato.parcela || '-') +
+                      '\nScore: ' + candidato.score + '%')) {
+            return;
+        }
+
+        try {
+            // Primeiro executar match individual para salvar
+            const respMatch = await fetchComRetry(
+                '/financeiro/comprovantes/api/match/executar',
+                {
+                    method: 'POST',
+                    body: JSON.stringify({ comprovante_ids: [comprovanteId] }),
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...getCsrfHeaders()
+                    }
+                }
+            );
+            await respMatch.json();
+
+            // Buscar lancamento criado para este comprovante + move_line
+            const respResultados = await fetch(
+                `/financeiro/comprovantes/api/match/resultados?comprovante_id=${comprovanteId}&status=PENDENTE`
+            );
+            const dadosResultados = await respResultados.json();
+
+            if (dadosResultados.lancamentos && dadosResultados.lancamentos.length > 0) {
+                // Encontrar o lancamento com o mesmo move_line_id
+                const lancamento = dadosResultados.lancamentos.find(
+                    l => l.odoo_move_line_id === candidato.odoo_move_line_id
+                ) || dadosResultados.lancamentos[0];
+
+                // Confirmar
+                const respConfirmar = await fetchComRetry(
+                    `/financeiro/comprovantes/api/match/${lancamento.id}/confirmar`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            ...getCsrfHeaders()
+                        }
+                    }
+                );
+                const resultado = await respConfirmar.json();
+
+                if (resultado.sucesso) {
+                    alert('Match confirmado com sucesso!');
+                    bootstrap.Modal.getInstance(document.getElementById('modalCandidatos')).hide();
+                    recarregarTabela();
+                } else {
+                    alert('Erro ao confirmar: ' + (resultado.erro || 'Erro desconhecido'));
+                }
+            } else {
+                alert('Nenhum lancamento encontrado para confirmar. Tente executar o match batch primeiro.');
+            }
+        } catch (err) {
+            alert('Erro: ' + err.message);
+        }
+    };
+
+    // --- Vinculacao Manual ---
+    document.getElementById('btn-vincular-manual').addEventListener('click', async () => {
+        if (!comprovanteAtualId) return;
+
+        const nf = document.getElementById('manual-nf').value.trim();
+        const parcela = document.getElementById('manual-parcela').value;
+        const companyId = document.getElementById('manual-company').value;
+
+        if (!nf) {
+            alert('Informe o numero da NF.');
+            return;
+        }
+
+        const btn = document.getElementById('btn-vincular-manual');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Vinculando...';
+
+        try {
+            const resp = await fetchComRetry(
+                `/financeiro/comprovantes/api/match/${comprovanteAtualId}/vincular-manual`,
+                {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        nf: nf,
+                        parcela: parseInt(parcela),
+                        company_id: parseInt(companyId),
+                    }),
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...getCsrfHeaders()
+                    }
+                }
+            );
+
+            const data = await resp.json();
+
+            if (data.sucesso) {
+                alert('Vinculacao manual confirmada!');
+                bootstrap.Modal.getInstance(document.getElementById('modalCandidatos')).hide();
+                recarregarTabela();
+            } else {
+                alert('Erro: ' + (data.erro || 'Erro desconhecido'));
+            }
+        } catch (err) {
+            alert('Erro de conexao: ' + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-link"></i> Vincular Manual';
         }
     });
 });

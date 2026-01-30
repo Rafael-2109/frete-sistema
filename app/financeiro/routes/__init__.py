@@ -18,6 +18,7 @@ Estrutura:
 - pagamentos_baixas.py   - Baixa de pagamentos via extrato (NEW)
 - dashboard.py           - Dashboard central financeiro (NEW)
 - comprovantes.py        - Upload e listagem de comprovantes de pagamento de boleto (NEW)
+- comprovante_match.py   - Matching de comprovantes com faturas Odoo (NEW)
 """
 
 import os
@@ -47,3 +48,4 @@ from app.financeiro.routes import contas_pagar
 from app.financeiro.routes import exportacao
 from app.financeiro.routes import dashboard
 from app.financeiro.routes import comprovantes
+from app.financeiro.routes import comprovante_match

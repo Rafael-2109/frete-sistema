@@ -447,14 +447,18 @@ def cotar_frete_mapa():
         if not lotes:
             return jsonify({'erro': 'Nenhuma separação encontrada para os pedidos selecionados'}), 400
 
-        # Salvar na sessão para a cotação
-        session['cotacao_lotes_mapa'] = lotes
+        # Salvar na sessão com as mesmas chaves que iniciar_cotacao usa
+        session['cotacao_lotes'] = lotes
+        session['cotacao_pedidos'] = lotes  # Retrocompatibilidade
+
+        # Limpar alteração de embarque anterior se houver
+        session.pop('alterando_embarque', None)
 
         return jsonify({
             'sucesso': True,
             'total_lotes': len(lotes),
             'lotes': lotes,
-            'redirect': url_for('cotacao.iniciar_cotacao')
+            'redirect': url_for('cotacao.tela_cotacao')
         })
 
     except Exception as e:

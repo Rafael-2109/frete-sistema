@@ -184,7 +184,9 @@ def processar_batch_comprovantes_job(
 
     try:
         with _app_context_safe():
+            from io import BytesIO
             from app.financeiro.services.comprovante_service import processar_pdf_comprovantes
+            from app.utils.file_storage import get_file_storage
 
             for idx, arq in enumerate(arquivos_info, 1):
                 nome = arq.get('nome', f'arquivo_{idx}.pdf')
@@ -204,11 +206,26 @@ def processar_batch_comprovantes_job(
                     with open(caminho, 'rb') as f:
                         pdf_bytes = f.read()
 
+                    # Upload PDF ao S3 (antes do processamento OCR)
+                    s3_path = None
+                    try:
+                        storage = get_file_storage()
+                        pdf_io = BytesIO(pdf_bytes)
+                        pdf_io.name = nome
+                        s3_path = storage.save_file(
+                            file=pdf_io,
+                            folder='comprovantes_pagamento',
+                            allowed_extensions=['pdf'],
+                        )
+                    except Exception as e:
+                        logger.warning(f"[Comprovante Batch] Erro ao salvar PDF no S3: {nome}: {e}")
+
                     # Processar via service (OCR + persistência com retry)
                     res = processar_pdf_comprovantes(
                         arquivo_bytes=pdf_bytes,
                         nome_arquivo=nome,
                         usuario=usuario_nome,
+                        arquivo_s3_path=s3_path,
                     )
 
                     # Acumular stats

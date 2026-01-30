@@ -494,6 +494,134 @@
         </button>
     </div>
 
+    <!-- Modal Verificação Bidirecional NF no CD (Mapa) -->
+    <div class="modal fade" id="modalNfCdMapa" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-warning text-dark py-2">
+                    <h5 class="modal-title mb-0">
+                        <i class="fas fa-exclamation-triangle me-2"></i>Pedidos relacionados não selecionados
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body px-4 py-3">
+                    <div class="alert alert-info d-flex align-items-center mb-4 py-2">
+                        <i class="fas fa-info-circle me-2 fs-5"></i>
+                        <span>Existem pedidos dos <strong>mesmos clientes</strong> que não foram incluídos na cotação. Verifique se deseja incluí-los.</span>
+                    </div>
+
+                    <!-- Seção: Pedidos Selecionados -->
+                    <div class="card border-success mb-4">
+                        <div class="card-header bg-success bg-opacity-10 py-2 d-flex align-items-center justify-content-between">
+                            <span>
+                                <i class="fas fa-check-circle text-success me-1"></i>
+                                <strong>Pedidos Selecionados para Cotação</strong>
+                            </span>
+                            <span class="badge bg-success" id="mapa_count_selecionados">0</span>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive" style="max-height: 220px; overflow-y: auto;">
+                                <table class="table table-sm table-hover table-striped mb-0 align-middle">
+                                    <thead class="table-light sticky-top" style="z-index: 1;">
+                                        <tr>
+                                            <th class="text-nowrap">Pedido</th>
+                                            <th class="text-nowrap">Cliente</th>
+                                            <th class="text-nowrap">Cidade/UF</th>
+                                            <th class="text-nowrap">Expedição</th>
+                                            <th class="text-end text-nowrap">Valor</th>
+                                            <th class="text-end text-nowrap">Peso</th>
+                                            <th class="text-end text-nowrap">Pallet</th>
+                                            <th class="text-nowrap">NF</th>
+                                            <th class="text-nowrap">Lote</th>
+                                            <th class="text-nowrap">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="mapa_tabela_selecionados"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Seção: Pendentes NF CD -->
+                    <div id="mapa_secao_pendentes_nf_cd" style="display: none;">
+                        <div class="card border-warning mb-4">
+                            <div class="card-header bg-warning bg-opacity-10 py-2 d-flex align-items-center justify-content-between">
+                                <span>
+                                    <i class="fas fa-undo text-warning me-1"></i>
+                                    <strong>NF no CD — Não Selecionados</strong>
+                                </span>
+                                <span class="badge bg-warning text-dark" id="mapa_count_nf_cd">0</span>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive" style="max-height: 220px; overflow-y: auto;">
+                                    <table class="table table-sm table-hover mb-0 align-middle">
+                                        <thead class="table-warning sticky-top" style="z-index: 1;">
+                                            <tr>
+                                                <th class="text-nowrap">Pedido</th>
+                                                <th class="text-nowrap">Cliente</th>
+                                                <th class="text-nowrap">Cidade/UF</th>
+                                                <th class="text-nowrap">Expedição</th>
+                                                <th class="text-end text-nowrap">Valor</th>
+                                                <th class="text-end text-nowrap">Peso</th>
+                                                <th class="text-end text-nowrap">Pallet</th>
+                                                <th class="text-nowrap">NF</th>
+                                                <th class="text-nowrap">Lote</th>
+                                                <th class="text-nowrap">Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="mapa_tabela_nf_cd"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Seção: Pendentes Normais -->
+                    <div id="mapa_secao_pendentes_normais" style="display: none;">
+                        <div class="card border-info mb-4">
+                            <div class="card-header bg-info bg-opacity-10 py-2 d-flex align-items-center justify-content-between">
+                                <span>
+                                    <i class="fas fa-box-open text-info me-1"></i>
+                                    <strong>Pedidos Abertos — Não Selecionados</strong>
+                                </span>
+                                <span class="badge bg-info text-dark" id="mapa_count_normais">0</span>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive" style="max-height: 220px; overflow-y: auto;">
+                                    <table class="table table-sm table-hover mb-0 align-middle">
+                                        <thead class="table-info sticky-top" style="z-index: 1;">
+                                            <tr>
+                                                <th class="text-nowrap">Pedido</th>
+                                                <th class="text-nowrap">Cliente</th>
+                                                <th class="text-nowrap">Cidade/UF</th>
+                                                <th class="text-nowrap">Expedição</th>
+                                                <th class="text-end text-nowrap">Valor</th>
+                                                <th class="text-end text-nowrap">Peso</th>
+                                                <th class="text-end text-nowrap">Pallet</th>
+                                                <th class="text-nowrap">NF</th>
+                                                <th class="text-nowrap">Lote</th>
+                                                <th class="text-nowrap">Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="mapa_tabela_normais"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i>Cancelar
+                    </button>
+                    <button type="button" class="btn btn-warning" id="btnProsseguirCotacaoMapa">
+                        <i class="fas fa-arrow-right me-1"></i>Prosseguir mesmo assim
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- jQuery -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <!-- Bootstrap JS -->
@@ -2215,7 +2343,10 @@
             });
         }
 
-        // Cotar frete para clientes selecionados
+        // URL de redirect para cotação (salva após preparar session)
+        let _cotacaoRedirectUrl = null;
+
+        // Cotar frete para clientes selecionados (com verificação NF CD)
         function cotarFrete() {
             const selecionados = getClientesSelecionados();
             if (selecionados.length === 0) {
@@ -2231,6 +2362,7 @@
 
             showLoading();
 
+            // Passo 1: Preparar session com lotes no backend
             $.ajax({
                 url: '/carteira/mapa/api/cotar-frete',
                 method: 'POST',
@@ -2240,20 +2372,14 @@
                 },
                 data: JSON.stringify({ pedidos: pedidos }),
                 success: function (response) {
-                    hideLoading();
                     if (response.sucesso) {
-                        Swal.fire({
-                            title: 'Cotação de Frete',
-                            text: `${response.total_lotes} lote(s) de separação encontrado(s). Deseja prosseguir para a cotação?`,
-                            icon: 'success',
-                            showCancelButton: true,
-                            confirmButtonText: 'Prosseguir',
-                            cancelButtonText: 'Cancelar'
-                        }).then((result) => {
-                            if (result.isConfirmed) {
-                                window.location.href = response.redirect;
-                            }
-                        });
+                        _cotacaoRedirectUrl = response.redirect;
+
+                        // Passo 2: Verificar NF CD pendentes
+                        verificarNfCdMapa(response.lotes, response.redirect, response.total_lotes);
+                    } else {
+                        hideLoading();
+                        Swal.fire('Erro', 'Erro ao preparar cotação', 'error');
                     }
                 },
                 error: function (xhr) {
@@ -2261,6 +2387,149 @@
                     Swal.fire('Erro', xhr.responseJSON?.erro || 'Erro ao processar cotação', 'error');
                 }
             });
+        }
+
+        // Verificação bidirecional NF CD para o mapa
+        function verificarNfCdMapa(lotes, redirectUrl, totalLotes) {
+            $.ajax({
+                url: '/cotacao/verificar_nf_cd',
+                method: 'POST',
+                contentType: 'application/json',
+                headers: {
+                    'X-CSRFToken': getCSRFToken()
+                },
+                data: JSON.stringify({ separacao_lote_ids: lotes }),
+                success: function (data) {
+                    hideLoading();
+
+                    if (!data.success) {
+                        Swal.fire('Erro', data.message || 'Erro ao verificar pedidos.', 'error');
+                        return;
+                    }
+
+                    if (!data.tem_pendentes) {
+                        // Sem pendentes NF CD - confirmar e redirecionar
+                        Swal.fire({
+                            title: 'Cotação de Frete',
+                            text: `${totalLotes} lote(s) de separação encontrado(s). Deseja prosseguir para a cotação?`,
+                            icon: 'success',
+                            showCancelButton: true,
+                            confirmButtonText: 'Prosseguir',
+                            cancelButtonText: 'Cancelar'
+                        }).then((result) => {
+                            if (result.isConfirmed) {
+                                window.location.href = redirectUrl;
+                            }
+                        });
+                        return;
+                    }
+
+                    // TEM pendentes - abrir modal NF CD
+                    preencherModalNfCdMapa(data.selecionados, data.pendentes_nf_cd, data.pendentes_normais);
+
+                    // Configurar botão "Prosseguir mesmo assim"
+                    document.getElementById('btnProsseguirCotacaoMapa').onclick = function () {
+                        var modalEl = document.getElementById('modalNfCdMapa');
+                        var modal = bootstrap.Modal.getInstance(modalEl);
+                        if (modal) modal.hide();
+                        window.location.href = redirectUrl;
+                    };
+
+                    var modal = new bootstrap.Modal(document.getElementById('modalNfCdMapa'));
+                    modal.show();
+                },
+                error: function (xhr) {
+                    hideLoading();
+                    console.error('Erro na verificação NF CD:', xhr);
+                    // Em caso de erro na verificação, prosseguir sem verificação
+                    Swal.fire({
+                        title: 'Cotação de Frete',
+                        text: `${totalLotes} lote(s) encontrado(s). Não foi possível verificar NF no CD. Deseja prosseguir?`,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonText: 'Prosseguir',
+                        cancelButtonText: 'Cancelar'
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            window.location.href = redirectUrl;
+                        }
+                    });
+                }
+            });
+        }
+
+        // Preencher modal NF CD do mapa
+        function preencherModalNfCdMapa(selecionados, pendentes_nf_cd, pendentes_normais) {
+            var tbodySelecionados = document.getElementById('mapa_tabela_selecionados');
+            tbodySelecionados.innerHTML = '';
+            selecionados.forEach(function (p) {
+                tbodySelecionados.innerHTML += renderizarLinhaNfCdMapa(p, '');
+            });
+            document.getElementById('mapa_count_selecionados').textContent = selecionados.length;
+
+            // Seção NF CD
+            var secaoNfCd = document.getElementById('mapa_secao_pendentes_nf_cd');
+            var tbodyNfCd = document.getElementById('mapa_tabela_nf_cd');
+            tbodyNfCd.innerHTML = '';
+            if (pendentes_nf_cd && pendentes_nf_cd.length > 0) {
+                secaoNfCd.style.display = 'block';
+                pendentes_nf_cd.forEach(function (p) {
+                    tbodyNfCd.innerHTML += renderizarLinhaNfCdMapa(p, 'table-warning');
+                });
+                document.getElementById('mapa_count_nf_cd').textContent = pendentes_nf_cd.length;
+            } else {
+                secaoNfCd.style.display = 'none';
+            }
+
+            // Seção Normais
+            var secaoNormais = document.getElementById('mapa_secao_pendentes_normais');
+            var tbodyNormais = document.getElementById('mapa_tabela_normais');
+            tbodyNormais.innerHTML = '';
+            if (pendentes_normais && pendentes_normais.length > 0) {
+                secaoNormais.style.display = 'block';
+                pendentes_normais.forEach(function (p) {
+                    tbodyNormais.innerHTML += renderizarLinhaNfCdMapa(p, 'table-info');
+                });
+                document.getElementById('mapa_count_normais').textContent = pendentes_normais.length;
+            } else {
+                secaoNormais.style.display = 'none';
+            }
+        }
+
+        // Renderizar linha da tabela NF CD do mapa
+        function renderizarLinhaNfCdMapa(p, rowClass) {
+            var statusBadge = '';
+            if (p.status) {
+                var statusColors = {
+                    'ABERTO': 'primary', 'PREVISAO': 'info', 'COTADO': 'warning',
+                    'EMBARCADO': 'success', 'FATURADO': 'secondary', 'NF no CD': 'danger'
+                };
+                var color = statusColors[p.status] || 'secondary';
+                statusBadge = '<span class="badge bg-' + color + '">' + p.status + '</span>';
+            }
+
+            function fmtValor(v) {
+                if (v === null || v === undefined) return '-';
+                return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+
+            function fmtNum(v, d) {
+                if (v === null || v === undefined) return '-';
+                return v.toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d });
+            }
+
+            return '<tr class="' + rowClass + '">' +
+                '<td class="text-nowrap">' + (p.num_pedido || '') + '</td>' +
+                '<td>' + (p.raz_social_red || '') + '</td>' +
+                '<td class="text-nowrap">' + (p.nome_cidade || '') + '/' + (p.cod_uf || '') + '</td>' +
+                '<td class="text-nowrap">' + (p.expedicao || '-') + '</td>' +
+                '<td class="text-end">R$ ' + fmtValor(p.valor_saldo) + '</td>' +
+                '<td class="text-end">' + fmtNum(p.peso, 1) + '</td>' +
+                '<td class="text-end">' + fmtNum(p.pallet, 2) + '</td>' +
+                '<td class="text-nowrap">' + (p.numero_nf || '-') + '</td>' +
+                '<td class="text-nowrap"><small class="text-muted">' + (p.separacao_lote_id || '') + '</small></td>' +
+                '<td>' + statusBadge + '</td>' +
+            '</tr>';
         }
 
         // Função antiga mantida para compatibilidade
