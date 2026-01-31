@@ -26,6 +26,10 @@ from claude_agent_sdk import (
     ToolResultBlock,   # Resultado de execução de ferramenta
     TextBlock,
     ThinkingBlock,     # FEAT-002: Extended Thinking
+    # SDK 0.1.26+: Error classes especializadas
+    CLINotFoundError,
+    ProcessError,
+    CLIJSONDecodeError,
 )
 
 # Fallback para API direta (health check)
@@ -394,10 +398,23 @@ Nunca invente informações."""
             options_dict["max_thinking_tokens"] = 20000
             logger.info("[AGENT_CLIENT] Extended Thinking ativado (max_thinking_tokens=20000)")
 
-        # Callback de permissão (formato: {behavior, updatedInput, message})
+        # Callback de permissão (SDK 0.1.26+: 3 params, retorno tipado)
         # Ref: https://platform.claude.com/docs/pt-BR/agent-sdk/permissions
         if can_use_tool:
             options_dict["can_use_tool"] = can_use_tool
+
+        # SDK 0.1.26+: Fallback model para resiliência em produção
+        # Se o modelo principal falhar (rate limit, indisponibilidade),
+        # o SDK automaticamente usa o fallback
+        options_dict["fallback_model"] = "sonnet"
+        logger.info("[AGENT_CLIENT] Fallback model configurado: sonnet")
+
+        # SDK 0.1.26+: Barreira real de segurança
+        # allowed_tools SOZINHO não bloqueia — agente pode pedir permissão
+        # disallowed_tools impede completamente o acesso
+        options_dict["disallowed_tools"] = [
+            "NotebookEdit",   # Não há Jupyter notebooks no sistema
+        ]
 
         return ClaudeAgentOptions(**options_dict)
 
@@ -724,6 +741,73 @@ Nunca invente informações."""
                     }
                 )
 
+        # =================================================================
+        # SDK 0.1.26+: Error Classes especializadas (antes do genérico)
+        # =================================================================
+        except CLINotFoundError as e:
+            elapsed_total = time.time() - stream_start_time
+            logger.critical(
+                f"[AGENT_CLIENT] CLI não encontrada após {elapsed_total:.1f}s: {e}"
+            )
+            yield StreamEvent(
+                type='error',
+                content="Erro crítico: CLI do agente não encontrada. Reinstale o SDK.",
+                metadata={'error_type': 'cli_not_found', 'elapsed_seconds': elapsed_total}
+            )
+            if not done_emitted:
+                done_emitted = True
+                yield StreamEvent(
+                    type='done',
+                    content={'text': full_text, 'session_id': current_session_id,
+                             'error_recovery': True},
+                    metadata={'error_type': 'cli_not_found'}
+                )
+
+        except ProcessError as e:
+            elapsed_total = time.time() - stream_start_time
+            exit_code = getattr(e, 'exit_code', None)
+            logger.error(
+                f"[AGENT_CLIENT] Process error após {elapsed_total:.1f}s | "
+                f"exit_code={exit_code} | mensagem={e}"
+            )
+            user_message = str(e)
+            if exit_code:
+                user_message = f"Erro de processo (código {exit_code}). Tente novamente."
+            yield StreamEvent(
+                type='error',
+                content=user_message,
+                metadata={'error_type': 'process_error', 'exit_code': exit_code,
+                          'elapsed_seconds': elapsed_total, 'last_tool': current_tool_name}
+            )
+            if not done_emitted:
+                done_emitted = True
+                yield StreamEvent(
+                    type='done',
+                    content={'text': full_text, 'input_tokens': input_tokens,
+                             'output_tokens': output_tokens, 'session_id': current_session_id,
+                             'tool_calls': len(tool_calls), 'error_recovery': True},
+                    metadata={'error_type': 'process_error'}
+                )
+
+        except CLIJSONDecodeError as e:
+            elapsed_total = time.time() - stream_start_time
+            logger.error(
+                f"[AGENT_CLIENT] JSON decode error após {elapsed_total:.1f}s: {e}"
+            )
+            yield StreamEvent(
+                type='error',
+                content="Erro ao processar resposta do agente. Tente novamente.",
+                metadata={'error_type': 'json_decode_error', 'elapsed_seconds': elapsed_total}
+            )
+            if not done_emitted:
+                done_emitted = True
+                yield StreamEvent(
+                    type='done',
+                    content={'text': full_text, 'session_id': current_session_id,
+                             'error_recovery': True},
+                    metadata={'error_type': 'json_decode_error'}
+                )
+
         except Exception as e:
             error_msg = str(e)
             error_type = type(e).__name__
@@ -745,13 +829,13 @@ Nunca invente informações."""
             # Mensagem amigável para o usuário
             user_message = error_msg
             if 'timeout' in error_msg.lower():
-                user_message = "⏱️ Tempo limite excedido. Tente uma consulta mais simples."
+                user_message = "Tempo limite excedido. Tente uma consulta mais simples."
             elif 'connection' in error_msg.lower():
-                user_message = "🔌 Erro de conexão com a API. Tente novamente em alguns segundos."
+                user_message = "Erro de conexão com a API. Tente novamente em alguns segundos."
             elif 'permission' in error_msg.lower() or 'denied' in error_msg.lower():
-                user_message = f"🚫 Operação não permitida: {error_msg}"
+                user_message = f"Operação não permitida: {error_msg}"
             elif 'rate' in error_msg.lower() and 'limit' in error_msg.lower():
-                user_message = "⚠️ Limite de requisições excedido. Aguarde um momento."
+                user_message = "Limite de requisições excedido. Aguarde um momento."
 
             yield StreamEvent(
                 type='error',
