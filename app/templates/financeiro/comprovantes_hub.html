@@ -5,15 +5,15 @@
 {% block extra_css %}
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
 <style>
+    /* Upload & resultados */
     .status-novo { color: var(--bs-success); }
     .status-duplicado { color: var(--bs-warning); }
     .status-erro { color: var(--bs-danger); }
     .status-vinculado { color: var(--bs-info); }
     .status-sem_match { color: var(--bs-secondary); }
     .status-ja_vinculado { color: var(--bs-warning); }
-    .badge-ofx { font-size: 0.7em; }
-    .badge-odoo { font-size: 0.7em; }
-    .badge-match { font-size: 0.7em; cursor: pointer; }
+
+    /* Modal de match - candidatos */
     .score-alto { background-color: #198754 !important; }
     .score-medio { background-color: #fd7e14 !important; }
     .score-baixo { background-color: #dc3545 !important; }
@@ -22,9 +22,20 @@
     .match-candidato.score-alto-border { border-left-color: #198754; }
     .match-candidato.score-medio-border { border-left-color: #fd7e14; }
     .match-candidato.score-baixo-border { border-left-color: #dc3545; }
-    .badge-status { font-size: 0.7em; }
+
+    /* Tabela comprovantes - Stacked cells */
+    #tabela-comprovantes { font-size: 0.88em; }
+    #tabela-comprovantes td { vertical-align: middle; padding: 6px 8px; line-height: 1.35; }
+    #tabela-comprovantes thead th { font-size: 0.82em; padding: 8px; white-space: nowrap; }
+
+    /* Pipeline badges empilhados */
+    .pipeline-badges { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
+    .pipeline-badges .badge { font-size: 0.72em; padding: 2px 6px; white-space: nowrap; }
+
+    /* Odoo links */
     .odoo-link { text-decoration: none; font-size: 0.85em; margin: 0 2px; }
     .odoo-link:hover { opacity: 0.8; }
+    .reconciled-check { font-size: 0.55em; vertical-align: super; color: #198754; margin-left: 1px; }
 </style>
 {% endblock %}
 
@@ -308,23 +319,13 @@
                 <table id="tabela-comprovantes" class="table table-striped table-hover mb-0" style="width: 100%;">
                     <thead>
                         <tr>
-                            <th>Data Pgto</th>
+                            <th>Data</th>
                             <th>Beneficiário</th>
-                            <th>Pagador</th>
-                            <th>N. Documento</th>
-                            <th>N. Agendamento</th>
-                            <th>OFX</th>
-                            <th>Odoo</th>
-                            <th>Match</th>
-                            <th>Status</th>
-                            <th>Links</th>
-                            <th class="text-end">Vl. Documento</th>
-                            <th class="text-end">Desconto</th>
-                            <th class="text-end">Juros/Multa</th>
-                            <th class="text-end">Vl. Pago</th>
-                            <th>Vencimento</th>
+                            <th>Documento</th>
+                            <th>Pipeline</th>
+                            <th class="text-end">Valores</th>
+                            <th>Ações</th>
                             <th>Arquivo</th>
-                            <th>PDF</th>
                         </tr>
                     </thead>
                     <tbody></tbody>
@@ -860,205 +861,316 @@ document.addEventListener('DOMContentLoaded', function() {
     // =========================================================================
     // DATATABLE
     // =========================================================================
+    // Helper: formatar moeda BR
+    function fmtBRL(val) {
+        if (val == null) return '-';
+        return 'R$ ' + val.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+
+    // Helper: truncar texto
+    function truncar(txt, max) {
+        if (!txt) return '-';
+        return txt.length > max ? txt.substring(0, max) + '...' : txt;
+    }
+
+    // Helper: comparar datas DD/MM/YYYY e retornar dias de diferença
+    function diasAtraso(dataPgto, dataVenc) {
+        if (!dataPgto || !dataVenc) return null;
+        var pParts = dataPgto.split('/');
+        var vParts = dataVenc.split('/');
+        if (pParts.length !== 3 || vParts.length !== 3) return null;
+        var pgto = new Date(pParts[2], pParts[1] - 1, pParts[0]);
+        var venc = new Date(vParts[2], vParts[1] - 1, vParts[0]);
+        return Math.round((pgto - venc) / (1000 * 60 * 60 * 24));
+    }
+
     const tabela = $('#tabela-comprovantes').DataTable({
         ajax: {
             url: '{{ url_for("financeiro.comprovantes_api_dados") }}',
             dataSrc: 'dados',
         },
         columns: [
-            { data: 'data_pagamento', defaultContent: '-' },
+            // ── COL 1: DATA (Data Pgto + Vencimento + Atraso) ──
+            {
+                data: 'data_pagamento',
+                render: function(val, type, row) {
+                    if (type !== 'display') return val || '';
+                    var html = '<div class="fw-semibold" style="font-size:0.88em">' + (val || '-') + '</div>';
+                    if (row.data_vencimento) {
+                        html += '<div style="font-size:0.75em" class="text-muted">Venc: ' + row.data_vencimento + '</div>';
+                    }
+                    var dias = diasAtraso(val, row.data_vencimento);
+                    if (dias !== null) {
+                        if (dias > 0) {
+                            html += '<div><span class="badge bg-danger-subtle text-danger" style="font-size:0.68em">' +
+                                    dias + 'd atraso</span></div>';
+                        } else {
+                            html += '<div><span class="badge bg-success-subtle text-success" style="font-size:0.68em">' +
+                                    'Em dia</span></div>';
+                        }
+                    }
+                    return html;
+                },
+                defaultContent: '-',
+                width: '85px',
+            },
+            // ── COL 2: BENEFICIÁRIO (Nome + CNPJ + Pagador/Partner) ──
             {
                 data: 'beneficiario_razao_social',
                 render: function(val, type, row) {
-                    if (!val) return '-';
-                    var html = '<div>' + val + '</div>';
+                    if (type !== 'display') return val || '';
+                    var nome = truncar(val, 40);
+                    var html = '<div class="fw-semibold" style="font-size:0.85em" title="' + (val || '') + '">' + nome + '</div>';
+                    // L2: CNPJ + badge Financeira
                     if (row.beneficiario_cnpj_cpf) {
-                        html += '<small class="text-muted">' + row.beneficiario_cnpj_cpf + '</small>';
-                    }
-                    return html;
-                },
-                defaultContent: '-',
-            },
-            {
-                data: 'pagador_razao_social',
-                render: function(val, type, row) {
-                    if (!val) return '-';
-                    var html = '<div>' + val + '</div>';
-                    if (row.pagador_cnpj_cpf) {
-                        html += '<small class="text-muted">' + row.pagador_cnpj_cpf + '</small>';
-                    }
-                    return html;
-                },
-                defaultContent: '-',
-            },
-            { data: 'numero_documento', defaultContent: '-' },
-            { data: 'numero_agendamento', defaultContent: '-' },
-            {
-                data: 'ofx_fitid',
-                render: function(val, type, row) {
-                    if (!val) return '<span class="badge bg-light text-muted badge-ofx">—</span>';
-                    return '<span class="badge bg-info badge-ofx" title="FITID: ' + val + '">' +
-                           '<i class="fas fa-link me-1"></i>OFX</span>';
-                },
-                defaultContent: '-',
-                className: 'text-center',
-            },
-            {
-                data: 'odoo_statement_line_id',
-                render: function(val, type, row) {
-                    if (!val) {
-                        if (row.ofx_fitid) {
-                            return '<span class="badge bg-warning text-dark badge-odoo" title="FITID vinculado mas sem linha no Odoo">' +
-                                   '<i class="fas fa-exclamation-triangle me-1"></i>Pendente</span>';
+                        html += '<div style="font-size:0.75em;font-family:monospace" class="text-muted">' +
+                                row.beneficiario_cnpj_cpf;
+                        if (row.lancamento_beneficiario_e_financeira) {
+                            html += ' <span class="badge bg-warning text-dark" style="font-size:0.85em">Financeira</span>';
                         }
-                        return '<span class="badge bg-light text-muted badge-odoo">—</span>';
+                        html += '</div>';
                     }
-                    var title = 'Line ID: ' + val;
-                    if (row.odoo_move_id) title += ' | Move: ' + row.odoo_move_id;
-                    if (row.odoo_is_reconciled) title += ' | Conciliado';
-                    return '<span class="badge bg-success badge-odoo" title="' + title + '">' +
-                           '<i class="fas fa-check-circle me-1"></i>Odoo</span>';
+                    // L3: Partner Odoo (se match) ou Pagador resumido
+                    if (row.lancamento_odoo_partner_name) {
+                        html += '<div style="font-size:0.72em" class="text-info">' +
+                                '<i class="fas fa-building me-1"></i>' +
+                                truncar(row.lancamento_odoo_partner_name, 35) + '</div>';
+                    } else if (row.pagador_razao_social) {
+                        html += '<div style="font-size:0.72em" class="text-muted">' +
+                                '<i class="fas fa-wallet me-1"></i>Pago por: ' +
+                                truncar(row.pagador_razao_social, 30) + '</div>';
+                    }
+                    return html;
                 },
                 defaultContent: '-',
-                className: 'text-center',
+                width: '240px',
             },
+            // ── COL 3: DOCUMENTO (N.Doc + Agendamento + NF/Parcela) ──
             {
-                data: 'id',
+                data: 'numero_documento',
                 render: function(val, type, row) {
-                    return '<button class="btn btn-sm btn-outline-success badge-match" ' +
-                           'onclick="abrirModalMatch(' + val + ')" title="Buscar match no Odoo">' +
-                           '<i class="fas fa-search-dollar"></i></button>';
+                    if (type !== 'display') return val || '';
+                    var html = '<div class="fw-medium" style="font-size:0.85em;font-family:monospace">' +
+                               (val || '-') + '</div>';
+                    if (row.numero_agendamento) {
+                        html += '<div style="font-size:0.75em" class="text-muted">Agend: ' +
+                                row.numero_agendamento + '</div>';
+                    }
+                    // L3: NF parseada + parcela (enrichment)
+                    if (row.lancamento_nf_numero) {
+                        html += '<div style="font-size:0.72em">' +
+                                '<span class="badge bg-primary-subtle text-primary-emphasis">NF ' +
+                                row.lancamento_nf_numero;
+                        if (row.lancamento_parcela) {
+                            html += '/' + row.lancamento_parcela;
+                        }
+                        html += '</span></div>';
+                    }
+                    return html;
                 },
-                className: 'text-center',
-                orderable: false,
+                defaultContent: '-',
+                width: '140px',
             },
-            // Coluna STATUS (badge com ação de lançar)
+            // ── COL 4: PIPELINE (OFX + Extrato + Status/Score/Reconcile) ──
             {
                 data: 'lancamento_status',
                 render: function(val, type, row) {
-                    if (!val) return '<span class="badge bg-light text-muted badge-status">\u2014</span>';
+                    if (type !== 'display') return val || '';
+                    var html = '<div class="pipeline-badges">';
 
-                    if (val === 'PENDENTE') {
-                        return '<span class="badge bg-warning text-dark badge-status" title="Match encontrado, aguardando confirmação">' +
-                               '<i class="fas fa-clock me-1"></i>Pendente</span>';
+                    // L1: OFX
+                    if (row.ofx_fitid) {
+                        html += '<span class="badge bg-info" title="FITID: ' + row.ofx_fitid + '">' +
+                                '<i class="fas fa-link me-1"></i>OFX</span>';
+                    } else {
+                        html += '<span class="badge bg-light text-muted">' +
+                                '<i class="fas fa-minus me-1"></i>OFX</span>';
                     }
 
-                    if (val === 'CONFIRMADO') {
-                        return '<span class="badge bg-info text-white badge-status me-1" title="Confirmado, pronto para lançar">' +
-                               '<i class="fas fa-check me-1"></i>Confirmado</span>' +
-                               '<button class="btn btn-sm btn-primary py-0 px-1" style="font-size: 0.7em;" ' +
-                               'onclick="lancarIndividual(' + row.lancamento_id + ')" title="Lançar no Odoo">' +
-                               '<i class="fas fa-paper-plane"></i></button>';
+                    // L2: Extrato Odoo
+                    if (row.odoo_statement_line_id) {
+                        var recIcon = row.odoo_is_reconciled
+                            ? '<i class="fas fa-check-double ms-1" title="Conciliado no Odoo"></i>' : '';
+                        html += '<span class="badge bg-success" title="Statement Line: ' + row.odoo_statement_line_id + '">' +
+                                '<i class="fas fa-university me-1"></i>Extrato' + recIcon + '</span>';
+                    } else if (row.ofx_fitid) {
+                        html += '<span class="badge bg-warning text-dark" title="OFX vinculado mas sem extrato no Odoo">' +
+                                '<i class="fas fa-exclamation-triangle me-1"></i>Extrato</span>';
+                    } else {
+                        html += '<span class="badge bg-light text-muted">' +
+                                '<i class="fas fa-minus me-1"></i>Extrato</span>';
                     }
 
-                    if (val === 'LANCADO') {
+                    // L3: Status + Score + Reconciliação
+                    if (!val) {
+                        html += '<span class="badge bg-light text-muted">' +
+                                '<i class="fas fa-minus me-1"></i>Match</span>';
+                    } else if (val === 'PENDENTE') {
+                        var scoreHtml = '';
+                        if (row.lancamento_match_score != null) {
+                            var sCls = row.lancamento_match_score >= 85 ? 'text-white' :
+                                       row.lancamento_match_score >= 60 ? '' : 'text-white';
+                            scoreHtml = ' ' + row.lancamento_match_score + '%';
+                        }
+                        html += '<span class="badge bg-warning text-dark" title="Aguardando confirmacao">' +
+                                '<i class="fas fa-clock me-1"></i>Pendente' + scoreHtml + '</span>';
+                    } else if (val === 'CONFIRMADO') {
+                        var scoreC = row.lancamento_match_score != null ? ' ' + row.lancamento_match_score + '%' : '';
+                        html += '<span class="badge bg-info text-white" title="Pronto para lancar">' +
+                                '<i class="fas fa-check me-1"></i>Confirmado' + scoreC + '</span>';
+                    } else if (val === 'LANCADO') {
                         var tooltip = 'Baixado no Odoo';
-                        if (row.lancamento_odoo_payment_name) tooltip += ' | Payment: ' + row.lancamento_odoo_payment_name;
-                        if (row.lancamento_lancado_em) tooltip += ' | Em: ' + row.lancamento_lancado_em;
-                        return '<span class="badge bg-success badge-status" title="' + tooltip + '">' +
-                               '<i class="fas fa-check-double me-1"></i>Baixado</span>';
+                        if (row.lancamento_odoo_payment_name) tooltip += ' | ' + row.lancamento_odoo_payment_name;
+                        if (row.lancamento_lancado_em) tooltip += ' | ' + row.lancamento_lancado_em;
+                        var reconcIcons = '';
+                        if (row.lancamento_odoo_full_reconcile_id) {
+                            reconcIcons += '<i class="fas fa-link ms-1" title="Titulo conciliado (Full Reconcile ' +
+                                           row.lancamento_odoo_full_reconcile_id + ')"></i>';
+                        }
+                        if (row.lancamento_odoo_full_reconcile_extrato_id) {
+                            reconcIcons += '<i class="fas fa-university ms-1" title="Extrato conciliado (Full Reconcile ' +
+                                           row.lancamento_odoo_full_reconcile_extrato_id + ')"></i>';
+                        }
+                        html += '<span class="badge bg-success" title="' + tooltip + '">' +
+                                '<i class="fas fa-check-double me-1"></i>Baixado' + reconcIcons + '</span>';
+                    } else if (row.lancamento_erro) {
+                        html += '<span class="badge bg-danger" title="Erro: ' +
+                                (row.lancamento_erro || '').substring(0, 200) + '">' +
+                                '<i class="fas fa-exclamation-circle me-1"></i>Erro</span>';
+                    } else {
+                        html += '<span class="badge bg-secondary">' + val + '</span>';
                     }
 
-                    // Status com erro
-                    if (row.lancamento_erro) {
-                        return '<span class="badge bg-danger badge-status" title="Erro: ' +
-                               row.lancamento_erro.substring(0, 200) + '">' +
-                               '<i class="fas fa-exclamation-circle me-1"></i>Erro</span>';
-                    }
-
-                    return '<span class="badge bg-secondary badge-status">' + val + '</span>';
+                    html += '</div>';
+                    return html;
                 },
                 className: 'text-center',
                 defaultContent: '-',
+                width: '120px',
             },
-            // Coluna LINKS para Odoo (título, extrato, payment)
+            // ── COL 5: VALORES (Vl.Pago + Vl.Doc + Desc/Juros/Diff) ──
             {
-                data: 'lancamento_odoo_move_id',
+                data: 'valor_pago',
                 render: function(val, type, row) {
+                    if (type === 'sort' || type === 'filter') return val || 0;
+                    // L1: Valor Pago (destaque)
+                    var html = '<div class="fw-bold text-primary" style="font-size:0.92em">' +
+                               fmtBRL(val) + '</div>';
+                    // L2: Valor Documento
+                    if (row.valor_documento != null && row.valor_documento !== val) {
+                        html += '<div style="font-size:0.72em" class="text-muted">Doc: ' +
+                                fmtBRL(row.valor_documento) + '</div>';
+                    }
+                    // L3: Desconto / Juros / Diferença Odoo
+                    var extras = [];
+                    if (row.valor_desconto_abatimento && row.valor_desconto_abatimento !== 0) {
+                        extras.push('<span class="text-success">-' + fmtBRL(row.valor_desconto_abatimento) + '</span>');
+                    }
+                    if (row.valor_juros_multa && row.valor_juros_multa !== 0) {
+                        extras.push('<span class="text-danger">+' + fmtBRL(row.valor_juros_multa) + '</span>');
+                    }
+                    if (row.lancamento_diferenca_valor != null) {
+                        var absDiff = Math.abs(row.lancamento_diferenca_valor);
+                        var diffCls = absDiff < 0.01 ? 'text-success' : 'text-danger';
+                        var diffSign = row.lancamento_diferenca_valor >= 0 ? '+' : '-';
+                        var diffFmt = 'R$ ' + absDiff.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                        extras.push('<span class="' + diffCls + '" title="Diferenca vs titulo Odoo">\u0394' + diffSign + diffFmt + '</span>');
+                    }
+                    if (extras.length > 0) {
+                        html += '<div style="font-size:0.72em">' + extras.join(' ') + '</div>';
+                    }
+                    return html;
+                },
+                className: 'text-end',
+                width: '150px',
+            },
+            // ── COL 6: AÇÕES (Match btn + Lançar btn + Links Odoo) ──
+            {
+                data: 'id',
+                render: function(val, type, row) {
+                    var html = '<div class="d-flex flex-column align-items-center gap-1">';
+
+                    // L1: Botões de ação
+                    html += '<div class="btn-group btn-group-sm">';
+                    html += '<button class="btn btn-outline-success py-0 px-1" ' +
+                            'onclick="abrirModalMatch(' + val + ')" title="Buscar match no Odoo">' +
+                            '<i class="fas fa-search-dollar"></i></button>';
+                    if (row.lancamento_status === 'CONFIRMADO' && row.lancamento_id) {
+                        html += '<button class="btn btn-primary py-0 px-1" ' +
+                                'onclick="lancarIndividual(' + row.lancamento_id + ')" title="Lancar no Odoo">' +
+                                '<i class="fas fa-paper-plane"></i></button>';
+                    }
+                    html += '</div>';
+
+                    // L2: Links Odoo (título, extrato, payment) com check de reconciliação
                     var links = [];
                     var odooBase = 'https://odoo.nacomgoya.com.br/web#';
 
-                    // Link para título (account.move do lançamento)
-                    if (val) {
+                    if (row.lancamento_odoo_move_id) {
+                        var recCheck1 = row.lancamento_odoo_full_reconcile_id
+                            ? '<i class="fas fa-check reconciled-check" title="Conciliado"></i>' : '';
                         links.push(
-                            '<a href="' + odooBase + 'id=' + val + '&model=account.move&view_type=form" ' +
-                            'target="_blank" class="odoo-link text-primary" title="Título (account.move ' + val + ')">' +
-                            '<i class="fas fa-file-invoice"></i></a>'
+                            '<a href="' + odooBase + 'id=' + row.lancamento_odoo_move_id +
+                            '&model=account.move&view_type=form" target="_blank" ' +
+                            'class="odoo-link text-primary" title="Titulo (account.move ' +
+                            row.lancamento_odoo_move_id + ')">' +
+                            '<i class="fas fa-file-invoice"></i>' + recCheck1 + '</a>'
                         );
                     }
-
-                    // Link para extrato (account.bank.statement.line)
                     if (row.odoo_statement_line_id) {
+                        var recCheck2 = row.lancamento_odoo_full_reconcile_extrato_id
+                            ? '<i class="fas fa-check reconciled-check" title="Extrato conciliado"></i>' : '';
                         links.push(
                             '<a href="' + odooBase + 'id=' + row.odoo_statement_line_id +
-                            '&model=account.bank.statement.line&view_type=form" ' +
-                            'target="_blank" class="odoo-link text-info" title="Extrato (statement.line ' + row.odoo_statement_line_id + ')">' +
-                            '<i class="fas fa-university"></i></a>'
+                            '&model=account.bank.statement.line&view_type=form" target="_blank" ' +
+                            'class="odoo-link text-info" title="Extrato (statement.line ' +
+                            row.odoo_statement_line_id + ')">' +
+                            '<i class="fas fa-university"></i>' + recCheck2 + '</a>'
                         );
                     }
-
-                    // Link para payment (account.payment) — só quando LANCADO
                     if (row.lancamento_odoo_payment_id) {
                         links.push(
                             '<a href="' + odooBase + 'id=' + row.lancamento_odoo_payment_id +
-                            '&model=account.payment&view_type=form" ' +
-                            'target="_blank" class="odoo-link text-success" title="Payment (' +
+                            '&model=account.payment&view_type=form" target="_blank" ' +
+                            'class="odoo-link text-success" title="Payment (' +
                             (row.lancamento_odoo_payment_name || row.lancamento_odoo_payment_id) + ')">' +
                             '<i class="fas fa-credit-card"></i></a>'
                         );
                     }
+                    if (links.length > 0) {
+                        html += '<div class="d-flex gap-1">' + links.join('') + '</div>';
+                    }
 
-                    return links.length > 0 ? links.join(' ') : '<span class="text-muted">\u2014</span>';
+                    html += '</div>';
+                    return html;
                 },
                 className: 'text-center',
                 orderable: false,
-                defaultContent: '-',
+                width: '90px',
             },
+            // ── COL 7: ARQUIVO (Nome + PDF btn + Data importação) ──
             {
-                data: 'valor_documento',
-                render: function(val) {
-                    if (val == null) return '-';
-                    return 'R$ ' + val.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                },
-                className: 'text-end',
-            },
-            {
-                data: 'valor_desconto_abatimento',
-                render: function(val) {
-                    if (val == null || val === 0) return '-';
-                    return 'R$ ' + val.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                },
-                className: 'text-end',
-            },
-            {
-                data: 'valor_juros_multa',
-                render: function(val) {
-                    if (val == null || val === 0) return '-';
-                    return 'R$ ' + val.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                },
-                className: 'text-end',
-            },
-            {
-                data: 'valor_pago',
-                render: function(val) {
-                    if (val == null) return '-';
-                    return 'R$ ' + val.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                },
-                className: 'text-end fw-bold',
-            },
-            { data: 'data_vencimento', defaultContent: '-' },
-            { data: 'arquivo_origem', defaultContent: '-' },
-            {
-                data: 'arquivo_s3_path',
+                data: 'arquivo_origem',
                 render: function(val, type, row) {
-                    if (!val) return '<span class="text-muted">\u2014</span>';
-                    return '<button class="btn btn-sm btn-outline-primary" ' +
-                           'onclick="abrirPdfComprovante(' + row.id + ')" ' +
-                           'title="Abrir PDF (p. ' + (row.pagina_origem || '?') + ')">' +
-                           '<i class="fas fa-file-pdf"></i></button>';
+                    if (type !== 'display') return val || '';
+                    var nome = truncar(val, 22);
+                    var pdfBtn = '';
+                    if (row.arquivo_s3_path) {
+                        pdfBtn = ' <a href="#" onclick="abrirPdfComprovante(' + row.id +
+                                 '); return false;" class="text-danger" title="Abrir PDF (p.' +
+                                 (row.pagina_origem || '?') + ')">' +
+                                 '<i class="fas fa-file-pdf"></i></a>';
+                    }
+                    var html = '<div style="font-size:0.8em" title="' + (val || '') + '">' +
+                               nome + pdfBtn + '</div>';
+                    if (row.importado_em) {
+                        html += '<div style="font-size:0.7em" class="text-muted">' +
+                                row.importado_em + '</div>';
+                    }
+                    return html;
                 },
-                className: 'text-center',
-                orderable: false,
+                defaultContent: '-',
+                width: '120px',
             },
         ],
         order: [[0, 'desc']],
@@ -1066,7 +1178,8 @@ document.addEventListener('DOMContentLoaded', function() {
             url: 'https://cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json',
         },
         pageLength: 25,
-        responsive: true,
+        autoWidth: false,
+        scrollX: false,
     });
 
     window.recarregarTabela = function() {

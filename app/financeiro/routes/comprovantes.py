@@ -388,6 +388,15 @@ def comprovantes_api_dados():
             item['lancamento_erro'] = lanc.erro_lancamento
             item['lancamento_odoo_move_id'] = lanc.odoo_move_id
             item['lancamento_match_score'] = lanc.match_score
+            # Enrichment: dados adicionais para UI compacta
+            item['lancamento_nf_numero'] = lanc.nf_numero
+            item['lancamento_parcela'] = lanc.parcela
+            item['lancamento_odoo_partner_name'] = lanc.odoo_partner_name
+            item['lancamento_odoo_move_name'] = lanc.odoo_move_name
+            item['lancamento_diferenca_valor'] = float(lanc.diferenca_valor) if lanc.diferenca_valor else None
+            item['lancamento_beneficiario_e_financeira'] = lanc.beneficiario_e_financeira
+            item['lancamento_odoo_full_reconcile_id'] = lanc.odoo_full_reconcile_id
+            item['lancamento_odoo_full_reconcile_extrato_id'] = lanc.odoo_full_reconcile_extrato_id
         else:
             item['lancamento_id'] = None
             item['lancamento_status'] = None
@@ -397,6 +406,14 @@ def comprovantes_api_dados():
             item['lancamento_erro'] = None
             item['lancamento_odoo_move_id'] = None
             item['lancamento_match_score'] = None
+            item['lancamento_nf_numero'] = None
+            item['lancamento_parcela'] = None
+            item['lancamento_odoo_partner_name'] = None
+            item['lancamento_odoo_move_name'] = None
+            item['lancamento_diferenca_valor'] = None
+            item['lancamento_beneficiario_e_financeira'] = None
+            item['lancamento_odoo_full_reconcile_id'] = None
+            item['lancamento_odoo_full_reconcile_extrato_id'] = None
 
         dados.append(item)
 
