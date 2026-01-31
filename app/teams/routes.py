@@ -25,7 +25,8 @@ def webhook_teams():
         "usuario": "nome do usuário"
     }
 
-    Retorna: Adaptive Card JSON para ser exibido no Teams
+    Retorna: Adaptive Card JSON como text/plain para o Power Automate
+    tratar como string (o conector "Postar cartão" espera string JSON, não Object)
     """
     logger.info("[TEAMS] Webhook recebido")
     
@@ -69,22 +70,34 @@ def webhook_teams():
             # Processa a mensagem e gera resposta
             resposta = processar_mensagem_teams(mensagem, usuario)
 
+        # Log detalhado do tipo e estrutura da resposta
+        logger.info(f"[TEAMS] Tipo resposta: {type(resposta).__name__}")
+        if isinstance(resposta, dict):
+            logger.info(f"[TEAMS] Keys resposta: {list(resposta.keys())}")
+
         # Garante que a resposta é JSON válido
         try:
             json_str = json.dumps(resposta, ensure_ascii=False, indent=None)
-            logger.info(f"[TEAMS] Resposta: {len(json_str)} bytes")
+            logger.info(f"[TEAMS] JSON gerado: {len(json_str)} chars")
+            logger.debug(f"[TEAMS] JSON primeiros 200 chars: {json_str[:200]}")
+
+            # Validação round-trip: garante que o JSON é parseável
+            json.loads(json_str)
+            logger.info("[TEAMS] JSON validado com sucesso (round-trip OK)")
         except (TypeError, ValueError) as e:
-            logger.error(f"[TEAMS] Erro ao serializar resposta: {e}")
+            logger.error(f"[TEAMS] FALHA ao serializar/validar JSON: {e}")
+            logger.error(f"[TEAMS] resposta repr: {repr(resposta)[:500]}")
             resposta = criar_card_erro("Erro interno ao formatar resposta.")
             json_str = json.dumps(resposta, ensure_ascii=False)
         
-        # Retorna como Response explícita para garantir Content-Type correto
+        # Retorna como text/plain para o Power Automate NÃO parsear como Object.
+        # O conector "Postar cartão" do Teams espera receber string JSON, não Object.
         return Response(
             response=json_str,
             status=200,
-            mimetype='application/json',
+            mimetype='text/plain',
             headers={
-                'Content-Type': 'application/json; charset=utf-8'
+                'Content-Type': 'text/plain; charset=utf-8'
             }
         )
 
@@ -97,11 +110,56 @@ def webhook_teams():
         return Response(
             response=json.dumps(erro_card, ensure_ascii=False),
             status=200,  # 200 para o Teams exibir o card
-            mimetype='application/json',
+            mimetype='text/plain',
             headers={
-                'Content-Type': 'application/json; charset=utf-8'
+                'Content-Type': 'text/plain; charset=utf-8'
             }
         )
+
+
+@teams_bp.route('/test-card', methods=['POST'])
+@csrf.exempt
+def test_card():
+    """
+    Retorna Adaptive Card estático para validar formato JSON.
+
+    Útil para testar se o Power Automate consegue parsear a resposta
+    sem depender do Agent SDK.
+    """
+    logger.info("[TEAMS] Test card solicitado")
+
+    card = {
+        "type": "AdaptiveCard",
+        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+        "version": "1.4",
+        "body": [
+            {
+                "type": "TextBlock",
+                "text": "Teste OK - Integracao Teams funcionando",
+                "weight": "Bolder",
+                "size": "Medium",
+                "color": "Accent"
+            },
+            {
+                "type": "TextBlock",
+                "text": "Este e um card de teste estatico para validar o formato JSON.",
+                "wrap": True,
+                "spacing": "Medium"
+            }
+        ]
+    }
+
+    json_str = json.dumps(card, ensure_ascii=False)
+    logger.info(f"[TEAMS] Test card: {len(json_str)} chars")
+
+    return Response(
+        response=json_str,
+        status=200,
+        mimetype='text/plain',
+        headers={
+            'Content-Type': 'text/plain; charset=utf-8'
+        }
+    )
 
 
 @teams_bp.route('/health', methods=['GET'])
