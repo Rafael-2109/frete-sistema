@@ -328,6 +328,8 @@ def _stream_chat_response(
                             if previous_messages:
                                 # Formata histórico para injetar no prompt
                                 history_text = _format_messages_as_context(previous_messages)
+                                # C5: Compactar se contexto exceder threshold
+                                history_text = _compact_context_if_needed(history_text)
                                 prompt_to_send = f"{history_text}\n\n[NOVA MENSAGEM DO USUÁRIO]\n{message}"
                                 logger.info(f"[AGENTE] Injetando {len(previous_messages)} mensagens como contexto")
 
@@ -810,6 +812,74 @@ def _format_messages_as_context(messages: List[Dict[str, Any]]) -> str:
     lines.append("")
 
     return "\n".join(lines)
+
+
+def _compact_context_if_needed(messages_context: str) -> str:
+    """
+    C5: Compaction manual de contexto via Haiku.
+
+    Quando o contexto injetado excede o threshold de tokens,
+    usa Claude Haiku (20x mais barato) para sumarizar preservando
+    informações críticas de logística.
+
+    FONTE: Memory Cookbook Anthropic — threshold produção 30-40k tokens.
+
+    Args:
+        messages_context: Texto do contexto formatado
+
+    Returns:
+        Contexto original ou compactado
+    """
+    from .config.feature_flags import USE_MANUAL_COMPACTION, COMPACTION_TOKEN_THRESHOLD
+
+    if not USE_MANUAL_COMPACTION:
+        return messages_context
+
+    # Estimativa de tokens (4 chars ~= 1 token)
+    estimated_tokens = len(messages_context) // 4
+    if estimated_tokens < COMPACTION_TOKEN_THRESHOLD:
+        return messages_context
+
+    logger.info(
+        f"[COMPACTION] Contexto com ~{estimated_tokens} tokens excede "
+        f"threshold {COMPACTION_TOKEN_THRESHOLD}. Compactando..."
+    )
+
+    try:
+        import anthropic
+        client = anthropic.Anthropic()
+        summary_response = client.messages.create(
+            model="claude-haiku-4-5-20250514",
+            max_tokens=2000,
+            messages=[{
+                "role": "user",
+                "content": (
+                    "Resuma a conversa abaixo preservando OBRIGATORIAMENTE:\n"
+                    "1. Números de pedido/NF consultados e seus status atuais\n"
+                    "2. Resultados de consultas (estoque, separações, entregas, valores)\n"
+                    "3. Decisões tomadas pelo usuário\n"
+                    "4. Memórias carregadas e preferências aplicadas\n"
+                    "5. Próximas ações pendentes\n\n"
+                    "DESCARTE: detalhes de tool calls intermediárias, outputs completos "
+                    "de scripts, dados tabulares já apresentados ao usuário.\n\n"
+                    f"Conversa:\n{messages_context}"
+                )
+            }]
+        )
+
+        compacted = summary_response.content[0].text
+        compacted_tokens = len(compacted) // 4
+        savings = estimated_tokens - compacted_tokens
+        logger.info(
+            f"[COMPACTION] Reduzido de ~{estimated_tokens} para "
+            f"~{compacted_tokens} tokens (economia: {savings})"
+        )
+
+        return f"[CONTEXTO COMPACTADO]\n{compacted}\n[FIM DO CONTEXTO COMPACTADO]"
+
+    except Exception as e:
+        logger.warning(f"[COMPACTION] Falha na compactação: {e}. Usando contexto original.")
+        return messages_context
 
 
 def _calculate_cost(model: str, input_tokens: int, output_tokens: int) -> float:

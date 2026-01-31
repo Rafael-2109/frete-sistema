@@ -1,84 +1,91 @@
-# Índice de Referências
+# Indice de Referencias
 
-**Última atualização**: 24/01/2026
-
-Este é o ponto de entrada para toda documentação de referência do projeto.
-
----
-
-## Consulta Rápida (Uso Frequente)
-
-| Preciso de... | Documento |
-|---------------|-----------|
-| Campos de modelos (Embarque, ContasAReceber, etc.) | [MODELOS_CAMPOS.md](MODELOS_CAMPOS.md) |
-| Queries SQL mapeadas | [QUERIES_MAPEAMENTO.md](QUERIES_MAPEAMENTO.md) |
-| Regras de negócio (bonificação, roteirização, etc.) | [REGRAS_NEGOCIO.md](REGRAS_NEGOCIO.md) |
-| Conversão de unidades Odoo | [CONVERSAO_UOM_ODOO.md](CONVERSAO_UOM_ODOO.md) |
-| Recebimento de materiais | [RECEBIMENTO_MATERIAIS.md](RECEBIMENTO_MATERIAIS.md) |
-
-**Nota**: Campos de CarteiraPrincipal e Separacao estão no **CLAUDE.md** (raiz do projeto).
+**Ultima atualizacao**: 31/01/2026
+**Gerado por**: Reestruturacao arquitetural
 
 ---
 
-## Integração Odoo (NOVO)
+## Consulta Rapida
 
 | Preciso de... | Documento |
 |---------------|-----------|
-| IDs fixos (Companies, Picking Types, Operações, Journals) | [ODOO_IDS_FIXOS.md](ODOO_IDS_FIXOS.md) |
-| GOTCHAS críticos (timeouts, campos inexistentes, comportamentos) | [ODOO_GOTCHAS.md](ODOO_GOTCHAS.md) |
-| Modelos Odoo (DFe, PO, SO, Stock, Financeiro) | [ODOO_MODELOS_CAMPOS.md](ODOO_MODELOS_CAMPOS.md) |
-| Padrões avançados (auditoria, batch, locks, retomada) | [ODOO_PADROES_AVANCADOS.md](ODOO_PADROES_AVANCADOS.md) |
-| Pipeline Recebimento (Fases 1-4) | [ODOO_PIPELINE_RECEBIMENTO.md](ODOO_PIPELINE_RECEBIMENTO.md) |
+| Campos CarteiraPrincipal / Separacao | [modelos/CAMPOS_CARTEIRA_SEPARACAO.md](modelos/CAMPOS_CARTEIRA_SEPARACAO.md) |
+| Campos Embarque, Faturamento, etc. | [modelos/MODELOS_CAMPOS.md](modelos/MODELOS_CAMPOS.md) |
+| Queries SQL / JOINs | [modelos/QUERIES_MAPEAMENTO.md](modelos/QUERIES_MAPEAMENTO.md) |
+| Regras de negocio | [negocio/REGRAS_NEGOCIO.md](negocio/REGRAS_NEGOCIO.md) |
+| Recebimento de materiais | [negocio/RECEBIMENTO_MATERIAIS.md](negocio/RECEBIMENTO_MATERIAIS.md) |
+| Historico de decisoes | [negocio/historia_organizada.md](negocio/historia_organizada.md) |
+
+---
+
+## Odoo
+
+| Preciso de... | Documento |
+|---------------|-----------|
+| IDs fixos (Companies, Picking Types, Journals) | [odoo/IDS_FIXOS.md](odoo/IDS_FIXOS.md) |
+| GOTCHAS criticos (timeouts, campos inexistentes) | [odoo/GOTCHAS.md](odoo/GOTCHAS.md) |
+| Modelos Odoo (DFe, PO, SO, Stock, Financeiro) | [odoo/MODELOS_CAMPOS.md](odoo/MODELOS_CAMPOS.md) |
+| Padroes avancados (auditoria, batch, locks) | [odoo/PADROES_AVANCADOS.md](odoo/PADROES_AVANCADOS.md) |
+| Pipeline Recebimento (Fases 1-4) | [odoo/PIPELINE_RECEBIMENTO.md](odoo/PIPELINE_RECEBIMENTO.md) |
+| Conversao de unidades (UoM) | [odoo/CONVERSAO_UOM.md](odoo/CONVERSAO_UOM.md) |
 
 ---
 
 ## Design & Frontend
 
-| Documento | Descrição |
+| Documento | Descricao |
 |-----------|-----------|
-| [MAPEAMENTO_CORES.md](MAPEAMENTO_CORES.md) | Tokens de cor, paleta, dark/light mode |
+| [design/MAPEAMENTO_CORES.md](design/MAPEAMENTO_CORES.md) | Tokens de cor, paleta, dark/light mode |
 
 ---
 
-## Roadmaps Ativos
+## Roadmaps
 
-| Documento | Descrição |
+| Documento | Descricao |
 |-----------|-----------|
-| [ROADMAP_FEATURES_AGENTE.md](ROADMAP_FEATURES_AGENTE.md) | Features futuras do Agente Logístico |
-| [ROADMAP_IMPLEMENTACAO.md](ROADMAP_IMPLEMENTACAO.md) | Status de implementação Odoo |
-
----
-
-## Contexto & Histórico
-
-| Documento | Descrição |
-|-----------|-----------|
-| [historia_organizada.md](historia_organizada.md) | Contexto da empresa Nacom Goya, decisões históricas |
+| [roadmaps/FEATURES_AGENTE.md](roadmaps/FEATURES_AGENTE.md) | Features futuras do Agente Logistico |
+| [roadmaps/IMPLEMENTACAO_ODOO.md](roadmaps/IMPLEMENTACAO_ODOO.md) | Status de implementacao Odoo |
 
 ---
 
 ## Cookbooks (Exemplos Anthropic)
 
-Exemplos de padrões do Claude/Agent SDK em [cookbooks/](cookbooks/):
-
-- `BUILDING_EVALS.md` - Construção de avaliações
-- `CONTEXT_COMPACTION.md` - Compactação de contexto
+Em [cookbooks/](cookbooks/):
+- `BUILDING_EVALS.md` - Construcao de avaliacoes
+- `CONTEXT_COMPACTION.md` - Compactacao de contexto
 - `METAPROMPT.md` - Meta-prompts
 - `PROMPT_CACHING.md` - Cache de prompts
 
 ---
 
-## Skills do Projeto
+## Mapeamento Skill -> References
 
-As skills estão documentadas em `.claude/skills/`. Principais:
+Quais references cada skill consome:
 
-| Skill | Propósito |
-|-------|-----------|
-| `gerindo-expedicao` | Consultas logísticas, estoque, separações |
-| `rastreando-odoo` | Rastreamento de fluxos documentais |
-| `integracao-odoo` | Desenvolvimento de integrações |
-| `descobrindo-odoo-estrutura` | Explorar modelos desconhecidos |
-| `exportando-arquivos` | Gerar Excel/CSV/JSON |
-| `lendo-arquivos` | Processar uploads |
-| `frontend-design` | Interfaces web |
-| `memoria-usuario` | Memória persistente |
+| Skill | References Utilizadas |
+|-------|----------------------|
+| `validacao-nf-po` | odoo/PIPELINE_RECEBIMENTO, odoo/GOTCHAS, odoo/IDS_FIXOS |
+| `conciliando-odoo-po` | odoo/PIPELINE_RECEBIMENTO, odoo/GOTCHAS, odoo/MODELOS_CAMPOS |
+| `recebimento-fisico-odoo` | odoo/PIPELINE_RECEBIMENTO, odoo/CONVERSAO_UOM, odoo/GOTCHAS |
+| `executando-odoo-financeiro` | odoo/IDS_FIXOS, odoo/GOTCHAS, odoo/MODELOS_CAMPOS |
+| `razao-geral-odoo` | odoo/MODELOS_CAMPOS |
+| `integracao-odoo` | odoo/PADROES_AVANCADOS, odoo/IDS_FIXOS, odoo/GOTCHAS |
+| `rastreando-odoo` | odoo/MODELOS_CAMPOS, odoo/IDS_FIXOS |
+| `descobrindo-odoo-estrutura` | odoo/MODELOS_CAMPOS |
+| `gerindo-expedicao` | modelos/CAMPOS_CARTEIRA_SEPARACAO, negocio/REGRAS_NEGOCIO |
+| `frontend-design` | design/MAPEAMENTO_CORES |
+
+---
+
+## Skills por Dominio
+
+### Agente Web (Render/Producao)
+- `gerindo-expedicao` - Consultas logisticas, estoque, separacoes
+- `memoria-usuario` - Memoria persistente entre sessoes
+
+### Claude Code (Desenvolvimento)
+- Odoo: rastreando-odoo, executando-odoo-financeiro, descobrindo-odoo-estrutura, integracao-odoo, validacao-nf-po, conciliando-odoo-po, recebimento-fisico-odoo, razao-geral-odoo
+- Dev: frontend-design, skill_creator, ralph-wiggum, prd-generator
+
+### Compartilhados (ambos dominios)
+- `exportando-arquivos`, `lendo-arquivos`
