@@ -730,6 +730,23 @@ function processSSEEvent(eventType, data, state) {
                 state.lastChunkTime = Date.now();
                 break;
 
+            // F0.1: Retry automático quando sessão SDK expira
+            // Backend detectou sessão expirada e está retentando com nova sessão.
+            // Limpa texto parcial (se houver) e mostra feedback ao usuário.
+            case 'retry':
+                console.log(`[SSE] Retry automático: ${data.reason} (tentativa ${data.attempt})`);
+                // Limpa texto parcial acumulado na primeira tentativa
+                state.text = '';
+                if (state.bubbleElement) {
+                    state.bubbleElement.innerHTML = '';
+                }
+                // Feedback visual discreto
+                showTyping(data.message || '🔄 Reconectando...');
+                // Conta como atividade para evitar timeout
+                state.lastChunkTime = Date.now();
+                state.lastTextTime = Date.now();
+                break;
+
             case 'text':
                 // FEAT-032: Atualiza timestamp de último texto recebido
                 state.lastTextTime = Date.now();
