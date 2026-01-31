@@ -36,6 +36,17 @@
     .odoo-link { text-decoration: none; font-size: 0.85em; margin: 0 2px; }
     .odoo-link:hover { opacity: 0.8; }
     .reconciled-check { font-size: 0.55em; vertical-align: super; color: #198754; margin-left: 1px; }
+
+    /* Modal de detalhes */
+    .det-section { margin-bottom: 1rem; }
+    .det-section h6 { border-bottom: 2px solid #dee2e6; padding-bottom: 4px; margin-bottom: 8px; font-size: 0.9em; }
+    .det-row { display: flex; padding: 2px 0; font-size: 0.85em; border-bottom: 1px solid #f8f9fa; }
+    .det-row:last-child { border-bottom: none; }
+    .det-label { width: 190px; font-weight: 500; color: #6c757d; flex-shrink: 0; }
+    .det-value { flex: 1; word-break: break-all; }
+    .det-value.mono { font-family: monospace; font-size: 0.92em; }
+    .det-odoo-link { text-decoration: none; }
+    .det-odoo-link:hover { text-decoration: underline; }
 </style>
 {% endblock %}
 
@@ -326,6 +337,7 @@
                             <th class="text-end">Valores</th>
                             <th>Ações</th>
                             <th>Arquivo</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody></tbody>
@@ -419,6 +431,29 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================================
+         MODAL DE DETALHES — Todos os campos organizados por seção
+         =================================================================== -->
+    <div class="modal fade" id="modalDetalhes" tabindex="-1" aria-labelledby="modalDetalhesLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title" id="modalDetalhesLabel">
+                        <i class="fas fa-info-circle text-primary me-2"></i>Detalhes do Comprovante
+                        <span id="det-agendamento" class="text-muted ms-2" style="font-size:0.85em"></span>
+                    </h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body" id="modalDetalhesBody">
+                    <!-- Conteúdo preenchido dinamicamente via JS -->
+                </div>
+                <div class="modal-footer py-1">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Fechar</button>
                 </div>
             </div>
         </div>
@@ -1172,6 +1207,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 defaultContent: '-',
                 width: '120px',
             },
+            // ── COL 8: DETALHES (botão info → modal) ──
+            {
+                data: null,
+                render: function(val, type, row) {
+                    return '<button class="btn btn-sm btn-outline-secondary py-0 px-1" ' +
+                           'onclick="abrirModalDetalhes(this)" title="Ver todos os detalhes">' +
+                           '<i class="fas fa-info-circle"></i></button>';
+                },
+                className: 'text-center',
+                orderable: false,
+                searchable: false,
+                width: '35px',
+            },
         ],
         order: [[0, 'desc']],
         language: {
@@ -1859,6 +1907,270 @@ document.addEventListener('DOMContentLoaded', function() {
         barra.classList.remove('bg-danger');
         barra.classList.add('bg-primary');
     }
+
+    // =========================================================================
+    // MODAL DE DETALHES — Exibe TODOS os campos do comprovante + lançamento
+    // =========================================================================
+    window.abrirModalDetalhes = function(btn) {
+        var tr = $(btn).closest('tr');
+        var rowData = tabela.row(tr).data();
+        if (!rowData) return;
+
+        var odooBase = 'https://odoo.nacomgoya.com.br/web#';
+
+        // Helper: valor ou traço cinza
+        function v(val) {
+            if (val == null || val === '' || val === undefined) return '<span class="text-muted">-</span>';
+            return val;
+        }
+        // Helper: valor monetário
+        function m(val) {
+            if (val == null) return '<span class="text-muted">-</span>';
+            return 'R$ ' + val.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        }
+        // Helper: badge colorido
+        function badge(val, cls) {
+            if (!val) return '<span class="text-muted">-</span>';
+            return '<span class="badge ' + cls + '">' + val + '</span>';
+        }
+        // Helper: link Odoo
+        function odooLink(id, model, label) {
+            if (!id) return '<span class="text-muted">-</span>';
+            var txt = label || id;
+            return '<a href="' + odooBase + 'id=' + id + '&model=' + model +
+                   '&view_type=form" target="_blank" class="det-odoo-link text-primary">' +
+                   '<i class="fas fa-external-link-alt me-1"></i>' + txt + '</a>';
+        }
+        // Helper: boolean badge
+        function boolBadge(val) {
+            if (val === true) return '<span class="badge bg-success">Sim</span>';
+            if (val === false) return '<span class="badge bg-danger">Não</span>';
+            return '<span class="text-muted">-</span>';
+        }
+        // Helper: construir linha
+        function row(label, value) {
+            return '<div class="det-row"><div class="det-label">' + label +
+                   '</div><div class="det-value">' + value + '</div></div>';
+        }
+        // Helper: construir linha mono
+        function rowMono(label, value) {
+            return '<div class="det-row"><div class="det-label">' + label +
+                   '</div><div class="det-value mono">' + v(value) + '</div></div>';
+        }
+
+        // Atualizar título
+        document.getElementById('det-agendamento').textContent =
+            rowData.numero_agendamento ? '# ' + rowData.numero_agendamento : '';
+
+        var html = '<div class="row">';
+
+        // ── COLUNA ESQUERDA ──
+        html += '<div class="col-lg-6">';
+
+        // SEÇÃO 1: Comprovante (dados do boleto/PDF)
+        html += '<div class="det-section">';
+        html += '<h6><i class="fas fa-file-invoice text-primary me-2"></i>Comprovante (Boleto)</h6>';
+        html += rowMono('N. Agendamento', rowData.numero_agendamento);
+        html += rowMono('N. Documento', rowData.numero_documento);
+        html += rowMono('Nosso Número', rowData.nosso_numero);
+        html += row('Tipo Documento', v(rowData.tipo_documento));
+        html += rowMono('Linha Digitável', rowData.linha_digitavel);
+        html += row('Instituição Emissora', v(rowData.instituicao_emissora));
+        html += row('Cooperativa / Conta', v(rowData.cooperativa) + ' / ' + v(rowData.conta));
+        html += row('Situação', v(rowData.situacao));
+        html += rowMono('Autenticação', rowData.autenticacao);
+        html += row('Data Comprovante', v(rowData.data_comprovante));
+        html += row('Data Realizado', v(rowData.data_realizado));
+        html += '</div>';
+
+        // SEÇÃO 2: Beneficiário & Pagador
+        html += '<div class="det-section">';
+        html += '<h6><i class="fas fa-building text-success me-2"></i>Beneficiário & Pagador</h6>';
+        html += row('Beneficiário', v(rowData.beneficiario_razao_social));
+        html += rowMono('CNPJ Beneficiário', rowData.beneficiario_cnpj_cpf);
+        html += row('Nome Fantasia', v(rowData.beneficiario_nome_fantasia));
+        html += '<hr class="my-1">';
+        html += row('Pagador', v(rowData.pagador_razao_social));
+        html += rowMono('CNPJ Pagador', rowData.pagador_cnpj_cpf);
+        html += row('Nome Fantasia Pagador', v(rowData.pagador_nome_fantasia));
+        html += '</div>';
+
+        // SEÇÃO 3: Valores & Datas
+        html += '<div class="det-section">';
+        html += '<h6><i class="fas fa-dollar-sign text-warning me-2"></i>Valores & Datas</h6>';
+        html += row('Valor Documento', m(rowData.valor_documento));
+        html += row('Desconto / Abatimento', m(rowData.valor_desconto_abatimento));
+        html += row('Juros / Multa', m(rowData.valor_juros_multa));
+        html += row('<strong>Valor Pago</strong>',
+                    '<strong class="text-primary">' + m(rowData.valor_pago) + '</strong>');
+        html += row('Data Pagamento', v(rowData.data_pagamento));
+        html += row('Data Vencimento', v(rowData.data_vencimento));
+        html += '</div>';
+
+        // SEÇÃO 8: Metadados de Importação
+        html += '<div class="det-section">';
+        html += '<h6><i class="fas fa-upload text-secondary me-2"></i>Metadados de Importação</h6>';
+        html += row('Arquivo Origem', v(rowData.arquivo_origem));
+        html += row('Página', v(rowData.pagina_origem));
+        html += row('Importado por', v(rowData.importado_por));
+        html += row('Importado em', v(rowData.importado_em));
+        html += rowMono('S3 Path', rowData.arquivo_s3_path);
+        html += '</div>';
+
+        html += '</div>'; // fim col-lg-6 esquerda
+
+        // ── COLUNA DIREITA ──
+        html += '<div class="col-lg-6">';
+
+        // SEÇÃO 4: Vínculo OFX (Extrato Bancário)
+        html += '<div class="det-section">';
+        html += '<h6><i class="fas fa-file-alt text-info me-2"></i>Vínculo OFX (Extrato Bancário)</h6>';
+        if (rowData.ofx_fitid) {
+            html += rowMono('FITID', rowData.ofx_fitid);
+            html += rowMono('Checknum', rowData.ofx_checknum);
+            html += row('Memo', v(rowData.ofx_memo));
+            html += row('Valor OFX', m(rowData.ofx_valor));
+            html += row('Data OFX', v(rowData.ofx_data));
+            html += row('Arquivo OFX', v(rowData.ofx_arquivo_origem));
+        } else {
+            html += '<div class="text-muted text-center py-2"><i class="fas fa-minus-circle me-1"></i>Sem vínculo OFX</div>';
+        }
+        html += '</div>';
+
+        // SEÇÃO 5: Vínculo Odoo (Extrato)
+        html += '<div class="det-section">';
+        html += '<h6><i class="fas fa-university text-success me-2"></i>Vínculo Odoo (Extrato)</h6>';
+        if (rowData.odoo_statement_line_id) {
+            html += row('Statement Line ID', odooLink(rowData.odoo_statement_line_id, 'account.bank.statement.line', 'Line #' + rowData.odoo_statement_line_id));
+            html += row('Move ID', odooLink(rowData.odoo_move_id, 'account.move', 'Move #' + rowData.odoo_move_id));
+            html += row('Statement ID', v(rowData.odoo_statement_id));
+            html += row('Journal ID', v(rowData.odoo_journal_id));
+            html += row('Conciliado?', boolBadge(rowData.odoo_is_reconciled));
+            html += row('Vinculado em', v(rowData.odoo_vinculado_em));
+        } else {
+            html += '<div class="text-muted text-center py-2"><i class="fas fa-minus-circle me-1"></i>Sem vínculo com extrato Odoo</div>';
+        }
+        html += '</div>';
+
+        // SEÇÃO 6: Match / Lançamento (condicional)
+        if (rowData.lancamento_status) {
+            html += '<div class="det-section">';
+            html += '<h6><i class="fas fa-search-dollar text-primary me-2"></i>Match / Lançamento</h6>';
+
+            // Status badge
+            var statusBadge = '';
+            if (rowData.lancamento_status === 'PENDENTE') statusBadge = badge('PENDENTE', 'bg-warning text-dark');
+            else if (rowData.lancamento_status === 'CONFIRMADO') statusBadge = badge('CONFIRMADO', 'bg-info text-white');
+            else if (rowData.lancamento_status === 'LANCADO') statusBadge = badge('BAIXADO', 'bg-success');
+            else if (rowData.lancamento_status === 'REJEITADO') statusBadge = badge('REJEITADO', 'bg-danger');
+            else statusBadge = badge(rowData.lancamento_status, 'bg-secondary');
+
+            // Score badge
+            var scoreBadge = '<span class="text-muted">-</span>';
+            if (rowData.lancamento_match_score != null) {
+                var sClass = rowData.lancamento_match_score >= 85 ? 'bg-success' :
+                             rowData.lancamento_match_score >= 60 ? 'bg-warning text-dark' : 'bg-danger';
+                scoreBadge = '<span class="badge ' + sClass + '">' + rowData.lancamento_match_score + '%</span>';
+            }
+
+            html += row('Status', statusBadge);
+            html += row('Score', scoreBadge);
+            html += row('NF / Parcela', v(rowData.lancamento_nf_numero) +
+                        (rowData.lancamento_parcela ? ' / ' + rowData.lancamento_parcela : ''));
+            html += row('Partner Odoo', v(rowData.lancamento_odoo_partner_name) +
+                        (rowData.lancamento_odoo_partner_cnpj ? ' <span class="text-muted" style="font-size:0.85em">(' + rowData.lancamento_odoo_partner_cnpj + ')</span>' : ''));
+            html += row('Company ID', v(rowData.lancamento_odoo_company_id));
+            html += row('Fatura (move)',
+                        (rowData.lancamento_odoo_move_name ? rowData.lancamento_odoo_move_name + ' ' : '') +
+                        (rowData.lancamento_odoo_move_id ? odooLink(rowData.lancamento_odoo_move_id, 'account.move', '#' + rowData.lancamento_odoo_move_id) : v(null)));
+            html += row('Move Line ID', rowData.lancamento_odoo_move_line_id ? odooLink(rowData.lancamento_odoo_move_line_id, 'account.move.line', '#' + rowData.lancamento_odoo_move_line_id) : v(null));
+            html += row('Valor Original', m(rowData.lancamento_odoo_valor_original));
+            html += row('Valor Residual', m(rowData.lancamento_odoo_valor_residual));
+            html += row('Valor Recalculado', m(rowData.lancamento_odoo_valor_recalculado));
+            html += row('Vencimento Odoo', v(rowData.lancamento_odoo_vencimento));
+
+            // Diferença valor
+            if (rowData.lancamento_diferenca_valor != null) {
+                var absDiff = Math.abs(rowData.lancamento_diferenca_valor);
+                var diffCls = absDiff < 0.01 ? 'text-success' : 'text-danger';
+                var diffSign = rowData.lancamento_diferenca_valor >= 0 ? '+' : '-';
+                var diffFmt = 'R$ ' + absDiff.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                html += row('Diferença', '<span class="' + diffCls + '">' + diffSign + diffFmt + '</span>');
+            } else {
+                html += row('Diferença', v(null));
+            }
+
+            html += row('Financeira?', boolBadge(rowData.lancamento_beneficiario_e_financeira));
+
+            // Match critérios (JSON → lista)
+            if (rowData.lancamento_match_criterios) {
+                try {
+                    var criterios = JSON.parse(rowData.lancamento_match_criterios);
+                    var criteriosHtml = '<ul class="mb-0 ps-3" style="font-size:0.88em">';
+                    if (Array.isArray(criterios)) {
+                        criterios.forEach(function(c) {
+                            criteriosHtml += '<li>' + c + '</li>';
+                        });
+                    } else if (typeof criterios === 'object') {
+                        Object.keys(criterios).forEach(function(k) {
+                            criteriosHtml += '<li><strong>' + k + '</strong>: ' + criterios[k] + '</li>';
+                        });
+                    }
+                    criteriosHtml += '</ul>';
+                    html += row('Critérios Match', criteriosHtml);
+                } catch(e) {
+                    html += row('Critérios Match', '<span style="font-size:0.85em">' + rowData.lancamento_match_criterios + '</span>');
+                }
+            }
+
+            html += row('Criado em', v(rowData.lancamento_criado_em));
+            html += row('Confirmado em / por', v(rowData.lancamento_confirmado_em) +
+                        (rowData.lancamento_confirmado_por ? ' — ' + rowData.lancamento_confirmado_por : ''));
+            html += '</div>';
+        }
+
+        // SEÇÃO 7: Lançamento Odoo (só se LANCADO)
+        if (rowData.lancamento_status === 'LANCADO') {
+            html += '<div class="det-section">';
+            html += '<h6><i class="fas fa-check-double text-success me-2"></i>Lançamento Odoo (Baixa)</h6>';
+            html += row('Payment ID', odooLink(rowData.lancamento_odoo_payment_id, 'account.payment', '#' + rowData.lancamento_odoo_payment_id));
+            html += row('Payment Name', v(rowData.lancamento_odoo_payment_name));
+            html += row('Lançado em / por', v(rowData.lancamento_lancado_em) +
+                        (rowData.lancamento_lancado_por ? ' — ' + rowData.lancamento_lancado_por : ''));
+            html += row('Full Reconcile Título', v(rowData.lancamento_odoo_full_reconcile_id));
+            html += row('Full Reconcile Extrato', v(rowData.lancamento_odoo_full_reconcile_extrato_id));
+            html += row('Debit Line ID', rowData.lancamento_odoo_debit_line_id ? odooLink(rowData.lancamento_odoo_debit_line_id, 'account.move.line', '#' + rowData.lancamento_odoo_debit_line_id) : v(null));
+            html += row('Credit Line ID', rowData.lancamento_odoo_credit_line_id ? odooLink(rowData.lancamento_odoo_credit_line_id, 'account.move.line', '#' + rowData.lancamento_odoo_credit_line_id) : v(null));
+
+            if (rowData.lancamento_erro) {
+                html += row('Erro', '<span class="badge bg-danger">' + rowData.lancamento_erro + '</span>');
+            }
+            html += '</div>';
+        }
+
+        // Erro sem ser LANCADO
+        if (rowData.lancamento_status && rowData.lancamento_status !== 'LANCADO' && rowData.lancamento_erro) {
+            html += '<div class="det-section">';
+            html += '<h6><i class="fas fa-exclamation-triangle text-danger me-2"></i>Erro</h6>';
+            html += row('Mensagem', '<span class="text-danger" style="font-size:0.88em">' + rowData.lancamento_erro + '</span>');
+            html += '</div>';
+        }
+
+        // Se NÃO tem lançamento
+        if (!rowData.lancamento_status) {
+            html += '<div class="det-section">';
+            html += '<h6><i class="fas fa-search-dollar text-muted me-2"></i>Match / Lançamento</h6>';
+            html += '<div class="text-muted text-center py-2"><i class="fas fa-minus-circle me-1"></i>Sem match realizado</div>';
+            html += '</div>';
+        }
+
+        html += '</div>'; // fim col-lg-6 direita
+        html += '</div>'; // fim row
+
+        document.getElementById('modalDetalhesBody').innerHTML = html;
+        new bootstrap.Modal(document.getElementById('modalDetalhes')).show();
+    };
+
 });
 </script>
 {% endblock %}

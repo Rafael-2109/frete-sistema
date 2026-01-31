@@ -397,6 +397,22 @@ def comprovantes_api_dados():
             item['lancamento_beneficiario_e_financeira'] = lanc.beneficiario_e_financeira
             item['lancamento_odoo_full_reconcile_id'] = lanc.odoo_full_reconcile_id
             item['lancamento_odoo_full_reconcile_extrato_id'] = lanc.odoo_full_reconcile_extrato_id
+            # Campos adicionais para modal de detalhes
+            item['lancamento_odoo_move_line_id'] = lanc.odoo_move_line_id
+            item['lancamento_odoo_partner_id'] = lanc.odoo_partner_id
+            item['lancamento_odoo_partner_cnpj'] = lanc.odoo_partner_cnpj
+            item['lancamento_odoo_company_id'] = lanc.odoo_company_id
+            item['lancamento_odoo_valor_original'] = float(lanc.odoo_valor_original) if lanc.odoo_valor_original else None
+            item['lancamento_odoo_valor_residual'] = float(lanc.odoo_valor_residual) if lanc.odoo_valor_residual else None
+            item['lancamento_odoo_valor_recalculado'] = float(lanc.odoo_valor_recalculado) if lanc.odoo_valor_recalculado else None
+            item['lancamento_odoo_vencimento'] = lanc.odoo_vencimento.strftime('%d/%m/%Y') if lanc.odoo_vencimento else None
+            item['lancamento_match_criterios'] = lanc.match_criterios
+            item['lancamento_criado_em'] = lanc.criado_em.strftime('%d/%m/%Y %H:%M') if lanc.criado_em else None
+            item['lancamento_confirmado_em'] = lanc.confirmado_em.strftime('%d/%m/%Y %H:%M') if lanc.confirmado_em else None
+            item['lancamento_confirmado_por'] = lanc.confirmado_por
+            item['lancamento_lancado_por'] = lanc.lancado_por
+            item['lancamento_odoo_debit_line_id'] = lanc.odoo_debit_line_id
+            item['lancamento_odoo_credit_line_id'] = lanc.odoo_credit_line_id
         else:
             item['lancamento_id'] = None
             item['lancamento_status'] = None
@@ -414,6 +430,21 @@ def comprovantes_api_dados():
             item['lancamento_beneficiario_e_financeira'] = None
             item['lancamento_odoo_full_reconcile_id'] = None
             item['lancamento_odoo_full_reconcile_extrato_id'] = None
+            item['lancamento_odoo_move_line_id'] = None
+            item['lancamento_odoo_partner_id'] = None
+            item['lancamento_odoo_partner_cnpj'] = None
+            item['lancamento_odoo_company_id'] = None
+            item['lancamento_odoo_valor_original'] = None
+            item['lancamento_odoo_valor_residual'] = None
+            item['lancamento_odoo_valor_recalculado'] = None
+            item['lancamento_odoo_vencimento'] = None
+            item['lancamento_match_criterios'] = None
+            item['lancamento_criado_em'] = None
+            item['lancamento_confirmado_em'] = None
+            item['lancamento_confirmado_por'] = None
+            item['lancamento_lancado_por'] = None
+            item['lancamento_odoo_debit_line_id'] = None
+            item['lancamento_odoo_credit_line_id'] = None
 
         dados.append(item)
 
