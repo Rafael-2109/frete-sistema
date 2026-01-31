@@ -18,10 +18,19 @@ description: |
   - Vincular extrato com fatura via Excel: "processar planilha de vinculacao", "conciliar via Excel"
 
   NAO USAR QUANDO:
-  - Descobrir campos de modelo desconhecido → usar descobrindo-odoo-estrutura
-  - Criar lancamentos fiscais → usar integracao-odoo
+  - Descobrir campos de modelo desconhecido (esta skill rastreia fluxos, nao explora estrutura)
+  - Criar lancamentos fiscais (esta skill apenas consulta, nao cria documentos)
   - Apenas listar registros sem rastrear fluxo
 ---
+
+
+## QUANDO NAO USAR ESTA SKILL
+- Match NF x PO especifico (Fase 2 do recebimento, nao rastreamento geral)
+- Split/consolidar PO (Fase 3, operacao de escrita em POs)
+- Recebimento fisico com lotes/quality checks (Fase 4, operacao no armazem)
+- Criar pagamentos ou reconciliar extratos (operacao financeira de escrita)
+- Explorar modelo Odoo desconhecido (esta skill usa modelos ja mapeados)
+- Criar nova integracao/service (esta skill consulta, nao desenvolve)
 
 # Rastreando Odoo
 

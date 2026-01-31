@@ -3,6 +3,16 @@ name: descobrindo-odoo-estrutura
 description: "Descobre campos e estrutura de qualquer modelo do Odoo. Lista campos de tabela, busca campo por nome, inspeciona registro, faz consulta generica. Use quando: nao conhecer um modelo Odoo, precisar descobrir nome de campo, explorar estrutura de tabela, consulta em modelo nao mapeado."
 ---
 
+## QUANDO NAO USAR ESTA SKILL (ULTIMO RECURSO)
+Esta skill e ULTIMO RECURSO. Nao use se a tarefa se encaixa em um dominio ja coberto:
+- Validacao/match de NF contra PO (dominio de recebimento Fase 2)
+- Split ou consolidacao de pedidos de compra (dominio de recebimento Fase 3)
+- Preenchimento de lotes ou quality checks (dominio de recebimento Fase 4)
+- Operacoes financeiras: pagamentos, extratos, reconciliacoes
+- Rastrear fluxo documental completo de NF/PO/SO
+- Exportar razao geral ou relatorios contabeis
+- Criar nova integracao (service, route, migration)
+
 # Descobrindo Odoo Estrutura
 
 Skill para **descoberta de campos e estrutura** de modelos do Odoo.
@@ -100,7 +110,7 @@ python .claude/skills/descobrindo-odoo-estrutura/scripts/descobrindo.py \
 # Resultado esperado: Lista campos como barcode, barcode_ids, etc.
 ```
 
-**Acao apos descoberta**: Documentar no CLAUDE.md ou references/MODELOS_CAMPOS.md se for campo frequentemente usado.
+**Acao apos descoberta**: Documentar em `.claude/references/odoo/MODELOS_CAMPOS.md` se for campo Odoo, ou `.claude/references/modelos/MODELOS_CAMPOS.md` se for campo local, caso seja frequentemente usado.
 
 ---
 

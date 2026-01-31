@@ -416,6 +416,53 @@ Nunca invente informações."""
             "NotebookEdit",   # Não há Jupyter notebooks no sistema
         ]
 
+        # =================================================================
+        # FEATURE FLAGS: Quick Wins (ativados via env vars)
+        # =================================================================
+        from ..config.feature_flags import (
+            USE_BUDGET_CONTROL, MAX_BUDGET_USD,
+            USE_EXTENDED_CONTEXT,
+            USE_CONTEXT_CLEARING,
+            USE_PROMPT_CACHING,
+        )
+
+        # C1: Budget Control nativo (disponível desde SDK v0.1.6)
+        if USE_BUDGET_CONTROL:
+            options_dict["max_budget_usd"] = MAX_BUDGET_USD
+            logger.info(f"[AGENT_CLIENT] Budget control nativo: max ${MAX_BUDGET_USD}/request")
+
+        # C2: Extended Context (1M tokens)
+        # RESTRICAO: Só funciona com Sonnet 4/4.5 — NÃO com Opus
+        if USE_EXTENDED_CONTEXT:
+            current_model = options_dict.get("model", self.settings.model if hasattr(self, 'settings') else "")
+            if "sonnet" in str(current_model).lower():
+                betas = options_dict.get("betas", [])
+                betas.append("context-1m-2025-08-07")
+                options_dict["betas"] = betas
+                logger.info("[AGENT_CLIENT] Extended Context habilitado (1M tokens)")
+            else:
+                logger.warning(
+                    f"[AGENT_CLIENT] Extended Context IGNORADO — "
+                    f"modelo '{current_model}' não suportado (apenas Sonnet)"
+                )
+
+        # C4: Context Clearing automático
+        if USE_CONTEXT_CLEARING:
+            betas = options_dict.get("betas", [])
+            betas.extend([
+                "clear-thinking-20251015",
+                "clear-tool-uses-20250919",
+            ])
+            options_dict["betas"] = betas
+            logger.info("[AGENT_CLIENT] Context Clearing habilitado")
+
+        # C6: Prompt Caching (economia de 50-90% tokens input)
+        if USE_PROMPT_CACHING:
+            betas = options_dict.get("betas", [])
+            betas.append("prompt-caching-2024-07-31")
+            options_dict["betas"] = betas
+            logger.info("[AGENT_CLIENT] Prompt Caching habilitado")
+
         return ClaudeAgentOptions(**options_dict)
 
     async def stream_response(
@@ -556,6 +603,38 @@ Nunca invente informações."""
                             # Objeto com atributos
                             input_tokens = getattr(usage, 'input_tokens', 0) or 0
                             output_tokens = getattr(usage, 'output_tokens', 0) or 0
+
+                    # C3: Detectar erros da API (rate limits, context overflow, etc.)
+                    # Campo .error fixado no SDK 0.1.16
+                    # ATENCAO: SDK NÃO levanta exceptions — erros chegam como campo
+                    if hasattr(message, 'error') and message.error:
+                        error_info = message.error
+                        error_str = str(error_info).lower()
+                        error_type_str = error_info.get('type', 'unknown') if isinstance(error_info, dict) else type(error_info).__name__
+
+                        logger.warning(
+                            f"[AGENT_CLIENT] API error detectado: type={error_type_str}, error={error_info}"
+                        )
+
+                        # Classificar erro para tratamento diferenciado
+                        if 'rate_limit' in error_str:
+                            yield StreamEvent(
+                                type='error',
+                                content="Limite de requisições excedido. Aguardando...",
+                                metadata={'error_type': 'rate_limit', 'retryable': True}
+                            )
+                        elif 'too long' in error_str or 'context' in error_str:
+                            yield StreamEvent(
+                                type='error',
+                                content="Conversa muito longa. Tente iniciar uma nova sessão.",
+                                metadata={'error_type': 'context_overflow', 'retryable': False}
+                            )
+                        else:
+                            yield StreamEvent(
+                                type='error',
+                                content=f"Erro da API: {error_info}",
+                                metadata={'error_type': error_type_str, 'raw_error': str(error_info)[:500]}
+                            )
 
                     # Captura message.id para deduplicação (conforme documentação)
                     if hasattr(message, 'id') and message.id:

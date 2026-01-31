@@ -12,12 +12,18 @@ description: |
   - Problema com lotes: "lote duplicado", "quantidade errada", "move.line nao criou"
 
   NAO USAR QUANDO:
-  - Rastrear documentos fiscais (NF, PO, SO) -> usar rastreando-odoo
-  - Descobrir campos de modelo desconhecido -> usar descobrindo-odoo-estrutura
-  - Criar pagamentos ou reconciliar extratos -> usar executando-odoo-financeiro
-  - Depurar match NF x PO (fase 2 validacao) -> usar validacao-nf-po
-  - Conciliar POs (split/consolidacao) -> usar conciliando-odoo-po
+  - Rastrear documentos fiscais (NF, PO, SO) sem operar recebimento fisico
+  - Descobrir campos de modelo Odoo desconhecido (esta skill usa modelos de picking conhecidos)
+  - Criar pagamentos ou reconciliar extratos (operacao financeira, nao de armazem)
+  - Depurar match NF x PO (Fase 2, anterior ao recebimento fisico)
+  - Conciliar POs por split/consolidacao (Fase 3, anterior ao recebimento fisico)
 ---
+
+## QUANDO NAO USAR ESTA SKILL
+- Match NF x PO (Fase 2, anterior ao recebimento fisico)
+- Split/consolidar PO (Fase 3, anterior ao recebimento fisico)
+- Operacoes financeiras como pagamentos ou reconciliacao de extratos
+- Rastrear fluxo documental completo de NF/PO/SO (esta skill opera o armazem, nao rastreia)
 
 # Recebimento Fisico - Odoo (Fase 4)
 

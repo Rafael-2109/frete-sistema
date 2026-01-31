@@ -12,11 +12,17 @@ description: |
   - Entender fluxo split/consolidacao: "como funciona o split?", "o que e PO Conciliador?"
 
   NAO USAR QUANDO:
-  - Apenas consultar/rastrear documentos -> usar rastreando-odoo
-  - Descobrir campos de modelo -> usar descobrindo-odoo-estrutura
-  - Criar pagamentos ou reconciliar extratos -> usar executando-odoo-financeiro
-  - Depurar match NF x PO (fase de validacao) -> usar validacao-nf-po
+  - Apenas consultar/rastrear documentos sem modificar POs
+  - Explorar campos de modelo Odoo desconhecido
+  - Operacoes financeiras (pagamentos, extratos, reconciliacao)
+  - Validar match NF x PO (este e processo anterior, Fase 2)
 ---
+
+## QUANDO NAO USAR ESTA SKILL
+- Validar match NF x PO (este e Fase 2, anterior a consolidacao)
+- Processar recebimento fisico com lotes/quality check (este e Fase 4, posterior)
+- Operacoes financeiras como pagamentos ou reconciliacao de extratos
+- Apenas consultar/rastrear documentos sem modificar POs
 
 # Conciliando Odoo PO
 

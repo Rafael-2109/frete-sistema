@@ -12,13 +12,19 @@ description: |
   - Entender tabelas locais: "o que tem em MatchNfPoItem", "campos da validacao"
 
   NAO USAR QUANDO:
-  - Rastrear documentos no Odoo -> usar rastreando-odoo
-  - Descobrir campos de modelo Odoo desconhecido -> usar descobrindo-odoo-estrutura
-  - Criar pagamentos ou reconciliar extratos -> usar executando-odoo-financeiro
-  - Criar CTe ou despesas -> usar integracao-odoo
-  - Depurar recebimento fisico (Fase 4) -> usar recebimento-fisico
-  - Conciliar POs (split/consolidacao) -> usar conciliando-odoo-po
+  - Rastrear documentos no Odoo sem foco em match NF x PO
+  - Descobrir campos de modelo Odoo desconhecido (esta skill usa modelos ja mapeados)
+  - Criar pagamentos ou reconciliar extratos (operacao financeira, nao de recebimento)
+  - Criar CTe ou despesas (lancamento fiscal, nao validacao de compra)
+  - Depurar recebimento fisico com lotes/quality checks (Fase 4, posterior a validacao)
+  - Conciliar POs por split/consolidacao (Fase 3, posterior a validacao)
 ---
+
+## QUANDO NAO USAR ESTA SKILL
+- Split/consolidar PO (Fase 3, posterior a esta validacao)
+- Recebimento fisico com lotes/quality checks (Fase 4, posterior a validacao)
+- Operacoes financeiras como pagamentos ou reconciliacao de extratos
+- Rastrear fluxo documental completo de NF/PO/SO (esta skill faz match especifico, nao rastreamento geral)
 
 # Validacao NF x PO - Processo Completo
 

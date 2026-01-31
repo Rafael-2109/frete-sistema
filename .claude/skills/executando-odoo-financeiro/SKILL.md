@@ -11,10 +11,16 @@ description: |
   - Baixar titulo a receber: "marque como pago no Odoo"
 
   NAO USAR QUANDO:
-  - Apenas consultar/rastrear documentos → usar rastreando-odoo
-  - Descobrir campos de modelo → usar descobrindo-odoo-estrutura
-  - Criar CTe ou despesas → usar integracao-odoo
+  - Apenas consultar/rastrear documentos sem modificar
+  - Explorar campos de modelo Odoo desconhecido
+  - Criar lancamentos fiscais (CTe, despesas extras)
 ---
+
+## QUANDO NAO USAR ESTA SKILL
+- Apenas CONSULTAR/rastrear documentos sem modificar (esta skill EXECUTA operacoes)
+- Explorar modelo Odoo desconhecido (esta skill trabalha com modelos financeiros conhecidos)
+- Validar match NF x PO (este e processo de recebimento, nao financeiro)
+- Exportar balancete/razao geral (existe skill especializada para relatorios contabeis)
 
 # Executando Odoo Financeiro
 
