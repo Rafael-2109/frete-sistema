@@ -228,7 +228,7 @@ def processar_pdf_comprovantes(
     tessdata_dir = os.environ.get('TESSDATA_PREFIX', os.path.expanduser('~/tessdata'))
     os.environ['TESSDATA_PREFIX'] = tessdata_dir
 
-    from scripts.leitor_comprovantes_sicoob import extrair_comprovantes_from_bytes
+    from app.financeiro.leitor_comprovantes_sicoob import extrair_comprovantes_from_bytes
 
     resultado = {
         'novos': 0,

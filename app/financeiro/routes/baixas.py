@@ -964,3 +964,75 @@ def baixas_job_resultado(job_id):
             'success': False,
             'error': str(e)
         }), 500
+
+
+# =============================================================================
+# ADMIN EDIT - EDITAR STATUS/MENSAGEM (SOMENTE ADMINISTRADOR)
+# =============================================================================
+
+@financeiro_bp.route('/contas-receber/baixas/item/<int:item_id>/admin-edit', methods=['POST'])
+@login_required
+def baixas_admin_edit(item_id):
+    """
+    Permite ao administrador editar manualmente o status e mensagem de um item.
+
+    - Se status mudar para VALIDO, ativa o item (ativo=True) para permitir reprocessamento.
+    - Somente administradores podem acessar.
+    """
+    # Verificar permissão de administrador
+    if current_user.perfil != 'administrador':
+        return jsonify({
+            'success': False,
+            'error': 'Acesso negado. Somente administradores podem editar itens.'
+        }), 403
+
+    try:
+        item = BaixaTituloItem.query.get_or_404(item_id)
+
+        data = request.get_json()
+        novo_status = data.get('status', '').strip().upper()
+        nova_mensagem = data.get('mensagem', '').strip()
+
+        # Validar status
+        status_validos = ['PENDENTE', 'VALIDO', 'INVALIDO', 'SUCESSO', 'ERRO']
+        if novo_status and novo_status not in status_validos:
+            return jsonify({
+                'success': False,
+                'error': f'Status inválido. Valores aceitos: {", ".join(status_validos)}'
+            }), 400
+
+        # Registrar alteração anterior para auditoria
+        status_anterior = item.status
+        mensagem_anterior = item.mensagem
+
+        # Atualizar campos
+        if novo_status:
+            item.status = novo_status
+
+            # Se mudou para VALIDO, ativar item para permitir reprocessamento
+            if novo_status == 'VALIDO':
+                item.ativo = True
+
+        if nova_mensagem is not None:
+            item.mensagem = nova_mensagem if nova_mensagem else None
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'item_id': item.id,
+            'status': item.status,
+            'mensagem': item.mensagem,
+            'ativo': item.ativo,
+            'alteracoes': {
+                'status_anterior': status_anterior,
+                'status_novo': item.status,
+                'mensagem_anterior': mensagem_anterior,
+                'mensagem_nova': item.mensagem,
+                'editado_por': current_user.nome
+            }
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500

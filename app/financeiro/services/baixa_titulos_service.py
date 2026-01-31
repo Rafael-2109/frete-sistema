@@ -637,11 +637,14 @@ class BaixaTitulosService:
         O Odoo aplica desconto múltiplas vezes para clientes com desconto contratual,
         criando um título extra com date_maturity = 2000-01-01.
 
-        Este método corrige diretamente no Odoo:
+        Estratégia (baseada no script corrigir_desconto_duplicado_odoo.py):
         1. Despublica a fatura (button_draft)
         2. Zera os títulos ano 2000
-        3. Rateia o desconto proporcionalmente entre TODAS as parcelas válidas
-        4. Republica a fatura (action_post)
+        3. Configura linhas de DESCONTO CONCEDIDO (primeira mantém valor, extras zeradas)
+        4. Ajusta parcelas válidas: debit = debit_original + rateio_desconto_2000
+           e amount_residual proporcional
+        5. Verifica equilíbrio
+        6. Republica a fatura (action_post)
 
         SUPORTA NFs com N parcelas (não apenas 1).
 
@@ -728,7 +731,7 @@ class BaixaTitulosService:
             if isinstance(move_id, (list, tuple)):
                 move_id = move_id[0]
 
-            # Calcular desconto total a ratear (soma dos débitos dos títulos 2000)
+            # Calcular desconto total dos títulos 2000 (valor a redistribuir nas parcelas)
             desconto_total = sum(t['debit'] for t in titulos_2000)
 
             # Calcular soma dos débitos das parcelas válidas (para rateio proporcional)
@@ -738,9 +741,27 @@ class BaixaTitulosService:
                 f"[ANO_2000] NF {nf}: Detectado bug de título ano 2000. "
                 f"Move ID: {move_id}, Títulos 2000: {len(titulos_2000)}, "
                 f"Parcelas válidas: {len(parcelas_validas)}, "
-                f"Desconto a ratear: R$ {desconto_total:.2f}, "
+                f"Desconto 2000 a redistribuir: R$ {desconto_total:.2f}, "
                 f"Soma parcelas: R$ {soma_parcelas:.2f}"
             )
+
+            # PASSO 0.5: Verificar equilíbrio PRÉ-EXISTENTE da fatura
+            lines_pre = self.connection.search_read(
+                'account.move.line',
+                [['move_id', '=', move_id]],
+                fields=['debit', 'credit'],
+                limit=200
+            )
+            total_debito_pre = sum(line['debit'] for line in lines_pre)
+            total_credito_pre = sum(line['credit'] for line in lines_pre)
+            diferenca_pre = abs(total_debito_pre - total_credito_pre)
+
+            if diferenca_pre > 0.01:
+                logger.warning(
+                    f"[ANO_2000] Fatura {move_id} já está desbalanceada ANTES da correção! "
+                    f"Débito: {total_debito_pre:.2f}, Crédito: {total_credito_pre:.2f}, "
+                    f"Diferença: {diferenca_pre:.2f}. Prosseguindo mesmo assim..."
+                )
 
             # PASSO 1: Despublicar fatura
             try:
@@ -758,16 +779,72 @@ class BaixaTitulosService:
                         'account.move.line', 'write',
                         [[t['id']], {'debit': 0, 'credit': 0}]
                     )
-                    logger.debug(f"[ANO_2000] Título {t['id']} zerado")
+                    logger.debug(f"[ANO_2000] Título {t['id']} zerado (ano 2000)")
                 except Exception as e:
                     logger.error(f"[ANO_2000] Erro ao zerar título {t['id']}: {e}")
 
-            # PASSO 3: Ratear desconto proporcionalmente entre TODAS as parcelas válidas
+            # PASSO 2.5: Configurar linhas de DESCONTO CONCEDIDO
+            # Buscar linhas de desconto (conta contendo 'DESCONTO')
+            descontos = self.connection.search_read(
+                'account.move.line',
+                [
+                    ['move_id', '=', move_id],
+                    ['account_id.name', 'ilike', 'DESCONTO']
+                ],
+                fields=['id', 'debit', 'credit'],
+                limit=20
+            )
+
+            if descontos:
+                # Calcular valor total de desconto existente
+                valor_desconto_total = sum(
+                    d['debit'] for d in descontos if d['debit'] > 0
+                )
+                # Se não há débito, verificar se há crédito (desconto pode estar invertido)
+                if valor_desconto_total == 0:
+                    valor_desconto_total = sum(
+                        d['credit'] for d in descontos if d['credit'] > 0
+                    )
+
+                logger.info(
+                    f"[ANO_2000] Linhas de desconto encontradas: {len(descontos)}, "
+                    f"Valor desconto total: R$ {valor_desconto_total:.2f}"
+                )
+
+                # Primeira linha mantém o valor total de desconto, extras são zeradas
+                for i, d in enumerate(descontos):
+                    try:
+                        if i == 0 and valor_desconto_total > 0:
+                            self.connection.execute_kw(
+                                'account.move.line', 'write',
+                                [[d['id']], {'debit': valor_desconto_total, 'credit': 0}]
+                            )
+                            logger.debug(
+                                f"[ANO_2000] Desconto {d['id']}: configurado para "
+                                f"R$ {valor_desconto_total:.2f}"
+                            )
+                        else:
+                            self.connection.execute_kw(
+                                'account.move.line', 'write',
+                                [[d['id']], {'debit': 0, 'credit': 0}]
+                            )
+                            logger.debug(f"[ANO_2000] Desconto {d['id']}: zerado (extra)")
+                    except Exception as e:
+                        logger.error(
+                            f"[ANO_2000] Erro ao configurar desconto {d['id']}: {e}"
+                        )
+            else:
+                logger.info(
+                    f"[ANO_2000] Nenhuma linha de desconto encontrada na fatura {move_id}"
+                )
+
+            # PASSO 3: Ajustar parcelas válidas (debit + amount_residual)
+            # Cada parcela recebe seu debit original + rateio proporcional do desconto_2000
             desconto_rateado_total = 0.0
             for i, parcela in enumerate(parcelas_validas):
                 if i < len(parcelas_validas) - 1:
                     # Rateio proporcional
-                    proporcao = parcela['debit'] / soma_parcelas
+                    proporcao = parcela['debit'] / soma_parcelas if soma_parcelas > 0 else 1.0 / len(parcelas_validas)
                     desconto_parcela = round(desconto_total * proporcao, 2)
                 else:
                     # Última parcela recebe o residual (evita diferença de centavos)
@@ -776,15 +853,29 @@ class BaixaTitulosService:
                 novo_debit = round(parcela['debit'] + desconto_parcela, 2)
                 desconto_rateado_total += desconto_parcela
 
+                # Calcular novo amount_residual proporcionalmente
+                # Se parcela tinha pagamento parcial, manter a mesma proporção
+                debit_original = parcela['debit']
+                residual_original = parcela.get('amount_residual', debit_original)
+                if debit_original > 0:
+                    proporcao_residual = residual_original / debit_original
+                else:
+                    proporcao_residual = 1.0
+                novo_residual = round(novo_debit * proporcao_residual, 2)
+
                 try:
                     self.connection.execute_kw(
                         'account.move.line', 'write',
-                        [[parcela['id']], {'debit': novo_debit}]
+                        [[parcela['id']], {
+                            'debit': novo_debit,
+                            'amount_residual': novo_residual
+                        }]
                     )
                     logger.debug(
                         f"[ANO_2000] Parcela {parcela['id']}: "
-                        f"debit {parcela['debit']:.2f} → {novo_debit:.2f} "
-                        f"(+{desconto_parcela:.2f} desconto rateado)"
+                        f"debit {debit_original:.2f} → {novo_debit:.2f} "
+                        f"(+{desconto_parcela:.2f}), "
+                        f"residual {residual_original:.2f} → {novo_residual:.2f}"
                     )
                 except Exception as e:
                     logger.error(
@@ -796,15 +887,21 @@ class BaixaTitulosService:
                 'account.move.line',
                 [['move_id', '=', move_id]],
                 fields=['debit', 'credit'],
-                limit=100
+                limit=200
             )
             total_debito = sum(line['debit'] for line in lines)
             total_credito = sum(line['credit'] for line in lines)
             diferenca = abs(total_debito - total_credito)
 
+            logger.info(
+                f"[ANO_2000] Verificação pós-correção: "
+                f"Débito: {total_debito:.2f}, Crédito: {total_credito:.2f}, "
+                f"Diferença: {diferenca:.2f}"
+            )
+
             if diferenca > 0.01:
                 logger.error(
-                    f"[ANO_2000] Fatura {move_id} desbalanceada! "
+                    f"[ANO_2000] Fatura {move_id} desbalanceada após correção! "
                     f"Débito: {total_debito:.2f}, Crédito: {total_credito:.2f}"
                 )
                 # Tentar republicar mesmo assim para não deixar em draft
@@ -869,7 +966,8 @@ class BaixaTitulosService:
             logger.info(
                 f"[ANO_2000] NF {nf} corrigida com sucesso. "
                 f"Parcelas ajustadas: {len(parcelas_validas)}, "
-                f"Desconto rateado: R$ {desconto_total:.2f}"
+                f"Desconto 2000 redistribuído: R$ {desconto_total:.2f}, "
+                f"Linhas desconto configuradas: {len(descontos) if descontos else 0}"
             )
 
             return True

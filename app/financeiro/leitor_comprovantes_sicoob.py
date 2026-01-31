@@ -397,6 +397,20 @@ def _validar_comprovante(comprovante: ComprovanteBoleto) -> ComprovanteBoleto:
     return comprovante
 
 
+def _eh_comprovante_boleto(texto: str) -> bool:
+    """
+    Verifica se o texto OCR corresponde a um comprovante de PAGAMENTO DE BOLETO.
+
+    O cabeçalho "SICOOB - SISTEMA DE COOPERATIVAS..." aparece em TODOS os
+    comprovantes Sicoob (boleto, PIX, TED, etc.). O que diferencia é o
+    sub-cabeçalho "PAGAMENTO DE BOLETO" — presente APENAS em boletos.
+
+    Se o texto não contém "PAGAMENTO DE BOLETO", não é um comprovante de
+    boleto e deve ser pulado pelo parser.
+    """
+    return 'PAGAMENTO DE BOLETO' in texto.upper()
+
+
 def parse_comprovante(texto: str, pagina: int) -> ComprovanteBoleto:
     """
     Faz o parsing do texto OCR de um comprovante e retorna os dados estruturados.
@@ -447,12 +461,20 @@ def extrair_comprovantes(pdf_path: str) -> list[ComprovanteBoleto]:
     print(f"Total de páginas: {total_paginas}")
     print("-" * 60)
 
+    pulados = 0
+
     for i in range(total_paginas):
         print(f"  Página {i + 1}/{total_paginas}... ", end="", flush=True)
 
         # Renderizar e OCR
         imagem = renderizar_pagina(pdf_path, i)
         texto = extrair_texto_ocr(imagem)
+
+        # Verificar se é comprovante de boleto
+        if not _eh_comprovante_boleto(texto):
+            print("PULADA (não é boleto)")
+            pulados += 1
+            continue
 
         # Parsear
         comprovante = parse_comprovante(texto, pagina=i + 1)
@@ -466,6 +488,8 @@ def extrair_comprovantes(pdf_path: str) -> list[ComprovanteBoleto]:
 
     print("-" * 60)
     print(f"Total extraído: {len(comprovantes)} comprovante(s)")
+    if pulados:
+        print(f"Páginas puladas (não são boleto): {pulados}")
 
     return comprovantes
 
@@ -489,6 +513,11 @@ def extrair_comprovantes_from_bytes(pdf_bytes: bytes) -> list[ComprovanteBoleto]
         bitmap = page.render(scale=4.0)
         imagem = bitmap.to_pil()
         texto = extrair_texto_ocr(imagem)
+
+        # Pular páginas que não são comprovante de boleto (PIX, TED, etc.)
+        if not _eh_comprovante_boleto(texto):
+            continue
+
         comprovante = parse_comprovante(texto, pagina=i + 1)
         comprovantes.append(comprovante)
 

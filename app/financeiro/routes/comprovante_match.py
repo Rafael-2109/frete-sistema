@@ -304,3 +304,116 @@ def comprovante_match_vincular_manual(comprovante_id):
     except Exception as e:
         logger.error(f"Erro vincular manual comp={comprovante_id}: {e}", exc_info=True)
         return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+
+# =============================================================================
+# LANÇAMENTO NO ODOO (INDIVIDUAL - SÍNCRONO)
+# =============================================================================
+
+@financeiro_bp.route('/comprovantes/api/match/<int:lancamento_id>/lancar', methods=['POST'])
+@login_required
+def comprovante_lancamento_individual(lancamento_id):
+    """
+    Lança um comprovante confirmado no Odoo (CONFIRMADO → LANCADO).
+
+    Cria account.payment outbound, posta, reconcilia com título e extrato.
+    """
+    try:
+        from app.financeiro.services.comprovante_lancamento_service import (
+            ComprovanteLancamentoService,
+        )
+
+        usuario = current_user.nome if hasattr(current_user, 'nome') else str(current_user)
+
+        service = ComprovanteLancamentoService()
+        resultado = service.lancar_no_odoo(lancamento_id, usuario)
+
+        if resultado.get('sucesso'):
+            return jsonify(resultado)
+        else:
+            return jsonify(resultado), 400
+
+    except Exception as e:
+        logger.error(f"Erro lançamento individual {lancamento_id}: {e}", exc_info=True)
+        return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+
+# =============================================================================
+# LANÇAMENTO BATCH (ASSÍNCRONO VIA RQ)
+# =============================================================================
+
+@financeiro_bp.route('/comprovantes/api/lancamento/executar', methods=['POST'])
+@login_required
+def comprovante_lancamento_batch():
+    """
+    Enfileira lançamento batch via RQ para processamento em background.
+
+    Body JSON (opcional):
+    {
+        "lancamento_ids": [1, 2, 3]   // IDs específicos ou omitir para todos CONFIRMADOS
+    }
+    """
+    try:
+        from app.portal.workers import enqueue_job
+        from app.financeiro.workers.comprovante_lancamento_jobs import (
+            processar_lancamento_comprovantes_job,
+        )
+
+        dados = request.get_json(silent=True) or {}
+        lancamento_ids = dados.get('lancamento_ids')
+
+        batch_id = str(uuid.uuid4())
+        usuario = current_user.nome if hasattr(current_user, 'nome') else str(current_user)
+
+        job = enqueue_job(
+            processar_lancamento_comprovantes_job,
+            batch_id,
+            lancamento_ids,
+            usuario,
+            queue_name='default',
+            timeout='60m',
+        )
+
+        logger.info(
+            f"Lancamento batch enfileirado: batch_id={batch_id}, job_id={job.id}, "
+            f"ids={lancamento_ids or 'todos confirmados'}, usuario={usuario}"
+        )
+
+        return jsonify({
+            'sucesso': True,
+            'batch_id': batch_id,
+            'job_id': job.id,
+            'mensagem': 'Lançamento iniciado em background. Acompanhe o progresso abaixo.',
+        })
+
+    except Exception as e:
+        logger.error(f"Erro ao enfileirar lancamento batch: {e}", exc_info=True)
+        return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+
+# =============================================================================
+# PROGRESSO DO LANÇAMENTO BATCH
+# =============================================================================
+
+@financeiro_bp.route('/comprovantes/api/lancamento/progresso/<batch_id>')
+@login_required
+def comprovante_lancamento_progresso(batch_id):
+    """
+    Retorna progresso do lançamento batch.
+
+    O frontend faz polling a cada 2s até o status ser 'concluido' ou 'erro'.
+    """
+    try:
+        from app.financeiro.workers.comprovante_lancamento_jobs import (
+            obter_progresso_lancamento,
+        )
+
+        progresso = obter_progresso_lancamento(batch_id)
+        if progresso:
+            return jsonify(progresso)
+        else:
+            return jsonify({'status': 'nao_encontrado', 'batch_id': batch_id})
+
+    except Exception as e:
+        logger.error(f"Erro ao obter progresso lancamento: {e}", exc_info=True)
+        return jsonify({'status': 'erro', 'erro': str(e)}), 500

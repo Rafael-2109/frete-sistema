@@ -212,6 +212,17 @@ class LancamentoComprovante(db.Model):
     rejeitado_por = db.Column(db.String(100), nullable=True)
     motivo_rejeicao = db.Column(db.Text, nullable=True)
 
+    # 🚀 Dados do lançamento no Odoo (preenchidos na transição CONFIRMADO → LANCADO)
+    lancado_em = db.Column(db.DateTime, nullable=True)
+    lancado_por = db.Column(db.String(100), nullable=True)
+    odoo_payment_id = db.Column(db.Integer, nullable=True)              # account.payment ID criado
+    odoo_payment_name = db.Column(db.String(100), nullable=True)        # Nome do payment (PAGO/2026/...)
+    odoo_debit_line_id = db.Column(db.Integer, nullable=True)           # Linha débito do payment
+    odoo_credit_line_id = db.Column(db.Integer, nullable=True)          # Linha crédito do payment
+    odoo_full_reconcile_id = db.Column(db.Integer, nullable=True)       # Full reconcile título
+    odoo_full_reconcile_extrato_id = db.Column(db.Integer, nullable=True)  # Full reconcile extrato
+    erro_lancamento = db.Column(db.Text, nullable=True)                 # Mensagem de erro se falhar
+
     # Relationship
     comprovante = db.relationship('ComprovantePagamentoBoleto', backref='lancamentos')
 
@@ -264,4 +275,14 @@ class LancamentoComprovante(db.Model):
             'rejeitado_em': self.rejeitado_em.strftime('%d/%m/%Y %H:%M') if self.rejeitado_em else None,
             'rejeitado_por': self.rejeitado_por,
             'motivo_rejeicao': self.motivo_rejeicao,
+            # Lançamento Odoo
+            'lancado_em': self.lancado_em.strftime('%d/%m/%Y %H:%M') if self.lancado_em else None,
+            'lancado_por': self.lancado_por,
+            'odoo_payment_id': self.odoo_payment_id,
+            'odoo_payment_name': self.odoo_payment_name,
+            'odoo_debit_line_id': self.odoo_debit_line_id,
+            'odoo_credit_line_id': self.odoo_credit_line_id,
+            'odoo_full_reconcile_id': self.odoo_full_reconcile_id,
+            'odoo_full_reconcile_extrato_id': self.odoo_full_reconcile_extrato_id,
+            'erro_lancamento': self.erro_lancamento,
         }

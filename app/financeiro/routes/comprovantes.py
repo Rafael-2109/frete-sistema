@@ -28,7 +28,10 @@ from sqlalchemy import desc
 from werkzeug.utils import secure_filename
 
 from app.financeiro.routes import financeiro_bp, UPLOAD_FOLDER
-from app.financeiro.models_comprovante import ComprovantePagamentoBoleto
+from app.financeiro.models_comprovante import (
+    ComprovantePagamentoBoleto,
+    LancamentoComprovante,
+)
 from app.utils.file_storage import get_file_storage
 
 logger = logging.getLogger(__name__)
@@ -350,15 +353,57 @@ def comprovantes_api_upload_ofx():
 @financeiro_bp.route('/comprovantes/api/dados')
 @login_required
 def comprovantes_api_dados():
-    """Retorna comprovantes em JSON para a tabela."""
+    """Retorna comprovantes em JSON para a tabela, com dados de lançamento."""
     comprovantes = ComprovantePagamentoBoleto.query.order_by(
         desc(ComprovantePagamentoBoleto.importado_em)
     ).all()
 
+    # Buscar lançamentos associados (melhor match por comprovante)
+    # Prioridade: LANCADO > CONFIRMADO > PENDENTE
+    lancamentos_por_comp = {}
+    lancamentos = LancamentoComprovante.query.filter(
+        LancamentoComprovante.status.in_(['PENDENTE', 'CONFIRMADO', 'LANCADO'])
+    ).all()
+
+    for lanc in lancamentos:
+        existente = lancamentos_por_comp.get(lanc.comprovante_id)
+        prioridade = {'LANCADO': 3, 'CONFIRMADO': 2, 'PENDENTE': 1}
+        if not existente or prioridade.get(lanc.status, 0) > prioridade.get(existente.status, 0):
+            lancamentos_por_comp[lanc.comprovante_id] = lanc
+
+    dados = []
+    for c in comprovantes:
+        item = c.to_dict()
+
+        # Enriquecer com dados do lançamento
+        lanc = lancamentos_por_comp.get(c.id)
+        if lanc:
+            item['lancamento_id'] = lanc.id
+            item['lancamento_status'] = lanc.status
+            item['lancamento_odoo_payment_id'] = lanc.odoo_payment_id
+            item['lancamento_odoo_payment_name'] = lanc.odoo_payment_name
+            item['lancamento_lancado_em'] = (
+                lanc.lancado_em.strftime('%d/%m/%Y %H:%M') if lanc.lancado_em else None
+            )
+            item['lancamento_erro'] = lanc.erro_lancamento
+            item['lancamento_odoo_move_id'] = lanc.odoo_move_id
+            item['lancamento_match_score'] = lanc.match_score
+        else:
+            item['lancamento_id'] = None
+            item['lancamento_status'] = None
+            item['lancamento_odoo_payment_id'] = None
+            item['lancamento_odoo_payment_name'] = None
+            item['lancamento_lancado_em'] = None
+            item['lancamento_erro'] = None
+            item['lancamento_odoo_move_id'] = None
+            item['lancamento_match_score'] = None
+
+        dados.append(item)
+
     return jsonify({
         'sucesso': True,
-        'dados': [c.to_dict() for c in comprovantes],
-        'total': len(comprovantes),
+        'dados': dados,
+        'total': len(dados),
     })
 
 

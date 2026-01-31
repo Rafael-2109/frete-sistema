@@ -22,6 +22,9 @@
     .match-candidato.score-alto-border { border-left-color: #198754; }
     .match-candidato.score-medio-border { border-left-color: #fd7e14; }
     .match-candidato.score-baixo-border { border-left-color: #dc3545; }
+    .badge-status { font-size: 0.7em; }
+    .odoo-link { text-decoration: none; font-size: 0.85em; margin: 0 2px; }
+    .odoo-link:hover { opacity: 0.8; }
 </style>
 {% endblock %}
 
@@ -247,6 +250,51 @@
         </div>
     </div>
 
+    <!-- Card de Lançamento no Odoo -->
+    <div id="card-lancamento" class="card shadow-sm mb-4">
+        <div class="card-header bg-light">
+            <strong><i class="fas fa-paper-plane text-primary"></i> Lançar Pagamentos no Odoo</strong>
+            <small class="text-muted ms-2">Criar payments e reconciliar títulos + extratos</small>
+        </div>
+        <div class="card-body">
+            <div class="d-flex align-items-center">
+                <button type="button" id="btn-executar-lancamento" class="btn btn-primary">
+                    <i class="fas fa-paper-plane"></i> Lançar Todos Confirmados
+                </button>
+                <small class="text-muted ms-3">Processa todos os comprovantes com status CONFIRMADO</small>
+            </div>
+            <div id="lancamento-progresso" style="display: none;" class="mt-3">
+                <div class="d-flex align-items-center mb-2">
+                    <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                    <span id="lancamento-progresso-texto">Enfileirando...</span>
+                    <span class="ms-auto small text-muted" id="lancamento-progresso-contagem"></span>
+                </div>
+                <div class="progress" style="height: 8px;">
+                    <div id="lancamento-progresso-barra" class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+                         role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                    </div>
+                </div>
+                <div class="mt-1 small text-muted" id="lancamento-progresso-detalhe"></div>
+            </div>
+        </div>
+        <div id="lancamento-resultado" class="card-footer" style="display: none;">
+            <div class="row text-center mb-2">
+                <div class="col">
+                    <div class="fs-5 fw-bold text-primary" id="lancamento-stat-total">0</div>
+                    <small class="text-muted">Total</small>
+                </div>
+                <div class="col">
+                    <div class="fs-5 fw-bold text-success" id="lancamento-stat-sucesso">0</div>
+                    <small class="text-muted">Lançados</small>
+                </div>
+                <div class="col">
+                    <div class="fs-5 fw-bold text-danger" id="lancamento-stat-erros">0</div>
+                    <small class="text-muted">Erros</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Tabela de Comprovantes -->
     <div class="card shadow-sm">
         <div class="card-header bg-light d-flex justify-content-between align-items-center">
@@ -268,6 +316,8 @@
                             <th>OFX</th>
                             <th>Odoo</th>
                             <th>Match</th>
+                            <th>Status</th>
+                            <th>Links</th>
                             <th class="text-end">Vl. Documento</th>
                             <th class="text-end">Desconto</th>
                             <th class="text-end">Juros/Multa</th>
@@ -882,6 +932,88 @@ document.addEventListener('DOMContentLoaded', function() {
                 className: 'text-center',
                 orderable: false,
             },
+            // Coluna STATUS (badge com ação de lançar)
+            {
+                data: 'lancamento_status',
+                render: function(val, type, row) {
+                    if (!val) return '<span class="badge bg-light text-muted badge-status">\u2014</span>';
+
+                    if (val === 'PENDENTE') {
+                        return '<span class="badge bg-warning text-dark badge-status" title="Match encontrado, aguardando confirmação">' +
+                               '<i class="fas fa-clock me-1"></i>Pendente</span>';
+                    }
+
+                    if (val === 'CONFIRMADO') {
+                        return '<span class="badge bg-info text-white badge-status me-1" title="Confirmado, pronto para lançar">' +
+                               '<i class="fas fa-check me-1"></i>Confirmado</span>' +
+                               '<button class="btn btn-sm btn-primary py-0 px-1" style="font-size: 0.7em;" ' +
+                               'onclick="lancarIndividual(' + row.lancamento_id + ')" title="Lançar no Odoo">' +
+                               '<i class="fas fa-paper-plane"></i></button>';
+                    }
+
+                    if (val === 'LANCADO') {
+                        var tooltip = 'Baixado no Odoo';
+                        if (row.lancamento_odoo_payment_name) tooltip += ' | Payment: ' + row.lancamento_odoo_payment_name;
+                        if (row.lancamento_lancado_em) tooltip += ' | Em: ' + row.lancamento_lancado_em;
+                        return '<span class="badge bg-success badge-status" title="' + tooltip + '">' +
+                               '<i class="fas fa-check-double me-1"></i>Baixado</span>';
+                    }
+
+                    // Status com erro
+                    if (row.lancamento_erro) {
+                        return '<span class="badge bg-danger badge-status" title="Erro: ' +
+                               row.lancamento_erro.substring(0, 200) + '">' +
+                               '<i class="fas fa-exclamation-circle me-1"></i>Erro</span>';
+                    }
+
+                    return '<span class="badge bg-secondary badge-status">' + val + '</span>';
+                },
+                className: 'text-center',
+                defaultContent: '-',
+            },
+            // Coluna LINKS para Odoo (título, extrato, payment)
+            {
+                data: 'lancamento_odoo_move_id',
+                render: function(val, type, row) {
+                    var links = [];
+                    var odooBase = 'https://odoo.nacomgoya.com.br/web#';
+
+                    // Link para título (account.move do lançamento)
+                    if (val) {
+                        links.push(
+                            '<a href="' + odooBase + 'id=' + val + '&model=account.move&view_type=form" ' +
+                            'target="_blank" class="odoo-link text-primary" title="Título (account.move ' + val + ')">' +
+                            '<i class="fas fa-file-invoice"></i></a>'
+                        );
+                    }
+
+                    // Link para extrato (account.bank.statement.line)
+                    if (row.odoo_statement_line_id) {
+                        links.push(
+                            '<a href="' + odooBase + 'id=' + row.odoo_statement_line_id +
+                            '&model=account.bank.statement.line&view_type=form" ' +
+                            'target="_blank" class="odoo-link text-info" title="Extrato (statement.line ' + row.odoo_statement_line_id + ')">' +
+                            '<i class="fas fa-university"></i></a>'
+                        );
+                    }
+
+                    // Link para payment (account.payment) — só quando LANCADO
+                    if (row.lancamento_odoo_payment_id) {
+                        links.push(
+                            '<a href="' + odooBase + 'id=' + row.lancamento_odoo_payment_id +
+                            '&model=account.payment&view_type=form" ' +
+                            'target="_blank" class="odoo-link text-success" title="Payment (' +
+                            (row.lancamento_odoo_payment_name || row.lancamento_odoo_payment_id) + ')">' +
+                            '<i class="fas fa-credit-card"></i></a>'
+                        );
+                    }
+
+                    return links.length > 0 ? links.join(' ') : '<span class="text-muted">\u2014</span>';
+                },
+                className: 'text-center',
+                orderable: false,
+                defaultContent: '-',
+            },
             {
                 data: 'valor_documento',
                 render: function(val) {
@@ -1443,6 +1575,177 @@ document.addEventListener('DOMContentLoaded', function() {
             btn.innerHTML = '<i class="fas fa-link"></i> Vincular Manual';
         }
     });
+
+    // =========================================================================
+    // LANÇAMENTO INDIVIDUAL (SÍNCRONO)
+    // =========================================================================
+    window.lancarIndividual = async function(lancamentoId) {
+        if (!confirm('Confirma o lançamento deste pagamento no Odoo?\n\nIsso irá criar um payment, baixar o título e reconciliar com o extrato.')) {
+            return;
+        }
+
+        try {
+            const resp = await fetchComRetry(
+                `/financeiro/comprovantes/api/match/${lancamentoId}/lancar`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...getCsrfHeaders()
+                    }
+                }
+            );
+
+            const data = await resp.json();
+
+            if (data.sucesso) {
+                alert(`Lançamento realizado com sucesso!\n\nPayment: ${data.payment_name}\nID: ${data.payment_id}`);
+                recarregarTabela();
+            } else {
+                alert('Erro no lançamento: ' + (data.erro || 'Erro desconhecido'));
+                recarregarTabela();
+            }
+        } catch (err) {
+            alert('Erro de conexão: ' + err.message);
+        }
+    };
+
+    // =========================================================================
+    // LANÇAMENTO BATCH (ASSÍNCRONO VIA RQ + POLLING)
+    // =========================================================================
+    let lancamentoPollingInterval = null;
+
+    document.getElementById('btn-executar-lancamento').addEventListener('click', async () => {
+        if (!confirm('Confirma o lançamento de TODOS os comprovantes CONFIRMADOS no Odoo?\n\nIsso irá criar payments, baixar títulos e reconciliar com extratos.')) {
+            return;
+        }
+
+        const btnLanc = document.getElementById('btn-executar-lancamento');
+        const progresso = document.getElementById('lancamento-progresso');
+        const resultado = document.getElementById('lancamento-resultado');
+
+        btnLanc.disabled = true;
+        btnLanc.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enfileirando...';
+        progresso.style.display = 'block';
+        resultado.style.display = 'none';
+
+        try {
+            const resp = await fetchComRetry(
+                '/financeiro/comprovantes/api/lancamento/executar',
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...getCsrfHeaders()
+                    }
+                }
+            );
+
+            const data = await resp.json();
+
+            if (data.sucesso && data.batch_id) {
+                btnLanc.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando em background...';
+                document.getElementById('lancamento-progresso-texto').textContent = 'Iniciando lançamentos...';
+                document.getElementById('lancamento-progresso-contagem').textContent = '';
+                document.getElementById('lancamento-progresso-detalhe').textContent = '';
+                document.getElementById('lancamento-progresso-barra').style.width = '0%';
+
+                iniciarPollingLancamento(data.batch_id, btnLanc, progresso, resultado);
+            } else {
+                alert('Erro ao enfileirar: ' + (data.erro || 'Erro desconhecido'));
+                finalizarLancamentoUI(btnLanc, progresso);
+            }
+        } catch (err) {
+            alert('Erro de conexão: ' + err.message);
+            finalizarLancamentoUI(btnLanc, progresso);
+        }
+    });
+
+    function iniciarPollingLancamento(batchId, btnLanc, progresso, resultado) {
+        if (lancamentoPollingInterval) clearInterval(lancamentoPollingInterval);
+
+        lancamentoPollingInterval = setInterval(async () => {
+            try {
+                const resp = await fetch(`/financeiro/comprovantes/api/lancamento/progresso/${batchId}`);
+                const data = await resp.json();
+
+                if (data.status === 'processando') {
+                    const processados = data.processados || 0;
+                    const total = data.total || 0;
+                    const pct = total > 0 ? Math.round((processados / total) * 100) : 0;
+
+                    document.getElementById('lancamento-progresso-barra').style.width = pct + '%';
+                    document.getElementById('lancamento-progresso-texto').textContent = 'Lançando pagamentos...';
+                    document.getElementById('lancamento-progresso-contagem').textContent = `${processados}/${total} (${pct}%)`;
+
+                    const sucesso = data.sucesso || 0;
+                    const erros = data.erros || 0;
+                    const ultimoPayment = data.ultimo_payment || '';
+                    document.getElementById('lancamento-progresso-detalhe').textContent =
+                        `${sucesso} lançados, ${erros} erros` +
+                        (ultimoPayment ? ` | Payment: ${ultimoPayment}` : '');
+
+                    document.getElementById('lancamento-stat-total').textContent = total;
+                    document.getElementById('lancamento-stat-sucesso').textContent = sucesso;
+                    document.getElementById('lancamento-stat-erros').textContent = erros;
+                    resultado.style.display = 'block';
+
+                } else if (data.status === 'concluido') {
+                    clearInterval(lancamentoPollingInterval);
+                    lancamentoPollingInterval = null;
+
+                    const stats = data.estatisticas || {};
+                    document.getElementById('lancamento-stat-total').textContent = stats.total || 0;
+                    document.getElementById('lancamento-stat-sucesso').textContent = stats.sucesso || 0;
+                    document.getElementById('lancamento-stat-erros').textContent = stats.erros || 0;
+                    resultado.style.display = 'block';
+
+                    document.getElementById('lancamento-progresso-barra').style.width = '100%';
+                    document.getElementById('lancamento-progresso-barra').classList.remove('progress-bar-animated');
+                    document.getElementById('lancamento-progresso-texto').textContent = 'Lançamentos concluídos!';
+                    document.getElementById('lancamento-progresso-contagem').textContent = '';
+                    document.getElementById('lancamento-progresso-detalhe').textContent = '';
+
+                    setTimeout(() => {
+                        finalizarLancamentoUI(btnLanc, progresso);
+                        recarregarTabela();
+                    }, 2000);
+
+                } else if (data.status === 'erro') {
+                    clearInterval(lancamentoPollingInterval);
+                    lancamentoPollingInterval = null;
+
+                    document.getElementById('lancamento-progresso-texto').textContent = 'Erro no processamento';
+                    document.getElementById('lancamento-progresso-barra').classList.add('bg-danger');
+                    document.getElementById('lancamento-progresso-barra').classList.remove('bg-primary');
+                    document.getElementById('lancamento-progresso-detalhe').textContent = data.ultimo_payment || '';
+
+                    setTimeout(() => {
+                        finalizarLancamentoUI(btnLanc, progresso);
+                        recarregarTabela();
+                    }, 3000);
+
+                } else if (data.status === 'nao_encontrado') {
+                    document.getElementById('lancamento-progresso-texto').textContent = 'Aguardando worker...';
+                }
+
+            } catch (err) {
+                console.warn('Erro no polling de progresso lançamento:', err);
+            }
+        }, 2000);
+    }
+
+    function finalizarLancamentoUI(btnLanc, progresso) {
+        btnLanc.disabled = false;
+        btnLanc.innerHTML = '<i class="fas fa-paper-plane"></i> Lançar Todos Confirmados';
+        progresso.style.display = 'none';
+
+        const barra = document.getElementById('lancamento-progresso-barra');
+        barra.style.width = '0%';
+        barra.classList.add('progress-bar-animated');
+        barra.classList.remove('bg-danger');
+        barra.classList.add('bg-primary');
+    }
 });
 </script>
 {% endblock %}
