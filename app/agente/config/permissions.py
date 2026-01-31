@@ -4,21 +4,26 @@ Callback de permissões do agente.
 Implementa canUseTool conforme documentação oficial Anthropic:
 https://platform.claude.com/docs/pt-BR/agent-sdk/permissions
 
-Formato de retorno:
-- {"behavior": "allow", "updatedInput": input} para permitir
-- {"behavior": "deny", "message": "..."} para negar
+SDK 0.1.26+: Assinatura com 3 parâmetros e retorno tipado.
 
 REGRAS DE SEGURANÇA:
 - Write: APENAS permitido para /tmp (arquivos temporários, exports)
-- Edit: BLOQUEADO (não permitir edição de código em produção)
+- Edit: APENAS permitido para /tmp (mesma regra)
 - Bash: Permitido (executado em sandbox pelo SDK)
 - Outras tools: Permitidas por padrão
+- FAIL-CLOSED: Erros de validação NEGAM por segurança
 """
 
 import logging
 import os
 import tempfile
-from typing import Dict, Any
+from typing import Any
+
+from claude_agent_sdk import (
+    PermissionResultAllow,
+    PermissionResultDeny,
+    ToolPermissionContext,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -35,32 +40,29 @@ ALLOWED_WRITE_PREFIXES = [
 
 async def can_use_tool(
     tool_name: str,
-    tool_input: Dict[str, Any],
-) -> Dict[str, Any]:
+    tool_input: dict[str, Any],
+    context: ToolPermissionContext | None = None,
+) -> PermissionResultAllow | PermissionResultDeny:
     """
     Callback de permissão para uso de ferramentas.
 
     Esta função é chamada pelo Agent SDK antes de executar cada tool.
-    Implementa o padrão canUseTool conforme documentação oficial da Anthropic.
+    SDK 0.1.26+: 3 parâmetros, retorno tipado (PermissionResult).
 
     REGRAS:
     - Write: APENAS /tmp (para exports, arquivos temporários)
-    - Edit: BLOQUEADO (segurança em produção)
+    - Edit: APENAS /tmp (segurança em produção)
+    - Bash: Permitido (com logging)
     - Outras tools: Permitidas
-
-    Referência: https://platform.claude.com/docs/pt-BR/agent-sdk/permissions
+    - FAIL-CLOSED: Erros negam por segurança
 
     Args:
         tool_name: Nome da ferramenta
         tool_input: Parâmetros da ferramenta
+        context: ToolPermissionContext do SDK (signal, suggestions)
 
     Returns:
-        Dict com formato oficial:
-        {
-            "behavior": "allow" | "deny",
-            "updatedInput": dict (opcional - input modificado),
-            "message": str (opcional - mensagem de negação)
-        }
+        PermissionResultAllow ou PermissionResultDeny
     """
     try:
         # ================================================================
@@ -71,10 +73,9 @@ async def can_use_tool(
 
             if not file_path:
                 logger.warning("[PERMISSION] Write negado: file_path vazio")
-                return {
-                    "behavior": "deny",
-                    "message": "❌ Escrita negada: caminho do arquivo não especificado."
-                }
+                return PermissionResultDeny(
+                    message="Escrita negada: caminho do arquivo não especificado."
+                )
 
             # Normaliza o caminho para evitar bypasses (../../etc)
             normalized_path = os.path.normpath(os.path.abspath(file_path))
@@ -90,20 +91,16 @@ async def can_use_tool(
                     f"[PERMISSION] Write negado: {file_path} "
                     f"(normalizado: {normalized_path}) não está em /tmp"
                 )
-                return {
-                    "behavior": "deny",
-                    "message": (
-                        f"❌ Escrita negada: apenas arquivos em /tmp são permitidos.\n"
+                return PermissionResultDeny(
+                    message=(
+                        f"Escrita negada: apenas arquivos em /tmp são permitidos.\n"
                         f"Caminho solicitado: {file_path}\n"
                         f"Use /tmp/agente_files/ para criar arquivos de export."
                     )
-                }
+                )
 
             logger.info(f"[PERMISSION] Write permitido: {normalized_path}")
-            return {
-                "behavior": "allow",
-                "updatedInput": tool_input
-            }
+            return PermissionResultAllow(updated_input=tool_input)
 
         # ================================================================
         # REGRA: Edit APENAS para /tmp (mesma regra do Write)
@@ -113,10 +110,9 @@ async def can_use_tool(
 
             if not file_path:
                 logger.warning("[PERMISSION] Edit negado: file_path vazio")
-                return {
-                    "behavior": "deny",
-                    "message": "❌ Edição negada: caminho do arquivo não especificado."
-                }
+                return PermissionResultDeny(
+                    message="Edição negada: caminho do arquivo não especificado."
+                )
 
             # Normaliza o caminho para evitar bypasses (../../etc)
             normalized_path = os.path.normpath(os.path.abspath(file_path))
@@ -132,20 +128,16 @@ async def can_use_tool(
                     f"[PERMISSION] Edit negado: {file_path} "
                     f"(normalizado: {normalized_path}) não está em /tmp"
                 )
-                return {
-                    "behavior": "deny",
-                    "message": (
-                        f"❌ Edição negada: apenas arquivos em /tmp são permitidos.\n"
+                return PermissionResultDeny(
+                    message=(
+                        f"Edição negada: apenas arquivos em /tmp são permitidos.\n"
                         f"Caminho solicitado: {file_path}\n"
                         f"Use /tmp/agente_files/ para editar arquivos temporários."
                     )
-                }
+                )
 
             logger.info(f"[PERMISSION] Edit permitido: {normalized_path}")
-            return {
-                "behavior": "allow",
-                "updatedInput": tool_input
-            }
+            return PermissionResultAllow(updated_input=tool_input)
 
         # ================================================================
         # REGRA: Bash - Permitido (com logging)
@@ -159,30 +151,23 @@ async def can_use_tool(
                 f"[PERMISSION] Bash permitido: {description or command[:100]}"
             )
 
-            return {
-                "behavior": "allow",
-                "updatedInput": tool_input
-            }
+            return PermissionResultAllow(updated_input=tool_input)
 
         # ================================================================
         # DEFAULT: Permite outras tools
         # ================================================================
         logger.debug(f"[PERMISSION] Tool '{tool_name}' permitida")
-        return {
-            "behavior": "allow",
-            "updatedInput": tool_input
-        }
+        return PermissionResultAllow(updated_input=tool_input)
 
     except Exception as e:
         # ================================================================
-        # NUNCA TRAVAR: Se der erro na validação, loga e permite
-        # Melhor permitir com log do que travar o agente
+        # FAIL-CLOSED: Se der erro na validação, NEGA por segurança
+        # SDK 0.1.26+: Comportamento seguro — negar em caso de dúvida
         # ================================================================
         logger.error(
             f"[PERMISSION] ERRO ao validar tool '{tool_name}': {e}. "
-            f"Permitindo por segurança (fail-open)."
+            f"NEGANDO por segurança (fail-closed)."
         )
-        return {
-            "behavior": "allow",
-            "updatedInput": tool_input
-        }
+        return PermissionResultDeny(
+            message=f"Erro interno de permissão: {e}"
+        )
