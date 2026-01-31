@@ -88,13 +88,13 @@ source .venv/bin/activate && python .claude/skills/descobrindo-odoo-estrutura/sc
 
 | Preciso de... | Onde Buscar |
 |---------------|-------------|
-| IDs fixos (Companies, Picking Types, Operacoes, Journals) | `.claude/references/ODOO_IDS_FIXOS.md` |
-| GOTCHAS criticos (timeouts, campos inexistentes) | `.claude/references/ODOO_GOTCHAS.md` |
-| Modelos Odoo e campos | `.claude/references/ODOO_MODELOS_CAMPOS.md` |
-| Padroes avancados (auditoria, batch, locks) | `.claude/references/ODOO_PADROES_AVANCADOS.md` |
-| Pipeline Recebimento (Fases 1-4) | `.claude/references/ODOO_PIPELINE_RECEBIMENTO.md` |
-| Campos locais (Carteira, Separacao) | `CLAUDE.md` (raiz) |
-| Outros modelos locais | `.claude/references/MODELOS_CAMPOS.md` |
+| IDs fixos (Companies, Picking Types, Operacoes, Journals) | `.claude/references/odoo/IDS_FIXOS.md` |
+| GOTCHAS criticos (timeouts, campos inexistentes) | `.claude/references/odoo/GOTCHAS.md` |
+| Modelos Odoo e campos | `.claude/references/odoo/MODELOS_CAMPOS.md` |
+| Padroes avancados (auditoria, batch, locks) | `.claude/references/odoo/PADROES_AVANCADOS.md` |
+| Pipeline Recebimento (Fases 1-4) | `.claude/references/odoo/PIPELINE_RECEBIMENTO.md` |
+| Campos locais (Carteira, Separacao) | `.claude/references/modelos/CAMPOS_CARTEIRA_SEPARACAO.md` |
+| Outros modelos locais | `.claude/references/modelos/MODELOS_CAMPOS.md` |
 
 ---
 
@@ -105,12 +105,12 @@ TAREFA SOLICITADA
 │
 ├─ Criar nova integracao/lancamento
 │  └─ Skill: integracao-odoo
-│     + Ref: ODOO_PADROES_AVANCADOS.md (auditoria, retomada)
+│     + Ref: odoo/PADROES_AVANCADOS.md (auditoria, retomada)
 │
 ├─ Debugar erro de integracao existente
-│  ├─ Timeout/Conexao → Ref: ODOO_GOTCHAS.md
-│  ├─ Campo nao existe → Ref: ODOO_MODELOS_CAMPOS.md
-│  ├─ ID errado → Ref: ODOO_IDS_FIXOS.md
+│  ├─ Timeout/Conexao → Ref: odoo/GOTCHAS.md
+│  ├─ Campo nao existe → Ref: odoo/MODELOS_CAMPOS.md
+│  ├─ ID errado → Ref: odoo/IDS_FIXOS.md
 │  └─ Nao sei qual campo → Skill: descobrindo-odoo-estrutura
 │
 ├─ Rastrear documento (NF, PO, titulo)
@@ -284,9 +284,9 @@ ALTER TABLE tabela ADD COLUMN IF NOT EXISTS campo VARCHAR(100);
 ```
 □ EXPLORAR
   □ Verificar modelos Odoo (skill descobrindo-odoo-estrutura)
-  □ Mapear campos (ref ODOO_MODELOS_CAMPOS.md)
-  □ Verificar IDs fixos (ref ODOO_IDS_FIXOS.md)
-  □ Identificar gotchas (ref ODOO_GOTCHAS.md)
+  □ Mapear campos (ref odoo/MODELOS_CAMPOS.md)
+  □ Verificar IDs fixos (ref odoo/IDS_FIXOS.md)
+  □ Identificar gotchas (ref odoo/GOTCHAS.md)
 
 □ PLANEJAR
   □ Definir fluxo (sync/async)

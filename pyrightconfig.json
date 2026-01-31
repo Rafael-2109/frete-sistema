@@ -40,7 +40,6 @@
     "reportMissingTypeArgument": "none",
     "reportPrivateImportUsage": "none",
     "autoImportCompletions": true,
-    "autoSearchPaths": true,
     "reportUnusedImport": "warning",
     "reportUnusedFunction": "information"
 }

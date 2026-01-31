@@ -463,7 +463,137 @@ Nunca invente informações."""
             options_dict["betas"] = betas
             logger.info("[AGENT_CLIENT] Prompt Caching habilitado")
 
+        # =================================================================
+        # FEATURE FLAGS: Architecture (Fase 3)
+        # =================================================================
+        from ..config.feature_flags import USE_PROGRAMMATIC_AGENTS
+
+        # D4: Subagentes programáticos via AgentDefinition
+        # Coexiste com .claude/agents/*.md (filesystem)
+        # NOTA: Subagentes NÃO podem spawnar outros subagentes
+        if USE_PROGRAMMATIC_AGENTS:
+            try:
+                from claude_agent_sdk import AgentDefinition
+                options_dict["agents"] = {
+                    "consulta-rapida": AgentDefinition(
+                        description=(
+                            "Consulta rápida de dados logísticos (pedidos, estoque, NFs). "
+                            "Use para perguntas simples que NÃO exigem análise complexa."
+                        ),
+                        prompt=(
+                            "Você é um assistente de consultas rápidas de logística. "
+                            "Responda de forma direta e concisa. "
+                            "Use as Skills disponíveis para buscar dados reais."
+                        ),
+                        tools=["Bash", "Read", "Skill", "Glob", "Grep"],
+                        model="haiku",  # 20x mais barato que Opus
+                    ),
+                }
+                logger.info("[AGENT_CLIENT] Subagentes programáticos habilitados")
+            except (ImportError, Exception) as e:
+                logger.warning(
+                    f"[AGENT_CLIENT] Subagentes programáticos desabilitados: {e}"
+                )
+
+        # =================================================================
+        # D5: Hooks SDK formais para auditoria
+        # PostToolUse: Registra execução de Bash/Skill
+        # PreCompact: Preserva informações críticas antes de compactação
+        # =================================================================
+        try:
+            from claude_agent_sdk import HookMatcher, PostToolUseHookInput, PreCompactHookInput, HookContext
+
+            async def _audit_post_tool_use(hook_input: PostToolUseHookInput, signal, context: HookContext):
+                """Registra execução de tools para auditoria."""
+                tool_name = getattr(hook_input, 'tool_name', 'unknown')
+                tool_input_str = str(getattr(hook_input, 'tool_input', ''))[:200]
+                logger.info(f"[AUDIT] PostToolUse: {tool_name} | input: {tool_input_str}")
+                return {}
+
+            async def _pre_compact_hook(hook_input: PreCompactHookInput, signal, context: HookContext):
+                """Antes de compactação, loga aviso."""
+                logger.info("[COMPACTION] PreCompact hook ativado — contexto será compactado")
+                return {}
+
+            options_dict["hooks"] = {
+                "PostToolUse": [
+                    HookMatcher(
+                        matcher="Bash|Skill",
+                        hooks=[_audit_post_tool_use],
+                    ),
+                ],
+                "PreCompact": [
+                    HookMatcher(
+                        hooks=[_pre_compact_hook],
+                    ),
+                ],
+            }
+            logger.debug("[AGENT_CLIENT] Hooks SDK (PostToolUse + PreCompact) configurados")
+        except (ImportError, Exception) as e:
+            logger.warning(f"[AGENT_CLIENT] Hooks SDK não disponíveis: {e}")
+
         return ClaudeAgentOptions(**options_dict)
+
+    @staticmethod
+    async def _self_correct_response(full_text: str) -> Optional[str]:
+        """
+        D6: Self-Correction — valida coerência da resposta antes de entregar.
+
+        Usa Haiku (20x mais barato) para verificar:
+        - Números/valores coerentes entre si
+        - Contradições internas na resposta
+        - Informação crítica faltante (ex: perguntou X, respondeu sobre Y)
+
+        Args:
+            full_text: Texto completo da resposta do agente
+
+        Returns:
+            None se a resposta está OK
+            String com observação de correção se detectar problema
+        """
+        from ..config.feature_flags import USE_SELF_CORRECTION
+
+        if not USE_SELF_CORRECTION:
+            return None
+
+        # Só validar respostas com conteúdo substancial (>100 chars)
+        if not full_text or len(full_text.strip()) < 100:
+            return None
+
+        try:
+            client = anthropic.Anthropic()
+
+            validation = client.messages.create(
+                model="claude-haiku-4-5-20250514",
+                max_tokens=300,
+                messages=[{
+                    "role": "user",
+                    "content": (
+                        "Analise esta resposta de um assistente de logística e identifique "
+                        "APENAS problemas GRAVES de coerência:\n"
+                        "- Números que contradizem entre si (ex: 'total de 5 itens' mas lista 8)\n"
+                        "- Valores monetários inconsistentes\n"
+                        "- Informação que contradiz a si mesma\n\n"
+                        "Se a resposta está coerente, responda EXATAMENTE: OK\n"
+                        "Se encontrar problema, descreva em UMA frase curta.\n\n"
+                        f"Resposta a validar:\n{full_text[:3000]}"
+                    )
+                }]
+            )
+
+            result = validation.content[0].text.strip()
+
+            if result.upper() == "OK" or len(result) < 5:
+                logger.debug("[SELF-CORRECTION] Resposta validada: OK")
+                return None
+
+            logger.warning(f"[SELF-CORRECTION] Problema detectado: {result}")
+            return result
+
+        except Exception as e:
+            # Self-correction é best-effort — falha silenciosa
+            logger.debug(f"[SELF-CORRECTION] Erro na validação (ignorado): {e}")
+            return None
 
     async def stream_response(
         self,
@@ -792,6 +922,15 @@ Nunca invente informações."""
 
                     # Emite evento done com métricas (apenas uma vez)
                     if not done_emitted:
+                        # D6: Self-Correction antes de entregar resposta
+                        correction = await self._self_correct_response(full_text)
+                        if correction:
+                            yield StreamEvent(
+                                type='text',
+                                content=f"\n\n⚠️ **Observação de validação**: {correction}",
+                                metadata={'self_correction': True}
+                            )
+
                         done_emitted = True
                         yield StreamEvent(
                             type='done',
@@ -801,7 +940,8 @@ Nunca invente informações."""
                                 'output_tokens': output_tokens,
                                 'total_cost_usd': getattr(message, 'total_cost_usd', 0) or 0,
                                 'session_id': current_session_id,
-                                'tool_calls': len(tool_calls)
+                                'tool_calls': len(tool_calls),
+                                'self_corrected': correction is not None,
                             },
                             metadata={'message_id': last_message_id or ''}
                         )
@@ -809,6 +949,15 @@ Nunca invente informações."""
 
             # Se não recebeu ResultMessage, emite done
             if not done_emitted:
+                # D6: Self-Correction (fallback path)
+                correction = await self._self_correct_response(full_text)
+                if correction:
+                    yield StreamEvent(
+                        type='text',
+                        content=f"\n\n⚠️ **Observação de validação**: {correction}",
+                        metadata={'self_correction': True}
+                    )
+
                 yield StreamEvent(
                     type='done',
                     content={
@@ -816,7 +965,8 @@ Nunca invente informações."""
                         'input_tokens': input_tokens,
                         'output_tokens': output_tokens,
                         'session_id': current_session_id,
-                        'tool_calls': len(tool_calls)
+                        'tool_calls': len(tool_calls),
+                        'self_corrected': correction is not None,
                     }
                 )
 
