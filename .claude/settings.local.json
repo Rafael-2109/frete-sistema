@@ -50,7 +50,16 @@
       "WebFetch(domain:css-tricks.com)",
       "mcp__render__list_log_label_values",
       "Bash(claude:*)",
-      "Bash(pyright-langserver:*)"
+      "Bash(pyright-langserver:*)",
+      "Bash(cat:*)",
+      "Bash(test:*)",
+      "Bash(git -C /home/rafaelnascimento/projetos/frete_sistema diff -- .claude/settings.json)",
+      "Bash(git -C /home/rafaelnascimento/projetos/frete_sistema diff -- .gitignore)",
+      "Bash(git -C /home/rafaelnascimento/projetos/frete_sistema diff -- CLAUDE.md)",
+      "Bash(git -C /home/rafaelnascimento/projetos/frete_sistema diff -- .claude/skills/gerindo-expedicao/scripts/app/portal/portal_sessions/.encryption_key)",
+      "Bash(git -C:*)",
+      "WebFetch(domain:claude.com)",
+      "Bash(pip show:*)"
     ],
     "deny": []
   },

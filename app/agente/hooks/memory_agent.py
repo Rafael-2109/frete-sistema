@@ -10,10 +10,24 @@ Usa claude-haiku-4-5-20251001 para custo baixo (~$0.003/mensagem).
 
 import logging
 import os
+import re
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timezone
 
 import anthropic
+
+# D2: Padrões perigosos para sanitização anti-injection em memórias
+_DANGEROUS_PATTERNS = [
+    re.compile(r'(?i)ignore\s+(all\s+)?previous\s+instructions'),
+    re.compile(r'(?i)ignore\s+rules?\s+(P\d|R\d)'),
+    re.compile(r'(?i)you\s+(must|should|are)\s+now'),
+    re.compile(r'(?i)new\s+instructions?:'),
+    re.compile(r'(?i)system\s*prompt'),
+    re.compile(r'(?i)override\s+rules?'),
+    re.compile(r'(?i)act\s+as\s+if'),
+    re.compile(r'(?i)disregard\s+(all\s+)?prior'),
+    re.compile(r'(?i)forget\s+(everything|all|prior)'),
+]
 
 logger = logging.getLogger(__name__)
 
@@ -162,14 +176,35 @@ class MemoryAgent:
 
         return "\n\n".join(memories_text) if memories_text else "(nenhuma memoria salva)"
 
+    @staticmethod
+    def _sanitize_memory_content(content: str) -> str:
+        """
+        D2: Sanitiza conteúdo de memória contra prompt injection.
+
+        Remove padrões que tentam modificar o comportamento do agente
+        quando injetados via memória persistente.
+        """
+        sanitized = content
+        for pattern in _DANGEROUS_PATTERNS:
+            if pattern.search(sanitized):
+                logger.warning(
+                    f"[MEMORY_SANITIZE] Padrão perigoso detectado: {pattern.pattern}"
+                )
+                sanitized = pattern.sub('[FILTRADO]', sanitized)
+        return sanitized
+
     def _save_memory_sync(self, user_id: int, path: str, content: str) -> bool:
         """
         Salva memoria no banco (APPEND se arquivo existir).
 
         Acumula memorias no mesmo arquivo para manter historico.
+        D2: Aplica sanitização anti-injection antes de salvar.
         """
         from ..models import AgentMemory
         from app import db
+
+        # D2: Sanitizar conteúdo antes de persistir
+        content = self._sanitize_memory_content(content)
 
         app = self._get_app()
 

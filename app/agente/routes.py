@@ -334,8 +334,14 @@ def _stream_chat_response(
                                 logger.info(f"[AGENTE] Injetando {len(previous_messages)} mensagens como contexto")
 
                 # FEAT-031: Injeta contexto de memória do usuário no prompt
+                # D3: Inclui MEMORY_SYSTEM_PROMPT (diretrizes de uso de memória)
                 if context_injection:
-                    prompt_to_send = f"[CONTEXTO DO USUÁRIO]\n{context_injection}\n\n{prompt_to_send}"
+                    from .memory_tool import MEMORY_SYSTEM_PROMPT
+                    prompt_to_send = (
+                        f"[DIRETRIZES DE MEMÓRIA]\n{MEMORY_SYSTEM_PROMPT}\n\n"
+                        f"[CONTEXTO DO USUÁRIO]\n{context_injection}\n\n"
+                        f"{prompt_to_send}"
+                    )
 
                 logger.info(f"[AGENTE] Chamando SDK | sdk_session_id: {sdk_session_id[:8] if sdk_session_id else 'Nova'} | images: {len(image_files) if image_files else 0}")
 

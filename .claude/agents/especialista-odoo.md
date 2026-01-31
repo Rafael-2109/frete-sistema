@@ -47,14 +47,14 @@ Voce possui visao COMPLETA de todos os modelos, relacoes e fluxos do Odoo usados
 
 | Preciso de... | Onde Buscar |
 |---------------|-------------|
-| IDs fixos (Companies, Picking Types, Journals) | `.claude/references/ODOO_IDS_FIXOS.md` |
-| GOTCHAS criticos (timeouts, campos inexistentes) | `.claude/references/ODOO_GOTCHAS.md` |
-| Modelos Odoo e campos | `.claude/references/ODOO_MODELOS_CAMPOS.md` |
-| Padroes avancados (auditoria, batch, locks) | `.claude/references/ODOO_PADROES_AVANCADOS.md` |
-| Pipeline Recebimento (Fases 1-4) | `.claude/references/ODOO_PIPELINE_RECEBIMENTO.md` |
-| Conversao UoM (Milhar, fator_un) | `.claude/references/CONVERSAO_UOM_ODOO.md` |
-| Campos locais (Carteira, Separacao) | `CLAUDE.md` (raiz) |
-| Outros modelos locais | `.claude/references/MODELOS_CAMPOS.md` |
+| IDs fixos (Companies, Picking Types, Journals) | `.claude/references/odoo/IDS_FIXOS.md` |
+| GOTCHAS criticos (timeouts, campos inexistentes) | `.claude/references/odoo/GOTCHAS.md` |
+| Modelos Odoo e campos | `.claude/references/odoo/MODELOS_CAMPOS.md` |
+| Padroes avancados (auditoria, batch, locks) | `.claude/references/odoo/PADROES_AVANCADOS.md` |
+| Pipeline Recebimento (Fases 1-4) | `.claude/references/odoo/PIPELINE_RECEBIMENTO.md` |
+| Conversao UoM (Milhar, fator_un) | `.claude/references/odoo/CONVERSAO_UOM.md` |
+| Campos locais (Carteira, Separacao) | `.claude/references/modelos/CAMPOS_CARTEIRA_SEPARACAO.md` |
+| Outros modelos locais | `.claude/references/modelos/MODELOS_CAMPOS.md` |
 
 ---
 
@@ -312,7 +312,7 @@ ENTRADA DO USUARIO
 
 ## PIPELINE DE RECEBIMENTO (Resumo)
 
-> **Referencia completa:** `.claude/references/ODOO_PIPELINE_RECEBIMENTO.md`
+> **Referencia completa:** `.claude/references/odoo/PIPELINE_RECEBIMENTO.md`
 
 ```
 FASE 1: Validacao Fiscal → FASE 2: Match NF x PO → FASE 3: Consolidacao PO → FASE 4: Recebimento Fisico
@@ -382,7 +382,7 @@ Ao diagnosticar ou explicar, estruturar assim:
 | Erros comuns financeiro | `.claude/skills/executando-odoo-financeiro/references/erros-comuns.md` |
 | Contas por empresa | `.claude/skills/executando-odoo-financeiro/references/contas-por-empresa.md` |
 | Modelos Odoo Fase 4 | `.claude/skills/recebimento-fisico-odoo/references/modelos-odoo.md` |
-| Conversao UoM | `.claude/references/CONVERSAO_UOM_ODOO.md` |
+| Conversao UoM | `.claude/references/odoo/CONVERSAO_UOM.md` |
 | Fluxo validacao NF-PO | `.claude/skills/validacao-nf-po/references/fluxo-validacao-nf-po.md` |
 | Fluxo consolidacao | `.claude/skills/conciliando-odoo-po/references/fluxo-conciliacao.md` |
 | Fluxo recebimento financeiro | `.claude/skills/executando-odoo-financeiro/references/fluxo-recebimento.md` |
