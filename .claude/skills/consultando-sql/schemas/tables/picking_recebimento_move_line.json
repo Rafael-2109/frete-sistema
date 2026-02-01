@@ -1,0 +1,74 @@
+{
+  "name": "picking_recebimento_move_line",
+  "description": "Move lines de picking de recebimento.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "picking_recebimento_id",
+      "type": "integer",
+      "description": "FK → picking_recebimento.id",
+      "nullable": false
+    },
+    {
+      "name": "produto_id",
+      "type": "integer",
+      "description": "FK → picking_recebimento_produto.id",
+      "nullable": false
+    },
+    {
+      "name": "odoo_move_line_id",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "odoo_move_id",
+      "type": "integer"
+    },
+    {
+      "name": "lot_id",
+      "type": "integer"
+    },
+    {
+      "name": "lot_name",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "quantity",
+      "type": "numeric(15,3)",
+      "default": 0
+    },
+    {
+      "name": "reserved_uom_qty",
+      "type": "numeric(15,3)",
+      "default": 0
+    },
+    {
+      "name": "location_id",
+      "type": "integer"
+    },
+    {
+      "name": "location_dest_id",
+      "type": "integer"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "picking_recebimento_id",
+      "references": "picking_recebimento.id"
+    },
+    {
+      "column": "produto_id",
+      "references": "picking_recebimento_produto.id"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "picking_recebimento_id",
+      "odoo_move_line_id"
+    ]
+  ]
+}

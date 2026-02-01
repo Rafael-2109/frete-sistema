@@ -1,0 +1,92 @@
+{
+  "name": "emails_anexados",
+  "description": "Emails anexados a documentos.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "despesa_extra_id",
+      "type": "integer",
+      "description": "FK → despesas_extras.id",
+      "nullable": false
+    },
+    {
+      "name": "nome_arquivo",
+      "type": "varchar(255)",
+      "description": "Nome original do arquivo .msg",
+      "nullable": false
+    },
+    {
+      "name": "caminho_s3",
+      "type": "varchar(500)",
+      "description": "Caminho completo no S3",
+      "nullable": false
+    },
+    {
+      "name": "tamanho_bytes",
+      "type": "integer",
+      "description": "Tamanho do arquivo"
+    },
+    {
+      "name": "remetente",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "destinatarios",
+      "type": "text",
+      "description": "JSON com lista de destinatários (TO)"
+    },
+    {
+      "name": "cc",
+      "type": "text",
+      "description": "JSON com lista de destinatários em cópia (CC)"
+    },
+    {
+      "name": "bcc",
+      "type": "text",
+      "description": "JSON com lista de destinatários em cópia oculta (BCC)"
+    },
+    {
+      "name": "assunto",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "data_envio",
+      "type": "timestamp"
+    },
+    {
+      "name": "tem_anexos",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "qtd_anexos",
+      "type": "integer",
+      "default": 0
+    },
+    {
+      "name": "conteudo_preview",
+      "type": "text",
+      "description": "Primeiros 500 caracteres do email"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "despesa_extra_id",
+      "references": "despesas_extras.id"
+    }
+  ]
+}

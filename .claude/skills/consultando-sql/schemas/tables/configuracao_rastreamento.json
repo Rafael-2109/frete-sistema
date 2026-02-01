@@ -1,0 +1,73 @@
+{
+  "name": "configuracao_rastreamento",
+  "description": "Configurações de rastreamento.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "intervalo_ping_segundos",
+      "type": "integer",
+      "description": "2 minutos",
+      "nullable": false,
+      "default": 120
+    },
+    {
+      "name": "intervalo_ping_parado_segundos",
+      "type": "integer",
+      "description": "5 minutos quando parado",
+      "nullable": false,
+      "default": 300
+    },
+    {
+      "name": "velocidade_considerada_parado",
+      "type": "float",
+      "description": "km/h",
+      "nullable": false,
+      "default": 5.0
+    },
+    {
+      "name": "distancia_chegada_metros",
+      "type": "float",
+      "description": "200 metros",
+      "nullable": false,
+      "default": 200.0
+    },
+    {
+      "name": "dias_retencao_dados",
+      "type": "integer",
+      "description": "90 dias",
+      "nullable": false,
+      "default": 90
+    },
+    {
+      "name": "versao_termo_lgpd",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "1.0"
+    },
+    {
+      "name": "notificar_chegada_destino",
+      "type": "boolean",
+      "nullable": false,
+      "default": true
+    },
+    {
+      "name": "notificar_inatividade_minutos",
+      "type": "integer",
+      "description": "NULL = desabilitado",
+      "default": 30
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    },
+    {
+      "name": "atualizado_por",
+      "type": "varchar(100)"
+    }
+  ]
+}

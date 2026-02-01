@@ -1,0 +1,73 @@
+{
+  "name": "recebimento_lote",
+  "description": "Lotes de recebimento físico.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "recebimento_id",
+      "type": "integer",
+      "description": "FK → recebimento_fisico.id",
+      "nullable": false
+    },
+    {
+      "name": "odoo_product_id",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "odoo_product_name",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "odoo_move_line_id",
+      "type": "integer"
+    },
+    {
+      "name": "odoo_move_id",
+      "type": "integer"
+    },
+    {
+      "name": "lote_nome",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "quantidade",
+      "type": "numeric(15,3)",
+      "nullable": false
+    },
+    {
+      "name": "data_validade",
+      "type": "date"
+    },
+    {
+      "name": "produto_tracking",
+      "type": "varchar(20)",
+      "default": "lot"
+    },
+    {
+      "name": "processado",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "odoo_lot_id",
+      "type": "integer"
+    },
+    {
+      "name": "odoo_move_line_criado_id",
+      "type": "integer"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "recebimento_id",
+      "references": "recebimento_fisico.id"
+    }
+  ]
+}

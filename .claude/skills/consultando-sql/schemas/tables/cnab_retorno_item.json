@@ -1,0 +1,246 @@
+{
+  "name": "cnab_retorno_item",
+  "description": "Itens individuais de retorno CNAB.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "lote_id",
+      "type": "integer",
+      "description": "FK → cnab_retorno_lote.id",
+      "nullable": false
+    },
+    {
+      "name": "tipo_registro",
+      "type": "varchar(1)",
+      "description": "0=Header, 1=Detalhe, 9=Trailer"
+    },
+    {
+      "name": "nosso_numero",
+      "type": "varchar(20)",
+      "description": "Identificação no banco"
+    },
+    {
+      "name": "seu_numero",
+      "type": "varchar(25)",
+      "description": "Identificação da empresa (NF/Parcela)"
+    },
+    {
+      "name": "cnpj_pagador",
+      "type": "varchar(20)",
+      "description": "CNPJ do sacado/pagador"
+    },
+    {
+      "name": "codigo_ocorrencia",
+      "type": "varchar(2)",
+      "description": "02, 06, 10, etc."
+    },
+    {
+      "name": "descricao_ocorrencia",
+      "type": "varchar(100)",
+      "description": "Descrição do código"
+    },
+    {
+      "name": "data_ocorrencia",
+      "type": "date"
+    },
+    {
+      "name": "valor_titulo",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "valor_pago",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "valor_juros",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "valor_desconto",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "valor_abatimento",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "data_vencimento",
+      "type": "date"
+    },
+    {
+      "name": "data_credito",
+      "type": "date"
+    },
+    {
+      "name": "nf_extraida",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "parcela_extraida",
+      "type": "varchar(10)"
+    },
+    {
+      "name": "conta_a_receber_id",
+      "type": "integer",
+      "description": "FK → contas_a_receber.id"
+    },
+    {
+      "name": "extrato_item_id",
+      "type": "integer",
+      "description": "FK → extrato_item.id"
+    },
+    {
+      "name": "status_match_extrato",
+      "type": "varchar(30)",
+      "default": "PENDENTE"
+    },
+    {
+      "name": "match_score_extrato",
+      "type": "integer"
+    },
+    {
+      "name": "match_criterio_extrato",
+      "type": "varchar(100)",
+      "description": "DATA+VALOR+CNPJ_EXATO, etc."
+    },
+    {
+      "name": "status_match",
+      "type": "varchar(30)",
+      "default": "PENDENTE"
+    },
+    {
+      "name": "match_score",
+      "type": "integer",
+      "description": "100 = match exato por NF/Parcela"
+    },
+    {
+      "name": "match_criterio",
+      "type": "varchar(100)",
+      "description": "NF_PARCELA_EXATO"
+    },
+    {
+      "name": "processado",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "data_processamento",
+      "type": "timestamp"
+    },
+    {
+      "name": "erro_mensagem",
+      "type": "text"
+    },
+    {
+      "name": "linha_original",
+      "type": "text"
+    },
+    {
+      "name": "numero_linha",
+      "type": "integer"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "lote_id",
+      "references": "cnab_retorno_lote.id"
+    },
+    {
+      "column": "conta_a_receber_id",
+      "references": "contas_a_receber.id"
+    },
+    {
+      "column": "extrato_item_id",
+      "references": "extrato_item.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_cnab_retorno_item_seu_numero",
+      "columns": [
+        "seu_numero"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_cnab_retorno_item_lote_id",
+      "columns": [
+        "lote_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_cnab_retorno_item_conta_a_receber_id",
+      "columns": [
+        "conta_a_receber_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_cnab_retorno_item_cnpj_pagador",
+      "columns": [
+        "cnpj_pagador"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_cnab_retorno_item_processado",
+      "columns": [
+        "processado"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_cnab_item_seu_numero",
+      "columns": [
+        "seu_numero"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_cnab_retorno_item_nosso_numero",
+      "columns": [
+        "nosso_numero"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_cnab_retorno_item_codigo_ocorrencia",
+      "columns": [
+        "codigo_ocorrencia"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_cnab_retorno_item_status_match",
+      "columns": [
+        "status_match"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_cnab_retorno_item_extrato_item_id",
+      "columns": [
+        "extrato_item_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_cnab_item_lote_status",
+      "columns": [
+        "lote_id",
+        "status_match"
+      ],
+      "unique": false
+    }
+  ]
+}

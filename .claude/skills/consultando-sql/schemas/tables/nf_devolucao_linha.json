@@ -1,0 +1,153 @@
+{
+  "name": "nf_devolucao_linha",
+  "description": "Linhas/itens de NF de devolução.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "nf_devolucao_id",
+      "type": "integer",
+      "description": "FK → nf_devolucao.id",
+      "nullable": false
+    },
+    {
+      "name": "codigo_produto_cliente",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "descricao_produto_cliente",
+      "type": "text"
+    },
+    {
+      "name": "codigo_produto_interno",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "descricao_produto_interno",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "produto_resolvido",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "metodo_resolucao",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "confianca_resolucao",
+      "type": "numeric(5,4)",
+      "description": "0.0000 a 1.0000"
+    },
+    {
+      "name": "quantidade",
+      "type": "numeric(15,3)"
+    },
+    {
+      "name": "unidade_medida",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "valor_unitario",
+      "type": "numeric(15,4)"
+    },
+    {
+      "name": "valor_total",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "quantidade_convertida",
+      "type": "numeric(15,3)"
+    },
+    {
+      "name": "qtd_por_caixa",
+      "type": "integer"
+    },
+    {
+      "name": "peso_bruto",
+      "type": "numeric(15,3)"
+    },
+    {
+      "name": "peso_liquido",
+      "type": "numeric(15,3)"
+    },
+    {
+      "name": "cfop",
+      "type": "varchar(10)"
+    },
+    {
+      "name": "ncm",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "numero_item",
+      "type": "integer"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "nf_devolucao_id",
+      "references": "nf_devolucao.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_nf_devolucao_linha_nf_devolucao_id",
+      "columns": [
+        "nf_devolucao_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_linha_codigo_produto_cliente",
+      "columns": [
+        "codigo_produto_cliente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_linha_codigo_produto_interno",
+      "columns": [
+        "codigo_produto_interno"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nfd_linha_produto_cliente",
+      "columns": [
+        "codigo_produto_cliente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nfd_linha_produto_interno",
+      "columns": [
+        "codigo_produto_interno"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nfd_linha_resolvido",
+      "columns": [
+        "produto_resolvido"
+      ],
+      "unique": false
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "name": "portal_logs",
+  "description": "Log de execuções das integrações",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "integracao_id",
+      "type": "integer",
+      "description": "FK → portal_integracoes.id"
+    },
+    {
+      "name": "acao",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "sucesso",
+      "type": "boolean"
+    },
+    {
+      "name": "mensagem",
+      "type": "text"
+    },
+    {
+      "name": "screenshot_path",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "dados_contexto",
+      "type": "jsonb"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "integracao_id",
+      "references": "portal_integracoes.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_portal_logs_integracao_id",
+      "columns": [
+        "integracao_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_portal_logs_criado_em",
+      "columns": [
+        "criado_em"
+      ],
+      "unique": false
+    }
+  ]
+}

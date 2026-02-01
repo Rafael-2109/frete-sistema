@@ -1,0 +1,178 @@
+{
+  "name": "entregas_monitoradas",
+  "description": "Monitoramento de entregas com status e ocorrências.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "numero_nf",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "cliente",
+      "type": "varchar(255)",
+      "nullable": false
+    },
+    {
+      "name": "transportadora",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "municipio",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "uf",
+      "type": "varchar(2)"
+    },
+    {
+      "name": "vendedor",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "cnpj_cliente",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "valor_nf",
+      "type": "float"
+    },
+    {
+      "name": "data_faturamento",
+      "type": "date"
+    },
+    {
+      "name": "data_embarque",
+      "type": "date"
+    },
+    {
+      "name": "data_entrega_prevista",
+      "type": "date"
+    },
+    {
+      "name": "data_hora_entrega_realizada",
+      "type": "timestamp"
+    },
+    {
+      "name": "entregue",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "lead_time",
+      "type": "integer"
+    },
+    {
+      "name": "reagendar",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "motivo_reagendamento",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "data_agenda",
+      "type": "date"
+    },
+    {
+      "name": "observacao_operacional",
+      "type": "text"
+    },
+    {
+      "name": "pendencia_financeira",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "resposta_financeiro",
+      "type": "text"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "nf_cd",
+      "type": "boolean",
+      "description": "Indica se está no CD",
+      "default": false
+    },
+    {
+      "name": "separacao_lote_id",
+      "type": "varchar(50)",
+      "description": "ID do lote de separação"
+    },
+    {
+      "name": "finalizado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "finalizado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "status_finalizacao",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "nova_nf",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "substituida_por_nf_id",
+      "type": "integer",
+      "description": "FK → entregas_monitoradas.id"
+    },
+    {
+      "name": "canhoto_arquivo",
+      "type": "varchar(500)",
+      "description": "Caminho do arquivo do canhoto"
+    },
+    {
+      "name": "teve_devolucao",
+      "type": "boolean",
+      "description": "Indica se houve devolucao",
+      "nullable": false,
+      "default": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "substituida_por_nf_id",
+      "references": "entregas_monitoradas.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_entregas_monitoradas_cnpj_cliente",
+      "columns": [
+        "cnpj_cliente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_entregas_monitoradas_numero_nf",
+      "columns": [
+        "numero_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_entregas_monitoradas_separacao_lote_id",
+      "columns": [
+        "separacao_lote_id"
+      ],
+      "unique": false
+    }
+  ]
+}

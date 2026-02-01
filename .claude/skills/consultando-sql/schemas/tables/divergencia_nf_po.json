@@ -1,0 +1,158 @@
+{
+  "name": "divergencia_nf_po",
+  "description": "Divergências encontradas NF × PO.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "validacao_id",
+      "type": "integer",
+      "description": "FK → validacao_nf_po_dfe.id",
+      "nullable": false
+    },
+    {
+      "name": "odoo_dfe_id",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "odoo_dfe_line_id",
+      "type": "integer"
+    },
+    {
+      "name": "cnpj_fornecedor",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "razao_fornecedor",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "cnpj_empresa_compradora",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "razao_empresa_compradora",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "cod_produto_fornecedor",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "cod_produto_interno",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "nome_produto",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "tipo_divergencia",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "campo_label",
+      "type": "varchar(100)",
+      "description": "\"Preco\", \"Quantidade\", etc"
+    },
+    {
+      "name": "valor_nf",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "valor_po",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "diferenca_percentual",
+      "type": "numeric(10,2)"
+    },
+    {
+      "name": "odoo_po_id",
+      "type": "integer"
+    },
+    {
+      "name": "odoo_po_name",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "odoo_po_line_id",
+      "type": "integer"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "pendente"
+    },
+    {
+      "name": "resolucao",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "justificativa",
+      "type": "text"
+    },
+    {
+      "name": "resolvido_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "resolvido_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "validacao_id",
+      "references": "validacao_nf_po_dfe.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_divergencia_nf_po_cnpj_empresa_compradora",
+      "columns": [
+        "cnpj_empresa_compradora"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_divergencia_nf_po_odoo_dfe_id",
+      "columns": [
+        "odoo_dfe_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_divergencia_nf_po_tipo_divergencia",
+      "columns": [
+        "tipo_divergencia"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_divergencia_nf_po_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_divergencia_nf_po_validacao_id",
+      "columns": [
+        "validacao_id"
+      ],
+      "unique": false
+    }
+  ]
+}

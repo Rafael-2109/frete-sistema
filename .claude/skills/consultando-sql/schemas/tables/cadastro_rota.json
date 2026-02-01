@@ -1,0 +1,49 @@
+{
+  "name": "cadastro_rota",
+  "description": "Cadastro de rotas logísticas por UF.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "cod_uf",
+      "type": "varchar(2)",
+      "nullable": false
+    },
+    {
+      "name": "rota",
+      "type": "varchar(50)",
+      "description": "ROTA",
+      "nullable": false
+    },
+    {
+      "name": "ativa",
+      "type": "boolean",
+      "nullable": false,
+      "default": true
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp",
+      "description": "Última atualização",
+      "nullable": false
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_cadastro_rota_cod_uf",
+      "columns": [
+        "cod_uf"
+      ],
+      "unique": true
+    }
+  ]
+}

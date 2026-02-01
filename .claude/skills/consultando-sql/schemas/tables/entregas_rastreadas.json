@@ -1,0 +1,141 @@
+{
+  "name": "entregas_rastreadas",
+  "description": "Entregas com rastreamento ativo.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "rastreamento_id",
+      "type": "integer",
+      "description": "FK → rastreamento_embarques.id",
+      "nullable": false
+    },
+    {
+      "name": "embarque_item_id",
+      "type": "integer",
+      "description": "FK → embarque_itens.id",
+      "nullable": false
+    },
+    {
+      "name": "numero_nf",
+      "type": "varchar(20)",
+      "description": "Pode ser NULL se ainda não faturado"
+    },
+    {
+      "name": "pedido",
+      "type": "varchar(50)",
+      "description": "Sempre tem pedido",
+      "nullable": false
+    },
+    {
+      "name": "cnpj_cliente",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "cliente",
+      "type": "varchar(255)",
+      "nullable": false
+    },
+    {
+      "name": "endereco_completo",
+      "type": "text"
+    },
+    {
+      "name": "cidade",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "uf",
+      "type": "varchar(2)",
+      "nullable": false
+    },
+    {
+      "name": "destino_latitude",
+      "type": "float"
+    },
+    {
+      "name": "destino_longitude",
+      "type": "float"
+    },
+    {
+      "name": "geocodificado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "ordem_entrega",
+      "type": "integer",
+      "description": "NULL para FRACIONADA"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "PENDENTE"
+    },
+    {
+      "name": "canhoto_arquivo",
+      "type": "varchar(500)",
+      "description": "Caminho no storage"
+    },
+    {
+      "name": "canhoto_latitude",
+      "type": "float"
+    },
+    {
+      "name": "canhoto_longitude",
+      "type": "float"
+    },
+    {
+      "name": "entregue_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "entregue_distancia_metros",
+      "type": "float",
+      "description": "Distância do cliente quando entregou"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "rastreamento_id",
+      "references": "rastreamento_embarques.id"
+    },
+    {
+      "column": "embarque_item_id",
+      "references": "embarque_itens.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_entregas_rastreadas_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_entregas_rastreadas_embarque_item_id",
+      "columns": [
+        "embarque_item_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_entregas_rastreadas_rastreamento_id",
+      "columns": [
+        "rastreamento_id"
+      ],
+      "unique": false
+    }
+  ]
+}

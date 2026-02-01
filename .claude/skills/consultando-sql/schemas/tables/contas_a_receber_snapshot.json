@@ -1,0 +1,66 @@
+{
+  "name": "contas_a_receber_snapshot",
+  "description": "Snapshots históricos de contas a receber.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "conta_a_receber_id",
+      "type": "integer",
+      "description": "FK → contas_a_receber.id",
+      "nullable": false
+    },
+    {
+      "name": "campo",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "valor_anterior",
+      "type": "text"
+    },
+    {
+      "name": "valor_novo",
+      "type": "text"
+    },
+    {
+      "name": "alterado_em",
+      "type": "timestamp",
+      "nullable": false
+    },
+    {
+      "name": "alterado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "odoo_write_date",
+      "type": "timestamp"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "conta_a_receber_id",
+      "references": "contas_a_receber.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "idx_snapshot_conta_campo",
+      "columns": [
+        "conta_a_receber_id",
+        "campo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_receber_snapshot_conta_a_receber_id",
+      "columns": [
+        "conta_a_receber_id"
+      ],
+      "unique": false
+    }
+  ]
+}

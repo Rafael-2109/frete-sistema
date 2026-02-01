@@ -1,0 +1,37 @@
+{
+  "name": "veiculos",
+  "description": "Frota de veículos por transportadora.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "nome",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "peso_maximo",
+      "type": "float",
+      "nullable": false
+    },
+    {
+      "name": "qtd_eixos",
+      "type": "integer",
+      "description": "Quantidade de eixos"
+    },
+    {
+      "name": "tipo_veiculo",
+      "type": "varchar(20)",
+      "description": "COMERCIAL ou PASSEIO"
+    },
+    {
+      "name": "multiplicador_pedagio",
+      "type": "float",
+      "description": "Multiplicador para cálculo de pedágio",
+      "default": 1.0
+    }
+  ]
+}

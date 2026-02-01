@@ -1,0 +1,210 @@
+{
+  "name": "despesas_extras",
+  "description": "Despesas extras de frete (estadia, pedágio, etc.).",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "frete_id",
+      "type": "integer",
+      "description": "FK → fretes.id",
+      "nullable": false
+    },
+    {
+      "name": "fatura_frete_id",
+      "type": "integer",
+      "description": "FK → faturas_frete.id"
+    },
+    {
+      "name": "transportadora_id",
+      "type": "integer",
+      "description": "FK → transportadoras.id"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "PENDENTE"
+    },
+    {
+      "name": "despesa_cte_id",
+      "type": "integer",
+      "description": "FK → conhecimento_transporte.id"
+    },
+    {
+      "name": "chave_cte",
+      "type": "varchar(44)",
+      "description": "Chave do CTe (facilita buscas)"
+    },
+    {
+      "name": "nfd_id",
+      "type": "integer",
+      "description": "FK → nf_devolucao.id"
+    },
+    {
+      "name": "numero_nfd",
+      "type": "varchar(20)",
+      "description": "Cache do número para facilitar exibição"
+    },
+    {
+      "name": "odoo_dfe_id",
+      "type": "integer",
+      "description": "ID do DFe no Odoo"
+    },
+    {
+      "name": "odoo_purchase_order_id",
+      "type": "integer",
+      "description": "ID do PO no Odoo"
+    },
+    {
+      "name": "odoo_invoice_id",
+      "type": "integer",
+      "description": "ID da Invoice no Odoo"
+    },
+    {
+      "name": "lancado_odoo_em",
+      "type": "timestamp",
+      "description": "Data/hora lançamento"
+    },
+    {
+      "name": "lancado_odoo_por",
+      "type": "varchar(100)",
+      "description": "Usuário que lançou"
+    },
+    {
+      "name": "comprovante_path",
+      "type": "varchar(500)",
+      "description": "Caminho S3 do comprovante"
+    },
+    {
+      "name": "comprovante_nome_arquivo",
+      "type": "varchar(255)",
+      "description": "Nome original do arquivo"
+    },
+    {
+      "name": "tipo_despesa",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "setor_responsavel",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "motivo_despesa",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "tipo_documento",
+      "type": "varchar(20)",
+      "description": "CTe, NFS, RECIBO, etc.",
+      "nullable": false
+    },
+    {
+      "name": "numero_documento",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "valor_despesa",
+      "type": "float",
+      "nullable": false
+    },
+    {
+      "name": "vencimento_despesa",
+      "type": "date"
+    },
+    {
+      "name": "observacoes",
+      "type": "text"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "frete_id",
+      "references": "fretes.id"
+    },
+    {
+      "column": "fatura_frete_id",
+      "references": "faturas_frete.id"
+    },
+    {
+      "column": "transportadora_id",
+      "references": "transportadoras.id"
+    },
+    {
+      "column": "despesa_cte_id",
+      "references": "conhecimento_transporte.id"
+    },
+    {
+      "column": "nfd_id",
+      "references": "nf_devolucao.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_despesas_extras_odoo_dfe_id",
+      "columns": [
+        "odoo_dfe_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_despesas_extras_chave_cte",
+      "columns": [
+        "chave_cte"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_despesas_extras_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_despesas_extras_nfd_id",
+      "columns": [
+        "nfd_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_despesas_extras_despesa_cte_id",
+      "columns": [
+        "despesa_cte_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_despesas_extras_transportadora_id",
+      "columns": [
+        "transportadora_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_despesas_extras_fatura_frete_id",
+      "columns": [
+        "fatura_frete_id"
+      ],
+      "unique": false
+    }
+  ]
+}

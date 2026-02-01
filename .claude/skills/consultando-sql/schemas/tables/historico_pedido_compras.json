@@ -1,0 +1,235 @@
+{
+  "name": "historico_pedido_compras",
+  "description": "Histórico COMPLETO (snapshot) de Pedidos de Compras",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "pedido_compra_id",
+      "type": "integer",
+      "description": "FK → pedido_compras.id",
+      "nullable": false
+    },
+    {
+      "name": "operacao",
+      "type": "varchar(20)",
+      "description": "'CRIAR', 'EDITAR'",
+      "nullable": false
+    },
+    {
+      "name": "alterado_em",
+      "type": "timestamp",
+      "nullable": false
+    },
+    {
+      "name": "alterado_por",
+      "type": "varchar(100)",
+      "description": "'Odoo' ou usuário",
+      "nullable": false
+    },
+    {
+      "name": "write_date_odoo",
+      "type": "timestamp"
+    },
+    {
+      "name": "num_pedido",
+      "type": "varchar(30)",
+      "nullable": false
+    },
+    {
+      "name": "company_id",
+      "type": "varchar(100)",
+      "description": "Empresa compradora"
+    },
+    {
+      "name": "num_requisicao",
+      "type": "varchar(30)"
+    },
+    {
+      "name": "cnpj_fornecedor",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "raz_social",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "numero_nf",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "data_pedido_criacao",
+      "type": "date"
+    },
+    {
+      "name": "usuario_pedido_criacao",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "lead_time_pedido",
+      "type": "integer"
+    },
+    {
+      "name": "lead_time_previsto",
+      "type": "integer"
+    },
+    {
+      "name": "data_pedido_previsao",
+      "type": "date"
+    },
+    {
+      "name": "data_pedido_entrega",
+      "type": "date"
+    },
+    {
+      "name": "cod_produto",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "nome_produto",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "qtd_produto_pedido",
+      "type": "numeric(15,3)",
+      "nullable": false
+    },
+    {
+      "name": "qtd_recebida",
+      "type": "numeric(15,3)",
+      "default": 0
+    },
+    {
+      "name": "preco_produto_pedido",
+      "type": "numeric(15,4)"
+    },
+    {
+      "name": "icms_produto_pedido",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "pis_produto_pedido",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "cofins_produto_pedido",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "confirmacao_pedido",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "confirmado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "confirmado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "status_odoo",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "tipo_pedido",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "importado_odoo",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "odoo_id",
+      "type": "varchar(50)",
+      "description": "ID da LINHA (purchase.order.line)"
+    },
+    {
+      "name": "odoo_purchase_order_id",
+      "type": "varchar(50)",
+      "description": "ID do HEADER (purchase.order)"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "pedido_compra_id",
+      "references": "pedido_compras.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_historico_pedido_compras_cod_produto",
+      "columns": [
+        "cod_produto"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_hist_ped_pedido_data",
+      "columns": [
+        "pedido_compra_id",
+        "alterado_em"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_historico_pedido_compras_alterado_por",
+      "columns": [
+        "alterado_por"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_hist_ped_num_data",
+      "columns": [
+        "num_pedido",
+        "alterado_em"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_historico_pedido_compras_pedido_compra_id",
+      "columns": [
+        "pedido_compra_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_historico_pedido_compras_num_pedido",
+      "columns": [
+        "num_pedido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_historico_pedido_compras_alterado_em",
+      "columns": [
+        "alterado_em"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_historico_pedido_compras_operacao",
+      "columns": [
+        "operacao"
+      ],
+      "unique": false
+    }
+  ]
+}

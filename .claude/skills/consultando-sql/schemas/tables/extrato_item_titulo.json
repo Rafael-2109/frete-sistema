@@ -1,0 +1,194 @@
+{
+  "name": "extrato_item_titulo",
+  "description": "Vínculo entre extrato bancário e título.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "extrato_item_id",
+      "type": "integer",
+      "description": "FK → extrato_item.id",
+      "nullable": false
+    },
+    {
+      "name": "titulo_receber_id",
+      "type": "integer",
+      "description": "FK → contas_a_receber.id"
+    },
+    {
+      "name": "titulo_pagar_id",
+      "type": "integer",
+      "description": "FK → contas_a_pagar.id"
+    },
+    {
+      "name": "valor_alocado",
+      "type": "numeric(15,2)",
+      "nullable": false
+    },
+    {
+      "name": "valor_titulo_original",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "percentual_alocado",
+      "type": "numeric(5,2)"
+    },
+    {
+      "name": "titulo_nf",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "titulo_parcela",
+      "type": "integer"
+    },
+    {
+      "name": "titulo_vencimento",
+      "type": "date"
+    },
+    {
+      "name": "titulo_cliente",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "titulo_cnpj",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "match_score",
+      "type": "integer"
+    },
+    {
+      "name": "match_criterio",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "status",
+      "type": "varchar(30)",
+      "nullable": false,
+      "default": "PENDENTE"
+    },
+    {
+      "name": "aprovado",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "aprovado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "aprovado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "partial_reconcile_id",
+      "type": "integer"
+    },
+    {
+      "name": "full_reconcile_id",
+      "type": "integer"
+    },
+    {
+      "name": "payment_id",
+      "type": "integer",
+      "description": "account.payment criado"
+    },
+    {
+      "name": "titulo_saldo_antes",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "titulo_saldo_depois",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "mensagem",
+      "type": "text"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "processado_em",
+      "type": "timestamp"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "extrato_item_id",
+      "references": "extrato_item.id"
+    },
+    {
+      "column": "titulo_receber_id",
+      "references": "contas_a_receber.id"
+    },
+    {
+      "column": "titulo_pagar_id",
+      "references": "contas_a_pagar.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_extrato_item_titulo_extrato_item_id",
+      "columns": [
+        "extrato_item_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_extrato_titulo_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_extrato_item_titulo_titulo_pagar_id",
+      "columns": [
+        "titulo_pagar_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_extrato_item_titulo_titulo_receber_id",
+      "columns": [
+        "titulo_receber_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_extrato_titulo_item",
+      "columns": [
+        "extrato_item_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_extrato_item_titulo_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_extrato_titulo_receber",
+      "columns": [
+        "titulo_receber_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_extrato_titulo_pagar",
+      "columns": [
+        "titulo_pagar_id"
+      ],
+      "unique": false
+    }
+  ]
+}

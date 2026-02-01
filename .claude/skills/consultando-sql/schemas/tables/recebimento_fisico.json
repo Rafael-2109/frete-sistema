@@ -1,0 +1,115 @@
+{
+  "name": "recebimento_fisico",
+  "description": "Recebimentos físicos de materiais.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "odoo_picking_id",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "odoo_picking_name",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "odoo_purchase_order_id",
+      "type": "integer"
+    },
+    {
+      "name": "odoo_purchase_order_name",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "odoo_partner_id",
+      "type": "integer"
+    },
+    {
+      "name": "odoo_partner_name",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "company_id",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "validacao_id",
+      "type": "integer",
+      "description": "FK → validacao_nf_po_dfe.id"
+    },
+    {
+      "name": "numero_nf",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "pendente"
+    },
+    {
+      "name": "odoo_status",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "erro_mensagem",
+      "type": "text"
+    },
+    {
+      "name": "tentativas",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "max_tentativas",
+      "type": "integer",
+      "nullable": false,
+      "default": 3
+    },
+    {
+      "name": "job_id",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "processado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "usuario",
+      "type": "varchar(100)"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "validacao_id",
+      "references": "validacao_nf_po_dfe.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_recebimento_fisico_odoo_picking_id",
+      "columns": [
+        "odoo_picking_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_recebimento_fisico_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    }
+  ]
+}

@@ -1,0 +1,124 @@
+{
+  "name": "correcao_data_nf_credito",
+  "description": "Correções de data de NFs de crédito.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "odoo_move_id",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "nome_documento",
+      "type": "varchar(50)",
+      "description": "Ex: RDVEND/2024/00621",
+      "nullable": false
+    },
+    {
+      "name": "numero_nf",
+      "type": "varchar(20)",
+      "description": "Ex: 107863"
+    },
+    {
+      "name": "odoo_partner_id",
+      "type": "integer"
+    },
+    {
+      "name": "nome_parceiro",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "data_emissao",
+      "type": "date",
+      "description": "invoice_date - NÃO ALTERADO",
+      "nullable": false
+    },
+    {
+      "name": "data_lancamento_antes",
+      "type": "date",
+      "description": "date ANTES da correção",
+      "nullable": false
+    },
+    {
+      "name": "data_lancamento_linhas_antes",
+      "type": "date",
+      "description": "date das lines ANTES"
+    },
+    {
+      "name": "data_correta",
+      "type": "date",
+      "description": "Data que DEVERIA estar",
+      "nullable": false
+    },
+    {
+      "name": "data_lancamento_depois",
+      "type": "date",
+      "description": "date DEPOIS da correção"
+    },
+    {
+      "name": "data_lancamento_linhas_depois",
+      "type": "date",
+      "description": "date das lines DEPOIS"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "pendente"
+    },
+    {
+      "name": "erro_mensagem",
+      "type": "text"
+    },
+    {
+      "name": "diagnosticado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "corrigido_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "corrigido_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "exportado_em",
+      "type": "timestamp"
+    }
+  ],
+  "indices": [
+    {
+      "name": "idx_correcao_data_emissao",
+      "columns": [
+        "data_emissao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_correcao_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_correcao_data_nf_credito_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_correcao_data_nf_credito_odoo_move_id",
+      "columns": [
+        "odoo_move_id"
+      ],
+      "unique": false
+    }
+  ]
+}

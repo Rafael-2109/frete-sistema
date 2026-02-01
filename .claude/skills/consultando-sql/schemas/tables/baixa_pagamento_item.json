@@ -1,0 +1,309 @@
+{
+  "name": "baixa_pagamento_item",
+  "description": "Itens individuais de pagamento.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "lote_id",
+      "type": "integer",
+      "description": "FK → baixa_pagamento_lote.id",
+      "nullable": false
+    },
+    {
+      "name": "statement_line_id",
+      "type": "integer",
+      "description": "account.bank.statement.line ID"
+    },
+    {
+      "name": "move_id_extrato",
+      "type": "integer",
+      "description": "account.move ID do extrato"
+    },
+    {
+      "name": "data_transacao",
+      "type": "date",
+      "nullable": false
+    },
+    {
+      "name": "valor",
+      "type": "float",
+      "description": "Valor absoluto (positivo)",
+      "nullable": false
+    },
+    {
+      "name": "payment_ref",
+      "type": "text",
+      "description": "Label completo da transação"
+    },
+    {
+      "name": "tipo_transacao",
+      "type": "varchar(50)",
+      "description": "PIX, TED, BOLETO, etc."
+    },
+    {
+      "name": "nome_beneficiario",
+      "type": "varchar(255)",
+      "description": "Nome do fornecedor extraído"
+    },
+    {
+      "name": "cnpj_beneficiario",
+      "type": "varchar(20)",
+      "description": "CNPJ extraído"
+    },
+    {
+      "name": "debit_line_id_extrato",
+      "type": "integer",
+      "description": "account.move.line ID (débito na TRANSITÓRIA)"
+    },
+    {
+      "name": "status_match",
+      "type": "varchar(30)",
+      "nullable": false,
+      "default": "PENDENTE"
+    },
+    {
+      "name": "titulo_id",
+      "type": "integer",
+      "description": "account.move.line ID (liability_payable)"
+    },
+    {
+      "name": "titulo_move_id",
+      "type": "integer",
+      "description": "account.move ID (NF de entrada)"
+    },
+    {
+      "name": "titulo_move_name",
+      "type": "varchar(100)",
+      "description": "Nome do move (COM2/2024/...)"
+    },
+    {
+      "name": "titulo_nf",
+      "type": "varchar(50)",
+      "description": "Número da NF (cache)"
+    },
+    {
+      "name": "titulo_parcela",
+      "type": "integer",
+      "description": "Parcela (cache)"
+    },
+    {
+      "name": "titulo_valor",
+      "type": "float",
+      "description": "Valor do título (cache)"
+    },
+    {
+      "name": "titulo_vencimento",
+      "type": "date",
+      "description": "Vencimento (cache)"
+    },
+    {
+      "name": "partner_id",
+      "type": "integer",
+      "description": "res.partner ID"
+    },
+    {
+      "name": "partner_name",
+      "type": "varchar(255)",
+      "description": "Nome do fornecedor (cache)"
+    },
+    {
+      "name": "company_id",
+      "type": "integer",
+      "description": "company_id do título"
+    },
+    {
+      "name": "match_score",
+      "type": "integer",
+      "description": "0-100"
+    },
+    {
+      "name": "match_criterio",
+      "type": "varchar(100)",
+      "description": "Ex: \"CNPJ_EXATO+VALOR_EXATO\""
+    },
+    {
+      "name": "matches_candidatos",
+      "type": "text"
+    },
+    {
+      "name": "aprovado",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "aprovado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "aprovado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "PENDENTE"
+    },
+    {
+      "name": "mensagem",
+      "type": "text"
+    },
+    {
+      "name": "payment_id",
+      "type": "integer",
+      "description": "account.payment ID criado"
+    },
+    {
+      "name": "payment_name",
+      "type": "varchar(100)",
+      "description": "Nome do pagamento (PGRA1/2025/...)"
+    },
+    {
+      "name": "debit_line_id_payment",
+      "type": "integer",
+      "description": "Linha de DÉBITO (liability_payable)"
+    },
+    {
+      "name": "credit_line_id_payment",
+      "type": "integer",
+      "description": "Linha de CRÉDITO (PENDENTES)"
+    },
+    {
+      "name": "partial_reconcile_titulo_id",
+      "type": "integer",
+      "description": "Reconcile payment <-> título"
+    },
+    {
+      "name": "full_reconcile_titulo_id",
+      "type": "integer"
+    },
+    {
+      "name": "partial_reconcile_extrato_id",
+      "type": "integer",
+      "description": "Reconcile payment <-> extrato"
+    },
+    {
+      "name": "full_reconcile_extrato_id",
+      "type": "integer"
+    },
+    {
+      "name": "saldo_antes",
+      "type": "float",
+      "description": "amount_residual ANTES"
+    },
+    {
+      "name": "saldo_depois",
+      "type": "float",
+      "description": "amount_residual DEPOIS"
+    },
+    {
+      "name": "snapshot_antes",
+      "type": "text",
+      "description": "JSON com estado ANTES"
+    },
+    {
+      "name": "snapshot_depois",
+      "type": "text",
+      "description": "JSON com estado DEPOIS"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "processado_em",
+      "type": "timestamp"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "lote_id",
+      "references": "baixa_pagamento_lote.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_baixa_pagamento_item_status_match",
+      "columns": [
+        "status_match"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_baixa_pag_item_lote",
+      "columns": [
+        "lote_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_baixa_pagamento_item_statement_line_id",
+      "columns": [
+        "statement_line_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_baixa_pagamento_item_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_baixa_pag_item_titulo",
+      "columns": [
+        "titulo_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_baixa_pagamento_item_lote_id",
+      "columns": [
+        "lote_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_baixa_pag_item_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_baixa_pag_item_status_match",
+      "columns": [
+        "status_match"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_baixa_pagamento_item_titulo_id",
+      "columns": [
+        "titulo_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_baixa_pag_item_cnpj",
+      "columns": [
+        "cnpj_beneficiario"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_baixa_pagamento_item_cnpj_beneficiario",
+      "columns": [
+        "cnpj_beneficiario"
+      ],
+      "unique": false
+    }
+  ]
+}

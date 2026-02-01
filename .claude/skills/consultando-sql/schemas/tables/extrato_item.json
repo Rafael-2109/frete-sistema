@@ -1,0 +1,280 @@
+{
+  "name": "extrato_item",
+  "description": "Linhas individuais de extrato bancário.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "lote_id",
+      "type": "integer",
+      "description": "FK → extrato_lote.id",
+      "nullable": false
+    },
+    {
+      "name": "statement_line_id",
+      "type": "integer",
+      "description": "account.bank.statement.line ID",
+      "nullable": false
+    },
+    {
+      "name": "move_id",
+      "type": "integer",
+      "description": "account.move ID"
+    },
+    {
+      "name": "move_name",
+      "type": "varchar(100)",
+      "description": "Nome do move (GRA1/2025/...)"
+    },
+    {
+      "name": "credit_line_id",
+      "type": "integer",
+      "description": "account.move.line ID da linha de crédito"
+    },
+    {
+      "name": "data_transacao",
+      "type": "date",
+      "nullable": false
+    },
+    {
+      "name": "valor",
+      "type": "float",
+      "nullable": false
+    },
+    {
+      "name": "payment_ref",
+      "type": "text",
+      "description": "Label completo da transação"
+    },
+    {
+      "name": "tipo_transacao",
+      "type": "varchar(50)",
+      "description": "TED, PIX, Boleto"
+    },
+    {
+      "name": "nome_pagador",
+      "type": "varchar(255)",
+      "description": "Nome do cliente"
+    },
+    {
+      "name": "cnpj_pagador",
+      "type": "varchar(20)",
+      "description": "CNPJ extraído"
+    },
+    {
+      "name": "journal_id",
+      "type": "integer"
+    },
+    {
+      "name": "journal_code",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "journal_name",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "status_match",
+      "type": "varchar(30)",
+      "nullable": false,
+      "default": "PENDENTE"
+    },
+    {
+      "name": "titulo_receber_id",
+      "type": "integer",
+      "description": "FK → contas_a_receber.id"
+    },
+    {
+      "name": "titulo_pagar_id",
+      "type": "integer",
+      "description": "FK → contas_a_pagar.id"
+    },
+    {
+      "name": "titulo_id",
+      "type": "integer",
+      "description": "DEPRECADO: usar titulo_receber_id ou titulo_pagar_id"
+    },
+    {
+      "name": "titulo_nf",
+      "type": "varchar(50)",
+      "description": "Número da NF-e"
+    },
+    {
+      "name": "titulo_parcela",
+      "type": "integer",
+      "description": "Número da parcela"
+    },
+    {
+      "name": "titulo_valor",
+      "type": "float",
+      "description": "Valor do título"
+    },
+    {
+      "name": "titulo_vencimento",
+      "type": "date",
+      "description": "Vencimento do título"
+    },
+    {
+      "name": "titulo_cliente",
+      "type": "varchar(255)",
+      "description": "Nome do cliente/fornecedor"
+    },
+    {
+      "name": "titulo_cnpj",
+      "type": "varchar(20)",
+      "description": "CNPJ do cliente/fornecedor"
+    },
+    {
+      "name": "matches_candidatos",
+      "type": "text"
+    },
+    {
+      "name": "match_score",
+      "type": "integer"
+    },
+    {
+      "name": "match_criterio",
+      "type": "varchar(100)",
+      "description": "Ex: \"CNPJ+VALOR_EXATO\""
+    },
+    {
+      "name": "aprovado",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "aprovado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "aprovado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "status",
+      "type": "varchar(30)",
+      "nullable": false,
+      "default": "PENDENTE"
+    },
+    {
+      "name": "mensagem",
+      "type": "text"
+    },
+    {
+      "name": "partial_reconcile_id",
+      "type": "integer"
+    },
+    {
+      "name": "full_reconcile_id",
+      "type": "integer"
+    },
+    {
+      "name": "titulo_saldo_antes",
+      "type": "float"
+    },
+    {
+      "name": "titulo_saldo_depois",
+      "type": "float"
+    },
+    {
+      "name": "snapshot_antes",
+      "type": "text"
+    },
+    {
+      "name": "snapshot_depois",
+      "type": "text"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "processado_em",
+      "type": "timestamp"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "lote_id",
+      "references": "extrato_lote.id"
+    },
+    {
+      "column": "titulo_receber_id",
+      "references": "contas_a_receber.id"
+    },
+    {
+      "column": "titulo_pagar_id",
+      "references": "contas_a_pagar.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "idx_extrato_item_cnpj",
+      "columns": [
+        "cnpj_pagador"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_extrato_item_statement_line_id",
+      "columns": [
+        "statement_line_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_extrato_item_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_extrato_item_statement_line",
+      "columns": [
+        "statement_line_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_extrato_item_cnpj_pagador",
+      "columns": [
+        "cnpj_pagador"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_extrato_item_lote_id",
+      "columns": [
+        "lote_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_extrato_item_lote",
+      "columns": [
+        "lote_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_extrato_item_status_match",
+      "columns": [
+        "status_match"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_extrato_item_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    }
+  ]
+}

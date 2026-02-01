@@ -1,0 +1,94 @@
+{
+  "name": "pings_gps",
+  "description": "Pings GPS de veículos.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "rastreamento_id",
+      "type": "integer",
+      "description": "FK → rastreamento_embarques.id",
+      "nullable": false
+    },
+    {
+      "name": "latitude",
+      "type": "float",
+      "nullable": false
+    },
+    {
+      "name": "longitude",
+      "type": "float",
+      "nullable": false
+    },
+    {
+      "name": "precisao",
+      "type": "float",
+      "description": "Precisão em metros"
+    },
+    {
+      "name": "altitude",
+      "type": "float"
+    },
+    {
+      "name": "velocidade",
+      "type": "float",
+      "description": "km/h"
+    },
+    {
+      "name": "direcao",
+      "type": "float",
+      "description": "Graus (0-360)"
+    },
+    {
+      "name": "distancia_destino",
+      "type": "float",
+      "description": "Em metros"
+    },
+    {
+      "name": "bateria_nivel",
+      "type": "integer",
+      "description": "0-100%"
+    },
+    {
+      "name": "bateria_carregando",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "timestamp_dispositivo",
+      "type": "timestamp",
+      "description": "Horário do dispositivo"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "rastreamento_id",
+      "references": "rastreamento_embarques.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_pings_gps_rastreamento_id",
+      "columns": [
+        "rastreamento_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pings_gps_criado_em",
+      "columns": [
+        "criado_em"
+      ],
+      "unique": false
+    }
+  ]
+}

@@ -1,0 +1,285 @@
+{
+  "name": "pedido_compras",
+  "description": "The base class of the :attr:`.SQLAlchemy.Model` declarative model class.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "num_pedido",
+      "type": "varchar(30)",
+      "description": "CORRIGIDO: Removido unique=True",
+      "nullable": false
+    },
+    {
+      "name": "company_id",
+      "type": "varchar(100)",
+      "description": "Empresa compradora"
+    },
+    {
+      "name": "num_requisicao",
+      "type": "varchar(30)",
+      "description": "ForeignKey - agora apenas informativo"
+    },
+    {
+      "name": "cnpj_fornecedor",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "raz_social",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "numero_nf",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "data_pedido_criacao",
+      "type": "date"
+    },
+    {
+      "name": "usuario_pedido_criacao",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "lead_time_pedido",
+      "type": "integer"
+    },
+    {
+      "name": "lead_time_previsto",
+      "type": "integer"
+    },
+    {
+      "name": "data_pedido_previsao",
+      "type": "date"
+    },
+    {
+      "name": "data_pedido_entrega",
+      "type": "date"
+    },
+    {
+      "name": "cod_produto",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "nome_produto",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "qtd_produto_pedido",
+      "type": "numeric(15,3)",
+      "nullable": false
+    },
+    {
+      "name": "qtd_recebida",
+      "type": "numeric(15,3)",
+      "description": "qty_received do Odoo",
+      "default": 0
+    },
+    {
+      "name": "preco_produto_pedido",
+      "type": "numeric(15,4)"
+    },
+    {
+      "name": "icms_produto_pedido",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "pis_produto_pedido",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "cofins_produto_pedido",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "confirmacao_pedido",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "confirmado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "confirmado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "status_odoo",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "tipo_pedido",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "importado_odoo",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "odoo_id",
+      "type": "varchar(50)",
+      "description": "ID da LINHA (purchase.order.line) no Odoo"
+    },
+    {
+      "name": "odoo_purchase_order_id",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    },
+    {
+      "name": "dfe_id",
+      "type": "varchar(50)",
+      "description": "ID do l10n_br_ciel_it_account.dfe no Odoo"
+    },
+    {
+      "name": "nf_pdf_path",
+      "type": "varchar(500)",
+      "description": "Caminho S3/local do PDF"
+    },
+    {
+      "name": "nf_xml_path",
+      "type": "varchar(500)",
+      "description": "Caminho S3/local do XML"
+    },
+    {
+      "name": "nf_chave_acesso",
+      "type": "varchar(44)",
+      "description": "Chave de acesso NFe (44 dígitos)"
+    },
+    {
+      "name": "nf_numero",
+      "type": "varchar(20)",
+      "description": "Número da NF"
+    },
+    {
+      "name": "nf_serie",
+      "type": "varchar(10)",
+      "description": "Série da NF"
+    },
+    {
+      "name": "nf_data_emissao",
+      "type": "date",
+      "description": "Data de emissão da NF"
+    },
+    {
+      "name": "nf_valor_total",
+      "type": "numeric(15,2)",
+      "description": "Valor total da NF"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "num_pedido",
+      "cod_produto",
+      "company_id"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_pedido_compras_cnpj_fornecedor",
+      "columns": [
+        "cnpj_fornecedor"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_pedido_empresa",
+      "columns": [
+        "company_id",
+        "num_pedido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pedido_compras_num_pedido",
+      "columns": [
+        "num_pedido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pedido_compras_odoo_purchase_order_id",
+      "columns": [
+        "odoo_purchase_order_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pedido_compras_cod_produto",
+      "columns": [
+        "cod_produto"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pedido_compras_nf_chave_acesso",
+      "columns": [
+        "nf_chave_acesso"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_pedido_dfe",
+      "columns": [
+        "dfe_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_pedido_chave_acesso",
+      "columns": [
+        "nf_chave_acesso"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pedido_compras_status_odoo",
+      "columns": [
+        "status_odoo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pedido_compras_tipo_pedido",
+      "columns": [
+        "tipo_pedido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pedido_compras_num_requisicao",
+      "columns": [
+        "num_requisicao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pedido_compras_dfe_id",
+      "columns": [
+        "dfe_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pedido_compras_company_id",
+      "columns": [
+        "company_id"
+      ],
+      "unique": false
+    }
+  ]
+}

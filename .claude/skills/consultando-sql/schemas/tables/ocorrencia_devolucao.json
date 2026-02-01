@@ -1,0 +1,215 @@
+{
+  "name": "ocorrencia_devolucao",
+  "description": "Ocorrências/motivos de devolução.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "nf_devolucao_id",
+      "type": "integer",
+      "description": "FK → nf_devolucao.id",
+      "nullable": false
+    },
+    {
+      "name": "numero_ocorrencia",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "destino",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "INDEFINIDO"
+    },
+    {
+      "name": "localizacao_atual",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "CLIENTE"
+    },
+    {
+      "name": "transportadora_retorno_id",
+      "type": "integer",
+      "description": "FK → transportadoras.id"
+    },
+    {
+      "name": "transportadora_retorno_nome",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "data_previsao_retorno",
+      "type": "date"
+    },
+    {
+      "name": "data_chegada_cd",
+      "type": "timestamp"
+    },
+    {
+      "name": "recebido_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "observacoes_logistica",
+      "type": "text"
+    },
+    {
+      "name": "categoria",
+      "type": "varchar(30)"
+    },
+    {
+      "name": "subcategoria",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "descricao_comercial",
+      "type": "text"
+    },
+    {
+      "name": "responsavel",
+      "type": "varchar(30)",
+      "default": "INDEFINIDO"
+    },
+    {
+      "name": "status",
+      "type": "varchar(30)",
+      "nullable": false,
+      "default": "ABERTA"
+    },
+    {
+      "name": "origem",
+      "type": "varchar(30)",
+      "default": "INDEFINIDO"
+    },
+    {
+      "name": "momento_devolucao",
+      "type": "varchar(20)",
+      "default": "INDEFINIDO"
+    },
+    {
+      "name": "autorizado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "resolvido_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "desfecho",
+      "type": "text"
+    },
+    {
+      "name": "data_abertura",
+      "type": "timestamp",
+      "nullable": false
+    },
+    {
+      "name": "data_acao_comercial",
+      "type": "timestamp"
+    },
+    {
+      "name": "data_resolucao",
+      "type": "timestamp"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    },
+    {
+      "name": "atualizado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "nullable": false,
+      "default": true
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "nf_devolucao_id",
+      "references": "nf_devolucao.id"
+    },
+    {
+      "column": "transportadora_retorno_id",
+      "references": "transportadoras.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "idx_ocorrencia_categoria",
+      "columns": [
+        "categoria",
+        "subcategoria"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_ocorrencia_devolucao_nf_devolucao_id",
+      "columns": [
+        "nf_devolucao_id"
+      ],
+      "unique": true
+    },
+    {
+      "name": "idx_ocorrencia_responsavel",
+      "columns": [
+        "responsavel",
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_ocorrencia_data_abertura",
+      "columns": [
+        "data_abertura"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_ocorrencia_devolucao_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_ocorrencia_devolucao_numero_ocorrencia",
+      "columns": [
+        "numero_ocorrencia"
+      ],
+      "unique": true
+    },
+    {
+      "name": "idx_ocorrencia_status_destino",
+      "columns": [
+        "status",
+        "destino"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_ocorrencia_devolucao_ativo",
+      "columns": [
+        "ativo"
+      ],
+      "unique": false
+    }
+  ]
+}

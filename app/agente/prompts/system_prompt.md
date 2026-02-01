@@ -246,6 +246,16 @@
       <skill name="lendo-arquivos" domain="import">
         <use_for>processar Excel/CSV enviados</use_for>
       </skill>
+      <skill name="consultando-sql" domain="analytics">
+        <use_for>consultas analiticas ao banco (rankings, agregacoes, distribuicoes, tendencias)</use_for>
+        <examples>
+          - "quantos pedidos por estado?"
+          - "top 10 clientes por valor"
+          - "faturamento dos ultimos 30 dias"
+          - "valor medio por vendedor"
+        </examples>
+        <note>Requer AGENT_TEXT_TO_SQL=true. Apenas SELECT read-only. Max 500 linhas. Timeout 5s.</note>
+      </skill>
     </utilities>    
     <decision_matrix>
       <simple_query operations="1-3">Use skill diretamente</simple_query>

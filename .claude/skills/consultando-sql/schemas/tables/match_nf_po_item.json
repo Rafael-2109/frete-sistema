@@ -1,0 +1,126 @@
+{
+  "name": "match_nf_po_item",
+  "description": "Itens do match NF × PO.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "validacao_id",
+      "type": "integer",
+      "description": "FK → validacao_nf_po_dfe.id",
+      "nullable": false
+    },
+    {
+      "name": "odoo_dfe_line_id",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "cod_produto_fornecedor",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "nome_produto",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "um_nf",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "cod_produto_interno",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "nome_produto_interno",
+      "type": "varchar(255)",
+      "description": "Nome interno (nosso nome)"
+    },
+    {
+      "name": "fator_conversao",
+      "type": "numeric(10,4)"
+    },
+    {
+      "name": "qtd_nf",
+      "type": "numeric(15,3)"
+    },
+    {
+      "name": "preco_nf",
+      "type": "numeric(15,4)"
+    },
+    {
+      "name": "data_nf",
+      "type": "date"
+    },
+    {
+      "name": "odoo_po_id",
+      "type": "integer"
+    },
+    {
+      "name": "odoo_po_name",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "odoo_po_line_id",
+      "type": "integer"
+    },
+    {
+      "name": "qtd_po",
+      "type": "numeric(15,3)"
+    },
+    {
+      "name": "preco_po",
+      "type": "numeric(15,4)"
+    },
+    {
+      "name": "data_po",
+      "type": "date"
+    },
+    {
+      "name": "status_match",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "motivo_bloqueio",
+      "type": "text"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "validacao_id",
+      "references": "validacao_nf_po_dfe.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_match_nf_po_item_status_match",
+      "columns": [
+        "status_match"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_match_nf_po_item_validacao_id",
+      "columns": [
+        "validacao_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_match_nf_po_item_odoo_dfe_line_id",
+      "columns": [
+        "odoo_dfe_line_id"
+      ],
+      "unique": false
+    }
+  ]
+}

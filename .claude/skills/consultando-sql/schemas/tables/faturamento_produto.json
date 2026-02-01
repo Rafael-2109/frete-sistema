@@ -1,0 +1,210 @@
+{
+  "name": "faturamento_produto",
+  "description": "NFs emitidas por produto. Registros de faturamento.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "numero_nf",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "data_fatura",
+      "type": "date",
+      "nullable": false
+    },
+    {
+      "name": "cnpj_cliente",
+      "type": "varchar(20)",
+      "description": "CNPJ do cliente",
+      "nullable": false
+    },
+    {
+      "name": "nome_cliente",
+      "type": "varchar(255)",
+      "description": "Razão Social",
+      "nullable": false
+    },
+    {
+      "name": "municipio",
+      "type": "varchar(100)",
+      "description": "Cidade"
+    },
+    {
+      "name": "estado",
+      "type": "varchar(2)",
+      "description": "UF (nome reduzido como \"ES\")"
+    },
+    {
+      "name": "vendedor",
+      "type": "varchar(100)",
+      "description": "Campo do CSV original"
+    },
+    {
+      "name": "equipe_vendas",
+      "type": "varchar(100)",
+      "description": "Campo para equipe de vendas"
+    },
+    {
+      "name": "incoterm",
+      "type": "varchar(20)",
+      "description": "Campo do CSV original"
+    },
+    {
+      "name": "cod_produto",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "nome_produto",
+      "type": "varchar(200)",
+      "nullable": false
+    },
+    {
+      "name": "qtd_produto_faturado",
+      "type": "numeric(15,3)",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "preco_produto_faturado",
+      "type": "numeric(15,4)",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "valor_produto_faturado",
+      "type": "numeric(15,2)",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "peso_unitario_produto",
+      "type": "numeric(15,3)",
+      "default": 0
+    },
+    {
+      "name": "peso_total",
+      "type": "numeric(15,3)",
+      "description": "peso_unitario * qtd",
+      "default": 0
+    },
+    {
+      "name": "origem",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "status_nf",
+      "type": "varchar(20)",
+      "description": "Lançado, Cancelado, Provisório",
+      "nullable": false,
+      "default": "Provisório"
+    },
+    {
+      "name": "revertida",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "nota_credito_id",
+      "type": "integer",
+      "description": "ID do out_refund no Odoo"
+    },
+    {
+      "name": "data_reversao",
+      "type": "timestamp"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp",
+      "description": "Última atualização",
+      "nullable": false
+    },
+    {
+      "name": "created_by",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "updated_by",
+      "type": "varchar(100)"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_faturamento_produto_cod_produto",
+      "columns": [
+        "cod_produto"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_faturamento_produto_cnpj_cliente",
+      "columns": [
+        "cnpj_cliente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_faturamento_nf_produto",
+      "columns": [
+        "numero_nf",
+        "cod_produto"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_faturamento_produto_numero_nf",
+      "columns": [
+        "numero_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_faturamento_produto_revertida",
+      "columns": [
+        "revertida"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_faturamento_cliente_data",
+      "columns": [
+        "cnpj_cliente",
+        "data_fatura"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_faturamento_pedido",
+      "columns": [
+        "origem"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_faturamento_produto_data_fatura",
+      "columns": [
+        "data_fatura"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_faturamento_produto_origem",
+      "columns": [
+        "origem"
+      ],
+      "unique": false
+    }
+  ]
+}

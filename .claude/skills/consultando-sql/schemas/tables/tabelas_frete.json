@@ -1,0 +1,125 @@
+{
+  "name": "tabelas_frete",
+  "description": "Tabelas de preço de frete.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "transportadora_id",
+      "type": "integer",
+      "description": "FK → transportadoras.id",
+      "nullable": false
+    },
+    {
+      "name": "uf_origem",
+      "type": "varchar(2)",
+      "nullable": false
+    },
+    {
+      "name": "uf_destino",
+      "type": "varchar(2)",
+      "nullable": false
+    },
+    {
+      "name": "nome_tabela",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "tipo_carga",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "modalidade",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "valor_kg",
+      "type": "float"
+    },
+    {
+      "name": "frete_minimo_peso",
+      "type": "float"
+    },
+    {
+      "name": "percentual_valor",
+      "type": "float"
+    },
+    {
+      "name": "frete_minimo_valor",
+      "type": "float"
+    },
+    {
+      "name": "percentual_gris",
+      "type": "float"
+    },
+    {
+      "name": "percentual_adv",
+      "type": "float"
+    },
+    {
+      "name": "percentual_rca",
+      "type": "float"
+    },
+    {
+      "name": "pedagio_por_100kg",
+      "type": "float"
+    },
+    {
+      "name": "valor_despacho",
+      "type": "float"
+    },
+    {
+      "name": "valor_cte",
+      "type": "float"
+    },
+    {
+      "name": "valor_tas",
+      "type": "float"
+    },
+    {
+      "name": "icms_incluso",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "gris_minimo",
+      "type": "float",
+      "description": "Valor mínimo de GRIS (usa o maior entre calculado e mínimo)",
+      "default": 0
+    },
+    {
+      "name": "adv_minimo",
+      "type": "float",
+      "description": "Valor mínimo de ADV (usa o maior entre calculado e mínimo)",
+      "default": 0
+    },
+    {
+      "name": "icms_proprio",
+      "type": "float",
+      "description": "ICMS próprio da tabela (substitui ICMS da cidade se informado)"
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(120)",
+      "description": "usuário que criou a tabela",
+      "nullable": false
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "horário do cadastro automático"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "transportadora_id",
+      "references": "transportadoras.id"
+    }
+  ]
+}

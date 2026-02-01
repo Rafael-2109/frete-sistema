@@ -1,0 +1,113 @@
+{
+  "name": "lista_materiais",
+  "description": "Estrutura de produtos (BOM - Bill of Materials)",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "cod_produto_produzido",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "nome_produto_produzido",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "cod_produto_componente",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "nome_produto_componente",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "qtd_utilizada",
+      "type": "numeric(15,6)",
+      "nullable": false
+    },
+    {
+      "name": "status",
+      "type": "varchar(10)",
+      "default": "ativo"
+    },
+    {
+      "name": "versao",
+      "type": "varchar(100)",
+      "default": "v1"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    },
+    {
+      "name": "atualizado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "inativado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "inativado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "motivo_inativacao",
+      "type": "text"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "cod_produto_produzido",
+      "cod_produto_componente",
+      "versao"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_lista_materiais_cod_produto_componente",
+      "columns": [
+        "cod_produto_componente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_lista_materiais_status_data",
+      "columns": [
+        "status",
+        "criado_em"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_lista_materiais_cod_produto_produzido",
+      "columns": [
+        "cod_produto_produzido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_lista_materiais_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    }
+  ]
+}

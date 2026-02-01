@@ -1,0 +1,256 @@
+{
+  "metadata": {
+    "date": "2026-01-31T17:55:30.700637",
+    "model": "claude-sonnet-4-20250514",
+    "total_tests": 10,
+    "total_input_tokens": 71177,
+    "total_output_tokens": 3578,
+    "total_cost_usd": 0.2672,
+    "execution_time_s": 106.3
+  },
+  "results": [
+    {
+      "id": "A1",
+      "category": "routing",
+      "prompt": "Preciso criar um pagamento no Odoo para a NF 54321. O titulo esta em aberto.",
+      "expected_skill": "executando-odoo-financeiro",
+      "expected_reference": null,
+      "response": "## RESPOSTA:\n\n**1. SKILL:** `executando-odoo-financeiro`\n\n**2. REFERENCE FILE:** `.claude/references/odoo/IDS_FIXOS.md` (para company_id, journal_id) e `.claude/references/odoo/MODELOS_CAMPOS.md` (campos de pagamento)\n\n**3. POR QUE ESTA SKILL:**\n\nA skill `executando-odoo-financeiro` é específica para **EXECUTAR** operações financeiras no Odoo, incluindo \"criar pagamento para NF\" e \"baixar titulo no Odoo\" - exatamente o que você precisa.\n\n**Por que NÃO outras skills:**\n- `rastreando-odoo`: Para CONSULTAR/rastrear documentos, não para criar pagamentos\n- `descobrindo-odoo-estrutura`: Para explorar modelos desconhecidos (pagamentos já são mapeados)\n- `validacao-nf-po`: Para match NF x PO (processo de recebimento, não financeiro)\n- `integracao-odoo`: Para CRIAR novas integrações, não operar fluxos existentes\n\nA regra de desempate no CLAUDE.md é clara: \"READ/consultar → rastreando. **WRITE/criar/modificar → executando**\". Como você quer **criar** um pagamento (operação de escrita), usa-se `executando-odoo-financeiro`.",
+      "score": 4.0,
+      "max_score": 5.0,
+      "percentage": 80,
+      "details": [
+        "PASS: Skill correta 'executando-odoo-financeiro' mencionada",
+        "WARN: Anti-skills detectadas: ['rastreando-odoo', 'descobrindo-odoo-estrutura']",
+        "PASS: 3/3 keywords encontradas",
+        "PASS: Path novo usado"
+      ],
+      "tokens": {
+        "input": 7115,
+        "output": 352
+      }
+    },
+    {
+      "id": "A2",
+      "category": "routing",
+      "prompt": "Rastreie o fluxo completo da NF 12345 desde a entrada fiscal ate o pagamento final.",
+      "expected_skill": "rastreando-odoo",
+      "expected_reference": null,
+      "response": "**CONFIRMACAO DO ENTENDIMENTO**: Entendi que voce precisa rastrear o fluxo documental completo da NF 12345, desde entrada fiscal ate pagamento final.\n\n## RESPOSTA:\n\n**1. SKILL**: `rastreando-odoo`\n\n**2. REFERENCE FILE**: `.claude/references/odoo/MODELOS_CAMPOS.md`\n\n**3. JUSTIFICATIVA**:\n\nA skill `rastreando-odoo` é a escolha EXATA porque:\n- **Match direto**: Descrição cita literalmente \"Rastrear NF de compra/venda: 'rastreie NF 12345', 'fluxo da nota 54321'\"\n- **Escopo completo**: Cobre \"fluxos documentais completos no Odoo\" incluindo \"titulos e conciliacoes\"\n- **Read-only**: Tarefa é de CONSULTA/rastreamento, não de modificação\n\n**Por que NÃO outras skills**:\n- `executando-odoo-financeiro`: EXECUTA operações, não consulta\n- `validacao-nf-po`: Foco específico em match NF x PO (Fase 2), não fluxo completo\n- `descobrindo-odoo-estrutura`: Para modelos desconhecidos, não rastreamento\n- `conciliando-odoo-po`: Para split/consolidação de POs, não rastreamento\n\nO reference file `MODELOS_CAMPOS.md` contém mapeamento dos campos dos modelos Odoo necessários para o rastreamento (account.move, purchase.order, account.payment, etc.).",
+      "score": 4.0,
+      "max_score": 5.0,
+      "percentage": 80,
+      "details": [
+        "PASS: Skill correta 'rastreando-odoo' mencionada",
+        "WARN: Anti-skills detectadas: ['executando-odoo-financeiro', 'validacao-nf-po']",
+        "PASS: 4/4 keywords encontradas",
+        "PASS: Path novo usado"
+      ],
+      "tokens": {
+        "input": 7116,
+        "output": 400
+      }
+    },
+    {
+      "id": "A3",
+      "category": "routing",
+      "prompt": "O picking do recebimento nao valida, os lotes nao foram preenchidos e o quality check esta pendente.",
+      "expected_skill": "recebimento-fisico-odoo",
+      "expected_reference": null,
+      "response": "**CONFIRMACAO DO ENTENDIMENTO**: Entendi que você precisa resolver um problema onde o picking de recebimento não está validando devido a lotes não preenchidos e quality check pendente.\n\n## RESPOSTA:\n\n1. **SKILL**: `recebimento-fisico-odoo`\n\n2. **REFERENCE FILE**: \n   - `.claude/references/odoo/PIPELINE_RECEBIMENTO.md` (pipeline completo)\n   - `.claude/references/odoo/GOTCHAS.md` (erros conhecidos)\n\n3. **POR QUE ESTA SKILL E NÃO OUTRA**:\n\nA skill `recebimento-fisico-odoo` é ESPECÍFICA para **Fase 4 do recebimento** - exatamente o problema descrito. Ela cobre:\n- Preenchimento de lotes\n- Quality checks\n- Validação de pickings\n- Processamento assíncrono via Redis Queue\n\n**NÃO usar outras skills porque**:\n- `validacao-nf-po`: É Fase 2 (match NF x PO), anterior ao problema\n- `conciliando-odoo-po`: É Fase 3 (split/consolidação), anterior ao problema  \n- `rastreando-odoo`: Para consultas gerais, não para OPERAR recebimento físico\n- `descobrindo-odoo-estrutura`: Esta skill já usa modelos de picking conhecidos\n\nO problema está na **operação do armazém** (lotes + quality check), que é o domínio específico desta skill.",
+      "score": 4.0,
+      "max_score": 5.0,
+      "percentage": 80,
+      "details": [
+        "PASS: Skill correta 'recebimento-fisico-odoo' mencionada",
+        "WARN: Anti-skills detectadas: ['validacao-nf-po', 'conciliando-odoo-po']",
+        "PASS: 5/5 keywords encontradas",
+        "PASS: Path novo usado"
+      ],
+      "tokens": {
+        "input": 7117,
+        "output": 379
+      }
+    },
+    {
+      "id": "A4",
+      "category": "routing",
+      "prompt": "Preciso exportar o razao geral contabil do periodo de janeiro de 2026 em Excel.",
+      "expected_skill": "razao-geral-odoo",
+      "expected_reference": null,
+      "response": "1. **SKILL**: `razao-geral-odoo`\n\n2. **REFERENCE FILE**: Não há reference file específico para esta skill no CLAUDE.md\n\n3. **POR QUE ESTA SKILL**:\n   - A skill `razao-geral-odoo` é especializada exclusivamente em \"Exporta Razão Geral (General Ledger) do Odoo em Excel\"\n   - Sua descrição menciona exatamente o que você precisa: \"busca account.move.line com paginação, calcula saldo inicial para contas patrimoniais via read_group, gera Excel\"\n   - O caso de uso \"exportar razão geral\" está listado explicitamente na descrição da skill\n\n**POR QUE NÃO OUTRAS SKILLS**:\n- `executando-odoo-financeiro`: Para operações de pagamento/reconciliação, não relatórios\n- `rastreando-odoo`: Para rastrear fluxos documentais específicos, não relatórios contábeis em massa\n- `descobrindo-odoo-estrutura`: Para explorar modelos desconhecidos (último recurso)\n- `exportando-arquivos`: Skill genérica para Excel, mas razão geral tem complexidades específicas do Odoo (account.move.line, saldos patrimoniais) que requerem skill especializada\n\nA skill `razao-geral-odoo` é a única que trata especificamente de relatórios contábeis do Odoo.",
+      "score": 3.5,
+      "max_score": 5.0,
+      "percentage": 70,
+      "details": [
+        "PASS: Skill correta 'razao-geral-odoo' mencionada",
+        "WARN: Anti-skills detectadas: ['executando-odoo-financeiro', 'rastreando-odoo']",
+        "PASS: 3/4 keywords encontradas",
+        "NEUTRAL: Nenhum path mencionado"
+      ],
+      "tokens": {
+        "input": 7113,
+        "output": 367
+      }
+    },
+    {
+      "id": "B1",
+      "category": "reference",
+      "prompt": "Quais campos tem o modelo CarteiraPrincipal? Preciso saber o nome correto do campo de saldo pendente.",
+      "expected_skill": null,
+      "expected_reference": "modelos/CAMPOS_CARTEIRA_SEPARACAO",
+      "response": "## RESPOSTA:\n\n**1. SKILL:** Nenhuma skill necessária\n\n**2. REFERENCE FILE:** `.claude/references/modelos/CAMPOS_CARTEIRA_SEPARACAO.md`\n\n**3. POR QUE:**\n\nConforme CLAUDE.md, seção \"MODELOS CRITICOS\":\n> **ANTES de usar campos de CarteiraPrincipal ou Separacao**:\n> -> LER `.claude/references/modelos/CAMPOS_CARTEIRA_SEPARACAO.md`\n\nEsta é uma consulta sobre **dados estáticos já documentados** do sistema local (não Odoo). O documento de referência contém todos os campos mapeados de CarteiraPrincipal, incluindo a diferença crítica:\n\n- **CarteiraPrincipal**: `qtd_saldo_produto_pedido` (campo correto de saldo)\n- **Separacao**: `qtd_saldo` (campo diferente)\n\n**Por que NÃO usar skills:**\n- `descobrindo-odoo-estrutura`: É para modelos **Odoo**, não sistema local\n- `rastreando-odoo`: Para fluxos documentais Odoo\n- Outras skills Odoo: Não se aplicam a modelos locais\n\nA informação já está documentada nos references, seguindo a regra \"Se a resposta está no reference -> NAO usar skill\".",
+      "score": 5.0,
+      "max_score": 5.0,
+      "percentage": 100,
+      "details": [
+        "N/A: Teste de reference, nao de skill",
+        "N/A: Sem anti-skills definidas",
+        "PASS: 3/3 keywords encontradas",
+        "PASS: Reference correta 'modelos/CAMPOS_CARTEIRA_SEPARACAO' encontrada"
+      ],
+      "tokens": {
+        "input": 7120,
+        "output": 334
+      }
+    },
+    {
+      "id": "B2",
+      "category": "reference",
+      "prompt": "Qual o picking_type_id correto para recebimento na empresa SC? Preciso do ID fixo.",
+      "expected_skill": null,
+      "expected_reference": "odoo/IDS_FIXOS",
+      "response": "**CONFIRMACAO DO ENTENDIMENTO**: Entendi que você precisa do picking_type_id fixo para recebimento na empresa SC.\n\n## 1. SKILL: \n**NENHUMA SKILL** - dados estáticos já documentados\n\n## 2. REFERENCE FILE:\n`.claude/references/odoo/IDS_FIXOS.md`\n\n## 3. POR QUE ESTA ABORDAGEM E NÃO OUTRA:\n\nSeguindo o **Passo 2 do ROUTING OBRIGATORIO**: \"Tem dado ESTATICO já documentado?\"\n\nA tabela de decisão indica claramente:\n- \"ID fixo (company, picking_type, journal)\" → `.claude/references/odoo/IDS_FIXOS.md`\n\n**REGRA**: \"Se a resposta está no reference → NAO usar skill\"\n\nO picking_type_id é um dado de configuração estático do Odoo que não muda e já foi mapeado. Usar skills como `descobrindo-odoo-estrutura` seria **VIOLAÇÃO** da regra de routing, pois esta skill é \"ULTIMO RECURSO\" apenas para modelos desconhecidos.\n\nA consulta direta ao arquivo de referência é a abordagem correta para IDs fixos já documentados.",
+      "score": 5.0,
+      "max_score": 5.0,
+      "percentage": 100,
+      "details": [
+        "N/A: Teste de reference, nao de skill",
+        "N/A: Sem anti-skills definidas",
+        "PASS: 3/3 keywords encontradas",
+        "PASS: Reference correta 'odoo/IDS_FIXOS' encontrada"
+      ],
+      "tokens": {
+        "input": 7115,
+        "output": 314
+      }
+    },
+    {
+      "id": "C1",
+      "category": "disambiguation",
+      "prompt": "Quero ver a estrutura do modelo purchase.order no Odoo, listar todos os campos disponiveis.",
+      "expected_skill": "descobrindo-odoo-estrutura",
+      "expected_reference": null,
+      "response": "CONFIRMACAO DO ENTENDIMENTO: Entendi que voce precisa explorar a estrutura do modelo purchase.order no Odoo para listar todos os campos disponiveis.\n\n## RESPOSTA:\n\n**1. SKILL:** `descobrindo-odoo-estrutura`\n\n**2. REFERENCE FILE:** `.claude/references/odoo/MODELOS_CAMPOS.md` (verificar se purchase.order ja esta mapeado antes de usar a skill)\n\n**3. POR QUE ESTA SKILL:**\n\nA skill `descobrindo-odoo-estrutura` eh especificamente para \"descobrir campos e estrutura de qualquer modelo do Odoo\" e \"explorar estrutura de tabela\". Sua tarefa se encaixa perfeitamente na descricao: \"quando nao conhecer um modelo Odoo, precisar descobrir nome de campo\".\n\n**Por que NAO outras skills:**\n- `rastreando-odoo`: Para rastrear fluxos documentais, nao explorar estrutura\n- `validacao-nf-po`: Para match especifico NF x PO, nao explorar modelo\n- `conciliando-odoo-po`: Para operacoes de split/consolidacao, nao listagem de campos\n- `executando-odoo-financeiro`: Para operacoes financeiras, nao explorar estrutura\n\n**IMPORTANTE:** Antes de usar a skill, verificarei se purchase.order ja esta documentado em `.claude/references/odoo/MODELOS_CAMPOS.md`. Se estiver, nao precisarei da skill e consultarei diretamente o reference.",
+      "score": 4.0,
+      "max_score": 5.0,
+      "percentage": 80,
+      "details": [
+        "PASS: Skill correta 'descobrindo-odoo-estrutura' mencionada",
+        "WARN: Anti-skills detectadas: ['validacao-nf-po', 'conciliando-odoo-po']",
+        "PASS: 2/4 keywords encontradas",
+        "PASS: Path novo usado"
+      ],
+      "tokens": {
+        "input": 7115,
+        "output": 383
+      }
+    },
+    {
+      "id": "C2",
+      "category": "disambiguation",
+      "prompt": "Preciso consolidar os POs da NF 12345, criar o PO Conciliador e ajustar os saldos.",
+      "expected_skill": "conciliando-odoo-po",
+      "expected_reference": null,
+      "response": "**1. SKILL:** `conciliando-odoo-po`\n\n**2. REFERENCE FILE:** `.claude/references/odoo/PIPELINE_RECEBIMENTO.md`\n\n**3. POR QUE ESTA SKILL:**\n\nA tarefa é **EXECUTAR** operações de consolidação de POs, que é exatamente o domínio da skill `conciliando-odoo-po`. Esta skill cobre:\n- Consolidação de POs: \"consolide os POs da NF 12345\" ✓\n- Criar PO Conciliador: \"crie PO conciliador\" ✓  \n- Ajustar saldo de PO: \"ajuste saldo\" ✓\n\n**NÃO usar outras skills porque:**\n- `rastreando-odoo`: Para CONSULTAR/rastrear documentos, não para MODIFICAR POs\n- `validacao-nf-po`: Para Fase 2 (match NF x PO), não Fase 3 (consolidação)\n- `recebimento-fisico-odoo`: Para Fase 4 (lotes/quality checks), posterior à consolidação\n- `executando-odoo-financeiro`: Para pagamentos/extratos, não operações de compra\n\nA consolidação é **Fase 3** do pipeline de recebimento, que vem após o match (Fase 2) e antes do recebimento físico (Fase 4). É uma operação de ESCRITA em POs, não uma consulta.",
+      "score": 4.0,
+      "max_score": 5.0,
+      "percentage": 80,
+      "details": [
+        "PASS: Skill correta 'conciliando-odoo-po' mencionada",
+        "WARN: Anti-skills detectadas: ['validacao-nf-po', 'recebimento-fisico-odoo', 'rastreando-odoo']",
+        "PASS: 3/4 keywords encontradas",
+        "PASS: Path novo usado"
+      ],
+      "tokens": {
+        "input": 7121,
+        "output": 364
+      }
+    },
+    {
+      "id": "D1",
+      "category": "decision_tree",
+      "prompt": "Preciso criar uma nova integracao para sincronizar devolucoes do Odoo com o sistema local, com service, route e migration.",
+      "expected_skill": "integracao-odoo",
+      "expected_reference": null,
+      "response": "**1. SKILL**: `integracao-odoo`\n\n**2. REFERENCE FILE**: `.claude/references/odoo/MODELOS_CAMPOS.md` (para campos de devolução já mapeados)\n\n**3. POR QUE ESTA SKILL:**\n\nA skill `integracao-odoo` é específica para **CRIAR novas integrações** seguindo o processo de 16 etapas (service, route, migration). Segundo o CLAUDE.md: \"Skill para CRIAR novas integracoes com Odoo... Use quando precisar IMPLEMENTAR novos fluxos\".\n\n**NÃO outras skills porque:**\n- `rastreando-odoo`: Para consultar/rastrear documentos existentes, não criar integrações\n- `descobrindo-odoo-estrutura`: Para explorar modelos desconhecidos (último recurso)\n- `executando-odoo-financeiro`: Para operações financeiras específicas\n- `validacao-nf-po`: Para Fase 2 de recebimento apenas\n\nA tarefa envolve criar uma **nova integração completa** (service + route + migration) para sincronizar devoluções, que é exatamente o domínio da skill `integracao-odoo`.\n\n**REFERENCE adicional**: Consultar também `app/devolucao/README.md` mencionado no índice para entender o sistema de devoluções existente.",
+      "score": 4.0,
+      "max_score": 5.0,
+      "percentage": 80,
+      "details": [
+        "PASS: Skill correta 'integracao-odoo' mencionada",
+        "WARN: Anti-skills detectadas: ['descobrindo-odoo-estrutura', 'rastreando-odoo']",
+        "PASS: 4/4 keywords encontradas",
+        "PASS: Path novo usado"
+      ],
+      "tokens": {
+        "input": 7122,
+        "output": 343
+      }
+    },
+    {
+      "id": "D2",
+      "category": "decision_tree",
+      "prompt": "A validacao da NF 98765 contra o PO esta dando divergencia de quantidade, o De-Para parece estar configurado errado.",
+      "expected_skill": "validacao-nf-po",
+      "expected_reference": null,
+      "response": "**1. SKILL**: `validacao-nf-po`\n\n**2. REFERENCE FILE**: `.claude/references/odoo/CONVERSAO_UOM.md`\n\n**3. JUSTIFICATIVA**:\n\nA tarefa envolve **depurar erro na validação NF x PO** com divergência de quantidade relacionada ao De-Para (conversão de unidades de medida). Segundo o CLAUDE.md:\n\n- **`validacao-nf-po`** é específica para \"Depurar erro na validacao NF x PO\" e \"Entender fluxo de conversao De-Para\"\n- **Reference CONVERSAO_UOM.md** contém dados estáticos já documentados sobre conversões UoM e fator_un\n\n**Por que NÃO outras skills**:\n- `rastreando-odoo`: Para rastreamento geral, não para depuração específica de match NF x PO\n- `conciliando-odoo-po`: Para Fase 3 (split/consolidação), mas este problema é Fase 2 (validação)  \n- `descobrindo-odoo-estrutura`: Seria último recurso, mas os campos de validação já estão mapeados\n\nA combinação skill + reference é ideal: a skill tem o contexto específico do processo de validação, e o reference tem os dados de conversão UoM necessários para corrigir o De-Para.",
+      "score": 4.0,
+      "max_score": 5.0,
+      "percentage": 80,
+      "details": [
+        "PASS: Skill correta 'validacao-nf-po' mencionada",
+        "WARN: Anti-skills detectadas: ['conciliando-odoo-po']",
+        "PASS: 4/5 keywords encontradas",
+        "PASS: Path novo usado"
+      ],
+      "tokens": {
+        "input": 7123,
+        "output": 342
+      }
+    }
+  ],
+  "summary": {
+    "overall_score": 41.5,
+    "overall_max": 50.0,
+    "overall_percentage": 83,
+    "by_category": {
+      "routing": {
+        "score": 15.5,
+        "max": 20.0,
+        "count": 4,
+        "pct": 78
+      },
+      "reference": {
+        "score": 10.0,
+        "max": 10.0,
+        "count": 2,
+        "pct": 100
+      },
+      "disambiguation": {
+        "score": 8.0,
+        "max": 10.0,
+        "count": 2,
+        "pct": 80
+      },
+      "decision_tree": {
+        "score": 8.0,
+        "max": 10.0,
+        "count": 2,
+        "pct": 80
+      }
+    },
+    "pass_threshold": 70,
+    "verdict": "PASS"
+  }
+}

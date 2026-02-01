@@ -1,0 +1,143 @@
+{
+  "name": "contas_a_receber_reconciliacao",
+  "description": "Reconciliações de contas a receber.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "conta_a_receber_id",
+      "type": "integer",
+      "description": "FK → contas_a_receber.id",
+      "nullable": false
+    },
+    {
+      "name": "odoo_id",
+      "type": "integer",
+      "description": "ID no Odoo (account.partial.reconcile)",
+      "nullable": false
+    },
+    {
+      "name": "amount",
+      "type": "float",
+      "description": "Valor reconciliado (sempre positivo)"
+    },
+    {
+      "name": "max_date",
+      "type": "date",
+      "description": "Data da reconciliação"
+    },
+    {
+      "name": "tipo_baixa",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "tipo_baixa_odoo",
+      "type": "varchar(20)",
+      "description": "move_type: entry, out_refund, etc"
+    },
+    {
+      "name": "payment_odoo_id",
+      "type": "integer",
+      "description": "payment_id do Odoo (se for pagamento)"
+    },
+    {
+      "name": "journal_code",
+      "type": "varchar(20)",
+      "description": "Código do diário (PACORD, PDEVOL, GRAFENO, etc)"
+    },
+    {
+      "name": "credit_move_name",
+      "type": "varchar(255)",
+      "description": "Ex: \"PGRA1/2025/01834\", \"RVND/2025/00036\""
+    },
+    {
+      "name": "credit_move_ref",
+      "type": "varchar(255)",
+      "description": "Ex: \"ABATIMENTO DE ST\", \"Estorno de: VND/...\""
+    },
+    {
+      "name": "credit_move_id",
+      "type": "integer",
+      "description": "ID da linha de crédito no Odoo (account.move.line)"
+    },
+    {
+      "name": "debit_move_id",
+      "type": "integer",
+      "description": "ID da linha de débito (título) no Odoo"
+    },
+    {
+      "name": "company_id",
+      "type": "integer"
+    },
+    {
+      "name": "odoo_create_date",
+      "type": "timestamp"
+    },
+    {
+      "name": "odoo_write_date",
+      "type": "timestamp"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "ultima_sincronizacao",
+      "type": "timestamp"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "conta_a_receber_id",
+      "references": "contas_a_receber.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_contas_a_receber_reconciliacao_odoo_id",
+      "columns": [
+        "odoo_id"
+      ],
+      "unique": true
+    },
+    {
+      "name": "ix_contas_a_receber_reconciliacao_tipo_baixa",
+      "columns": [
+        "tipo_baixa"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_receber_reconciliacao_conta_a_receber_id",
+      "columns": [
+        "conta_a_receber_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_reconciliacao_odoo_id",
+      "columns": [
+        "odoo_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_reconciliacao_conta",
+      "columns": [
+        "conta_a_receber_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_reconciliacao_tipo_baixa",
+      "columns": [
+        "tipo_baixa"
+      ],
+      "unique": false
+    }
+  ]
+}

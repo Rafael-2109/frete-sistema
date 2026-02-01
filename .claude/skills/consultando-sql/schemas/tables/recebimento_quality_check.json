@@ -1,0 +1,74 @@
+{
+  "name": "recebimento_quality_check",
+  "description": "Quality checks de recebimento.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "recebimento_id",
+      "type": "integer",
+      "description": "FK → recebimento_fisico.id",
+      "nullable": false
+    },
+    {
+      "name": "odoo_check_id",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "odoo_point_id",
+      "type": "integer"
+    },
+    {
+      "name": "odoo_product_id",
+      "type": "integer"
+    },
+    {
+      "name": "test_type",
+      "type": "varchar(20)",
+      "description": "'passfail' ou 'measure'",
+      "nullable": false
+    },
+    {
+      "name": "titulo",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "resultado",
+      "type": "varchar(10)",
+      "description": "'pass' ou 'fail'",
+      "nullable": false
+    },
+    {
+      "name": "valor_medido",
+      "type": "numeric(15,4)"
+    },
+    {
+      "name": "unidade",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "tolerancia_min",
+      "type": "numeric(15,4)"
+    },
+    {
+      "name": "tolerancia_max",
+      "type": "numeric(15,4)"
+    },
+    {
+      "name": "processado",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "recebimento_id",
+      "references": "recebimento_fisico.id"
+    }
+  ]
+}

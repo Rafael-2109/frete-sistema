@@ -1,0 +1,71 @@
+{
+  "name": "permissao_comercial",
+  "description": "Permissões comerciais por vendedor.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "usuario_id",
+      "type": "integer",
+      "description": "FK → usuarios.id",
+      "nullable": false
+    },
+    {
+      "name": "tipo",
+      "type": "varchar(20)",
+      "description": "'equipe' ou 'vendedor'",
+      "nullable": false
+    },
+    {
+      "name": "valor",
+      "type": "varchar(100)",
+      "description": "Nome da equipe ou vendedor",
+      "nullable": false
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)",
+      "description": "Email do admin que criou",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "usuario_id",
+      "references": "usuarios.id"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "usuario_id",
+      "tipo",
+      "valor"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "idx_usuario_tipo",
+      "columns": [
+        "usuario_id",
+        "tipo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_permissao_comercial_usuario_id",
+      "columns": [
+        "usuario_id"
+      ],
+      "unique": false
+    }
+  ]
+}

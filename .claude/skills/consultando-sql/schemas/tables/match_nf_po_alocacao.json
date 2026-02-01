@@ -1,0 +1,83 @@
+{
+  "name": "match_nf_po_alocacao",
+  "description": "Alocação de quantidades NF × PO.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "match_item_id",
+      "type": "integer",
+      "description": "FK → match_nf_po_item.id",
+      "nullable": false
+    },
+    {
+      "name": "odoo_po_id",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "odoo_po_name",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "odoo_po_line_id",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "qtd_alocada",
+      "type": "numeric(15,3)",
+      "nullable": false
+    },
+    {
+      "name": "preco_po",
+      "type": "numeric(15,4)"
+    },
+    {
+      "name": "data_po",
+      "type": "date"
+    },
+    {
+      "name": "ordem",
+      "type": "integer",
+      "default": 1
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "match_item_id",
+      "references": "match_nf_po_item.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_match_nf_po_alocacao_match_item_id",
+      "columns": [
+        "match_item_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_match_nf_po_alocacao_odoo_po_line_id",
+      "columns": [
+        "odoo_po_line_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_match_nf_po_alocacao_odoo_po_id",
+      "columns": [
+        "odoo_po_id"
+      ],
+      "unique": false
+    }
+  ]
+}

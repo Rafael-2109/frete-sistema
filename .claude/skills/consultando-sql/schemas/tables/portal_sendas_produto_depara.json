@@ -1,0 +1,99 @@
+{
+  "name": "portal_sendas_produto_depara",
+  "description": "Tabela DE-PARA para mapear códigos de produtos",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "codigo_nosso",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "descricao_nosso",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "codigo_sendas",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "descricao_sendas",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "cnpj_cliente",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "fator_conversao",
+      "type": "numeric(10,4)",
+      "default": 1.0
+    },
+    {
+      "name": "observacoes",
+      "type": "text"
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "default": true
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "codigo_nosso",
+      "codigo_sendas",
+      "cnpj_cliente"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_portal_sendas_produto_depara_ativo",
+      "columns": [
+        "ativo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_portal_sendas_produto_depara_cnpj_cliente",
+      "columns": [
+        "cnpj_cliente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_portal_sendas_produto_depara_codigo_sendas",
+      "columns": [
+        "codigo_sendas"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_portal_sendas_produto_depara_codigo_nosso",
+      "columns": [
+        "codigo_nosso"
+      ],
+      "unique": false
+    }
+  ]
+}

@@ -1,0 +1,201 @@
+{
+  "name": "pallet_solucoes",
+  "description": "Registro de resolução de crédito de pallet.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "credito_id",
+      "type": "integer",
+      "description": "FK → pallet_creditos.id",
+      "nullable": false
+    },
+    {
+      "name": "tipo",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "quantidade",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "motivo_baixa",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "confirmado_cliente",
+      "type": "boolean"
+    },
+    {
+      "name": "data_confirmacao",
+      "type": "date"
+    },
+    {
+      "name": "nf_venda",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "chave_nfe_venda",
+      "type": "varchar(44)"
+    },
+    {
+      "name": "data_venda",
+      "type": "date"
+    },
+    {
+      "name": "valor_unitario",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "valor_total",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "cnpj_comprador",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "nome_comprador",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "data_recebimento",
+      "type": "date"
+    },
+    {
+      "name": "local_recebimento",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "recebido_de",
+      "type": "varchar(255)",
+      "description": "Nome de quem entregou"
+    },
+    {
+      "name": "cnpj_entregador",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "credito_destino_id",
+      "type": "integer",
+      "description": "FK → pallet_creditos.id"
+    },
+    {
+      "name": "nf_destino",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "motivo_substituicao",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "cnpj_responsavel",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "nome_responsavel",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "vale_pallet_id",
+      "type": "integer"
+    },
+    {
+      "name": "observacao",
+      "type": "text"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    },
+    {
+      "name": "atualizado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "nullable": false,
+      "default": true
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "credito_id",
+      "references": "pallet_creditos.id"
+    },
+    {
+      "column": "credito_destino_id",
+      "references": "pallet_creditos.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "idx_solucao_nf_venda",
+      "columns": [
+        "nf_venda"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_solucoes_credito_id",
+      "columns": [
+        "credito_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_solucao_credito_tipo",
+      "columns": [
+        "credito_id",
+        "tipo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_solucoes_nf_venda",
+      "columns": [
+        "nf_venda"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_solucao_tipo_data",
+      "columns": [
+        "tipo",
+        "criado_em"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_solucoes_credito_destino_id",
+      "columns": [
+        "credito_destino_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_solucoes_tipo",
+      "columns": [
+        "tipo"
+      ],
+      "unique": false
+    }
+  ]
+}

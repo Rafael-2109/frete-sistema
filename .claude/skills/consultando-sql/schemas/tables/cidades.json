@@ -1,0 +1,44 @@
+{
+  "name": "cidades",
+  "description": "Cadastro de cidades do Brasil.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "nome",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "uf",
+      "type": "varchar(2)",
+      "nullable": false
+    },
+    {
+      "name": "codigo_ibge",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "icms",
+      "type": "float",
+      "nullable": false
+    },
+    {
+      "name": "substitui_icms_por_iss",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "microrregiao",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "mesorregiao",
+      "type": "varchar(100)"
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "name": "picking_recebimento_produto",
+  "description": "Produtos por picking de recebimento.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "picking_recebimento_id",
+      "type": "integer",
+      "description": "FK → picking_recebimento.id",
+      "nullable": false
+    },
+    {
+      "name": "odoo_move_id",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "odoo_product_id",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "odoo_product_name",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "product_uom_qty",
+      "type": "numeric(15,3)"
+    },
+    {
+      "name": "product_uom",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "tracking",
+      "type": "varchar(20)",
+      "default": "none"
+    },
+    {
+      "name": "use_expiration_date",
+      "type": "boolean",
+      "default": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "picking_recebimento_id",
+      "references": "picking_recebimento.id"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "picking_recebimento_id",
+      "odoo_move_id"
+    ]
+  ]
+}

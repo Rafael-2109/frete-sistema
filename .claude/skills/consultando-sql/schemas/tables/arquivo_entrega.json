@@ -1,0 +1,67 @@
+{
+  "name": "arquivo_entrega",
+  "description": "Arquivos anexados a entregas.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "entrega_id",
+      "type": "integer",
+      "description": "FK → entregas_monitoradas.id",
+      "nullable": false
+    },
+    {
+      "name": "nome_original",
+      "type": "varchar(255)",
+      "description": "Nome original do arquivo",
+      "nullable": false
+    },
+    {
+      "name": "nome_arquivo",
+      "type": "varchar(255)",
+      "description": "Nome do arquivo no storage",
+      "nullable": false
+    },
+    {
+      "name": "caminho_arquivo",
+      "type": "varchar(500)",
+      "description": "Caminho completo no storage",
+      "nullable": false
+    },
+    {
+      "name": "tipo_storage",
+      "type": "varchar(20)",
+      "description": "'local' ou 's3'",
+      "nullable": false
+    },
+    {
+      "name": "tamanho_bytes",
+      "type": "integer",
+      "description": "Tamanho do arquivo"
+    },
+    {
+      "name": "content_type",
+      "type": "varchar(100)",
+      "description": "Tipo MIME"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "entrega_id",
+      "references": "entregas_monitoradas.id"
+    }
+  ]
+}

@@ -1,0 +1,299 @@
+{
+  "version": "1.0.0",
+  "database": "postgresql",
+  "notas_gerais": [
+    "Todos os valores monetarios estao em BRL (R$)",
+    "Datas no formato YYYY-MM-DD no banco",
+    "Campos Boolean: True/False (PostgreSQL)",
+    "Registros ativos: ativo = True (quando o campo existe)"
+  ],
+  "tabelas_bloqueadas": [
+    "usuarios", "permissions", "agent_session", "agent_memory",
+    "agent_memory_version", "agent_event", "alembic_version"
+  ],
+  "tables": [
+    {
+      "name": "carteira_principal",
+      "description": "Pedidos originais do Odoo com saldo pendente. Fonte da verdade para demanda de clientes.",
+      "business_rules": [
+        "CRITICO: Usar qtd_saldo_produto_pedido para saldo (NAO qtd_saldo — esse campo NAO existe aqui)",
+        "Chave de negocio: (num_pedido, cod_produto) e unica",
+        "Filtrar ativo = True para registros validos",
+        "Filtrar qtd_saldo_produto_pedido > 0 para pedidos pendentes",
+        "incoterm: CIF = empresa entrega, FOB = cliente retira, RED = redespacho"
+      ],
+      "fields": [
+        {"name": "id", "type": "integer", "description": "Primary key"},
+        {"name": "num_pedido", "type": "varchar(50)", "description": "Numero do pedido (ex: VCD123456, VFB789)"},
+        {"name": "cod_produto", "type": "varchar(50)", "description": "Codigo SKU do produto"},
+        {"name": "nome_produto", "type": "varchar(255)", "description": "Nome/descricao do produto"},
+        {"name": "data_pedido", "type": "date", "description": "Data de criacao do pedido"},
+        {"name": "status_pedido", "type": "varchar(50)", "description": "Status (Pedido de venda, Cancelado, Cotacao)"},
+        {"name": "cnpj_cpf", "type": "varchar(20)", "description": "CNPJ ou CPF do cliente"},
+        {"name": "raz_social", "type": "varchar(255)", "description": "Razao Social completa do cliente"},
+        {"name": "raz_social_red", "type": "varchar(100)", "description": "Nome fantasia/reduzido do cliente"},
+        {"name": "municipio", "type": "varchar(100)", "description": "Cidade do cliente"},
+        {"name": "estado", "type": "varchar(2)", "description": "UF do cliente (SP, RJ, MG, etc.)"},
+        {"name": "vendedor", "type": "varchar(100)", "description": "Nome do vendedor responsavel"},
+        {"name": "equipe_vendas", "type": "varchar(100)", "description": "Equipe/gerencia de vendas"},
+        {"name": "embalagem_produto", "type": "varchar(100)", "description": "Categoria do produto (Conserva, Molho, etc.)"},
+        {"name": "materia_prima_produto", "type": "varchar(100)", "description": "Sub-categoria (Palmito, Azeitona, etc.)"},
+        {"name": "qtd_produto_pedido", "type": "numeric(15,3)", "description": "Quantidade original do pedido"},
+        {"name": "qtd_saldo_produto_pedido", "type": "numeric(15,3)", "description": "SALDO pendente a faturar (fonte da verdade)"},
+        {"name": "qtd_cancelada_produto_pedido", "type": "numeric(15,3)", "description": "Quantidade cancelada"},
+        {"name": "preco_produto_pedido", "type": "numeric(15,2)", "description": "Preco unitario em R$"},
+        {"name": "cond_pgto_pedido", "type": "varchar(100)", "description": "Condicao de pagamento (ex: 30/60/90 DDL)"},
+        {"name": "forma_pgto_pedido", "type": "varchar(100)", "description": "Forma de pagamento"},
+        {"name": "incoterm", "type": "varchar(20)", "description": "CIF, FOB ou RED"},
+        {"name": "data_entrega_pedido", "type": "date", "description": "Data de entrega solicitada pelo cliente"},
+        {"name": "cliente_nec_agendamento", "type": "varchar(10)", "description": "Necessita agendamento (Sim/Nao)"},
+        {"name": "nome_cidade", "type": "varchar(100)", "description": "Cidade de entrega"},
+        {"name": "cod_uf", "type": "varchar(2)", "description": "UF de entrega"},
+        {"name": "margem_bruta", "type": "numeric(15,2)", "description": "Margem bruta calculada em R$"},
+        {"name": "margem_bruta_percentual", "type": "numeric(7,2)", "description": "Margem bruta percentual"},
+        {"name": "margem_liquida", "type": "numeric(15,2)", "description": "Margem liquida calculada em R$"},
+        {"name": "margem_liquida_percentual", "type": "numeric(7,2)", "description": "Margem liquida percentual"},
+        {"name": "comissao_percentual", "type": "numeric(5,2)", "description": "Percentual de comissao"},
+        {"name": "importante", "type": "boolean", "description": "Flag de pedido importante"},
+        {"name": "created_at", "type": "timestamp", "description": "Data de criacao do registro"},
+        {"name": "updated_at", "type": "timestamp", "description": "Ultima atualizacao"},
+        {"name": "ativo", "type": "boolean", "description": "True = registro valido, False = inativo"}
+      ]
+    },
+    {
+      "name": "separacao",
+      "description": "Separacoes de pedidos (picking). Cada registro e um item separado para expedicao. Projetam saidas de estoque quando sincronizado_nf=False.",
+      "business_rules": [
+        "CRITICO: Usar qtd_saldo para quantidade separada (NAO qtd_saldo_produto_pedido — esse campo NAO existe aqui)",
+        "sincronizado_nf=False significa que ainda NAO foi faturado (projeta estoque)",
+        "sincronizado_nf=True significa FATURADO (ja tem NF)",
+        "Status: PREVISAO, ABERTO, COTADO, FATURADO, NF no CD",
+        "Para contar pendentes: filtrar sincronizado_nf = False"
+      ],
+      "fields": [
+        {"name": "id", "type": "integer", "description": "Primary key"},
+        {"name": "separacao_lote_id", "type": "varchar(50)", "description": "ID do lote de separacao (agrupa itens)"},
+        {"name": "num_pedido", "type": "varchar(50)", "description": "Numero do pedido"},
+        {"name": "data_pedido", "type": "date", "description": "Data do pedido"},
+        {"name": "cnpj_cpf", "type": "varchar(20)", "description": "CNPJ do cliente"},
+        {"name": "raz_social_red", "type": "varchar(255)", "description": "Nome fantasia do cliente"},
+        {"name": "nome_cidade", "type": "varchar(100)", "description": "Cidade de entrega"},
+        {"name": "cod_uf", "type": "varchar(2)", "description": "UF de entrega"},
+        {"name": "cod_produto", "type": "varchar(50)", "description": "Codigo SKU do produto"},
+        {"name": "nome_produto", "type": "varchar(255)", "description": "Nome do produto"},
+        {"name": "qtd_saldo", "type": "float", "description": "Quantidade separada (pendente)"},
+        {"name": "valor_saldo", "type": "float", "description": "Valor da separacao em R$"},
+        {"name": "pallet", "type": "float", "description": "Quantidade de pallets (calculado)"},
+        {"name": "peso", "type": "float", "description": "Peso total em kg (calculado)"},
+        {"name": "rota", "type": "varchar(50)", "description": "Rota de entrega"},
+        {"name": "sub_rota", "type": "varchar(50)", "description": "Sub-rota"},
+        {"name": "expedicao", "type": "date", "description": "Data de expedicao programada"},
+        {"name": "agendamento", "type": "date", "description": "Data de agendamento no cliente"},
+        {"name": "agendamento_confirmado", "type": "boolean", "description": "Agendamento confirmado"},
+        {"name": "protocolo", "type": "varchar(50)", "description": "Protocolo de agendamento"},
+        {"name": "tipo_envio", "type": "varchar(10)", "description": "total ou parcial"},
+        {"name": "sincronizado_nf", "type": "boolean", "description": "True=faturado, False=pendente"},
+        {"name": "numero_nf", "type": "varchar(20)", "description": "Numero da NF quando faturado"},
+        {"name": "status", "type": "varchar(20)", "description": "PREVISAO, ABERTO, COTADO, FATURADO, NF no CD"},
+        {"name": "nf_cd", "type": "boolean", "description": "NF retornou ao CD"},
+        {"name": "data_embarque", "type": "date", "description": "Data real de embarque"},
+        {"name": "falta_item", "type": "boolean", "description": "Falta item no estoque"},
+        {"name": "falta_pagamento", "type": "boolean", "description": "Pagamento pendente"},
+        {"name": "cotacao_id", "type": "integer", "description": "FK para cotacao de frete"},
+        {"name": "criado_em", "type": "timestamp", "description": "Data de criacao"}
+      ]
+    },
+    {
+      "name": "movimentacao_estoque",
+      "description": "Todas as movimentacoes de estoque (entradas, saidas, ajustes, producao). Estoque atual = SUM(qtd_movimentacao) WHERE ativo=True.",
+      "business_rules": [
+        "Estoque atual: SUM(qtd_movimentacao) WHERE cod_produto = X AND ativo = True",
+        "qtd_movimentacao positiva = entrada, negativa = saida",
+        "tipo_movimentacao: ENTRADA, SAIDA, AJUSTE, PRODUCAO",
+        "local_movimentacao: COMPRA, VENDA, PRODUCAO, AJUSTE, DEVOLUCAO",
+        "Filtrar ativo = True para registros validos"
+      ],
+      "fields": [
+        {"name": "id", "type": "integer", "description": "Primary key"},
+        {"name": "cod_produto", "type": "varchar(50)", "description": "Codigo SKU do produto"},
+        {"name": "nome_produto", "type": "varchar(200)", "description": "Nome do produto"},
+        {"name": "data_movimentacao", "type": "date", "description": "Data da movimentacao"},
+        {"name": "tipo_movimentacao", "type": "varchar(50)", "description": "ENTRADA, SAIDA, AJUSTE, PRODUCAO"},
+        {"name": "local_movimentacao", "type": "varchar(50)", "description": "COMPRA, VENDA, PRODUCAO, AJUSTE, DEVOLUCAO"},
+        {"name": "qtd_movimentacao", "type": "numeric(15,3)", "description": "Quantidade (+ entrada, - saida)"},
+        {"name": "separacao_lote_id", "type": "varchar(50)", "description": "Lote de separacao associado"},
+        {"name": "numero_nf", "type": "varchar(20)", "description": "Numero da NF"},
+        {"name": "num_pedido", "type": "varchar(50)", "description": "Numero do pedido"},
+        {"name": "tipo_origem", "type": "varchar(20)", "description": "ODOO, TAGPLUS, MANUAL, LEGADO"},
+        {"name": "status_nf", "type": "varchar(20)", "description": "FATURADO, CANCELADO"},
+        {"name": "lote_nome", "type": "varchar(100)", "description": "Nome do lote"},
+        {"name": "data_validade", "type": "date", "description": "Data de validade"},
+        {"name": "criado_em", "type": "timestamp", "description": "Data de criacao"},
+        {"name": "ativo", "type": "boolean", "description": "True = valido, False = inativo"}
+      ]
+    },
+    {
+      "name": "programacao_producao",
+      "description": "Programacao futura de producao por linha. Cada registro = 1 produto programado para producao em 1 data.",
+      "business_rules": [
+        "qtd_programada sempre positiva",
+        "linha_producao identifica a linha de fabrica",
+        "ordem_producao = numero da OP (ordem de producao)"
+      ],
+      "fields": [
+        {"name": "id", "type": "integer", "description": "Primary key"},
+        {"name": "data_programacao", "type": "date", "description": "Data programada para producao"},
+        {"name": "cod_produto", "type": "varchar(50)", "description": "Codigo SKU"},
+        {"name": "nome_produto", "type": "varchar(200)", "description": "Nome do produto"},
+        {"name": "qtd_programada", "type": "float", "description": "Quantidade programada"},
+        {"name": "linha_producao", "type": "varchar(50)", "description": "Linha de producao"},
+        {"name": "ordem_producao", "type": "varchar(50)", "description": "Numero da OP"},
+        {"name": "cliente_produto", "type": "varchar(100)", "description": "Marca/cliente do produto"},
+        {"name": "created_at", "type": "timestamp", "description": "Data de criacao"}
+      ]
+    },
+    {
+      "name": "cadastro_palletizacao",
+      "description": "Cadastro de produtos com fatores de conversao (peso, pallet). Usado para calcular logistica.",
+      "business_rules": [
+        "cod_produto e UNIQUE (1 registro por produto)",
+        "pallets = quantidade / palletizacao",
+        "peso_total = quantidade * peso_bruto",
+        "Filtrar ativo = True"
+      ],
+      "fields": [
+        {"name": "id", "type": "integer", "description": "Primary key"},
+        {"name": "cod_produto", "type": "varchar(50)", "description": "Codigo SKU (UNIQUE)"},
+        {"name": "nome_produto", "type": "varchar(255)", "description": "Nome do produto"},
+        {"name": "palletizacao", "type": "float", "description": "Fator: quantidade / palletizacao = pallets"},
+        {"name": "peso_bruto", "type": "float", "description": "Peso unitario bruto em kg"},
+        {"name": "tipo_embalagem", "type": "varchar(50)", "description": "Tipo de embalagem"},
+        {"name": "tipo_materia_prima", "type": "varchar(50)", "description": "Tipo de materia-prima"},
+        {"name": "categoria_produto", "type": "varchar(50)", "description": "Categoria"},
+        {"name": "linha_producao", "type": "varchar(50)", "description": "Linha de producao"},
+        {"name": "produto_comprado", "type": "boolean", "description": "Produto comprado (revenda)"},
+        {"name": "produto_produzido", "type": "boolean", "description": "Produto fabricado"},
+        {"name": "lead_time_mto", "type": "integer", "description": "Lead time MTO em dias"},
+        {"name": "custo_produto", "type": "numeric(15,4)", "description": "Custo unitario em R$"},
+        {"name": "ativo", "type": "boolean", "description": "True = ativo"}
+      ]
+    },
+    {
+      "name": "faturamento_produto",
+      "description": "Registros de faturamento (NFs emitidas). Cada registro = 1 produto faturado em 1 NF.",
+      "business_rules": [
+        "status_nf: Lancado = NF valida, Cancelado = NF cancelada, Provisorio = rascunho",
+        "Para faturamento efetivo: filtrar status_nf = 'Lancado' AND revertida = False",
+        "origem = num_pedido que gerou a NF"
+      ],
+      "fields": [
+        {"name": "id", "type": "integer", "description": "Primary key"},
+        {"name": "numero_nf", "type": "varchar(20)", "description": "Numero da NF"},
+        {"name": "data_fatura", "type": "date", "description": "Data do faturamento"},
+        {"name": "cnpj_cliente", "type": "varchar(20)", "description": "CNPJ do cliente"},
+        {"name": "nome_cliente", "type": "varchar(255)", "description": "Nome do cliente"},
+        {"name": "municipio", "type": "varchar(100)", "description": "Municipio"},
+        {"name": "estado", "type": "varchar(2)", "description": "UF"},
+        {"name": "vendedor", "type": "varchar(100)", "description": "Vendedor"},
+        {"name": "equipe_vendas", "type": "varchar(100)", "description": "Equipe de vendas"},
+        {"name": "incoterm", "type": "varchar(20)", "description": "CIF, FOB, RED"},
+        {"name": "cod_produto", "type": "varchar(50)", "description": "Codigo SKU"},
+        {"name": "nome_produto", "type": "varchar(200)", "description": "Nome do produto"},
+        {"name": "qtd_produto_faturado", "type": "numeric(15,3)", "description": "Quantidade faturada"},
+        {"name": "preco_produto_faturado", "type": "numeric(15,4)", "description": "Preco unitario faturado"},
+        {"name": "valor_produto_faturado", "type": "numeric(15,2)", "description": "Valor total faturado em R$"},
+        {"name": "peso_total", "type": "numeric(15,3)", "description": "Peso total em kg"},
+        {"name": "origem", "type": "varchar(20)", "description": "Numero do pedido origem"},
+        {"name": "status_nf", "type": "varchar(20)", "description": "Lancado, Cancelado, Provisorio"},
+        {"name": "revertida", "type": "boolean", "description": "NF foi revertida/estornada"},
+        {"name": "created_at", "type": "timestamp", "description": "Data de criacao"}
+      ]
+    },
+    {
+      "name": "embarques",
+      "description": "Embarques de mercadoria. Agrupa separacoes para envio via transportadora.",
+      "business_rules": [
+        "status: draft, ativo, cancelado",
+        "tipo_carga: FRACIONADA (multiplos destinos) ou DIRETA (1 destino)",
+        "valor_total, peso_total, pallet_total sao somas dos itens"
+      ],
+      "fields": [
+        {"name": "id", "type": "integer", "description": "Primary key"},
+        {"name": "numero", "type": "integer", "description": "Numero sequencial do embarque (UNIQUE)"},
+        {"name": "data_prevista_embarque", "type": "date", "description": "Data prevista"},
+        {"name": "data_embarque", "type": "date", "description": "Data real do embarque"},
+        {"name": "transportadora_id", "type": "integer", "description": "FK transportadora"},
+        {"name": "status", "type": "varchar(20)", "description": "draft, ativo, cancelado"},
+        {"name": "tipo_cotacao", "type": "varchar(20)", "description": "Automatica ou Manual"},
+        {"name": "valor_total", "type": "float", "description": "Valor total da carga em R$"},
+        {"name": "peso_total", "type": "float", "description": "Peso total em kg"},
+        {"name": "pallet_total", "type": "float", "description": "Total de pallets"},
+        {"name": "tipo_carga", "type": "varchar(20)", "description": "FRACIONADA ou DIRETA"},
+        {"name": "modalidade", "type": "varchar(50)", "description": "Tipo de veiculo"},
+        {"name": "criado_em", "type": "timestamp", "description": "Data de criacao"},
+        {"name": "criado_por", "type": "varchar(100)", "description": "Usuario criador"}
+      ]
+    },
+    {
+      "name": "embarque_itens",
+      "description": "Itens de embarque. Cada item = 1 separacao/pedido dentro de 1 embarque.",
+      "business_rules": [
+        "embarque_id = FK para embarques.id",
+        "status: ativo, cancelado",
+        "peso, valor, pallets sao do item individual"
+      ],
+      "fields": [
+        {"name": "id", "type": "integer", "description": "Primary key"},
+        {"name": "embarque_id", "type": "integer", "description": "FK embarques.id"},
+        {"name": "separacao_lote_id", "type": "varchar(50)", "description": "Lote de separacao"},
+        {"name": "cnpj_cliente", "type": "varchar(20)", "description": "CNPJ do cliente"},
+        {"name": "cliente", "type": "varchar(120)", "description": "Nome do cliente"},
+        {"name": "pedido", "type": "varchar(50)", "description": "Numero do pedido"},
+        {"name": "nota_fiscal", "type": "varchar(20)", "description": "Numero da NF"},
+        {"name": "peso", "type": "float", "description": "Peso do item em kg"},
+        {"name": "valor", "type": "float", "description": "Valor do item em R$"},
+        {"name": "pallets", "type": "float", "description": "Pallets"},
+        {"name": "status", "type": "varchar(20)", "description": "ativo ou cancelado"},
+        {"name": "uf_destino", "type": "varchar(2)", "description": "UF de destino"},
+        {"name": "cidade_destino", "type": "varchar(100)", "description": "Cidade de destino"}
+      ]
+    },
+    {
+      "name": "saldo_standby",
+      "description": "Pedidos em standby (aguardando decisao comercial, PCP ou saldo). Itens retirados da carteira ativa.",
+      "business_rules": [
+        "status_standby: ATIVO, BLOQ. COML., SALDO, CONFIRMADO",
+        "tipo_standby: Saldo, Aguardar Comercial, Aguardar PCP",
+        "Para standby ativos: filtrar status_standby IN ('ATIVO', 'BLOQ. COML.', 'SALDO')"
+      ],
+      "fields": [
+        {"name": "id", "type": "integer", "description": "Primary key"},
+        {"name": "origem_separacao_lote_id", "type": "varchar(50)", "description": "Lote de separacao origem"},
+        {"name": "num_pedido", "type": "varchar(50)", "description": "Numero do pedido"},
+        {"name": "cod_produto", "type": "varchar(50)", "description": "Codigo SKU"},
+        {"name": "cnpj_cliente", "type": "varchar(20)", "description": "CNPJ do cliente"},
+        {"name": "nome_cliente", "type": "varchar(255)", "description": "Nome do cliente"},
+        {"name": "qtd_saldo", "type": "numeric(15,3)", "description": "Quantidade em standby"},
+        {"name": "valor_saldo", "type": "numeric(15,2)", "description": "Valor em standby em R$"},
+        {"name": "tipo_standby", "type": "varchar(50)", "description": "Saldo, Aguardar Comercial, Aguardar PCP"},
+        {"name": "status_standby", "type": "varchar(20)", "description": "ATIVO, BLOQ. COML., SALDO, CONFIRMADO"},
+        {"name": "dias_em_standby", "type": "integer", "description": "Dias em standby"},
+        {"name": "criado_em", "type": "timestamp", "description": "Data de criacao"}
+      ]
+    }
+  ],
+  "joins_comuns": [
+    {
+      "descricao": "Carteira com info de produto (peso, pallet)",
+      "sql": "carteira_principal cp LEFT JOIN cadastro_palletizacao pal ON cp.cod_produto = pal.cod_produto AND pal.ativo = True"
+    },
+    {
+      "descricao": "Carteira com separacoes pendentes",
+      "sql": "carteira_principal cp LEFT JOIN separacao s ON cp.num_pedido = s.num_pedido AND cp.cod_produto = s.cod_produto AND s.sincronizado_nf = False"
+    },
+    {
+      "descricao": "Embarque com itens",
+      "sql": "embarques e INNER JOIN embarque_itens ei ON e.id = ei.embarque_id AND ei.status = 'ativo'"
+    }
+  ]
+}

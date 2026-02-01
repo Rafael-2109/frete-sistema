@@ -104,6 +104,12 @@ config_local.py
 
 # Claude settings
 .claude/settings.local.json
+
+# Claude skills temp/cache (nunca commitar)
+.claude/skills/**/__pycache__/
+.claude/skills/**/flask_session/
+.claude/skills/**/uploads/
+.claude/skills/**/*.pyc
 .mcp.json
 memory/sessions/*
 !memory/sessions/README.md

@@ -1,0 +1,1046 @@
+{
+  "version": "2.0.0",
+  "database": "postgresql",
+  "notas_gerais": [
+    "Todos os valores monetários em BRL (R$)",
+    "Datas no formato YYYY-MM-DD no banco",
+    "Campos Boolean: True/False (PostgreSQL)",
+    "Registros ativos: ativo = True (quando o campo existe)",
+    "Para usar campos detalhados, consultar schemas/tables/{tabela}.json"
+  ],
+  "tabelas_bloqueadas": [
+    "agent_memories",
+    "agent_memory_versions",
+    "agent_sessions",
+    "alembic_version",
+    "alerta_notificacoes",
+    "alertas_separacao_cotada",
+    "anexo_ocorrencia",
+    "baixa_pagamento_lote",
+    "baixa_titulo_lote",
+    "batch_operation",
+    "bi_analise_regional",
+    "bi_despesa_detalhada",
+    "bi_frete_agregado",
+    "bi_indicador_mensal",
+    "bi_performance_transportadora",
+    "cadastro_cliente",
+    "carteira_copia",
+    "cliente_moto",
+    "cnab_retorno_lote",
+    "comissao_vendedor",
+    "conta_corrente_transportadoras",
+    "contagem_devolucao",
+    "contas_a_receber_abatimento",
+    "contas_a_receber_tipos",
+    "controle_cruzado_separacao",
+    "cotacao_itens",
+    "cotacoes",
+    "cross_docking",
+    "custo_mensal",
+    "custos_extra_entrega",
+    "custos_operacionais",
+    "descarte_devolucao",
+    "descarte_item",
+    "despesa_mensal",
+    "divergencia_fiscal",
+    "embarque_moto",
+    "embarque_pedido",
+    "empresa_venda_moto",
+    "equipe_permission",
+    "equipe_vendas",
+    "equipe_vendas_moto",
+    "extrato_lote",
+    "faturamento_parcial_justificativa",
+    "fretes_lancados",
+    "historico_data_prevista",
+    "historico_pedidos",
+    "historico_tabelas_frete",
+    "inconsistencia_faturamento",
+    "lead_time_fornecedor",
+    "liberacao_antecipacao",
+    "log_integracao",
+    "log_permissao_comercial",
+    "mapeamento_tipo_odoo",
+    "modelo_moto",
+    "moto",
+    "movimentacao_financeira",
+    "pedido_venda_auditoria",
+    "pedido_venda_moto",
+    "pedido_venda_moto_item",
+    "pedidos",
+    "pendencias_financeiras_nf",
+    "perfil_usuario",
+    "permission_cache",
+    "permission_category",
+    "permission_log",
+    "permission_module",
+    "permission_submodule",
+    "permission_template",
+    "plano_mestre_producao",
+    "portal_configuracoes",
+    "portal_sessoes",
+    "portal_tenda_agendamentos",
+    "portal_tenda_local_entrega_depara",
+    "portal_tenda_produto_depara_ean",
+    "pre_separacao_item",
+    "regra_comissao",
+    "relatorio_faturamento_importado",
+    "tabela_preco_crossdocking",
+    "tabela_preco_equipe",
+    "tagplus_oauth_token",
+    "tipo_carga",
+    "titulo_a_pagar",
+    "titulo_financeiro",
+    "transportadora_moto",
+    "user_equipe",
+    "user_permission",
+    "user_vendedor",
+    "usuarios",
+    "vale_pallets",
+    "vendedor",
+    "vendedor_moto",
+    "vendedor_permission",
+    "vinculacao_carteira_separacao",
+    "webhook_configs"
+  ],
+  "total_tabelas": 104,
+  "tabelas": [
+    {
+      "name": "agendamentos_entrega",
+      "description": "Agendamentos de entrega.",
+      "key_fields": [
+        "entrega_id",
+        "data_agendada",
+        "hora_agendada"
+      ]
+    },
+    {
+      "name": "aprovacoes_frete",
+      "description": "Aprovações de fretes por alçada.",
+      "key_fields": [
+        "frete_id",
+        "status",
+        "solicitado_por"
+      ]
+    },
+    {
+      "name": "arquivo_entrega",
+      "description": "Arquivos anexados a entregas.",
+      "key_fields": [
+        "entrega_id",
+        "nome_original",
+        "nome_arquivo"
+      ]
+    },
+    {
+      "name": "baixa_pagamento_item",
+      "description": "Itens individuais de pagamento.",
+      "key_fields": [
+        "lote_id",
+        "statement_line_id",
+        "move_id_extrato"
+      ]
+    },
+    {
+      "name": "baixa_titulo_item",
+      "description": "Itens individuais de baixa de título.",
+      "key_fields": [
+        "lote_id",
+        "linha_excel",
+        "nf_excel"
+      ]
+    },
+    {
+      "name": "cadastro_palletizacao",
+      "description": "Cadastro de produtos com peso, pallet, conversões.",
+      "key_fields": [
+        "cod_produto",
+        "nome_produto",
+        "palletizacao"
+      ]
+    },
+    {
+      "name": "cadastro_primeira_compra",
+      "description": "Cadastro de primeira compra.",
+      "key_fields": [
+        "odoo_dfe_id",
+        "odoo_dfe_line_id",
+        "numero_nf"
+      ]
+    },
+    {
+      "name": "cadastro_rota",
+      "description": "Cadastro de rotas logísticas por UF.",
+      "key_fields": [
+        "cod_uf",
+        "rota",
+        "ativa"
+      ]
+    },
+    {
+      "name": "cadastro_sub_rota",
+      "description": "Sub-rotas por cidade.",
+      "key_fields": [
+        "cod_uf",
+        "nome_cidade",
+        "sub_rota"
+      ]
+    },
+    {
+      "name": "carteira_principal",
+      "description": "Pedidos com saldo pendente. Fonte da verdade para demanda.",
+      "key_fields": [
+        "num_pedido",
+        "cod_produto",
+        "pedido_cliente"
+      ]
+    },
+    {
+      "name": "cidades",
+      "description": "Cadastro de cidades do Brasil.",
+      "key_fields": [
+        "nome",
+        "uf",
+        "codigo_ibge"
+      ]
+    },
+    {
+      "name": "cidades_atendidas",
+      "description": "Cidades atendidas por transportadora com lead time.",
+      "key_fields": [
+        "uf",
+        "cidade_id",
+        "codigo_ibge"
+      ]
+    },
+    {
+      "name": "cnab_retorno_item",
+      "description": "Itens individuais de retorno CNAB.",
+      "key_fields": [
+        "lote_id",
+        "tipo_registro",
+        "nosso_numero"
+      ]
+    },
+    {
+      "name": "comentarios_nf",
+      "description": "Comentários em notas fiscais.",
+      "key_fields": [
+        "entrega_id",
+        "autor",
+        "texto"
+      ]
+    },
+    {
+      "name": "comprovante_pagamento_boleto",
+      "description": "Comprovantes de pagamento de boletos.",
+      "key_fields": [
+        "numero_agendamento",
+        "data_comprovante",
+        "cooperativa"
+      ]
+    },
+    {
+      "name": "configuracao_rastreamento",
+      "description": "Configurações de rastreamento.",
+      "key_fields": [
+        "intervalo_ping_segundos",
+        "intervalo_ping_parado_segundos",
+        "velocidade_considerada_parado"
+      ]
+    },
+    {
+      "name": "conhecimento_transporte",
+      "description": "CT-es (Conhecimento de Transporte Eletrônico).",
+      "key_fields": [
+        "dfe_id",
+        "odoo_ativo",
+        "odoo_name"
+      ]
+    },
+    {
+      "name": "contas_a_pagar",
+      "description": "Títulos a pagar para fornecedores.",
+      "key_fields": [
+        "empresa",
+        "titulo_nf",
+        "parcela"
+      ]
+    },
+    {
+      "name": "contas_a_receber",
+      "description": "Títulos a receber de clientes. Dados do Odoo enriquecidos.",
+      "key_fields": [
+        "empresa",
+        "titulo_nf",
+        "parcela"
+      ]
+    },
+    {
+      "name": "contas_a_receber_reconciliacao",
+      "description": "Reconciliações de contas a receber.",
+      "key_fields": [
+        "conta_a_receber_id",
+        "odoo_id",
+        "amount"
+      ]
+    },
+    {
+      "name": "contas_a_receber_snapshot",
+      "description": "Snapshots históricos de contas a receber.",
+      "key_fields": [
+        "conta_a_receber_id",
+        "campo",
+        "valor_anterior"
+      ]
+    },
+    {
+      "name": "contatos_agendamento",
+      "description": "Contatos para agendamento de entrega.",
+      "key_fields": [
+        "cnpj",
+        "forma",
+        "contato"
+      ]
+    },
+    {
+      "name": "controle_portaria",
+      "description": "Controle de entrada/saída na portaria.",
+      "key_fields": [
+        "motorista_id",
+        "placa",
+        "tipo_veiculo_id"
+      ]
+    },
+    {
+      "name": "correcao_data_nf_credito",
+      "description": "Correções de data de NFs de crédito.",
+      "key_fields": [
+        "odoo_move_id",
+        "nome_documento",
+        "numero_nf"
+      ]
+    },
+    {
+      "name": "custo_considerado",
+      "description": "Custos considerados para análise.",
+      "key_fields": [
+        "cod_produto",
+        "nome_produto",
+        "tipo_produto"
+      ]
+    },
+    {
+      "name": "custo_frete",
+      "description": "Custos de frete calculados.",
+      "key_fields": [
+        "incoterm",
+        "cod_uf",
+        "percentual_frete"
+      ]
+    },
+    {
+      "name": "depara_produto_cliente",
+      "description": "De-Para de código produto ↔ cliente.",
+      "key_fields": [
+        "prefixo_cnpj",
+        "nome_grupo",
+        "codigo_cliente"
+      ]
+    },
+    {
+      "name": "despesas_extras",
+      "description": "Despesas extras de frete (estadia, pedágio, etc.).",
+      "key_fields": [
+        "frete_id",
+        "fatura_frete_id",
+        "transportadora_id"
+      ]
+    },
+    {
+      "name": "divergencia_nf_po",
+      "description": "Divergências encontradas NF × PO.",
+      "key_fields": [
+        "validacao_id",
+        "odoo_dfe_id",
+        "odoo_dfe_line_id"
+      ]
+    },
+    {
+      "name": "emails_anexados",
+      "description": "Emails anexados a documentos.",
+      "key_fields": [
+        "despesa_extra_id",
+        "nome_arquivo",
+        "caminho_s3"
+      ]
+    },
+    {
+      "name": "embarque_itens",
+      "description": "Itens individuais dentro de um embarque.",
+      "key_fields": [
+        "embarque_id",
+        "separacao_lote_id",
+        "cnpj_cliente"
+      ]
+    },
+    {
+      "name": "embarques",
+      "description": "Embarques que agrupam separações para transporte.",
+      "key_fields": [
+        "numero",
+        "data_prevista_embarque",
+        "data_embarque"
+      ]
+    },
+    {
+      "name": "entregas_monitoradas",
+      "description": "Monitoramento de entregas com status e ocorrências.",
+      "key_fields": [
+        "numero_nf",
+        "cliente",
+        "transportadora"
+      ]
+    },
+    {
+      "name": "entregas_rastreadas",
+      "description": "Entregas com rastreamento ativo.",
+      "key_fields": [
+        "rastreamento_id",
+        "embarque_item_id",
+        "numero_nf"
+      ]
+    },
+    {
+      "name": "eventos_entrega",
+      "description": "Eventos de entrega (tentativa, sucesso, falha).",
+      "key_fields": [
+        "entrega_id",
+        "data_hora_chegada",
+        "data_hora_saida"
+      ]
+    },
+    {
+      "name": "extrato_item",
+      "description": "Linhas individuais de extrato bancário.",
+      "key_fields": [
+        "lote_id",
+        "statement_line_id",
+        "move_id"
+      ]
+    },
+    {
+      "name": "extrato_item_titulo",
+      "description": "Vínculo entre extrato bancário e título.",
+      "key_fields": [
+        "extrato_item_id",
+        "titulo_receber_id",
+        "titulo_pagar_id"
+      ]
+    },
+    {
+      "name": "faturamento_produto",
+      "description": "NFs emitidas por produto. Registros de faturamento.",
+      "key_fields": [
+        "numero_nf",
+        "data_fatura",
+        "cnpj_cliente"
+      ]
+    },
+    {
+      "name": "faturas_frete",
+      "description": "Faturas de frete emitidas por transportadoras.",
+      "key_fields": [
+        "transportadora_id",
+        "numero_fatura",
+        "data_emissao"
+      ]
+    },
+    {
+      "name": "fila_agendamento_sendas",
+      "description": "Fila simples para acumular agendamentos Sendas e processar em lote",
+      "key_fields": [
+        "tipo_origem",
+        "documento_origem",
+        "cnpj"
+      ]
+    },
+    {
+      "name": "frete_devolucao",
+      "description": "Fretes de devoluções.",
+      "key_fields": [
+        "ocorrencia_devolucao_id",
+        "despesa_extra_id",
+        "transportadora_id"
+      ]
+    },
+    {
+      "name": "fretes",
+      "description": "Fretes contratados para embarques. Valores e transportadoras.",
+      "key_fields": [
+        "embarque_id",
+        "cnpj_cliente",
+        "nome_cliente"
+      ]
+    },
+    {
+      "name": "grupo_empresarial",
+      "description": "Grupos empresariais.",
+      "key_fields": [
+        "nome_grupo",
+        "prefixo_cnpj",
+        "descricao"
+      ]
+    },
+    {
+      "name": "historico_pedido_compras",
+      "description": "Histórico COMPLETO (snapshot) de Pedidos de Compras",
+      "key_fields": [
+        "pedido_compra_id",
+        "operacao",
+        "alterado_em"
+      ]
+    },
+    {
+      "name": "historico_requisicao_compras",
+      "description": "Histórico COMPLETO (snapshot) de Requisições de Compras",
+      "key_fields": [
+        "requisicao_id",
+        "operacao",
+        "alterado_em"
+      ]
+    },
+    {
+      "name": "lancamento_comprovante",
+      "description": "Lançamentos de comprovantes financeiros.",
+      "key_fields": [
+        "comprovante_id",
+        "odoo_move_line_id",
+        "odoo_move_id"
+      ]
+    },
+    {
+      "name": "lancamento_frete_odoo_auditoria",
+      "description": "Auditoria de lançamentos de frete no Odoo.",
+      "key_fields": [
+        "frete_id",
+        "despesa_extra_id",
+        "cte_id"
+      ]
+    },
+    {
+      "name": "lista_materiais",
+      "description": "Estrutura de produtos (BOM - Bill of Materials)",
+      "key_fields": [
+        "cod_produto_produzido",
+        "nome_produto_produzido",
+        "cod_produto_componente"
+      ]
+    },
+    {
+      "name": "lista_materiais_historico",
+      "description": "Histórico de todas as alterações em Lista de Materiais",
+      "key_fields": [
+        "lista_materiais_id",
+        "operacao",
+        "cod_produto_produzido"
+      ]
+    },
+    {
+      "name": "logs_entrega",
+      "description": "Logs de entrega.",
+      "key_fields": [
+        "entrega_id",
+        "autor",
+        "data_hora"
+      ]
+    },
+    {
+      "name": "logs_rastreamento",
+      "description": "Logs de rastreamento.",
+      "key_fields": [
+        "rastreamento_id",
+        "evento",
+        "detalhes"
+      ]
+    },
+    {
+      "name": "match_nf_po_alocacao",
+      "description": "Alocação de quantidades NF × PO.",
+      "key_fields": [
+        "match_item_id",
+        "odoo_po_id",
+        "odoo_po_name"
+      ]
+    },
+    {
+      "name": "match_nf_po_item",
+      "description": "Itens do match NF × PO.",
+      "key_fields": [
+        "validacao_id",
+        "odoo_dfe_line_id",
+        "cod_produto_fornecedor"
+      ]
+    },
+    {
+      "name": "motoristas",
+      "description": "Cadastro de motoristas.",
+      "key_fields": [
+        "nome_completo",
+        "rg",
+        "cpf"
+      ]
+    },
+    {
+      "name": "movimentacao_estoque",
+      "description": "Movimentos de estoque: entradas, saídas, ajustes, produção.",
+      "key_fields": [
+        "cod_produto",
+        "nome_produto",
+        "data_movimentacao"
+      ]
+    },
+    {
+      "name": "ncm_ibscbs_validado",
+      "description": "NCMs validados contra IBSCBS.",
+      "key_fields": [
+        "ncm_prefixo",
+        "descricao_ncm",
+        "aliquota_ibs_uf"
+      ]
+    },
+    {
+      "name": "nf_devolucao",
+      "description": "NFs de devolução recebidas.",
+      "key_fields": [
+        "entrega_monitorada_id",
+        "numero_nfd",
+        "data_registro"
+      ]
+    },
+    {
+      "name": "nf_devolucao_linha",
+      "description": "Linhas/itens de NF de devolução.",
+      "key_fields": [
+        "nf_devolucao_id",
+        "codigo_produto_cliente",
+        "descricao_produto_cliente"
+      ]
+    },
+    {
+      "name": "nf_devolucao_nf_referenciada",
+      "description": "NFs referenciadas em devoluções.",
+      "key_fields": [
+        "nf_devolucao_id",
+        "numero_nf",
+        "serie_nf"
+      ]
+    },
+    {
+      "name": "nf_pendente_tagplus",
+      "description": "NFs pendentes no TagPlus.",
+      "key_fields": [
+        "numero_nf",
+        "cnpj_cliente",
+        "nome_cliente"
+      ]
+    },
+    {
+      "name": "ocorrencia_devolucao",
+      "description": "Ocorrências/motivos de devolução.",
+      "key_fields": [
+        "nf_devolucao_id",
+        "numero_ocorrencia",
+        "destino"
+      ]
+    },
+    {
+      "name": "pallet_creditos",
+      "description": "Registro de crédito de pallet a receber.",
+      "key_fields": [
+        "nf_remessa_id",
+        "qtd_original",
+        "qtd_saldo"
+      ]
+    },
+    {
+      "name": "pallet_documentos",
+      "description": "Documentos que enriquecem o crédito de pallet.",
+      "key_fields": [
+        "credito_id",
+        "tipo",
+        "numero_documento"
+      ]
+    },
+    {
+      "name": "pallet_nf_remessa",
+      "description": "NF de remessa de pallet emitida.",
+      "key_fields": [
+        "numero_nf",
+        "serie",
+        "chave_nfe"
+      ]
+    },
+    {
+      "name": "pallet_nf_solucoes",
+      "description": "Solução documental de NF de remessa.",
+      "key_fields": [
+        "nf_remessa_id",
+        "tipo",
+        "quantidade"
+      ]
+    },
+    {
+      "name": "pallet_solucoes",
+      "description": "Registro de resolução de crédito de pallet.",
+      "key_fields": [
+        "credito_id",
+        "tipo",
+        "quantidade"
+      ]
+    },
+    {
+      "name": "parametro_custeio",
+      "description": "Parâmetros de custeio.",
+      "key_fields": [
+        "chave",
+        "valor",
+        "descricao"
+      ]
+    },
+    {
+      "name": "pedido_compras",
+      "description": "The base class of the :attr:`.SQLAlchemy.Model` declarative model class.",
+      "key_fields": [
+        "num_pedido",
+        "company_id",
+        "num_requisicao"
+      ]
+    },
+    {
+      "name": "pedido_importacao_temp",
+      "description": "Pedidos temporários para importação.",
+      "key_fields": [
+        "chave_importacao",
+        "status",
+        "rede"
+      ]
+    },
+    {
+      "name": "pendencia_fiscal_ibscbs",
+      "description": "Pendências fiscais IBSCBS.",
+      "key_fields": [
+        "tipo_documento",
+        "chave_acesso",
+        "numero_documento"
+      ]
+    },
+    {
+      "name": "perfil_fiscal_produto_fornecedor",
+      "description": "Perfil fiscal produto × fornecedor.",
+      "key_fields": [
+        "cnpj_empresa_compradora",
+        "cod_produto",
+        "cnpj_fornecedor"
+      ]
+    },
+    {
+      "name": "permissao_comercial",
+      "description": "Permissões comerciais por vendedor.",
+      "key_fields": [
+        "usuario_id",
+        "tipo",
+        "valor"
+      ]
+    },
+    {
+      "name": "picking_recebimento",
+      "description": "Pickings de recebimento (Odoo).",
+      "key_fields": [
+        "odoo_picking_id",
+        "odoo_picking_name",
+        "state"
+      ]
+    },
+    {
+      "name": "picking_recebimento_move_line",
+      "description": "Move lines de picking de recebimento.",
+      "key_fields": [
+        "picking_recebimento_id",
+        "produto_id",
+        "odoo_move_line_id"
+      ]
+    },
+    {
+      "name": "picking_recebimento_produto",
+      "description": "Produtos por picking de recebimento.",
+      "key_fields": [
+        "picking_recebimento_id",
+        "odoo_move_id",
+        "odoo_product_id"
+      ]
+    },
+    {
+      "name": "picking_recebimento_quality_check",
+      "description": "Quality checks de picking.",
+      "key_fields": [
+        "picking_recebimento_id",
+        "odoo_check_id",
+        "odoo_point_id"
+      ]
+    },
+    {
+      "name": "pings_gps",
+      "description": "Pings GPS de veículos.",
+      "key_fields": [
+        "rastreamento_id",
+        "latitude",
+        "longitude"
+      ]
+    },
+    {
+      "name": "portal_atacadao_produto_depara",
+      "description": "Tabela DE-PARA para mapear códigos de produtos",
+      "key_fields": [
+        "codigo_nosso",
+        "descricao_nosso",
+        "codigo_atacadao"
+      ]
+    },
+    {
+      "name": "portal_integracoes",
+      "description": "Tabela principal de integrações com portais",
+      "key_fields": [
+        "portal",
+        "lote_id",
+        "tipo_lote"
+      ]
+    },
+    {
+      "name": "portal_logs",
+      "description": "Log de execuções das integrações",
+      "key_fields": [
+        "integracao_id",
+        "acao",
+        "sucesso"
+      ]
+    },
+    {
+      "name": "portal_sendas_filial_depara",
+      "description": "Tabela DE-PARA para mapear CNPJs e códigos de filiais do Sendas",
+      "key_fields": [
+        "cnpj",
+        "filial",
+        "numero"
+      ]
+    },
+    {
+      "name": "portal_sendas_planilha_modelo",
+      "description": "Armazena os dados da planilha modelo baixada do portal Sendas",
+      "key_fields": [
+        "razao_social_fornecedor",
+        "nome_fantasia_fornecedor",
+        "unidade_destino"
+      ]
+    },
+    {
+      "name": "portal_sendas_produto_depara",
+      "description": "Tabela DE-PARA para mapear códigos de produtos",
+      "key_fields": [
+        "codigo_nosso",
+        "descricao_nosso",
+        "codigo_sendas"
+      ]
+    },
+    {
+      "name": "previsao_demanda",
+      "description": "The base class of the :attr:`.SQLAlchemy.Model` declarative model class.",
+      "key_fields": [
+        "data_mes",
+        "data_ano",
+        "nome_grupo"
+      ]
+    },
+    {
+      "name": "produto_fornecedor_depara",
+      "description": "De-Para produto × fornecedor.",
+      "key_fields": [
+        "cnpj_fornecedor",
+        "razao_fornecedor",
+        "cod_produto_fornecedor"
+      ]
+    },
+    {
+      "name": "programacao_producao",
+      "description": "Produção programada por data e linha.",
+      "key_fields": [
+        "data_programacao",
+        "cod_produto",
+        "nome_produto"
+      ]
+    },
+    {
+      "name": "rastreamento_embarques",
+      "description": "Rastreamento GPS de embarques.",
+      "key_fields": [
+        "embarque_id",
+        "token_acesso",
+        "token_expiracao"
+      ]
+    },
+    {
+      "name": "recebimento_fisico",
+      "description": "Recebimentos físicos de materiais.",
+      "key_fields": [
+        "odoo_picking_id",
+        "odoo_picking_name",
+        "odoo_purchase_order_id"
+      ]
+    },
+    {
+      "name": "recebimento_lote",
+      "description": "Lotes de recebimento físico.",
+      "key_fields": [
+        "recebimento_id",
+        "odoo_product_id",
+        "odoo_product_name"
+      ]
+    },
+    {
+      "name": "recebimento_quality_check",
+      "description": "Quality checks de recebimento.",
+      "key_fields": [
+        "recebimento_id",
+        "odoo_check_id",
+        "odoo_point_id"
+      ]
+    },
+    {
+      "name": "recursos_producao",
+      "description": "The base class of the :attr:`.SQLAlchemy.Model` declarative model class.",
+      "key_fields": [
+        "cod_produto",
+        "nome_produto",
+        "linha_producao"
+      ]
+    },
+    {
+      "name": "regiao_tabela_rede",
+      "description": "Regiões por tabela de rede.",
+      "key_fields": [
+        "rede",
+        "uf",
+        "regiao"
+      ]
+    },
+    {
+      "name": "registro_pedido_odoo",
+      "description": "Registro de pedidos enviados ao Odoo.",
+      "key_fields": [
+        "rede",
+        "tipo_documento",
+        "numero_documento"
+      ]
+    },
+    {
+      "name": "requisicao_compra_alocacao",
+      "description": "Tabela intermediária N:N entre Requisições de Compra e Pedidos de Compra",
+      "key_fields": [
+        "requisicao_compra_id",
+        "pedido_compra_id",
+        "odoo_allocation_id"
+      ]
+    },
+    {
+      "name": "requisicao_compras",
+      "description": "The base class of the :attr:`.SQLAlchemy.Model` declarative model class.",
+      "key_fields": [
+        "num_requisicao",
+        "company_id",
+        "data_requisicao_criacao"
+      ]
+    },
+    {
+      "name": "saldo_standby",
+      "description": "Pedidos em espera: saldo, comercial ou PCP.",
+      "key_fields": [
+        "origem_separacao_lote_id",
+        "num_pedido",
+        "cod_produto"
+      ]
+    },
+    {
+      "name": "separacao",
+      "description": "Itens separados para expedição. Projeta saídas de estoque.",
+      "key_fields": [
+        "separacao_lote_id",
+        "num_pedido",
+        "data_pedido"
+      ]
+    },
+    {
+      "name": "tabela_rede_precos",
+      "description": "Tabela de preços por rede.",
+      "key_fields": [
+        "rede",
+        "regiao",
+        "cod_produto"
+      ]
+    },
+    {
+      "name": "tabelas_frete",
+      "description": "Tabelas de preço de frete.",
+      "key_fields": [
+        "transportadora_id",
+        "uf_origem",
+        "uf_destino"
+      ]
+    },
+    {
+      "name": "transportadoras",
+      "description": "Cadastro de transportadoras com dados logísticos e financeiros.",
+      "key_fields": [
+        "cnpj",
+        "razao_social",
+        "cidade"
+      ]
+    },
+    {
+      "name": "unificacao_codigos",
+      "description": "Unificação de códigos de produto.",
+      "key_fields": [
+        "codigo_origem",
+        "codigo_destino",
+        "observacao"
+      ]
+    },
+    {
+      "name": "validacao_fiscal_dfe",
+      "description": "Validação fiscal de DFe (NF-e entrada).",
+      "key_fields": [
+        "odoo_dfe_id",
+        "numero_nf",
+        "chave_nfe"
+      ]
+    },
+    {
+      "name": "validacao_nf_po_dfe",
+      "description": "Match de NF de compra × PO no Odoo.",
+      "key_fields": [
+        "odoo_dfe_id",
+        "numero_nf",
+        "serie_nf"
+      ]
+    },
+    {
+      "name": "veiculos",
+      "description": "Frota de veículos por transportadora.",
+      "key_fields": [
+        "nome",
+        "peso_maximo",
+        "qtd_eixos"
+      ]
+    }
+  ]
+}

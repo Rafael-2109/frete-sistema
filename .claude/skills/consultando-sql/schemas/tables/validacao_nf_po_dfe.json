@@ -1,0 +1,232 @@
+{
+  "name": "validacao_nf_po_dfe",
+  "description": "Match de NF de compra × PO no Odoo.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "odoo_dfe_id",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "numero_nf",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "serie_nf",
+      "type": "varchar(10)"
+    },
+    {
+      "name": "chave_nfe",
+      "type": "varchar(44)"
+    },
+    {
+      "name": "cnpj_fornecedor",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "razao_fornecedor",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "cnpj_empresa_compradora",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "razao_empresa_compradora",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "data_nf",
+      "type": "date"
+    },
+    {
+      "name": "valor_total_nf",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "pendente"
+    },
+    {
+      "name": "total_itens",
+      "type": "integer",
+      "default": 0
+    },
+    {
+      "name": "itens_match",
+      "type": "integer",
+      "default": 0
+    },
+    {
+      "name": "itens_sem_depara",
+      "type": "integer",
+      "default": 0
+    },
+    {
+      "name": "itens_sem_po",
+      "type": "integer",
+      "default": 0
+    },
+    {
+      "name": "itens_preco_diverge",
+      "type": "integer",
+      "default": 0
+    },
+    {
+      "name": "itens_data_diverge",
+      "type": "integer",
+      "default": 0
+    },
+    {
+      "name": "itens_qtd_diverge",
+      "type": "integer",
+      "default": 0
+    },
+    {
+      "name": "odoo_po_vinculado_id",
+      "type": "integer",
+      "description": "ID do PO vinculado"
+    },
+    {
+      "name": "odoo_po_vinculado_name",
+      "type": "varchar(50)",
+      "description": "Nome do PO (ex: PO00123)"
+    },
+    {
+      "name": "odoo_po_fiscal_id",
+      "type": "integer",
+      "description": "ID do PO fiscal (escrituracao)"
+    },
+    {
+      "name": "odoo_po_fiscal_name",
+      "type": "varchar(50)",
+      "description": "Nome do PO fiscal"
+    },
+    {
+      "name": "pos_vinculados_importados_em",
+      "type": "timestamp",
+      "description": "Quando foram importados"
+    },
+    {
+      "name": "po_consolidado_id",
+      "type": "integer"
+    },
+    {
+      "name": "po_consolidado_name",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "pos_saldo_ids",
+      "type": "text",
+      "description": "JSON: [{\"id\": 123, \"name\": \"PO00456\"}]"
+    },
+    {
+      "name": "pos_cancelados_ids",
+      "type": "text",
+      "description": "JSON: [{\"id\": 124, \"name\": \"PO00457\"}]"
+    },
+    {
+      "name": "acao_executada",
+      "type": "json",
+      "description": "Detalhes completos da acao"
+    },
+    {
+      "name": "erro_mensagem",
+      "type": "text"
+    },
+    {
+      "name": "situacao_dfe_odoo",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "po_modificada_apos_validacao",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "ultima_validacao_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "po_ids_usados",
+      "type": "text"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "validado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "consolidado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_validacao_nf_po_dfe_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_validacao_nf_po_dfe_cnpj_empresa_compradora",
+      "columns": [
+        "cnpj_empresa_compradora"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_validacao_nf_po_dfe_po_modificada_apos_validacao",
+      "columns": [
+        "po_modificada_apos_validacao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_validacao_nf_po_dfe_chave_nfe",
+      "columns": [
+        "chave_nfe"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_validacao_nf_po_dfe_odoo_po_vinculado_id",
+      "columns": [
+        "odoo_po_vinculado_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_validacao_nf_po_dfe_cnpj_fornecedor",
+      "columns": [
+        "cnpj_fornecedor"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_validacao_nf_po_dfe_odoo_dfe_id",
+      "columns": [
+        "odoo_dfe_id"
+      ],
+      "unique": true
+    }
+  ]
+}

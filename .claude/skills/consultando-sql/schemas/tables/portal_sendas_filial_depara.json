@@ -1,0 +1,87 @@
+{
+  "name": "portal_sendas_filial_depara",
+  "description": "Tabela DE-PARA para mapear CNPJs e códigos de filiais do Sendas",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "cnpj",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "filial",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "numero",
+      "type": "varchar(10)"
+    },
+    {
+      "name": "nome_filial",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "cidade",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "uf",
+      "type": "varchar(2)"
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "default": true
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_portal_sendas_filial_depara_ativo",
+      "columns": [
+        "ativo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_portal_sendas_filial_depara_numero",
+      "columns": [
+        "numero"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_portal_sendas_filial_depara_filial",
+      "columns": [
+        "filial"
+      ],
+      "unique": true
+    },
+    {
+      "name": "ix_portal_sendas_filial_depara_cnpj",
+      "columns": [
+        "cnpj"
+      ],
+      "unique": true
+    }
+  ]
+}

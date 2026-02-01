@@ -1,0 +1,194 @@
+{
+  "name": "pallet_nf_solucoes",
+  "description": "Solução documental de NF de remessa.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "nf_remessa_id",
+      "type": "integer",
+      "description": "FK → pallet_nf_remessa.id",
+      "nullable": false
+    },
+    {
+      "name": "tipo",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "quantidade",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "numero_nf_solucao",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "serie_nf_solucao",
+      "type": "varchar(5)"
+    },
+    {
+      "name": "chave_nfe_solucao",
+      "type": "varchar(44)"
+    },
+    {
+      "name": "data_nf_solucao",
+      "type": "timestamp"
+    },
+    {
+      "name": "odoo_account_move_id",
+      "type": "integer"
+    },
+    {
+      "name": "odoo_dfe_id",
+      "type": "integer"
+    },
+    {
+      "name": "cnpj_emitente",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "nome_emitente",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "vinculacao",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "MANUAL"
+    },
+    {
+      "name": "score_match",
+      "type": "integer"
+    },
+    {
+      "name": "confirmado",
+      "type": "boolean",
+      "nullable": false,
+      "default": true
+    },
+    {
+      "name": "confirmado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "confirmado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "rejeitado",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "rejeitado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "rejeitado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "motivo_rejeicao",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "info_complementar",
+      "type": "text"
+    },
+    {
+      "name": "observacao",
+      "type": "text"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    },
+    {
+      "name": "atualizado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "nullable": false,
+      "default": true
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "nf_remessa_id",
+      "references": "pallet_nf_remessa.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "idx_nf_solucao_confirmado",
+      "columns": [
+        "confirmado",
+        "vinculacao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nf_solucao_emitente",
+      "columns": [
+        "cnpj_emitente",
+        "tipo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_nf_solucoes_numero_nf_solucao",
+      "columns": [
+        "numero_nf_solucao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nf_solucao_tipo_vinculacao",
+      "columns": [
+        "tipo",
+        "vinculacao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_nf_solucoes_cnpj_emitente",
+      "columns": [
+        "cnpj_emitente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_nf_solucoes_nf_remessa_id",
+      "columns": [
+        "nf_remessa_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_nf_solucoes_tipo",
+      "columns": [
+        "tipo"
+      ],
+      "unique": false
+    }
+  ]
+}

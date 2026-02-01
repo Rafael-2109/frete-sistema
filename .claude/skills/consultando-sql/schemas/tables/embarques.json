@@ -1,0 +1,275 @@
+{
+  "name": "embarques",
+  "description": "Embarques que agrupam separações para transporte.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "numero",
+      "type": "integer"
+    },
+    {
+      "name": "data_prevista_embarque",
+      "type": "date"
+    },
+    {
+      "name": "data_embarque",
+      "type": "date"
+    },
+    {
+      "name": "transportadora_id",
+      "type": "integer",
+      "description": "FK → transportadoras.id"
+    },
+    {
+      "name": "observacoes",
+      "type": "text"
+    },
+    {
+      "name": "placa_veiculo",
+      "type": "varchar(10)",
+      "description": "Não utilizado"
+    },
+    {
+      "name": "paletizado",
+      "type": "boolean",
+      "description": "Não utilizado",
+      "default": false
+    },
+    {
+      "name": "laudo_anexado",
+      "type": "boolean",
+      "description": "Não utilizado",
+      "default": false
+    },
+    {
+      "name": "embalagem_aprovada",
+      "type": "boolean",
+      "description": "Não utilizado",
+      "default": false
+    },
+    {
+      "name": "transporte_aprovado",
+      "type": "boolean",
+      "description": "Não utilizado",
+      "default": false
+    },
+    {
+      "name": "horario_carregamento",
+      "type": "varchar(5)",
+      "description": "Não utilizado"
+    },
+    {
+      "name": "responsavel_carregamento",
+      "type": "varchar(100)",
+      "description": "Não utilizado"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "description": "'draft', 'ativo', 'cancelado'",
+      "default": "draft"
+    },
+    {
+      "name": "motivo_cancelamento",
+      "type": "text",
+      "description": "Motivo do cancelamento"
+    },
+    {
+      "name": "cancelado_em",
+      "type": "timestamp",
+      "description": "Data/hora do cancelamento"
+    },
+    {
+      "name": "cancelado_por",
+      "type": "varchar(100)",
+      "description": "Usuário que cancelou"
+    },
+    {
+      "name": "tipo_cotacao",
+      "type": "varchar(20)",
+      "description": "'Automatica' ou 'Manual'",
+      "default": "Automatica"
+    },
+    {
+      "name": "valor_total",
+      "type": "float",
+      "description": "Somatória do valor dos itens do embarque"
+    },
+    {
+      "name": "peso_total",
+      "type": "float",
+      "description": "Somatória do peso dos itens do embarque"
+    },
+    {
+      "name": "pallet_total",
+      "type": "float",
+      "description": "Soma de EmbarqueItem.pallets (TEÓRICO)"
+    },
+    {
+      "name": "tipo_carga",
+      "type": "varchar(20)",
+      "description": "'FRACIONADA' ou 'DIRETA'"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)",
+      "nullable": false,
+      "default": "Administrador"
+    },
+    {
+      "name": "nome_motorista",
+      "type": "varchar(100)",
+      "description": "Não utilizado"
+    },
+    {
+      "name": "cpf_motorista",
+      "type": "varchar(20)",
+      "description": "Não utilizado"
+    },
+    {
+      "name": "qtd_pallets",
+      "type": "integer",
+      "description": "Não utilizado"
+    },
+    {
+      "name": "data_embarque_str",
+      "type": "varchar(10)",
+      "description": "formato DD/MM/AAAA"
+    },
+    {
+      "name": "cotacao_id",
+      "type": "integer",
+      "description": "FK → cotacoes.id"
+    },
+    {
+      "name": "modalidade",
+      "type": "varchar(50)",
+      "description": "TIPO DE VEICULO CONTRATADO (MODELOS EM \"app/veiculos/models/veiculos.nome\")"
+    },
+    {
+      "name": "tabela_nome_tabela",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "tabela_valor_kg",
+      "type": "float"
+    },
+    {
+      "name": "tabela_percentual_valor",
+      "type": "float"
+    },
+    {
+      "name": "tabela_frete_minimo_valor",
+      "type": "float"
+    },
+    {
+      "name": "tabela_frete_minimo_peso",
+      "type": "float"
+    },
+    {
+      "name": "tabela_icms",
+      "type": "float"
+    },
+    {
+      "name": "tabela_percentual_gris",
+      "type": "float"
+    },
+    {
+      "name": "tabela_pedagio_por_100kg",
+      "type": "float"
+    },
+    {
+      "name": "tabela_valor_tas",
+      "type": "float"
+    },
+    {
+      "name": "tabela_percentual_adv",
+      "type": "float"
+    },
+    {
+      "name": "tabela_percentual_rca",
+      "type": "float"
+    },
+    {
+      "name": "tabela_valor_despacho",
+      "type": "float"
+    },
+    {
+      "name": "tabela_valor_cte",
+      "type": "float"
+    },
+    {
+      "name": "tabela_icms_incluso",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "tabela_gris_minimo",
+      "type": "float",
+      "description": "Valor mínimo de GRIS",
+      "default": 0
+    },
+    {
+      "name": "tabela_adv_minimo",
+      "type": "float",
+      "description": "Valor mínimo de ADV",
+      "default": 0
+    },
+    {
+      "name": "tabela_icms_proprio",
+      "type": "float",
+      "description": "ICMS próprio da tabela"
+    },
+    {
+      "name": "icms_destino",
+      "type": "float"
+    },
+    {
+      "name": "transportadora_optante",
+      "type": "boolean"
+    },
+    {
+      "name": "nf_pallet_transportadora",
+      "type": "varchar(20)",
+      "description": "NF remessa para transportadora"
+    },
+    {
+      "name": "qtd_pallet_transportadora",
+      "type": "float",
+      "description": "Qtd na NF remessa",
+      "default": 0
+    },
+    {
+      "name": "qtd_pallets_separados",
+      "type": "integer",
+      "description": "Pallets físicos expedidos",
+      "default": 0
+    },
+    {
+      "name": "qtd_pallets_trazidos",
+      "type": "integer",
+      "description": "Pallets retornados pela transportadora",
+      "default": 0
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "transportadora_id",
+      "references": "transportadoras.id"
+    },
+    {
+      "column": "cotacao_id",
+      "references": "cotacoes.id"
+    }
+  ]
+}

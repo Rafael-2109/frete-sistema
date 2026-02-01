@@ -1,0 +1,189 @@
+{
+  "name": "lancamento_frete_odoo_auditoria",
+  "description": "Auditoria de lançamentos de frete no Odoo.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "frete_id",
+      "type": "integer",
+      "description": "FK → fretes.id"
+    },
+    {
+      "name": "despesa_extra_id",
+      "type": "integer",
+      "description": "Para despesas extras"
+    },
+    {
+      "name": "cte_id",
+      "type": "integer",
+      "description": "FK → conhecimento_transporte.id"
+    },
+    {
+      "name": "chave_cte",
+      "type": "varchar(44)",
+      "nullable": false
+    },
+    {
+      "name": "dfe_id",
+      "type": "integer",
+      "description": "ID do DFe no Odoo"
+    },
+    {
+      "name": "purchase_order_id",
+      "type": "integer",
+      "description": "ID do PO no Odoo"
+    },
+    {
+      "name": "invoice_id",
+      "type": "integer",
+      "description": "ID da Invoice no Odoo"
+    },
+    {
+      "name": "etapa",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "etapa_descricao",
+      "type": "varchar(255)",
+      "nullable": false
+    },
+    {
+      "name": "modelo_odoo",
+      "type": "varchar(100)",
+      "description": "l10n_br_ciel_it_account.dfe, purchase.order, account.move",
+      "nullable": false
+    },
+    {
+      "name": "metodo_odoo",
+      "type": "varchar(100)",
+      "description": "action_gerar_po_dfe, button_confirm, action_post, etc"
+    },
+    {
+      "name": "acao",
+      "type": "varchar(50)",
+      "description": "create, write, execute_method",
+      "nullable": false
+    },
+    {
+      "name": "dados_antes",
+      "type": "text",
+      "description": "JSON com valores antes"
+    },
+    {
+      "name": "dados_depois",
+      "type": "text",
+      "description": "JSON com valores depois"
+    },
+    {
+      "name": "campos_alterados",
+      "type": "text",
+      "description": "Lista de campos separados por vírgula"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "description": "SUCESSO, ERRO, AVISO",
+      "nullable": false,
+      "default": "SUCESSO"
+    },
+    {
+      "name": "mensagem",
+      "type": "text",
+      "description": "Mensagem de sucesso ou erro"
+    },
+    {
+      "name": "erro_detalhado",
+      "type": "text",
+      "description": "Stack trace se houver erro"
+    },
+    {
+      "name": "contexto_odoo",
+      "type": "text",
+      "description": "JSON com contexto usado"
+    },
+    {
+      "name": "tempo_execucao_ms",
+      "type": "integer",
+      "description": "Tempo em milissegundos"
+    },
+    {
+      "name": "executado_em",
+      "type": "timestamp",
+      "nullable": false
+    },
+    {
+      "name": "executado_por",
+      "type": "varchar(100)",
+      "description": "Usuário que executou",
+      "nullable": false
+    },
+    {
+      "name": "ip_usuario",
+      "type": "varchar(50)",
+      "description": "IP do usuário"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "frete_id",
+      "references": "fretes.id"
+    },
+    {
+      "column": "despesa_extra_id",
+      "references": "despesas_extras.id"
+    },
+    {
+      "column": "cte_id",
+      "references": "conhecimento_transporte.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_lancamento_frete_odoo_auditoria_etapa",
+      "columns": [
+        "etapa"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_lancamento_frete_odoo_auditoria_despesa_extra_id",
+      "columns": [
+        "despesa_extra_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_lancamento_frete_odoo_auditoria_chave_cte",
+      "columns": [
+        "chave_cte"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_lancamento_frete_odoo_auditoria_frete_id",
+      "columns": [
+        "frete_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_lancamento_frete_odoo_auditoria_executado_em",
+      "columns": [
+        "executado_em"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_lancamento_frete_odoo_auditoria_cte_id",
+      "columns": [
+        "cte_id"
+      ],
+      "unique": false
+    }
+  ]
+}

@@ -1,0 +1,218 @@
+{
+  "name": "pendencia_fiscal_ibscbs",
+  "description": "Pendências fiscais IBSCBS.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "tipo_documento",
+      "type": "varchar(10)",
+      "nullable": false
+    },
+    {
+      "name": "chave_acesso",
+      "type": "varchar(44)",
+      "nullable": false
+    },
+    {
+      "name": "numero_documento",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "serie",
+      "type": "varchar(5)"
+    },
+    {
+      "name": "data_emissao",
+      "type": "date"
+    },
+    {
+      "name": "odoo_dfe_id",
+      "type": "integer"
+    },
+    {
+      "name": "cte_id",
+      "type": "integer",
+      "description": "FK → conhecimento_transporte.id"
+    },
+    {
+      "name": "cnpj_fornecedor",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "razao_fornecedor",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "uf_fornecedor",
+      "type": "varchar(2)"
+    },
+    {
+      "name": "regime_tributario",
+      "type": "varchar(1)"
+    },
+    {
+      "name": "regime_tributario_descricao",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "ncm",
+      "type": "varchar(10)"
+    },
+    {
+      "name": "ncm_prefixo",
+      "type": "varchar(4)",
+      "description": "4 primeiros digitos"
+    },
+    {
+      "name": "valor_total",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "valor_base_calculo",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "ibscbs_cst",
+      "type": "varchar(10)"
+    },
+    {
+      "name": "ibscbs_class_trib",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "ibscbs_base",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "ibs_uf_aliq",
+      "type": "numeric(5,2)"
+    },
+    {
+      "name": "ibs_uf_valor",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "ibs_mun_aliq",
+      "type": "numeric(5,2)"
+    },
+    {
+      "name": "ibs_mun_valor",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "ibs_total",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "cbs_aliq",
+      "type": "numeric(5,2)"
+    },
+    {
+      "name": "cbs_valor",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "motivo_pendencia",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "detalhes_pendencia",
+      "type": "text"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "pendente"
+    },
+    {
+      "name": "resolucao",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "justificativa",
+      "type": "text"
+    },
+    {
+      "name": "resolvido_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "resolvido_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)",
+      "default": "SISTEMA"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "cte_id",
+      "references": "conhecimento_transporte.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_pendencia_fiscal_ibscbs_ncm_prefixo",
+      "columns": [
+        "ncm_prefixo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pendencia_fiscal_ibscbs_odoo_dfe_id",
+      "columns": [
+        "odoo_dfe_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pendencia_fiscal_ibscbs_cnpj_fornecedor",
+      "columns": [
+        "cnpj_fornecedor"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pendencia_fiscal_ibscbs_tipo_documento",
+      "columns": [
+        "tipo_documento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pendencia_fiscal_ibscbs_chave_acesso",
+      "columns": [
+        "chave_acesso"
+      ],
+      "unique": true
+    },
+    {
+      "name": "ix_pendencia_fiscal_ibscbs_cte_id",
+      "columns": [
+        "cte_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pendencia_fiscal_ibscbs_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    }
+  ]
+}

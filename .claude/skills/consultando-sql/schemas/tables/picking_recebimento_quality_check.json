@@ -1,0 +1,70 @@
+{
+  "name": "picking_recebimento_quality_check",
+  "description": "Quality checks de picking.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "picking_recebimento_id",
+      "type": "integer",
+      "description": "FK → picking_recebimento.id",
+      "nullable": false
+    },
+    {
+      "name": "odoo_check_id",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "odoo_point_id",
+      "type": "integer"
+    },
+    {
+      "name": "odoo_product_id",
+      "type": "integer"
+    },
+    {
+      "name": "odoo_product_name",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "quality_state",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "test_type",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "title",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "norm_unit",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "tolerance_min",
+      "type": "numeric(15,4)"
+    },
+    {
+      "name": "tolerance_max",
+      "type": "numeric(15,4)"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "picking_recebimento_id",
+      "references": "picking_recebimento.id"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "picking_recebimento_id",
+      "odoo_check_id"
+    ]
+  ]
+}

@@ -1,0 +1,76 @@
+{
+  "name": "regiao_tabela_rede",
+  "description": "Regiões por tabela de rede.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "rede",
+      "type": "varchar(50)",
+      "description": "'ATACADAO', 'TENDA', 'ASSAI'",
+      "nullable": false
+    },
+    {
+      "name": "uf",
+      "type": "varchar(2)",
+      "description": "'SP', 'RJ', etc.",
+      "nullable": false
+    },
+    {
+      "name": "regiao",
+      "type": "varchar(50)",
+      "description": "'SUDESTE', 'SUL', etc.",
+      "nullable": false
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "nullable": false,
+      "default": true
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "rede",
+      "uf"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_regiao_tabela_rede_rede",
+      "columns": [
+        "rede"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_regiao_rede_uf",
+      "columns": [
+        "rede",
+        "uf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_regiao_tabela_rede_uf",
+      "columns": [
+        "uf"
+      ],
+      "unique": false
+    }
+  ]
+}

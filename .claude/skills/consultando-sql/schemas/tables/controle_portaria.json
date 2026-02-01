@@ -1,0 +1,110 @@
+{
+  "name": "controle_portaria",
+  "description": "Controle de entrada/saída na portaria.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "motorista_id",
+      "type": "integer",
+      "description": "FK → motoristas.id",
+      "nullable": false
+    },
+    {
+      "name": "placa",
+      "type": "varchar(10)",
+      "description": "AAA-1234 ou AAA1A23",
+      "nullable": false
+    },
+    {
+      "name": "tipo_veiculo_id",
+      "type": "integer",
+      "description": "FK → veiculos.id"
+    },
+    {
+      "name": "tipo_carga",
+      "type": "varchar(50)",
+      "description": "Coleta / Coleta + Devolução / Devolução / Entrega",
+      "nullable": false
+    },
+    {
+      "name": "empresa",
+      "type": "varchar(255)",
+      "nullable": false
+    },
+    {
+      "name": "embarque_id",
+      "type": "integer",
+      "description": "FK → embarques.id"
+    },
+    {
+      "name": "data_chegada",
+      "type": "date"
+    },
+    {
+      "name": "hora_chegada",
+      "type": "time"
+    },
+    {
+      "name": "data_entrada",
+      "type": "date"
+    },
+    {
+      "name": "hora_entrada",
+      "type": "time"
+    },
+    {
+      "name": "data_saida",
+      "type": "date"
+    },
+    {
+      "name": "hora_saida",
+      "type": "time"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    },
+    {
+      "name": "registrado_por_id",
+      "type": "integer",
+      "description": "FK → usuarios.id"
+    },
+    {
+      "name": "atualizado_por_id",
+      "type": "integer",
+      "description": "FK → usuarios.id"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "motorista_id",
+      "references": "motoristas.id"
+    },
+    {
+      "column": "tipo_veiculo_id",
+      "references": "veiculos.id"
+    },
+    {
+      "column": "embarque_id",
+      "references": "embarques.id"
+    },
+    {
+      "column": "registrado_por_id",
+      "references": "usuarios.id"
+    },
+    {
+      "column": "atualizado_por_id",
+      "references": "usuarios.id"
+    }
+  ]
+}

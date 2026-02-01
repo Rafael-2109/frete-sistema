@@ -46,3 +46,14 @@ USE_PROGRAMMATIC_AGENTS = os.getenv("AGENT_PROGRAMMATIC_AGENTS", "false").lower(
 # Self-correction — validar output antes de entregar
 # Chamada Haiku rapida para verificar coerencia da resposta
 USE_SELF_CORRECTION = os.getenv("AGENT_SELF_CORRECTION", "false").lower() == "true"
+
+# ====================================================================
+# FASE 4: Cookbook Capabilities
+# ====================================================================
+
+# Text-to-SQL — converte perguntas em linguagem natural para SQL
+# Usa Haiku para gerar e validar SQL (Evaluator-Optimizer pattern)
+# Seguranca: regex validator + SET TRANSACTION READ ONLY + blacklist tabelas
+USE_TEXT_TO_SQL = os.getenv("AGENT_TEXT_TO_SQL", "false").lower() == "true"
+TEXT_TO_SQL_TIMEOUT = int(os.getenv("AGENT_TEXT_TO_SQL_TIMEOUT", "5"))
+TEXT_TO_SQL_MAX_ROWS = int(os.getenv("AGENT_TEXT_TO_SQL_MAX_ROWS", "500"))

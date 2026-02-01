@@ -1,0 +1,343 @@
+{
+  "name": "separacao",
+  "description": "Itens separados para expedição. Projeta saídas de estoque.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "separacao_lote_id",
+      "type": "varchar(50)",
+      "description": "ID do lote de separação"
+    },
+    {
+      "name": "num_pedido",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "data_pedido",
+      "type": "date",
+      "description": "agora pode ser nulo"
+    },
+    {
+      "name": "cnpj_cpf",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "raz_social_red",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "nome_cidade",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "cod_uf",
+      "type": "varchar(2)",
+      "nullable": false
+    },
+    {
+      "name": "cod_produto",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "nome_produto",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "qtd_saldo",
+      "type": "float",
+      "description": "agora pode ser nulo"
+    },
+    {
+      "name": "valor_saldo",
+      "type": "float"
+    },
+    {
+      "name": "pallet",
+      "type": "float"
+    },
+    {
+      "name": "peso",
+      "type": "float"
+    },
+    {
+      "name": "rota",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "sub_rota",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "observ_ped_1",
+      "type": "varchar(700)",
+      "description": "Truncado automaticamente antes de salvar"
+    },
+    {
+      "name": "roteirizacao",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "expedicao",
+      "type": "date"
+    },
+    {
+      "name": "agendamento",
+      "type": "date"
+    },
+    {
+      "name": "agendamento_confirmado",
+      "type": "boolean",
+      "description": "Flag para confirmação de agendamento",
+      "default": false
+    },
+    {
+      "name": "protocolo",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "pedido_cliente",
+      "type": "varchar(100)",
+      "description": "Pedido de Compra do Cliente"
+    },
+    {
+      "name": "tipo_envio",
+      "type": "varchar(10)",
+      "description": "total, parcial",
+      "default": "total"
+    },
+    {
+      "name": "sincronizado_nf",
+      "type": "boolean",
+      "description": "Indica se foi sincronizado com NF, gatilho principal para projetar saidas de estoque",
+      "default": false
+    },
+    {
+      "name": "numero_nf",
+      "type": "varchar(20)",
+      "description": "NF associada quando sincronizada"
+    },
+    {
+      "name": "data_sincronizacao",
+      "type": "timestamp",
+      "description": "Data/hora da sincronização"
+    },
+    {
+      "name": "zerado_por_sync",
+      "type": "boolean",
+      "description": "Indica se foi zerado por sincronização",
+      "default": false
+    },
+    {
+      "name": "data_zeragem",
+      "type": "timestamp",
+      "description": "Data/hora quando foi zerado"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "description": "PREVISAO, ABERTO, FATURADO",
+      "nullable": false,
+      "default": "ABERTO"
+    },
+    {
+      "name": "nf_cd",
+      "type": "boolean",
+      "description": "NF voltou para o CD",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "data_embarque",
+      "type": "date",
+      "description": "Data de embarque"
+    },
+    {
+      "name": "cidade_normalizada",
+      "type": "varchar(120)"
+    },
+    {
+      "name": "uf_normalizada",
+      "type": "varchar(2)"
+    },
+    {
+      "name": "codigo_ibge",
+      "type": "varchar(10)"
+    },
+    {
+      "name": "separacao_impressa",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "separacao_impressa_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "separacao_impressa_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "obs_separacao",
+      "type": "text",
+      "description": "Observações sobre a separação"
+    },
+    {
+      "name": "falta_item",
+      "type": "boolean",
+      "description": "Indica se falta item no estoque",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "falta_pagamento",
+      "type": "boolean",
+      "description": "Indica se pagamento está pendente",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "cotacao_id",
+      "type": "integer",
+      "description": "FK → cotacoes.id"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)",
+      "description": "Usuario que criou a separacao"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "cotacao_id",
+      "references": "cotacoes.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_separacao_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_sep_pedido_sync",
+      "columns": [
+        "num_pedido",
+        "sincronizado_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_separacao_separacao_lote_id",
+      "columns": [
+        "separacao_lote_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_sep_pedido_produto_sync",
+      "columns": [
+        "num_pedido",
+        "cod_produto",
+        "sincronizado_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_sep_produto_qtd_sync",
+      "columns": [
+        "cod_produto",
+        "qtd_saldo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_sep_estoque_projetado",
+      "columns": [
+        "cod_produto",
+        "expedicao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_sep_expedicao_produto",
+      "columns": [
+        "expedicao",
+        "cod_produto"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_sep_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_sep_nf",
+      "columns": [
+        "numero_nf",
+        "sincronizado_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_sep_lote_sync",
+      "columns": [
+        "separacao_lote_id",
+        "sincronizado_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_sep_cnpj",
+      "columns": [
+        "cnpj_cpf",
+        "sincronizado_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_sep_expedicao",
+      "columns": [
+        "expedicao",
+        "sincronizado_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_sep_lote_status",
+      "columns": [
+        "separacao_lote_id",
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_sep_cotacao",
+      "columns": [
+        "cotacao_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_sep_num_pedido",
+      "columns": [
+        "num_pedido"
+      ],
+      "unique": false
+    }
+  ]
+}

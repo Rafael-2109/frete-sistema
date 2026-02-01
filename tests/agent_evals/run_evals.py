@@ -158,12 +158,12 @@ def grade_model(response_text: str, grading_config: dict) -> tuple[bool, float, 
         (passed, score, details)
     """
     try:
-        import anthropic
+        from anthropic import Anthropic
 
         criteria = grading_config.get("criteria", "")
         min_score = grading_config.get("min_score", 0.5)
 
-        client = anthropic.Anthropic()
+        client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
         evaluation = client.messages.create(
             model="claude-haiku-4-5-20250514",
             max_tokens=200,

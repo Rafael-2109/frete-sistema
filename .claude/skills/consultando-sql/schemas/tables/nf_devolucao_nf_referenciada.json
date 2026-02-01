@@ -1,0 +1,117 @@
+{
+  "name": "nf_devolucao_nf_referenciada",
+  "description": "NFs referenciadas em devoluções.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "nf_devolucao_id",
+      "type": "integer",
+      "description": "FK → nf_devolucao.id",
+      "nullable": false
+    },
+    {
+      "name": "numero_nf",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "serie_nf",
+      "type": "varchar(10)"
+    },
+    {
+      "name": "chave_nf",
+      "type": "varchar(44)",
+      "description": "chave de acesso (se disponivel)"
+    },
+    {
+      "name": "data_emissao_nf",
+      "type": "date"
+    },
+    {
+      "name": "origem",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "MANUAL"
+    },
+    {
+      "name": "entrega_monitorada_id",
+      "type": "integer",
+      "description": "FK → entregas_monitoradas.id"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "nf_devolucao_id",
+      "references": "nf_devolucao.id"
+    },
+    {
+      "column": "entrega_monitorada_id",
+      "references": "entregas_monitoradas.id"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "nf_devolucao_id",
+      "numero_nf",
+      "serie_nf"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_nf_devolucao_nf_referenciada_numero_nf",
+      "columns": [
+        "numero_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_nf_referenciada_entrega_monitorada_id",
+      "columns": [
+        "entrega_monitorada_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_nf_referenciada_chave_nf",
+      "columns": [
+        "chave_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nf_ref_numero",
+      "columns": [
+        "numero_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nf_ref_chave",
+      "columns": [
+        "chave_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_nf_referenciada_nf_devolucao_id",
+      "columns": [
+        "nf_devolucao_id"
+      ],
+      "unique": false
+    }
+  ]
+}

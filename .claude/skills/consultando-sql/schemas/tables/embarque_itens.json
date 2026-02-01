@@ -1,0 +1,222 @@
+{
+  "name": "embarque_itens",
+  "description": "Itens individuais dentro de um embarque.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "embarque_id",
+      "type": "integer",
+      "description": "FK → embarques.id",
+      "nullable": false
+    },
+    {
+      "name": "separacao_lote_id",
+      "type": "varchar(50)",
+      "description": "ID do lote de separação"
+    },
+    {
+      "name": "cnpj_cliente",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "cliente",
+      "type": "varchar(120)",
+      "nullable": false
+    },
+    {
+      "name": "pedido",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "protocolo_agendamento",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "data_agenda",
+      "type": "varchar(10)"
+    },
+    {
+      "name": "agendamento_confirmado",
+      "type": "boolean",
+      "description": "Status de confirmação do agendamento",
+      "default": false
+    },
+    {
+      "name": "nota_fiscal",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "volumes",
+      "type": "integer"
+    },
+    {
+      "name": "peso",
+      "type": "float",
+      "description": "Peso do item"
+    },
+    {
+      "name": "valor",
+      "type": "float",
+      "description": "Valor do item"
+    },
+    {
+      "name": "pallets",
+      "type": "float",
+      "description": "Pallets TEÓRICOS (via CadastroPalletizacao)"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "description": "'ativo' ou 'cancelado'",
+      "nullable": false,
+      "default": "ativo"
+    },
+    {
+      "name": "uf_destino",
+      "type": "varchar(2)",
+      "nullable": false
+    },
+    {
+      "name": "cidade_destino",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "cotacao_id",
+      "type": "integer",
+      "description": "FK → cotacoes.id"
+    },
+    {
+      "name": "modalidade",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "tabela_nome_tabela",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "tabela_valor_kg",
+      "type": "float"
+    },
+    {
+      "name": "tabela_percentual_valor",
+      "type": "float"
+    },
+    {
+      "name": "tabela_frete_minimo_valor",
+      "type": "float"
+    },
+    {
+      "name": "tabela_frete_minimo_peso",
+      "type": "float"
+    },
+    {
+      "name": "tabela_icms",
+      "type": "float"
+    },
+    {
+      "name": "tabela_percentual_gris",
+      "type": "float"
+    },
+    {
+      "name": "tabela_pedagio_por_100kg",
+      "type": "float"
+    },
+    {
+      "name": "tabela_valor_tas",
+      "type": "float"
+    },
+    {
+      "name": "tabela_percentual_adv",
+      "type": "float"
+    },
+    {
+      "name": "tabela_percentual_rca",
+      "type": "float"
+    },
+    {
+      "name": "tabela_valor_despacho",
+      "type": "float"
+    },
+    {
+      "name": "tabela_valor_cte",
+      "type": "float"
+    },
+    {
+      "name": "tabela_icms_incluso",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "icms_destino",
+      "type": "float"
+    },
+    {
+      "name": "tabela_gris_minimo",
+      "type": "float",
+      "description": "Valor mínimo de GRIS",
+      "default": 0
+    },
+    {
+      "name": "tabela_adv_minimo",
+      "type": "float",
+      "description": "Valor mínimo de ADV",
+      "default": 0
+    },
+    {
+      "name": "tabela_icms_proprio",
+      "type": "float",
+      "description": "ICMS próprio da tabela"
+    },
+    {
+      "name": "erro_validacao",
+      "type": "varchar(500)",
+      "description": "Armazena erros como \"CNPJ_DIFERENTE\", etc."
+    },
+    {
+      "name": "nf_pallet_cliente",
+      "type": "varchar(20)",
+      "description": "NF remessa para cliente"
+    },
+    {
+      "name": "qtd_pallet_cliente",
+      "type": "float",
+      "description": "Qtd na NF cliente",
+      "default": 0
+    },
+    {
+      "name": "nf_pallet_referencia",
+      "type": "varchar(20)",
+      "description": "Qual NF de pallet cobre esta venda"
+    },
+    {
+      "name": "nf_pallet_origem",
+      "type": "varchar(10)",
+      "description": "'EMBARQUE' ou 'ITEM'"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "embarque_id",
+      "references": "embarques.id"
+    },
+    {
+      "column": "cotacao_id",
+      "references": "cotacoes.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_embarque_itens_separacao_lote_id",
+      "columns": [
+        "separacao_lote_id"
+      ],
+      "unique": false
+    }
+  ]
+}

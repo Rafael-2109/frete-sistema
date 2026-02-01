@@ -1,0 +1,255 @@
+{
+  "name": "baixa_titulo_item",
+  "description": "Itens individuais de baixa de título.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "lote_id",
+      "type": "integer",
+      "description": "FK → baixa_titulo_lote.id",
+      "nullable": false
+    },
+    {
+      "name": "linha_excel",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "nf_excel",
+      "type": "varchar(50)",
+      "description": "Numero da NF-e",
+      "nullable": false
+    },
+    {
+      "name": "parcela_excel",
+      "type": "integer",
+      "description": "Numero sequencial da parcela",
+      "nullable": false
+    },
+    {
+      "name": "valor_excel",
+      "type": "float",
+      "description": "Valor a baixar",
+      "nullable": false
+    },
+    {
+      "name": "journal_excel",
+      "type": "varchar(100)",
+      "description": "Nome do journal (ex: GRAFENO)",
+      "nullable": false
+    },
+    {
+      "name": "data_excel",
+      "type": "date",
+      "description": "Data do pagamento",
+      "nullable": false
+    },
+    {
+      "name": "juros_excel",
+      "type": "float",
+      "description": "Valor de juros recebidos (lancamento separado)",
+      "default": 0
+    },
+    {
+      "name": "desconto_concedido_excel",
+      "type": "float",
+      "description": "Desconto concedido ao cliente",
+      "default": 0
+    },
+    {
+      "name": "acordo_comercial_excel",
+      "type": "float",
+      "description": "Acordo comercial",
+      "default": 0
+    },
+    {
+      "name": "devolucao_excel",
+      "type": "float",
+      "description": "Devolucao",
+      "default": 0
+    },
+    {
+      "name": "titulo_odoo_id",
+      "type": "integer",
+      "description": "account.move.line ID"
+    },
+    {
+      "name": "move_odoo_id",
+      "type": "integer",
+      "description": "account.move ID (NF)"
+    },
+    {
+      "name": "move_odoo_name",
+      "type": "varchar(100)",
+      "description": "Nome do move (VND/2025/...)"
+    },
+    {
+      "name": "partner_odoo_id",
+      "type": "integer",
+      "description": "ID do cliente"
+    },
+    {
+      "name": "journal_odoo_id",
+      "type": "integer",
+      "description": "account.journal ID"
+    },
+    {
+      "name": "journal_odoo_code",
+      "type": "varchar(20)",
+      "description": "Codigo do journal"
+    },
+    {
+      "name": "valor_titulo_odoo",
+      "type": "float",
+      "description": "Valor original do titulo"
+    },
+    {
+      "name": "saldo_antes",
+      "type": "float",
+      "description": "amount_residual ANTES da baixa"
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "nullable": false,
+      "default": true
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "PENDENTE"
+    },
+    {
+      "name": "mensagem",
+      "type": "text"
+    },
+    {
+      "name": "payment_odoo_id",
+      "type": "integer",
+      "description": "account.payment ID criado"
+    },
+    {
+      "name": "payment_odoo_name",
+      "type": "varchar(100)",
+      "description": "Nome do pagamento (PGRA1/2025/...)"
+    },
+    {
+      "name": "partial_reconcile_id",
+      "type": "integer",
+      "description": "account.partial.reconcile ID"
+    },
+    {
+      "name": "payment_juros_odoo_id",
+      "type": "integer",
+      "description": "account.payment ID do juros"
+    },
+    {
+      "name": "payment_juros_odoo_name",
+      "type": "varchar(100)",
+      "description": "Nome do pagamento de juros"
+    },
+    {
+      "name": "payment_desconto_odoo_id",
+      "type": "integer"
+    },
+    {
+      "name": "payment_desconto_odoo_name",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "payment_acordo_odoo_id",
+      "type": "integer"
+    },
+    {
+      "name": "payment_acordo_odoo_name",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "payment_devolucao_odoo_id",
+      "type": "integer"
+    },
+    {
+      "name": "payment_devolucao_odoo_name",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "saldo_depois",
+      "type": "float",
+      "description": "amount_residual DEPOIS"
+    },
+    {
+      "name": "snapshot_antes",
+      "type": "text"
+    },
+    {
+      "name": "snapshot_depois",
+      "type": "text"
+    },
+    {
+      "name": "campos_alterados",
+      "type": "text"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "validado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "processado_em",
+      "type": "timestamp"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "lote_id",
+      "references": "baixa_titulo_lote.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_baixa_titulo_item_lote_id",
+      "columns": [
+        "lote_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_baixa_item_lote",
+      "columns": [
+        "lote_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_baixa_titulo_item_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_baixa_item_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_baixa_item_nf",
+      "columns": [
+        "nf_excel"
+      ],
+      "unique": false
+    }
+  ]
+}

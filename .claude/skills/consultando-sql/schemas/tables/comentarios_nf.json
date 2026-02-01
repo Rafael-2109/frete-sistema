@@ -1,0 +1,51 @@
+{
+  "name": "comentarios_nf",
+  "description": "Comentários em notas fiscais.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "entrega_id",
+      "type": "integer",
+      "description": "FK → entregas_monitoradas.id",
+      "nullable": false
+    },
+    {
+      "name": "autor",
+      "type": "varchar(150)",
+      "nullable": false
+    },
+    {
+      "name": "texto",
+      "type": "text",
+      "nullable": false
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "arquivo",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "resposta_a_id",
+      "type": "integer",
+      "description": "FK → comentarios_nf.id"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "entrega_id",
+      "references": "entregas_monitoradas.id"
+    },
+    {
+      "column": "resposta_a_id",
+      "references": "comentarios_nf.id"
+    }
+  ]
+}

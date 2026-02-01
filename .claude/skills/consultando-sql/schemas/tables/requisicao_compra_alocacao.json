@@ -1,0 +1,194 @@
+{
+  "name": "requisicao_compra_alocacao",
+  "description": "Tabela intermediária N:N entre Requisições de Compra e Pedidos de Compra",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "requisicao_compra_id",
+      "type": "integer",
+      "description": "FK → requisicao_compras.id",
+      "nullable": false
+    },
+    {
+      "name": "pedido_compra_id",
+      "type": "integer",
+      "description": "FK → pedido_compras.id"
+    },
+    {
+      "name": "odoo_allocation_id",
+      "type": "varchar(50)",
+      "description": "ID da alocação no Odoo"
+    },
+    {
+      "name": "purchase_request_line_odoo_id",
+      "type": "varchar(50)",
+      "description": "purchase.request.line ID",
+      "nullable": false
+    },
+    {
+      "name": "purchase_order_line_odoo_id",
+      "type": "varchar(50)",
+      "description": "purchase.order.line ID"
+    },
+    {
+      "name": "cod_produto",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "nome_produto",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "company_id",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "qtd_alocada",
+      "type": "numeric(15,3)",
+      "description": "allocated_product_qty",
+      "nullable": false
+    },
+    {
+      "name": "qtd_requisitada",
+      "type": "numeric(15,3)",
+      "description": "requested_product_uom_qty",
+      "nullable": false
+    },
+    {
+      "name": "qtd_aberta",
+      "type": "numeric(15,3)",
+      "description": "open_product_qty",
+      "default": 0
+    },
+    {
+      "name": "purchase_state",
+      "type": "varchar(20)",
+      "description": "'draft', 'sent', 'purchase', 'done', 'cancel'"
+    },
+    {
+      "name": "stock_move_odoo_id",
+      "type": "varchar(50)",
+      "description": "ID do movimento de estoque"
+    },
+    {
+      "name": "importado_odoo",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    },
+    {
+      "name": "create_date_odoo",
+      "type": "timestamp"
+    },
+    {
+      "name": "write_date_odoo",
+      "type": "timestamp"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "requisicao_compra_id",
+      "references": "requisicao_compras.id"
+    },
+    {
+      "column": "pedido_compra_id",
+      "references": "pedido_compras.id"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "purchase_request_line_odoo_id",
+      "purchase_order_line_odoo_id"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_requisicao_compra_alocacao_odoo_allocation_id",
+      "columns": [
+        "odoo_allocation_id"
+      ],
+      "unique": true
+    },
+    {
+      "name": "idx_alocacao_odoo_ids",
+      "columns": [
+        "purchase_request_line_odoo_id",
+        "purchase_order_line_odoo_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_requisicao_compra_alocacao_purchase_request_line_odoo_id",
+      "columns": [
+        "purchase_request_line_odoo_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_requisicao_compra_alocacao_pedido_compra_id",
+      "columns": [
+        "pedido_compra_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_requisicao_compra_alocacao_company_id",
+      "columns": [
+        "company_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_requisicao_compra_alocacao_purchase_order_line_odoo_id",
+      "columns": [
+        "purchase_order_line_odoo_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_alocacao_requisicao_pedido",
+      "columns": [
+        "requisicao_compra_id",
+        "pedido_compra_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_requisicao_compra_alocacao_cod_produto",
+      "columns": [
+        "cod_produto"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_requisicao_compra_alocacao_requisicao_compra_id",
+      "columns": [
+        "requisicao_compra_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_alocacao_produto_estado",
+      "columns": [
+        "cod_produto",
+        "purchase_state"
+      ],
+      "unique": false
+    }
+  ]
+}

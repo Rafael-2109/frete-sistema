@@ -1,0 +1,114 @@
+{
+  "name": "tabela_rede_precos",
+  "description": "Tabela de preços por rede.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "rede",
+      "type": "varchar(50)",
+      "description": "'ATACADAO', 'TENDA', 'ASSAI'",
+      "nullable": false
+    },
+    {
+      "name": "regiao",
+      "type": "varchar(50)",
+      "description": "'SUDESTE', 'SUL', 'NORDESTE', etc.",
+      "nullable": false
+    },
+    {
+      "name": "cod_produto",
+      "type": "varchar(50)",
+      "description": "Código Nacom",
+      "nullable": false
+    },
+    {
+      "name": "preco",
+      "type": "numeric(15,2)",
+      "nullable": false
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "nullable": false,
+      "default": true
+    },
+    {
+      "name": "vigencia_inicio",
+      "type": "date"
+    },
+    {
+      "name": "vigencia_fim",
+      "type": "date"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "atualizado_por",
+      "type": "varchar(100)"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "rede",
+      "regiao",
+      "cod_produto"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_tabela_rede_precos_cod_produto",
+      "columns": [
+        "cod_produto"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_tabela_rede_precos_regiao",
+      "columns": [
+        "regiao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_tabela_rede_precos_rede",
+      "columns": [
+        "rede"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_tabela_rede_regiao",
+      "columns": [
+        "rede",
+        "regiao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_tabela_rede_produto",
+      "columns": [
+        "rede",
+        "cod_produto"
+      ],
+      "unique": false
+    }
+  ]
+}

@@ -1,0 +1,157 @@
+{
+  "name": "pedido_importacao_temp",
+  "description": "Pedidos temporários para importação.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "chave_importacao",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "PROCESSADO"
+    },
+    {
+      "name": "rede",
+      "type": "varchar(50)",
+      "description": "'ATACADAO', 'TENDA', 'ASSAI'",
+      "nullable": false
+    },
+    {
+      "name": "tipo_documento",
+      "type": "varchar(50)",
+      "description": "'PROPOSTA', 'PEDIDO'",
+      "nullable": false
+    },
+    {
+      "name": "numero_documento",
+      "type": "varchar(100)",
+      "description": "Número da proposta"
+    },
+    {
+      "name": "numero_pedido_cliente",
+      "type": "varchar(100)",
+      "description": "Número do pedido do cliente (Numero:)"
+    },
+    {
+      "name": "arquivo_pdf_s3",
+      "type": "varchar(500)",
+      "description": "URL do arquivo no S3"
+    },
+    {
+      "name": "filename_original",
+      "type": "varchar(255)",
+      "description": "Nome original do arquivo"
+    },
+    {
+      "name": "dados_brutos",
+      "type": "json"
+    },
+    {
+      "name": "identificacao",
+      "type": "json"
+    },
+    {
+      "name": "summary",
+      "type": "json"
+    },
+    {
+      "name": "validacao_precos",
+      "type": "json"
+    },
+    {
+      "name": "itens_sem_depara",
+      "type": "json"
+    },
+    {
+      "name": "dados_filiais",
+      "type": "json"
+    },
+    {
+      "name": "justificativa_global",
+      "type": "text"
+    },
+    {
+      "name": "tem_divergencia",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "pode_inserir",
+      "type": "boolean",
+      "description": "Sem itens sem De-Para",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "usuario",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    },
+    {
+      "name": "expira_em",
+      "type": "timestamp",
+      "description": "Para cleanup automático"
+    },
+    {
+      "name": "resultados_lancamento",
+      "type": "json"
+    }
+  ],
+  "indices": [
+    {
+      "name": "idx_importacao_temp_criado",
+      "columns": [
+        "criado_em"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_importacao_temp_expira",
+      "columns": [
+        "expira_em"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pedido_importacao_temp_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pedido_importacao_temp_chave_importacao",
+      "columns": [
+        "chave_importacao"
+      ],
+      "unique": true
+    },
+    {
+      "name": "idx_importacao_temp_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    }
+  ]
+}

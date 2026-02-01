@@ -1,0 +1,434 @@
+{
+  "name": "conhecimento_transporte",
+  "description": "CT-es (Conhecimento de Transporte Eletrônico).",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "dfe_id",
+      "type": "varchar(50)",
+      "description": "ID do DFe no Odoo",
+      "nullable": false
+    },
+    {
+      "name": "odoo_ativo",
+      "type": "boolean",
+      "description": "Campo 'active' do Odoo",
+      "default": true
+    },
+    {
+      "name": "odoo_name",
+      "type": "varchar(100)",
+      "description": "Campo 'name' do Odoo (ex: DFE/2025/15797)"
+    },
+    {
+      "name": "odoo_status_codigo",
+      "type": "varchar(2)",
+      "description": "Código (ex: '06')"
+    },
+    {
+      "name": "odoo_status_descricao",
+      "type": "varchar(50)",
+      "description": "Descrição (ex: 'Concluído')"
+    },
+    {
+      "name": "chave_acesso",
+      "type": "varchar(44)",
+      "description": "protnfe_infnfe_chnfe"
+    },
+    {
+      "name": "numero_cte",
+      "type": "varchar(20)",
+      "description": "nfe_infnfe_ide_nnf"
+    },
+    {
+      "name": "serie_cte",
+      "type": "varchar(10)",
+      "description": "nfe_infnfe_ide_serie"
+    },
+    {
+      "name": "data_emissao",
+      "type": "date",
+      "description": "nfe_infnfe_ide_dhemi"
+    },
+    {
+      "name": "data_entrada",
+      "type": "date",
+      "description": "l10n_br_data_entrada"
+    },
+    {
+      "name": "valor_total",
+      "type": "numeric(15,2)",
+      "description": "nfe_infnfe_total_icmstot_vnf"
+    },
+    {
+      "name": "valor_frete",
+      "type": "numeric(15,2)",
+      "description": "nfe_infnfe_total_icms_vfrete"
+    },
+    {
+      "name": "valor_icms",
+      "type": "numeric(15,2)",
+      "description": "nfe_infnfe_total_icms_vicms"
+    },
+    {
+      "name": "vencimento",
+      "type": "date"
+    },
+    {
+      "name": "cnpj_emitente",
+      "type": "varchar(20)",
+      "description": "nfe_infnfe_emit_cnpj"
+    },
+    {
+      "name": "nome_emitente",
+      "type": "varchar(255)",
+      "description": "nfe_infnfe_emit_xnome"
+    },
+    {
+      "name": "ie_emitente",
+      "type": "varchar(20)",
+      "description": "nfe_infnfe_emit_ie"
+    },
+    {
+      "name": "cnpj_destinatario",
+      "type": "varchar(20)",
+      "description": "nfe_infnfe_dest_cnpj"
+    },
+    {
+      "name": "cnpj_remetente",
+      "type": "varchar(20)",
+      "description": "nfe_infnfe_rem_cnpj"
+    },
+    {
+      "name": "cnpj_expedidor",
+      "type": "varchar(20)",
+      "description": "nfe_infnfe_exped_cnpj"
+    },
+    {
+      "name": "municipio_inicio",
+      "type": "varchar(10)",
+      "description": "cte_infcte_ide_cmunini (código IBGE)"
+    },
+    {
+      "name": "municipio_fim",
+      "type": "varchar(10)",
+      "description": "cte_infcte_ide_cmunfim (código IBGE)"
+    },
+    {
+      "name": "tomador",
+      "type": "varchar(1)",
+      "description": "cte_infcte_ide_toma3_toma (1-Remetente, 2-Expedidor, 3-Recebedor, 4-Destinatário)"
+    },
+    {
+      "name": "tomador_e_empresa",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "informacoes_complementares",
+      "type": "text",
+      "description": "nfe_infnfe_infadic_infcpl"
+    },
+    {
+      "name": "tipo_pedido",
+      "type": "varchar(50)",
+      "description": "l10n_br_tipo_pedido (ex: 'servico', 'serv-industrializacao')"
+    },
+    {
+      "name": "numeros_nfs",
+      "type": "text",
+      "description": "String separada por vírgula: \"141768,141769,141770,141771\""
+    },
+    {
+      "name": "tipo_cte",
+      "type": "varchar(1)",
+      "default": "0"
+    },
+    {
+      "name": "cte_complementa_chave",
+      "type": "varchar(44)",
+      "description": "Chave do CTe complementado"
+    },
+    {
+      "name": "cte_complementa_id",
+      "type": "integer",
+      "description": "FK → conhecimento_transporte.id"
+    },
+    {
+      "name": "motivo_complemento",
+      "type": "text"
+    },
+    {
+      "name": "cte_pdf_path",
+      "type": "varchar(500)",
+      "description": "Caminho S3/local do PDF"
+    },
+    {
+      "name": "cte_xml_path",
+      "type": "varchar(500)",
+      "description": "Caminho S3/local do XML"
+    },
+    {
+      "name": "cte_pdf_nome_arquivo",
+      "type": "varchar(255)",
+      "description": "l10n_br_pdf_dfe_fname"
+    },
+    {
+      "name": "cte_xml_nome_arquivo",
+      "type": "varchar(255)",
+      "description": "l10n_br_xml_dfe_fname"
+    },
+    {
+      "name": "odoo_partner_id",
+      "type": "integer",
+      "description": "ID do partner no Odoo (transportadora)"
+    },
+    {
+      "name": "odoo_invoice_ids",
+      "type": "text",
+      "description": "JSON: lista de IDs de invoices"
+    },
+    {
+      "name": "odoo_purchase_fiscal_id",
+      "type": "integer",
+      "description": "ID da compra fiscal no Odoo"
+    },
+    {
+      "name": "frete_id",
+      "type": "integer",
+      "description": "FK → fretes.id"
+    },
+    {
+      "name": "vinculado_manualmente",
+      "type": "boolean",
+      "description": "Se foi vinculado manualmente",
+      "default": false
+    },
+    {
+      "name": "vinculado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "vinculado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "importado_em",
+      "type": "timestamp",
+      "nullable": false
+    },
+    {
+      "name": "importado_por",
+      "type": "varchar(100)",
+      "default": "Sistema Odoo"
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    },
+    {
+      "name": "atualizado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "default": true
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "cte_complementa_id",
+      "references": "conhecimento_transporte.id"
+    },
+    {
+      "column": "frete_id",
+      "references": "fretes.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "idx_cte_cnpj_emitente",
+      "columns": [
+        "cnpj_emitente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_numero_cte",
+      "columns": [
+        "numero_cte"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_cte_cnpj_remetente",
+      "columns": [
+        "cnpj_remetente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_cte_complementa_chave",
+      "columns": [
+        "cte_complementa_chave"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_cte_cnpj_destinatario",
+      "columns": [
+        "cnpj_destinatario"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_cte_data_emissao",
+      "columns": [
+        "data_emissao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_cte_complementa_id",
+      "columns": [
+        "cte_complementa_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_cte_frete",
+      "columns": [
+        "frete_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_cte_status",
+      "columns": [
+        "odoo_status_codigo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_data_emissao",
+      "columns": [
+        "data_emissao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_cte_tipo",
+      "columns": [
+        "tipo_cte"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_cte_complementa_chave",
+      "columns": [
+        "cte_complementa_chave"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_cte_complementa_id",
+      "columns": [
+        "cte_complementa_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_cnpj_emitente",
+      "columns": [
+        "cnpj_emitente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_frete_id",
+      "columns": [
+        "frete_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_cnpj_destinatario",
+      "columns": [
+        "cnpj_destinatario"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_cnpj_remetente",
+      "columns": [
+        "cnpj_remetente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_dfe_id",
+      "columns": [
+        "dfe_id"
+      ],
+      "unique": true
+    },
+    {
+      "name": "ix_conhecimento_transporte_tomador_e_empresa",
+      "columns": [
+        "tomador_e_empresa"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_cte_chave_acesso",
+      "columns": [
+        "chave_acesso"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_ativo",
+      "columns": [
+        "ativo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_odoo_status_codigo",
+      "columns": [
+        "odoo_status_codigo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_chave_acesso",
+      "columns": [
+        "chave_acesso"
+      ],
+      "unique": true
+    },
+    {
+      "name": "ix_conhecimento_transporte_tipo_cte",
+      "columns": [
+        "tipo_cte"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_cte_numero_serie",
+      "columns": [
+        "numero_cte",
+        "serie_cte"
+      ],
+      "unique": false
+    }
+  ]
+}

@@ -1,0 +1,133 @@
+{
+  "name": "depara_produto_cliente",
+  "description": "De-Para de código produto ↔ cliente.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "prefixo_cnpj",
+      "type": "varchar(8)",
+      "nullable": false
+    },
+    {
+      "name": "nome_grupo",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "codigo_cliente",
+      "type": "varchar(255)",
+      "nullable": false
+    },
+    {
+      "name": "descricao_cliente",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "nosso_codigo",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "descricao_nosso",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "fator_conversao",
+      "type": "numeric(10,4)",
+      "nullable": false,
+      "default": 1.0
+    },
+    {
+      "name": "unidade_medida_cliente",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "unidade_medida_nosso",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "observacoes",
+      "type": "text"
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "nullable": false,
+      "default": true
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    },
+    {
+      "name": "atualizado_por",
+      "type": "varchar(100)"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "prefixo_cnpj",
+      "codigo_cliente"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_depara_produto_cliente_ativo",
+      "columns": [
+        "ativo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_depara_nosso_codigo",
+      "columns": [
+        "nosso_codigo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_depara_produto_cliente_prefixo_cnpj",
+      "columns": [
+        "prefixo_cnpj"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_depara_produto_cliente_nosso_codigo",
+      "columns": [
+        "nosso_codigo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_depara_prefixo_ativo",
+      "columns": [
+        "prefixo_cnpj",
+        "ativo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_depara_produto_cliente_codigo_cliente",
+      "columns": [
+        "codigo_cliente"
+      ],
+      "unique": false
+    }
+  ]
+}

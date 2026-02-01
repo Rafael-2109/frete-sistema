@@ -1,0 +1,1032 @@
+{
+  "version": "2.0.0",
+  "total_relationships": 171,
+  "relationships": [
+    {
+      "from_table": "agendamentos_entrega",
+      "from_column": "entrega_id",
+      "to_table": "entregas_monitoradas",
+      "to_column": "id"
+    },
+    {
+      "from_table": "anexo_ocorrencia",
+      "from_column": "ocorrencia_devolucao_id",
+      "to_table": "ocorrencia_devolucao",
+      "to_column": "id"
+    },
+    {
+      "from_table": "anexo_ocorrencia",
+      "from_column": "contagem_devolucao_id",
+      "to_table": "contagem_devolucao",
+      "to_column": "id"
+    },
+    {
+      "from_table": "aprovacoes_frete",
+      "from_column": "frete_id",
+      "to_table": "fretes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "arquivo_entrega",
+      "from_column": "entrega_id",
+      "to_table": "entregas_monitoradas",
+      "to_column": "id"
+    },
+    {
+      "from_table": "baixa_pagamento_item",
+      "from_column": "lote_id",
+      "to_table": "baixa_pagamento_lote",
+      "to_column": "id"
+    },
+    {
+      "from_table": "baixa_pagamento_lote",
+      "from_column": "extrato_lote_id",
+      "to_table": "extrato_lote",
+      "to_column": "id"
+    },
+    {
+      "from_table": "baixa_titulo_item",
+      "from_column": "lote_id",
+      "to_table": "baixa_titulo_lote",
+      "to_column": "id"
+    },
+    {
+      "from_table": "bi_despesa_detalhada",
+      "from_column": "transportadora_id",
+      "to_table": "transportadoras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "bi_frete_agregado",
+      "from_column": "transportadora_id",
+      "to_table": "transportadoras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "bi_performance_transportadora",
+      "from_column": "transportadora_id",
+      "to_table": "transportadoras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "cidades_atendidas",
+      "from_column": "cidade_id",
+      "to_table": "cidades",
+      "to_column": "id"
+    },
+    {
+      "from_table": "cidades_atendidas",
+      "from_column": "transportadora_id",
+      "to_table": "transportadoras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "cliente_moto",
+      "from_column": "vendedor_id",
+      "to_table": "vendedor_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "cnab_retorno_item",
+      "from_column": "lote_id",
+      "to_table": "cnab_retorno_lote",
+      "to_column": "id"
+    },
+    {
+      "from_table": "cnab_retorno_item",
+      "from_column": "conta_a_receber_id",
+      "to_table": "contas_a_receber",
+      "to_column": "id"
+    },
+    {
+      "from_table": "cnab_retorno_item",
+      "from_column": "extrato_item_id",
+      "to_table": "extrato_item",
+      "to_column": "id"
+    },
+    {
+      "from_table": "comentarios_nf",
+      "from_column": "entrega_id",
+      "to_table": "entregas_monitoradas",
+      "to_column": "id"
+    },
+    {
+      "from_table": "comentarios_nf",
+      "from_column": "resposta_a_id",
+      "to_table": "comentarios_nf",
+      "to_column": "id"
+    },
+    {
+      "from_table": "comissao_vendedor",
+      "from_column": "pedido_id",
+      "to_table": "pedido_venda_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "comissao_vendedor",
+      "from_column": "vendedor_id",
+      "to_table": "vendedor_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "comissao_vendedor",
+      "from_column": "numero_chassi",
+      "to_table": "moto",
+      "to_column": "numero_chassi"
+    },
+    {
+      "from_table": "comissao_vendedor",
+      "from_column": "empresa_pagadora_id",
+      "to_table": "empresa_venda_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "conhecimento_transporte",
+      "from_column": "cte_complementa_id",
+      "to_table": "conhecimento_transporte",
+      "to_column": "id"
+    },
+    {
+      "from_table": "conhecimento_transporte",
+      "from_column": "frete_id",
+      "to_table": "fretes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "conta_corrente_transportadoras",
+      "from_column": "transportadora_id",
+      "to_table": "transportadoras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "conta_corrente_transportadoras",
+      "from_column": "frete_id",
+      "to_table": "fretes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "conta_corrente_transportadoras",
+      "from_column": "compensacao_frete_id",
+      "to_table": "fretes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "contagem_devolucao",
+      "from_column": "nf_devolucao_linha_id",
+      "to_table": "nf_devolucao_linha",
+      "to_column": "id"
+    },
+    {
+      "from_table": "contas_a_receber",
+      "from_column": "confirmacao_tipo_id",
+      "to_table": "contas_a_receber_tipos",
+      "to_column": "id"
+    },
+    {
+      "from_table": "contas_a_receber",
+      "from_column": "forma_confirmacao_tipo_id",
+      "to_table": "contas_a_receber_tipos",
+      "to_column": "id"
+    },
+    {
+      "from_table": "contas_a_receber",
+      "from_column": "acao_necessaria_tipo_id",
+      "to_table": "contas_a_receber_tipos",
+      "to_column": "id"
+    },
+    {
+      "from_table": "contas_a_receber",
+      "from_column": "entrega_monitorada_id",
+      "to_table": "entregas_monitoradas",
+      "to_column": "id"
+    },
+    {
+      "from_table": "contas_a_receber_abatimento",
+      "from_column": "conta_a_receber_id",
+      "to_table": "contas_a_receber",
+      "to_column": "id"
+    },
+    {
+      "from_table": "contas_a_receber_abatimento",
+      "from_column": "tipo_id",
+      "to_table": "contas_a_receber_tipos",
+      "to_column": "id"
+    },
+    {
+      "from_table": "contas_a_receber_abatimento",
+      "from_column": "reconciliacao_odoo_id",
+      "to_table": "contas_a_receber_reconciliacao",
+      "to_column": "id"
+    },
+    {
+      "from_table": "contas_a_receber_reconciliacao",
+      "from_column": "conta_a_receber_id",
+      "to_table": "contas_a_receber",
+      "to_column": "id"
+    },
+    {
+      "from_table": "contas_a_receber_snapshot",
+      "from_column": "conta_a_receber_id",
+      "to_table": "contas_a_receber",
+      "to_column": "id"
+    },
+    {
+      "from_table": "controle_portaria",
+      "from_column": "motorista_id",
+      "to_table": "motoristas",
+      "to_column": "id"
+    },
+    {
+      "from_table": "controle_portaria",
+      "from_column": "tipo_veiculo_id",
+      "to_table": "veiculos",
+      "to_column": "id"
+    },
+    {
+      "from_table": "controle_portaria",
+      "from_column": "embarque_id",
+      "to_table": "embarques",
+      "to_column": "id"
+    },
+    {
+      "from_table": "cotacao_itens",
+      "from_column": "cotacao_id",
+      "to_table": "cotacoes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "cotacoes",
+      "from_column": "transportadora_id",
+      "to_table": "transportadoras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "custos_extra_entrega",
+      "from_column": "entrega_id",
+      "to_table": "entregas_monitoradas",
+      "to_column": "id"
+    },
+    {
+      "from_table": "descarte_devolucao",
+      "from_column": "ocorrencia_devolucao_id",
+      "to_table": "ocorrencia_devolucao",
+      "to_column": "id"
+    },
+    {
+      "from_table": "descarte_devolucao",
+      "from_column": "despesa_extra_id",
+      "to_table": "despesas_extras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "descarte_item",
+      "from_column": "descarte_id",
+      "to_table": "descarte_devolucao",
+      "to_column": "id"
+    },
+    {
+      "from_table": "descarte_item",
+      "from_column": "nfd_linha_id",
+      "to_table": "nf_devolucao_linha",
+      "to_column": "id"
+    },
+    {
+      "from_table": "despesa_mensal",
+      "from_column": "empresa_pagadora_id",
+      "to_table": "empresa_venda_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "despesas_extras",
+      "from_column": "frete_id",
+      "to_table": "fretes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "despesas_extras",
+      "from_column": "fatura_frete_id",
+      "to_table": "faturas_frete",
+      "to_column": "id"
+    },
+    {
+      "from_table": "despesas_extras",
+      "from_column": "transportadora_id",
+      "to_table": "transportadoras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "despesas_extras",
+      "from_column": "despesa_cte_id",
+      "to_table": "conhecimento_transporte",
+      "to_column": "id"
+    },
+    {
+      "from_table": "despesas_extras",
+      "from_column": "nfd_id",
+      "to_table": "nf_devolucao",
+      "to_column": "id"
+    },
+    {
+      "from_table": "divergencia_fiscal",
+      "from_column": "perfil_fiscal_id",
+      "to_table": "perfil_fiscal_produto_fornecedor",
+      "to_column": "id"
+    },
+    {
+      "from_table": "divergencia_nf_po",
+      "from_column": "validacao_id",
+      "to_table": "validacao_nf_po_dfe",
+      "to_column": "id"
+    },
+    {
+      "from_table": "emails_anexados",
+      "from_column": "despesa_extra_id",
+      "to_table": "despesas_extras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "embarque_itens",
+      "from_column": "embarque_id",
+      "to_table": "embarques",
+      "to_column": "id"
+    },
+    {
+      "from_table": "embarque_itens",
+      "from_column": "cotacao_id",
+      "to_table": "cotacoes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "embarque_moto",
+      "from_column": "transportadora_id",
+      "to_table": "transportadora_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "embarque_moto",
+      "from_column": "empresa_pagadora_id",
+      "to_table": "empresa_venda_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "embarque_pedido",
+      "from_column": "embarque_id",
+      "to_table": "embarque_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "embarque_pedido",
+      "from_column": "pedido_id",
+      "to_table": "pedido_venda_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "embarques",
+      "from_column": "transportadora_id",
+      "to_table": "transportadoras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "embarques",
+      "from_column": "cotacao_id",
+      "to_table": "cotacoes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "entregas_monitoradas",
+      "from_column": "substituida_por_nf_id",
+      "to_table": "entregas_monitoradas",
+      "to_column": "id"
+    },
+    {
+      "from_table": "entregas_rastreadas",
+      "from_column": "rastreamento_id",
+      "to_table": "rastreamento_embarques",
+      "to_column": "id"
+    },
+    {
+      "from_table": "entregas_rastreadas",
+      "from_column": "embarque_item_id",
+      "to_table": "embarque_itens",
+      "to_column": "id"
+    },
+    {
+      "from_table": "eventos_entrega",
+      "from_column": "entrega_id",
+      "to_table": "entregas_monitoradas",
+      "to_column": "id"
+    },
+    {
+      "from_table": "extrato_item",
+      "from_column": "lote_id",
+      "to_table": "extrato_lote",
+      "to_column": "id"
+    },
+    {
+      "from_table": "extrato_item",
+      "from_column": "titulo_receber_id",
+      "to_table": "contas_a_receber",
+      "to_column": "id"
+    },
+    {
+      "from_table": "extrato_item",
+      "from_column": "titulo_pagar_id",
+      "to_table": "contas_a_pagar",
+      "to_column": "id"
+    },
+    {
+      "from_table": "extrato_item_titulo",
+      "from_column": "extrato_item_id",
+      "to_table": "extrato_item",
+      "to_column": "id"
+    },
+    {
+      "from_table": "extrato_item_titulo",
+      "from_column": "titulo_receber_id",
+      "to_table": "contas_a_receber",
+      "to_column": "id"
+    },
+    {
+      "from_table": "extrato_item_titulo",
+      "from_column": "titulo_pagar_id",
+      "to_table": "contas_a_pagar",
+      "to_column": "id"
+    },
+    {
+      "from_table": "faturas_frete",
+      "from_column": "transportadora_id",
+      "to_table": "transportadoras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "frete_devolucao",
+      "from_column": "ocorrencia_devolucao_id",
+      "to_table": "ocorrencia_devolucao",
+      "to_column": "id"
+    },
+    {
+      "from_table": "frete_devolucao",
+      "from_column": "despesa_extra_id",
+      "to_table": "despesas_extras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "frete_devolucao",
+      "from_column": "transportadora_id",
+      "to_table": "transportadoras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "fretes",
+      "from_column": "embarque_id",
+      "to_table": "embarques",
+      "to_column": "id"
+    },
+    {
+      "from_table": "fretes",
+      "from_column": "transportadora_id",
+      "to_table": "transportadoras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "fretes",
+      "from_column": "fatura_frete_id",
+      "to_table": "faturas_frete",
+      "to_column": "id"
+    },
+    {
+      "from_table": "fretes",
+      "from_column": "frete_cte_id",
+      "to_table": "conhecimento_transporte",
+      "to_column": "id"
+    },
+    {
+      "from_table": "fretes_lancados",
+      "from_column": "embarque_id",
+      "to_table": "embarques",
+      "to_column": "id"
+    },
+    {
+      "from_table": "fretes_lancados",
+      "from_column": "transportadora_id",
+      "to_table": "transportadoras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "historico_data_prevista",
+      "from_column": "entrega_id",
+      "to_table": "entregas_monitoradas",
+      "to_column": "id"
+    },
+    {
+      "from_table": "historico_pedido_compras",
+      "from_column": "pedido_compra_id",
+      "to_table": "pedido_compras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "historico_requisicao_compras",
+      "from_column": "requisicao_id",
+      "to_table": "requisicao_compras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "historico_tabelas_frete",
+      "from_column": "transportadora_id",
+      "to_table": "transportadoras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "lancamento_comprovante",
+      "from_column": "comprovante_id",
+      "to_table": "comprovante_pagamento_boleto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "lancamento_frete_odoo_auditoria",
+      "from_column": "frete_id",
+      "to_table": "fretes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "lancamento_frete_odoo_auditoria",
+      "from_column": "despesa_extra_id",
+      "to_table": "despesas_extras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "lancamento_frete_odoo_auditoria",
+      "from_column": "cte_id",
+      "to_table": "conhecimento_transporte",
+      "to_column": "id"
+    },
+    {
+      "from_table": "logs_entrega",
+      "from_column": "entrega_id",
+      "to_table": "entregas_monitoradas",
+      "to_column": "id"
+    },
+    {
+      "from_table": "logs_rastreamento",
+      "from_column": "rastreamento_id",
+      "to_table": "rastreamento_embarques",
+      "to_column": "id"
+    },
+    {
+      "from_table": "mapeamento_tipo_odoo",
+      "from_column": "tipo_sistema_id",
+      "to_table": "contas_a_receber_tipos",
+      "to_column": "id"
+    },
+    {
+      "from_table": "match_nf_po_alocacao",
+      "from_column": "match_item_id",
+      "to_table": "match_nf_po_item",
+      "to_column": "id"
+    },
+    {
+      "from_table": "match_nf_po_item",
+      "from_column": "validacao_id",
+      "to_table": "validacao_nf_po_dfe",
+      "to_column": "id"
+    },
+    {
+      "from_table": "moto",
+      "from_column": "modelo_id",
+      "to_table": "modelo_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "moto",
+      "from_column": "empresa_pagadora_id",
+      "to_table": "empresa_venda_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "movimentacao_estoque",
+      "from_column": "codigo_embarque",
+      "to_table": "embarques",
+      "to_column": "id"
+    },
+    {
+      "from_table": "movimentacao_estoque",
+      "from_column": "pedido_compras_id",
+      "to_table": "pedido_compras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "movimentacao_estoque",
+      "from_column": "recebimento_fisico_id",
+      "to_table": "recebimento_fisico",
+      "to_column": "id"
+    },
+    {
+      "from_table": "movimentacao_estoque",
+      "from_column": "recebimento_lote_id",
+      "to_table": "recebimento_lote",
+      "to_column": "id"
+    },
+    {
+      "from_table": "movimentacao_estoque",
+      "from_column": "producao_pai_id",
+      "to_table": "movimentacao_estoque",
+      "to_column": "id"
+    },
+    {
+      "from_table": "movimentacao_estoque",
+      "from_column": "embarque_item_id",
+      "to_table": "embarque_itens",
+      "to_column": "id"
+    },
+    {
+      "from_table": "movimentacao_estoque",
+      "from_column": "movimento_baixado_id",
+      "to_table": "movimentacao_estoque",
+      "to_column": "id"
+    },
+    {
+      "from_table": "movimentacao_financeira",
+      "from_column": "empresa_origem_id",
+      "to_table": "empresa_venda_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "movimentacao_financeira",
+      "from_column": "empresa_destino_id",
+      "to_table": "empresa_venda_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "movimentacao_financeira",
+      "from_column": "pedido_id",
+      "to_table": "pedido_venda_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "movimentacao_financeira",
+      "from_column": "numero_chassi",
+      "to_table": "moto",
+      "to_column": "numero_chassi"
+    },
+    {
+      "from_table": "movimentacao_financeira",
+      "from_column": "titulo_financeiro_id",
+      "to_table": "titulo_financeiro",
+      "to_column": "id"
+    },
+    {
+      "from_table": "movimentacao_financeira",
+      "from_column": "comissao_vendedor_id",
+      "to_table": "comissao_vendedor",
+      "to_column": "id"
+    },
+    {
+      "from_table": "movimentacao_financeira",
+      "from_column": "embarque_moto_id",
+      "to_table": "embarque_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "movimentacao_financeira",
+      "from_column": "despesa_mensal_id",
+      "to_table": "despesa_mensal",
+      "to_column": "id"
+    },
+    {
+      "from_table": "movimentacao_financeira",
+      "from_column": "movimentacao_origem_id",
+      "to_table": "movimentacao_financeira",
+      "to_column": "id"
+    },
+    {
+      "from_table": "nf_devolucao",
+      "from_column": "entrega_monitorada_id",
+      "to_table": "entregas_monitoradas",
+      "to_column": "id"
+    },
+    {
+      "from_table": "nf_devolucao_linha",
+      "from_column": "nf_devolucao_id",
+      "to_table": "nf_devolucao",
+      "to_column": "id"
+    },
+    {
+      "from_table": "nf_devolucao_nf_referenciada",
+      "from_column": "nf_devolucao_id",
+      "to_table": "nf_devolucao",
+      "to_column": "id"
+    },
+    {
+      "from_table": "nf_devolucao_nf_referenciada",
+      "from_column": "entrega_monitorada_id",
+      "to_table": "entregas_monitoradas",
+      "to_column": "id"
+    },
+    {
+      "from_table": "ocorrencia_devolucao",
+      "from_column": "nf_devolucao_id",
+      "to_table": "nf_devolucao",
+      "to_column": "id"
+    },
+    {
+      "from_table": "ocorrencia_devolucao",
+      "from_column": "transportadora_retorno_id",
+      "to_table": "transportadoras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pallet_creditos",
+      "from_column": "nf_remessa_id",
+      "to_table": "pallet_nf_remessa",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pallet_documentos",
+      "from_column": "credito_id",
+      "to_table": "pallet_creditos",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pallet_nf_remessa",
+      "from_column": "embarque_id",
+      "to_table": "embarques",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pallet_nf_remessa",
+      "from_column": "embarque_item_id",
+      "to_table": "embarque_itens",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pallet_nf_solucoes",
+      "from_column": "nf_remessa_id",
+      "to_table": "pallet_nf_remessa",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pallet_solucoes",
+      "from_column": "credito_id",
+      "to_table": "pallet_creditos",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pallet_solucoes",
+      "from_column": "credito_destino_id",
+      "to_table": "pallet_creditos",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pedido_venda_auditoria",
+      "from_column": "pedido_id",
+      "to_table": "pedido_venda_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pedido_venda_moto",
+      "from_column": "cliente_id",
+      "to_table": "cliente_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pedido_venda_moto",
+      "from_column": "vendedor_id",
+      "to_table": "vendedor_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pedido_venda_moto",
+      "from_column": "equipe_vendas_id",
+      "to_table": "equipe_vendas_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pedido_venda_moto",
+      "from_column": "transportadora_id",
+      "to_table": "transportadora_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pedido_venda_moto",
+      "from_column": "empresa_venda_id",
+      "to_table": "empresa_venda_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pedido_venda_moto_item",
+      "from_column": "pedido_id",
+      "to_table": "pedido_venda_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pedido_venda_moto_item",
+      "from_column": "numero_chassi",
+      "to_table": "moto",
+      "to_column": "numero_chassi"
+    },
+    {
+      "from_table": "pedido_venda_moto_item",
+      "from_column": "empresa_pagadora_montagem_id",
+      "to_table": "empresa_venda_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pedidos",
+      "from_column": "cotacao_id",
+      "to_table": "cotacoes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pendencia_fiscal_ibscbs",
+      "from_column": "cte_id",
+      "to_table": "conhecimento_transporte",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pendencias_financeiras_nf",
+      "from_column": "entrega_id",
+      "to_table": "entregas_monitoradas",
+      "to_column": "id"
+    },
+    {
+      "from_table": "picking_recebimento_move_line",
+      "from_column": "picking_recebimento_id",
+      "to_table": "picking_recebimento",
+      "to_column": "id"
+    },
+    {
+      "from_table": "picking_recebimento_move_line",
+      "from_column": "produto_id",
+      "to_table": "picking_recebimento_produto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "picking_recebimento_produto",
+      "from_column": "picking_recebimento_id",
+      "to_table": "picking_recebimento",
+      "to_column": "id"
+    },
+    {
+      "from_table": "picking_recebimento_quality_check",
+      "from_column": "picking_recebimento_id",
+      "to_table": "picking_recebimento",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pings_gps",
+      "from_column": "rastreamento_id",
+      "to_table": "rastreamento_embarques",
+      "to_column": "id"
+    },
+    {
+      "from_table": "portal_logs",
+      "from_column": "integracao_id",
+      "to_table": "portal_integracoes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "rastreamento_embarques",
+      "from_column": "embarque_id",
+      "to_table": "embarques",
+      "to_column": "id"
+    },
+    {
+      "from_table": "recebimento_fisico",
+      "from_column": "validacao_id",
+      "to_table": "validacao_nf_po_dfe",
+      "to_column": "id"
+    },
+    {
+      "from_table": "recebimento_lote",
+      "from_column": "recebimento_id",
+      "to_table": "recebimento_fisico",
+      "to_column": "id"
+    },
+    {
+      "from_table": "recebimento_quality_check",
+      "from_column": "recebimento_id",
+      "to_table": "recebimento_fisico",
+      "to_column": "id"
+    },
+    {
+      "from_table": "requisicao_compra_alocacao",
+      "from_column": "requisicao_compra_id",
+      "to_table": "requisicao_compras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "requisicao_compra_alocacao",
+      "from_column": "pedido_compra_id",
+      "to_table": "pedido_compras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "separacao",
+      "from_column": "cotacao_id",
+      "to_table": "cotacoes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "tabela_preco_crossdocking",
+      "from_column": "crossdocking_id",
+      "to_table": "cross_docking",
+      "to_column": "id"
+    },
+    {
+      "from_table": "tabela_preco_crossdocking",
+      "from_column": "modelo_id",
+      "to_table": "modelo_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "tabela_preco_equipe",
+      "from_column": "equipe_vendas_id",
+      "to_table": "equipe_vendas_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "tabela_preco_equipe",
+      "from_column": "modelo_id",
+      "to_table": "modelo_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "tabelas_frete",
+      "from_column": "transportadora_id",
+      "to_table": "transportadoras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "tipo_carga",
+      "from_column": "carga_principal_id",
+      "to_table": "tipo_carga",
+      "to_column": "id"
+    },
+    {
+      "from_table": "titulo_a_pagar",
+      "from_column": "titulo_financeiro_id",
+      "to_table": "titulo_financeiro",
+      "to_column": "id"
+    },
+    {
+      "from_table": "titulo_a_pagar",
+      "from_column": "pedido_id",
+      "to_table": "pedido_venda_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "titulo_a_pagar",
+      "from_column": "numero_chassi",
+      "to_table": "moto",
+      "to_column": "numero_chassi"
+    },
+    {
+      "from_table": "titulo_a_pagar",
+      "from_column": "empresa_destino_id",
+      "to_table": "empresa_venda_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "titulo_financeiro",
+      "from_column": "pedido_id",
+      "to_table": "pedido_venda_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "titulo_financeiro",
+      "from_column": "numero_chassi",
+      "to_table": "moto",
+      "to_column": "numero_chassi"
+    },
+    {
+      "from_table": "titulo_financeiro",
+      "from_column": "empresa_recebedora_id",
+      "to_table": "empresa_venda_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "titulo_financeiro",
+      "from_column": "titulo_pai_id",
+      "to_table": "titulo_financeiro",
+      "to_column": "id"
+    },
+    {
+      "from_table": "user_equipe",
+      "from_column": "equipe_id",
+      "to_table": "equipe_vendas",
+      "to_column": "id"
+    },
+    {
+      "from_table": "user_vendedor",
+      "from_column": "vendedor_id",
+      "to_table": "vendedor",
+      "to_column": "id"
+    },
+    {
+      "from_table": "vendedor_moto",
+      "from_column": "equipe_vendas_id",
+      "to_table": "equipe_vendas_moto",
+      "to_column": "id"
+    }
+  ]
+}

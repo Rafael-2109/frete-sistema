@@ -1,0 +1,121 @@
+{
+  "name": "produto_fornecedor_depara",
+  "description": "De-Para produto × fornecedor.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "cnpj_fornecedor",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "razao_fornecedor",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "cod_produto_fornecedor",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "descricao_produto_fornecedor",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "cod_produto_interno",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "nome_produto_interno",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "odoo_product_id",
+      "type": "integer"
+    },
+    {
+      "name": "um_fornecedor",
+      "type": "varchar(20)",
+      "description": "det_prod_ucom (ML, MI, MIL)"
+    },
+    {
+      "name": "um_interna",
+      "type": "varchar(20)",
+      "description": "product_uom",
+      "default": "UNITS"
+    },
+    {
+      "name": "fator_conversao",
+      "type": "numeric(10,4)",
+      "description": "1000 para Milhar",
+      "default": 1.0
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "default": true
+    },
+    {
+      "name": "sincronizado_odoo",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "odoo_supplierinfo_id",
+      "type": "integer"
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "atualizado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "cnpj_fornecedor",
+      "cod_produto_fornecedor"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_produto_fornecedor_depara_cnpj_fornecedor",
+      "columns": [
+        "cnpj_fornecedor"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_produto_fornecedor_depara_cod_produto_fornecedor",
+      "columns": [
+        "cod_produto_fornecedor"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_produto_fornecedor_depara_cod_produto_interno",
+      "columns": [
+        "cod_produto_interno"
+      ],
+      "unique": false
+    }
+  ]
+}

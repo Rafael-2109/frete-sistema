@@ -1,0 +1,478 @@
+{
+  "name": "movimentacao_estoque",
+  "description": "Movimentos de estoque: entradas, saídas, ajustes, produção.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "cod_produto",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "nome_produto",
+      "type": "varchar(200)",
+      "nullable": false
+    },
+    {
+      "name": "data_movimentacao",
+      "type": "date",
+      "nullable": false
+    },
+    {
+      "name": "tipo_movimentacao",
+      "type": "varchar(50)",
+      "description": "ENTRADA, SAIDA, AJUSTE, PRODUCAO",
+      "nullable": false
+    },
+    {
+      "name": "local_movimentacao",
+      "type": "varchar(50)",
+      "description": "COMPRA, VENDA, PRODUCAO, AJUSTE, DEVOLUCAO",
+      "nullable": false
+    },
+    {
+      "name": "qtd_movimentacao",
+      "type": "numeric(15,3)",
+      "nullable": false
+    },
+    {
+      "name": "separacao_lote_id",
+      "type": "varchar(50)",
+      "description": "ID do lote de separação"
+    },
+    {
+      "name": "numero_nf",
+      "type": "varchar(20)",
+      "description": "Número da NF"
+    },
+    {
+      "name": "num_pedido",
+      "type": "varchar(50)",
+      "description": "Número do pedido"
+    },
+    {
+      "name": "tipo_origem",
+      "type": "varchar(20)",
+      "description": "ODOO, TAGPLUS, MANUAL, LEGADO"
+    },
+    {
+      "name": "status_nf",
+      "type": "varchar(20)",
+      "description": "FATURADO, CANCELADO"
+    },
+    {
+      "name": "codigo_embarque",
+      "type": "integer"
+    },
+    {
+      "name": "odoo_picking_id",
+      "type": "varchar(50)",
+      "description": "ID do stock.picking no Odoo"
+    },
+    {
+      "name": "odoo_move_id",
+      "type": "varchar(50)",
+      "description": "ID do stock.move no Odoo"
+    },
+    {
+      "name": "purchase_line_id",
+      "type": "varchar(50)",
+      "description": "ID da linha de pedido Odoo (purchase.order.line)"
+    },
+    {
+      "name": "pedido_compras_id",
+      "type": "integer",
+      "description": "FK → pedido_compras.id"
+    },
+    {
+      "name": "recebimento_fisico_id",
+      "type": "integer",
+      "description": "FK → recebimento_fisico.id"
+    },
+    {
+      "name": "recebimento_lote_id",
+      "type": "integer",
+      "description": "FK → recebimento_lote.id"
+    },
+    {
+      "name": "lote_nome",
+      "type": "varchar(100)",
+      "description": "Nome do lote (ex: LOTE-2024-001)"
+    },
+    {
+      "name": "data_validade",
+      "type": "date",
+      "description": "Data de validade do lote"
+    },
+    {
+      "name": "observacao",
+      "type": "text"
+    },
+    {
+      "name": "operacao_producao_id",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "tipo_origem_producao",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "cod_produto_raiz",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "producao_pai_id",
+      "type": "integer",
+      "description": "FK → movimentacao_estoque.id"
+    },
+    {
+      "name": "tipo_destinatario",
+      "type": "varchar(20)",
+      "description": "CLIENTE ou TRANSPORTADORA"
+    },
+    {
+      "name": "cnpj_destinatario",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "nome_destinatario",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "embarque_item_id",
+      "type": "integer",
+      "description": "FK → embarque_itens.id"
+    },
+    {
+      "name": "baixado",
+      "type": "boolean",
+      "description": "Se a saida de pallet foi baixada",
+      "default": false
+    },
+    {
+      "name": "baixado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "baixado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "movimento_baixado_id",
+      "type": "integer",
+      "description": "FK → movimentacao_estoque.id"
+    },
+    {
+      "name": "qtd_abatida",
+      "type": "numeric(15,3)",
+      "default": 0
+    },
+    {
+      "name": "nf_remessa_origem",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "cnpj_responsavel",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "nome_responsavel",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização",
+      "nullable": false
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "atualizado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "default": true
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "codigo_embarque",
+      "references": "embarques.id"
+    },
+    {
+      "column": "pedido_compras_id",
+      "references": "pedido_compras.id"
+    },
+    {
+      "column": "recebimento_fisico_id",
+      "references": "recebimento_fisico.id"
+    },
+    {
+      "column": "recebimento_lote_id",
+      "references": "recebimento_lote.id"
+    },
+    {
+      "column": "producao_pai_id",
+      "references": "movimentacao_estoque.id"
+    },
+    {
+      "column": "embarque_item_id",
+      "references": "embarque_itens.id"
+    },
+    {
+      "column": "movimento_baixado_id",
+      "references": "movimentacao_estoque.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_movimentacao_estoque_num_pedido",
+      "columns": [
+        "num_pedido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_ativo",
+      "columns": [
+        "ativo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_cod_produto_raiz",
+      "columns": [
+        "cod_produto_raiz"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_cod_produto",
+      "columns": [
+        "cod_produto"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_producao_pai_id",
+      "columns": [
+        "producao_pai_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_produto_data",
+      "columns": [
+        "cod_produto",
+        "data_movimentacao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_odoo_picking_id",
+      "columns": [
+        "odoo_picking_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_odoo_move_id",
+      "columns": [
+        "odoo_move_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_cnpj_destinatario",
+      "columns": [
+        "cnpj_destinatario"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_tipo_data",
+      "columns": [
+        "tipo_movimentacao",
+        "data_movimentacao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_nf",
+      "columns": [
+        "numero_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_lote",
+      "columns": [
+        "separacao_lote_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_pedido",
+      "columns": [
+        "num_pedido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_tipo_origem",
+      "columns": [
+        "tipo_origem"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_status_nf",
+      "columns": [
+        "status_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_odoo_picking",
+      "columns": [
+        "odoo_picking_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_odoo_move",
+      "columns": [
+        "odoo_move_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_cnpj_destinatario",
+      "columns": [
+        "cnpj_destinatario"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_recebimento_fisico_id",
+      "columns": [
+        "recebimento_fisico_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_tipo_destinatario",
+      "columns": [
+        "tipo_destinatario"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_data_movimentacao",
+      "columns": [
+        "data_movimentacao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_baixado",
+      "columns": [
+        "baixado"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_nf_remessa_origem",
+      "columns": [
+        "nf_remessa_origem"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_tipo_movimentacao",
+      "columns": [
+        "tipo_movimentacao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_cnpj_responsavel",
+      "columns": [
+        "cnpj_responsavel"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_recebimento_lote_id",
+      "columns": [
+        "recebimento_lote_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_recebimento_fisico",
+      "columns": [
+        "recebimento_fisico_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_nf_remessa_origem",
+      "columns": [
+        "nf_remessa_origem"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_recebimento_lote",
+      "columns": [
+        "recebimento_lote_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_separacao_lote_id",
+      "columns": [
+        "separacao_lote_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_cnpj_responsavel",
+      "columns": [
+        "cnpj_responsavel"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_numero_nf",
+      "columns": [
+        "numero_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_operacao_producao_id",
+      "columns": [
+        "operacao_producao_id"
+      ],
+      "unique": false
+    }
+  ]
+}

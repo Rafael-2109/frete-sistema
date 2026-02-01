@@ -1,0 +1,174 @@
+{
+  "name": "requisicao_compras",
+  "description": "The base class of the :attr:`.SQLAlchemy.Model` declarative model class.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "num_requisicao",
+      "type": "varchar(30)",
+      "nullable": false
+    },
+    {
+      "name": "company_id",
+      "type": "varchar(100)",
+      "description": "Empresa compradora"
+    },
+    {
+      "name": "data_requisicao_criacao",
+      "type": "date",
+      "nullable": false
+    },
+    {
+      "name": "usuario_requisicao_criacao",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "lead_time_requisicao",
+      "type": "integer"
+    },
+    {
+      "name": "lead_time_previsto",
+      "type": "integer"
+    },
+    {
+      "name": "data_requisicao_solicitada",
+      "type": "date"
+    },
+    {
+      "name": "cod_produto",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "nome_produto",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "qtd_produto_requisicao",
+      "type": "numeric(15,3)",
+      "nullable": false
+    },
+    {
+      "name": "qtd_produto_sem_requisicao",
+      "type": "numeric(15,3)",
+      "default": 0
+    },
+    {
+      "name": "necessidade",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "data_necessidade",
+      "type": "date"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "default": "Pendente"
+    },
+    {
+      "name": "purchase_state",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "importado_odoo",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "odoo_id",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "requisicao_odoo_id",
+      "type": "varchar(50)",
+      "description": "ID da requisição no Odoo"
+    },
+    {
+      "name": "status_requisicao",
+      "type": "varchar(20)",
+      "default": "rascunho"
+    },
+    {
+      "name": "data_envio_odoo",
+      "type": "timestamp"
+    },
+    {
+      "name": "data_confirmacao_odoo",
+      "type": "timestamp"
+    },
+    {
+      "name": "observacoes_odoo",
+      "type": "text"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "num_requisicao",
+      "cod_produto",
+      "company_id"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_requisicao_compras_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_requisicao_compras_num_requisicao",
+      "columns": [
+        "num_requisicao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_requisicao_compras_cod_produto",
+      "columns": [
+        "cod_produto"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_requisicao_compras_purchase_state",
+      "columns": [
+        "purchase_state"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_requisicao_compras_company_id",
+      "columns": [
+        "company_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_requisicao_compras_requisicao_odoo_id",
+      "columns": [
+        "requisicao_odoo_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_requisicao_empresa",
+      "columns": [
+        "company_id",
+        "num_requisicao"
+      ],
+      "unique": false
+    }
+  ]
+}

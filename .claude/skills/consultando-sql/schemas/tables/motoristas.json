@@ -1,0 +1,55 @@
+{
+  "name": "motoristas",
+  "description": "Cadastro de motoristas.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "nome_completo",
+      "type": "varchar(255)",
+      "nullable": false
+    },
+    {
+      "name": "rg",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "cpf",
+      "type": "varchar(14)",
+      "nullable": false
+    },
+    {
+      "name": "telefone",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "foto_documento",
+      "type": "varchar(255)",
+      "description": "Caminho para arquivo da foto"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_motoristas_cpf",
+      "columns": [
+        "cpf"
+      ],
+      "unique": true
+    }
+  ]
+}

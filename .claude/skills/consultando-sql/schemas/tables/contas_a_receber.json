@@ -1,0 +1,267 @@
+{
+  "name": "contas_a_receber",
+  "description": "Títulos a receber de clientes. Dados do Odoo enriquecidos.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "empresa",
+      "type": "integer",
+      "description": "1=FB, 2=SC, 3=CD",
+      "nullable": false
+    },
+    {
+      "name": "titulo_nf",
+      "type": "varchar(20)",
+      "description": "NF-e",
+      "nullable": false
+    },
+    {
+      "name": "parcela",
+      "type": "varchar(10)",
+      "description": "Número da parcela",
+      "nullable": false
+    },
+    {
+      "name": "cnpj",
+      "type": "varchar(20)",
+      "description": "CNPJ do cliente"
+    },
+    {
+      "name": "raz_social",
+      "type": "varchar(255)",
+      "description": "Razão Social completa"
+    },
+    {
+      "name": "raz_social_red",
+      "type": "varchar(100)",
+      "description": "Nome fantasia/trade_name"
+    },
+    {
+      "name": "uf_cliente",
+      "type": "varchar(2)",
+      "description": "UF do cliente"
+    },
+    {
+      "name": "emissao",
+      "type": "date",
+      "description": "Data de emissão (date)"
+    },
+    {
+      "name": "vencimento",
+      "type": "date",
+      "description": "Data de vencimento (date_maturity)"
+    },
+    {
+      "name": "valor_original",
+      "type": "float",
+      "description": "Saldo Total (balance + desconto_concedido)"
+    },
+    {
+      "name": "desconto_percentual",
+      "type": "float",
+      "description": "desconto_concedido_percentual / 100"
+    },
+    {
+      "name": "desconto",
+      "type": "float",
+      "description": "desconto_concedido"
+    },
+    {
+      "name": "tipo_titulo",
+      "type": "varchar(100)",
+      "description": "Forma de Pagamento (payment_provider_id)"
+    },
+    {
+      "name": "parcela_paga",
+      "type": "boolean",
+      "description": "l10n_br_paga",
+      "default": false
+    },
+    {
+      "name": "status_pagamento_odoo",
+      "type": "varchar(50)",
+      "description": "x_studio_status_de_pagamento"
+    },
+    {
+      "name": "valor_titulo",
+      "type": "float"
+    },
+    {
+      "name": "liberacao_prevista_antecipacao",
+      "type": "date"
+    },
+    {
+      "name": "confirmacao_tipo_id",
+      "type": "integer",
+      "description": "FK → contas_a_receber_tipos.id"
+    },
+    {
+      "name": "forma_confirmacao_tipo_id",
+      "type": "integer",
+      "description": "FK → contas_a_receber_tipos.id"
+    },
+    {
+      "name": "data_confirmacao",
+      "type": "timestamp",
+      "description": "Log automático"
+    },
+    {
+      "name": "confirmado_por",
+      "type": "varchar(100)",
+      "description": "Quem confirmou (para fins financeiros)"
+    },
+    {
+      "name": "confirmacao_entrega",
+      "type": "text"
+    },
+    {
+      "name": "observacao",
+      "type": "text"
+    },
+    {
+      "name": "alerta",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "acao_necessaria_tipo_id",
+      "type": "integer",
+      "description": "FK → contas_a_receber_tipos.id"
+    },
+    {
+      "name": "obs_acao_necessaria",
+      "type": "text"
+    },
+    {
+      "name": "data_lembrete",
+      "type": "date"
+    },
+    {
+      "name": "entrega_monitorada_id",
+      "type": "integer",
+      "description": "FK → entregas_monitoradas.id"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    },
+    {
+      "name": "atualizado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "odoo_write_date",
+      "type": "timestamp",
+      "description": "write_date do Odoo para sync incremental"
+    },
+    {
+      "name": "ultima_sincronizacao",
+      "type": "timestamp"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "confirmacao_tipo_id",
+      "references": "contas_a_receber_tipos.id"
+    },
+    {
+      "column": "forma_confirmacao_tipo_id",
+      "references": "contas_a_receber_tipos.id"
+    },
+    {
+      "column": "acao_necessaria_tipo_id",
+      "references": "contas_a_receber_tipos.id"
+    },
+    {
+      "column": "entrega_monitorada_id",
+      "references": "entregas_monitoradas.id"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "empresa",
+      "titulo_nf",
+      "parcela"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_contas_a_receber_parcela",
+      "columns": [
+        "parcela"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_receber_vencimento",
+      "columns": [
+        "vencimento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_receber_cnpj",
+      "columns": [
+        "cnpj"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_conta_receber_vencimento",
+      "columns": [
+        "vencimento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_receber_empresa",
+      "columns": [
+        "empresa"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_conta_receber_cnpj",
+      "columns": [
+        "cnpj"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_conta_receber_nf",
+      "columns": [
+        "titulo_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_receber_titulo_nf",
+      "columns": [
+        "titulo_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_receber_uf_cliente",
+      "columns": [
+        "uf_cliente"
+      ],
+      "unique": false
+    }
+  ]
+}

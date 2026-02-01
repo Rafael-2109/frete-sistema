@@ -1,0 +1,243 @@
+{
+  "name": "contas_a_pagar",
+  "description": "Títulos a pagar para fornecedores.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "empresa",
+      "type": "integer",
+      "description": "1=FB, 2=SC, 3=CD",
+      "nullable": false
+    },
+    {
+      "name": "titulo_nf",
+      "type": "varchar(50)",
+      "description": "NF-e de entrada (x_studio_nf_e)",
+      "nullable": false
+    },
+    {
+      "name": "parcela",
+      "type": "varchar(10)",
+      "description": "Número da parcela",
+      "nullable": false
+    },
+    {
+      "name": "odoo_line_id",
+      "type": "integer",
+      "description": "account.move.line ID"
+    },
+    {
+      "name": "odoo_move_id",
+      "type": "integer",
+      "description": "account.move ID"
+    },
+    {
+      "name": "odoo_move_name",
+      "type": "varchar(255)",
+      "description": "Nome do move (ENTSI/2025/...)"
+    },
+    {
+      "name": "partner_id",
+      "type": "integer",
+      "description": "res.partner ID"
+    },
+    {
+      "name": "cnpj",
+      "type": "varchar(20)",
+      "description": "CNPJ do fornecedor"
+    },
+    {
+      "name": "raz_social",
+      "type": "varchar(255)",
+      "description": "Razão Social completa"
+    },
+    {
+      "name": "raz_social_red",
+      "type": "varchar(100)",
+      "description": "Nome reduzido/fantasia"
+    },
+    {
+      "name": "emissao",
+      "type": "date",
+      "description": "Data de emissão (date)"
+    },
+    {
+      "name": "vencimento",
+      "type": "date",
+      "description": "Data de vencimento (date_maturity)"
+    },
+    {
+      "name": "valor_original",
+      "type": "float",
+      "description": "Valor original (credit)"
+    },
+    {
+      "name": "valor_residual",
+      "type": "float",
+      "description": "Saldo em aberto (abs(amount_residual))"
+    },
+    {
+      "name": "parcela_paga",
+      "type": "boolean",
+      "description": "l10n_br_paga",
+      "default": false
+    },
+    {
+      "name": "reconciliado",
+      "type": "boolean",
+      "description": "reconciled",
+      "default": false
+    },
+    {
+      "name": "observacao",
+      "type": "text"
+    },
+    {
+      "name": "alerta",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "status_sistema",
+      "type": "varchar(30)",
+      "nullable": false,
+      "default": "PENDENTE"
+    },
+    {
+      "name": "data_programada",
+      "type": "date"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    },
+    {
+      "name": "atualizado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "odoo_write_date",
+      "type": "timestamp",
+      "description": "write_date do Odoo para sync incremental"
+    },
+    {
+      "name": "ultima_sincronizacao",
+      "type": "timestamp"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "empresa",
+      "titulo_nf",
+      "parcela"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_contas_a_pagar_partner_id",
+      "columns": [
+        "partner_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_pagar_parcela",
+      "columns": [
+        "parcela"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_pagar_cnpj",
+      "columns": [
+        "cnpj"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_pagar_odoo_line_id",
+      "columns": [
+        "odoo_line_id"
+      ],
+      "unique": true
+    },
+    {
+      "name": "ix_contas_a_pagar_titulo_nf",
+      "columns": [
+        "titulo_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_conta_pagar_vencimento",
+      "columns": [
+        "vencimento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_conta_pagar_cnpj",
+      "columns": [
+        "cnpj"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_pagar_empresa",
+      "columns": [
+        "empresa"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_pagar_odoo_move_id",
+      "columns": [
+        "odoo_move_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_conta_pagar_nf",
+      "columns": [
+        "titulo_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_pagar_status_sistema",
+      "columns": [
+        "status_sistema"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_conta_pagar_odoo_line",
+      "columns": [
+        "odoo_line_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_pagar_vencimento",
+      "columns": [
+        "vencimento"
+      ],
+      "unique": false
+    }
+  ]
+}

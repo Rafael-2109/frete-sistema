@@ -1,0 +1,52 @@
+{
+  "name": "cidades_atendidas",
+  "description": "Cidades atendidas por transportadora com lead time.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "uf",
+      "type": "varchar(2)",
+      "nullable": false
+    },
+    {
+      "name": "cidade_id",
+      "type": "integer",
+      "description": "FK → cidades.id",
+      "nullable": false
+    },
+    {
+      "name": "codigo_ibge",
+      "type": "varchar(10)",
+      "nullable": false
+    },
+    {
+      "name": "transportadora_id",
+      "type": "integer",
+      "description": "FK → transportadoras.id",
+      "nullable": false
+    },
+    {
+      "name": "nome_tabela",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "lead_time",
+      "type": "integer"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "cidade_id",
+      "references": "cidades.id"
+    },
+    {
+      "column": "transportadora_id",
+      "references": "transportadoras.id"
+    }
+  ]
+}

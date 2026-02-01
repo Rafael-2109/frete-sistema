@@ -1,0 +1,117 @@
+{
+  "name": "fila_agendamento_sendas",
+  "description": "Fila simples para acumular agendamentos Sendas e processar em lote",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "tipo_origem",
+      "type": "varchar(20)",
+      "description": "'separacao', 'nf', 'lote'",
+      "nullable": false
+    },
+    {
+      "name": "documento_origem",
+      "type": "varchar(50)",
+      "description": "separacao_lote_id ou numero_nf ou CNPJ do cliente",
+      "nullable": false
+    },
+    {
+      "name": "cnpj",
+      "type": "varchar(20)",
+      "description": "CNPJ do cliente - Deverá ser convertido para o padrão do Sendas",
+      "nullable": false
+    },
+    {
+      "name": "num_pedido",
+      "type": "varchar(50)",
+      "description": "Numero do pedido do cliente",
+      "nullable": false
+    },
+    {
+      "name": "pedido_cliente",
+      "type": "varchar(100)",
+      "description": "Campo essencial para Sendas"
+    },
+    {
+      "name": "cod_produto",
+      "type": "varchar(50)",
+      "description": "Codigo do produto - Deverá ser convertido para o padrão do Sendas",
+      "nullable": false
+    },
+    {
+      "name": "nome_produto",
+      "type": "varchar(255)",
+      "description": "Nome do produto"
+    },
+    {
+      "name": "quantidade",
+      "type": "numeric(15,3)",
+      "nullable": false
+    },
+    {
+      "name": "data_expedicao",
+      "type": "date",
+      "nullable": false
+    },
+    {
+      "name": "data_agendamento",
+      "type": "date",
+      "nullable": false
+    },
+    {
+      "name": "protocolo",
+      "type": "varchar(100)",
+      "description": "Protocolo"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "default": "pendente"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "processado_em",
+      "type": "timestamp"
+    }
+  ],
+  "indices": [
+    {
+      "name": "idx_fila_sendas_processo",
+      "columns": [
+        "status",
+        "cnpj",
+        "data_agendamento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_fila_agendamento_sendas_cnpj",
+      "columns": [
+        "cnpj"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_fila_agendamento_sendas_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_fila_agendamento_sendas_data_agendamento",
+      "columns": [
+        "data_agendamento"
+      ],
+      "unique": false
+    }
+  ]
+}

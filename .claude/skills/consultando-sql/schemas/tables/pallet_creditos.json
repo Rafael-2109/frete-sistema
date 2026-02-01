@@ -1,0 +1,150 @@
+{
+  "name": "pallet_creditos",
+  "description": "Registro de crédito de pallet a receber.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "nf_remessa_id",
+      "type": "integer",
+      "description": "FK → pallet_nf_remessa.id",
+      "nullable": false
+    },
+    {
+      "name": "qtd_original",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "qtd_saldo",
+      "type": "integer",
+      "description": "Saldo pendente de resolução",
+      "nullable": false
+    },
+    {
+      "name": "tipo_responsavel",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "cnpj_responsavel",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "nome_responsavel",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "uf_responsavel",
+      "type": "varchar(2)"
+    },
+    {
+      "name": "cidade_responsavel",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "prazo_dias",
+      "type": "integer"
+    },
+    {
+      "name": "data_vencimento",
+      "type": "date"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "PENDENTE"
+    },
+    {
+      "name": "movimentacao_estoque_id",
+      "type": "integer"
+    },
+    {
+      "name": "observacao",
+      "type": "text"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    },
+    {
+      "name": "atualizado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "nullable": false,
+      "default": true
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "nf_remessa_id",
+      "references": "pallet_nf_remessa.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "idx_credito_responsavel_status",
+      "columns": [
+        "cnpj_responsavel",
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_credito_tipo_status",
+      "columns": [
+        "tipo_responsavel",
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_credito_vencimento",
+      "columns": [
+        "data_vencimento",
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_creditos_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_creditos_nf_remessa_id",
+      "columns": [
+        "nf_remessa_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_creditos_cnpj_responsavel",
+      "columns": [
+        "cnpj_responsavel"
+      ],
+      "unique": false
+    }
+  ]
+}

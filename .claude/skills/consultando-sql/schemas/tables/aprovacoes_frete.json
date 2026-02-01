@@ -1,0 +1,54 @@
+{
+  "name": "aprovacoes_frete",
+  "description": "Aprovações de fretes por alçada.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "frete_id",
+      "type": "integer",
+      "description": "FK → fretes.id",
+      "nullable": false
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "description": "PENDENTE, APROVADO, REJEITADO",
+      "default": "PENDENTE"
+    },
+    {
+      "name": "solicitado_por",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "solicitado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "motivo_solicitacao",
+      "type": "text"
+    },
+    {
+      "name": "aprovador",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "aprovado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "observacoes_aprovacao",
+      "type": "text"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "frete_id",
+      "references": "fretes.id"
+    }
+  ]
+}

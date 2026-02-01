@@ -1,0 +1,160 @@
+{
+  "name": "registro_pedido_odoo",
+  "description": "Registro de pedidos enviados ao Odoo.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "rede",
+      "type": "varchar(50)",
+      "description": "'ATACADAO', 'TENDA', 'ASSAI'",
+      "nullable": false
+    },
+    {
+      "name": "tipo_documento",
+      "type": "varchar(50)",
+      "description": "'PROPOSTA', 'PEDIDO'",
+      "nullable": false
+    },
+    {
+      "name": "numero_documento",
+      "type": "varchar(100)",
+      "description": "Número da proposta/pedido"
+    },
+    {
+      "name": "arquivo_pdf_s3",
+      "type": "varchar(500)",
+      "description": "URL do arquivo no S3"
+    },
+    {
+      "name": "cnpj_cliente",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "nome_cliente",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "uf_cliente",
+      "type": "varchar(2)"
+    },
+    {
+      "name": "cep_cliente",
+      "type": "varchar(10)"
+    },
+    {
+      "name": "endereco_cliente",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "odoo_order_id",
+      "type": "integer",
+      "description": "ID do sale.order no Odoo"
+    },
+    {
+      "name": "odoo_order_name",
+      "type": "varchar(50)",
+      "description": "Número do pedido (VCD...)"
+    },
+    {
+      "name": "status_odoo",
+      "type": "varchar(50)",
+      "description": "'SUCESSO', 'ERRO', 'PENDENTE'",
+      "nullable": false,
+      "default": "PENDENTE"
+    },
+    {
+      "name": "mensagem_erro",
+      "type": "text"
+    },
+    {
+      "name": "dados_documento",
+      "type": "json"
+    },
+    {
+      "name": "divergente",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "divergencias",
+      "type": "json"
+    },
+    {
+      "name": "justificativa_aprovacao",
+      "type": "text",
+      "description": "Obrigatório se divergente"
+    },
+    {
+      "name": "inserido_por",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "aprovado_por",
+      "type": "varchar(100)",
+      "description": "Quem aprovou divergência"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "processado_em",
+      "type": "timestamp",
+      "description": "Quando foi enviado ao Odoo"
+    }
+  ],
+  "indices": [
+    {
+      "name": "idx_registro_criado_em",
+      "columns": [
+        "criado_em"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_registro_pedido_odoo_cnpj_cliente",
+      "columns": [
+        "cnpj_cliente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_registro_pedido_odoo_rede",
+      "columns": [
+        "rede"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_registro_rede_cnpj",
+      "columns": [
+        "rede",
+        "cnpj_cliente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_registro_odoo_order",
+      "columns": [
+        "odoo_order_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_registro_status",
+      "columns": [
+        "status_odoo"
+      ],
+      "unique": false
+    }
+  ]
+}

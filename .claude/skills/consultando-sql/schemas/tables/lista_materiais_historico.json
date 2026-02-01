@@ -1,0 +1,147 @@
+{
+  "name": "lista_materiais_historico",
+  "description": "Histórico de todas as alterações em Lista de Materiais",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "lista_materiais_id",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "operacao",
+      "type": "varchar(20)",
+      "description": "'CRIAR', 'EDITAR', 'INATIVAR', 'REATIVAR'",
+      "nullable": false
+    },
+    {
+      "name": "cod_produto_produzido",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "nome_produto_produzido",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "cod_produto_componente",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "nome_produto_componente",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "versao",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "qtd_utilizada_antes",
+      "type": "numeric(15,6)"
+    },
+    {
+      "name": "status_antes",
+      "type": "varchar(10)"
+    },
+    {
+      "name": "qtd_utilizada_depois",
+      "type": "numeric(15,6)"
+    },
+    {
+      "name": "status_depois",
+      "type": "varchar(10)"
+    },
+    {
+      "name": "alterado_em",
+      "type": "timestamp",
+      "nullable": false
+    },
+    {
+      "name": "alterado_por",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "motivo",
+      "type": "text",
+      "description": "Motivo da alteração (opcional)"
+    },
+    {
+      "name": "dados_adicionais",
+      "type": "jsonb"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_lista_materiais_historico_alterado_por",
+      "columns": [
+        "alterado_por"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_historico_componente_data",
+      "columns": [
+        "cod_produto_componente",
+        "alterado_em"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_lista_materiais_historico_cod_produto_produzido",
+      "columns": [
+        "cod_produto_produzido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_lista_materiais_historico_operacao",
+      "columns": [
+        "operacao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_historico_produto_data",
+      "columns": [
+        "cod_produto_produzido",
+        "alterado_em"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_lista_materiais_historico_alterado_em",
+      "columns": [
+        "alterado_em"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_lista_materiais_historico_lista_materiais_id",
+      "columns": [
+        "lista_materiais_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_lista_materiais_historico_cod_produto_componente",
+      "columns": [
+        "cod_produto_componente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_historico_operacao_data",
+      "columns": [
+        "operacao",
+        "alterado_em"
+      ],
+      "unique": false
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "name": "eventos_entrega",
+  "description": "Eventos de entrega (tentativa, sucesso, falha).",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "entrega_id",
+      "type": "integer",
+      "description": "FK → entregas_monitoradas.id"
+    },
+    {
+      "name": "data_hora_chegada",
+      "type": "timestamp"
+    },
+    {
+      "name": "data_hora_saida",
+      "type": "timestamp"
+    },
+    {
+      "name": "motorista",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "tipo_evento",
+      "type": "varchar(50)",
+      "description": "entrega, reentrega, tentativa, NF no CD"
+    },
+    {
+      "name": "observacao",
+      "type": "text"
+    },
+    {
+      "name": "autor",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "entrega_id",
+      "references": "entregas_monitoradas.id"
+    }
+  ]
+}

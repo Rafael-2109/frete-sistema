@@ -1,0 +1,331 @@
+{
+  "name": "fretes",
+  "description": "Fretes contratados para embarques. Valores e transportadoras.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "embarque_id",
+      "type": "integer",
+      "description": "FK → embarques.id",
+      "nullable": false
+    },
+    {
+      "name": "cnpj_cliente",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "nome_cliente",
+      "type": "varchar(255)",
+      "nullable": false
+    },
+    {
+      "name": "transportadora_id",
+      "type": "integer",
+      "description": "FK → transportadoras.id",
+      "nullable": false
+    },
+    {
+      "name": "tipo_carga",
+      "type": "varchar(20)",
+      "description": "'FRACIONADA' ou 'DIRETA'",
+      "nullable": false
+    },
+    {
+      "name": "modalidade",
+      "type": "varchar(50)",
+      "description": "VALOR, PESO, VAN, etc.",
+      "nullable": false
+    },
+    {
+      "name": "uf_destino",
+      "type": "varchar(2)",
+      "nullable": false
+    },
+    {
+      "name": "cidade_destino",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "peso_total",
+      "type": "float",
+      "nullable": false
+    },
+    {
+      "name": "valor_total_nfs",
+      "type": "float",
+      "nullable": false
+    },
+    {
+      "name": "quantidade_nfs",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "numeros_nfs",
+      "type": "text",
+      "description": "Lista das NFs separadas por vírgula",
+      "nullable": false
+    },
+    {
+      "name": "tabela_nome_tabela",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "tabela_valor_kg",
+      "type": "float"
+    },
+    {
+      "name": "tabela_percentual_valor",
+      "type": "float"
+    },
+    {
+      "name": "tabela_frete_minimo_valor",
+      "type": "float"
+    },
+    {
+      "name": "tabela_frete_minimo_peso",
+      "type": "float"
+    },
+    {
+      "name": "tabela_icms",
+      "type": "float"
+    },
+    {
+      "name": "tabela_percentual_gris",
+      "type": "float"
+    },
+    {
+      "name": "tabela_pedagio_por_100kg",
+      "type": "float"
+    },
+    {
+      "name": "tabela_valor_tas",
+      "type": "float"
+    },
+    {
+      "name": "tabela_percentual_adv",
+      "type": "float"
+    },
+    {
+      "name": "tabela_percentual_rca",
+      "type": "float"
+    },
+    {
+      "name": "tabela_valor_despacho",
+      "type": "float"
+    },
+    {
+      "name": "tabela_valor_cte",
+      "type": "float"
+    },
+    {
+      "name": "tabela_icms_incluso",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "tabela_icms_destino",
+      "type": "float"
+    },
+    {
+      "name": "tabela_gris_minimo",
+      "type": "float",
+      "description": "Valor mínimo de GRIS",
+      "default": 0
+    },
+    {
+      "name": "tabela_adv_minimo",
+      "type": "float",
+      "description": "Valor mínimo de ADV",
+      "default": 0
+    },
+    {
+      "name": "tabela_icms_proprio",
+      "type": "float",
+      "description": "ICMS próprio da tabela"
+    },
+    {
+      "name": "valor_cotado",
+      "type": "float",
+      "description": "Calculado automaticamente pela tabela",
+      "nullable": false
+    },
+    {
+      "name": "valor_cte",
+      "type": "float",
+      "description": "Valor cobrado pela transportadora"
+    },
+    {
+      "name": "valor_considerado",
+      "type": "float",
+      "description": "Valor que consideramos válido (inicialmente = valor_cotado)"
+    },
+    {
+      "name": "valor_pago",
+      "type": "float",
+      "description": "Valor que efetivamente pagamos"
+    },
+    {
+      "name": "numero_cte",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "data_emissao_cte",
+      "type": "date"
+    },
+    {
+      "name": "vencimento",
+      "type": "date"
+    },
+    {
+      "name": "fatura_frete_id",
+      "type": "integer",
+      "description": "FK → faturas_frete.id"
+    },
+    {
+      "name": "frete_cte_id",
+      "type": "integer",
+      "description": "FK → conhecimento_transporte.id"
+    },
+    {
+      "name": "odoo_dfe_id",
+      "type": "integer",
+      "description": "ID do DFe no Odoo"
+    },
+    {
+      "name": "odoo_purchase_order_id",
+      "type": "integer",
+      "description": "ID do PO no Odoo"
+    },
+    {
+      "name": "odoo_invoice_id",
+      "type": "integer",
+      "description": "ID da Invoice no Odoo"
+    },
+    {
+      "name": "lancado_odoo_em",
+      "type": "timestamp",
+      "description": "Data/hora do lançamento no Odoo"
+    },
+    {
+      "name": "lancado_odoo_por",
+      "type": "varchar(100)",
+      "description": "Usuário que lançou no Odoo"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "description": "PENDENTE, EM_TRATATIVA, APROVADO, REJEITADO, PAGO, CANCELADO, LANCADO_ODOO",
+      "default": "PENDENTE"
+    },
+    {
+      "name": "requer_aprovacao",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "aprovado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "aprovado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "observacoes_aprovacao",
+      "type": "text"
+    },
+    {
+      "name": "considerar_diferenca",
+      "type": "boolean",
+      "description": "Para lançar na conta corrente mesmo com diferença até R$ 5,00",
+      "default": false
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "lancado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "lancado_por",
+      "type": "varchar(100)"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "embarque_id",
+      "references": "embarques.id"
+    },
+    {
+      "column": "transportadora_id",
+      "references": "transportadoras.id"
+    },
+    {
+      "column": "fatura_frete_id",
+      "references": "faturas_frete.id"
+    },
+    {
+      "column": "frete_cte_id",
+      "references": "conhecimento_transporte.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_fretes_odoo_purchase_order_id",
+      "columns": [
+        "odoo_purchase_order_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_fretes_frete_cte_id",
+      "columns": [
+        "frete_cte_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_fretes_numero_cte",
+      "columns": [
+        "numero_cte"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_fretes_odoo_invoice_id",
+      "columns": [
+        "odoo_invoice_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_fretes_cnpj_cliente",
+      "columns": [
+        "cnpj_cliente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_fretes_odoo_dfe_id",
+      "columns": [
+        "odoo_dfe_id"
+      ],
+      "unique": false
+    }
+  ]
+}

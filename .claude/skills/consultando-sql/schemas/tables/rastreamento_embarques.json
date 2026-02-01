@@ -1,0 +1,129 @@
+{
+  "name": "rastreamento_embarques",
+  "description": "Rastreamento GPS de embarques.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "embarque_id",
+      "type": "integer",
+      "description": "FK → embarques.id",
+      "nullable": false
+    },
+    {
+      "name": "token_acesso",
+      "type": "varchar(64)",
+      "nullable": false
+    },
+    {
+      "name": "token_expiracao",
+      "type": "timestamp",
+      "description": "NULL = sem expiração"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "AGUARDANDO_ACEITE"
+    },
+    {
+      "name": "aceite_lgpd",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "aceite_lgpd_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "aceite_lgpd_ip",
+      "type": "varchar(45)",
+      "description": "Suporta IPv6"
+    },
+    {
+      "name": "aceite_lgpd_user_agent",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "rastreamento_iniciado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "rastreamento_finalizado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "ultimo_ping_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "chegou_destino_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "distancia_minima_atingida",
+      "type": "float",
+      "description": "Em metros"
+    },
+    {
+      "name": "canhoto_arquivo",
+      "type": "varchar(500)",
+      "description": "Caminho S3/local"
+    },
+    {
+      "name": "canhoto_enviado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "canhoto_latitude",
+      "type": "float"
+    },
+    {
+      "name": "canhoto_longitude",
+      "type": "float"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)",
+      "nullable": false,
+      "default": "Sistema"
+    },
+    {
+      "name": "data_expurgo_lgpd",
+      "type": "timestamp",
+      "description": "Automaticamente 90 dias após criação"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "embarque_id",
+      "references": "embarques.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_rastreamento_embarques_token_acesso",
+      "columns": [
+        "token_acesso"
+      ],
+      "unique": true
+    },
+    {
+      "name": "ix_rastreamento_embarques_embarque_id",
+      "columns": [
+        "embarque_id"
+      ],
+      "unique": true
+    }
+  ]
+}

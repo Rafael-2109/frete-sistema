@@ -1,0 +1,228 @@
+{
+  "name": "lancamento_comprovante",
+  "description": "Lançamentos de comprovantes financeiros.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "comprovante_id",
+      "type": "integer",
+      "description": "FK → comprovante_pagamento_boleto.id",
+      "nullable": false
+    },
+    {
+      "name": "odoo_move_line_id",
+      "type": "integer",
+      "description": "account.move.line ID"
+    },
+    {
+      "name": "odoo_move_id",
+      "type": "integer",
+      "description": "account.move ID"
+    },
+    {
+      "name": "odoo_move_name",
+      "type": "varchar(255)",
+      "description": "Nome (ENTSI/2025/...)"
+    },
+    {
+      "name": "odoo_partner_id",
+      "type": "integer",
+      "description": "res.partner ID"
+    },
+    {
+      "name": "odoo_partner_name",
+      "type": "varchar(255)",
+      "description": "Nome fornecedor"
+    },
+    {
+      "name": "odoo_partner_cnpj",
+      "type": "varchar(20)",
+      "description": "CNPJ do partner"
+    },
+    {
+      "name": "odoo_company_id",
+      "type": "integer",
+      "description": "company_id (1,3,4,5)"
+    },
+    {
+      "name": "nf_numero",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "parcela",
+      "type": "integer"
+    },
+    {
+      "name": "odoo_valor_original",
+      "type": "numeric(15,2)",
+      "description": "credit da line"
+    },
+    {
+      "name": "odoo_valor_residual",
+      "type": "numeric(15,2)",
+      "description": "amount_residual"
+    },
+    {
+      "name": "odoo_valor_recalculado",
+      "type": "numeric(15,2)",
+      "description": "valor após recálculo"
+    },
+    {
+      "name": "odoo_vencimento",
+      "type": "date",
+      "description": "date_maturity"
+    },
+    {
+      "name": "match_score",
+      "type": "integer",
+      "description": "0-100",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "match_criterios",
+      "type": "text",
+      "description": "JSON com critérios"
+    },
+    {
+      "name": "diferenca_valor",
+      "type": "numeric(15,2)",
+      "description": "valor_pago - odoo_valor"
+    },
+    {
+      "name": "beneficiario_e_financeira",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "PENDENTE"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "confirmado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "confirmado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "rejeitado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "rejeitado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "motivo_rejeicao",
+      "type": "text"
+    },
+    {
+      "name": "lancado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "lancado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "odoo_payment_id",
+      "type": "integer",
+      "description": "account.payment ID criado"
+    },
+    {
+      "name": "odoo_payment_name",
+      "type": "varchar(100)",
+      "description": "Nome do payment (PAGO/2026/...)"
+    },
+    {
+      "name": "odoo_debit_line_id",
+      "type": "integer",
+      "description": "Linha débito do payment"
+    },
+    {
+      "name": "odoo_credit_line_id",
+      "type": "integer",
+      "description": "Linha crédito do payment"
+    },
+    {
+      "name": "odoo_full_reconcile_id",
+      "type": "integer",
+      "description": "Full reconcile título"
+    },
+    {
+      "name": "odoo_full_reconcile_extrato_id",
+      "type": "integer",
+      "description": "Full reconcile extrato"
+    },
+    {
+      "name": "erro_lancamento",
+      "type": "text",
+      "description": "Mensagem de erro se falhar"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "comprovante_id",
+      "references": "comprovante_pagamento_boleto.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "idx_lanc_comp_status",
+      "columns": [
+        "comprovante_id",
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_lancamento_comprovante_comprovante_id",
+      "columns": [
+        "comprovante_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_lanc_odoo_move_line",
+      "columns": [
+        "odoo_move_line_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_lanc_nf_parcela",
+      "columns": [
+        "nf_numero",
+        "parcela"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_lancamento_comprovante_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_lancamento_comprovante_odoo_move_line_id",
+      "columns": [
+        "odoo_move_line_id"
+      ],
+      "unique": false
+    }
+  ]
+}

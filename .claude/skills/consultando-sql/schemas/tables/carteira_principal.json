@@ -1,0 +1,452 @@
+{
+  "name": "carteira_principal",
+  "description": "Pedidos com saldo pendente. Fonte da verdade para demanda.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "num_pedido",
+      "type": "varchar(50)",
+      "description": "Chave principal",
+      "nullable": false
+    },
+    {
+      "name": "cod_produto",
+      "type": "varchar(50)",
+      "description": "Chave produto",
+      "nullable": false
+    },
+    {
+      "name": "pedido_cliente",
+      "type": "varchar(100)",
+      "description": "Pedido de Compra do Cliente"
+    },
+    {
+      "name": "data_pedido",
+      "type": "date",
+      "description": "Data de criação"
+    },
+    {
+      "name": "data_atual_pedido",
+      "type": "date",
+      "description": "Data da última alteração"
+    },
+    {
+      "name": "status_pedido",
+      "type": "varchar(50)",
+      "description": "Cancelado, Pedido de venda, Cotação"
+    },
+    {
+      "name": "cnpj_cpf",
+      "type": "varchar(20)",
+      "description": "CNPJ do cliente",
+      "nullable": false
+    },
+    {
+      "name": "raz_social",
+      "type": "varchar(255)",
+      "description": "Razão Social"
+    },
+    {
+      "name": "raz_social_red",
+      "type": "varchar(100)",
+      "description": "Nome reduzido"
+    },
+    {
+      "name": "municipio",
+      "type": "varchar(100)",
+      "description": "Cidade do cliente"
+    },
+    {
+      "name": "estado",
+      "type": "varchar(2)",
+      "description": "UF do cliente"
+    },
+    {
+      "name": "vendedor",
+      "type": "varchar(100)",
+      "description": "Vendedor responsável"
+    },
+    {
+      "name": "equipe_vendas",
+      "type": "varchar(100)",
+      "description": "Equipe de vendas"
+    },
+    {
+      "name": "nome_produto",
+      "type": "varchar(255)",
+      "description": "Descrição do produto",
+      "nullable": false
+    },
+    {
+      "name": "unid_medida_produto",
+      "type": "varchar(20)",
+      "description": "Unidade de medida"
+    },
+    {
+      "name": "embalagem_produto",
+      "type": "varchar(100)",
+      "description": "Categoria"
+    },
+    {
+      "name": "materia_prima_produto",
+      "type": "varchar(100)",
+      "description": "Sub categoria"
+    },
+    {
+      "name": "categoria_produto",
+      "type": "varchar(100)",
+      "description": "Sub sub categoria"
+    },
+    {
+      "name": "qtd_produto_pedido",
+      "type": "numeric(15,3)",
+      "description": "Quantidade original",
+      "nullable": false
+    },
+    {
+      "name": "qtd_saldo_produto_pedido",
+      "type": "numeric(15,3)",
+      "description": "Saldo a faturar",
+      "nullable": false
+    },
+    {
+      "name": "qtd_cancelada_produto_pedido",
+      "type": "numeric(15,3)",
+      "description": "Quantidade cancelada",
+      "default": 0
+    },
+    {
+      "name": "preco_produto_pedido",
+      "type": "numeric(15,2)",
+      "description": "Preço unitário"
+    },
+    {
+      "name": "icms_valor",
+      "type": "numeric(15,2)",
+      "description": "l10n_br_icms_valor"
+    },
+    {
+      "name": "icmsst_valor",
+      "type": "numeric(15,2)",
+      "description": "l10n_br_icmsst_valor"
+    },
+    {
+      "name": "pis_valor",
+      "type": "numeric(15,2)",
+      "description": "l10n_br_pis_valor"
+    },
+    {
+      "name": "cofins_valor",
+      "type": "numeric(15,2)",
+      "description": "l10n_br_cofins_valor"
+    },
+    {
+      "name": "desconto_contratual",
+      "type": "boolean",
+      "description": "x_studio_desconto_contratual",
+      "default": false
+    },
+    {
+      "name": "desconto_percentual",
+      "type": "numeric(5,2)",
+      "description": "x_studio_desconto (%)"
+    },
+    {
+      "name": "cond_pgto_pedido",
+      "type": "varchar(100)",
+      "description": "Condições de pagamento"
+    },
+    {
+      "name": "forma_pgto_pedido",
+      "type": "varchar(100)",
+      "description": "Forma de pagamento"
+    },
+    {
+      "name": "incoterm",
+      "type": "varchar(20)",
+      "description": "Incoterm"
+    },
+    {
+      "name": "metodo_entrega_pedido",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "data_entrega_pedido",
+      "type": "date",
+      "description": "Data de entrega"
+    },
+    {
+      "name": "cliente_nec_agendamento",
+      "type": "varchar(10)",
+      "description": "Sim/Não"
+    },
+    {
+      "name": "observ_ped_1",
+      "type": "text",
+      "description": "Observações"
+    },
+    {
+      "name": "cnpj_endereco_ent",
+      "type": "varchar(20)",
+      "description": "CNPJ entrega"
+    },
+    {
+      "name": "empresa_endereco_ent",
+      "type": "varchar(255)",
+      "description": "Nome local entrega"
+    },
+    {
+      "name": "cep_endereco_ent",
+      "type": "varchar(10)"
+    },
+    {
+      "name": "nome_cidade",
+      "type": "varchar(100)",
+      "description": "Cidade extraída"
+    },
+    {
+      "name": "cod_uf",
+      "type": "varchar(2)",
+      "description": "UF extraída"
+    },
+    {
+      "name": "bairro_endereco_ent",
+      "type": "varchar(100)",
+      "description": "Bairro"
+    },
+    {
+      "name": "rua_endereco_ent",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "endereco_ent",
+      "type": "varchar(20)",
+      "description": "Número"
+    },
+    {
+      "name": "telefone_endereco_ent",
+      "type": "varchar(50)",
+      "description": "Telefone - aumentado de 20 para 50"
+    },
+    {
+      "name": "forma_agendamento",
+      "type": "varchar(50)",
+      "description": "Portal, Telefone, E-mail, WhatsApp, ODOO, SEM AGENDAMENTO"
+    },
+    {
+      "name": "odoo_write_date",
+      "type": "timestamp",
+      "description": "write_date do Odoo"
+    },
+    {
+      "name": "ultima_sync",
+      "type": "timestamp",
+      "description": "momento da última sincronização"
+    },
+    {
+      "name": "motivo_exclusao",
+      "type": "text",
+      "description": "Motivo do cancelamento/exclusão da separação"
+    },
+    {
+      "name": "importante",
+      "type": "boolean",
+      "description": "Marcador de pedido importante",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "tags_pedido",
+      "type": "text",
+      "description": "JSON com tags do pedido: [{\"name\": \"VIP\", \"color\": 5}]"
+    },
+    {
+      "name": "custo_unitario_snapshot",
+      "type": "numeric(15,6)"
+    },
+    {
+      "name": "custo_tipo_snapshot",
+      "type": "varchar(20)",
+      "description": "MEDIO_MES, ULTIMO_CUSTO, MEDIO_ESTOQUE, BOM"
+    },
+    {
+      "name": "custo_vigencia_snapshot",
+      "type": "timestamp",
+      "description": "Data do custo usado"
+    },
+    {
+      "name": "custo_producao_snapshot",
+      "type": "numeric(15,6)",
+      "description": "Custo adicional de producao"
+    },
+    {
+      "name": "margem_bruta",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "margem_bruta_percentual",
+      "type": "numeric(7,2)",
+      "description": "Suporta até ±99999.99%"
+    },
+    {
+      "name": "margem_liquida",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "margem_liquida_percentual",
+      "type": "numeric(7,2)",
+      "description": "Suporta até ±99999.99%"
+    },
+    {
+      "name": "comissao_percentual",
+      "type": "numeric(5,2)",
+      "description": "Soma das regras de comissao",
+      "default": 0
+    },
+    {
+      "name": "frete_percentual_snapshot",
+      "type": "numeric(5,2)",
+      "description": "% Frete usado"
+    },
+    {
+      "name": "custo_financeiro_pct_snapshot",
+      "type": "numeric(5,2)",
+      "description": "% Custo financeiro"
+    },
+    {
+      "name": "custo_operacao_pct_snapshot",
+      "type": "numeric(5,2)",
+      "description": "% Custo operacao"
+    },
+    {
+      "name": "percentual_perda_snapshot",
+      "type": "numeric(5,2)",
+      "description": "% Perda"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp",
+      "description": "Última atualização",
+      "nullable": false
+    },
+    {
+      "name": "created_by",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "updated_by",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "default": true
+    }
+  ],
+  "unique_constraints": [
+    [
+      "num_pedido",
+      "cod_produto"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_carteira_principal_num_pedido",
+      "columns": [
+        "num_pedido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_carteira_cliente_vendedor",
+      "columns": [
+        "cnpj_cpf",
+        "vendedor"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carteira_principal_cnpj_cpf",
+      "columns": [
+        "cnpj_cpf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carteira_principal_importante",
+      "columns": [
+        "importante"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carteira_principal_ativo",
+      "columns": [
+        "ativo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carteira_principal_status_pedido",
+      "columns": [
+        "status_pedido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carteira_principal_data_pedido",
+      "columns": [
+        "data_pedido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carteira_principal_odoo_write_date",
+      "columns": [
+        "odoo_write_date"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carteira_principal_cod_produto",
+      "columns": [
+        "cod_produto"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carteira_principal_vendedor",
+      "columns": [
+        "vendedor"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_carteira_status_data",
+      "columns": [
+        "status_pedido",
+        "data_pedido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_carteira_produto_saldo",
+      "columns": [
+        "cod_produto",
+        "qtd_saldo_produto_pedido"
+      ],
+      "unique": false
+    }
+  ]
+}

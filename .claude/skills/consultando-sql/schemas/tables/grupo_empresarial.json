@@ -1,0 +1,65 @@
+{
+  "name": "grupo_empresarial",
+  "description": "Grupos empresariais.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "nome_grupo",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "prefixo_cnpj",
+      "type": "varchar(8)",
+      "description": "1 prefixo por linha",
+      "nullable": false
+    },
+    {
+      "name": "descricao",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "default": true
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_grupo_empresarial_nome_grupo",
+      "columns": [
+        "nome_grupo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_grupo_prefixo",
+      "columns": [
+        "nome_grupo",
+        "prefixo_cnpj"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_grupo_empresarial_prefixo_cnpj",
+      "columns": [
+        "prefixo_cnpj"
+      ],
+      "unique": false
+    }
+  ]
+}

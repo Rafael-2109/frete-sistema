@@ -1,0 +1,157 @@
+{
+  "name": "perfil_fiscal_produto_fornecedor",
+  "description": "Perfil fiscal produto × fornecedor.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "cnpj_empresa_compradora",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "cod_produto",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "cnpj_fornecedor",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "nome_empresa_compradora",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "razao_fornecedor",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "nome_produto",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "ncm_esperado",
+      "type": "varchar(10)"
+    },
+    {
+      "name": "cfop_esperados",
+      "type": "text",
+      "description": "JSON: [\"5101\", \"6101\"]"
+    },
+    {
+      "name": "cst_icms_esperado",
+      "type": "varchar(5)"
+    },
+    {
+      "name": "aliquota_icms_esperada",
+      "type": "numeric(5,2)"
+    },
+    {
+      "name": "reducao_bc_icms_esperada",
+      "type": "numeric(5,2)",
+      "description": "% reducao BC ICMS"
+    },
+    {
+      "name": "aliquota_icms_st_esperada",
+      "type": "numeric(5,2)"
+    },
+    {
+      "name": "aliquota_ipi_esperada",
+      "type": "numeric(5,2)"
+    },
+    {
+      "name": "cst_pis_esperado",
+      "type": "varchar(5)"
+    },
+    {
+      "name": "aliquota_pis_esperada",
+      "type": "numeric(5,2)"
+    },
+    {
+      "name": "cst_cofins_esperado",
+      "type": "varchar(5)"
+    },
+    {
+      "name": "aliquota_cofins_esperada",
+      "type": "numeric(5,2)"
+    },
+    {
+      "name": "tolerancia_bc_icms_pct",
+      "type": "numeric(5,2)",
+      "default": 2.0
+    },
+    {
+      "name": "tolerancia_bc_icms_st_pct",
+      "type": "numeric(5,2)",
+      "default": 2.0
+    },
+    {
+      "name": "tolerancia_tributos_pct",
+      "type": "numeric(5,2)",
+      "default": 5.0
+    },
+    {
+      "name": "ultimas_nfs_ids",
+      "type": "text",
+      "description": "JSON: [dfe_id1, dfe_id2, dfe_id3]"
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "atualizado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "default": true
+    }
+  ],
+  "unique_constraints": [
+    [
+      "cnpj_empresa_compradora",
+      "cnpj_fornecedor",
+      "cod_produto"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_perfil_fiscal_produto_fornecedor_cnpj_empresa_compradora",
+      "columns": [
+        "cnpj_empresa_compradora"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_perfil_fiscal_produto_fornecedor_cod_produto",
+      "columns": [
+        "cod_produto"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_perfil_fiscal_produto_fornecedor_cnpj_fornecedor",
+      "columns": [
+        "cnpj_fornecedor"
+      ],
+      "unique": false
+    }
+  ]
+}

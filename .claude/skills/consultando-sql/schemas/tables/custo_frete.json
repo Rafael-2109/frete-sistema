@@ -1,0 +1,64 @@
+{
+  "name": "custo_frete",
+  "description": "Custos de frete calculados.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "incoterm",
+      "type": "varchar(20)",
+      "description": "CIF, FOB, etc",
+      "nullable": false
+    },
+    {
+      "name": "cod_uf",
+      "type": "varchar(2)",
+      "nullable": false
+    },
+    {
+      "name": "percentual_frete",
+      "type": "numeric(5,2)",
+      "nullable": false
+    },
+    {
+      "name": "vigencia_inicio",
+      "type": "date",
+      "nullable": false
+    },
+    {
+      "name": "vigencia_fim",
+      "type": "date",
+      "description": "NULL = vigente"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "incoterm",
+      "cod_uf",
+      "vigencia_inicio"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "idx_custo_frete_vigencia",
+      "columns": [
+        "incoterm",
+        "cod_uf",
+        "vigencia_inicio"
+      ],
+      "unique": false
+    }
+  ]
+}

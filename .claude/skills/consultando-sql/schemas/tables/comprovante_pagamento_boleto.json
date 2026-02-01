@@ -1,0 +1,260 @@
+{
+  "name": "comprovante_pagamento_boleto",
+  "description": "Comprovantes de pagamento de boletos.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "numero_agendamento",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "data_comprovante",
+      "type": "date"
+    },
+    {
+      "name": "cooperativa",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "conta",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "cliente",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "linha_digitavel",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "numero_documento",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "nosso_numero",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "instituicao_emissora",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "tipo_documento",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "beneficiario_razao_social",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "beneficiario_nome_fantasia",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "beneficiario_cnpj_cpf",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "pagador_razao_social",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "pagador_nome_fantasia",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "pagador_cnpj_cpf",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "data_realizado",
+      "type": "varchar(50)",
+      "description": "\"02/01/2026 às 17:08:48\""
+    },
+    {
+      "name": "data_pagamento",
+      "type": "date"
+    },
+    {
+      "name": "data_vencimento",
+      "type": "date"
+    },
+    {
+      "name": "valor_documento",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "valor_desconto_abatimento",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "valor_juros_multa",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "valor_pago",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "situacao",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "autenticacao",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "arquivo_origem",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "pagina_origem",
+      "type": "integer"
+    },
+    {
+      "name": "importado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "importado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "arquivo_s3_path",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "ofx_fitid",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "ofx_checknum",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "ofx_memo",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "ofx_valor",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "ofx_data",
+      "type": "date"
+    },
+    {
+      "name": "ofx_arquivo_origem",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "odoo_statement_line_id",
+      "type": "integer"
+    },
+    {
+      "name": "odoo_move_id",
+      "type": "integer"
+    },
+    {
+      "name": "odoo_statement_id",
+      "type": "integer"
+    },
+    {
+      "name": "odoo_journal_id",
+      "type": "integer"
+    },
+    {
+      "name": "odoo_is_reconciled",
+      "type": "boolean"
+    },
+    {
+      "name": "odoo_vinculado_em",
+      "type": "timestamp"
+    }
+  ],
+  "indices": [
+    {
+      "name": "idx_comp_ofx_fitid",
+      "columns": [
+        "ofx_fitid"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_comp_beneficiario_cnpj",
+      "columns": [
+        "beneficiario_cnpj_cpf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_comprovante_pagamento_boleto_ofx_fitid",
+      "columns": [
+        "ofx_fitid"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_comprovante_pagamento_boleto_odoo_statement_line_id",
+      "columns": [
+        "odoo_statement_line_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_comp_ofx_checknum",
+      "columns": [
+        "ofx_checknum"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_comprovante_pagamento_boleto_numero_agendamento",
+      "columns": [
+        "numero_agendamento"
+      ],
+      "unique": true
+    },
+    {
+      "name": "idx_comp_odoo_statement_line",
+      "columns": [
+        "odoo_statement_line_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_comprovante_pagamento_boleto_ofx_checknum",
+      "columns": [
+        "ofx_checknum"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_comp_pagador_cnpj",
+      "columns": [
+        "pagador_cnpj_cpf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_comp_data_pagamento",
+      "columns": [
+        "data_pagamento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_comp_data_vencimento",
+      "columns": [
+        "data_vencimento"
+      ],
+      "unique": false
+    }
+  ]
+}

@@ -1,0 +1,390 @@
+{
+  "name": "nf_devolucao",
+  "description": "NFs de devolução recebidas.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "entrega_monitorada_id",
+      "type": "integer",
+      "description": "FK → entregas_monitoradas.id"
+    },
+    {
+      "name": "numero_nfd",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "data_registro",
+      "type": "timestamp",
+      "nullable": false
+    },
+    {
+      "name": "motivo",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "descricao_motivo",
+      "type": "text"
+    },
+    {
+      "name": "confianca_motivo",
+      "type": "numeric(5,4)",
+      "description": "0.0000 a 1.0000 - Confiança da extração IA"
+    },
+    {
+      "name": "numero_nf_venda",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "odoo_dfe_id",
+      "type": "integer"
+    },
+    {
+      "name": "odoo_ativo",
+      "type": "boolean"
+    },
+    {
+      "name": "odoo_name",
+      "type": "varchar(100)",
+      "description": "Ex: DFE/2025/15797"
+    },
+    {
+      "name": "odoo_status_codigo",
+      "type": "varchar(10)"
+    },
+    {
+      "name": "odoo_status_descricao",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "chave_nfd",
+      "type": "varchar(44)"
+    },
+    {
+      "name": "serie_nfd",
+      "type": "varchar(10)"
+    },
+    {
+      "name": "data_emissao",
+      "type": "date"
+    },
+    {
+      "name": "data_entrada",
+      "type": "date"
+    },
+    {
+      "name": "valor_total",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "valor_produtos",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "cnpj_emitente",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "nome_emitente",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "ie_emitente",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "uf_emitente",
+      "type": "varchar(2)"
+    },
+    {
+      "name": "municipio_emitente",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "cep_emitente",
+      "type": "varchar(10)"
+    },
+    {
+      "name": "endereco_emitente",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "cnpj_destinatario",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "nome_destinatario",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "info_complementar",
+      "type": "text",
+      "description": "Texto livre do cliente"
+    },
+    {
+      "name": "nfd_xml_path",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "nfd_xml_nome_arquivo",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "nfd_pdf_path",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "nfd_pdf_nome_arquivo",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "sincronizado_odoo",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "data_sincronizacao",
+      "type": "timestamp"
+    },
+    {
+      "name": "status",
+      "type": "varchar(30)",
+      "nullable": false,
+      "default": "REGISTRADA"
+    },
+    {
+      "name": "origem_registro",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "MONITORAMENTO"
+    },
+    {
+      "name": "tipo_documento",
+      "type": "varchar(10)",
+      "nullable": false,
+      "default": "NFD"
+    },
+    {
+      "name": "status_odoo",
+      "type": "varchar(30)"
+    },
+    {
+      "name": "status_monitoramento",
+      "type": "varchar(30)"
+    },
+    {
+      "name": "odoo_nf_venda_id",
+      "type": "integer",
+      "description": "ID da NF original (account.move)"
+    },
+    {
+      "name": "odoo_nota_credito_id",
+      "type": "integer",
+      "description": "ID da NC (out_refund)"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    },
+    {
+      "name": "atualizado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "nullable": false,
+      "default": true
+    },
+    {
+      "name": "e_pallet_devolucao",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "entrega_monitorada_id",
+      "references": "entregas_monitoradas.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_nf_devolucao_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_origem_registro",
+      "columns": [
+        "origem_registro"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nfd_numero_serie",
+      "columns": [
+        "numero_nfd",
+        "serie_nfd"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_numero_nf_venda",
+      "columns": [
+        "numero_nf_venda"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_tipo_documento",
+      "columns": [
+        "tipo_documento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nfd_cnpj_status",
+      "columns": [
+        "cnpj_emitente",
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_odoo_dfe_id",
+      "columns": [
+        "odoo_dfe_id"
+      ],
+      "unique": true
+    },
+    {
+      "name": "idx_nfd_data_registro",
+      "columns": [
+        "data_registro"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nfd_nf_venda",
+      "columns": [
+        "numero_nf_venda"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nfd_odoo_dfe",
+      "columns": [
+        "odoo_dfe_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nfd_tipo_documento",
+      "columns": [
+        "tipo_documento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_odoo_nf_venda_id",
+      "columns": [
+        "odoo_nf_venda_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nfd_odoo_nf_venda",
+      "columns": [
+        "odoo_nf_venda_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nfd_status_odoo_monit",
+      "columns": [
+        "status_odoo",
+        "status_monitoramento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_chave_nfd",
+      "columns": [
+        "chave_nfd"
+      ],
+      "unique": true
+    },
+    {
+      "name": "ix_nf_devolucao_odoo_nota_credito_id",
+      "columns": [
+        "odoo_nota_credito_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_cnpj_emitente",
+      "columns": [
+        "cnpj_emitente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_ativo",
+      "columns": [
+        "ativo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_e_pallet_devolucao",
+      "columns": [
+        "e_pallet_devolucao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_cnpj_destinatario",
+      "columns": [
+        "cnpj_destinatario"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_entrega_monitorada_id",
+      "columns": [
+        "entrega_monitorada_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_numero_nfd",
+      "columns": [
+        "numero_nfd"
+      ],
+      "unique": false
+    }
+  ]
+}

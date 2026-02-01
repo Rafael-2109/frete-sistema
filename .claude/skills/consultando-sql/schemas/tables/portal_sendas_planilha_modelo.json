@@ -1,0 +1,127 @@
+{
+  "name": "portal_sendas_planilha_modelo",
+  "description": "Armazena os dados da planilha modelo baixada do portal Sendas",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "razao_social_fornecedor",
+      "type": "varchar(255)",
+      "description": "Coluna 2"
+    },
+    {
+      "name": "nome_fantasia_fornecedor",
+      "type": "varchar(255)",
+      "description": "Coluna 3"
+    },
+    {
+      "name": "unidade_destino",
+      "type": "varchar(255)",
+      "description": "Coluna 4"
+    },
+    {
+      "name": "uf_destino",
+      "type": "varchar(2)",
+      "description": "Coluna 5"
+    },
+    {
+      "name": "fluxo_operacao",
+      "type": "varchar(100)",
+      "description": "Coluna 6"
+    },
+    {
+      "name": "codigo_pedido_cliente",
+      "type": "varchar(200)",
+      "description": "Coluna 7"
+    },
+    {
+      "name": "codigo_produto_cliente",
+      "type": "varchar(100)",
+      "description": "Coluna 8"
+    },
+    {
+      "name": "codigo_produto_sku_fornecedor",
+      "type": "varchar(100)",
+      "description": "Coluna 9"
+    },
+    {
+      "name": "ean",
+      "type": "varchar(20)",
+      "description": "Coluna 10"
+    },
+    {
+      "name": "setor",
+      "type": "varchar(100)",
+      "description": "Coluna 11"
+    },
+    {
+      "name": "numero_pedido_trizy",
+      "type": "varchar(100)",
+      "description": "Coluna 12"
+    },
+    {
+      "name": "descricao_item",
+      "type": "varchar(500)",
+      "description": "Coluna 13"
+    },
+    {
+      "name": "quantidade_total",
+      "type": "numeric(15,3)",
+      "description": "Coluna 14"
+    },
+    {
+      "name": "saldo_disponivel",
+      "type": "numeric(15,3)",
+      "description": "Coluna 15"
+    },
+    {
+      "name": "unidade_medida",
+      "type": "varchar(20)",
+      "description": "Coluna 16"
+    },
+    {
+      "name": "data_importacao",
+      "type": "timestamp",
+      "nullable": false
+    },
+    {
+      "name": "usuario_importacao",
+      "type": "varchar(100)"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_portal_sendas_planilha_modelo_codigo_pedido_cliente",
+      "columns": [
+        "codigo_pedido_cliente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_portal_sendas_planilha_modelo_unidade_destino",
+      "columns": [
+        "unidade_destino"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_planilha_sendas_busca",
+      "columns": [
+        "unidade_destino",
+        "codigo_pedido_cliente",
+        "codigo_produto_cliente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_portal_sendas_planilha_modelo_codigo_produto_cliente",
+      "columns": [
+        "codigo_produto_cliente"
+      ],
+      "unique": false
+    }
+  ]
+}

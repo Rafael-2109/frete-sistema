@@ -1,0 +1,34 @@
+{
+  "name": "parametro_custeio",
+  "description": "Parâmetros de custeio.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "chave",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "valor",
+      "type": "numeric(15,6)",
+      "nullable": false
+    },
+    {
+      "name": "descricao",
+      "type": "text"
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    },
+    {
+      "name": "atualizado_por",
+      "type": "varchar(100)"
+    }
+  ]
+}

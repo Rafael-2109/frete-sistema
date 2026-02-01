@@ -1,0 +1,144 @@
+{
+  "name": "transportadoras",
+  "description": "Cadastro de transportadoras com dados logísticos e financeiros.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "cnpj",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "razao_social",
+      "type": "varchar(120)",
+      "nullable": false
+    },
+    {
+      "name": "cidade",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "uf",
+      "type": "varchar(2)",
+      "nullable": false
+    },
+    {
+      "name": "optante",
+      "type": "boolean",
+      "description": "Sim/Não",
+      "default": false
+    },
+    {
+      "name": "condicao_pgto",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "freteiro",
+      "type": "boolean",
+      "description": "Define se é freteiro",
+      "default": false
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "Status ativo/inativo para cotações",
+      "nullable": false,
+      "default": true
+    },
+    {
+      "name": "aplica_gris_pos_minimo",
+      "type": "boolean",
+      "description": "Se True, GRIS é aplicado após frete mínimo",
+      "default": false
+    },
+    {
+      "name": "aplica_adv_pos_minimo",
+      "type": "boolean",
+      "description": "Se True, ADV é aplicado após frete mínimo",
+      "default": false
+    },
+    {
+      "name": "aplica_rca_pos_minimo",
+      "type": "boolean",
+      "description": "Se True, RCA é aplicado após frete mínimo",
+      "default": false
+    },
+    {
+      "name": "aplica_pedagio_pos_minimo",
+      "type": "boolean",
+      "description": "Se True, Pedágio é aplicado após frete mínimo",
+      "default": false
+    },
+    {
+      "name": "aplica_despacho_pos_minimo",
+      "type": "boolean",
+      "description": "Se True, Despacho é aplicado após frete mínimo",
+      "default": false
+    },
+    {
+      "name": "aplica_cte_pos_minimo",
+      "type": "boolean",
+      "description": "Se True, CTE é aplicado após frete mínimo",
+      "default": false
+    },
+    {
+      "name": "aplica_tas_pos_minimo",
+      "type": "boolean",
+      "description": "Se True, TAS é aplicado após frete mínimo",
+      "default": false
+    },
+    {
+      "name": "pedagio_por_fracao",
+      "type": "boolean",
+      "description": "True = arredonda para cima, False = usa valor exato",
+      "default": true
+    },
+    {
+      "name": "nao_aceita_nf_pallet",
+      "type": "boolean",
+      "description": "Transportadora não aceita NF de pallet",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "motorista_proprio",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "banco",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "agencia",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "conta",
+      "type": "varchar(30)"
+    },
+    {
+      "name": "tipo_conta",
+      "type": "varchar(20)",
+      "description": "'corrente' ou 'poupanca'"
+    },
+    {
+      "name": "pix",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "cpf_cnpj_favorecido",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "obs_financ",
+      "type": "text"
+    }
+  ]
+}

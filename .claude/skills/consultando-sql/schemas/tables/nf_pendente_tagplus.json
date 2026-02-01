@@ -1,0 +1,168 @@
+{
+  "name": "nf_pendente_tagplus",
+  "description": "NFs pendentes no TagPlus.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "numero_nf",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "cnpj_cliente",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "nome_cliente",
+      "type": "varchar(255)",
+      "nullable": false
+    },
+    {
+      "name": "nome_cidade",
+      "type": "varchar(120)"
+    },
+    {
+      "name": "cod_uf",
+      "type": "varchar(5)"
+    },
+    {
+      "name": "data_fatura",
+      "type": "date",
+      "nullable": false
+    },
+    {
+      "name": "cod_produto",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "nome_produto",
+      "type": "varchar(200)",
+      "nullable": false
+    },
+    {
+      "name": "qtd_produto_faturado",
+      "type": "numeric(15,3)",
+      "nullable": false
+    },
+    {
+      "name": "preco_produto_faturado",
+      "type": "numeric(15,4)",
+      "nullable": false
+    },
+    {
+      "name": "valor_produto_faturado",
+      "type": "numeric(15,2)",
+      "nullable": false
+    },
+    {
+      "name": "peso_unitario_produto",
+      "type": "numeric(15,3)",
+      "description": "Peso bruto unitário",
+      "default": 0
+    },
+    {
+      "name": "peso_total",
+      "type": "numeric(15,3)",
+      "description": "qtd_produto_faturado * peso_unitario_produto",
+      "default": 0
+    },
+    {
+      "name": "origem",
+      "type": "varchar(50)",
+      "description": "Número do pedido"
+    },
+    {
+      "name": "resolvido",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "importado",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "pedido_preenchido_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "pedido_preenchido_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "resolvido_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "resolvido_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "importado_em",
+      "type": "timestamp"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "numero_nf",
+      "cod_produto"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_nf_pendente_tagplus_cnpj_cliente",
+      "columns": [
+        "cnpj_cliente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_pendente_tagplus_importado",
+      "columns": [
+        "importado"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_pendente_tagplus_origem",
+      "columns": [
+        "origem"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_pendente_tagplus_numero_nf",
+      "columns": [
+        "numero_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_pendente_tagplus_resolvido",
+      "columns": [
+        "resolvido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nf_pendente_resolvido",
+      "columns": [
+        "resolvido",
+        "importado"
+      ],
+      "unique": false
+    }
+  ]
+}
