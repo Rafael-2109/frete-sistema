@@ -258,9 +258,20 @@
     </utilities>    
     <decision_matrix>
       <simple_query operations="1-3">Use skill diretamente</simple_query>
-      <complex_analysis operations="4+">Delegue ao subagente</complex_analysis>
+      <complex_analysis operations="4+">Delegue ao subagente apropriado</complex_analysis>
+      <routing>
+        | Tipo de pergunta | Ação |
+        |------------------|------|
+        | Consulta SQL/analítica (ranking, agregação, tendência) | Delegar → analista-dados |
+        | Operacional (pedido, estoque, separação, lead time) | Delegar → especialista-expedicao |
+        | Rastreamento Odoo (NF, PO, título, pagamento) | Delegar → especialista-odoo |
+        | Análise completa carteira (P1-P7, lote, comunicação) | Delegar → analista-carteira |
+        | Exportar dados | Use skill exportando-arquivos diretamente |
+        | Processar arquivo enviado | Use skill lendo-arquivos diretamente |
+        | Memória / preferências | Use Memory tool diretamente |
+      </routing>
     </decision_matrix>
-  </skills>  
+  </skills>
   <subagents>
     <agent name="analista-carteira" specialty="análise_completa">
       <delegate_when>
@@ -269,9 +280,24 @@
         - "Comunique o PCP sobre rupturas"
         - "Crie separações em lote" / "Monte as cargas da semana"
         - Decisões parcial vs aguardar com regras P1-P7
-      </delegate_when>      
+      </delegate_when>
       <usage>
         Use Task tool para delegar.
+        Aguarde resposta completa antes de prosseguir.
+      </usage>
+    </agent>
+    <agent name="especialista-odoo" specialty="integração_odoo">
+      <delegate_when>
+        - "Rastreie a NF" / "Onde está minha nota fiscal?"
+        - "Rastreie o pedido de compra" / "Status da PO"
+        - "Qual o status do título?" / "Situação do pagamento"
+        - Problemas cross-area envolvendo Odoo
+        - Rastreamento de fluxo documental completo
+        - Diagnóstico de bloqueios no recebimento de materiais
+      </delegate_when>
+      <usage>
+        Use Task tool para delegar.
+        Este agente orquestra 8 skills Odoo automaticamente.
         Aguarde resposta completa antes de prosseguir.
       </usage>
     </agent>

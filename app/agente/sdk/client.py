@@ -476,21 +476,62 @@ Nunca invente informações."""
             try:
                 from claude_agent_sdk import AgentDefinition
                 options_dict["agents"] = {
-                    "consulta-rapida": AgentDefinition(
+                    "analista-dados": AgentDefinition(
                         description=(
-                            "Consulta rápida de dados logísticos (pedidos, estoque, NFs). "
-                            "Use para perguntas simples que NÃO exigem análise complexa."
+                            "Analista de dados que converte perguntas em linguagem natural para SQL "
+                            "e retorna resultados formatados. Use para: rankings, agregações, "
+                            "distribuições, tendências, comparações numéricas. "
+                            "Exemplos: 'top 10 clientes por valor', 'faturamento por estado', "
+                            "'pedidos pendentes por vendedor'."
                         ),
                         prompt=(
-                            "Você é um assistente de consultas rápidas de logística. "
-                            "Responda de forma direta e concisa. "
-                            "Use as Skills disponíveis para buscar dados reais."
+                            "Você é um analista de dados especializado em logística de frete. "
+                            "Seu trabalho é converter perguntas do usuário em consultas SQL, "
+                            "executar via a skill consultando-sql, e apresentar resultados "
+                            "de forma clara com tabelas formatadas.\n\n"
+                            "FLUXO OBRIGATÓRIO:\n"
+                            "1. Invocar skill consultando-sql com a pergunta do usuário\n"
+                            "2. Se resultado > 10 linhas, sugerir exportação via exportando-arquivos\n"
+                            "3. Formatar resultado em tabela markdown\n"
+                            "4. Incluir totais/médias quando relevante\n\n"
+                            "NUNCA invente dados. Se a query falhar, explique o erro."
+                        ),
+                        tools=["Bash", "Read", "Skill"],
+                        model="haiku",  # Haiku para consultas SQL (custo-eficiente)
+                    ),
+                    "especialista-expedicao": AgentDefinition(
+                        description=(
+                            "Especialista em expedição e logística operacional. "
+                            "Use para: consultar pedidos, verificar estoque e disponibilidade, "
+                            "calcular lead time, criar separações, consultar programação de produção. "
+                            "Exemplos: 'tem estoque do produto X?', 'crie separação do pedido Y', "
+                            "'qual o lead time para cliente Z?', 'status do pedido 12345'."
+                        ),
+                        prompt=(
+                            "Você é um especialista em expedição da Nacom Goya. "
+                            "Use a skill gerindo-expedicao para TODAS as consultas operacionais.\n\n"
+                            "REGRAS:\n"
+                            "- SEMPRE consulte dados REAIS via skill (nunca invente)\n"
+                            "- Para separações: SEMPRE simule antes de criar\n"
+                            "- Formate números no padrão brasileiro (R$ 1.234,56)\n"
+                            "- Se não encontrar dados, informe claramente\n\n"
+                            "PRIORIDADES P1-P7 (quando relevante):\n"
+                            "P1: Com data_entrega_pedido → EXECUTAR\n"
+                            "P2: FOB → SEMPRE COMPLETO\n"
+                            "P3: Carga direta ≥26 pallets → Agendar D+3\n"
+                            "P4: Atacadão (exceto loja 183)\n"
+                            "P5: Assaí\n"
+                            "P6: Resto (por data_pedido)\n"
+                            "P7: Atacadão 183 (POR ÚLTIMO)"
                         ),
                         tools=["Bash", "Read", "Skill", "Glob", "Grep"],
-                        model="haiku",  # 20x mais barato que Opus
+                        model="sonnet",  # Sonnet para raciocínio sobre regras P1-P7
                     ),
                 }
-                logger.info("[AGENT_CLIENT] Subagentes programáticos habilitados")
+                logger.info(
+                    "[AGENT_CLIENT] Subagentes programáticos habilitados: "
+                    "analista-dados (haiku), especialista-expedicao (sonnet)"
+                )
             except (ImportError, Exception) as e:
                 logger.warning(
                     f"[AGENT_CLIENT] Subagentes programáticos desabilitados: {e}"
