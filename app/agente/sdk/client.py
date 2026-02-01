@@ -374,6 +374,7 @@ Nunca invente informações."""
             options_dict["allowed_tools"] = [
                 "Skill",      # OBRIGATÓRIO - permite Claude invocar Skills
                 "Bash",       # OBRIGATÓRIO - executa scripts Python das Skills
+                "Task",       # Invocar subagentes (.claude/agents/ e programáticos)
                 "Read",       # Leitura de arquivos (útil para contexto)
                 "Glob",       # Busca de arquivos
                 "Grep",       # Busca em conteúdo
