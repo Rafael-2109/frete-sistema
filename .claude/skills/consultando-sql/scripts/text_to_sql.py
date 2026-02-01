@@ -544,12 +544,12 @@ JSON:"""
                     result = json.loads(json_match.group())
                 except json.JSONDecodeError:
                     logger.warning(f"Evaluator retornou JSON invalido: {result_text[:200]}")
-                    result = {"approved": True, "improved_sql": None, "reason": "Avaliacao inconclusiva"}
+                    result = {"approved": False, "improved_sql": None, "reason": "Evaluator retornou JSON invalido"}
             else:
-                result = {"approved": True, "improved_sql": None, "reason": "Avaliacao inconclusiva"}
+                result = {"approved": False, "improved_sql": None, "reason": "Evaluator nao retornou JSON"}
 
         return {
-            "approved": result.get("approved", True),
+            "approved": result.get("approved", False),
             "improved_sql": result.get("improved_sql"),
             "reason": result.get("reason", "Sem motivo informado"),
         }
@@ -657,17 +657,11 @@ class TextToSQLPipeline:
         self.generator = SQLGenerator(catalog_text)
         self.evaluator = SQLEvaluator()
 
-        # Ler configs de feature flags
-        try:
-            from app.agente.config.feature_flags import (
-                TEXT_TO_SQL_TIMEOUT, TEXT_TO_SQL_MAX_ROWS
-            )
-            self.executor = SQLExecutor(
-                timeout_seconds=TEXT_TO_SQL_TIMEOUT,
-                max_rows=TEXT_TO_SQL_MAX_ROWS,
-            )
-        except ImportError:
-            self.executor = SQLExecutor()
+        # Executor com defaults seguros (timeout 5s, max 500 linhas)
+        # Configuráveis via env vars se necessário no futuro
+        timeout = int(os.getenv("TEXT_TO_SQL_TIMEOUT", "5"))
+        max_rows = int(os.getenv("TEXT_TO_SQL_MAX_ROWS", "500"))
+        self.executor = SQLExecutor(timeout_seconds=timeout, max_rows=max_rows)
 
     def run(self, question: str) -> dict:
         """
@@ -861,20 +855,6 @@ def main():
         logging.basicConfig(level=logging.DEBUG, format='%(message)s')
     else:
         logging.basicConfig(level=logging.WARNING)
-
-    # Verificar feature flag
-    try:
-        from app.agente.config.feature_flags import USE_TEXT_TO_SQL
-        if not USE_TEXT_TO_SQL:
-            result = {
-                "sucesso": False,
-                "pergunta": args.pergunta,
-                "aviso": "Text-to-SQL desabilitado. Ative com AGENT_TEXT_TO_SQL=true"
-            }
-            print(json.dumps(result, ensure_ascii=False))
-            return
-    except ImportError:
-        pass
 
     # Verificar API key
     if not os.getenv('ANTHROPIC_API_KEY'):

@@ -8,16 +8,14 @@ Referência: https://platform.claude.com/docs/pt-BR/agent-sdk/
 """
 
 import logging
-import asyncio
 import time
-from typing import AsyncGenerator, Dict, Any, List, Optional, Callable, Union
+from typing import AsyncGenerator, Dict, Any, List, Optional, Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 
 # SDK Oficial
 # Ref: https://platform.claude.com/docs/pt-BR/agent-sdk/
 from claude_agent_sdk import (
-    query,
     ClaudeAgentOptions,
     ResultMessage,
     AssistantMessage,
@@ -44,7 +42,7 @@ class ToolCall:
     id: str
     name: str
     input: Dict[str, Any]
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 @dataclass
@@ -71,35 +69,25 @@ class AgentClient:
     """
     Cliente do Claude Agent SDK oficial.
 
-    ARQUITETURA (conforme melhores práticas Anthropic):
-    - Usa SKILLS para funcionalidades (.claude/skills/)
-    - Skills são invocadas automaticamente baseado na descrição
-    - Scripts são executados via Bash tool
-    - NÃO usa Custom Tools MCP (evita duplicação)
+    ARQUITETURA:
+    - Usa ClaudeSDKClient via SessionPool (canal bidirecional persistente)
+    - Skills para funcionalidades (.claude/skills/)
+    - Custom Tools MCP in-process para text-to-sql
+    - Callback canUseTool para permissões
+    - Rastreamento de custos
 
     Referências:
     - https://platform.claude.com/docs/pt-BR/agent-sdk/skills
     - https://platform.claude.com/docs/pt-BR/agent-sdk/sessions
     - https://platform.claude.com/docs/pt-BR/agent-sdk/permissions
 
-    Implementa:
-    - Streaming com query() async generator
-    - Sessions automáticas com resume
-    - Skills via setting_sources=["project"]
-    - Callback canUseTool para permissões
-    - Rastreamento de custos
-
     Uso:
         client = AgentClient()
 
-        # Streaming
-        async for event in client.stream_response("Sua pergunta"):
+        # Streaming (requer pooled_client do SessionPool)
+        async for event in client.stream_response("Sua pergunta", pooled_client=pooled):
             if event.type == 'text':
                 print(event.content, end='')
-
-        # Com sessão existente
-        async for event in client.stream_response("Continue...", session_id="xyz"):
-            ...
     """
 
     def __init__(self):
@@ -265,317 +253,6 @@ Nunca invente informações."""
 
         return prompt
 
-    def _build_options(
-        self,
-        session_id: Optional[str] = None,
-        user_name: str = "Usuário",
-        allowed_tools: Optional[List[str]] = None,
-        permission_mode: str = "default",
-        can_use_tool: Optional[Callable] = None,
-        max_turns: int = 10,
-        fork_session: bool = False,
-        model: Optional[str] = None,
-        thinking_enabled: bool = False,
-        user_id: int = None,
-    ) -> ClaudeAgentOptions:
-        """
-        Constrói ClaudeAgentOptions conforme documentação oficial Anthropic.
-
-        ARQUITETURA (conforme melhores práticas):
-        - Usa SKILLS para funcionalidades (.claude/skills/)
-        - Skills são invocadas automaticamente baseado na descrição
-        - Scripts são executados via Bash tool
-        - NÃO usa Custom Tools MCP (evita duplicação)
-
-        Referências:
-        - https://platform.claude.com/docs/pt-BR/agent-sdk/skills
-        - https://platform.claude.com/docs/pt-BR/agent-sdk/sessions
-        - https://platform.claude.com/docs/pt-BR/agent-sdk/permissions
-
-        Args:
-            session_id: ID de sessão para retomar (do SDK)
-            user_name: Nome do usuário
-            allowed_tools: Lista de tools permitidas
-            permission_mode: Modo de permissão (default, acceptEdits, plan, bypassPermissions)
-            can_use_tool: Callback de permissão (retorna {behavior, updatedInput})
-            max_turns: Máximo de turnos
-            fork_session: Se deve bifurcar a sessão
-            model: Modelo a usar (FEAT-001) - sobrescreve settings.model
-            thinking_enabled: Ativar Extended Thinking (FEAT-002)
-            user_id: ID do usuário (para Memory Tool)
-
-        Returns:
-            ClaudeAgentOptions configurado
-        """
-        import os
-
-        # System prompt customizado (com user_id para Memory Tool)
-        custom_instructions = self._format_system_prompt(user_name, user_id)
-
-        # Diretório do projeto para carregar Skills
-        # Skills estão em: .claude/skills/
-        project_cwd = os.path.dirname(
-            os.path.dirname(
-                os.path.dirname(
-                    os.path.dirname(os.path.abspath(__file__))
-                )
-            )
-        )  # Raiz do projeto: /home/.../frete_sistema
-
-        options_dict = {
-            # ========================================
-            # CONFIGURAÇÃO CONFORME DOCUMENTAÇÃO SDK
-            # https://platform.claude.com/docs/pt-BR/agent-sdk/modifying-system-prompts
-            # https://platform.claude.com/docs/pt-BR/agent-sdk/skills
-            # ========================================
-
-            # FEAT-001: Modelo a ser usado (usa o passado por parâmetro ou o padrão)
-            "model": model if model else self.settings.model,
-
-            # Máximo de turnos (quantas vezes o agente pode responder)
-            "max_turns": max_turns,
-
-            # System Prompt: OBRIGATÓRIO usar preset "claude_code" para ter tools funcionando!
-            # Referência: https://platform.claude.com/docs/pt-BR/agent-sdk/modifying-system-prompts
-            # "O Agent SDK usa um prompt do sistema vazio por padrão"
-            # "Para usar funcionalidades completas, especifique preset: 'claude_code'"
-            "system_prompt": {
-                "type": "preset",
-                "preset": "claude_code",
-                "append": custom_instructions
-            },
-
-            # CWD: Diretório de trabalho para Skills
-            # CRÍTICO: Skills só funcionam se cwd apontar para raiz do projeto
-            "cwd": project_cwd,
-
-            # Setting Sources: Carrega configurações do projeto e usuário
-            # Ref: https://platform.claude.com/docs/pt-BR/agent-sdk/skills
-            # OBRIGATÓRIO para habilitar Skills - sem isso, Skills não carregam!
-            "setting_sources": ["user", "project"],
-        }
-
-        # Retomar sessão existente (SDK gerencia sessions)
-        # Referência: https://platform.claude.com/docs/pt-BR/agent-sdk/sessions
-        if session_id:
-            options_dict["resume"] = session_id
-            if fork_session:
-                options_dict["fork_session"] = True
-
-        # Tools permitidas - APENAS as necessárias para Skills funcionarem
-        # Referência: https://platform.claude.com/docs/pt-BR/agent-sdk/skills
-        # "Skill" é OBRIGATÓRIO para Claude invocar Skills
-        # "Bash" é necessário para executar scripts das Skills
-        if allowed_tools:
-            options_dict["allowed_tools"] = allowed_tools
-        else:
-            # Default: Tools necessárias para Skills funcionarem
-            # NOTA: Write e Edit são validados no can_use_tool para permitir APENAS /tmp
-            options_dict["allowed_tools"] = [
-                "Skill",      # OBRIGATÓRIO - permite Claude invocar Skills
-                "Bash",       # OBRIGATÓRIO - executa scripts Python das Skills
-                "Task",       # Invocar subagentes (.claude/agents/ e programáticos)
-                "Read",       # Leitura de arquivos (útil para contexto)
-                "Glob",       # Busca de arquivos
-                "Grep",       # Busca em conteúdo
-                "Write",      # Escrita de arquivos (RESTRITO a /tmp via can_use_tool)
-                "Edit",       # Edição de arquivos (RESTRITO a /tmp via can_use_tool)
-                "TodoWrite",  # Gerenciamento de tarefas (feedback visual)
-                "Memory",     # Memória persistente do usuário (DatabaseMemoryTool)
-            ]
-
-        # Modo de permissão
-        # Referência: https://platform.claude.com/docs/pt-BR/agent-sdk/permissions
-        if permission_mode in ['default', 'acceptEdits', 'plan', 'bypassPermissions']:
-            options_dict["permission_mode"] = permission_mode
-        else:
-            options_dict["permission_mode"] = "default"
-
-        # FEAT-002: Extended Thinking (Pensamento Profundo)
-        # Referência: Parâmetro max_thinking_tokens do ClaudeAgentOptions
-        # Quando ativado, o Claude usa mais tokens para raciocinar antes de responder
-        if thinking_enabled:
-            # Budget de 20.000 tokens para thinking (ajustável)
-            options_dict["max_thinking_tokens"] = 20000
-            logger.info("[AGENT_CLIENT] Extended Thinking ativado (max_thinking_tokens=20000)")
-
-        # Callback de permissão (SDK 0.1.26+: 3 params, retorno tipado)
-        # Ref: https://platform.claude.com/docs/pt-BR/agent-sdk/permissions
-        if can_use_tool:
-            options_dict["can_use_tool"] = can_use_tool
-
-        # SDK 0.1.26+: Fallback model para resiliência em produção
-        # Se o modelo principal falhar (rate limit, indisponibilidade),
-        # o SDK automaticamente usa o fallback
-        options_dict["fallback_model"] = "sonnet"
-        logger.info("[AGENT_CLIENT] Fallback model configurado: sonnet")
-
-        # SDK 0.1.26+: Barreira real de segurança
-        # allowed_tools SOZINHO não bloqueia — agente pode pedir permissão
-        # disallowed_tools impede completamente o acesso
-        options_dict["disallowed_tools"] = [
-            "NotebookEdit",   # Não há Jupyter notebooks no sistema
-        ]
-
-        # =================================================================
-        # FEATURE FLAGS: Quick Wins (ativados via env vars)
-        # =================================================================
-        from ..config.feature_flags import (
-            USE_BUDGET_CONTROL, MAX_BUDGET_USD,
-            USE_EXTENDED_CONTEXT,
-            USE_CONTEXT_CLEARING,
-            USE_PROMPT_CACHING,
-        )
-
-        # C1: Budget Control nativo (disponível desde SDK v0.1.6)
-        if USE_BUDGET_CONTROL:
-            options_dict["max_budget_usd"] = MAX_BUDGET_USD
-            logger.info(f"[AGENT_CLIENT] Budget control nativo: max ${MAX_BUDGET_USD}/request")
-
-        # C2: Extended Context (1M tokens)
-        # RESTRICAO: Só funciona com Sonnet 4/4.5 — NÃO com Opus
-        if USE_EXTENDED_CONTEXT:
-            current_model = options_dict.get("model", self.settings.model if hasattr(self, 'settings') else "")
-            if "sonnet" in str(current_model).lower():
-                betas = options_dict.get("betas", [])
-                betas.append("context-1m-2025-08-07")
-                options_dict["betas"] = betas
-                logger.info("[AGENT_CLIENT] Extended Context habilitado (1M tokens)")
-            else:
-                logger.warning(
-                    f"[AGENT_CLIENT] Extended Context IGNORADO — "
-                    f"modelo '{current_model}' não suportado (apenas Sonnet)"
-                )
-
-        # C4: Context Clearing automático
-        if USE_CONTEXT_CLEARING:
-            betas = options_dict.get("betas", [])
-            betas.extend([
-                "clear-thinking-20251015",
-                "clear-tool-uses-20250919",
-            ])
-            options_dict["betas"] = betas
-            logger.info("[AGENT_CLIENT] Context Clearing habilitado")
-
-        # C6: Prompt Caching (economia de 50-90% tokens input)
-        if USE_PROMPT_CACHING:
-            betas = options_dict.get("betas", [])
-            betas.append("prompt-caching-2024-07-31")
-            options_dict["betas"] = betas
-            logger.info("[AGENT_CLIENT] Prompt Caching habilitado")
-
-        # =================================================================
-        # FEATURE FLAGS: Architecture (Fase 3)
-        # =================================================================
-        from ..config.feature_flags import USE_PROGRAMMATIC_AGENTS
-
-        # D4: Subagentes programáticos via AgentDefinition
-        # Coexiste com .claude/agents/*.md (filesystem)
-        # NOTA: Subagentes NÃO podem spawnar outros subagentes
-        if USE_PROGRAMMATIC_AGENTS:
-            try:
-                from claude_agent_sdk import AgentDefinition
-                options_dict["agents"] = {
-                    "analista-dados": AgentDefinition(
-                        description=(
-                            "Analista de dados que converte perguntas em linguagem natural para SQL "
-                            "e retorna resultados formatados. Use para: rankings, agregações, "
-                            "distribuições, tendências, comparações numéricas. "
-                            "Exemplos: 'top 10 clientes por valor', 'faturamento por estado', "
-                            "'pedidos pendentes por vendedor'."
-                        ),
-                        prompt=(
-                            "Você é um analista de dados especializado em logística de frete. "
-                            "Seu trabalho é converter perguntas do usuário em consultas SQL, "
-                            "executar via a skill consultando-sql, e apresentar resultados "
-                            "de forma clara com tabelas formatadas.\n\n"
-                            "FLUXO OBRIGATÓRIO:\n"
-                            "1. Invocar skill consultando-sql com a pergunta do usuário\n"
-                            "2. Se resultado > 10 linhas, sugerir exportação via exportando-arquivos\n"
-                            "3. Formatar resultado em tabela markdown\n"
-                            "4. Incluir totais/médias quando relevante\n\n"
-                            "NUNCA invente dados. Se a query falhar, explique o erro."
-                        ),
-                        tools=["Bash", "Read", "Skill"],
-                        model="haiku",  # Haiku para consultas SQL (custo-eficiente)
-                    ),
-                    "especialista-expedicao": AgentDefinition(
-                        description=(
-                            "Especialista em expedição e logística operacional. "
-                            "Use para: consultar pedidos, verificar estoque e disponibilidade, "
-                            "calcular lead time, criar separações, consultar programação de produção. "
-                            "Exemplos: 'tem estoque do produto X?', 'crie separação do pedido Y', "
-                            "'qual o lead time para cliente Z?', 'status do pedido 12345'."
-                        ),
-                        prompt=(
-                            "Você é um especialista em expedição da Nacom Goya. "
-                            "Use a skill gerindo-expedicao para TODAS as consultas operacionais.\n\n"
-                            "REGRAS:\n"
-                            "- SEMPRE consulte dados REAIS via skill (nunca invente)\n"
-                            "- Para separações: SEMPRE simule antes de criar\n"
-                            "- Formate números no padrão brasileiro (R$ 1.234,56)\n"
-                            "- Se não encontrar dados, informe claramente\n\n"
-                            "PRIORIDADES P1-P7 (quando relevante):\n"
-                            "P1: Com data_entrega_pedido → EXECUTAR\n"
-                            "P2: FOB → SEMPRE COMPLETO\n"
-                            "P3: Carga direta ≥26 pallets → Agendar D+3\n"
-                            "P4: Atacadão (exceto loja 183)\n"
-                            "P5: Assaí\n"
-                            "P6: Resto (por data_pedido)\n"
-                            "P7: Atacadão 183 (POR ÚLTIMO)"
-                        ),
-                        tools=["Bash", "Read", "Skill", "Glob", "Grep"],
-                        model="sonnet",  # Sonnet para raciocínio sobre regras P1-P7
-                    ),
-                }
-                logger.info(
-                    "[AGENT_CLIENT] Subagentes programáticos habilitados: "
-                    "analista-dados (haiku), especialista-expedicao (sonnet)"
-                )
-            except (ImportError, Exception) as e:
-                logger.warning(
-                    f"[AGENT_CLIENT] Subagentes programáticos desabilitados: {e}"
-                )
-
-        # =================================================================
-        # D5: Hooks SDK formais para auditoria
-        # PostToolUse: Registra execução de Bash/Skill
-        # PreCompact: Preserva informações críticas antes de compactação
-        # =================================================================
-        try:
-            from claude_agent_sdk import HookMatcher, PostToolUseHookInput, PreCompactHookInput, HookContext
-
-            async def _audit_post_tool_use(hook_input: PostToolUseHookInput, signal, context: HookContext):
-                """Registra execução de tools para auditoria."""
-                tool_name = getattr(hook_input, 'tool_name', 'unknown')
-                tool_input_str = str(getattr(hook_input, 'tool_input', ''))[:200]
-                logger.info(f"[AUDIT] PostToolUse: {tool_name} | input: {tool_input_str}")
-                return {}
-
-            async def _pre_compact_hook(hook_input: PreCompactHookInput, signal, context: HookContext):
-                """Antes de compactação, loga aviso."""
-                logger.info("[COMPACTION] PreCompact hook ativado — contexto será compactado")
-                return {}
-
-            options_dict["hooks"] = {
-                "PostToolUse": [
-                    HookMatcher(
-                        matcher="Bash|Skill",
-                        hooks=[_audit_post_tool_use],
-                    ),
-                ],
-                "PreCompact": [
-                    HookMatcher(
-                        hooks=[_pre_compact_hook],
-                    ),
-                ],
-            }
-            logger.debug("[AGENT_CLIENT] Hooks SDK (PostToolUse + PreCompact) configurados")
-        except (ImportError, Exception) as e:
-            logger.warning(f"[AGENT_CLIENT] Hooks SDK não disponíveis: {e}")
-
-        return ClaudeAgentOptions(**options_dict)
-
     @staticmethod
     async def _self_correct_response(full_text: str) -> Optional[str]:
         """
@@ -606,7 +283,7 @@ Nunca invente informações."""
             client = anthropic.Anthropic()
 
             validation = client.messages.create(
-                model="claude-haiku-4-5-20250514",
+                model="claude-haiku-4-5-20251001",
                 max_tokens=300,
                 messages=[{
                     "role": "user",
@@ -640,82 +317,8 @@ Nunca invente informações."""
     async def stream_response(
         self,
         prompt: str,
-        session_id: Optional[str] = None,
+        pooled_client: Any,  # PooledClient do SessionPool
         user_name: str = "Usuário",
-        allowed_tools: Optional[List[str]] = None,
-        can_use_tool: Optional[Callable] = None,
-        max_turns: int = 10,
-        model: Optional[str] = None,
-        thinking_enabled: bool = False,
-        plan_mode: bool = False,
-        user_id: int = None,
-        image_files: Optional[List[dict]] = None,
-        pooled_client: Optional[Any] = None,
-    ) -> AsyncGenerator[StreamEvent, None]:
-        """
-        Gera resposta em streaming usando SDK oficial.
-
-        Dispatcher dual-mode:
-        - USE_SDK_CLIENT=false: Usa query() (comportamento legado via _stream_response_query)
-        - USE_SDK_CLIENT=true: Usa ClaudeSDKClient (canal bidirecional via _stream_response_sdk_client)
-
-        Args:
-            prompt: Mensagem do usuário
-            session_id: ID de sessão para retomar (apenas query() path)
-            user_name: Nome do usuário
-            allowed_tools: Lista de tools permitidas
-            can_use_tool: Callback de permissão
-            max_turns: Máximo de turnos
-            model: Modelo a usar (FEAT-001)
-            thinking_enabled: Ativar Extended Thinking (FEAT-002)
-            plan_mode: Ativar modo somente-leitura (FEAT-010)
-            user_id: ID do usuário (para Memory Tool)
-            image_files: Lista de imagens em formato Vision API (FEAT-032)
-            pooled_client: PooledClient do SessionPool (apenas ClaudeSDKClient path)
-
-        Yields:
-            StreamEvent com tipo e conteúdo
-        """
-        from ..config.feature_flags import USE_SDK_CLIENT
-
-        if USE_SDK_CLIENT and pooled_client is not None:
-            async for event in self._stream_response_sdk_client(
-                prompt=prompt,
-                pooled_client=pooled_client,
-                user_name=user_name,
-                can_use_tool=can_use_tool,
-                max_turns=max_turns,
-                model=model,
-                thinking_enabled=thinking_enabled,
-                plan_mode=plan_mode,
-                user_id=user_id,
-                image_files=image_files,
-            ):
-                yield event
-        else:
-            async for event in self._stream_response_query(
-                prompt=prompt,
-                session_id=session_id,
-                user_name=user_name,
-                allowed_tools=allowed_tools,
-                can_use_tool=can_use_tool,
-                max_turns=max_turns,
-                model=model,
-                thinking_enabled=thinking_enabled,
-                plan_mode=plan_mode,
-                user_id=user_id,
-                image_files=image_files,
-            ):
-                yield event
-
-    async def _stream_response_query(
-        self,
-        prompt: str,
-        session_id: Optional[str] = None,
-        user_name: str = "Usuário",
-        allowed_tools: Optional[List[str]] = None,
-        can_use_tool: Optional[Callable] = None,
-        max_turns: int = 10,
         model: Optional[str] = None,
         thinking_enabled: bool = False,
         plan_mode: bool = False,
@@ -723,18 +326,12 @@ Nunca invente informações."""
         image_files: Optional[List[dict]] = None,
     ) -> AsyncGenerator[StreamEvent, None]:
         """
-        Gera resposta em streaming usando query() — path legado.
-
-        Este metodo contem a implementacao original usando a funcao query()
-        do SDK. Mantido intacto para rollback via feature flag.
+        Gera resposta em streaming usando ClaudeSDKClient.
 
         Args:
             prompt: Mensagem do usuário
-            session_id: ID de sessão para retomar
+            pooled_client: PooledClient do SessionPool (obrigatório)
             user_name: Nome do usuário
-            allowed_tools: Lista de tools permitidas
-            can_use_tool: Callback de permissão
-            max_turns: Máximo de turnos
             model: Modelo a usar (FEAT-001)
             thinking_enabled: Ativar Extended Thinking (FEAT-002)
             plan_mode: Ativar modo somente-leitura (FEAT-010)
@@ -744,552 +341,231 @@ Nunca invente informações."""
         Yields:
             StreamEvent com tipo e conteúdo
         """
-        # FEAT-010: Plan Mode força permission_mode="plan"
-        permission_mode = "plan" if plan_mode else "default"
-
-        options = self._build_options(
-            session_id=session_id,
-            user_name=user_name,
-            allowed_tools=allowed_tools,
-            permission_mode=permission_mode,
-            can_use_tool=can_use_tool,
-            max_turns=max_turns,
+        async for event in self._stream_response(
+            prompt=prompt,
+            pooled_client=pooled_client,
             model=model,
-            thinking_enabled=thinking_enabled,
-            user_id=user_id,
-        )
+            image_files=image_files,
+        ):
+            yield event
 
-        current_session_id = session_id
-        full_text = ""
-        tool_calls = []
-        input_tokens = 0
-        output_tokens = 0
-        last_message_id = None  # Para deduplicação conforme documentação
-        done_emitted = False  # Controle para emitir done apenas uma vez
-
-        # =================================================================
-        # DIAGNÓSTICO: Rastreamento de tempo para identificar travamentos
-        # =================================================================
-        stream_start_time = time.time()
-        last_message_time = stream_start_time
-        current_tool_start_time = None
-        current_tool_name = None
-
-        # Gerador assíncrono para o prompt (OBRIGATÓRIO quando can_use_tool é usado)
-        # Ref: https://platform.claude.com/docs/pt-BR/agent-sdk/streaming-vs-single-mode
-        # FEAT-032: Suporte a Vision API - imagens são enviadas como content blocks
-        async def prompt_generator():
-            # Construir content com texto + imagens (se houver)
-            if image_files:
-                content_blocks = []
-                # Adicionar imagens primeiro (para Claude "ver" antes de ler o texto)
-                for img in image_files:
-                    content_blocks.append(img)
-                # Adicionar texto
-                content_blocks.append({
-                    "type": "text",
-                    "text": prompt
-                })
-                content = content_blocks
-                logger.info(f"[AGENT_CLIENT] Enviando {len(image_files)} imagem(ns) via Vision API")
-            else:
-                # Manter compatibilidade: texto simples quando não há imagens
-                content = prompt
-
-            yield {
-                "type": "user",
-                "message": {
-                    "role": "user",
-                    "content": content
-                }
-            }
-
-        try:
-            # Conforme documentação: async for termina naturalmente quando generator é exaurido
-            # NÃO usar return/break - deixar o loop terminar sozinho
-            async for message in query(prompt=prompt_generator(), options=options):
-                # =================================================================
-                # DIAGNÓSTICO: Log de tempo entre mensagens
-                # =================================================================
-                current_time = time.time()
-                elapsed_total = current_time - stream_start_time
-                elapsed_since_last = current_time - last_message_time
-                last_message_time = current_time
-
-                logger.debug(
-                    f"[AGENT_CLIENT] Mensagem recebida | "
-                    f"tipo={type(message).__name__} | "
-                    f"total={elapsed_total:.1f}s | "
-                    f"desde_última={elapsed_since_last:.1f}s"
-                )
-
-                # Mensagem de sistema (contém session_id no subtype='init')
-                # Ref: https://platform.claude.com/docs/pt-BR/agent-sdk/sessions
-                if hasattr(message, 'subtype') and message.subtype == 'init':
-                    if hasattr(message, 'data') and message.data:
-                        current_session_id = message.data.get('session_id')
-                        yield StreamEvent(
-                            type='init',
-                            content={'session_id': current_session_id},
-                            metadata={'timestamp': datetime.utcnow().isoformat()}
-                        )
-                    continue
-
-                # Mensagem do assistente
-                # Ref: https://platform.claude.com/docs/pt-BR/agent-sdk/cost-tracking
-                if isinstance(message, AssistantMessage):
-                    # Captura usage de AssistantMessage (conforme documentação Anthropic)
-                    # usage pode ser dict ou objeto com atributos
-                    if hasattr(message, 'usage') and message.usage:
-                        usage = message.usage
-                        if isinstance(usage, dict):
-                            input_tokens = usage.get('input_tokens', 0)
-                            output_tokens = usage.get('output_tokens', 0)
-                        else:
-                            # Objeto com atributos
-                            input_tokens = getattr(usage, 'input_tokens', 0) or 0
-                            output_tokens = getattr(usage, 'output_tokens', 0) or 0
-
-                    # C3: Detectar erros da API (rate limits, context overflow, etc.)
-                    # Campo .error fixado no SDK 0.1.16
-                    # ATENCAO: SDK NÃO levanta exceptions — erros chegam como campo
-                    if hasattr(message, 'error') and message.error:
-                        error_info = message.error
-                        error_str = str(error_info).lower()
-                        error_type_str = error_info.get('type', 'unknown') if isinstance(error_info, dict) else type(error_info).__name__
-
-                        logger.warning(
-                            f"[AGENT_CLIENT] API error detectado: type={error_type_str}, error={error_info}"
-                        )
-
-                        # Classificar erro para tratamento diferenciado
-                        if 'rate_limit' in error_str:
-                            yield StreamEvent(
-                                type='error',
-                                content="Limite de requisições excedido. Aguardando...",
-                                metadata={'error_type': 'rate_limit', 'retryable': True}
-                            )
-                        elif 'too long' in error_str or 'context' in error_str:
-                            yield StreamEvent(
-                                type='error',
-                                content="Conversa muito longa. Tente iniciar uma nova sessão.",
-                                metadata={'error_type': 'context_overflow', 'retryable': False}
-                            )
-                        else:
-                            yield StreamEvent(
-                                type='error',
-                                content=f"Erro da API: {error_info}",
-                                metadata={'error_type': error_type_str, 'raw_error': str(error_info)[:500]}
-                            )
-
-                    # Captura message.id para deduplicação (conforme documentação)
-                    if hasattr(message, 'id') and message.id:
-                        last_message_id = message.id
-
-                    if message.content:
-                        for block in message.content:
-                            # FEAT-002: Extended Thinking (mostra raciocínio)
-                            if isinstance(block, ThinkingBlock):
-                                thinking_content = getattr(block, 'thinking', '')
-                                if thinking_content:
-                                    yield StreamEvent(
-                                        type='thinking',
-                                        content=thinking_content
-                                    )
-                                continue
-
-                            # Texto
-                            if isinstance(block, TextBlock):
-                                text_chunk = block.text
-                                full_text += text_chunk
-                                yield StreamEvent(
-                                    type='text',
-                                    content=text_chunk
-                                )
-
-                            # Chamada de ferramenta
-                            elif isinstance(block, ToolUseBlock):
-                                tool_call = ToolCall(
-                                    id=block.id,
-                                    name=block.name,
-                                    input=block.input
-                                )
-                                tool_calls.append(tool_call)
-
-                                # =================================================================
-                                # DIAGNÓSTICO: Marca início da execução da tool
-                                # =================================================================
-                                current_tool_start_time = time.time()
-                                current_tool_name = block.name
-                                logger.info(f"[AGENT_CLIENT] Tool INICIADA: {block.name}")
-
-                                # FEAT-024: Extrai descrição amigável do input
-                                tool_description = self._extract_tool_description(
-                                    block.name,
-                                    block.input
-                                )
-
-                                yield StreamEvent(
-                                    type='tool_call',
-                                    content=block.name,
-                                    metadata={
-                                        'tool_id': block.id,
-                                        'input': block.input,
-                                        'description': tool_description  # FEAT-024
-                                    }
-                                )
-
-                                # FEAT-024: Se for TodoWrite, emite evento de todos
-                                if block.name == 'TodoWrite' and block.input:
-                                    todos = block.input.get('todos', [])
-                                    if todos:
-                                        yield StreamEvent(
-                                            type='todos',
-                                            content={'todos': todos},
-                                            metadata={'tool_id': block.id}
-                                        )
-                    continue
-
-                # Mensagem do usuário (contém resultados de ferramentas executadas)
-                # Quando o SDK executa uma ferramenta, o resultado vem como UserMessage
-                if isinstance(message, UserMessage):
-                    # =================================================================
-                    # DIAGNÓSTICO: Calcula duração da tool
-                    # =================================================================
-                    tool_duration_ms = 0
-                    if current_tool_start_time:
-                        tool_duration_ms = int((time.time() - current_tool_start_time) * 1000)
-                        logger.info(
-                            f"[AGENT_CLIENT] Tool COMPLETADA: {current_tool_name} em {tool_duration_ms}ms"
-                        )
-                        current_tool_start_time = None
-
-                    content = getattr(message, 'content', None)
-                    if content and isinstance(content, list):
-                        for block in content:
-                            if isinstance(block, ToolResultBlock):
-                                # Extrai conteúdo do resultado (pode ser string ou lista)
-                                result_content = block.content
-                                is_error = getattr(block, 'is_error', False) or False
-                                tool_use_id = getattr(block, 'tool_use_id', '')
-
-                                if isinstance(result_content, list):
-                                    # Se for lista de dicts, converte para string
-                                    result_content = str(result_content)[:500]
-                                elif result_content:
-                                    result_content = str(result_content)[:500]
-                                else:
-                                    result_content = "(sem resultado)"
-
-                                # Encontra o nome da tool pelo tool_use_id
-                                tool_name = next(
-                                    (tc.name for tc in tool_calls if tc.id == tool_use_id),
-                                    'ferramenta'
-                                )
-
-                                # MELHORIA: Log detalhado de erros de tools
-                                # Erros esperados (arquivo não existe) usam debug
-                                # Erros inesperados usam warning
-                                if is_error:
-                                    expected_errors = [
-                                        'does not exist',
-                                        'not found',
-                                        'no such file',
-                                    ]
-                                    is_expected = any(
-                                        err in result_content.lower()
-                                        for err in expected_errors
-                                    )
-                                    if is_expected:
-                                        logger.debug(
-                                            f"[AGENT_CLIENT] Tool '{tool_name}' (esperado): "
-                                            f"{result_content[:100]}"
-                                        )
-                                    else:
-                                        logger.warning(
-                                            f"[AGENT_CLIENT] Tool '{tool_name}' retornou erro: "
-                                            f"{result_content[:200]}"
-                                        )
-
-                                yield StreamEvent(
-                                    type='tool_result',
-                                    content=result_content,
-                                    metadata={
-                                        'tool_use_id': tool_use_id,
-                                        'tool_name': tool_name,
-                                        'is_error': is_error,
-                                        'duration_ms': tool_duration_ms,  # DIAGNÓSTICO
-                                    }
-                                )
-                    continue
-
-                # Mensagem de resultado final
-                # Ref: https://platform.claude.com/docs/pt-BR/agent-sdk/cost-tracking
-                if isinstance(message, ResultMessage):
-                    # ✅ NÃO emite texto aqui - já foi emitido pelos TextBlocks do AssistantMessage
-                    # O ResultMessage.result contém o texto completo, mas duplicaria o que já foi enviado
-                    # Apenas captura o texto final para métricas
-                    if message.result:
-                        full_text = message.result
-
-                    # Session ID do resultado
-                    if hasattr(message, 'session_id') and message.session_id:
-                        current_session_id = message.session_id
-
-                    # Emite evento done com métricas (apenas uma vez)
-                    if not done_emitted:
-                        # D6: Self-Correction antes de entregar resposta
-                        correction = await self._self_correct_response(full_text)
-                        if correction:
-                            yield StreamEvent(
-                                type='text',
-                                content=f"\n\n⚠️ **Observação de validação**: {correction}",
-                                metadata={'self_correction': True}
-                            )
-
-                        done_emitted = True
-                        yield StreamEvent(
-                            type='done',
-                            content={
-                                'text': full_text,
-                                'input_tokens': input_tokens,
-                                'output_tokens': output_tokens,
-                                'total_cost_usd': getattr(message, 'total_cost_usd', 0) or 0,
-                                'session_id': current_session_id,
-                                'tool_calls': len(tool_calls),
-                                'self_corrected': correction is not None,
-                            },
-                            metadata={'message_id': last_message_id or ''}
-                        )
-                    # NÃO usar return - deixar o loop terminar naturalmente
-
-            # Se não recebeu ResultMessage, emite done
-            if not done_emitted:
-                # D6: Self-Correction (fallback path)
-                correction = await self._self_correct_response(full_text)
-                if correction:
-                    yield StreamEvent(
-                        type='text',
-                        content=f"\n\n⚠️ **Observação de validação**: {correction}",
-                        metadata={'self_correction': True}
-                    )
-
-                yield StreamEvent(
-                    type='done',
-                    content={
-                        'text': full_text,
-                        'input_tokens': input_tokens,
-                        'output_tokens': output_tokens,
-                        'session_id': current_session_id,
-                        'tool_calls': len(tool_calls),
-                        'self_corrected': correction is not None,
-                    }
-                )
-
-        # =================================================================
-        # SDK 0.1.26+: Error Classes especializadas (antes do genérico)
-        # =================================================================
-        except CLINotFoundError as e:
-            elapsed_total = time.time() - stream_start_time
-            logger.critical(
-                f"[AGENT_CLIENT] CLI não encontrada após {elapsed_total:.1f}s: {e}"
-            )
-            yield StreamEvent(
-                type='error',
-                content="Erro crítico: CLI do agente não encontrada. Reinstale o SDK.",
-                metadata={'error_type': 'cli_not_found', 'elapsed_seconds': elapsed_total}
-            )
-            if not done_emitted:
-                done_emitted = True
-                yield StreamEvent(
-                    type='done',
-                    content={'text': full_text, 'session_id': current_session_id,
-                             'error_recovery': True},
-                    metadata={'error_type': 'cli_not_found'}
-                )
-
-        except ProcessError as e:
-            elapsed_total = time.time() - stream_start_time
-            exit_code = getattr(e, 'exit_code', None)
-            logger.error(
-                f"[AGENT_CLIENT] Process error após {elapsed_total:.1f}s | "
-                f"exit_code={exit_code} | mensagem={e}"
-            )
-            user_message = str(e)
-            if exit_code:
-                user_message = f"Erro de processo (código {exit_code}). Tente novamente."
-            yield StreamEvent(
-                type='error',
-                content=user_message,
-                metadata={'error_type': 'process_error', 'exit_code': exit_code,
-                          'elapsed_seconds': elapsed_total, 'last_tool': current_tool_name}
-            )
-            if not done_emitted:
-                done_emitted = True
-                yield StreamEvent(
-                    type='done',
-                    content={'text': full_text, 'input_tokens': input_tokens,
-                             'output_tokens': output_tokens, 'session_id': current_session_id,
-                             'tool_calls': len(tool_calls), 'error_recovery': True},
-                    metadata={'error_type': 'process_error'}
-                )
-
-        except CLIJSONDecodeError as e:
-            elapsed_total = time.time() - stream_start_time
-            logger.error(
-                f"[AGENT_CLIENT] JSON decode error após {elapsed_total:.1f}s: {e}"
-            )
-            yield StreamEvent(
-                type='error',
-                content="Erro ao processar resposta do agente. Tente novamente.",
-                metadata={'error_type': 'json_decode_error', 'elapsed_seconds': elapsed_total}
-            )
-            if not done_emitted:
-                done_emitted = True
-                yield StreamEvent(
-                    type='done',
-                    content={'text': full_text, 'session_id': current_session_id,
-                             'error_recovery': True},
-                    metadata={'error_type': 'json_decode_error'}
-                )
-
-        except Exception as e:
-            error_msg = str(e)
-            error_type = type(e).__name__
-
-            # =================================================================
-            # DIAGNÓSTICO: Log detalhado com contexto de tempo
-            # =================================================================
-            elapsed_total = time.time() - stream_start_time
-            logger.error(
-                f"[AGENT_CLIENT] EXCEÇÃO após {elapsed_total:.1f}s | "
-                f"tipo={error_type} | mensagem={error_msg}",
-                exc_info=True
-            )
-
-            # Se estava executando uma tool, loga qual era
-            if current_tool_name:
-                logger.error(f"[AGENT_CLIENT] Tool em execução quando falhou: {current_tool_name}")
-
-            # Mensagem amigável para o usuário
-            user_message = error_msg
-            if 'timeout' in error_msg.lower():
-                user_message = "Tempo limite excedido. Tente uma consulta mais simples."
-            elif 'connection' in error_msg.lower():
-                user_message = "Erro de conexão com a API. Tente novamente em alguns segundos."
-            elif 'permission' in error_msg.lower() or 'denied' in error_msg.lower():
-                user_message = f"Operação não permitida: {error_msg}"
-            elif 'rate' in error_msg.lower() and 'limit' in error_msg.lower():
-                user_message = "Limite de requisições excedido. Aguarde um momento."
-
-            yield StreamEvent(
-                type='error',
-                content=user_message,
-                metadata={
-                    'error_type': error_type,
-                    'original_error': error_msg[:500],
-                    'elapsed_seconds': elapsed_total,
-                    'last_tool': current_tool_name,
-                }
-            )
-
-            # =================================================================
-            # GARANTIA: Emite done mesmo em caso de erro
-            # =================================================================
-            # Isso garante que o frontend não fica esperando eternamente.
-            # O routes.py depende do evento 'done' para finalizar corretamente.
-            # =================================================================
-            if not done_emitted:
-                done_emitted = True
-                logger.warning("[AGENT_CLIENT] Emitindo 'done' após exceção para evitar travamento")
-                yield StreamEvent(
-                    type='done',
-                    content={
-                        'text': full_text,
-                        'input_tokens': input_tokens,
-                        'output_tokens': output_tokens,
-                        'session_id': current_session_id,
-                        'tool_calls': len(tool_calls),
-                        'error_recovery': True,  # Flag indicando que veio de erro
-                    },
-                    metadata={'error_type': error_type}
-                )
-
-    def _build_options_for_client(
+    def _build_options(
         self,
         user_name: str = "Usuário",
         can_use_tool: Optional[Callable] = None,
-        max_turns: int = 10,
+        max_turns: int = 30,
         model: Optional[str] = None,
         thinking_enabled: bool = False,
         plan_mode: bool = False,
         user_id: int = None,
-        allowed_tools: Optional[List[str]] = None,
     ) -> 'ClaudeAgentOptions':
         """
-        Constroi ClaudeAgentOptions para criacao de ClaudeSDKClient.
+        Constrói ClaudeAgentOptions para ClaudeSDKClient.
 
-        Reutiliza toda logica de _build_options() mas:
-        - NAO inclui 'resume' (ClaudeSDKClient gerencia sessao internamente)
-        - NAO inclui 'fork_session'
-        - Mantem: model, system_prompt, cwd, allowed_tools, hooks, betas, agents, etc.
+        Configura: model, system_prompt, cwd, allowed_tools (de settings),
+        hooks, betas, permission_mode, disallowed_tools, fallback_model.
+
+        Args:
+            user_name: Nome do usuário
+            can_use_tool: Callback de permissão
+            max_turns: Máximo de turnos
+            model: Modelo a usar (sobrescreve settings.model)
+            thinking_enabled: Ativar Extended Thinking
+            plan_mode: Ativar modo somente-leitura
+            user_id: ID do usuário (para Memory Tool)
 
         Returns:
-            ClaudeAgentOptions configurado para ClaudeSDKClient
+            ClaudeAgentOptions configurado
         """
-        # Reutilizar _build_options sem session_id (nao faz resume)
-        options = self._build_options(
-            session_id=None,  # Sem resume — ClaudeSDKClient gerencia sessao
-            user_name=user_name,
-            allowed_tools=allowed_tools,
-            permission_mode="plan" if plan_mode else "default",
-            can_use_tool=can_use_tool,
-            max_turns=max_turns,
-            model=model,
-            thinking_enabled=thinking_enabled,
-            user_id=user_id,
-        )
-        return options
+        import os
 
-    async def _stream_response_sdk_client(
+        # System prompt customizado (com user_id para Memory Tool)
+        custom_instructions = self._format_system_prompt(user_name, user_id)
+
+        # Diretório do projeto para carregar Skills
+        project_cwd = os.path.dirname(
+            os.path.dirname(
+                os.path.dirname(
+                    os.path.dirname(os.path.abspath(__file__))
+                )
+            )
+        )  # Raiz do projeto: /home/.../frete_sistema
+
+        # Modo de permissão
+        permission_mode = "plan" if plan_mode else "default"
+
+        options_dict = {
+            # Modelo
+            "model": model if model else self.settings.model,
+
+            # Máximo de turnos
+            "max_turns": max_turns,
+
+            # System Prompt: preset "claude_code" para ter tools funcionando
+            "system_prompt": {
+                "type": "preset",
+                "preset": "claude_code",
+                "append": custom_instructions
+            },
+
+            # CWD: Diretório de trabalho para Skills
+            "cwd": project_cwd,
+
+            # Setting Sources: Carrega configurações do projeto
+            "setting_sources": ["user", "project"],
+
+            # Tools permitidas — lê de settings.py (fonte única de verdade)
+            "allowed_tools": list(self.settings.tools_enabled),
+
+            # Modo de permissão
+            "permission_mode": permission_mode,
+
+            # SDK 0.1.26+: Fallback model para resiliência
+            "fallback_model": "sonnet",
+
+            # SDK 0.1.26+: Barreira real de segurança
+            "disallowed_tools": [
+                "NotebookEdit",   # Não há Jupyter notebooks no sistema
+            ],
+        }
+
+        # Extended Thinking
+        if thinking_enabled:
+            options_dict["max_thinking_tokens"] = 20000
+            logger.info("[AGENT_CLIENT] Extended Thinking ativado (max_thinking_tokens=20000)")
+
+        # Callback de permissão
+        if can_use_tool:
+            options_dict["can_use_tool"] = can_use_tool
+
+        # =================================================================
+        # FEATURE FLAGS: Quick Wins (ativados via env vars)
+        # =================================================================
+        from ..config.feature_flags import (
+            USE_BUDGET_CONTROL, MAX_BUDGET_USD,
+            USE_EXTENDED_CONTEXT,
+            USE_CONTEXT_CLEARING,
+            USE_PROMPT_CACHING,
+        )
+
+        # Budget Control nativo
+        if USE_BUDGET_CONTROL:
+            options_dict["max_budget_usd"] = MAX_BUDGET_USD
+            logger.info(f"[AGENT_CLIENT] Budget control nativo: max ${MAX_BUDGET_USD}/request")
+
+        # Extended Context (1M tokens) — apenas Sonnet
+        if USE_EXTENDED_CONTEXT:
+            current_model = options_dict.get("model", self.settings.model)
+            if "sonnet" in str(current_model).lower():
+                betas = options_dict.get("betas", [])
+                betas.append("context-1m-2025-08-07")
+                options_dict["betas"] = betas
+                logger.info("[AGENT_CLIENT] Extended Context habilitado (1M tokens)")
+            else:
+                logger.warning(
+                    f"[AGENT_CLIENT] Extended Context IGNORADO — "
+                    f"modelo '{current_model}' não suportado (apenas Sonnet)"
+                )
+
+        # Context Clearing automático
+        if USE_CONTEXT_CLEARING:
+            betas = options_dict.get("betas", [])
+            betas.extend([
+                "clear-thinking-20251015",
+                "clear-tool-uses-20250919",
+            ])
+            options_dict["betas"] = betas
+            logger.info("[AGENT_CLIENT] Context Clearing habilitado")
+
+        # Prompt Caching
+        if USE_PROMPT_CACHING:
+            betas = options_dict.get("betas", [])
+            betas.append("prompt-caching-2024-07-31")
+            options_dict["betas"] = betas
+            logger.info("[AGENT_CLIENT] Prompt Caching habilitado")
+
+        # =================================================================
+        # Hooks SDK formais para auditoria
+        # =================================================================
+        try:
+            from claude_agent_sdk import HookMatcher, PostToolUseHookInput, PreCompactHookInput, HookContext
+
+            async def _audit_post_tool_use(hook_input: PostToolUseHookInput, signal, context: HookContext):
+                """Registra execução de tools para auditoria."""
+                tool_name = getattr(hook_input, 'tool_name', 'unknown')
+                tool_input_str = str(getattr(hook_input, 'tool_input', ''))[:200]
+                logger.info(f"[AUDIT] PostToolUse: {tool_name} | input: {tool_input_str}")
+                return {}
+
+            async def _pre_compact_hook(hook_input: PreCompactHookInput, signal, context: HookContext):
+                """Antes de compactação, loga aviso."""
+                logger.info("[COMPACTION] PreCompact hook ativado — contexto será compactado")
+                return {}
+
+            options_dict["hooks"] = {
+                "PostToolUse": [
+                    HookMatcher(
+                        matcher="Bash|Skill",
+                        hooks=[_audit_post_tool_use],
+                    ),
+                ],
+                "PreCompact": [
+                    HookMatcher(
+                        hooks=[_pre_compact_hook],
+                    ),
+                ],
+            }
+            logger.debug("[AGENT_CLIENT] Hooks SDK (PostToolUse + PreCompact) configurados")
+        except (ImportError, Exception) as e:
+            logger.warning(f"[AGENT_CLIENT] Hooks SDK não disponíveis: {e}")
+
+        # =================================================================
+        # MCP Servers (Custom Tools in-process)
+        # =================================================================
+        try:
+            from ..tools.text_to_sql_tool import sql_server
+            if sql_server is not None:
+                mcp_servers = options_dict.get("mcp_servers", {})
+                mcp_servers["sql"] = sql_server
+                options_dict["mcp_servers"] = mcp_servers
+
+                # Adicionar tool na allowed_tools
+                allowed = options_dict.get("allowed_tools", [])
+                if "mcp__sql__consultar_sql" not in allowed:
+                    allowed.append("mcp__sql__consultar_sql")
+                options_dict["allowed_tools"] = allowed
+
+                logger.info("[AGENT_CLIENT] Custom Tool MCP 'consultar_sql' registrada")
+            else:
+                logger.debug("[AGENT_CLIENT] sql_server é None — claude_agent_sdk não disponível no módulo tools")
+        except ImportError:
+            logger.debug("[AGENT_CLIENT] Custom Tool text_to_sql não disponível (módulo não encontrado)")
+        except Exception as e:
+            logger.warning(f"[AGENT_CLIENT] Erro ao registrar Custom Tool text_to_sql: {e}")
+
+        return ClaudeAgentOptions(**options_dict)
+
+    async def _stream_response(
         self,
         prompt: str,
         pooled_client: Any,  # PooledClient (import circular evitado)
-        user_name: str = "Usuário",
-        can_use_tool: Optional[Callable] = None,
-        max_turns: int = 10,
         model: Optional[str] = None,
-        thinking_enabled: bool = False,
-        plan_mode: bool = False,
-        user_id: int = None,
         image_files: Optional[List[dict]] = None,
     ) -> AsyncGenerator[StreamEvent, None]:
         """
-        Gera resposta em streaming usando ClaudeSDKClient — path bidirecional.
+        Gera resposta em streaming usando ClaudeSDKClient.
 
-        O ClaudeSDKClient mantem sessao persistente no pool. Cada chamada a
+        O ClaudeSDKClient mantém sessão persistente no pool. Cada chamada a
         query() preserva contexto das mensagens anteriores automaticamente.
 
-        Diferencas vs _stream_response_query():
-        - NAO cria options (ja aplicadas na criacao do client no pool)
-        - NAO tem prompt_generator() (envia prompt direto ao client.query())
-        - NAO tem resume (client ja mantem sessao)
-        - Emite 'init' sintetico (ClaudeSDKClient nao emite init como query())
-
         Args:
-            prompt: Mensagem do usuario
+            prompt: Mensagem do usuário
             pooled_client: PooledClient do SessionPool
-            user_name: Nome do usuario
-            can_use_tool: Callback de permissao (nao usado aqui — ja no client)
-            max_turns: Maximo de turnos (nao usado aqui — ja no client)
             model: Modelo (pode mudar via set_model se diferente do client)
-            thinking_enabled: Extended Thinking (nao mutavel apos criacao)
-            plan_mode: Modo somente-leitura (nao mutavel apos criacao)
-            user_id: ID do usuario
-            image_files: Lista de imagens em formato Vision API (FEAT-032)
+            image_files: Lista de imagens em formato Vision API
 
         Yields:
-            StreamEvent com tipo e conteudo
+            StreamEvent com tipo e conteúdo
         """
         full_text = ""
         tool_calls = []
@@ -1308,7 +584,7 @@ Nunca invente informações."""
         yield StreamEvent(
             type='init',
             content={'session_id': pooled_client.session_id},
-            metadata={'timestamp': datetime.utcnow().isoformat(), 'sdk_client': True}
+            metadata={'timestamp': datetime.now(timezone.utc).isoformat(), 'sdk_client': True}
         )
 
         # Se modelo mudou desde a criacao do client, atualizar
@@ -1639,12 +915,31 @@ Nunca invente informações."""
                 )
             raise
 
+        except CLIJSONDecodeError as e:
+            elapsed_total = time.time() - stream_start_time
+            logger.error(
+                f"[AGENT_CLIENT] JSON decode error após {elapsed_total:.1f}s: {e}"
+            )
+            yield StreamEvent(
+                type='error',
+                content="Erro ao processar resposta do agente. Tente novamente.",
+                metadata={'error_type': 'json_decode_error', 'elapsed_seconds': elapsed_total}
+            )
+            if not done_emitted:
+                done_emitted = True
+                yield StreamEvent(
+                    type='done',
+                    content={'text': full_text, 'session_id': pooled_client.session_id,
+                             'error_recovery': True},
+                    metadata={'error_type': 'json_decode_error'}
+                )
+
         except Exception as e:
             error_msg = str(e)
             error_type = type(e).__name__
             elapsed_total = time.time() - stream_start_time
             logger.error(
-                f"[AGENT_CLIENT_SDK] EXCEÇÃO após {elapsed_total:.1f}s | "
+                f"[AGENT_CLIENT] EXCEÇÃO após {elapsed_total:.1f}s | "
                 f"tipo={error_type} | mensagem={error_msg}",
                 exc_info=True
             )
@@ -1685,18 +980,20 @@ Nunca invente informações."""
     async def get_response(
         self,
         prompt: str,
-        session_id: Optional[str] = None,
+        pooled_client: Any,
         user_name: str = "Usuário",
-        allowed_tools: Optional[List[str]] = None,
+        model: Optional[str] = None,
     ) -> AgentResponse:
         """
         Obtém resposta completa (não streaming).
 
+        Requer pooled_client do SessionPool (mesmo que stream_response).
+
         Args:
             prompt: Mensagem do usuário
-            session_id: ID de sessão
+            pooled_client: PooledClient do SessionPool (obrigatório)
             user_name: Nome do usuário
-            allowed_tools: Lista de tools permitidas
+            model: Modelo a usar
 
         Returns:
             AgentResponse completa
@@ -1706,13 +1003,13 @@ Nunca invente informações."""
         input_tokens = 0
         output_tokens = 0
         stop_reason = ""
-        result_session_id = session_id
+        result_session_id = pooled_client.session_id
 
         async for event in self.stream_response(
             prompt=prompt,
-            session_id=session_id,
+            pooled_client=pooled_client,
             user_name=user_name,
-            allowed_tools=allowed_tools,
+            model=model,
         ):
             if event.type == 'init':
                 result_session_id = event.content.get('session_id')

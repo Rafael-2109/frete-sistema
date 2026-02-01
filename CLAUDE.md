@@ -178,6 +178,9 @@ Skills usadas exclusivamente pelo agente logistico web:
 - `gerindo-expedicao` - Consultas logisticas, estoque, separacoes
 - `memoria-usuario` - Memoria persistente entre sessoes
 
+Custom Tools MCP (in-process, sem subprocess):
+- `consultar_sql` (mcp__sql__consultar_sql) - Consultas analiticas SQL via linguagem natural
+
 ## Claude Code (Desenvolvimento)
 Skills para desenvolvimento no Cursor/Terminal:
 
@@ -206,7 +209,7 @@ Skills para desenvolvimento no Cursor/Terminal:
 |-------|-----------------|
 | `exportando-arquivos` | Gerar Excel, CSV, JSON |
 | `lendo-arquivos` | Processar Excel/CSV enviados |
-| `consultando-sql` | Consultas analiticas SQL via linguagem natural |
+| `consultando-sql` | Consultas analiticas SQL via linguagem natural (CLI para Claude Code; Custom Tool MCP para agente web) |
 
 ---
 
@@ -252,11 +255,15 @@ Skills para desenvolvimento no Cursor/Terminal:
 ### Arquitetura
 ```
 app/agente/
-  models.py              # AgentSession, AgentMemory, AgentEvent
-  routes.py              # API endpoints (/api/agente/...)
-  memory_tool.py         # DatabaseMemoryTool
-  prompts/system_prompt.md  # Prompt agente web (v3.0.0)
-  sdk/client.py          # Substitui {data_atual}, {usuario_nome}, {user_id}
+  models.py                    # AgentSession, AgentMemory, AgentMemoryVersion
+  routes.py                    # API endpoints (/api/agente/...)
+  memory_tool.py               # DatabaseMemoryTool
+  prompts/system_prompt.md     # Prompt agente web (v3.0.0)
+  sdk/client.py                # ClaudeSDKClient (unico modo)
+  sdk/session_pool.py          # SessionPool com PooledClient (LRU)
+  tools/text_to_sql_tool.py    # Custom Tool MCP: consultar_sql (in-process)
+  config/settings.py           # AgentSettings (model, pricing, tools_enabled)
+  config/feature_flags.py      # Feature flags (env vars, default false)
 ```
 
 ---

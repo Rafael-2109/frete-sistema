@@ -42,16 +42,26 @@ class AgentSettings:
         'Read',     # Leitura de arquivos
         'Glob',     # Busca de arquivos
         'Grep',     # Busca em conteúdo
+        'Memory',   # Memória persistente do usuário (DatabaseMemoryTool)
+        'Write',    # Escrita de arquivos (RESTRITO a /tmp via can_use_tool)
+        'Edit',     # Edição de arquivos (RESTRITO a /tmp via can_use_tool)
+        'TodoWrite',  # Gerenciamento de tarefas (feedback visual)
+        'WebSearch',  # Busca na web
+        'WebFetch',  # Busca e salva na web
+        'MultiEdit',  # Edição de arquivos (múltiplos arquivos)
     ])
 
     # Custos
     cost_tracking_enabled: bool = True
     cost_alert_threshold_usd: float = 1.0  # Alerta por sessão
 
-    # Preços Opus 4.5 (por 1M tokens)
+    # Preços por modelo (por 1M tokens) — [input, output]
     # Ref: https://www.anthropic.com/pricing
-    opus_input_price_per_million: float = 5.00
-    opus_output_price_per_million: float = 25.00
+    MODEL_PRICING: dict = field(default_factory=lambda: {
+        'claude-opus-4-5-20251101': (5.00, 25.00),
+        'claude-sonnet-4-5-20250514': (1.00, 5.00),
+        'claude-haiku-4-5-20251001': (0.25, 1.25),
+    })
 
     # System prompt
     system_prompt_path: str = "app/agente/prompts/system_prompt.md"
@@ -71,19 +81,31 @@ class AgentSettings:
                 "Defina a variável de ambiente ANTHROPIC_API_KEY."
             )
 
-    def calculate_cost(self, input_tokens: int, output_tokens: int) -> float:
+    def calculate_cost(
+        self,
+        input_tokens: int,
+        output_tokens: int,
+        model: Optional[str] = None,
+    ) -> float:
         """
         Calcula custo de uma requisição.
 
         Args:
             input_tokens: Tokens de entrada
             output_tokens: Tokens de saída
+            model: Modelo usado (se None, usa self.model)
 
         Returns:
             Custo em USD
         """
-        input_cost = (input_tokens / 1_000_000) * self.opus_input_price_per_million
-        output_cost = (output_tokens / 1_000_000) * self.opus_output_price_per_million
+        model_id = model or self.model
+        # Fallback para Opus se modelo desconhecido
+        input_price, output_price = self.MODEL_PRICING.get(
+            model_id,
+            self.MODEL_PRICING.get('claude-opus-4-5-20251101', (5.00, 25.00)),
+        )
+        input_cost = (input_tokens / 1_000_000) * input_price
+        output_cost = (output_tokens / 1_000_000) * output_price
         return round(input_cost + output_cost, 6)
 
 

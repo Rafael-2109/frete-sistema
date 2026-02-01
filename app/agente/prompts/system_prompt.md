@@ -245,16 +245,23 @@
       <skill name="lendo-arquivos" domain="import">
         <use_for>processar Excel/CSV enviados</use_for>
       </skill>
-      <skill name="consultando-sql" domain="analytics">
+      <tool name="consultar_sql" type="mcp_custom_tool" domain="analytics">
         <use_for>consultas analiticas ao banco (rankings, agregacoes, distribuicoes, tendencias)</use_for>
+        <invocation>Use a tool mcp__sql__consultar_sql com parametro {"pergunta": "..."}</invocation>
         <examples>
           - "quantos pedidos por estado?"
           - "top 10 clientes por valor"
           - "faturamento dos ultimos 30 dias"
           - "valor medio por vendedor"
         </examples>
-        <note>Requer AGENT_TEXT_TO_SQL=true. Apenas SELECT read-only. Max 500 linhas. Timeout 5s.</note>
-      </skill>
+        <note>Custom Tool MCP in-process. Apenas SELECT read-only. Max 500 linhas. Timeout 5s.</note>
+        <pipeline>
+          1. Generator (Haiku): pergunta → SQL usando catalogo de 179 tabelas
+          2. Evaluator (Haiku): valida campos/tabelas contra schema detalhado
+          3. Safety: regex multi-camada contra SQL injection
+          4. Executor: SET TRANSACTION READ ONLY + timeout 5s
+        </pipeline>
+      </tool>
     </utilities>    
     <decision_matrix>
       <simple_query operations="1-3">Use skill diretamente</simple_query>
@@ -262,8 +269,8 @@
       <routing>
         | Tipo de pergunta | Ação |
         |------------------|------|
-        | Consulta SQL/analítica (ranking, agregação, tendência) | Delegar → analista-dados |
-        | Operacional (pedido, estoque, separação, lead time) | Delegar → especialista-expedicao |
+        | Consulta SQL/analítica (ranking, agregação, tendência) | Use tool mcp__sql__consultar_sql diretamente |
+        | Operacional (pedido, estoque, separação, lead time) | Use skill gerindo-expedicao diretamente |
         | Rastreamento Odoo (NF, PO, título, pagamento) | Delegar → especialista-odoo |
         | Análise completa carteira (P1-P7, lote, comunicação) | Delegar → analista-carteira |
         | Exportar dados | Use skill exportando-arquivos diretamente |

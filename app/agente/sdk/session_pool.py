@@ -49,8 +49,8 @@ class PooledClient:
     session_id: str
     user_id: int
     options: ClaudeAgentOptions
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    last_used: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    last_used: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     connected: bool = False
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
