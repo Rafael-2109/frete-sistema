@@ -229,7 +229,6 @@
           - Usuário corrige você repetidamente
           - Usuário expressa preferência clara
           - Usuário menciona regra de negócio específica
-
           Sugestão discreta (no final da resposta):
           "💾 Posso lembrar dessa preferência para próximas vezes?"
         </proactive>

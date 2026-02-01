@@ -18,6 +18,12 @@ FEAT-031: Sistema de Hooks para Memória Persistente
 - TOOL HOOKS: Instrumenta tool calls para analytics
 - FEEDBACK: Processa feedback do usuário
 
+FASE 5: ClaudeSDKClient — Sessões Bidirecionais
+- Dual-mode: query() (legado) ou ClaudeSDKClient (persistente) via USE_SDK_CLIENT
+- SessionPool: gerencia instancias ClaudeSDKClient com LRU eviction
+- Interrupt: cancela operação em andamento no ClaudeSDKClient
+- Pool Stats: métricas de observabilidade do pool
+
 Endpoints:
 - GET  /agente/              - Página de chat
 - POST /agente/api/chat      - Chat com streaming (SSE)
@@ -26,6 +32,8 @@ Endpoints:
 - GET  /agente/api/sessions/<id>/messages - Histórico de mensagens (FEAT-030)
 - DELETE /agente/api/sessions/<id> - Excluir sessão
 - PUT  /agente/api/sessions/<id>/rename - Renomear sessão
+- POST /agente/api/interrupt  - Interrompe operação SDK Client (FASE 5)
+- GET  /agente/api/pool/stats - Métricas do SessionPool (FASE 5)
 - POST /agente/api/upload    - Upload de arquivo
 - GET  /agente/api/files/<filename> - Download de arquivo
 - GET  /agente/api/files     - Lista arquivos da sessão
@@ -226,6 +234,288 @@ def api_chat():
         }), 500
 
 
+# =============================================================================
+# DUAL-MODE: Funções async para os dois paths (query e ClaudeSDKClient)
+# =============================================================================
+
+async def _async_stream_sdk_client(
+    client,
+    memory_agent,
+    our_session_id: str,
+    context_injection: str,
+    response_state: dict,
+    event_queue,
+    _process_stream_event,
+    message: str,
+    user_id: int,
+    user_name: str,
+    can_use_tool,
+    model: str,
+    thinking_enabled: bool,
+    plan_mode: bool,
+    image_files: list,
+    app,
+):
+    """
+    FASE 5: Path ClaudeSDKClient — canal bidirecional persistente.
+
+    Diferenças vs _async_stream_query:
+    - Usa SessionPool para obter/criar client persistente
+    - NÃO faz history injection (SDK mantém contexto nativo)
+    - NÃO faz compaction manual (SDK compacta automaticamente)
+    - Retry simplificado: só ProcessError/CLINotFoundError (processo morreu)
+    - Passa pooled_client para stream_response() → despacha para _stream_response_sdk_client()
+    """
+    from .sdk import get_session_pool
+    from claude_agent_sdk import ProcessError, CLINotFoundError
+
+    pool = get_session_pool()
+
+    # Construir opções para o client
+    options = client._build_options_for_client(
+        user_name=user_name,
+        user_id=user_id,
+        model=model,
+        thinking_enabled=thinking_enabled,
+        plan_mode=plan_mode,
+        can_use_tool=can_use_tool,
+    )
+
+    # Obter ou criar client no pool
+    pooled = await pool.get_or_create(
+        session_id=our_session_id,
+        user_id=user_id,
+        options=options,
+    )
+
+    logger.info(
+        f"[AGENTE] SDK Client obtido do pool: session={our_session_id[:8]}... "
+        f"connected={pooled.connected} | pool={len(pool._pool)}/{pool.max_clients}"
+    )
+
+    # Preparar prompt (SEM history injection — SDK mantém contexto)
+    prompt_to_send = message
+
+    # FEAT-031: Injeta contexto de memória do usuário no prompt
+    if context_injection:
+        from .memory_tool import MEMORY_SYSTEM_PROMPT
+        prompt_to_send = (
+            f"[DIRETRIZES DE MEMÓRIA]\n{MEMORY_SYSTEM_PROMPT}\n\n"
+            f"[CONTEXTO DO USUÁRIO]\n{context_injection}\n\n"
+            f"{prompt_to_send}"
+        )
+
+    # RETRY: 1 normal + 1 se processo morreu
+    max_attempts = 2
+    for attempt in range(1, max_attempts + 1):
+        try:
+            # Reset de estado no retry
+            if attempt > 1:
+                response_state['full_text'] = ''
+                response_state['tools_used'] = []
+                response_state['tool_errors'] = []
+                response_state['input_tokens'] = 0
+                response_state['output_tokens'] = 0
+                response_state['sdk_session_id'] = None
+                response_state['error_message'] = None
+                logger.info(f"[AGENTE] SDK Client RETRY: Tentativa {attempt}/{max_attempts} — recriando client")
+
+                event_queue.put(_sse_event('retry', {
+                    'reason': 'process_died',
+                    'attempt': attempt,
+                    'message': 'Reconectando...',
+                }))
+
+            logger.info(
+                f"[AGENTE] SDK Client chamando stream_response (attempt {attempt}/{max_attempts}) "
+                f"| session={our_session_id[:8]}... | images={len(image_files) if image_files else 0}"
+            )
+
+            async for event in client.stream_response(
+                prompt=prompt_to_send,
+                pooled_client=pooled,
+                user_name=user_name,
+                can_use_tool=can_use_tool,
+                model=model,
+                thinking_enabled=thinking_enabled,
+                plan_mode=plan_mode,
+                user_id=user_id,
+                image_files=image_files,
+            ):
+                should_continue = _process_stream_event(event)
+                if should_continue:
+                    continue
+
+            # Sucesso — sai do retry loop
+            break
+
+        except (ProcessError, CLINotFoundError) as e:
+            # Processo CLI morreu — destruir client e recriar
+            if attempt < max_attempts:
+                logger.warning(
+                    f"[AGENTE] SDK Client processo morreu (attempt {attempt}): {e}. "
+                    f"Destruindo e recriando..."
+                )
+                await pool.destroy(our_session_id)
+                pooled = await pool.get_or_create(
+                    session_id=our_session_id,
+                    user_id=user_id,
+                    options=options,
+                )
+                continue
+            else:
+                logger.error(
+                    f"[AGENTE] SDK Client erro fatal após {attempt} tentativas: {e}",
+                    exc_info=True
+                )
+                response_state['error_message'] = str(e)
+                event_queue.put(_sse_event('error', {
+                    'message': f'Erro no processo do agente: {str(e)[:200]}',
+                    'fatal': True,
+                }))
+                break
+
+        except Exception as e:
+            # Erro genérico — não retenta
+            error_str = str(e)
+            logger.error(f"[AGENTE] SDK Client erro inesperado: {error_str}", exc_info=True)
+            response_state['error_message'] = error_str
+            event_queue.put(_sse_event('error', {
+                'message': error_str,
+            }))
+            break
+
+
+async def _async_stream_query(
+    client,
+    sdk_session_id: Optional[str],
+    our_session_id: str,
+    context_injection: str,
+    response_state: dict,
+    event_queue,
+    _process_stream_event,
+    message: str,
+    session_id: str,
+    user_id: int,
+    user_name: str,
+    can_use_tool,
+    model: str,
+    thinking_enabled: bool,
+    plan_mode: bool,
+    image_files: list,
+    app,
+):
+    """
+    Path query() — comportamento legado (stateless por mensagem).
+
+    Lógica inalterada do código original, apenas extraída para função separada.
+    """
+    from .models import AgentSession
+
+    max_attempts = 2  # 1 normal + 1 retry
+    for attempt in range(1, max_attempts + 1):
+        try:
+            # Reset de estado acumulado no retry
+            if attempt > 1:
+                response_state['full_text'] = ''
+                response_state['tools_used'] = []
+                response_state['tool_errors'] = []
+                response_state['input_tokens'] = 0
+                response_state['output_tokens'] = 0
+                response_state['sdk_session_id'] = None
+                response_state['error_message'] = None
+                logger.info(f"[AGENTE] RETRY: Tentativa {attempt}/{max_attempts} — recriando sessão SDK")
+
+                event_queue.put(_sse_event('retry', {
+                    'reason': 'session_expired',
+                    'attempt': attempt,
+                    'message': 'Reconectando...',
+                }))
+
+            # FEAT-030: Prepara prompt com contexto se necessário
+            prompt_to_send = message
+
+            # Se não temos sdk_session_id (sessão expirou ou é nova),
+            # injeta histórico de mensagens anteriores como contexto
+            if not sdk_session_id and session_id:
+                with app.app_context():
+                    session = AgentSession.get_by_session_id(session_id)
+                    if session:
+                        previous_messages = session.get_messages_for_context()
+                        if previous_messages:
+                            history_text = _format_messages_as_context(previous_messages)
+                            history_text = _compact_context_if_needed(history_text)
+                            prompt_to_send = f"{history_text}\n\n[NOVA MENSAGEM DO USUÁRIO]\n{message}"
+                            logger.info(f"[AGENTE] Injetando {len(previous_messages)} mensagens como contexto")
+
+            # FEAT-031: Injeta contexto de memória do usuário no prompt
+            if context_injection:
+                from .memory_tool import MEMORY_SYSTEM_PROMPT
+                prompt_to_send = (
+                    f"[DIRETRIZES DE MEMÓRIA]\n{MEMORY_SYSTEM_PROMPT}\n\n"
+                    f"[CONTEXTO DO USUÁRIO]\n{context_injection}\n\n"
+                    f"{prompt_to_send}"
+                )
+
+            logger.info(f"[AGENTE] Chamando SDK (attempt {attempt}/{max_attempts}) | sdk_session_id: {sdk_session_id[:8] if sdk_session_id else 'Nova'} | images: {len(image_files) if image_files else 0}")
+
+            async for event in client.stream_response(
+                prompt=prompt_to_send,
+                session_id=sdk_session_id,
+                user_name=user_name,
+                can_use_tool=can_use_tool,
+                model=model,
+                thinking_enabled=thinking_enabled,
+                plan_mode=plan_mode,
+                user_id=user_id,
+                image_files=image_files,
+            ):
+                should_continue = _process_stream_event(event)
+                if should_continue:
+                    continue
+
+            # SDK call bem-sucedida — sai do retry loop
+            break
+
+        except Exception as e:
+            error_str = str(e)
+            is_expired = _is_session_expired_error(error_str)
+
+            if is_expired and attempt < max_attempts:
+                logger.warning(
+                    f"[AGENTE] Sessão SDK expirada detectada (attempt {attempt}). "
+                    f"Limpando sdk_session_id e preparando retry automático..."
+                )
+                sdk_session_id = None
+
+                try:
+                    with app.app_context():
+                        if session_id:
+                            session_obj = AgentSession.get_by_session_id(session_id)
+                            if session_obj:
+                                session_obj.set_sdk_session_id(None)
+                                db.session.commit()
+                                logger.info(f"[AGENTE] sdk_session_id limpo no DB para retry")
+                except Exception as db_err:
+                    logger.warning(f"[AGENTE] Erro ao limpar sdk_session_id no DB: {db_err}")
+
+                continue
+
+            else:
+                logger.error(f"[AGENTE] Erro no async stream (attempt {attempt}): {error_str}", exc_info=True)
+
+                if is_expired:
+                    response_state['session_expired'] = True
+                    logger.warning(f"[AGENTE] Sessão SDK expirada mesmo após retry")
+
+                response_state['error_message'] = error_str
+                event_queue.put(_sse_event('error', {
+                    'message': error_str,
+                    'session_expired': response_state['session_expired'],
+                }))
+                break
+
+
 def _stream_chat_response(
     message: str,
     original_message: str,
@@ -304,16 +594,20 @@ def _stream_chat_response(
             memory_agent = get_memory_agent(app)
             processed_message_ids = set()
 
+            from .config.feature_flags import USE_SDK_CLIENT
+
             # FEAT-030: Busca sessão existente para obter sdk_session_id
             sdk_session_id = None
             our_session_id = session_id
 
-            with app.app_context():
-                if session_id:
-                    session = AgentSession.get_by_session_id(session_id)
-                    if session:
-                        sdk_session_id = session.get_sdk_session_id()
-                        logger.info(f"[AGENTE] Sessão encontrada: {session_id[:8]}... SDK: {sdk_session_id[:8] if sdk_session_id else 'None'}")
+            if not USE_SDK_CLIENT:
+                # Path query(): precisa do sdk_session_id para retomar sessão
+                with app.app_context():
+                    if session_id:
+                        session = AgentSession.get_by_session_id(session_id)
+                        if session:
+                            sdk_session_id = session.get_sdk_session_id()
+                            logger.info(f"[AGENTE] Sessão encontrada: {session_id[:8]}... SDK: {sdk_session_id[:8] if sdk_session_id else 'None'}")
 
             # FEAT-031: Se não temos session_id, criar novo agora para os hooks
             if not our_session_id:
@@ -336,230 +630,167 @@ def _stream_chat_response(
                 logger.warning(f"[AGENTE] PRE-HOOK falhou (continuando sem contexto): {hook_error}")
 
             # =============================================================
-            # RETRY LOOP: Chamada SDK com recovery automático de sessão
-            #
-            # F0.1: Quando o sdk_session_id está expirado no servidor SDK,
-            # a primeira tentativa falha. Em vez de mostrar erro ao usuário,
-            # limpa o sdk_session_id, injeta histórico, e retenta 1x.
+            # PROCESSAMENTO DE EVENTOS (compartilhado entre query e SDK client)
             # =============================================================
-            max_attempts = 2  # 1 normal + 1 retry
-            for attempt in range(1, max_attempts + 1):
-                try:
-                    # Reset de estado acumulado no retry (evita dados duplicados)
-                    if attempt > 1:
-                        response_state['full_text'] = ''
-                        response_state['tools_used'] = []
-                        response_state['tool_errors'] = []
-                        response_state['input_tokens'] = 0
-                        response_state['output_tokens'] = 0
-                        response_state['sdk_session_id'] = None
-                        response_state['error_message'] = None
-                        logger.info(f"[AGENTE] RETRY: Tentativa {attempt}/{max_attempts} — recriando sessão SDK")
+            def _process_stream_event(event):
+                """
+                Processa StreamEvent e coloca na fila SSE.
 
-                        # Notifica frontend para limpar texto parcial (se houver)
-                        event_queue.put(_sse_event('retry', {
-                            'reason': 'session_expired',
-                            'attempt': attempt,
-                            'message': 'Reconectando...',
-                        }))
+                Compartilhado entre paths query() e ClaudeSDKClient.
+                Retorna True para 'init' (sinaliza continue no loop externo).
+                """
+                if event.type == 'init':
+                    new_sdk_session_id = event.content.get('session_id')
+                    response_state['sdk_session_id'] = new_sdk_session_id
 
-                    # FEAT-030: Prepara prompt com contexto se necessário
-                    prompt_to_send = message
+                    if not response_state['our_session_id']:
+                        response_state['our_session_id'] = str(uuid.uuid4())
 
-                    # Se não temos sdk_session_id (sessão expirou ou é nova),
-                    # injeta histórico de mensagens anteriores como contexto
-                    if not sdk_session_id and session_id:
-                        with app.app_context():
-                            session = AgentSession.get_by_session_id(session_id)
-                            if session:
-                                previous_messages = session.get_messages_for_context()
-                                if previous_messages:
-                                    # Formata histórico para injetar no prompt
-                                    history_text = _format_messages_as_context(previous_messages)
-                                    # C5: Compactar se contexto exceder threshold
-                                    history_text = _compact_context_if_needed(history_text)
-                                    prompt_to_send = f"{history_text}\n\n[NOVA MENSAGEM DO USUÁRIO]\n{message}"
-                                    logger.info(f"[AGENTE] Injetando {len(previous_messages)} mensagens como contexto")
+                    event_queue.put(_sse_event('init', {
+                        'session_id': response_state['our_session_id'],
+                        'sdk_session_id': new_sdk_session_id,
+                    }))
+                    return True  # continue
 
-                    # FEAT-031: Injeta contexto de memória do usuário no prompt
-                    # D3: Inclui MEMORY_SYSTEM_PROMPT (diretrizes de uso de memória)
-                    if context_injection:
-                        from .memory_tool import MEMORY_SYSTEM_PROMPT
-                        prompt_to_send = (
-                            f"[DIRETRIZES DE MEMÓRIA]\n{MEMORY_SYSTEM_PROMPT}\n\n"
-                            f"[CONTEXTO DO USUÁRIO]\n{context_injection}\n\n"
-                            f"{prompt_to_send}"
+                if event.type == 'text':
+                    response_state['full_text'] += event.content
+                    event_queue.put(_sse_event('text', {'content': event.content}))
+
+                elif event.type == 'tool_call':
+                    tool_name = event.content
+                    if tool_name not in response_state['tools_used']:
+                        response_state['tools_used'].append(tool_name)
+                    event_queue.put(_sse_event('tool_call', {
+                        'tool_name': tool_name,
+                        'tool_id': event.metadata.get('tool_id'),
+                        'description': event.metadata.get('description', '')
+                    }))
+
+                elif event.type == 'tool_result':
+                    tool_name_result = event.metadata.get('tool_name', '')
+                    is_error = event.metadata.get('is_error', False)
+
+                    if is_error:
+                        response_state['tool_errors'].append({
+                            'tool_name': tool_name_result,
+                            'error': str(event.content)[:500],
+                        })
+
+                    event_queue.put(_sse_event('tool_result', {
+                        'tool_name': tool_name_result,
+                        'result': event.content
+                    }))
+
+                elif event.type == 'thinking':
+                    event_queue.put(_sse_event('thinking', {'content': event.content}))
+
+                elif event.type == 'todos':
+                    todos = event.content.get('todos', [])
+                    if todos:
+                        event_queue.put(_sse_event('todos', {'todos': todos}))
+
+                elif event.type == 'error':
+                    response_state['error_message'] = event.content
+                    event_queue.put(_sse_event('error', {'message': event.content}))
+
+                elif event.type == 'interrupt_ack':
+                    # FASE 5: Interrupt acknowledgment do ClaudeSDKClient
+                    event_queue.put(_sse_event('interrupt_ack', {
+                        'message': event.content if isinstance(event.content, str) else 'Operação interrompida',
+                    }))
+
+                elif event.type == 'done':
+                    message_id = event.metadata.get('message_id', '') or str(datetime.utcnow().timestamp())
+                    response_state['input_tokens'] = event.content.get('input_tokens', 0)
+                    response_state['output_tokens'] = event.content.get('output_tokens', 0)
+                    cost_usd = event.content.get('total_cost_usd', 0)
+
+                    if message_id not in processed_message_ids:
+                        processed_message_ids.add(message_id)
+                        cost_tracker.record_cost(
+                            message_id=message_id,
+                            input_tokens=response_state['input_tokens'],
+                            output_tokens=response_state['output_tokens'],
+                            session_id=response_state['sdk_session_id'],
+                            user_id=user_id,
                         )
 
-                    logger.info(f"[AGENTE] Chamando SDK (attempt {attempt}/{max_attempts}) | sdk_session_id: {sdk_session_id[:8] if sdk_session_id else 'Nova'} | images: {len(image_files) if image_files else 0}")
-
-                    async for event in client.stream_response(
-                        prompt=prompt_to_send,
-                        session_id=sdk_session_id,
-                        user_name=user_name,
-                        can_use_tool=can_use_tool,
-                        model=model,
-                        thinking_enabled=thinking_enabled,
-                        plan_mode=plan_mode,
-                        user_id=user_id,  # Para Memory Tool
-                        image_files=image_files,  # FEAT-032: Imagens para Vision API
-                    ):
-                        # Evento de inicialização
-                        if event.type == 'init':
-                            new_sdk_session_id = event.content.get('session_id')
-                            response_state['sdk_session_id'] = new_sdk_session_id
-
-                            # FEAT-030: Se não tínhamos session_id, criar novo
-                            if not response_state['our_session_id']:
-                                response_state['our_session_id'] = str(uuid.uuid4())
-
-                            event_queue.put(_sse_event('init', {
-                                'session_id': response_state['our_session_id'],
-                                'sdk_session_id': new_sdk_session_id,
-                            }))
-                            continue
-
-                        if event.type == 'text':
-                            response_state['full_text'] += event.content
-                            event_queue.put(_sse_event('text', {'content': event.content}))
-
-                        elif event.type == 'tool_call':
-                            tool_name = event.content
-                            if tool_name not in response_state['tools_used']:
-                                response_state['tools_used'].append(tool_name)
-                            event_queue.put(_sse_event('tool_call', {
-                                'tool_name': tool_name,
-                                'tool_id': event.metadata.get('tool_id'),
-                                'description': event.metadata.get('description', '')
-                            }))
-
-                        elif event.type == 'tool_result':
-                            tool_name_result = event.metadata.get('tool_name', '')
-                            is_error = event.metadata.get('is_error', False)
-
-                            # FEAT-031: Registra erros de tools para post-hook
-                            if is_error:
-                                response_state['tool_errors'].append({
-                                    'tool_name': tool_name_result,
-                                    'error': str(event.content)[:500],
-                                })
-
-                            event_queue.put(_sse_event('tool_result', {
-                                'tool_name': tool_name_result,
-                                'result': event.content
-                            }))
-
-                        elif event.type == 'thinking':
-                            # FEAT-002: Repassa thinking block para frontend
-                            event_queue.put(_sse_event('thinking', {'content': event.content}))
-
-                        elif event.type == 'todos':
-                            todos = event.content.get('todos', [])
-                            if todos:
-                                event_queue.put(_sse_event('todos', {'todos': todos}))
-
-                        elif event.type == 'error':
-                            response_state['error_message'] = event.content
-                            event_queue.put(_sse_event('error', {'message': event.content}))
-
-                        elif event.type == 'done':
-                            message_id = event.metadata.get('message_id', '') or str(datetime.utcnow().timestamp())
-                            response_state['input_tokens'] = event.content.get('input_tokens', 0)
-                            response_state['output_tokens'] = event.content.get('output_tokens', 0)
-                            cost_usd = event.content.get('total_cost_usd', 0)
-
-                            if message_id not in processed_message_ids:
-                                processed_message_ids.add(message_id)
-                                cost_tracker.record_cost(
-                                    message_id=message_id,
-                                    input_tokens=response_state['input_tokens'],
-                                    output_tokens=response_state['output_tokens'],
-                                    session_id=response_state['sdk_session_id'],
-                                    user_id=user_id,
-                                )
-
-                            # =============================================================
-                            # POST-HOOK: Subagente Haiku analisa e salva padrões/correções
-                            # =============================================================
-                            try:
-                                post_result = memory_agent.analyze_and_save(
-                                    user_id=user_id,
-                                    prompt=message,
-                                    response=response_state['full_text'],
-                                )
-
-                                if post_result.get('action') == 'saved':
-                                    memory_type = post_result.get('type', 'info')
-                                    memory_category = post_result.get('category', '')
-                                    logger.info(f"[AGENTE] MEMORIA: Salvo {memory_type} em {post_result.get('path')}")
-
-                                    # FEAT-031: Feedback visual discreto para o frontend
-                                    event_queue.put(_sse_event('memory_saved', {
-                                        'type': memory_type,
-                                        'category': memory_category,
-                                        'message': _get_memory_feedback_message(memory_type, memory_category),
-                                    }))
-
-                            except Exception as hook_error:
-                                logger.warning(f"[AGENTE] POST-HOOK falhou: {hook_error}")
-
-                            # Evento done
-                            event_queue.put(_sse_event('done', {
-                                'session_id': response_state['our_session_id'],
-                                'input_tokens': response_state['input_tokens'],
-                                'output_tokens': response_state['output_tokens'],
-                                'cost_usd': cost_usd,
-                            }))
-
-                    # SDK call bem-sucedida — sai do retry loop
-                    break
-
-                except Exception as e:
-                    error_str = str(e)
-                    is_expired = _is_session_expired_error(error_str)
-
-                    if is_expired and attempt < max_attempts:
-                        # =============================================================
-                        # F0.1: RETRY AUTOMÁTICO — Sessão SDK expirada
-                        # Limpa sdk_session_id (local e DB) para forçar nova sessão
-                        # com injeção de histórico na próxima tentativa.
-                        # =============================================================
-                        logger.warning(
-                            f"[AGENTE] Sessão SDK expirada detectada (attempt {attempt}). "
-                            f"Limpando sdk_session_id e preparando retry automático..."
+                    # =============================================================
+                    # POST-HOOK: Subagente Haiku analisa e salva padrões/correções
+                    # =============================================================
+                    try:
+                        post_result = memory_agent.analyze_and_save(
+                            user_id=user_id,
+                            prompt=message,
+                            response=response_state['full_text'],
                         )
-                        sdk_session_id = None
 
-                        # Limpa no DB imediatamente para consistência
-                        try:
-                            with app.app_context():
-                                if session_id:
-                                    session_obj = AgentSession.get_by_session_id(session_id)
-                                    if session_obj:
-                                        session_obj.set_sdk_session_id(None)
-                                        db.session.commit()
-                                        logger.info(f"[AGENTE] sdk_session_id limpo no DB para retry")
-                        except Exception as db_err:
-                            logger.warning(f"[AGENTE] Erro ao limpar sdk_session_id no DB: {db_err}")
+                        if post_result.get('action') == 'saved':
+                            memory_type = post_result.get('type', 'info')
+                            memory_category = post_result.get('category', '')
+                            logger.info(f"[AGENTE] MEMORIA: Salvo {memory_type} em {post_result.get('path')}")
 
-                        # continue → próxima iteração do for (attempt 2)
-                        continue
+                            event_queue.put(_sse_event('memory_saved', {
+                                'type': memory_type,
+                                'category': memory_category,
+                                'message': _get_memory_feedback_message(memory_type, memory_category),
+                            }))
 
-                    else:
-                        # Erro não-recuperável OU retry já foi tentado
-                        logger.error(f"[AGENTE] Erro no async stream (attempt {attempt}): {error_str}", exc_info=True)
+                    except Exception as hook_error:
+                        logger.warning(f"[AGENTE] POST-HOOK falhou: {hook_error}")
 
-                        if is_expired:
-                            response_state['session_expired'] = True
-                            logger.warning(f"[AGENTE] Sessão SDK expirada mesmo após retry")
+                    # Evento done
+                    event_queue.put(_sse_event('done', {
+                        'session_id': response_state['our_session_id'],
+                        'input_tokens': response_state['input_tokens'],
+                        'output_tokens': response_state['output_tokens'],
+                        'cost_usd': cost_usd,
+                    }))
 
-                        response_state['error_message'] = error_str
-                        event_queue.put(_sse_event('error', {
-                            'message': error_str,
-                            'session_expired': response_state['session_expired'],
-                        }))
-                        # break → sai do retry loop
-                        break
+                return False  # Não é init, não precisa continue
+
+            # =============================================================
+            # DUAL-MODE: Escolhe path baseado em USE_SDK_CLIENT
+            # =============================================================
+            if USE_SDK_CLIENT:
+                await _async_stream_sdk_client(
+                    client=client,
+                    memory_agent=memory_agent,
+                    our_session_id=our_session_id,
+                    context_injection=context_injection,
+                    response_state=response_state,
+                    event_queue=event_queue,
+                    _process_stream_event=_process_stream_event,
+                    message=message,
+                    user_id=user_id,
+                    user_name=user_name,
+                    can_use_tool=can_use_tool,
+                    model=model,
+                    thinking_enabled=thinking_enabled,
+                    plan_mode=plan_mode,
+                    image_files=image_files,
+                    app=app,
+                )
+            else:
+                await _async_stream_query(
+                    client=client,
+                    sdk_session_id=sdk_session_id,
+                    our_session_id=our_session_id,
+                    context_injection=context_injection,
+                    response_state=response_state,
+                    event_queue=event_queue,
+                    _process_stream_event=_process_stream_event,
+                    message=message,
+                    session_id=session_id,
+                    user_id=user_id,
+                    user_name=user_name,
+                    can_use_tool=can_use_tool,
+                    model=model,
+                    thinking_enabled=thinking_enabled,
+                    plan_mode=plan_mode,
+                    image_files=image_files,
+                    app=app,
+                )
 
         # =================================================================
         # CRÍTICO: GARANTIA DE FINALIZAÇÃO
@@ -1168,6 +1399,116 @@ def api_rename_session(session_db_id: int):
             'success': False,
             'error': str(e)
         }), 500
+
+
+# =============================================================================
+# API - SDK CLIENT (FASE 5: Interrupt + Pool Stats)
+# =============================================================================
+
+@agente_bp.route('/api/interrupt', methods=['POST'])
+@login_required
+def api_interrupt():
+    """
+    FASE 5: Interrompe operação em andamento no ClaudeSDKClient.
+
+    POST /agente/api/interrupt
+    {"session_id": "uuid-da-nossa-sessao"}
+
+    Requer USE_SDK_CLIENT=true. Quando chamado, o loop receive_response()
+    do client termina e emite interrupt_ack + done no stream SSE.
+
+    Returns:
+        200: {"success": true, "message": "Operação interrompida"}
+        400: Se USE_SDK_CLIENT=false ou session_id faltando
+        404: Se sessão não está ativa no pool
+        500: Se interrupt falhou
+    """
+    from .config.feature_flags import USE_SDK_CLIENT
+
+    if not USE_SDK_CLIENT:
+        return jsonify({
+            'success': False,
+            'error': 'Interrupt requer SDK Client (AGENT_USE_SDK_CLIENT=true)'
+        }), 400
+
+    data = request.get_json()
+    if not data or not data.get('session_id'):
+        return jsonify({
+            'success': False,
+            'error': 'session_id é obrigatório'
+        }), 400
+
+    interrupt_session_id = data['session_id']
+
+    from .sdk import get_session_pool
+    pool = get_session_pool()
+    pooled = pool.get_if_exists(interrupt_session_id)
+
+    if not pooled or not pooled.connected:
+        return jsonify({
+            'success': False,
+            'error': 'Sessão não ativa no pool'
+        }), 404
+
+    # Executa interrupt assíncrono em novo event loop (Flask é sync)
+    try:
+        loop = asyncio.new_event_loop()
+        loop.run_until_complete(pooled.client.interrupt())
+        loop.close()
+
+        logger.info(f"[AGENTE] Interrupt enviado: session={interrupt_session_id[:8]}...")
+        return jsonify({
+            'success': True,
+            'message': 'Operação interrompida'
+        })
+    except Exception as e:
+        logger.error(f"[AGENTE] Erro no interrupt: session={interrupt_session_id[:8]}... {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Erro ao interromper: {str(e)[:200]}'
+        }), 500
+
+
+@agente_bp.route('/api/pool/stats', methods=['GET'])
+@login_required
+def api_pool_stats():
+    """
+    FASE 5: Métricas do SessionPool para observabilidade.
+
+    GET /agente/api/pool/stats
+
+    Retorna:
+    {
+        "max_clients": 5,
+        "total_clients": 2,
+        "active_clients": 2,
+        "idle_clients": 0,
+        "total_created": 15,
+        "total_evicted": 3,
+        "total_destroyed": 10,
+        "idle_timeout_seconds": 300,
+        "uptime_seconds": 3600,
+        "sessions": [...]
+    }
+    """
+    from .config.feature_flags import USE_SDK_CLIENT
+
+    if not USE_SDK_CLIENT:
+        return jsonify({
+            'success': True,
+            'enabled': False,
+            'message': 'SDK Client desabilitado (AGENT_USE_SDK_CLIENT=false)',
+            'stats': None,
+        })
+
+    from .sdk import get_session_pool
+    pool = get_session_pool()
+
+    return jsonify({
+        'success': True,
+        'enabled': True,
+        'stats': pool.get_stats(),
+    })
 
 
 # =============================================================================

@@ -290,3 +290,37 @@ resolve-library-id("sqlalchemy") -> query-docs("/...", "bulk insert")
 - CNPJ (documentos brasileiros)
 - Formato de data: DD/MM/YYYY
 - Moeda: R$ (BRL)
+
+---
+
+# INFORMAÇÕES SOBRE DOMINIO E SERVIDOR
+
+## RENDER
+
+### WEB SERVICE
+
+- sistema-fretes
+- Dominio: sistema-fretes-onrender.com
+- Instance: Pro 4 GB 2 CPU
+- Build Command: chmod +x build.sh && ./build.sh
+- Start Command: ./start_render.sh
+
+### KEY VALUE
+
+- sistema-fretes-redis
+- Instance: Starter 256 MB RAM
+
+### BACKGROUND WORKER
+
+- sistema-fretes-worker-atacadao
+- Instance: Standard 2 GB 1 CPU
+- Build Command: pip install -r requirements.txt && python -m playwright install chromium && bash install_libreoffice_render.sh
+- Start Command: ./start_worker_render.sh
+
+## ODOO
+
+### ERP
+
+- odoo.nacomgoya.com.br
+
+---

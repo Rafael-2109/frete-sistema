@@ -57,3 +57,26 @@ USE_SELF_CORRECTION = os.getenv("AGENT_SELF_CORRECTION", "false").lower() == "tr
 USE_TEXT_TO_SQL = os.getenv("AGENT_TEXT_TO_SQL", "false").lower() == "true"
 TEXT_TO_SQL_TIMEOUT = int(os.getenv("AGENT_TEXT_TO_SQL_TIMEOUT", "5"))
 TEXT_TO_SQL_MAX_ROWS = int(os.getenv("AGENT_TEXT_TO_SQL_MAX_ROWS", "500"))
+
+# ====================================================================
+# FASE 5: ClaudeSDKClient (sessoes bidirecionais)
+# Substitui query() por ClaudeSDKClient para manter canal persistente.
+# SDK gerencia contexto e compactacao nativamente.
+# ====================================================================
+
+# Ativar ClaudeSDKClient em vez de query()
+# Quando false: usa query() (comportamento atual)
+# Quando true: usa ClaudeSDKClient via SessionPool
+USE_SDK_CLIENT = os.getenv("AGENT_USE_SDK_CLIENT", "false").lower() == "true"
+
+# Maximo de ClaudeSDKClient simultaneos no pool
+# Cada client consome ~300-500MB (subprocesso CLI)
+# Render Pro 4GB: max 5-6 | Standard 2GB: max 2-3 | Starter 512MB: max 1
+SDK_CLIENT_MAX_POOL = int(os.getenv("AGENT_SDK_CLIENT_MAX_POOL", "5"))
+
+# Timeout em segundos para desconectar clients inativos
+# Default 300s (5 min) — libera memoria de sessoes abandonadas
+SDK_CLIENT_IDLE_TIMEOUT = int(os.getenv("AGENT_SDK_CLIENT_IDLE_TIMEOUT", "300"))
+
+# Intervalo em segundos entre ciclos de cleanup do pool
+SDK_CLIENT_CLEANUP_INTERVAL = int(os.getenv("AGENT_SDK_CLIENT_CLEANUP_INTERVAL", "60"))

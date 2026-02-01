@@ -99,10 +99,28 @@ function autoResizeTextarea() {
 function stopGeneration() {
     console.log('[CHAT] Interrompendo geração...');
 
+    // FASE 5: Se SDK Client ativo e temos sessionId, chamar /api/interrupt
+    // Isso envia interrupt ao ClaudeSDKClient, que emite interrupt_ack no stream
+    if (sessionId) {
+        fetch('/agente/api/interrupt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sessionId })
+        }).then(resp => {
+            if (resp.ok) {
+                console.log('[CHAT] Interrupt enviado com sucesso');
+            } else {
+                console.log('[CHAT] Interrupt não disponível (SDK Client desabilitado ou sessão não ativa)');
+            }
+        }).catch(e => {
+            console.warn('[CHAT] Falha ao enviar interrupt:', e);
+        });
+    }
+
     // Marca como não gerando (isso vai parar o loop)
     isGenerating = false;
 
-    // Cancela o reader se existir
+    // Cancela o reader se existir (fallback — funciona com ou sem SDK Client)
     if (currentEventSource && currentEventSource.cancel) {
         try {
             currentEventSource.cancel();
@@ -115,7 +133,7 @@ function stopGeneration() {
     hideTyping();
     hideStopButton();
 
-    // Adiciona mensagem de interrupção
+    // Adiciona mensagem de interrupção (fallback — se interrupt_ack chegar, será mostrado via SSE)
     addMessage('⏹️ *Geração interrompida pelo usuário*', 'assistant');
 }
 
@@ -842,6 +860,16 @@ function processSSEEvent(eventType, data, state) {
                 hideTyping();
                 pendingAction = data;
                 showConfirmation(data.message || 'Confirmar ação?');
+                break;
+
+            case 'interrupt_ack':
+                // FASE 5: Interrupt acknowledgment do ClaudeSDKClient
+                hideTyping();
+                hideThinkingPanel();
+                finalizePendingTimelineItems('cancelled');
+                finalizePendingTodos(false);
+                addMessage('🛑 Operação interrompida.', 'system');
+                console.log('[SSE] Interrupt acknowledgment recebido');
                 break;
 
             case 'error':
