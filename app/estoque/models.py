@@ -72,6 +72,8 @@ class MovimentacaoEstoque(db.Model):
     cod_produto_raiz = db.Column(db.String(50), nullable=True, index=True)
     # FK para produção que gerou este consumo (auto-referência)
     producao_pai_id = db.Column(db.Integer, db.ForeignKey('movimentacao_estoque.id', ondelete='SET NULL'), nullable=True, index=True)
+    # Ordem de Produção (OP) - identificador da ordem de produção
+    ordem_producao = db.Column(db.String(50), nullable=True, index=True)
 
     # Campos para controle de Pallet em Terceiros
     tipo_destinatario = db.Column(db.String(20), nullable=True)  # CLIENTE ou TRANSPORTADORA

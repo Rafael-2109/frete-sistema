@@ -121,11 +121,6 @@ class RecursosProducao(db.Model):
     )
 
 
-# REMOVIDO: OrdemProducao
-# Modelo deprecated - integração Manufatura/Odoo foi removida.
-# Tabela 'ordem_producao' ainda existe no banco mas não é mais usada.
-# Produção agora é gerenciada via importação Excel em app/estoque.
-
 
 class RequisicaoCompras(db.Model):
     __tablename__ = 'requisicao_compras'

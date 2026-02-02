@@ -116,7 +116,8 @@ class ServicoConsumoProducao:
         tipo_origem: Optional[str] = None,
         nivel_recursao: int = 0,
         max_nivel_recursao: int = 10,
-        visitados: Optional[Set[str]] = None
+        visitados: Optional[Set[str]] = None,
+        ordem_producao: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Processa produção com consumo automático de componentes.
@@ -225,6 +226,7 @@ class ServicoConsumoProducao:
                 tipo_origem_producao=tipo_origem,
                 cod_produto_raiz=cod_produto_raiz,
                 producao_pai_id=producao_pai_id,
+                ordem_producao=ordem_producao,
                 ativo=True
             )
 
@@ -266,7 +268,8 @@ class ServicoConsumoProducao:
                     usuario=usuario,
                     nivel_recursao=nivel_recursao + 1,
                     max_nivel_recursao=max_nivel_recursao,
-                    visitados=visitados.copy()  # Cópia para cada branch
+                    visitados=visitados.copy(),  # Cópia para cada branch
+                    ordem_producao=ordem_producao
                 )
 
                 consumos.extend(resultado_comp.get('consumos', []))
@@ -316,7 +319,8 @@ class ServicoConsumoProducao:
         usuario: Optional[str],
         nivel_recursao: int,
         max_nivel_recursao: int,
-        visitados: Set[str]
+        visitados: Set[str],
+        ordem_producao: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Processa consumo de um componente específico.
@@ -368,7 +372,8 @@ class ServicoConsumoProducao:
                     producao_pai_id=producao_pai_id,
                     tipo_origem=ServicoConsumoProducao.TIPO_CONSUMO_DIRETO,
                     usuario=usuario,
-                    observacao=f"Consumo para produção de {cod_produto_raiz}"
+                    observacao=f"Consumo para produção de {cod_produto_raiz}",
+                    ordem_producao=ordem_producao
                 )
                 consumos.append(consumo)
 
@@ -390,7 +395,8 @@ class ServicoConsumoProducao:
                         producao_pai_id=producao_pai_id,
                         tipo_origem=ServicoConsumoProducao.TIPO_CONSUMO_DIRETO,
                         usuario=usuario,
-                        observacao=f"Consumo parcial (estoque) para produção de {cod_produto_raiz}"
+                        observacao=f"Consumo parcial (estoque) para produção de {cod_produto_raiz}",
+                        ordem_producao=ordem_producao
                     )
                     consumos.append(consumo_parcial)
 
@@ -419,7 +425,8 @@ class ServicoConsumoProducao:
                         tipo_origem=ServicoConsumoProducao.TIPO_PRODUCAO_AUTO,
                         nivel_recursao=nivel_recursao,
                         max_nivel_recursao=max_nivel_recursao,
-                        visitados=visitados
+                        visitados=visitados,
+                        ordem_producao=ordem_producao
                     )
 
                     if resultado_producao_auto['sucesso']:
@@ -447,7 +454,8 @@ class ServicoConsumoProducao:
                             producao_pai_id=producao_pai_id,
                             tipo_origem=ServicoConsumoProducao.TIPO_CONSUMO_AUTO,
                             usuario=usuario,
-                            observacao=f"Consumo após produção automática para {cod_produto_raiz}"
+                            observacao=f"Consumo após produção automática para {cod_produto_raiz}",
+                            ordem_producao=ordem_producao
                         )
                         consumos.append(consumo_auto)
                     else:
@@ -469,7 +477,8 @@ class ServicoConsumoProducao:
                             producao_pai_id=producao_pai_id,
                             tipo_origem=ServicoConsumoProducao.TIPO_CONSUMO_DIRETO,
                             usuario=usuario,
-                            observacao=f"Consumo (estoque ficará negativo) para {cod_produto_raiz}"
+                            observacao=f"Consumo (estoque ficará negativo) para {cod_produto_raiz}",
+                            ordem_producao=ordem_producao
                         )
                         consumos.append(consumo_negativo)
 
@@ -503,7 +512,8 @@ class ServicoConsumoProducao:
         producao_pai_id: int,
         tipo_origem: str,
         usuario: Optional[str],
-        observacao: Optional[str] = None
+        observacao: Optional[str] = None,
+        ordem_producao: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Registra movimentação de CONSUMO (valor negativo).
@@ -526,6 +536,7 @@ class ServicoConsumoProducao:
             tipo_origem_producao=tipo_origem,
             cod_produto_raiz=cod_produto_raiz,
             producao_pai_id=producao_pai_id,
+            ordem_producao=ordem_producao,
             ativo=True
         )
 

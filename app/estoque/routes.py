@@ -330,6 +330,23 @@ def listar_movimentacoes():
         status_disponiveis = []
         locais_disponiveis = []
 
+    # Contagem de produções RAIZ sem ordem_producao
+    try:
+        producoes_sem_op_count = MovimentacaoEstoque.query.filter(
+            MovimentacaoEstoque.tipo_movimentacao.in_(['PRODUÇÃO', 'PRODUCAO']),
+            MovimentacaoEstoque.tipo_origem_producao == 'RAIZ',
+            db.or_(
+                MovimentacaoEstoque.ordem_producao == None,  # noqa: E711
+                MovimentacaoEstoque.ordem_producao == ''
+            ),
+            MovimentacaoEstoque.ativo == True
+        ).count()
+    except Exception:
+        producoes_sem_op_count = 0
+
+    # Flag para abrir modal automaticamente (pós-importação)
+    sem_op_flag = request.args.get('sem_op', '')
+
     return render_template('estoque/listar_movimentacoes.html',
                          movimentacoes=movimentacoes,
                          cod_produto=cod_produto,
@@ -345,7 +362,9 @@ def listar_movimentacoes():
                          tipos_disponiveis=tipos_disponiveis,
                          origens_disponiveis=origens_disponiveis,
                          status_disponiveis=status_disponiveis,
-                         locais_disponiveis=locais_disponiveis)
+                         locais_disponiveis=locais_disponiveis,
+                         producoes_sem_op_count=producoes_sem_op_count,
+                         sem_op_flag=sem_op_flag)
 
 @estoque_bp.route('/api/estatisticas')
 @login_required
@@ -436,6 +455,7 @@ def processar_importacao_movimentacoes():
         
         # COMPORTAMENTO: SEMPRE ADICIONA - Não remove dados existentes
         produtos_importados = 0
+        producoes_sem_op = 0  # Contador de produções importadas sem ordem_producao
         erros = []
         
         for index, row in df.iterrows():
@@ -494,6 +514,15 @@ def processar_importacao_movimentacoes():
                 if 'observacao' in df.columns:
                     observacao = str(row.get('observacao', '')).strip()
 
+                # 📋 ORDEM DE PRODUÇÃO (opcional)
+                ordem_producao_valor = ''
+                if 'ordem_producao' in df.columns:
+                    op_raw = row.get('ordem_producao', '')
+                    if pd.notna(op_raw):
+                        ordem_producao_valor = str(op_raw).strip()
+                        if ordem_producao_valor == 'nan':
+                            ordem_producao_valor = ''
+
                 # 🔧 PRODUÇÃO COM CONSUMO AUTOMÁTICO DE COMPONENTES
                 if tipo_movimentacao == 'PRODUÇÃO':
                     from app.estoque.services.consumo_producao_service import ServicoConsumoProducao
@@ -505,11 +534,16 @@ def processar_importacao_movimentacoes():
                         nome_produto=nome_produto,
                         local_movimentacao=local_movimentacao,
                         observacao=observacao,
-                        usuario=current_user.nome
+                        usuario=current_user.nome,
+                        ordem_producao=ordem_producao_valor or None
                     )
 
                     if resultado_producao['sucesso']:
                         produtos_importados += 1
+
+                        # Contar produções sem ordem_producao
+                        if not ordem_producao_valor:
+                            producoes_sem_op += 1
 
                         # Log de consumos e produções automáticas
                         n_consumos = len(resultado_producao.get('consumos', []))
@@ -563,7 +597,12 @@ def processar_importacao_movimentacoes():
         if erros[:5]:  # Mostrar apenas os primeiros 5 erros
             for erro in erros[:5]:
                 flash(f"❌ {erro}", 'error')
-        
+
+        # Se houver produções sem ordem_producao, redirecionar com flag para abrir modal
+        if producoes_sem_op > 0:
+            flash(f"⚠️ {producoes_sem_op} produção(ões) importada(s) sem Ordem de Produção. Preencha no modal.", 'warning')
+            return redirect(url_for('estoque.listar_movimentacoes', sem_op=producoes_sem_op))
+
         return redirect(url_for('estoque.listar_movimentacoes'))
         
     except Exception as e:
@@ -1623,7 +1662,8 @@ def baixar_modelo_movimentacoes():
             'tipo_movimentacao': ['ENTRADA'],  # ENTRADA ou SAIDA
             'qtd_movimentacao': [100],
             'observacao': ['Observação da movimentação'],
-            'local_movimentacao': ['Linha de Produção']
+            'local_movimentacao': ['Linha de Produção'],
+            'ordem_producao': ['OP-001']
         }
         
         df = pd.DataFrame(modelo_data)
@@ -1975,3 +2015,142 @@ def api_pedidos_previstos_cardex(cod_produto):
     except Exception as e:
         logger.error(f"Erro ao buscar pedidos previstos para {cod_produto}: {str(e)}")
         return jsonify({'error': str(e), 'success': False}), 500
+
+
+# ============================================================================
+# ROTAS API - ORDEM DE PRODUÇÃO (OP)
+# ============================================================================
+
+@estoque_bp.route('/api/producoes-sem-op')
+@login_required
+def api_producoes_sem_op():
+    """Retorna lista de produções RAIZ sem ordem_producao para preenchimento no modal"""
+    try:
+        producoes = MovimentacaoEstoque.query.filter(
+            MovimentacaoEstoque.tipo_movimentacao.in_(['PRODUÇÃO', 'PRODUCAO']),
+            MovimentacaoEstoque.tipo_origem_producao == 'RAIZ',
+            db.or_(
+                MovimentacaoEstoque.ordem_producao == None,  # noqa: E711
+                MovimentacaoEstoque.ordem_producao == ''
+            ),
+            MovimentacaoEstoque.ativo == True
+        ).order_by(
+            MovimentacaoEstoque.data_movimentacao.desc()
+        ).all()
+
+        resultado = []
+        for mov in producoes:
+            resultado.append({
+                'id': mov.id,
+                'data_movimentacao': mov.data_movimentacao.strftime('%d/%m/%Y') if mov.data_movimentacao else '-',
+                'cod_produto': mov.cod_produto or '-',
+                'nome_produto': mov.nome_produto or '-',
+                'qtd_movimentacao': float(mov.qtd_movimentacao or 0),
+                'local_movimentacao': mov.local_movimentacao or '-',
+                'operacao_producao_id': mov.operacao_producao_id or '',
+            })
+
+        return jsonify({'success': True, 'producoes': resultado, 'total': len(resultado)})
+
+    except Exception as e:
+        logger.error(f"Erro ao buscar produções sem OP: {str(e)}")
+        return jsonify({'error': str(e), 'success': False}), 500
+
+
+@estoque_bp.route('/api/producoes-sem-op/salvar', methods=['POST'])
+@login_required
+def api_salvar_ordem_producao():
+    """Salva ordem_producao para produções selecionadas e propaga recursivamente"""
+    try:
+        dados = request.get_json()
+        if not dados or 'producoes' not in dados:
+            return jsonify({'error': 'Dados inválidos', 'success': False}), 400
+
+        producoes_para_salvar = dados['producoes']
+        # Formato esperado: [{"id": 123, "ordem_producao": "OP-001"}, ...]
+
+        total_atualizados = 0
+        total_propagados = 0
+
+        for item in producoes_para_salvar:
+            producao_id = item.get('id')
+            ordem_producao_valor = (item.get('ordem_producao') or '').strip()
+
+            if not producao_id or not ordem_producao_valor:
+                continue
+
+            # Buscar a produção RAIZ
+            producao = MovimentacaoEstoque.query.get(producao_id)
+            if not producao:
+                logger.warning(f"Produção ID {producao_id} não encontrada para atribuir OP")
+                continue
+
+            # Atualizar a produção RAIZ
+            producao.ordem_producao = ordem_producao_valor
+            total_atualizados += 1
+
+            # Propagar para componentes vinculados
+            propagados = _propagar_ordem_producao(producao, ordem_producao_valor)
+            total_propagados += propagados
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'total_atualizados': total_atualizados,
+            'total_propagados': total_propagados,
+            'message': f'{total_atualizados} produção(ões) atualizada(s), {total_propagados} componente(s) propagado(s).'
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao salvar ordem de produção: {str(e)}")
+        return jsonify({'error': str(e), 'success': False}), 500
+
+
+def _propagar_ordem_producao(producao_raiz, ordem_producao):
+    """
+    Propaga ordem_producao da produção RAIZ para todos os componentes vinculados.
+
+    Estratégia de propagação (em ordem de prioridade):
+    1. Se a RAIZ tem operacao_producao_id: atualiza TODAS as movimentações com mesmo operacao_producao_id
+    2. Se não tem operacao_producao_id: busca filhos via producao_pai_id recursivamente
+
+    Returns:
+        int: Número de registros propagados
+    """
+    total_propagados = 0
+
+    # Estratégia 1: Propagar via operacao_producao_id (mais eficiente, pega tudo de uma vez)
+    if producao_raiz.operacao_producao_id:
+        resultado = MovimentacaoEstoque.query.filter(
+            MovimentacaoEstoque.operacao_producao_id == producao_raiz.operacao_producao_id,
+            MovimentacaoEstoque.id != producao_raiz.id,
+            MovimentacaoEstoque.ativo == True
+        ).update(
+            {MovimentacaoEstoque.ordem_producao: ordem_producao},
+            synchronize_session='fetch'
+        )
+        total_propagados += resultado
+    else:
+        # Estratégia 2: Propagar via producao_pai_id recursivamente
+        total_propagados += _propagar_recursivo_por_pai(producao_raiz.id, ordem_producao)
+
+    return total_propagados
+
+
+def _propagar_recursivo_por_pai(pai_id, ordem_producao):
+    """Propaga ordem_producao recursivamente via producao_pai_id"""
+    filhos = MovimentacaoEstoque.query.filter(
+        MovimentacaoEstoque.producao_pai_id == pai_id,
+        MovimentacaoEstoque.ativo == True
+    ).all()
+
+    total = 0
+    for filho in filhos:
+        filho.ordem_producao = ordem_producao
+        total += 1
+        # Recursão para filhos dos filhos
+        total += _propagar_recursivo_por_pai(filho.id, ordem_producao)
+
+    return total
