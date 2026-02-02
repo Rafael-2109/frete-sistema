@@ -822,6 +822,28 @@ class ComprovanteMatchService:
                 'confianca': 95,
             }
 
+        # Estrategia 1b: Com espaco — lado direito é bloco NF+parcela zero-padded
+        # Caso: "5 0006641" → prefixo="5", bloco="6641" → NF=664, parcela=1
+        sep_bloco = re.match(r'^(\d+)\s+(0*)(\d+)$', doc)
+        if sep_bloco:
+            bloco = sep_bloco.group(3)  # dígitos significativos após zeros
+            if len(bloco) >= 2:
+                # Tentar extrair NF+parcela do bloco (1 ou 2 dígitos de parcela)
+                for suffix_len in [1, 2]:
+                    if len(bloco) <= suffix_len:
+                        continue
+                    nf_candidata = bloco[:-suffix_len]
+                    parcela_val = int(bloco[-suffix_len:])
+                    if parcela_val == 0:
+                        continue
+                    if nf_candidata in nfs_conhecidas:
+                        return {
+                            'nf': nf_candidata,
+                            'parcela': parcela_val,
+                            'metodo': 'SEPARADOR_BLOCO',
+                            'confianca': 85,
+                        }
+
         # Estrategia 2: Letra final (A=1, B=2...)
         letra_match = re.match(r'^0*(\d+)([A-Z])$', doc.upper())
         if letra_match:
@@ -869,6 +891,36 @@ class ComprovanteMatchService:
                         'metodo': 'PARCELA_UNICA',
                         'confianca': 85,
                     }
+
+            # Estrategia 3c: Busca exaustiva — NF embutida em posicao desconhecida
+            # Gera subsequencias a partir de cada posicao e valida contra nfs_conhecidas
+            if nfs_conhecidas:
+                for start in range(len(doc_limpo)):
+                    substr = doc_limpo[start:].lstrip('0') or '0'
+                    if not substr or substr == '0':
+                        continue
+                    for suffix_len in [1, 2]:
+                        if len(substr) <= suffix_len:
+                            continue
+                        nf_candidata = substr[:-suffix_len]
+                        parcela_val = int(substr[-suffix_len:])
+                        if parcela_val == 0:
+                            continue
+                        if nf_candidata in nfs_conhecidas:
+                            return {
+                                'nf': nf_candidata,
+                                'parcela': parcela_val,
+                                'metodo': 'BUSCA_EXAUSTIVA',
+                                'confianca': 70,
+                            }
+                    # Tambem tentar substr inteiro como NF (sem parcela)
+                    if substr in nfs_conhecidas:
+                        return {
+                            'nf': substr,
+                            'parcela': 1,
+                            'metodo': 'BUSCA_EXAUSTIVA_SEM_PARCELA',
+                            'confianca': 65,
+                        }
 
             # Fallback: doc inteiro como NF
             nf_candidata = doc_limpo.lstrip('0') or '0'
@@ -1109,8 +1161,14 @@ class ComprovanteMatchService:
         elif metodo.startswith('SEM_SEPARADOR'):
             score -= 5
             criterios.append(f'NF_{metodo}(-5%)')
+        elif metodo == 'SEPARADOR_BLOCO':
+            score -= 3
+            criterios.append('NF_SEPARADOR_BLOCO(-3%)')
         elif metodo == 'PARCELA_UNICA':
             criterios.append('NF_PARCELA_UNICA(0%)')
+        elif metodo.startswith('BUSCA_EXAUSTIVA'):
+            score -= 8
+            criterios.append(f'NF_{metodo}(-8%)')
         elif metodo == 'FALLBACK_COMPLETO':
             score -= 15
             criterios.append('NF_FALLBACK(-15%)')
