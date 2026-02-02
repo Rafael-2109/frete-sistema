@@ -811,10 +811,35 @@ class ComprovanteMatchService:
                 parcelas_por_nf.setdefault(nf_str, set()).add(parc)
 
         # Estrategia 1: Com separador (-, /, espaco)
-        sep_match = re.match(r'^0*(\d+)\s*[-/\s]\s*0*(\d{1,3})$', doc)
+        # Tolera ruido OCR no final: "78908-4 5" → captura NF=78908, parcela=4, ignora " 5"
+        sep_match = re.match(r'^0*(\d+)\s*[-/\s]\s*0*(\d{1,3})(?:\s+\d{1,2})?$', doc)
         if sep_match:
             nf = sep_match.group(1)
             parcela = int(sep_match.group(2))
+
+            # Validar NF contra conhecidas
+            if nf in nfs_conhecidas:
+                return {
+                    'nf': nf,
+                    'parcela': parcela,
+                    'metodo': 'SEPARADOR',
+                    'confianca': 95,
+                }
+
+            # NF nao conhecida: pode ter prefixo embutido (ex: "1002288" → NF "2288")
+            nf_limpa = nf.lstrip('0') or '0'
+            for i in range(1, len(nf_limpa)):
+                sub_nf = nf_limpa[i:]
+                if sub_nf in nfs_conhecidas:
+                    return {
+                        'nf': sub_nf,
+                        'parcela': parcela,
+                        'metodo': 'SEPARADOR_VALIDADO',
+                        'confianca': 88,
+                    }
+
+            # NF nao encontrada nas conhecidas — manter resultado original
+            # (pode ser NF nova ainda nao cadastrada no Odoo)
             return {
                 'nf': nf,
                 'parcela': parcela,
@@ -1155,6 +1180,9 @@ class ComprovanteMatchService:
         metodo = parse_result.get('metodo', 'NAO_PARSEADO')
         if metodo == 'SEPARADOR':
             criterios.append('NF_SEPARADOR(0%)')
+        elif metodo == 'SEPARADOR_VALIDADO':
+            score -= 2
+            criterios.append('NF_SEPARADOR_VALIDADO(-2%)')
         elif metodo == 'LETRA':
             score -= 2
             criterios.append('NF_LETRA(-2%)')
