@@ -1270,29 +1270,62 @@ function renderAskUserQuestion(questions, askSessionId, state) {
             <span class="option-desc">Digitar resposta personalizada</span>
         `;
         otherBtn.addEventListener('click', () => {
-            // Mostra input de texto inline
-            const existingInput = optionsDiv.querySelector('.ask-user-text-input');
-            if (existingInput) {
-                existingInput.focus();
+            // FIX: Desselecionar opções anteriores e limpar answer
+            if (!q.multiSelect) {
+                optionsDiv.querySelectorAll('.ask-user-option').forEach(b => b.classList.remove('selected'));
+                otherBtn.classList.add('selected');
+                delete answers[q.question]; // Limpa seleção anterior
+            }
+
+            // Se já tem input visível, só foca nele
+            const existingWrapper = optionsDiv.querySelector('.ask-user-text-input-wrapper');
+            if (existingWrapper) {
+                const existingInput = existingWrapper.querySelector('.ask-user-text-input');
+                if (existingInput) existingInput.focus();
                 return;
             }
+
+            // Wrapper com input + botão confirmar (não depender só do Enter)
+            const inputWrapper = document.createElement('div');
+            inputWrapper.className = 'ask-user-text-input-wrapper';
+
             const input = document.createElement('input');
             input.type = 'text';
             input.className = 'ask-user-text-input';
             input.placeholder = 'Digite sua resposta...';
-            input.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' && input.value.trim()) {
-                    answers[q.question] = input.value.trim();
-                    optionsDiv.querySelectorAll('.ask-user-option').forEach(b => b.classList.remove('selected'));
-                    otherBtn.classList.add('selected');
-                    otherBtn.querySelector('.option-desc').textContent = input.value.trim();
-                    input.remove();
-                    if (questions.length === 1) {
-                        submitAskUserAnswers(container, askSessionId, answers);
-                    }
+
+            const confirmBtn = document.createElement('button');
+            confirmBtn.className = 'ask-user-text-confirm';
+            confirmBtn.textContent = '✓';
+            confirmBtn.type = 'button';
+
+            // Lógica de confirmação (Enter ou clique no ✓)
+            const confirmInput = () => {
+                const val = input.value.trim();
+                if (!val) return;
+
+                answers[q.question] = val;
+                optionsDiv.querySelectorAll('.ask-user-option').forEach(b => b.classList.remove('selected'));
+                otherBtn.classList.add('selected');
+                otherBtn.querySelector('.option-desc').textContent = val;
+                inputWrapper.remove();
+
+                // Auto-envio se single-select com 1 pergunta
+                if (questions.length === 1 && !q.multiSelect) {
+                    submitAskUserAnswers(container, askSessionId, answers);
+                } else {
+                    showToast('✓ Resposta capturada', 2000);
                 }
+            };
+
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') confirmInput();
             });
-            otherBtn.after(input);
+            confirmBtn.addEventListener('click', confirmInput);
+
+            inputWrapper.appendChild(input);
+            inputWrapper.appendChild(confirmBtn);
+            otherBtn.after(inputWrapper);
             input.focus();
         });
         optionsDiv.appendChild(otherBtn);

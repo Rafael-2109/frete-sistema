@@ -1737,6 +1737,36 @@
     box-shadow: 0 0 0 2px var(--agent-accent-primary-muted);
 }
 
+/* Wrapper do input "Outro" com botão confirmar */
+.ask-user-text-input-wrapper {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+    width: 100%;
+}
+
+.ask-user-text-input-wrapper .ask-user-text-input {
+    flex: 1;
+    margin-top: 0;
+}
+
+.ask-user-text-confirm {
+    padding: 8px 14px;
+    background: var(--agent-accent-primary);
+    color: white;
+    border: none;
+    border-radius: var(--agent-radius-sm);
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: bold;
+    transition: opacity var(--agent-transition-fast);
+    flex-shrink: 0;
+}
+
+.ask-user-text-confirm:hover {
+    opacity: 0.85;
+}
+
 /* Botão "Enviar Respostas" (multi-select ou múltiplas perguntas) */
 .ask-user-submit {
     margin-top: var(--agent-space-md);
