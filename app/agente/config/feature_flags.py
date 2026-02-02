@@ -22,10 +22,17 @@ USE_BUDGET_CONTROL = os.getenv("AGENT_BUDGET_CONTROL", "false").lower() == "true
 MAX_BUDGET_USD = float(os.getenv("AGENT_MAX_BUDGET_USD", "2.0"))
 
 # Context Clearing automatico — remove thinking/tool_uses antigos
-USE_CONTEXT_CLEARING = os.getenv("AGENT_CONTEXT_CLEARING", "false").lower() == "true"
+# ATIVO por default: a Anthropic recomenda habilitar para conversas longas.
+# O system_prompt.md contém instruções explícitas de compactação (Rule R6).
+# NOTA (2026-02): clear-thinking e clear-tool-uses foram promovidos a GA.
+#   Beta headers removidos — flag controla apenas log/documentação.
+# Para desativar: AGENT_CONTEXT_CLEARING=false
+USE_CONTEXT_CLEARING = os.getenv("AGENT_CONTEXT_CLEARING", "true").lower() == "true"
 
 # Prompt Caching — economia de 50-90% tokens input
 # O system_prompt.md do agente e extenso (~8K tokens)
+# NOTA (2026-02): prompt-caching foi promovido a GA.
+#   Beta header removido — flag controla apenas log/documentação.
 USE_PROMPT_CACHING = os.getenv("AGENT_PROMPT_CACHING", "false").lower() == "true"
 
 # ====================================================================

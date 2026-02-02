@@ -10,14 +10,17 @@ REGRAS DE SEGURANÇA:
 - Write: APENAS permitido para /tmp (arquivos temporários, exports)
 - Edit: APENAS permitido para /tmp (mesma regra)
 - Bash: Permitido (executado em sandbox pelo SDK)
+- AskUserQuestion: Interceptado para UI interativa (SSE + HTTP)
 - Outras tools: Permitidas por padrão
 - FAIL-CLOSED: Erros de validação NEGAM por segurança
 """
 
+import json
 import logging
 import os
 import tempfile
-from typing import Any
+import threading
+from typing import Any, Dict
 
 from claude_agent_sdk import (
     PermissionResultAllow,
@@ -26,6 +29,63 @@ from claude_agent_sdk import (
 )
 
 logger = logging.getLogger(__name__)
+
+# =============================================================================
+# ASKUSERQUESTION: Context storage global thread-safe
+# =============================================================================
+# Motivação: can_use_tool roda em Thread daemon do ClaudeSDKClient (subprocess),
+# mas event_queue é criado na Thread Flask. threading.local() não funciona
+# porque isola por thread. Solução: dict global + lock thread-safe.
+# =============================================================================
+_stream_context: Dict[str, Any] = {}  # session_id → {'event_queue': Queue}
+_context_lock = threading.Lock()
+
+
+def set_current_session_id(session_id: str) -> None:
+    """Define session_id no contexto global."""
+    with _context_lock:
+        if session_id not in _stream_context:
+            _stream_context[session_id] = {}
+        _stream_context[session_id]['_active'] = True
+
+
+def get_current_session_id() -> str | None:
+    """
+    Obtém session_id da thread atual.
+
+    NOTA: Como temos múltiplas threads, não podemos usar threading.local().
+    Procuramos a sessão mais recente marcada como ativa.
+    """
+    with _context_lock:
+        active_sessions = [
+            sid for sid, ctx in _stream_context.items()
+            if ctx.get('_active', False)
+        ]
+        if active_sessions:
+            return active_sessions[-1]  # Última ativa
+        return None
+
+
+def set_event_queue(session_id: str, event_queue: Any) -> None:
+    """Define event_queue para uma sessão (thread-safe)."""
+    with _context_lock:
+        if session_id not in _stream_context:
+            _stream_context[session_id] = {}
+        _stream_context[session_id]['event_queue'] = event_queue
+
+
+def get_event_queue(session_id: str) -> Any:
+    """Obtém event_queue de uma sessão (thread-safe)."""
+    with _context_lock:
+        ctx = _stream_context.get(session_id, {})
+        return ctx.get('event_queue')
+
+
+def cleanup_session_context(session_id: str) -> None:
+    """Remove contexto de uma sessão após stream terminar."""
+    with _context_lock:
+        _stream_context.pop(session_id, None)
+
 
 # Diretório temporário padrão do sistema
 TEMP_DIR = tempfile.gettempdir()  # /tmp no Linux
@@ -152,6 +212,87 @@ async def can_use_tool(
             )
 
             return PermissionResultAllow(updated_input=tool_input)
+
+        # ================================================================
+        # REGRA: AskUserQuestion — Perguntas interativas ao usuário
+        # Ref: https://platform.claude.com/docs/en/agent-sdk/user-input
+        #
+        # O SDK PAUSA execução aqui e AGUARDA retorno (timeout 60s).
+        # Fluxo:
+        # 1. Emitir evento SSE ask_user_question com as perguntas
+        # 2. Esperar resposta via HTTP POST /api/user-answer
+        # 3. Retornar PermissionResultAllow com updated_input={answers: {...}}
+        # ================================================================
+        if tool_name == 'AskUserQuestion':
+            current_session_id = get_current_session_id()
+            if not current_session_id:
+                logger.warning("[PERMISSION] AskUserQuestion sem session_id — negando")
+                return PermissionResultDeny(
+                    message="Não foi possível apresentar perguntas ao usuário (sessão não identificada)."
+                )
+
+            from ..sdk.pending_questions import register_question, wait_for_answer
+
+            questions = tool_input.get('questions', [])
+            logger.info(
+                f"[PERMISSION] AskUserQuestion interceptado: "
+                f"session={current_session_id[:8]}... "
+                f"questions={len(questions)}"
+            )
+
+            # Registra pergunta pendente no registry global
+            register_question(current_session_id, tool_input)
+
+            # Emitir evento SSE para o frontend via dict global thread-safe
+            event_queue = get_event_queue(current_session_id)
+            if event_queue:
+                sse_data = {
+                    'session_id': current_session_id,
+                    'questions': questions,
+                }
+                event_queue.put(
+                    f"event: ask_user_question\ndata: {json.dumps(sse_data, ensure_ascii=False)}\n\n"
+                )
+            else:
+                logger.error(
+                    f"[PERMISSION] AskUserQuestion: event_queue não disponível para "
+                    f"session={current_session_id[:8]}..."
+                )
+                # Cancela pergunta pendente e nega
+                from ..sdk.pending_questions import cancel_pending
+                cancel_pending(current_session_id)
+                return PermissionResultDeny(
+                    message="Erro interno: não foi possível enviar perguntas ao frontend."
+                )
+
+            # BLOQUEIA até o usuário responder via POST /api/user-answer (ou timeout 55s)
+            # NOTA ARQUITETURAL: Esta é uma chamada BLOQUEANTE (threading.Event.wait)
+            # dentro de uma função async. Isso é INTENCIONAL e SEGURO porque:
+            # - can_use_tool roda dentro de asyncio.run() em uma Thread daemon dedicada
+            #   (criada por ClaudeSDKClient._stream_response via threading.Thread)
+            # - O bloqueio NÃO afeta o event loop principal do Flask
+            # - Se a arquitetura mudar para event loop compartilhado, substituir por:
+            #   await asyncio.get_event_loop().run_in_executor(None, wait_for_answer, session_id)
+            answers = wait_for_answer(current_session_id)
+
+            if answers is None:
+                logger.warning(
+                    f"[PERMISSION] AskUserQuestion timeout: session={current_session_id[:8]}..."
+                )
+                return PermissionResultDeny(
+                    message="Tempo esgotado para responder às perguntas."
+                )
+
+            # Retorna com as respostas do usuário no updated_input
+            updated = dict(tool_input)
+            updated['answers'] = answers
+
+            logger.info(
+                f"[PERMISSION] AskUserQuestion respondido: "
+                f"session={current_session_id[:8]}... "
+                f"answers={list(answers.keys())}"
+            )
+            return PermissionResultAllow(updated_input=updated)
 
         # ================================================================
         # DEFAULT: Permite outras tools

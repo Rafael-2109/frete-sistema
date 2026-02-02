@@ -20,8 +20,6 @@
       "Skill(descobrindo-odoo-estrutura:*)",
       "Skill(exportando-arquivos)",
       "Skill(exportando-arquivos:*)",
-      "Skill(superpowers:using-superpowers)",
-      "Skill(superpowers:using-superpowers:*)",
       "Skill(rastreando-odoo)",
       "Skill(rastreando-odoo:*)",
       "Bash(for file in /home/rafaelnascimento/projetos/frete_sistema/.claude/skills/*/SKILL.md)",
@@ -35,10 +33,6 @@
       "mcp__render__get_key_value",
       "mcp__render__list_deploys",
       "mcp__render__query_render_postgres",
-      "Skill(superpowers:brainstorming)",
-      "Skill(superpowers:brainstorming:*)",
-      "Skill(superpowers:systematic-debugging)",
-      "Skill(superpowers:systematic-debugging:*)",
       "mcp__render__list_postgres_instances",
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(curl:*)",
@@ -60,7 +54,9 @@
       "Bash(git -C:*)",
       "WebFetch(domain:claude.com)",
       "Bash(pip show:*)",
-      "Bash(AGENT_TEXT_TO_SQL=true python:*)"
+      "Bash(AGENT_TEXT_TO_SQL=true python:*)",
+      "WebFetch(domain:www.anthropic.com)",
+      "WebFetch(domain:docs.claude.com)"
     ],
     "deny": []
   },

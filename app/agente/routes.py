@@ -17,10 +17,10 @@ FEAT-031: Sistema de Hooks para Memória Persistente
 - TOOL HOOKS: Instrumenta tool calls para analytics
 - FEEDBACK: Processa feedback do usuário
 
-Arquitetura: ClaudeSDKClient via SessionPool (canal bidirecional persistente)
-- SessionPool: gerencia instâncias ClaudeSDKClient com LRU eviction
-- Interrupt: cancela operação em andamento no ClaudeSDKClient
-- Pool Stats: métricas de observabilidade do pool
+Arquitetura v2: query() + resume (self-contained, sem estado persistente)
+- Cada request HTTP usa query() standalone (spawna CLI, executa, limpa)
+- resume=sdk_session_id restaura contexto da conversa anterior
+- Sem SessionPool, sem locks, sem connect/disconnect
 
 Endpoints:
 - GET  /agente/              - Página de chat
@@ -30,8 +30,7 @@ Endpoints:
 - GET  /agente/api/sessions/<id>/messages - Histórico de mensagens (FEAT-030)
 - DELETE /agente/api/sessions/<id> - Excluir sessão
 - PUT  /agente/api/sessions/<id>/rename - Renomear sessão
-- POST /agente/api/interrupt  - Interrompe operação SDK Client
-- GET  /agente/api/pool/stats - Métricas do SessionPool
+- POST /agente/api/user-answer - Resposta do usuário a AskUserQuestion
 - POST /agente/api/upload    - Upload de arquivo
 - GET  /agente/api/files/<filename> - Download de arquivo
 - GET  /agente/api/files     - Lista arquivos da sessão
@@ -67,6 +66,10 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
 # FEAT-030: Configuração de heartbeat
 HEARTBEAT_INTERVAL_SECONDS = 10  # Envia heartbeat a cada 10s (reduzido de 20s)
+
+# Cache de health check (TTL 30s) — evita chamada API real a cada request
+_health_cache = {'result': None, 'timestamp': 0}
+_HEALTH_CACHE_TTL = 30  # segundos
 
 # Timeout global do stream (9 minutos - deixa 1 min de margem antes do timeout do Render)
 MAX_STREAM_DURATION_SECONDS = 540
@@ -205,13 +208,17 @@ def api_chat():
 
 
 # =============================================================================
-# STREAMING: Função async para ClaudeSDKClient via SessionPool
+# HELPERS
+# =============================================================================
+
+
+# =============================================================================
+# STREAMING: Função async para query() + resume (self-contained)
 # =============================================================================
 
 async def _async_stream_sdk_client(
     client,
     our_session_id: str,
-    context_injection: str,
     response_state: dict,
     event_queue,
     _process_stream_event,
@@ -223,132 +230,73 @@ async def _async_stream_sdk_client(
     thinking_enabled: bool,
     plan_mode: bool,
     image_files: list,
+    app=None,
 ):
     """
-    Streaming via ClaudeSDKClient — canal bidirecional persistente.
+    Streaming via query() + resume — self-contained, sem pool.
 
-    - Usa SessionPool para obter/criar client persistente
-    - NÃO faz history injection (SDK mantém contexto nativo)
-    - NÃO faz compaction manual (SDK compacta automaticamente)
-    - Retry simplificado: só ProcessError/CLINotFoundError (processo morreu)
+    ARQUITETURA v2:
+    - Cada chamada usa query() standalone (sem ClaudeSDKClient, sem SessionPool)
+    - resume=sdk_session_id restaura contexto da conversa anterior
+    - Sem locks, sem connect/disconnect, sem retry de recreate
     """
-    from .sdk import get_session_pool
-    from claude_agent_sdk import ProcessError, CLINotFoundError
+    # Buscar sdk_session_id do banco para resume
+    sdk_session_id_for_resume = None
+    if app and our_session_id:
+        try:
+            with app.app_context():
+                from .models import AgentSession
+                db_session = AgentSession.query.filter_by(
+                    session_id=our_session_id
+                ).first()
+                if db_session:
+                    sdk_session_id_for_resume = db_session.get_sdk_session_id()
+                    if sdk_session_id_for_resume:
+                        logger.info(
+                            f"[AGENTE] sdk_session_id para resume: "
+                            f"{sdk_session_id_for_resume[:12]}..."
+                        )
+        except Exception as e:
+            logger.warning(f"[AGENTE] Erro ao buscar sdk_session_id do DB: {e}")
 
-    pool = get_session_pool()
-
-    # Construir opções para o client
-    options = client._build_options(
-        user_name=user_name,
-        user_id=user_id,
-        model=model,
-        thinking_enabled=thinking_enabled,
-        plan_mode=plan_mode,
-        can_use_tool=can_use_tool,
-    )
-
-    # Obter ou criar client no pool
-    pooled = await pool.get_or_create(
-        session_id=our_session_id,
-        user_id=user_id,
-        options=options,
-    )
+    # Definir user_id no contexto para as MCP Memory Tools
+    try:
+        from .tools.memory_mcp_tool import set_current_user_id
+        set_current_user_id(user_id)
+    except ImportError:
+        pass
 
     logger.info(
-        f"[AGENTE] SDK Client obtido do pool: session={our_session_id[:8]}... "
-        f"connected={pooled.connected} | pool={len(pool._pool)}/{pool.max_clients}"
+        f"[AGENTE] query()+resume: session={our_session_id[:8]}... "
+        f"resume={'sim' if sdk_session_id_for_resume else 'não'} "
+        f"images={len(image_files) if image_files else 0}"
     )
 
-    # Preparar prompt (SEM history injection — SDK mantém contexto)
-    prompt_to_send = message
-
-    # FEAT-031: Injeta contexto de memória do usuário no prompt
-    if context_injection:
-        from .memory_tool import MEMORY_SYSTEM_PROMPT
-        prompt_to_send = (
-            f"[DIRETRIZES DE MEMÓRIA]\n{MEMORY_SYSTEM_PROMPT}\n\n"
-            f"[CONTEXTO DO USUÁRIO]\n{context_injection}\n\n"
-            f"{prompt_to_send}"
-        )
-
-    # RETRY: 1 normal + 1 se processo morreu
-    max_attempts = 2
-    for attempt in range(1, max_attempts + 1):
-        try:
-            # Reset de estado no retry
-            if attempt > 1:
-                response_state['full_text'] = ''
-                response_state['tools_used'] = []
-                response_state['tool_errors'] = []
-                response_state['input_tokens'] = 0
-                response_state['output_tokens'] = 0
-                response_state['sdk_session_id'] = None
-                response_state['error_message'] = None
-                logger.info(f"[AGENTE] SDK Client RETRY: Tentativa {attempt}/{max_attempts} — recriando client")
-
-                event_queue.put(_sse_event('retry', {
-                    'reason': 'process_died',
-                    'attempt': attempt,
-                    'message': 'Reconectando...',
-                }))
-
-            logger.info(
-                f"[AGENTE] SDK Client chamando stream_response (attempt {attempt}/{max_attempts}) "
-                f"| session={our_session_id[:8]}... | images={len(image_files) if image_files else 0}"
-            )
-
-            async for event in client.stream_response(
-                prompt=prompt_to_send,
-                pooled_client=pooled,
-                user_name=user_name,
-                model=model,
-                thinking_enabled=thinking_enabled,
-                plan_mode=plan_mode,
-                user_id=user_id,
-                image_files=image_files,
-            ):
-                should_continue = _process_stream_event(event)
-                if should_continue:
-                    continue
-
-            # Sucesso — sai do retry loop
-            break
-
-        except (ProcessError, CLINotFoundError) as e:
-            # Processo CLI morreu — destruir client e recriar
-            if attempt < max_attempts:
-                logger.warning(
-                    f"[AGENTE] SDK Client processo morreu (attempt {attempt}): {e}. "
-                    f"Destruindo e recriando..."
-                )
-                await pool.destroy(our_session_id)
-                pooled = await pool.get_or_create(
-                    session_id=our_session_id,
-                    user_id=user_id,
-                    options=options,
-                )
+    try:
+        # ─── STREAMING direto com query() ───
+        # Sem pool, sem locks, sem connect/disconnect
+        async for event in client.stream_response(
+            prompt=message,
+            user_name=user_name,
+            model=model,
+            thinking_enabled=thinking_enabled,
+            plan_mode=plan_mode,
+            user_id=user_id,
+            image_files=image_files,
+            sdk_session_id=sdk_session_id_for_resume,
+            can_use_tool=can_use_tool,
+        ):
+            should_continue = _process_stream_event(event)
+            if should_continue:
                 continue
-            else:
-                logger.error(
-                    f"[AGENTE] SDK Client erro fatal após {attempt} tentativas: {e}",
-                    exc_info=True
-                )
-                response_state['error_message'] = str(e)
-                event_queue.put(_sse_event('error', {
-                    'message': f'Erro no processo do agente: {str(e)[:200]}',
-                    'fatal': True,
-                }))
-                break
 
-        except Exception as e:
-            # Erro genérico — não retenta
-            error_str = str(e)
-            logger.error(f"[AGENTE] SDK Client erro inesperado: {error_str}", exc_info=True)
-            response_state['error_message'] = error_str
-            event_queue.put(_sse_event('error', {
-                'message': error_str,
-            }))
-            break
+    except Exception as e:
+        error_str = str(e)
+        logger.error(f"[AGENTE] Erro no stream: {error_str}", exc_info=True)
+        response_state['error_message'] = error_str
+        event_queue.put(_sse_event('error', {
+            'message': error_str[:200],
+        }))
 
 
 def _stream_chat_response(
@@ -390,7 +338,6 @@ def _stream_chat_response(
     """
     from .sdk import get_client, get_cost_tracker
     from .config.permissions import can_use_tool
-    from .hooks import get_memory_agent
     from queue import Queue, Empty
     from threading import Thread
 
@@ -408,7 +355,6 @@ def _stream_chat_response(
         'our_session_id': session_id,
         'session_expired': False,
         'error_message': None,
-        'context_injection': '',
     }
 
     def run_async_stream():
@@ -425,7 +371,6 @@ def _stream_chat_response(
             logger.info("[AGENTE] Iniciando async_stream()")
             client = get_client()
             cost_tracker = get_cost_tracker()
-            memory_agent = get_memory_agent(app)
             processed_message_ids = set()
 
             our_session_id = session_id
@@ -436,19 +381,13 @@ def _stream_chat_response(
                 response_state['our_session_id'] = our_session_id
 
             # =============================================================
-            # PRE-HOOK: Subagente Haiku recupera memórias relevantes
-            # (Roda 1x ANTES do retry loop — não duplica chamada Haiku)
+            # ASKUSERQUESTION: Definir context global thread-safe
+            # O can_use_tool callback precisa de session_id e event_queue
+            # para emitir SSE e esperar resposta do frontend
             # =============================================================
-            context_injection = ""
-            try:
-                context_injection = memory_agent.get_relevant_context(user_id, message)
-                response_state['context_injection'] = context_injection
-
-                if context_injection:
-                    logger.info(f"[AGENTE] MEMORIA: Contexto injetado ({len(context_injection)} chars)")
-
-            except Exception as hook_error:
-                logger.warning(f"[AGENTE] PRE-HOOK falhou (continuando sem contexto): {hook_error}")
+            from .config.permissions import set_current_session_id, set_event_queue
+            set_current_session_id(our_session_id)
+            set_event_queue(our_session_id, event_queue)
 
             # =============================================================
             # PROCESSAMENTO DE EVENTOS DO STREAM
@@ -460,15 +399,16 @@ def _stream_chat_response(
                 Retorna True para 'init' (sinaliza continue no loop externo).
                 """
                 if event.type == 'init':
-                    new_sdk_session_id = event.content.get('session_id')
-                    response_state['sdk_session_id'] = new_sdk_session_id
+                    # O init agora pode conter sdk_session_id pendente ou real
+                    init_session_id = event.content.get('session_id')
+                    if init_session_id and init_session_id != 'pending':
+                        response_state['sdk_session_id'] = init_session_id
 
                     if not response_state['our_session_id']:
                         response_state['our_session_id'] = str(uuid.uuid4())
 
                     event_queue.put(_sse_event('init', {
                         'session_id': response_state['our_session_id'],
-                        'sdk_session_id': new_sdk_session_id,
                     }))
                     return True  # continue
 
@@ -525,6 +465,16 @@ def _stream_chat_response(
                     response_state['output_tokens'] = event.content.get('output_tokens', 0)
                     cost_usd = event.content.get('total_cost_usd', 0)
 
+                    # CRÍTICO: Capturar session_id REAL do SDK para resume
+                    # Este é o ResultMessage.session_id — NÃO nosso UUID
+                    sdk_real_session_id = event.content.get('session_id')
+                    if sdk_real_session_id and sdk_real_session_id != 'pending':
+                        response_state['sdk_session_id'] = sdk_real_session_id
+                        logger.info(
+                            f"[AGENTE] SDK session_id capturado do done: "
+                            f"{sdk_real_session_id[:12]}..."
+                        )
+
                     if message_id not in processed_message_ids:
                         processed_message_ids.add(message_id)
                         cost_tracker.record_cost(
@@ -534,30 +484,6 @@ def _stream_chat_response(
                             session_id=response_state['sdk_session_id'],
                             user_id=user_id,
                         )
-
-                    # =============================================================
-                    # POST-HOOK: Subagente Haiku analisa e salva padrões/correções
-                    # =============================================================
-                    try:
-                        post_result = memory_agent.analyze_and_save(
-                            user_id=user_id,
-                            prompt=message,
-                            response=response_state['full_text'],
-                        )
-
-                        if post_result.get('action') == 'saved':
-                            memory_type = post_result.get('type', 'info')
-                            memory_category = post_result.get('category', '')
-                            logger.info(f"[AGENTE] MEMORIA: Salvo {memory_type} em {post_result.get('path')}")
-
-                            event_queue.put(_sse_event('memory_saved', {
-                                'type': memory_type,
-                                'category': memory_category,
-                                'message': _get_memory_feedback_message(memory_type, memory_category),
-                            }))
-
-                    except Exception as hook_error:
-                        logger.warning(f"[AGENTE] POST-HOOK falhou: {hook_error}")
 
                     # Evento done
                     event_queue.put(_sse_event('done', {
@@ -570,12 +496,11 @@ def _stream_chat_response(
                 return False  # Não é init, não precisa continue
 
             # =============================================================
-            # Streaming via ClaudeSDKClient (canal bidirecional persistente)
+            # Streaming via query() + resume (self-contained)
             # =============================================================
             await _async_stream_sdk_client(
                 client=client,
                 our_session_id=our_session_id,
-                context_injection=context_injection,
                 response_state=response_state,
                 event_queue=event_queue,
                 _process_stream_event=_process_stream_event,
@@ -587,6 +512,7 @@ def _stream_chat_response(
                 thinking_enabled=thinking_enabled,
                 plan_mode=plan_mode,
                 image_files=image_files,
+                app=app,
             )
 
         # =================================================================
@@ -645,6 +571,19 @@ def _stream_chat_response(
             # Este é o ponto mais crítico do código. Sem o None, o loop
             # principal (while True) fica esperando eternamente.
             # =================================================================
+            # Cleanup: cancelar perguntas pendentes (AskUserQuestion)
+            # Se o stream terminou enquanto uma pergunta estava pendente,
+            # o threading.Event.wait() em permissions.py seria desbloqueado
+            try:
+                from .sdk.pending_questions import cancel_pending
+                from .config.permissions import cleanup_session_context
+
+                if response_state.get('our_session_id'):
+                    cancel_pending(response_state['our_session_id'])
+                    cleanup_session_context(response_state['our_session_id'])
+            except Exception:
+                pass
+
             if not none_sent:
                 try:
                     event_queue.put(None)
@@ -745,6 +684,8 @@ def _stream_chat_response(
             logger.warning("[AGENTE] Thread ainda ativa após timeout de 10s")
 
         # FEAT-030: Salva mensagens no banco após streaming completo
+        # IMPORTANTE: salvar ANTES de destruir o client, para que sdk_session_id
+        # esteja persistido no DB para resume no próximo turno.
         _save_messages_to_db(
             app=app,
             our_session_id=response_state['our_session_id'],
@@ -759,6 +700,7 @@ def _stream_chat_response(
             session_expired=response_state['session_expired'],
         )
 
+        # query() limpa o CLI process automaticamente — sem pool, sem destroy.
         logger.info("[AGENTE] Thread finalizada e mensagens salvas")
 
     except Exception as e:
@@ -769,43 +711,6 @@ def _stream_chat_response(
 def _sse_event(event_type: str, data: dict) -> str:
     """Formata evento SSE."""
     return f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
-
-
-def _get_memory_feedback_message(memory_type: str, category: str) -> str:
-    """
-    FEAT-031: Gera mensagem de feedback amigável quando memória é salva.
-
-    Args:
-        memory_type: Tipo da memória (comando, correcao, preferencia, regra, padrao, fato)
-        category: Categoria (explicito, comunicacao, negocio, workflow, usuario)
-
-    Returns:
-        Mensagem amigável para exibir ao usuário
-    """
-    # Mensagens baseadas no tipo
-    type_messages = {
-        'comando': '💾 Anotado!',
-        'correcao': '💾 Correção anotada',
-        'preferencia': '💾 Preferência salva',
-        'regra': '💾 Regra registrada',
-        'padrao': '💾 Padrão aprendido',
-        'fato': '💾 Informação salva',
-    }
-
-    # Fallback por categoria se tipo não mapeado
-    category_messages = {
-        'explicito': '💾 Anotado!',
-        'comunicacao': '💾 Preferência salva',
-        'negocio': '💾 Regra registrada',
-        'workflow': '💾 Padrão aprendido',
-        'usuario': '💾 Informação salva',
-    }
-
-    message = type_messages.get(memory_type)
-    if not message:
-        message = category_messages.get(category, '💾 Lembrei disso')
-
-    return message
 
 
 def _save_messages_to_db(
@@ -1085,94 +990,26 @@ def api_rename_session(session_db_id: int):
 
 
 # =============================================================================
-# API - SDK CLIENT (FASE 5: Interrupt + Pool Stats)
+# API - SDK CLIENT (Interrupt não suportado com query() — mantém endpoint para
+# compatibilidade com frontend, retornando resposta informativa)
 # =============================================================================
 
 @agente_bp.route('/api/interrupt', methods=['POST'])
 @login_required
 def api_interrupt():
     """
-    Interrompe operação em andamento no ClaudeSDKClient.
+    Interrupt não suportado na arquitetura query() + resume.
 
-    POST /agente/api/interrupt
-    {"session_id": "uuid-da-nossa-sessao"}
+    query() é self-contained (spawna CLI, executa, limpa).
+    Não mantém processo persistente para interromper.
 
-    Quando chamado, o loop receive_response() do client termina
-    e emite interrupt_ack + done no stream SSE.
-
-    Returns:
-        200: {"success": true, "message": "Operação interrompida"}
-        400: Se session_id faltando
-        404: Se sessão não está ativa no pool
-        500: Se interrupt falhou
+    O próximo turno com resume continua de onde parou.
     """
-    data = request.get_json()
-    if not data or not data.get('session_id'):
-        return jsonify({
-            'success': False,
-            'error': 'session_id é obrigatório'
-        }), 400
-
-    interrupt_session_id = data['session_id']
-
-    from .sdk import get_session_pool
-    pool = get_session_pool()
-    pooled = pool.get_if_exists(interrupt_session_id)
-
-    if not pooled or not pooled.connected:
-        return jsonify({
-            'success': False,
-            'error': 'Sessão não ativa no pool'
-        }), 404
-
-    # Executa interrupt assíncrono em novo event loop (Flask é sync)
-    try:
-        loop = asyncio.new_event_loop()
-        loop.run_until_complete(pooled.client.interrupt())
-        loop.close()
-
-        logger.info(f"[AGENTE] Interrupt enviado: session={interrupt_session_id[:8]}...")
-        return jsonify({
-            'success': True,
-            'message': 'Operação interrompida'
-        })
-    except Exception as e:
-        logger.error(f"[AGENTE] Erro no interrupt: session={interrupt_session_id[:8]}... {e}")
-        return jsonify({
-            'success': False,
-            'error': f'Erro ao interromper: {str(e)[:200]}'
-        }), 500
-
-
-@agente_bp.route('/api/pool/stats', methods=['GET'])
-@login_required
-def api_pool_stats():
-    """
-    FASE 5: Métricas do SessionPool para observabilidade.
-
-    GET /agente/api/pool/stats
-
-    Retorna:
-    {
-        "max_clients": 5,
-        "total_clients": 2,
-        "active_clients": 2,
-        "idle_clients": 0,
-        "total_created": 15,
-        "total_evicted": 3,
-        "total_destroyed": 10,
-        "idle_timeout_seconds": 300,
-        "uptime_seconds": 3600,
-        "sessions": [...]
-    }
-    """
-    from .sdk import get_session_pool
-    pool = get_session_pool()
-
     return jsonify({
-        'success': True,
-        'stats': pool.get_stats(),
-    })
+        'success': False,
+        'error': 'Interrupt não disponível nesta versão. O processamento será concluído automaticamente.',
+        'info': 'Arquitetura query() + resume não suporta interrupt. Aguarde a conclusão ou envie nova mensagem.',
+    }), 501  # 501 Not Implemented
 
 
 # =============================================================================
@@ -1546,7 +1383,19 @@ def api_cleanup_files():
 
 @agente_bp.route('/api/health', methods=['GET'])
 def api_health():
-    """Health check do serviço."""
+    """
+    Health check do servico (com cache TTL 30s).
+
+    Evita chamada API real ao Anthropic a cada request (~2s cada).
+    Cache de 30s e aceitavel — health check nao e critico para funcionalidade.
+    """
+    now = time.time()
+
+    # Retornar cache se ainda valido
+    if (_health_cache['result'] is not None
+            and now - _health_cache['timestamp'] < _HEALTH_CACHE_TTL):
+        return jsonify(_health_cache['result'])
+
     try:
         from .sdk import get_client
         from .config import get_settings
@@ -1555,17 +1404,26 @@ def api_health():
         client = get_client()
         health = client.health_check()
 
-        return jsonify({
+        result = {
             'success': True,
             'status': health.get('status', 'unknown'),
             'model': settings.model,
             'api_connected': health.get('api_connected', False),
             'sdk': 'claude-agent-sdk',
             'timestamp': datetime.now(timezone.utc).isoformat(),
-        })
+        }
+
+        # Atualizar cache
+        _health_cache['result'] = result
+        _health_cache['timestamp'] = now
+
+        return jsonify(result)
 
     except Exception as e:
         logger.error(f"[AGENTE] Erro no health check: {e}")
+        # Limpar cache em caso de erro para forcar nova tentativa
+        _health_cache['result'] = None
+        _health_cache['timestamp'] = 0
         return jsonify({
             'success': False,
             'status': 'unhealthy',
@@ -1678,3 +1536,90 @@ def api_feedback():
             'success': False,
             'error': str(e)
         }), 500
+
+
+# =============================================================================
+# API - ASKUSERQUESTION (Resposta do usuário a perguntas interativas)
+# =============================================================================
+
+@agente_bp.route('/api/user-answer', methods=['POST'])
+@login_required
+def api_user_answer():
+    """
+    Recebe resposta do usuário para AskUserQuestion.
+
+    Quando o agente chama AskUserQuestion, o callback can_use_tool
+    fica bloqueado esperando esta resposta. Este endpoint desbloqueia
+    o callback com as respostas do usuário.
+
+    POST /agente/api/user-answer
+    {
+        "session_id": "uuid-da-sessao",
+        "answers": {
+            "Qual método prefere?": "OAuth",
+            "Quais features ativar?": "Cache, Logs"
+        }
+    }
+
+    Response:
+        200: {"success": true, "message": "Resposta enviada ao agente"}
+        400: Body/session_id/answers inválidos
+        404: Nenhuma pergunta pendente para a sessão
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'Body obrigatório'}), 400
+
+        answer_session_id = data.get('session_id')
+        answers = data.get('answers', {})
+
+        if not answer_session_id:
+            return jsonify({'success': False, 'error': 'session_id obrigatório'}), 400
+
+        if not answers or not isinstance(answers, dict):
+            return jsonify({
+                'success': False,
+                'error': 'answers deve ser um dict não-vazio'
+            }), 400
+
+        # Validação de ownership: session_id deve pertencer ao usuário autenticado
+        from .models import AgentSession
+        session_record = AgentSession.query.filter_by(
+            session_id=answer_session_id,
+            user_id=current_user.id
+        ).first()
+        if not session_record:
+            logger.warning(
+                f"[AGENTE] user-answer: sessão {answer_session_id[:8]}... "
+                f"não pertence ao user {current_user.id}"
+            )
+            return jsonify({
+                'success': False,
+                'error': 'Sessão não encontrada'
+            }), 403
+
+        from .sdk.pending_questions import submit_answer
+
+        submitted = submit_answer(answer_session_id, answers)
+
+        if not submitted:
+            return jsonify({
+                'success': False,
+                'error': 'Nenhuma pergunta pendente para esta sessão'
+            }), 404
+
+        logger.info(
+            f"[AGENTE] Resposta do usuário recebida (AskUserQuestion): "
+            f"session={answer_session_id[:8]}... "
+            f"keys={list(answers.keys())}"
+        )
+
+        return jsonify({
+            'success': True,
+            'message': 'Resposta enviada ao agente'
+        })
+
+    except Exception as e:
+        logger.error(f"[AGENTE] Erro em /api/user-answer: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500

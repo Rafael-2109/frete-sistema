@@ -42,7 +42,7 @@ class AgentSettings:
         'Read',     # Leitura de arquivos
         'Glob',     # Busca de arquivos
         'Grep',     # Busca em conteúdo
-        'Memory',   # Memória persistente do usuário (DatabaseMemoryTool)
+        # 'Memory' REMOVIDO — agora usa MCP tools (mcp__memory__*)
         'Write',    # Escrita de arquivos (RESTRITO a /tmp via can_use_tool)
         'Edit',     # Edição de arquivos (RESTRITO a /tmp via can_use_tool)
         'TodoWrite',  # Gerenciamento de tarefas (feedback visual)
@@ -59,7 +59,7 @@ class AgentSettings:
     # Ref: https://www.anthropic.com/pricing
     MODEL_PRICING: dict = field(default_factory=lambda: {
         'claude-opus-4-5-20251101': (5.00, 25.00),
-        'claude-sonnet-4-5-20250514': (1.00, 5.00),
+        'claude-sonnet-4-5-20250929': (3.00, 15.00),   # Corrigido: model ID e preço
         'claude-haiku-4-5-20251001': (0.25, 1.25),
     })
 

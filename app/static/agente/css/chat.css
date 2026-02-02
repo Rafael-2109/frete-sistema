@@ -1629,3 +1629,165 @@
         max-width: 150px;
     }
 }
+
+/* ============================================
+   FEAT-AUQ: AskUserQuestion — Perguntas Interativas do Agente
+   Exibe opções clicáveis quando o agente precisa de input do usuário.
+   Suporta single-select, multi-select e resposta livre ("Outro").
+   ============================================ */
+.ask-user-container {
+    padding: var(--agent-space-sm) 0;
+}
+
+.ask-user-question {
+    margin-bottom: var(--agent-space-lg);
+}
+
+.ask-user-header {
+    display: inline-block;
+    background: var(--agent-accent-primary);
+    color: var(--agent-text-inverse);
+    padding: 2px 10px;
+    border-radius: var(--agent-radius-full);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+
+.ask-user-text {
+    margin: 6px 0 10px;
+    font-weight: 500;
+    color: var(--agent-text-primary);
+    font-size: 0.95rem;
+}
+
+.ask-user-options {
+    display: flex;
+    flex-direction: column;
+    gap: var(--agent-space-sm);
+}
+
+.ask-user-option {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 10px 14px;
+    border: 1.5px solid var(--agent-border-color-emphasis);
+    border-radius: var(--agent-radius-md);
+    background: var(--agent-bg-secondary);
+    cursor: pointer;
+    transition: all var(--agent-transition-fast);
+    text-align: left;
+    width: 100%;
+    font-family: var(--agent-font-sans);
+}
+
+.ask-user-option:hover {
+    border-color: var(--agent-accent-primary);
+    background: var(--agent-bg-hover);
+    transform: translateX(2px);
+}
+
+.ask-user-option.selected {
+    border-color: var(--agent-accent-primary);
+    background: var(--agent-accent-primary-muted);
+    box-shadow: 0 0 0 1px var(--agent-accent-primary);
+}
+
+.ask-user-option .option-label {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--agent-text-primary);
+}
+
+.ask-user-option .option-desc {
+    font-size: 0.8rem;
+    color: var(--agent-text-secondary);
+    margin-top: 2px;
+}
+
+/* Botão "Outro" — estilo diferenciado (dashed) */
+.ask-user-other {
+    border-style: dashed;
+    opacity: 0.8;
+}
+
+.ask-user-other:hover {
+    opacity: 1;
+}
+
+/* Input de texto livre (quando clica "Outro") */
+.ask-user-text-input {
+    width: 100%;
+    padding: 8px 12px;
+    margin-top: 6px;
+    border: 1.5px solid var(--agent-accent-primary);
+    border-radius: var(--agent-radius-sm);
+    font-size: 0.9rem;
+    font-family: var(--agent-font-sans);
+    outline: none;
+    background: var(--agent-bg-primary);
+    color: var(--agent-text-primary);
+    transition: box-shadow var(--agent-transition-fast);
+}
+
+.ask-user-text-input:focus {
+    box-shadow: 0 0 0 2px var(--agent-accent-primary-muted);
+}
+
+/* Botão "Enviar Respostas" (multi-select ou múltiplas perguntas) */
+.ask-user-submit {
+    margin-top: var(--agent-space-md);
+    padding: 10px 24px;
+    background: var(--agent-accent-primary);
+    color: var(--agent-text-inverse);
+    border: none;
+    border-radius: var(--agent-radius-sm);
+    font-weight: 600;
+    font-family: var(--agent-font-sans);
+    cursor: pointer;
+    transition: opacity var(--agent-transition-fast);
+    width: 100%;
+}
+
+.ask-user-submit:hover {
+    opacity: 0.9;
+    background: var(--agent-accent-primary-hover);
+}
+
+.ask-user-submit:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Estado: após envio das respostas */
+.ask-user-submitted .ask-user-option {
+    pointer-events: none;
+    opacity: 0.6;
+}
+
+.ask-user-submitted .ask-user-option.selected {
+    opacity: 1;
+    background: var(--agent-accent-primary-muted);
+}
+
+/* Resumo das respostas enviadas */
+.ask-user-summary {
+    margin-top: var(--agent-space-sm);
+    padding: 8px 12px;
+    background: var(--agent-success-muted);
+    border-radius: var(--agent-radius-sm);
+    border-left: 3px solid var(--agent-success);
+}
+
+.ask-user-summary p {
+    margin: 2px 0;
+    font-size: 0.85rem;
+    color: var(--agent-text-primary);
+}
+
+.ask-user-answer-line {
+    color: var(--agent-text-secondary);
+}

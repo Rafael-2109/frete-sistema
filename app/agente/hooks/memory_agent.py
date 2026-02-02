@@ -1,4 +1,15 @@
 """
+DEPRECATED: Este módulo será removido em versão futura.
+
+A funcionalidade de memória agora é provida pela MCP Memory Tool
+em app/agente/tools/memory_mcp_tool.py.
+
+O modelo principal (Sonnet/Opus) gerencia suas próprias memórias
+via tool_use autônomo (mcp__memory__*), sem necessidade de subagente Haiku.
+
+Mantido temporariamente para rollback de segurança.
+
+--- Documentação original ---
 MemoryAgent - Subagente Haiku para gerenciamento inteligente de memorias.
 
 Arquitetura simples:

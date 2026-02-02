@@ -889,6 +889,27 @@ function processSSEEvent(eventType, data, state) {
                 }
                 break;
 
+            case 'memory_saved':
+                // FEAT-031: Notificação sutil quando memória é salva
+                showToast(data.message || '💾 Memória salva', 3000);
+                console.log('[SSE] Memória salva:', data);
+                break;
+
+            // FEAT-ASK: AskUserQuestion — perguntas interativas do agente
+            // O agente quer perguntar algo ao usuário (multiple choice)
+            // Renderiza cards clicáveis e envia resposta via POST /api/user-answer
+            case 'ask_user_question': {
+                hideTyping();
+                const questions = data.questions || [];
+                const askSessionId = data.session_id || sessionId;
+
+                if (questions.length > 0) {
+                    console.log(`[SSE] AskUserQuestion: ${questions.length} pergunta(s)`, questions);
+                    renderAskUserQuestion(questions, askSessionId, state);
+                }
+                break;
+            }
+
             case 'done':
                 hideTyping();
                 hideThinkingPanel();
@@ -898,6 +919,11 @@ function processSSEEvent(eventType, data, state) {
                 // FEAT-030: Finaliza items pendentes (timeline e todos)
                 finalizePendingTimelineItems('success');
                 finalizePendingTodos(true);  // Marca como completed
+
+                // Adicionar botões de feedback à mensagem streamed
+                if (state.msgElement && state.text && state.text.trim()) {
+                    injectFeedbackButtons(state.msgElement, state.text);
+                }
                 break;
         }
     } catch (e) {
@@ -972,6 +998,33 @@ function handleJsonResponse(data) {
     }
 }
 
+/**
+ * Exibe um toast de notificação sutil (reutiliza estilo voice-feedback).
+ * @param {string} message - Texto do toast
+ * @param {number} duration - Duração em ms (default 3000)
+ */
+function showToast(message, duration = 3000) {
+    // Reutilizar elemento existente ou criar novo
+    let toast = document.getElementById('agent-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'agent-toast';
+        toast.className = 'voice-feedback';
+        document.body.appendChild(toast);
+    }
+    toast.textContent = message;
+    toast.style.display = 'flex';
+    toast.style.opacity = '1';
+    toast.style.transition = 'opacity 0.3s ease';
+
+    // Auto-hide com fade
+    clearTimeout(toast._hideTimeout);
+    toast._hideTimeout = setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => { toast.style.display = 'none'; }, 300);
+    }, duration);
+}
+
 // Adiciona mensagem ao chat
 function addMessage(text, role) {
     const element = createMessageElement(text, role);
@@ -987,6 +1040,24 @@ function createMessageElement(text, role) {
     const icon = role === 'user' ? 'fa-user' : 'fa-robot';
     const formattedText = role === 'user' ? escapeHtml(text) : formatMessage(text);
 
+    // Botões de feedback apenas para mensagens do assistente com conteúdo
+    const feedbackButtons = (role === 'assistant' && text && text.trim()) ? `
+        <div class="message-feedback" style="display:flex;gap:4px;margin-top:4px;">
+            <button class="feedback-btn" data-rating="positive" title="Boa resposta"
+                    style="background:none;border:none;cursor:pointer;padding:2px 6px;border-radius:4px;opacity:0.4;font-size:14px;transition:opacity 0.2s,background 0.2s;"
+                    onmouseover="this.style.opacity='1';this.style.background='rgba(255,255,255,0.1)'"
+                    onmouseout="if(!this.classList.contains('active'))this.style.opacity='0.4';this.style.background='none'">
+                👍
+            </button>
+            <button class="feedback-btn" data-rating="negative" title="Resposta pode melhorar"
+                    style="background:none;border:none;cursor:pointer;padding:2px 6px;border-radius:4px;opacity:0.4;font-size:14px;transition:opacity 0.2s,background 0.2s;"
+                    onmouseover="this.style.opacity='1';this.style.background='rgba(255,255,255,0.1)'"
+                    onmouseout="if(!this.classList.contains('active'))this.style.opacity='0.4';this.style.background='none'">
+                👎
+            </button>
+        </div>
+    ` : '';
+
     div.innerHTML = `
         <div class="message-avatar">
             <i class="fas ${icon}"></i>
@@ -994,11 +1065,334 @@ function createMessageElement(text, role) {
         <div class="message-content">
             <div class="message-bubble">${formattedText}</div>
             <div class="message-time">${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
+            ${feedbackButtons}
         </div>
     `;
 
+    // Attach feedback handlers
+    if (role === 'assistant' && text && text.trim()) {
+        div.querySelectorAll('.feedback-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const rating = this.dataset.rating;
+                sendFeedback(rating, text);
+
+                // Visual feedback: destaca o botão clicado, esconde o outro
+                const parent = this.closest('.message-feedback');
+                parent.querySelectorAll('.feedback-btn').forEach(b => {
+                    b.disabled = true;
+                    if (b === this) {
+                        b.classList.add('active');
+                        b.style.opacity = '1';
+                    } else {
+                        b.style.display = 'none';
+                    }
+                });
+                showToast(rating === 'positive' ? '👍 Obrigado!' : '👎 Anotado, vou melhorar!', 2000);
+            });
+        });
+    }
+
     return div;
 }
+
+/**
+ * Envia feedback sobre uma resposta do assistente.
+ * @param {string} rating - 'positive' ou 'negative'
+ * @param {string} context - Texto da mensagem avaliada
+ */
+function sendFeedback(rating, context) {
+    if (!sessionId) return;
+
+    fetch('/agente/api/feedback', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+        },
+        body: JSON.stringify({
+            session_id: sessionId,
+            type: rating,
+            data: { context: (context || '').substring(0, 500) }
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        console.log('[FEEDBACK] Enviado:', rating, data);
+    })
+    .catch(err => {
+        console.error('[FEEDBACK] Erro ao enviar:', err);
+    });
+}
+
+/**
+ * Injeta botões de feedback (👍👎) em uma mensagem do assistente já renderizada.
+ * Usado para mensagens streamed que foram criadas com texto vazio e preenchidas
+ * incrementalmente — nesse caso createMessageElement não adiciona os botões.
+ * @param {HTMLElement} msgElement - Elemento .message da mensagem
+ * @param {string} text - Texto completo da mensagem
+ */
+function injectFeedbackButtons(msgElement, text) {
+    // Evitar duplicação se já tem botões
+    if (msgElement.querySelector('.message-feedback')) return;
+
+    const contentDiv = msgElement.querySelector('.message-content');
+    if (!contentDiv) return;
+
+    const feedbackDiv = document.createElement('div');
+    feedbackDiv.className = 'message-feedback';
+    feedbackDiv.style.cssText = 'display:flex;gap:4px;margin-top:4px;';
+
+    feedbackDiv.innerHTML = `
+        <button class="feedback-btn" data-rating="positive" title="Boa resposta"
+                style="background:none;border:none;cursor:pointer;padding:2px 6px;border-radius:4px;opacity:0.4;font-size:14px;transition:opacity 0.2s,background 0.2s;"
+                onmouseover="this.style.opacity='1';this.style.background='rgba(255,255,255,0.1)'"
+                onmouseout="if(!this.classList.contains('active'))this.style.opacity='0.4';this.style.background='none'">
+            👍
+        </button>
+        <button class="feedback-btn" data-rating="negative" title="Resposta pode melhorar"
+                style="background:none;border:none;cursor:pointer;padding:2px 6px;border-radius:4px;opacity:0.4;font-size:14px;transition:opacity 0.2s,background 0.2s;"
+                onmouseover="this.style.opacity='1';this.style.background='rgba(255,255,255,0.1)'"
+                onmouseout="if(!this.classList.contains('active'))this.style.opacity='0.4';this.style.background='none'">
+            👎
+        </button>
+    `;
+
+    contentDiv.appendChild(feedbackDiv);
+
+    // Attach handlers
+    feedbackDiv.querySelectorAll('.feedback-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const rating = this.dataset.rating;
+            sendFeedback(rating, text);
+
+            const parent = this.closest('.message-feedback');
+            parent.querySelectorAll('.feedback-btn').forEach(b => {
+                b.disabled = true;
+                if (b === this) {
+                    b.classList.add('active');
+                    b.style.opacity = '1';
+                } else {
+                    b.style.display = 'none';
+                }
+            });
+            showToast(rating === 'positive' ? '👍 Obrigado!' : '👎 Anotado, vou melhorar!', 2000);
+        });
+    });
+}
+
+// ============================================
+// FEAT-ASK: ASKUSERQUESTION — Perguntas Interativas
+// ============================================
+
+/**
+ * Renderiza perguntas interativas do agente (AskUserQuestion).
+ * Exibe cards com opções clicáveis. Suporta single e multi-select.
+ * Ao selecionar, envia resposta via POST /api/user-answer.
+ *
+ * @param {Array} questions - Array de objetos de pergunta do SDK
+ * @param {string} askSessionId - Session ID para enviar resposta
+ * @param {object} state - Estado do stream (para inserir no chat)
+ */
+function renderAskUserQuestion(questions, askSessionId, state) {
+    // Container para todas as perguntas
+    const container = document.createElement('div');
+    container.className = 'ask-user-container';
+
+    // Estado das respostas
+    const answers = {};
+    const selections = {};  // Para multi-select: { questionText: Set<label> }
+
+    questions.forEach((q) => {
+        const questionDiv = document.createElement('div');
+        questionDiv.className = 'ask-user-question';
+
+        // Header (chip/tag) — só renderiza se tiver valor
+        if (q.header) {
+            const headerSpan = document.createElement('span');
+            headerSpan.className = 'ask-user-header';
+            headerSpan.textContent = q.header;
+            questionDiv.appendChild(headerSpan);
+        }
+
+        // Texto da pergunta
+        const questionText = document.createElement('p');
+        questionText.className = 'ask-user-text';
+        questionText.textContent = q.question;
+
+        // Opções
+        const optionsDiv = document.createElement('div');
+        optionsDiv.className = 'ask-user-options';
+
+        if (q.multiSelect) {
+            selections[q.question] = new Set();
+        }
+
+        (q.options || []).forEach((opt) => {
+            const optBtn = document.createElement('button');
+            optBtn.className = 'ask-user-option';
+            optBtn.innerHTML = `
+                <span class="option-label">${escapeHtml(opt.label)}</span>
+                <span class="option-desc">${escapeHtml(opt.description || '')}</span>
+            `;
+
+            optBtn.addEventListener('click', () => {
+                if (q.multiSelect) {
+                    // Toggle seleção
+                    optBtn.classList.toggle('selected');
+                    if (selections[q.question].has(opt.label)) {
+                        selections[q.question].delete(opt.label);
+                    } else {
+                        selections[q.question].add(opt.label);
+                    }
+                    // Atualiza resposta (labels separados por vírgula)
+                    answers[q.question] = Array.from(selections[q.question]).join(', ');
+                } else {
+                    // Single select: desseleciona outros
+                    optionsDiv.querySelectorAll('.ask-user-option').forEach(b => b.classList.remove('selected'));
+                    optBtn.classList.add('selected');
+                    answers[q.question] = opt.label;
+
+                    // Se é single-select E é a única pergunta, envia imediatamente
+                    if (questions.length === 1) {
+                        submitAskUserAnswers(container, askSessionId, answers);
+                    }
+                }
+            });
+
+            optionsDiv.appendChild(optBtn);
+        });
+
+        // Botão "Outro" (free text) — SDK sempre oferece opção "Other"
+        const otherBtn = document.createElement('button');
+        otherBtn.className = 'ask-user-option ask-user-other';
+        otherBtn.innerHTML = `
+            <span class="option-label">Outro</span>
+            <span class="option-desc">Digitar resposta personalizada</span>
+        `;
+        otherBtn.addEventListener('click', () => {
+            // Mostra input de texto inline
+            const existingInput = optionsDiv.querySelector('.ask-user-text-input');
+            if (existingInput) {
+                existingInput.focus();
+                return;
+            }
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'ask-user-text-input';
+            input.placeholder = 'Digite sua resposta...';
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && input.value.trim()) {
+                    answers[q.question] = input.value.trim();
+                    optionsDiv.querySelectorAll('.ask-user-option').forEach(b => b.classList.remove('selected'));
+                    otherBtn.classList.add('selected');
+                    otherBtn.querySelector('.option-desc').textContent = input.value.trim();
+                    input.remove();
+                    if (questions.length === 1) {
+                        submitAskUserAnswers(container, askSessionId, answers);
+                    }
+                }
+            });
+            otherBtn.after(input);
+            input.focus();
+        });
+        optionsDiv.appendChild(otherBtn);
+
+        questionDiv.appendChild(questionText);
+        questionDiv.appendChild(optionsDiv);
+        container.appendChild(questionDiv);
+    });
+
+    // Botão Enviar (para multi-select ou múltiplas perguntas)
+    if (questions.length > 1 || questions.some(q => q.multiSelect)) {
+        const submitBtn = document.createElement('button');
+        submitBtn.className = 'ask-user-submit';
+        submitBtn.textContent = 'Enviar Respostas';
+        submitBtn.addEventListener('click', () => {
+            // Validar que todas as perguntas foram respondidas
+            const unanswered = questions.filter(q => !answers[q.question]);
+            if (unanswered.length > 0) {
+                showToast(`Responda: ${unanswered[0].header || unanswered[0].question}`, 2000);
+                return;
+            }
+            submitAskUserAnswers(container, askSessionId, answers);
+        });
+        container.appendChild(submitBtn);
+    }
+
+    // Inserir no chat como "mensagem" do assistente
+    // NOTA: Usa createMessageElement diretamente (não addMessage) pois
+    // addMessage() não retorna o elemento DOM criado.
+    const msgElement = createMessageElement('', 'assistant');
+    chatMessages.appendChild(msgElement);
+    const contentDiv = msgElement.querySelector('.message-content');
+    if (contentDiv) {
+        contentDiv.innerHTML = '';
+        contentDiv.appendChild(container);
+    }
+
+    scrollToBottom();
+}
+
+
+/**
+ * Envia respostas do AskUserQuestion ao backend.
+ * Substitui a UI de seleção por texto confirmando as respostas.
+ *
+ * @param {HTMLElement} container - Container .ask-user-container
+ * @param {string} askSessionId - Session ID
+ * @param {object} answers - Dict question → label selecionado
+ */
+function submitAskUserAnswers(container, askSessionId, answers) {
+    // Desabilita botões para evitar duplo-clique
+    container.querySelectorAll('button').forEach(b => b.disabled = true);
+    container.classList.add('ask-user-submitted');
+
+    // Mostra resumo das respostas selecionadas
+    const summary = document.createElement('div');
+    summary.className = 'ask-user-summary';
+    summary.innerHTML = '<p><strong>✅ Respostas enviadas:</strong></p>';
+    Object.entries(answers).forEach(([, answer]) => {
+        summary.innerHTML += `<p class="ask-user-answer-line">• ${escapeHtml(answer)}</p>`;
+    });
+
+    // Esconde opções e mostra resumo
+    container.querySelectorAll('.ask-user-options, .ask-user-submit, .ask-user-text-input').forEach(el => {
+        el.style.display = 'none';
+    });
+    container.appendChild(summary);
+
+    // Enviar ao backend via POST
+    const csrfToken = document.querySelector('meta[name="csrf-token"]');
+
+    fetch('/agente/api/user-answer', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            ...(csrfToken ? { 'X-CSRFToken': csrfToken.content } : {}),
+        },
+        body: JSON.stringify({
+            session_id: askSessionId,
+            answers: answers,
+        }),
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Resposta enviada ao agente', 2000);
+            showTyping('🤔 Processando sua resposta...');
+        } else {
+            showToast(`Erro: ${data.error}`, 3000);
+            console.error('[ASK_USER] Erro na resposta:', data.error);
+        }
+    })
+    .catch(err => {
+        console.error('[ASK_USER] Erro ao enviar resposta:', err);
+        showToast('Erro ao enviar resposta', 3000);
+    });
+
+    scrollToBottom();
+}
+
 
 // ============================================
 // FEAT-023: MARKDOWN AVANÇADO

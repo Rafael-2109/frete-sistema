@@ -2,9 +2,15 @@
 Cliente do Claude Agent SDK.
 
 Wrapper que encapsula a comunicação com a API usando o SDK oficial.
-Suporta streaming, tools, sessions e permissions.
+Usa query() + resume para streaming (compatível com Flask thread-per-request).
 
 Referência: https://platform.claude.com/docs/pt-BR/agent-sdk/
+
+ARQUITETURA (v2 — query() + resume):
+- Cada request HTTP roda em Thread + asyncio.run() que DESTRÓI o event loop.
+- ClaudeSDKClient precisa de event loop PERSISTENTE → corrompido entre requests.
+- query() é self-contained: spawna CLI process, executa, limpa automaticamente.
+- resume=sdk_session_id restaura contexto da conversa anterior (CLI carrega sessão do disco).
 """
 
 import logging
@@ -16,10 +22,12 @@ from datetime import datetime, timezone
 # SDK Oficial
 # Ref: https://platform.claude.com/docs/pt-BR/agent-sdk/
 from claude_agent_sdk import (
+    query as sdk_query,  # query() standalone — self-contained, sem estado persistente
     ClaudeAgentOptions,
     ResultMessage,
     AssistantMessage,
     UserMessage,       # Contém resultados de ferramentas
+    SystemMessage,     # Mensagem de sistema (init com session_id)
     ToolUseBlock,
     ToolResultBlock,   # Resultado de execução de ferramenta
     TextBlock,
@@ -69,8 +77,10 @@ class AgentClient:
     """
     Cliente do Claude Agent SDK oficial.
 
-    ARQUITETURA:
-    - Usa ClaudeSDKClient via SessionPool (canal bidirecional persistente)
+    ARQUITETURA (v2 — query() + resume):
+    - Usa query() standalone (self-contained, sem estado persistente)
+    - Resume via sdk_session_id para manter contexto entre turnos
+    - Sem SessionPool, sem locks, sem connect/disconnect
     - Skills para funcionalidades (.claude/skills/)
     - Custom Tools MCP in-process para text-to-sql
     - Callback canUseTool para permissões
@@ -84,8 +94,8 @@ class AgentClient:
     Uso:
         client = AgentClient()
 
-        # Streaming (requer pooled_client do SessionPool)
-        async for event in client.stream_response("Sua pergunta", pooled_client=pooled):
+        # Streaming com query() + resume
+        async for event in client.stream_response("Sua pergunta", sdk_session_id="..."):
             if event.type == 'text':
                 print(event.content, end='')
     """
@@ -317,35 +327,45 @@ Nunca invente informações."""
     async def stream_response(
         self,
         prompt: str,
-        pooled_client: Any,  # PooledClient do SessionPool
         user_name: str = "Usuário",
         model: Optional[str] = None,
         thinking_enabled: bool = False,
         plan_mode: bool = False,
         user_id: int = None,
         image_files: Optional[List[dict]] = None,
+        sdk_session_id: Optional[str] = None,
+        can_use_tool: Optional[Callable] = None,
+        # LEGADO: aceitar pooled_client para compatibilidade (ignorado)
+        pooled_client: Any = None,
     ) -> AsyncGenerator[StreamEvent, None]:
         """
-        Gera resposta em streaming usando ClaudeSDKClient.
+        Gera resposta em streaming usando query() + resume.
 
         Args:
             prompt: Mensagem do usuário
-            pooled_client: PooledClient do SessionPool (obrigatório)
             user_name: Nome do usuário
             model: Modelo a usar (FEAT-001)
             thinking_enabled: Ativar Extended Thinking (FEAT-002)
             plan_mode: Ativar modo somente-leitura (FEAT-010)
             user_id: ID do usuário (para Memory Tool)
             image_files: Lista de imagens em formato Vision API (FEAT-032)
+            sdk_session_id: Session ID do SDK para resume (do DB)
+            can_use_tool: Callback de permissão
+            pooled_client: LEGADO — ignorado (mantido para compatibilidade)
 
         Yields:
             StreamEvent com tipo e conteúdo
         """
         async for event in self._stream_response(
             prompt=prompt,
-            pooled_client=pooled_client,
+            user_name=user_name,
             model=model,
+            thinking_enabled=thinking_enabled,
+            plan_mode=plan_mode,
+            user_id=user_id,
             image_files=image_files,
+            sdk_session_id=sdk_session_id,
+            can_use_tool=can_use_tool,
         ):
             yield event
 
@@ -468,21 +488,16 @@ Nunca invente informações."""
                 )
 
         # Context Clearing automático
+        # NOTA: clear-thinking e clear-tool-uses foram promovidos a GA.
+        # Não precisam mais de beta header (removidos em 2026-02).
         if USE_CONTEXT_CLEARING:
-            betas = options_dict.get("betas", [])
-            betas.extend([
-                "clear-thinking-20251015",
-                "clear-tool-uses-20250919",
-            ])
-            options_dict["betas"] = betas
-            logger.info("[AGENT_CLIENT] Context Clearing habilitado")
+            logger.info("[AGENT_CLIENT] Context Clearing habilitado (GA — sem beta header)")
 
         # Prompt Caching
+        # NOTA: prompt-caching foi promovido a GA.
+        # Não precisa mais de beta header (removido em 2026-02).
         if USE_PROMPT_CACHING:
-            betas = options_dict.get("betas", [])
-            betas.append("prompt-caching-2024-07-31")
-            options_dict["betas"] = betas
-            logger.info("[AGENT_CLIENT] Prompt Caching habilitado")
+            logger.info("[AGENT_CLIENT] Prompt Caching habilitado (GA — sem beta header)")
 
         # =================================================================
         # Hooks SDK formais para auditoria
@@ -498,9 +513,16 @@ Nunca invente informações."""
                 return {}
 
             async def _pre_compact_hook(hook_input: PreCompactHookInput, signal, context: HookContext):
-                """Antes de compactação, loga aviso."""
+                """Antes de compactação, instrui modelo a salvar contexto crítico."""
                 logger.info("[COMPACTION] PreCompact hook ativado — contexto será compactado")
-                return {}
+                return {
+                    "custom_instructions": (
+                        "O contexto será compactado agora. ANTES de continuar, "
+                        "salve informações críticas (pedidos em discussão, clientes, decisões) "
+                        "usando mcp__memory__save_memory em /memories/context/session_notes.xml. "
+                        "Após compactação, consulte suas memórias para recuperar estado."
+                    )
+                }
 
             options_dict["hooks"] = {
                 "PostToolUse": [
@@ -543,26 +565,78 @@ Nunca invente informações."""
         except Exception as e:
             logger.warning(f"[AGENT_CLIENT] Erro ao registrar Custom Tool text_to_sql: {e}")
 
+        # =================================================================
+        # MCP Memory Tool (memória persistente do usuário via tool_use)
+        # Substitui o padrão anterior de subagente Haiku (PRE/POST-HOOK)
+        # =================================================================
+        try:
+            from ..tools.memory_mcp_tool import memory_server, set_current_user_id
+
+            if memory_server is not None:
+                # Definir user_id no contexto para as memory tools
+                if user_id:
+                    set_current_user_id(user_id)
+
+                mcp_servers = options_dict.get("mcp_servers", {})
+                mcp_servers["memory"] = memory_server
+                options_dict["mcp_servers"] = mcp_servers
+
+                # Adicionar tools na allowed_tools
+                allowed = options_dict.get("allowed_tools", [])
+                memory_tool_names = [
+                    "mcp__memory__view_memories",
+                    "mcp__memory__save_memory",
+                    "mcp__memory__update_memory",
+                    "mcp__memory__delete_memory",
+                    "mcp__memory__list_memories",
+                    "mcp__memory__clear_memories",
+                ]
+                for tool_name in memory_tool_names:
+                    if tool_name not in allowed:
+                        allowed.append(tool_name)
+                options_dict["allowed_tools"] = allowed
+
+                logger.info("[AGENT_CLIENT] Custom Tool MCP 'memory' registrada (6 operações)")
+            else:
+                logger.debug("[AGENT_CLIENT] memory_server é None — claude_agent_sdk não disponível")
+        except ImportError:
+            logger.debug("[AGENT_CLIENT] Custom Tool memory não disponível (módulo não encontrado)")
+        except Exception as e:
+            logger.warning(f"[AGENT_CLIENT] Erro ao registrar Custom Tool memory: {e}")
+
         return ClaudeAgentOptions(**options_dict)
 
     async def _stream_response(
         self,
         prompt: str,
-        pooled_client: Any,  # PooledClient (import circular evitado)
+        user_name: str = "Usuário",
         model: Optional[str] = None,
+        thinking_enabled: bool = False,
+        plan_mode: bool = False,
+        user_id: int = None,
         image_files: Optional[List[dict]] = None,
+        sdk_session_id: Optional[str] = None,
+        can_use_tool: Optional[Callable] = None,
     ) -> AsyncGenerator[StreamEvent, None]:
         """
-        Gera resposta em streaming usando ClaudeSDKClient.
+        Gera resposta em streaming usando query() + resume.
 
-        O ClaudeSDKClient mantém sessão persistente no pool. Cada chamada a
-        query() preserva contexto das mensagens anteriores automaticamente.
+        ARQUITETURA v2:
+        - Cada chamada usa query() standalone (sem ClaudeSDKClient)
+        - query() spawna CLI process, executa, limpa automaticamente
+        - resume=sdk_session_id restaura contexto da conversa anterior
+        - Sem pool, sem locks, sem connect/disconnect
 
         Args:
             prompt: Mensagem do usuário
-            pooled_client: PooledClient do SessionPool
-            model: Modelo (pode mudar via set_model se diferente do client)
+            user_name: Nome do usuário
+            model: Modelo a usar
+            thinking_enabled: Ativar Extended Thinking
+            plan_mode: Ativar modo somente-leitura
+            user_id: ID do usuário (para Memory Tool)
             image_files: Lista de imagens em formato Vision API
+            sdk_session_id: Session ID do SDK para resume (do DB)
+            can_use_tool: Callback de permissão
 
         Yields:
             StreamEvent com tipo e conteúdo
@@ -573,6 +647,7 @@ Nunca invente informações."""
         output_tokens = 0
         last_message_id = None
         done_emitted = False
+        result_session_id = None  # Capturado do ResultMessage
 
         # Diagnostico de tempo
         stream_start_time = time.time()
@@ -580,304 +655,306 @@ Nunca invente informações."""
         current_tool_start_time = None
         current_tool_name = None
 
-        # Emitir init sintetico (ClaudeSDKClient nao emite evento init)
-        yield StreamEvent(
-            type='init',
-            content={'session_id': pooled_client.session_id},
-            metadata={'timestamp': datetime.now(timezone.utc).isoformat(), 'sdk_client': True}
+        # ─── Construir options ───
+        options = self._build_options(
+            user_name=user_name,
+            user_id=user_id,
+            model=model,
+            thinking_enabled=thinking_enabled,
+            plan_mode=plan_mode,
+            can_use_tool=can_use_tool,
         )
 
-        # Se modelo mudou desde a criacao do client, atualizar
-        if model and hasattr(pooled_client.client, 'set_model'):
-            try:
-                await pooled_client.client.set_model(model)
-            except Exception as e:
-                logger.warning(f"[AGENT_CLIENT_SDK] Erro ao mudar modelo: {e}")
+        # ─── RESUME: Continuar conversa anterior ───
+        if sdk_session_id:
+            options = self._with_resume(options, sdk_session_id)
+            logger.info(f"[AGENT_SDK] Resuming session: {sdk_session_id[:12]}...")
 
-        # Construir prompt com imagens (FEAT-032)
-        if image_files:
-            # ClaudeSDKClient.query() aceita AsyncIterable de dicts (mesmo formato que query())
-            content_blocks = []
-            for img in image_files:
-                content_blocks.append(img)
-            content_blocks.append({"type": "text", "text": prompt})
+        # ─── Construir prompt como AsyncIterable ───
+        # CRÍTICO: can_use_tool EXIGE streaming mode (AsyncIterable, não string)
+        # FONTE: _internal/client.py:53-58
+        # Portanto SEMPRE usamos AsyncIterable wrapper.
+        query_prompt = self._make_streaming_prompt(prompt, image_files)
 
-            async def prompt_with_images():
-                yield {
-                    "type": "user",
-                    "message": {
-                        "role": "user",
-                        "content": content_blocks
-                    }
-                }
-
-            query_prompt = prompt_with_images()
-        else:
-            query_prompt = prompt
+        # ─── Emitir init sintético ───
+        yield StreamEvent(
+            type='init',
+            content={'session_id': sdk_session_id or 'pending'},
+            metadata={
+                'timestamp': datetime.now(timezone.utc).isoformat(),
+                'resume': bool(sdk_session_id),
+            }
+        )
 
         try:
-            # Serializar: apenas 1 query por vez no mesmo client
-            async with pooled_client.lock:
-                pooled_client.touch()
+            # ─── STREAMING via query() ───
+            # query() é self-contained: spawna CLI process, executa, limpa.
+            # Sem background tasks, sem estado persistente.
+            # Quando o async for termina, o CLI process é limpo automaticamente.
+            async for message in sdk_query(
+                prompt=query_prompt,
+                options=options,
+            ):
+                # Diagnostico de tempo
+                current_time = time.time()
+                elapsed_total = current_time - stream_start_time
+                elapsed_since_last = current_time - last_message_time
+                last_message_time = current_time
 
-                # Enviar query ao ClaudeSDKClient
-                await pooled_client.client.query(query_prompt)
+                logger.debug(
+                    f"[AGENT_SDK] msg={type(message).__name__} | "
+                    f"total={elapsed_total:.1f}s | "
+                    f"delta={elapsed_since_last:.1f}s"
+                )
 
-                # Receber resposta (mesmos tipos de mensagem que query())
-                async for message in pooled_client.client.receive_response():
-                    # Diagnostico de tempo
-                    current_time = time.time()
-                    elapsed_total = current_time - stream_start_time
-                    elapsed_since_last = current_time - last_message_time
-                    last_message_time = current_time
+                # ─── SystemMessage (init do SDK) ───
+                if isinstance(message, SystemMessage):
+                    sdk_sid = message.data.get('session_id') if hasattr(message, 'data') else None
+                    if sdk_sid:
+                        result_session_id = sdk_sid
+                        logger.info(f"[AGENT_SDK] SDK session_id from init: {sdk_sid[:12]}...")
+                    continue
 
-                    logger.debug(
-                        f"[AGENT_CLIENT_SDK] Mensagem recebida | "
-                        f"tipo={type(message).__name__} | "
-                        f"total={elapsed_total:.1f}s | "
-                        f"desde_última={elapsed_since_last:.1f}s"
-                    )
+                # ─── AssistantMessage ───
+                if isinstance(message, AssistantMessage):
+                    # Captura usage
+                    if hasattr(message, 'usage') and message.usage:
+                        usage = message.usage
+                        if isinstance(usage, dict):
+                            input_tokens = usage.get('input_tokens', 0)
+                            output_tokens = usage.get('output_tokens', 0)
+                        else:
+                            input_tokens = getattr(usage, 'input_tokens', 0) or 0
+                            output_tokens = getattr(usage, 'output_tokens', 0) or 0
 
-                    # Mensagem de sistema (init) — ja emitimos sintetico acima
-                    if hasattr(message, 'subtype') and message.subtype == 'init':
-                        continue
+                    # C3: Detectar erros da API
+                    if hasattr(message, 'error') and message.error:
+                        error_info = message.error
+                        error_str = str(error_info).lower()
+                        error_type_str = error_info.get('type', 'unknown') if isinstance(error_info, dict) else type(error_info).__name__
 
-                    # Mensagem do assistente
-                    if isinstance(message, AssistantMessage):
-                        # Captura usage
-                        if hasattr(message, 'usage') and message.usage:
-                            usage = message.usage
-                            if isinstance(usage, dict):
-                                input_tokens = usage.get('input_tokens', 0)
-                                output_tokens = usage.get('output_tokens', 0)
-                            else:
-                                input_tokens = getattr(usage, 'input_tokens', 0) or 0
-                                output_tokens = getattr(usage, 'output_tokens', 0) or 0
+                        logger.warning(
+                            f"[AGENT_SDK] API error: type={error_type_str}, error={error_info}"
+                        )
 
-                        # C3: Detectar erros da API
-                        if hasattr(message, 'error') and message.error:
-                            error_info = message.error
-                            error_str = str(error_info).lower()
-                            error_type_str = error_info.get('type', 'unknown') if isinstance(error_info, dict) else type(error_info).__name__
-
-                            logger.warning(
-                                f"[AGENT_CLIENT_SDK] API error: type={error_type_str}, error={error_info}"
+                        if 'rate_limit' in error_str:
+                            yield StreamEvent(
+                                type='error',
+                                content="Limite de requisições excedido. Aguardando...",
+                                metadata={'error_type': 'rate_limit', 'retryable': True}
+                            )
+                        elif 'too long' in error_str or 'context' in error_str:
+                            yield StreamEvent(
+                                type='error',
+                                content="Conversa muito longa. Tente iniciar uma nova sessão.",
+                                metadata={'error_type': 'context_overflow', 'retryable': False}
+                            )
+                        else:
+                            yield StreamEvent(
+                                type='error',
+                                content=f"Erro da API: {error_info}",
+                                metadata={'error_type': error_type_str, 'raw_error': str(error_info)[:500]}
                             )
 
-                            if 'rate_limit' in error_str:
+                    # Message ID para deduplicacao
+                    if hasattr(message, 'id') and message.id:
+                        last_message_id = message.id
+
+                    if message.content:
+                        for block in message.content:
+                            # Extended Thinking
+                            if isinstance(block, ThinkingBlock):
+                                thinking_content = getattr(block, 'thinking', '')
+                                if thinking_content:
+                                    yield StreamEvent(
+                                        type='thinking',
+                                        content=thinking_content
+                                    )
+                                continue
+
+                            # Texto
+                            if isinstance(block, TextBlock):
+                                text_chunk = block.text
+                                full_text += text_chunk
                                 yield StreamEvent(
-                                    type='error',
-                                    content="Limite de requisições excedido. Aguardando...",
-                                    metadata={'error_type': 'rate_limit', 'retryable': True}
-                                )
-                            elif 'too long' in error_str or 'context' in error_str:
-                                yield StreamEvent(
-                                    type='error',
-                                    content="Conversa muito longa. Tente iniciar uma nova sessão.",
-                                    metadata={'error_type': 'context_overflow', 'retryable': False}
-                                )
-                            else:
-                                yield StreamEvent(
-                                    type='error',
-                                    content=f"Erro da API: {error_info}",
-                                    metadata={'error_type': error_type_str, 'raw_error': str(error_info)[:500]}
+                                    type='text',
+                                    content=text_chunk
                                 )
 
-                        # Message ID para deduplicacao
-                        if hasattr(message, 'id') and message.id:
-                            last_message_id = message.id
+                            # Tool call
+                            elif isinstance(block, ToolUseBlock):
+                                tool_call = ToolCall(
+                                    id=block.id,
+                                    name=block.name,
+                                    input=block.input
+                                )
+                                tool_calls.append(tool_call)
 
-                        if message.content:
-                            for block in message.content:
-                                # Extended Thinking
-                                if isinstance(block, ThinkingBlock):
-                                    thinking_content = getattr(block, 'thinking', '')
-                                    if thinking_content:
+                                current_tool_start_time = time.time()
+                                current_tool_name = block.name
+                                logger.info(f"[AGENT_SDK] Tool START: {block.name}")
+
+                                tool_description = self._extract_tool_description(
+                                    block.name, block.input
+                                )
+
+                                yield StreamEvent(
+                                    type='tool_call',
+                                    content=block.name,
+                                    metadata={
+                                        'tool_id': block.id,
+                                        'input': block.input,
+                                        'description': tool_description
+                                    }
+                                )
+
+                                # TodoWrite emit
+                                if block.name == 'TodoWrite' and block.input:
+                                    todos = block.input.get('todos', [])
+                                    if todos:
                                         yield StreamEvent(
-                                            type='thinking',
-                                            content=thinking_content
+                                            type='todos',
+                                            content={'todos': todos},
+                                            metadata={'tool_id': block.id}
                                         )
-                                    continue
+                    continue
 
-                                # Texto
-                                if isinstance(block, TextBlock):
-                                    text_chunk = block.text
-                                    full_text += text_chunk
-                                    yield StreamEvent(
-                                        type='text',
-                                        content=text_chunk
-                                    )
+                # ─── UserMessage (tool results) ───
+                if isinstance(message, UserMessage):
+                    tool_duration_ms = 0
+                    if current_tool_start_time:
+                        tool_duration_ms = int((time.time() - current_tool_start_time) * 1000)
+                        logger.info(
+                            f"[AGENT_SDK] Tool DONE: {current_tool_name} {tool_duration_ms}ms"
+                        )
+                        current_tool_start_time = None
 
-                                # Tool call
-                                elif isinstance(block, ToolUseBlock):
-                                    tool_call = ToolCall(
-                                        id=block.id,
-                                        name=block.name,
-                                        input=block.input
-                                    )
-                                    tool_calls.append(tool_call)
+                    content = getattr(message, 'content', None)
+                    if content and isinstance(content, list):
+                        for block in content:
+                            if isinstance(block, ToolResultBlock):
+                                result_content = block.content
+                                is_error = getattr(block, 'is_error', False) or False
+                                tool_use_id = getattr(block, 'tool_use_id', '')
 
-                                    current_tool_start_time = time.time()
-                                    current_tool_name = block.name
-                                    logger.info(f"[AGENT_CLIENT_SDK] Tool INICIADA: {block.name}")
+                                if isinstance(result_content, list):
+                                    result_content = str(result_content)[:500]
+                                elif result_content:
+                                    result_content = str(result_content)[:500]
+                                else:
+                                    result_content = "(sem resultado)"
 
-                                    tool_description = self._extract_tool_description(
-                                        block.name, block.input
-                                    )
+                                tool_name = next(
+                                    (tc.name for tc in tool_calls if tc.id == tool_use_id),
+                                    'ferramenta'
+                                )
 
-                                    yield StreamEvent(
-                                        type='tool_call',
-                                        content=block.name,
-                                        metadata={
-                                            'tool_id': block.id,
-                                            'input': block.input,
-                                            'description': tool_description
-                                        }
-                                    )
-
-                                    # TodoWrite emit
-                                    if block.name == 'TodoWrite' and block.input:
-                                        todos = block.input.get('todos', [])
-                                        if todos:
-                                            yield StreamEvent(
-                                                type='todos',
-                                                content={'todos': todos},
-                                                metadata={'tool_id': block.id}
-                                            )
-                        continue
-
-                    # Tool result
-                    if isinstance(message, UserMessage):
-                        tool_duration_ms = 0
-                        if current_tool_start_time:
-                            tool_duration_ms = int((time.time() - current_tool_start_time) * 1000)
-                            logger.info(
-                                f"[AGENT_CLIENT_SDK] Tool COMPLETADA: {current_tool_name} em {tool_duration_ms}ms"
-                            )
-                            current_tool_start_time = None
-
-                        content = getattr(message, 'content', None)
-                        if content and isinstance(content, list):
-                            for block in content:
-                                if isinstance(block, ToolResultBlock):
-                                    result_content = block.content
-                                    is_error = getattr(block, 'is_error', False) or False
-                                    tool_use_id = getattr(block, 'tool_use_id', '')
-
-                                    if isinstance(result_content, list):
-                                        result_content = str(result_content)[:500]
-                                    elif result_content:
-                                        result_content = str(result_content)[:500]
+                                if is_error:
+                                    expected_errors = ['does not exist', 'not found', 'no such file']
+                                    is_expected = any(err in result_content.lower() for err in expected_errors)
+                                    if is_expected:
+                                        logger.debug(f"[AGENT_SDK] Tool '{tool_name}' (esperado): {result_content[:100]}")
                                     else:
-                                        result_content = "(sem resultado)"
+                                        logger.warning(f"[AGENT_SDK] Tool '{tool_name}' erro: {result_content[:200]}")
 
-                                    tool_name = next(
-                                        (tc.name for tc in tool_calls if tc.id == tool_use_id),
-                                        'ferramenta'
-                                    )
+                                yield StreamEvent(
+                                    type='tool_result',
+                                    content=result_content,
+                                    metadata={
+                                        'tool_use_id': tool_use_id,
+                                        'tool_name': tool_name,
+                                        'is_error': is_error,
+                                        'duration_ms': tool_duration_ms,
+                                    }
+                                )
+                    continue
 
-                                    if is_error:
-                                        expected_errors = ['does not exist', 'not found', 'no such file']
-                                        is_expected = any(err in result_content.lower() for err in expected_errors)
-                                        if is_expected:
-                                            logger.debug(f"[AGENT_CLIENT_SDK] Tool '{tool_name}' (esperado): {result_content[:100]}")
-                                        else:
-                                            logger.warning(f"[AGENT_CLIENT_SDK] Tool '{tool_name}' erro: {result_content[:200]}")
+                # ─── ResultMessage (fim) ───
+                if isinstance(message, ResultMessage):
+                    # CRÍTICO: Capturar session_id REAL do SDK para resume
+                    result_session_id = message.session_id
 
-                                    yield StreamEvent(
-                                        type='tool_result',
-                                        content=result_content,
-                                        metadata={
-                                            'tool_use_id': tool_use_id,
-                                            'tool_name': tool_name,
-                                            'is_error': is_error,
-                                            'duration_ms': tool_duration_ms,
-                                        }
-                                    )
-                        continue
+                    if message.result:
+                        full_text = message.result
 
-                    # ResultMessage — final
-                    if isinstance(message, ResultMessage):
-                        if message.result:
-                            full_text = message.result
-
-                        # Detectar interrupt: subtype indica interrupcao
-                        is_interrupted = (
-                            getattr(message, 'subtype', '') in ('interrupted', 'canceled', 'cancelled')
-                            or (message.is_error and 'interrupt' in str(message.result or '').lower())
-                        )
-
-                        if is_interrupted and not done_emitted:
-                            # Emitir interrupt_ack ANTES do done
-                            logger.info(
-                                f"[AGENT_CLIENT_SDK] Interrupt detectado | "
-                                f"subtype={getattr(message, 'subtype', 'N/A')} | "
-                                f"text_so_far={len(full_text)} chars"
-                            )
-                            yield StreamEvent(
-                                type='interrupt_ack',
-                                content='Operação interrompida pelo usuário',
-                                metadata={'sdk_client': True}
-                            )
-
-                        if not done_emitted:
-                            # D6: Self-Correction (skip se interrupt)
-                            correction = None
-                            if not is_interrupted:
-                                correction = await self._self_correct_response(full_text)
-                                if correction:
-                                    yield StreamEvent(
-                                        type='text',
-                                        content=f"\n\n⚠️ **Observação de validação**: {correction}",
-                                        metadata={'self_correction': True}
-                                    )
-
-                            done_emitted = True
-                            yield StreamEvent(
-                                type='done',
-                                content={
-                                    'text': full_text,
-                                    'input_tokens': input_tokens,
-                                    'output_tokens': output_tokens,
-                                    'total_cost_usd': getattr(message, 'total_cost_usd', 0) or 0,
-                                    'session_id': pooled_client.session_id,
-                                    'tool_calls': len(tool_calls),
-                                    'self_corrected': correction is not None if correction else False,
-                                    'interrupted': is_interrupted,
-                                },
-                                metadata={'message_id': last_message_id or '', 'sdk_client': True}
-                            )
-
-                # Fallback: se nao recebeu ResultMessage
-                if not done_emitted:
-                    correction = await self._self_correct_response(full_text)
-                    if correction:
-                        yield StreamEvent(
-                            type='text',
-                            content=f"\n\n⚠️ **Observação de validação**: {correction}",
-                            metadata={'self_correction': True}
-                        )
-
-                    yield StreamEvent(
-                        type='done',
-                        content={
-                            'text': full_text,
-                            'input_tokens': input_tokens,
-                            'output_tokens': output_tokens,
-                            'session_id': pooled_client.session_id,
-                            'tool_calls': len(tool_calls),
-                            'self_corrected': correction is not None if correction else False,
-                        }
+                    # Detectar interrupt
+                    is_interrupted = (
+                        getattr(message, 'subtype', '') in ('interrupted', 'canceled', 'cancelled')
+                        or (message.is_error and 'interrupt' in str(message.result or '').lower())
                     )
+
+                    if is_interrupted and not done_emitted:
+                        logger.info(
+                            f"[AGENT_SDK] Interrupt detectado | "
+                            f"subtype={getattr(message, 'subtype', 'N/A')} | "
+                            f"text_so_far={len(full_text)} chars"
+                        )
+                        yield StreamEvent(
+                            type='interrupt_ack',
+                            content='Operação interrompida pelo usuário',
+                        )
+
+                    if not done_emitted:
+                        # D6: Self-Correction (skip se interrupt)
+                        correction = None
+                        if not is_interrupted:
+                            correction = await self._self_correct_response(full_text)
+                            if correction:
+                                yield StreamEvent(
+                                    type='text',
+                                    content=f"\n\n⚠️ **Observação de validação**: {correction}",
+                                    metadata={'self_correction': True}
+                                )
+
+                        done_emitted = True
+                        yield StreamEvent(
+                            type='done',
+                            content={
+                                'text': full_text,
+                                'input_tokens': input_tokens,
+                                'output_tokens': output_tokens,
+                                'total_cost_usd': getattr(message, 'total_cost_usd', 0) or 0,
+                                # CRÍTICO: session_id REAL do SDK para resume no próximo turno
+                                'session_id': result_session_id,
+                                'tool_calls': len(tool_calls),
+                                'self_corrected': correction is not None if correction else False,
+                                'interrupted': is_interrupted,
+                            },
+                            metadata={'message_id': last_message_id or ''}
+                        )
+
+            # ─── Fallback done (sem ResultMessage) ───
+            if not done_emitted:
+                correction = await self._self_correct_response(full_text)
+                if correction:
+                    yield StreamEvent(
+                        type='text',
+                        content=f"\n\n⚠️ **Observação de validação**: {correction}",
+                        metadata={'self_correction': True}
+                    )
+
+                yield StreamEvent(
+                    type='done',
+                    content={
+                        'text': full_text,
+                        'input_tokens': input_tokens,
+                        'output_tokens': output_tokens,
+                        'session_id': result_session_id,
+                        'tool_calls': len(tool_calls),
+                        'self_corrected': correction is not None if correction else False,
+                    }
+                )
+
+            # ─── NÃO PRECISA DESTRUIR NADA ───
+            # query() limpa o CLI process automaticamente quando o
+            # async for termina. Sem pool, sem disconnect, sem leak.
 
         except ProcessError as e:
             elapsed_total = time.time() - stream_start_time
             exit_code = getattr(e, 'exit_code', None)
             logger.error(
-                f"[AGENT_CLIENT_SDK] Process error após {elapsed_total:.1f}s | "
-                f"exit_code={exit_code} | mensagem={e}"
+                f"[AGENT_SDK] ProcessError {elapsed_total:.1f}s | exit={exit_code} | msg={e}"
             )
-            pooled_client.connected = False  # Marcar como morto
             yield StreamEvent(
                 type='error',
                 content=f"Erro de processo (código {exit_code}). Tente novamente." if exit_code else str(e),
@@ -889,17 +966,14 @@ Nunca invente informações."""
                 yield StreamEvent(
                     type='done',
                     content={'text': full_text, 'input_tokens': input_tokens,
-                             'output_tokens': output_tokens, 'session_id': pooled_client.session_id,
+                             'output_tokens': output_tokens, 'session_id': result_session_id,
                              'tool_calls': len(tool_calls), 'error_recovery': True},
-                    metadata={'error_type': 'process_error', 'sdk_client': True}
+                    metadata={'error_type': 'process_error'}
                 )
-            # Re-raise para que routes.py destrua o client no pool e retente
-            raise
 
         except CLINotFoundError as e:
             elapsed_total = time.time() - stream_start_time
-            logger.critical(f"[AGENT_CLIENT_SDK] CLI nao encontrada após {elapsed_total:.1f}s: {e}")
-            pooled_client.connected = False
+            logger.critical(f"[AGENT_SDK] CLI não encontrada {elapsed_total:.1f}s: {e}")
             yield StreamEvent(
                 type='error',
                 content="Erro crítico: CLI do agente não encontrada.",
@@ -909,17 +983,14 @@ Nunca invente informações."""
                 done_emitted = True
                 yield StreamEvent(
                     type='done',
-                    content={'text': full_text, 'session_id': pooled_client.session_id,
+                    content={'text': full_text, 'session_id': result_session_id,
                              'error_recovery': True},
-                    metadata={'error_type': 'cli_not_found', 'sdk_client': True}
+                    metadata={'error_type': 'cli_not_found'}
                 )
-            raise
 
         except CLIJSONDecodeError as e:
             elapsed_total = time.time() - stream_start_time
-            logger.error(
-                f"[AGENT_CLIENT] JSON decode error após {elapsed_total:.1f}s: {e}"
-            )
+            logger.error(f"[AGENT_SDK] JSON decode error {elapsed_total:.1f}s: {e}")
             yield StreamEvent(
                 type='error',
                 content="Erro ao processar resposta do agente. Tente novamente.",
@@ -929,7 +1000,7 @@ Nunca invente informações."""
                 done_emitted = True
                 yield StreamEvent(
                     type='done',
-                    content={'text': full_text, 'session_id': pooled_client.session_id,
+                    content={'text': full_text, 'session_id': result_session_id,
                              'error_recovery': True},
                     metadata={'error_type': 'json_decode_error'}
                 )
@@ -939,8 +1010,7 @@ Nunca invente informações."""
             error_type = type(e).__name__
             elapsed_total = time.time() - stream_start_time
             logger.error(
-                f"[AGENT_CLIENT] EXCEÇÃO após {elapsed_total:.1f}s | "
-                f"tipo={error_type} | mensagem={error_msg}",
+                f"[AGENT_SDK] {error_type} {elapsed_total:.1f}s: {error_msg}",
                 exc_info=True
             )
 
@@ -963,37 +1033,81 @@ Nunca invente informações."""
 
             if not done_emitted:
                 done_emitted = True
-                logger.warning("[AGENT_CLIENT_SDK] Emitindo 'done' após exceção")
                 yield StreamEvent(
                     type='done',
                     content={
                         'text': full_text,
                         'input_tokens': input_tokens,
                         'output_tokens': output_tokens,
-                        'session_id': pooled_client.session_id,
+                        'session_id': result_session_id,
                         'tool_calls': len(tool_calls),
                         'error_recovery': True,
                     },
-                    metadata={'error_type': error_type, 'sdk_client': True}
+                    metadata={'error_type': error_type}
                 )
+
+    @staticmethod
+    async def _make_streaming_prompt(text: str, image_files: Optional[List[dict]] = None):
+        """
+        Converte prompt string em AsyncIterable para compatibilidade com can_use_tool.
+
+        CRÍTICO: can_use_tool exige streaming mode (AsyncIterable, não string).
+        FONTE: _internal/client.py:53-58
+
+        Args:
+            text: Texto do prompt
+            image_files: Lista de imagens em formato Vision API
+
+        Yields:
+            Dict no formato esperado pelo SDK streaming mode
+        """
+        if image_files:
+            content_blocks = list(image_files) + [{"type": "text", "text": text}]
+        else:
+            content_blocks = text
+
+        yield {
+            "type": "user",
+            "message": {"role": "user", "content": content_blocks}
+        }
+
+    @staticmethod
+    def _with_resume(options: 'ClaudeAgentOptions', sdk_session_id: str) -> 'ClaudeAgentOptions':
+        """
+        Retorna cópia do options com resume configurado.
+
+        Usa dataclasses.replace() para criar cópia imutável.
+
+        Args:
+            options: ClaudeAgentOptions original
+            sdk_session_id: Session ID do SDK para resume
+
+        Returns:
+            Novo ClaudeAgentOptions com resume=sdk_session_id
+        """
+        from dataclasses import replace
+        return replace(options, resume=sdk_session_id)
 
     async def get_response(
         self,
         prompt: str,
-        pooled_client: Any,
         user_name: str = "Usuário",
         model: Optional[str] = None,
+        sdk_session_id: Optional[str] = None,
+        can_use_tool: Optional[Callable] = None,
+        # LEGADO: aceitar pooled_client para compatibilidade (ignorado)
+        pooled_client: Any = None,
     ) -> AgentResponse:
         """
         Obtém resposta completa (não streaming).
 
-        Requer pooled_client do SessionPool (mesmo que stream_response).
-
         Args:
             prompt: Mensagem do usuário
-            pooled_client: PooledClient do SessionPool (obrigatório)
             user_name: Nome do usuário
             model: Modelo a usar
+            sdk_session_id: Session ID do SDK para resume
+            can_use_tool: Callback de permissão
+            pooled_client: LEGADO — ignorado
 
         Returns:
             AgentResponse completa
@@ -1003,13 +1117,14 @@ Nunca invente informações."""
         input_tokens = 0
         output_tokens = 0
         stop_reason = ""
-        result_session_id = pooled_client.session_id
+        result_session_id = sdk_session_id
 
         async for event in self.stream_response(
             prompt=prompt,
-            pooled_client=pooled_client,
             user_name=user_name,
             model=model,
+            sdk_session_id=sdk_session_id,
+            can_use_tool=can_use_tool,
         ):
             if event.type == 'init':
                 result_session_id = event.content.get('session_id')
@@ -1024,6 +1139,10 @@ Nunca invente informações."""
             elif event.type == 'done':
                 input_tokens = event.content.get('input_tokens', 0)
                 output_tokens = event.content.get('output_tokens', 0)
+                # Captura session_id real do done
+                done_session_id = event.content.get('session_id')
+                if done_session_id:
+                    result_session_id = done_session_id
 
         return AgentResponse(
             text=full_text,

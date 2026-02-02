@@ -52,7 +52,7 @@ email-validator==2.2.0
 # ==========================================
 # AI & CLAUDE INTEGRATION
 # ==========================================
-anthropic==0.75.0           # API direta Anthropic (fallback)
+anthropic==0.77.0           # API direta Anthropic (fallback)
 claude-agent-sdk==0.1.26    # Claude Agent SDK oficial (upgraded from 0.1.10)
 mcp>=1.10.0                 # Model Context Protocol (latest stable)
 pydantic==2.11.7           # Data validation

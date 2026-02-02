@@ -94,7 +94,7 @@ Refatoracao completa da infraestrutura `.claude/` do sistema de fretes Nacom Goy
 | Item | Mudanca |
 |------|---------|
 | Plugins desabilitados | agent-sdk-dev, frontend-design, code-simplifier, ralph-wiggum |
-| Plugins mantidos | superpowers, pyright-lsp |
+| Plugins mantidos | pyright-lsp |
 | .gitignore | +4 patterns (`__pycache__`, `flask_session`, `uploads`, `.pyc`) |
 | .encryption_key | DELETADA (seguranca) |
 

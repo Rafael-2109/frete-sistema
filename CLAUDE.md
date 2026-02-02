@@ -259,11 +259,14 @@ app/agente/
   routes.py                    # API endpoints (/api/agente/...)
   memory_tool.py               # DatabaseMemoryTool
   prompts/system_prompt.md     # Prompt agente web (v3.0.0)
-  sdk/client.py                # ClaudeSDKClient (unico modo)
-  sdk/session_pool.py          # SessionPool com PooledClient (LRU)
+  sdk/client.py                # AgentClient — query() + resume (self-contained)
+  sdk/session_pool.py          # DEPRECADO (vazio — mantido para compat)
+  sdk/pending_questions.py     # AskUserQuestion: threading.Event wait/set
   tools/text_to_sql_tool.py    # Custom Tool MCP: consultar_sql (in-process)
+  tools/memory_mcp_tool.py     # Custom Tool MCP: memoria persistente
   config/settings.py           # AgentSettings (model, pricing, tools_enabled)
   config/feature_flags.py      # Feature flags (env vars, default false)
+  config/permissions.py        # can_use_tool callback (Write/Edit → /tmp only)
 ```
 
 ---

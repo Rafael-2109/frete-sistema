@@ -1,23 +1,14 @@
 """
-Sistema de Hooks para o Agent SDK.
+DEPRECATED: Sistema de Hooks para o Agent SDK.
 
-ARQUITETURA SIMPLIFICADA:
-- MemoryAgent: Subagente Haiku para gerenciamento inteligente de memorias
-  - PRE-HOOK: get_relevant_context() - Retorna memorias relevantes para o prompt
-  - POST-HOOK: analyze_and_save() - Detecta padroes/correcoes e salva silenciosamente
+A funcionalidade de memória agora é provida pela MCP Memory Tool
+em app/agente/tools/memory_mcp_tool.py.
 
-Uso:
-    from app.agente.hooks import get_memory_agent
+O modelo principal gerencia suas próprias memórias via tool_use
+autônomo (mcp__memory__*), sem necessidade de subagente Haiku.
 
-    agent = get_memory_agent()
-
-    # PRE-HOOK: Antes de enviar ao SDK
-    context = agent.get_relevant_context(user_id, prompt)
-    if context:
-        prompt_with_context = f"[CONTEXTO DO USUARIO]\n{context}\n\n{prompt}"
-
-    # POST-HOOK: Apos resposta
-    result = agent.analyze_and_save(user_id, prompt, response)
+Mantido temporariamente para rollback de segurança.
+Os exports são preservados para evitar ImportError em código legado.
 """
 
 from .memory_agent import (
