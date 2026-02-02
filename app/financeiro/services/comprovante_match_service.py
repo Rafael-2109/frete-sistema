@@ -539,6 +539,31 @@ class ComprovanteMatchService:
             candidatos_filtrados = faturas
             parse_result['confianca'] = max(parse_result.get('confianca', 0) - 20, 0)
 
+        # 5b. Para FIDC sem NF: afunilar por vencimento se disponivel
+        if e_financeira and parse_result.get('metodo') == 'VAZIO' and comp.data_vencimento:
+            faturas_venc_exato = [
+                f for f in candidatos_filtrados
+                if self._vencimento_fatura_match(f, comp.data_vencimento, tolerancia_dias=0)
+            ]
+            faturas_venc_proximo = [
+                f for f in candidatos_filtrados
+                if self._vencimento_fatura_match(f, comp.data_vencimento, tolerancia_dias=5)
+            ]
+
+            if faturas_venc_exato:
+                candidatos_filtrados = faturas_venc_exato
+                logger.info(
+                    f"FIDC afunilamento: vencimento exato {comp.data_vencimento} "
+                    f"-> {len(faturas_venc_exato)} candidato(s)"
+                )
+            elif faturas_venc_proximo:
+                candidatos_filtrados = faturas_venc_proximo
+                logger.info(
+                    f"FIDC afunilamento: vencimento +-5d {comp.data_vencimento} "
+                    f"-> {len(faturas_venc_proximo)} candidato(s)"
+                )
+            # Se nenhum vencimento proximo, manter todos (o scoring vai penalizar)
+
         # 6. Recalcular parcelas e scorear cada candidato
         candidatos_scoreados = []
         for fatura in candidatos_filtrados[:LIMITE_CANDIDATOS]:
@@ -769,7 +794,7 @@ class ComprovanteMatchService:
         Returns:
             Dict com nf, parcela, metodo, confianca
         """
-        if not numero_documento:
+        if not numero_documento or numero_documento.strip() in ('--', '-', '---'):
             return {'nf': None, 'parcela': None, 'metodo': 'VAZIO', 'confianca': 0}
 
         doc = numero_documento.strip()
@@ -986,6 +1011,24 @@ class ComprovanteMatchService:
 
         return filtradas
 
+    def _vencimento_fatura_match(
+        self, fatura: Dict, data_comp: date, tolerancia_dias: int = 0
+    ) -> bool:
+        """Verifica se o vencimento da fatura esta dentro da tolerancia em relacao ao comprovante."""
+        vencimento_str = fatura.get('date_maturity')
+        if not vencimento_str or vencimento_str == '2000-01-01':
+            return False
+        if isinstance(vencimento_str, str):
+            try:
+                vencimento = datetime.strptime(vencimento_str, '%Y-%m-%d').date()
+            except ValueError:
+                return False
+        elif isinstance(vencimento_str, date):
+            vencimento = vencimento_str
+        else:
+            return False
+        return abs((data_comp - vencimento).days) <= tolerancia_dias
+
     def _scorear_candidato(
         self,
         comp: ComprovantePagamentoBoleto,
@@ -1071,11 +1114,59 @@ class ComprovanteMatchService:
         elif metodo == 'FALLBACK_COMPLETO':
             score -= 15
             criterios.append('NF_FALLBACK(-15%)')
+        elif metodo == 'VAZIO':
+            score -= 20
+            criterios.append('NF_VAZIO(-20%)')
         elif metodo == 'NAO_PARSEADO':
             score -= 20
             criterios.append('NF_NAO_PARSEADO(-20%)')
 
-        score = max(score, 0)
+        # --- Extrair vencimento da fatura (necessario para scoring) ---
+        vencimento_str = fatura.get('date_maturity')
+        vencimento = None
+        if vencimento_str and vencimento_str != '2000-01-01':
+            if isinstance(vencimento_str, str):
+                try:
+                    vencimento = datetime.strptime(vencimento_str, '%Y-%m-%d').date()
+                except ValueError:
+                    vencimento = None
+            elif isinstance(vencimento_str, date):
+                vencimento = vencimento_str
+
+        # --- VENCIMENTO ---
+        # Comparar data_vencimento do comprovante com date_maturity da fatura
+        comp_vencimento = comp.data_vencimento  # date ou None (do banco)
+        if comp_vencimento and vencimento:
+            diff_dias = abs((comp_vencimento - vencimento).days)
+            if diff_dias == 0:
+                score += 3
+                criterios.append('VENCIMENTO_EXATO(+3%)')
+            elif diff_dias <= 5:
+                score -= 3
+                criterios.append(f'VENCIMENTO_PROXIMO(-3%: {diff_dias}d)')
+            elif diff_dias <= 30:
+                score -= 8
+                criterios.append(f'VENCIMENTO_DISTANTE(-8%: {diff_dias}d)')
+            else:
+                score -= 15
+                criterios.append(f'VENCIMENTO_MUITO_DISTANTE(-15%: {diff_dias}d)')
+        elif comp_vencimento and not vencimento:
+            score -= 5
+            criterios.append('VENCIMENTO_FATURA_SEM_DATA(-5%)')
+
+        # --- PARCELA ---
+        # Se o parse identificou parcela, verificar se coincide com a fatura
+        parcela_parseada = parse_result.get('parcela')
+        parcela_fatura = fatura.get('l10n_br_cobranca_parcela')
+        if parcela_parseada is not None and parcela_fatura is not None:
+            if parcela_parseada == parcela_fatura:
+                score += 2
+                criterios.append(f'PARCELA_MATCH(+2%: p{parcela_parseada})')
+            else:
+                score -= 10
+                criterios.append(f'PARCELA_MISMATCH(-10%: parse={parcela_parseada} odoo={parcela_fatura})')
+
+        score = min(max(score, 0), 100)
 
         # Extrair dados do candidato
         partner_id_val = fatura.get('partner_id')
@@ -1088,17 +1179,6 @@ class ComprovanteMatchService:
 
         company_id_val = fatura.get('company_id')
         company_id = company_id_val[0] if isinstance(company_id_val, (list, tuple)) else company_id_val
-
-        vencimento_str = fatura.get('date_maturity')
-        vencimento = None
-        if vencimento_str and vencimento_str != '2000-01-01':
-            if isinstance(vencimento_str, str):
-                try:
-                    vencimento = datetime.strptime(vencimento_str, '%Y-%m-%d').date()
-                except ValueError:
-                    vencimento = None
-            elif isinstance(vencimento_str, date):
-                vencimento = vencimento_str
 
         return {
             'odoo_move_line_id': fatura['id'],

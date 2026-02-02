@@ -380,6 +380,14 @@ def _validar_comprovante(comprovante: ComprovanteBoleto) -> ComprovanteBoleto:
         print(f"  ⚠️  p.{comprovante.pagina}: numero_agendamento inválido: '{comprovante.numero_agendamento}' → None")
         comprovante.numero_agendamento = None
 
+    # numero_documento e nosso_numero: tratar placeholders como None
+    # Comprovantes FIDC/cessão usam "--" ou "-" quando campo não se aplica
+    for campo in ('numero_documento', 'nosso_numero'):
+        valor = getattr(comprovante, campo, None)
+        if valor and valor.strip() in ('--', '-', '---', ''):
+            print(f"  ℹ️  p.{comprovante.pagina}: {campo} placeholder: '{valor}' → None")
+            setattr(comprovante, campo, None)
+
     # CNPJ/CPF deve conter apenas dígitos, pontos, barras, hífens
     for campo in ('beneficiario_cnpj_cpf', 'pagador_cnpj_cpf'):
         valor = getattr(comprovante, campo, None)
