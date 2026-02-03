@@ -379,6 +379,14 @@ def create_app(config_name=None):
         def handle_500(error): # pyright: ignore[reportUnusedFunction]
             """Captura erros 500 e faz log detalhado"""
             log_error(error, f"Erro 500 em {request.path}")
+            # Retornar JSON para requisições AJAX/API
+            if (
+                '/api/' in request.path
+                or request.is_json
+                or 'XMLHttpRequest' in request.headers.get('X-Requested-With', '')
+            ):
+                from flask import jsonify
+                return jsonify({'sucesso': False, 'mensagem': 'Erro interno do servidor'}), 500
             return "Erro interno do servidor", 500
 
         @app.errorhandler(Exception)

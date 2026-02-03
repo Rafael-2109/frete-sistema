@@ -91,6 +91,11 @@ class Separacao(db.Model):
         db.Index('idx_sep_cnpj', 'cnpj_cpf', 'sincronizado_nf'),
         db.Index('idx_sep_expedicao', 'expedicao', 'sincronizado_nf'),
         db.Index('idx_sep_cotacao', 'cotacao_id'),
+
+        # Índices para lista_pedidos - contadores de falta_item/falta_pagamento
+        db.Index('idx_sep_falta_item_sync', 'falta_item', 'sincronizado_nf', postgresql_where=db.text('falta_item = true')),
+        db.Index('idx_sep_falta_pgto_sync', 'falta_pagamento', 'sincronizado_nf', postgresql_where=db.text('falta_pagamento = true')),
+        db.Index('idx_sep_nf_cd', 'nf_cd', postgresql_where=db.text('nf_cd = true')),
     )
 
     @property

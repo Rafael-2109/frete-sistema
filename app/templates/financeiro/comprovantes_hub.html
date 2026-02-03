@@ -632,6 +632,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     { method: 'POST', body: formData, headers: getCsrfHeaders() }
                 );
 
+                if (!resp.ok) {
+                    throw new Error(`Servidor retornou erro ${resp.status}`);
+                }
+
+                const contentType = resp.headers.get('content-type') || '';
+                if (!contentType.includes('application/json')) {
+                    throw new Error(`Resposta inesperada do servidor (${resp.status})`);
+                }
+
                 const data = await resp.json();
 
                 if (data.sucesso) {

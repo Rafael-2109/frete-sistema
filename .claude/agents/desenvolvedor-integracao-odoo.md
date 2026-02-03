@@ -381,3 +381,24 @@ ALTER TABLE tabela ADD COLUMN IF NOT EXISTS campo VARCHAR(100);
 |--------|-------------|
 | `especialista-odoo` | Problema cross-area, diagnostico |
 | `analista-carteira` | Analise P1-P7, comunicacao PCP |
+
+---
+
+## Checklist: Integracao com Extrato Bancario
+
+Ao criar/modificar service que reconcilia payment ↔ extrato:
+
+- [ ] **ANTES** de `reconcile()`: Trocar conta TRANSITORIA (22199) → PENDENTES (26868)
+- [ ] **DEPOIS** de `reconcile()`: Atualizar `partner_id` da statement line
+- [ ] **DEPOIS** de `reconcile()`: Atualizar rotulo (`payment_ref` + `name` das move lines)
+- [ ] Usar `BaixaPagamentosService.formatar_rotulo_pagamento()` para formatar rotulo
+- [ ] Tratar excecoes com `logger.warning` (nao bloquear fluxo principal)
+- [ ] Testar: verificar os 3 campos no Odoo apos execucao
+
+**Metodos disponiveis (BaixaPagamentosService):**
+- `trocar_conta_move_line_extrato(move_id, conta_origem, conta_destino)`
+- `atualizar_statement_line_partner(statement_line_id, partner_id)`
+- `atualizar_rotulo_extrato(move_id, statement_line_id, rotulo)`
+- `formatar_rotulo_pagamento(valor, nome_fornecedor, data_pagamento)` (estatico)
+
+**Ref:** `.claude/references/odoo/GOTCHAS.md` secao "Extrato Bancario: 3 Campos"

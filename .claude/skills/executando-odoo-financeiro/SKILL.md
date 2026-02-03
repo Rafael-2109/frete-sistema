@@ -220,6 +220,35 @@ except Exception as e:
     # Erro "cannot marshal None" = SUCESSO!
 ```
 
+### Corrigir Campos do Extrato (OBRIGATORIO para Boletos)
+
+Apos reconciliar extrato com payment, **SEMPRE** corrigir os 3 campos:
+
+```python
+from app.financeiro.services.baixa_pagamentos_service import (
+    BaixaPagamentosService, CONTA_TRANSITORIA, CONTA_PAGAMENTOS_PENDENTES
+)
+
+baixa_service = BaixaPagamentosService()
+
+# 1. ANTES de reconciliar: trocar conta
+baixa_service.trocar_conta_move_line_extrato(
+    move_id=extrato_move_id,
+    conta_origem=CONTA_TRANSITORIA,            # 22199
+    conta_destino=CONTA_PAGAMENTOS_PENDENTES,  # 26868
+)
+
+# 2. Reconciliar (codigo existente)
+
+# 3. DEPOIS: atualizar partner e rotulo
+baixa_service.atualizar_statement_line_partner(statement_line_id, partner_id)
+rotulo = BaixaPagamentosService.formatar_rotulo_pagamento(valor, nome, data)
+baixa_service.atualizar_rotulo_extrato(extrato_move_id, statement_line_id, rotulo)
+```
+
+> **REGRA:** Qualquer operacao que reconcilie payment ↔ extrato DEVE incluir estes 3 passos.
+> Ver [erros-comuns.md](references/erros-comuns.md) Erro 11 e `.claude/references/odoo/GOTCHAS.md` secao "Extrato Bancario: 3 Campos".
+
 ## Skills Relacionadas
 
 | Skill | Quando usar |

@@ -223,6 +223,17 @@ except Exception as e:
     print("Reconciliacao realizada (erro None ignorado)")
 ```
 
+### 3.3 Corrigir Campos do Extrato (OBRIGATORIO)
+
+Apos reconciliar, os 3 campos do extrato ficam incorretos para boletos.
+**Sempre** executar:
+
+1. Trocar conta TRANSITORIA → PENDENTES (ANTES de reconciliar, no passo 3.2)
+2. Atualizar partner_id da statement line
+3. Atualizar rotulo (payment_ref + name)
+
+Ver `.claude/references/odoo/GOTCHAS.md` secao "Extrato Bancario: 3 Campos" para codigo completo.
+
 ## Passo 4: Verificar Resultado
 
 ```python

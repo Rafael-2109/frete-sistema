@@ -88,6 +88,7 @@ def _query_com_retry(query_fn, max_tentativas: int = MAX_RETRY):
         try:
             return query_fn()
         except OperationalError as e:
+            db.session.rollback()  # Limpar transação inválida antes do retry
             if _is_retryable_error(e) and tentativa < max_tentativas - 1:
                 wait = RETRY_BACKOFF_BASE * (tentativa + 1)
                 logger.warning(
@@ -284,6 +285,7 @@ def processar_pdf_comprovantes(
                 ).first()
             )
         except Exception as e:
+            db.session.rollback()  # Garantir sessão limpa para próximo comprovante
             logger.error(f"Erro ao verificar duplicata {comp.numero_agendamento}: {e}")
             detalhe['status'] = 'erro'
             detalhe['mensagem'] = f'Erro de conexão ao verificar duplicata: {str(e)}'

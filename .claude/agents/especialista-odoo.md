@@ -224,6 +224,25 @@ if match:
     cnpj = match.group(1)
 ```
 
+### Correcao de Campos do Extrato (Boletos)
+
+Para boletos, o Odoo NAO preenche automaticamente 3 campos. Apos reconciliar:
+
+| Passo | Quando | O que |
+|-------|--------|-------|
+| Trocar conta | **ANTES** de reconciliar | `22199` (TRANSITORIA) → `26868` (PENDENTES) |
+| Atualizar partner | **DEPOIS** de reconciliar | `partner_id` na statement line |
+| Atualizar rotulo | **DEPOIS** de reconciliar | `payment_ref` + `name` nas move lines |
+
+**Formato rotulo:** `"Pagamento de fornecedor R$ {valor} - {NOME} - {DD/MM/YYYY}"`
+
+**Services que implementam:**
+- `baixa_pagamentos_service.py` → metodos publicos (`trocar_conta_move_line_extrato`, `atualizar_statement_line_partner`, `atualizar_rotulo_extrato`)
+- `extrato_conciliacao_service.py` → metodos privados (`_trocar_conta_extrato`, `_atualizar_campos_extrato`)
+- `comprovante_lancamento_service.py` → passos 5a-5e em `lancar_no_odoo()`
+
+> **REGRA:** Ao diagnosticar "extrato reconciliado mas sem partner/rotulo", a causa eh que os 3 campos nao foram atualizados. Ver `.claude/references/odoo/GOTCHAS.md` secao "Extrato Bancario: 3 Campos".
+
 ---
 
 ## MAPA DE SERVICOS LOCAIS

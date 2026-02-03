@@ -23,6 +23,25 @@ echo "   PYTHON: $(python --version)"
 
 echo ""
 
+# Baixar dados de treinamento do Tesseract OCR (para OCR de comprovantes)
+# Mesmo procedimento do build.sh do web service
+echo "📦 Verificando Tesseract tessdata..."
+TESSDATA_DIR="/opt/render/project/src/tessdata"
+mkdir -p "$TESSDATA_DIR"
+if [ ! -f "$TESSDATA_DIR/por.traineddata" ]; then
+    echo "   📥 Baixando por.traineddata..."
+    curl -fsSL -o "$TESSDATA_DIR/por.traineddata" \
+        "https://github.com/tesseract-ocr/tessdata_fast/raw/main/por.traineddata" \
+        && echo "   ✅ Tesseract tessdata baixado com sucesso" \
+        || echo "   ⚠️ Falha ao baixar tessdata, OCR pode não funcionar"
+else
+    echo "   ✅ Tesseract tessdata já existe"
+fi
+export TESSDATA_PREFIX="$TESSDATA_DIR"
+echo "   TESSDATA_PREFIX=$TESSDATA_PREFIX"
+
+echo ""
+
 # Verificar conexão com Redis e limpar workers antigos
 echo "🔍 Testando conexão com Redis..."
 python -c "

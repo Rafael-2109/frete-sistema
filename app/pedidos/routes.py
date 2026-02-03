@@ -8,6 +8,7 @@ from app.carteira.models import CarteiraPrincipal
 from app.transportadoras.models import Transportadora
 from app.veiculos.models import Veiculo
 from sqlalchemy import func, distinct
+from sqlalchemy.orm import load_only
 from app.utils.localizacao import LocalizacaoService
 from app.cadastros_agendamento.models import ContatoAgendamento
 from app.embarques.models import Embarque, EmbarqueItem
@@ -24,7 +25,7 @@ pedidos_bp = Blueprint('pedidos', __name__, url_prefix='/pedidos')
 @pedidos_bp.route('/lista_pedidos', methods=['GET','POST'])
 @login_required
 def lista_pedidos():
-    from datetime import datetime, timedelta
+    from datetime import datetime
     
     # Form para filtrar:
     filtro_form = FiltroPedidosForm()
@@ -50,151 +51,31 @@ def lista_pedidos():
     sort_by = request.args.get('sort_by', 'expedicao')  # Default: ordenar por expedição
     sort_order = request.args.get('sort_order', 'asc')  # Default: ascendente
     
-    # ✅ NOVO: Contadores para os botões de atalho por data
+    # ✅ OTIMIZADO: Contadores via PedidosCounterService (Redis cache + queries consolidadas)
+    # Substitui ~26 queries individuais por ~4 queries consolidadas com cache de 45s
+    from app.pedidos.services.counter_service import PedidosCounterService
+
     hoje = datetime.now().date()
-    contadores_data = {}
-    for i in range(4):  # D+0, D+1, D+2, D+3
-        data_filtro = hoje + timedelta(days=i)
-        
-        # Conta total de pedidos da data
-        total_data = Pedido.query.filter(
-            func.date(Pedido.expedicao) == data_filtro
-        ).count()
-        
-        # Conta pedidos ABERTOS da data (APENAS por status='ABERTO' e expedição)
-        abertos_data = Pedido.query.filter(
-            func.date(Pedido.expedicao) == data_filtro,
-            Pedido.status == 'ABERTO'  # ✅ Filtro APENAS por status
-        ).count()
-        
-        contadores_data[f'd{i}'] = {
-            'data': data_filtro,
-            'total': total_data,
-            'abertos': abertos_data
-        }
-    
-    # ✅ NOVO: Contadores para os botões de status
-    contadores_status = {
-        'todos': Pedido.query.count(),
-        'abertos': Pedido.query.filter(
-            Pedido.status == 'ABERTO'  # ✅ Filtro APENAS por status
-        ).count(),
-        'cotados': Pedido.query.filter(
-            Pedido.cotacao_id.isnot(None),
-            Pedido.data_embarque.is_(None),
-            (Pedido.nf.is_(None)) | (Pedido.nf == ""),
-            Pedido.nf_cd == False
-        ).count(),
-        'nf_cd': Pedido.query.filter(Pedido.nf_cd == True).count(),
-        # Contador de atrasados (cotados ou abertos com expedição < hoje)
-        'atrasados': Pedido.query.filter(
-            db.or_(
-                db.and_(Pedido.cotacao_id.isnot(None), Pedido.data_embarque.is_(None), (Pedido.nf.is_(None)) | (Pedido.nf == "")),  # COTADO
-                db.and_(Pedido.cotacao_id.is_(None), (Pedido.nf.is_(None)) | (Pedido.nf == ""))  # ABERTO
-            ),
-            Pedido.nf_cd == False,
-            Pedido.expedicao < hoje,
-            (Pedido.nf.is_(None)) | (Pedido.nf == "")  # Sem NF
-        ).count(),
-        # Contador de atrasados apenas abertos
-        'atrasados_abertos': Pedido.query.filter(
-            Pedido.status == 'ABERTO',  # ✅ Filtro APENAS por status
-            Pedido.expedicao < hoje
-        ).count(),
-        # ✅ NOVO: Contador de pedidos sem data de expedição
-        'sem_data': Pedido.query.filter(
-            Pedido.expedicao.is_(None),
-            Pedido.nf_cd == False,
-            (Pedido.nf.is_(None)) | (Pedido.nf == ""),
-            Pedido.data_embarque.is_(None)
-        ).count()
-    }
-    
-    # ✅ NOVO: Contador de pedidos com agendamento pendente
-    # Buscar CNPJs que precisam de agendamento
-    contatos_agendamento_count = ContatoAgendamento.query.filter(
-        ContatoAgendamento.forma is not None,
+    dados_contadores = PedidosCounterService.obter_contadores()
+
+    contadores_data = dados_contadores['contadores_data']
+    contadores_status = dados_contadores['contadores_status']
+    cnpjs_validos_agendamento = dados_contadores['cnpjs_agendamento']
+    lotes_falta_item_ids = dados_contadores['lotes_falta_item']
+    lotes_falta_pagamento_ids = dados_contadores['lotes_falta_pgto']
+
+    # Converter datas ISO string de volta para date objects (template precisa)
+    for key, dados in contadores_data.items():
+        if isinstance(dados['data'], str):
+            dados['data'] = datetime.strptime(dados['data'], '%Y-%m-%d').date()
+
+    # Carregar contatos de agendamento para enriquecimento posterior
+    contatos_agendamento_todos = ContatoAgendamento.query.filter(
+        ContatoAgendamento.forma.isnot(None),
         ContatoAgendamento.forma != '',
         ContatoAgendamento.forma != 'SEM AGENDAMENTO'
     ).all()
-    
-    # Criar lista de CNPJs válidos para agendamento
-    cnpjs_validos_agendamento = []
-    for contato in contatos_agendamento_count:
-        if contato.cnpj:
-            cnpjs_validos_agendamento.append(contato.cnpj)
-    
-    # Contar pedidos sem agendamento que deveriam ter
-    if cnpjs_validos_agendamento:
-        contadores_status['agend_pendente'] = Pedido.query.filter(
-            Pedido.cnpj_cpf.in_(cnpjs_validos_agendamento),
-            (Pedido.agendamento.is_(None)),  # Sem data de agendamento
-            Pedido.nf_cd == False,  # Não está no CD
-            (Pedido.nf.is_(None)) | (Pedido.nf == ""),  # Sem NF
-            Pedido.data_embarque.is_(None)  # Não embarcado
-        ).count()
-    else:
-        contadores_status['agend_pendente'] = 0
-
-    # ✅ NOVO: Contadores para aguardando pagamento e aguardando item
-    # Estes serão calculados corretamente consultando as tabelas diretamente
-
-    # 1. Ag. Item: Contar lotes com falta_item=True na Separacao
-    try:
-        lotes_falta_item = db.session.query(Separacao.separacao_lote_id).filter(
-            Separacao.falta_item == True,
-            Separacao.sincronizado_nf == False
-        ).distinct().subquery()
-
-        contadores_status['ag_item'] = db.session.query(func.count(distinct(Pedido.separacao_lote_id))).filter(
-            Pedido.separacao_lote_id.in_(db.session.query(lotes_falta_item)),
-            Pedido.nf_cd == False,
-            (Pedido.nf.is_(None)) | (Pedido.nf == "")
-        ).scalar() or 0
-
-        lotes_falta_item_ids = [r[0] for r in db.session.query(Separacao.separacao_lote_id).filter(
-            Separacao.falta_item == True,
-            Separacao.sincronizado_nf == False
-        ).distinct().all()]
-    except Exception as e:
-        print(f"[ERRO Contador ag_item] {e}")
-        contadores_status['ag_item'] = 0
-        lotes_falta_item_ids = []
-
-    # 2. Ag. Pagamento: Contar pedidos ANTECIPADOS com falta_pagamento=True
-    try:
-        # Buscar pedidos com ANTECIPADO
-        num_pedidos_antecipados = [r[0] for r in db.session.query(
-            distinct(CarteiraPrincipal.num_pedido)
-        ).filter(
-            CarteiraPrincipal.cond_pgto_pedido.ilike('%ANTECIPADO%')
-        ).all() if r[0]]
-
-        if num_pedidos_antecipados:
-            lotes_falta_pgto = db.session.query(Separacao.separacao_lote_id).filter(
-                Separacao.num_pedido.in_(num_pedidos_antecipados),
-                Separacao.falta_pagamento == True,
-                Separacao.sincronizado_nf == False
-            ).distinct().subquery()
-
-            contadores_status['ag_pagamento'] = db.session.query(func.count(distinct(Pedido.separacao_lote_id))).filter(
-                Pedido.separacao_lote_id.in_(db.session.query(lotes_falta_pgto)),
-                Pedido.nf_cd == False,
-                (Pedido.nf.is_(None)) | (Pedido.nf == "")
-            ).scalar() or 0
-
-            lotes_falta_pagamento_ids = [r[0] for r in db.session.query(Separacao.separacao_lote_id).filter(
-                Separacao.num_pedido.in_(num_pedidos_antecipados),
-                Separacao.falta_pagamento == True,
-                Separacao.sincronizado_nf == False
-            ).distinct().all()]
-        else:
-            contadores_status['ag_pagamento'] = 0
-            lotes_falta_pagamento_ids = []
-    except Exception as e:
-        print(f"[ERRO Contador ag_pagamento] {e}")
-        contadores_status['ag_pagamento'] = 0
-        lotes_falta_pagamento_ids = []
+    contatos_por_cnpj_global = {c.cnpj: c for c in contatos_agendamento_todos if c.cnpj}
 
     # ✅ APLICAR FILTROS DE ATALHO (botões) - SEMPRE PRIMEIRO
     filtros_botao_aplicados = False
@@ -461,17 +342,11 @@ def lista_pedidos():
             if item.separacao_lote_id not in embarques_por_lote:
                 embarques_por_lote[item.separacao_lote_id] = embarque
     
-    # ✅ NOVO: Busca contatos de agendamento para os CNPJs dos pedidos
-    contatos_por_cnpj = {}
+    # ✅ OTIMIZADO: Reusar contatos já carregados na fase de contadores (sem nova query)
     cnpjs_pedidos = [p.cnpj_cpf for p in pedidos if p.cnpj_cpf]
-    
-    if cnpjs_pedidos:
-        contatos_agendamento = ContatoAgendamento.query.filter(
-            ContatoAgendamento.cnpj.in_(cnpjs_pedidos)
-        ).all()
-        
-        for contato in contatos_agendamento:
-            contatos_por_cnpj[contato.cnpj] = contato
+    contatos_por_cnpj = {cnpj: contatos_por_cnpj_global[cnpj]
+                         for cnpj in cnpjs_pedidos
+                         if cnpj in contatos_por_cnpj_global}
     
     # Adiciona o embarque e contato de agendamento a cada pedido
     for pedido in pedidos:
@@ -482,10 +357,17 @@ def lista_pedidos():
     info_separacao_por_lote = {}
 
     if lotes_ids:
-        # Buscar na Separacao os flags de falta_item e falta_pagamento
+        # ✅ OTIMIZADO: Carregar apenas campos necessários em vez de todos os ~30 campos
         itens_separacao = Separacao.query.filter(
             Separacao.separacao_lote_id.in_(lotes_ids)
-        ).all()
+        ).options(load_only(
+            Separacao.separacao_lote_id,
+            Separacao.num_pedido,
+            Separacao.falta_item,
+            Separacao.falta_pagamento,
+            Separacao.obs_separacao,
+            Separacao.separacao_impressa
+        )).all()
 
         for item in itens_separacao:
             lote_id = item.separacao_lote_id
@@ -705,6 +587,10 @@ def editar_pedido(lote_id):
             
             # ✅ COMMIT das alterações
             db.session.commit()
+
+            # ✅ Invalidar cache de contadores (expedição pode ter mudado)
+            from app.pedidos.services.counter_service import PedidosCounterService
+            PedidosCounterService.invalidar_cache()
 
             # ✅ LOG das alterações
             print(f"[EDIT] Pedido {pedido.num_pedido} editado:")
@@ -1087,6 +973,10 @@ def toggle_falta_item(item_id):
         item.falta_item = not item.falta_item
         db.session.commit()
 
+        # Invalidar cache de contadores (ag_item mudou)
+        from app.pedidos.services.counter_service import PedidosCounterService
+        PedidosCounterService.invalidar_cache()
+
         return jsonify({
             'success': True,
             'item_id': item_id,
@@ -1125,6 +1015,10 @@ def toggle_pagamento(lote_id):
             item.falta_pagamento = falta_pagamento
 
         db.session.commit()
+
+        # Invalidar cache de contadores (ag_pagamento mudou)
+        from app.pedidos.services.counter_service import PedidosCounterService
+        PedidosCounterService.invalidar_cache()
 
         return jsonify({
             'success': True,
@@ -1707,10 +1601,13 @@ def atualizar_status():
         
         if atualizados > 0:
             db.session.commit()
+            # Invalidar cache de contadores (status mudou)
+            from app.pedidos.services.counter_service import PedidosCounterService
+            PedidosCounterService.invalidar_cache()
             flash(f"✅ {atualizados} status de pedidos atualizados com sucesso!", "success")
         else:
             flash("✅ Todos os status já estão corretos!", "info")
-            
+
     except Exception as e:
         db.session.rollback()
         flash(f"❌ Erro ao atualizar status: {str(e)}", "error")

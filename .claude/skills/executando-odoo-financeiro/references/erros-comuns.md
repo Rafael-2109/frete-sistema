@@ -277,6 +277,33 @@ payments = odoo.search_read(
 
 ---
 
+## Erro 11: Extrato Reconciliado mas Campos Incorretos
+
+### Sintoma
+Apos reconciliar, o extrato mostra `is_reconciled=True` mas:
+- `partner_id` = False
+- Move line na conta TRANSITORIA (22199) em vez de PENDENTES (26868)
+- `payment_ref` generico ("DEB.TIT.COMPE")
+
+### Causa
+O Odoo so auto-preenche esses campos para transacoes identificaveis (TED, PIX).
+Boletos tem `payment_ref` generico que o Odoo nao consegue mapear.
+
+### Solucao
+Atualizar MANUALMENTE os 3 campos via API:
+
+1. **ANTES de reconciliar**: Trocar conta 22199 → 26868
+2. **DEPOIS de reconciliar**: Atualizar partner_id e rotulo
+
+Ver `.claude/references/odoo/GOTCHAS.md` secao "Extrato Bancario: 3 Campos" para codigo completo.
+
+### Checklist Atualizado
+- [ ] Trocar conta TRANSITORIA → PENDENTES **antes** de reconciliar
+- [ ] Atualizar partner_id da statement line **depois** de reconciliar
+- [ ] Atualizar rotulo (payment_ref + name) **depois** de reconciliar
+
+---
+
 ## Checklist de Verificacao
 
 Antes de executar operacoes financeiras:

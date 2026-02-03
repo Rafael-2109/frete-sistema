@@ -189,7 +189,11 @@ EXTRATO ←→ PAYMENT ←→ TÍTULO
 | `is_reconciled` | boolean | Se esta totalmente conciliado |
 | `amount_residual` | float | Valor restante (suporta 1:N) |
 | `partner_id` | many2one | Parceiro (pode estar vazio) |
+| `payment_ref` | char | Referencia do pagamento (pode ser generica para boletos) |
 | `journal_id` | many2one | Diario/Conta bancaria |
+
+> **ATENCAO:** Para boletos, `partner_id` pode ser `False` e `payment_ref` pode ser generico
+> ("DEB.TIT.COMPE"). Ver `.claude/references/odoo/GOTCHAS.md` secao "Extrato Bancario: 3 Campos".
 
 #### account.move.line (Titulo)
 

@@ -153,6 +153,71 @@ odoo.execute_kw('stock.picking', 'button_validate', [[picking_id]])
 
 ---
 
+## Extrato Bancario: 3 Campos que o Odoo NAO Preenche para Boletos
+
+Para boletos bancarios, o Odoo **NAO** auto-preenche 3 campos do extrato porque o `payment_ref` eh generico ("DEB.TIT.COMPE"). O Odoo so auto-preenche para transacoes identificaveis (TED/PIX com CNPJ).
+
+| Campo | Modelo | Problema | Correcao |
+|-------|--------|----------|----------|
+| `partner_id` | `account.bank.statement.line` | Fica `False` | Atualizar com `res.partner` do titulo |
+| `account_id` | `account.move.line` (do extrato) | Fica na conta TRANSITORIA (22199) | Trocar para PENDENTES (26868) **ANTES** de reconciliar |
+| `name` / `payment_ref` | `account.bank.statement.line` + `account.move.line` | Generico, sem identificacao | Atualizar com rotulo formatado |
+
+**Rotulo padrao:** `"Pagamento de fornecedor R$ {valor_br} - {FORNECEDOR} - {DD/MM/YYYY}"`
+
+### Regra: SEMPRE Corrigir ao Reconciliar com Extrato
+
+```python
+from app.financeiro.services.baixa_pagamentos_service import (
+    BaixaPagamentosService, CONTA_TRANSITORIA, CONTA_PAGAMENTOS_PENDENTES
+)
+
+baixa_service = BaixaPagamentosService()
+
+# 1. ANTES de reconciliar: trocar conta TRANSITORIA → PENDENTES
+baixa_service.trocar_conta_move_line_extrato(
+    move_id=extrato_move_id,
+    conta_origem=CONTA_TRANSITORIA,       # 22199
+    conta_destino=CONTA_PAGAMENTOS_PENDENTES,  # 26868
+)
+
+# 2. Buscar linha de debito do extrato (agora na conta PENDENTES)
+debit_line_extrato = baixa_service.buscar_linha_debito_extrato(extrato_move_id)
+
+# 3. Reconciliar normalmente
+baixa_service.reconciliar(payment_credit_line_id, debit_line_extrato)
+
+# 4. DEPOIS: atualizar partner_id
+baixa_service.atualizar_statement_line_partner(statement_line_id, partner_id)
+
+# 5. DEPOIS: atualizar rotulo
+rotulo = BaixaPagamentosService.formatar_rotulo_pagamento(
+    valor=float(valor_pago),
+    nome_fornecedor=nome_parceiro,
+    data_pagamento=data_pagamento,
+)
+baixa_service.atualizar_rotulo_extrato(extrato_move_id, statement_line_id, rotulo)
+```
+
+### Services que JA Implementam
+
+| Service | Metodos / Local |
+|---------|-----------------|
+| `baixa_pagamentos_service.py` | Metodos publicos: `trocar_conta_move_line_extrato()`, `atualizar_statement_line_partner()`, `atualizar_rotulo_extrato()`, `formatar_rotulo_pagamento()` (estatico) |
+| `comprovante_lancamento_service.py` | Passos 5a-5e em `lancar_no_odoo()` |
+| `extrato_conciliacao_service.py` | Metodos privados: `_trocar_conta_extrato()`, `_atualizar_campos_extrato()`, `_extrair_partner_dados()` |
+| `vincular_extrato_fatura_excel.py` (script) | `batch_write_partner_statement_lines()`, `batch_write_conta_pendentes()`, `ajustar_name_linha_extrato()` |
+
+### Services que NAO Precisam (referencia)
+
+| Service | Motivo |
+|---------|--------|
+| `baixa_titulos_service.py` | So reconcilia payment↔titulo, **nunca** toca em extrato |
+| `extrato_service.py` | Apenas importa extratos do Odoo (READ-ONLY) |
+| `sincronizacao_extratos_service.py` | Sincroniza dados locais, nao faz reconcile no Odoo |
+
+---
+
 ## Matriz de Erros
 
 | Erro | Causa | Solucao |
