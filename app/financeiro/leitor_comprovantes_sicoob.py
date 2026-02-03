@@ -165,6 +165,66 @@ SECOES = {
 
 
 # ---------------------------------------------------------------------------
+# Mapeamento de campos — Layout V2 ("Comprovante de Pagamento de Boleto")
+# ---------------------------------------------------------------------------
+# Layout V2 usa labels auto-descritivos (sem seções separadas).
+# Ex: "CPF/CNPJ Beneficiário:" em vez de seção "Beneficiário" + "CPF/CNPJ:".
+
+MAPEAMENTO_CAMPOS_V2 = {
+    # --- Campos iguais ao V1 ---
+    'linha digitavel': 'linha_digitavel',
+    'linha digitável': 'linha_digitavel',
+    'nosso numero': 'nosso_numero',
+    'nosso número': 'nosso_numero',
+    'instituicao emissora': 'instituicao_emissora',
+    'instituição emissora': 'instituicao_emissora',
+    'tipo documento': 'tipo_documento',
+    'situacao': 'situacao',
+    'situação': 'situacao',
+    'autenticacao': 'autenticacao',
+    'autenticação': 'autenticacao',
+
+    # --- Labels V2 específicos: Nº documento / agendamento ---
+    'nº documento': 'numero_documento',
+    'n documento': 'numero_documento',
+    'n° documento': 'numero_documento',
+    'no. agendamento': 'numero_agendamento',
+    'no agendamento': 'numero_agendamento',
+    'nº agendamento': 'numero_agendamento',
+    'n. agendamento': 'numero_agendamento',
+    'n° agendamento': 'numero_agendamento',
+
+    # --- Beneficiário (label auto-descritivo, sem seção) ---
+    'nome/razao social do beneficiario': 'beneficiario_razao_social',
+    'nome/razão social do beneficiário': 'beneficiario_razao_social',
+    'nome fantasia beneficiario': 'beneficiario_nome_fantasia',
+    'nome fantasia beneficiário': 'beneficiario_nome_fantasia',
+    'cpf/cnpj beneficiario': 'beneficiario_cnpj_cpf',
+    'cpf/cnpj beneficiário': 'beneficiario_cnpj_cpf',
+
+    # --- Pagador (label auto-descritivo, sem seção) ---
+    'nome/razao social do pagador': 'pagador_razao_social',
+    'nome/razão social do pagador': 'pagador_razao_social',
+    'nome fantasia pagador': 'pagador_nome_fantasia',
+    'cpf/cnpj pagador': 'pagador_cnpj_cpf',
+
+    # --- Datas (prefixo "Data" no label) ---
+    'data agendamento': 'data_realizado',
+    'data pagamento': 'data_pagamento',
+    'data vencimento': 'data_vencimento',
+
+    # --- Valores ---
+    'valor documento': 'valor_documento',
+    '(-) desconto / abatimento': 'valor_desconto_abatimento',
+    '(-) desconto/abatimento': 'valor_desconto_abatimento',
+    # "(+) Outros acréscimos" → valor_juros_multa (campo mais próximo no dataclass)
+    '(+) outros acrescimos': 'valor_juros_multa',
+    '(+) outros acréscimos': 'valor_juros_multa',
+    'valor pago': 'valor_pago',
+}
+
+
+# ---------------------------------------------------------------------------
 # Funções de extração
 # ---------------------------------------------------------------------------
 
@@ -204,6 +264,40 @@ def _detectar_formato(linhas: list[str]) -> str:
             # Se aparece mais tarde → Formato A (labels separadas)
             return 'A'
     return 'B'  # fallback
+
+
+def _detectar_layout_boleto(linhas: list[str]) -> str:
+    """
+    Detecta se o comprovante usa Layout V1 (seções) ou V2 (labels auto-descritivos).
+
+    V1: Sub-cabeçalho "PAGAMENTO DE BOLETO" (layout com seções separadas)
+    V2: Sub-cabeçalho "Comprovante de Pagamento de Boleto" (labels auto-descritivos)
+
+    Usa heurística dupla:
+    1. Cabeçalho específico do V2
+    2. Presença de labels auto-descritivos exclusivos do V2
+    """
+    texto_junto = ' '.join(linhas).upper()
+
+    # Heurística 1: Cabeçalho específico do V2
+    if 'COMPROVANTE DE PAGAMENTO DE BOLETO' in texto_junto:
+        return 'V2'
+
+    # Heurística 2: Labels auto-descritivos exclusivos do V2
+    # (fallback caso OCR corrompa o cabeçalho)
+    marcadores_v2 = [
+        'CPF/CNPJ BENEFICI',
+        'NOME/RAZÃO SOCIAL DO BENEFICI',
+        'NOME/RAZAO SOCIAL DO BENEFICI',
+        'DATA AGENDAMENTO',
+        'NO. AGENDAMENTO',
+        'VALOR DOCUMENTO',
+    ]
+    if any(m in texto_junto for m in marcadores_v2):
+        return 'V2'
+
+    # V1: layout original (default)
+    return 'V1'
 
 
 def _parse_formato_a(linhas: list[str], comprovante: ComprovanteBoleto) -> None:
@@ -332,6 +426,104 @@ def _parse_formato_b(linhas: list[str], comprovante: ComprovanteBoleto) -> None:
             continue
 
 
+def _normalizar_label_v2(label: str) -> str:
+    """
+    Normaliza um label V2 para lookup no MAPEAMENTO_CAMPOS_V2.
+
+    Além da normalização padrão (strip, lower, remover ':'), também
+    normaliza prefixos (+)/(-) que o OCR pode corromper.
+    """
+    label = normalizar_label(label)
+
+    # Normalizar prefixos (-) e (+) — OCR pode gerar variantes:
+    # "(- )", "(—)", "(–)", "(-)", etc.
+    label = re.sub(r'^\(\s*[-–—]\s*\)\s*', '(-) ', label)
+    label = re.sub(r'^\(\s*\+\s*\)\s*', '(+) ', label)
+
+    return label
+
+
+def _parse_layout_v2(linhas: list[str], comprovante: ComprovanteBoleto) -> None:
+    """
+    Parse do Layout V2: labels auto-descritivos, sem seções.
+
+    Sub-cabeçalho: "Comprovante de Pagamento de Boleto"
+    Formato: cada campo é "Label: Valor" com label já descrevendo a quem pertence.
+    Ex: "CPF/CNPJ Beneficiário: 37.706.133/0001-98"
+    """
+    valores_pendentes = []  # Para labels sem valor na mesma linha
+
+    for linha in linhas:
+        stripped = linha.strip()
+        if not stripped:
+            continue
+
+        # --- Linhas de cabeçalho/rodapé: ignorar ---
+        upper = stripped.upper()
+        if any(kw in upper for kw in [
+            'SICOOB - SISTEMA', 'SISBR - SISTEMA',
+            'PLATAFORMA DE SERVI', 'COMPROVANTE DE',
+            'PAGAMENTO DE BOLETO', 'OUVIDORIA', 'V1.0',
+        ]):
+            continue
+
+        # --- Cabeçalho V2: "Coop.: CÓDIGO / NOME" ---
+        match_coop = re.match(r'^Coop\.?\s*:?\s*(.+)$', stripped, re.IGNORECASE)
+        if match_coop:
+            comprovante.cooperativa = match_coop.group(1).strip()
+            continue
+
+        # --- Cabeçalho V2: "Conta: CÓDIGO / NOME_CLIENTE" ---
+        match_conta = re.match(r'^Conta\s*:\s*(.+)$', stripped, re.IGNORECASE)
+        if match_conta:
+            valor_conta = match_conta.group(1).strip()
+            partes = valor_conta.split('/', 1)
+            comprovante.conta = partes[0].strip()
+            if len(partes) > 1:
+                comprovante.cliente = partes[1].strip()
+            continue
+
+        # --- Cabeçalho V2: "Data: DD/MM/YYYY" (pode ter "Hora: HH:MM:SS" na mesma linha) ---
+        match_data_hora = re.match(
+            r'^Data\s*:\s*(\d{2}/\d{2}/\d{4})\s*(Hora\s*:\s*\d{2}:\d{2}:\d{2})?$',
+            stripped, re.IGNORECASE,
+        )
+        if match_data_hora:
+            comprovante.data_comprovante = match_data_hora.group(1)
+            continue
+
+        # --- Hora solta (rodapé ou cabeçalho) ---
+        if re.match(r'^(Hora\s*:\s*)?\d{2}:\d{2}:\d{2}$', stripped, re.IGNORECASE):
+            continue
+
+        # --- Labels ignorados (sem campo correspondente no dataclass) ---
+        if 'autorizou pagar valor diferente' in stripped.lower():
+            continue
+
+        # --- Tentar formato "Label: Valor" (inline) ---
+        match_inline = re.match(r'^(.+?):\s+(.+)$', stripped)
+        if match_inline:
+            label = _normalizar_label_v2(match_inline.group(1))
+            valor = match_inline.group(2).strip()
+
+            if label in MAPEAMENTO_CAMPOS_V2:
+                setattr(comprovante, MAPEAMENTO_CAMPOS_V2[label], valor)
+            continue
+
+        # --- Label V2 com ":" sozinho na linha (valor na próxima linha) ---
+        if stripped.endswith(':'):
+            label = _normalizar_label_v2(stripped)
+            valores_pendentes.append(label)
+            continue
+
+        # --- Linha que é apenas um valor (sem label) — consumir label pendente ---
+        if valores_pendentes:
+            label = valores_pendentes.pop(0)
+            if label in MAPEAMENTO_CAMPOS_V2:
+                setattr(comprovante, MAPEAMENTO_CAMPOS_V2[label], stripped)
+            continue
+
+
 def _atribuir_campo(
     comprovante: ComprovanteBoleto,
     label: str,
@@ -376,9 +568,14 @@ def _validar_comprovante(comprovante: ComprovanteBoleto) -> ComprovanteBoleto:
     para evitar dados incorretos no banco (ex: CNPJ no campo de razão social).
     """
     # numero_agendamento deve ser numérico
-    if comprovante.numero_agendamento and not re.match(r'^\d+$', comprovante.numero_agendamento):
-        print(f"  ⚠️  p.{comprovante.pagina}: numero_agendamento inválido: '{comprovante.numero_agendamento}' → None")
-        comprovante.numero_agendamento = None
+    # Layout V2 pode trazer com separador de milhar (ex: "17.375.820") — limpar antes
+    if comprovante.numero_agendamento:
+        agendamento_limpo = comprovante.numero_agendamento.replace('.', '').replace(' ', '').strip()
+        if re.match(r'^\d+$', agendamento_limpo):
+            comprovante.numero_agendamento = agendamento_limpo
+        else:
+            print(f"  ⚠️  p.{comprovante.pagina}: numero_agendamento inválido: '{comprovante.numero_agendamento}' → None")
+            comprovante.numero_agendamento = None
 
     # numero_documento e nosso_numero: tratar placeholders como None
     # Comprovantes FIDC/cessão usam "--" ou "-" quando campo não se aplica
@@ -423,9 +620,11 @@ def parse_comprovante(texto: str, pagina: int) -> ComprovanteBoleto:
     """
     Faz o parsing do texto OCR de um comprovante e retorna os dados estruturados.
 
-    Detecta automaticamente o formato do OCR:
-    - Formato A: Labels em bloco separado dos valores (OCR leu colunas separadas)
-    - Formato B: Labels e valores inline "Label: Valor" (OCR leu linha a linha)
+    Detecta automaticamente o layout do comprovante:
+    - Layout V2: Labels auto-descritivos ("Comprovante de Pagamento de Boleto")
+    - Layout V1: Seções separadas ("PAGAMENTO DE BOLETO")
+      - Formato A: Labels em bloco separado dos valores (OCR leu colunas separadas)
+      - Formato B: Labels e valores inline "Label: Valor" (OCR leu linha a linha)
     """
     comprovante = ComprovanteBoleto(pagina=pagina)
 
@@ -435,12 +634,18 @@ def parse_comprovante(texto: str, pagina: int) -> ComprovanteBoleto:
     if not linhas:
         return comprovante
 
-    formato = _detectar_formato(linhas)
+    # Detectar layout do comprovante (V1 com seções ou V2 auto-descritivo)
+    layout = _detectar_layout_boleto(linhas)
 
-    if formato == 'A':
-        _parse_formato_a(linhas, comprovante)
+    if layout == 'V2':
+        _parse_layout_v2(linhas, comprovante)
     else:
-        _parse_formato_b(linhas, comprovante)
+        # Layout V1: detectar formato OCR (A ou B)
+        formato = _detectar_formato(linhas)
+        if formato == 'A':
+            _parse_formato_a(linhas, comprovante)
+        else:
+            _parse_formato_b(linhas, comprovante)
 
     # Validação pós-parse: anula campos com valores inconsistentes (OCR errado)
     comprovante = _validar_comprovante(comprovante)

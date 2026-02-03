@@ -171,6 +171,66 @@ def comprovante_match_confirmar(lancamento_id):
 
 
 # =============================================================================
+# CONFIRMAR MATCH EM BATCH
+# =============================================================================
+
+@financeiro_bp.route('/comprovantes/api/match/confirmar-batch', methods=['POST'])
+@login_required
+def comprovante_match_confirmar_batch():
+    """
+    Confirma multiplos matches de uma vez (PENDENTE -> CONFIRMADO).
+
+    Body JSON:
+    {
+        "lancamento_ids": [1, 2, 3]
+    }
+    """
+    try:
+        from app.financeiro.services.comprovante_match_service import ComprovanteMatchService
+
+        dados = request.get_json(silent=True) or {}
+        lancamento_ids = dados.get('lancamento_ids', [])
+
+        if not lancamento_ids:
+            return jsonify({
+                'sucesso': False,
+                'erro': 'Nenhum lancamento_id informado',
+            }), 400
+
+        usuario = current_user.nome if hasattr(current_user, 'nome') else str(current_user)
+
+        service = ComprovanteMatchService()
+        confirmados = 0
+        erros = []
+
+        for lid in lancamento_ids:
+            resultado = service.confirmar_match(lid, usuario)
+            if resultado.get('sucesso'):
+                confirmados += 1
+            else:
+                erros.append({
+                    'lancamento_id': lid,
+                    'erro': resultado.get('erro', 'Erro desconhecido'),
+                })
+
+        logger.info(
+            f"Confirmar batch: {confirmados}/{len(lancamento_ids)} confirmados, "
+            f"{len(erros)} erros, usuario={usuario}"
+        )
+
+        return jsonify({
+            'sucesso': True,
+            'total_solicitados': len(lancamento_ids),
+            'confirmados': confirmados,
+            'erros': erros,
+        })
+
+    except Exception as e:
+        logger.error(f"Erro confirmar batch: {e}", exc_info=True)
+        return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+
+# =============================================================================
 # REJEITAR MATCH
 # =============================================================================
 

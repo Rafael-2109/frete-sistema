@@ -912,7 +912,7 @@ class ComprovanteMatchService:
                 if nf_candidata in nfs_conhecidas:
                     return {
                         'nf': nf_candidata,
-                        'parcela': 1,
+                        'parcela': None,
                         'metodo': 'PARCELA_UNICA',
                         'confianca': 85,
                     }
@@ -942,7 +942,7 @@ class ComprovanteMatchService:
                     if substr in nfs_conhecidas:
                         return {
                             'nf': substr,
-                            'parcela': 1,
+                            'parcela': None,
                             'metodo': 'BUSCA_EXAUSTIVA_SEM_PARCELA',
                             'confianca': 65,
                         }
@@ -951,7 +951,7 @@ class ComprovanteMatchService:
             nf_candidata = doc_limpo.lstrip('0') or '0'
             return {
                 'nf': nf_candidata,
-                'parcela': 1,
+                'parcela': None,
                 'metodo': 'FALLBACK_COMPLETO',
                 'confianca': 50,
             }

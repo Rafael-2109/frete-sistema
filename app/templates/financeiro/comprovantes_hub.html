@@ -321,15 +321,25 @@
     <div class="card shadow-sm">
         <div class="card-header bg-light d-flex justify-content-between align-items-center">
             <strong><i class="fas fa-table"></i> Comprovantes Importados</strong>
-            <button class="btn btn-sm btn-outline-primary" onclick="recarregarTabela()">
-                <i class="fas fa-sync"></i> Atualizar
-            </button>
+            <div class="d-flex gap-2">
+                <button type="button" id="btn-confirmar-selecionados" class="btn btn-sm btn-success"
+                        style="display: none;" onclick="confirmarSelecionados()">
+                    <i class="fas fa-check-double"></i> Confirmar Selecionados (<span id="contagem-selecionados">0</span>)
+                </button>
+                <button class="btn btn-sm btn-outline-primary" onclick="recarregarTabela()">
+                    <i class="fas fa-sync"></i> Atualizar
+                </button>
+            </div>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table id="tabela-comprovantes" class="table table-striped table-hover mb-0" style="width: 100%;">
                     <thead>
                         <tr>
+                            <th class="text-center" style="width: 35px;">
+                                <input type="checkbox" id="check-todos" class="form-check-input"
+                                       title="Selecionar todos pendentes">
+                            </th>
                             <th>Data</th>
                             <th>Beneficiário</th>
                             <th>Documento</th>
@@ -925,6 +935,23 @@ document.addEventListener('DOMContentLoaded', function() {
             dataSrc: 'dados',
         },
         columns: [
+            // ── COL 0: CHECKBOX (só para PENDENTE) ──
+            {
+                data: null,
+                render: function(val, type, row) {
+                    if (type !== 'display') return '';
+                    if (row.lancamento_status === 'PENDENTE' && row.lancamento_id) {
+                        return '<input type="checkbox" class="form-check-input check-item" ' +
+                               'data-lancamento-id="' + row.lancamento_id + '" ' +
+                               'data-comprovante-id="' + row.id + '">';
+                    }
+                    return '';
+                },
+                className: 'text-center',
+                orderable: false,
+                searchable: false,
+                width: '35px',
+            },
             // ── COL 1: DATA (Data Pgto + Vencimento + Atraso) ──
             {
                 data: 'data_pagamento',
@@ -1221,7 +1248,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 width: '35px',
             },
         ],
-        order: [[0, 'desc']],
+        order: [[1, 'desc']],
         language: {
             url: 'https://cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json',
         },
@@ -1234,7 +1261,95 @@ document.addEventListener('DOMContentLoaded', function() {
         tabela.ajax.reload(function() {
             const info = tabela.page.info();
             document.getElementById('total-comprovantes').textContent = info.recordsTotal;
+            // Resetar checkboxes apos reload
+            document.getElementById('check-todos').checked = false;
+            atualizarBtnConfirmar();
         });
+    };
+
+    // =========================================================================
+    // CHECKBOXES + CONFIRMAÇÃO EM LOTE
+    // =========================================================================
+
+    function atualizarBtnConfirmar() {
+        const selecionados = document.querySelectorAll('.check-item:checked');
+        const btn = document.getElementById('btn-confirmar-selecionados');
+        const contagem = document.getElementById('contagem-selecionados');
+
+        contagem.textContent = selecionados.length;
+        btn.style.display = selecionados.length > 0 ? 'inline-block' : 'none';
+    }
+
+    // Checkbox "selecionar todos" no header
+    document.getElementById('check-todos').addEventListener('change', function() {
+        const checked = this.checked;
+        document.querySelectorAll('.check-item').forEach(function(cb) {
+            cb.checked = checked;
+        });
+        atualizarBtnConfirmar();
+    });
+
+    // Delegacao de eventos para checkboxes individuais (DataTable recria o DOM)
+    $('#tabela-comprovantes').on('change', '.check-item', function() {
+        atualizarBtnConfirmar();
+
+        // Atualizar estado do "check-todos"
+        const total = document.querySelectorAll('.check-item').length;
+        const marcados = document.querySelectorAll('.check-item:checked').length;
+        document.getElementById('check-todos').checked = (total > 0 && total === marcados);
+    });
+
+    // Confirmar selecionados em lote
+    window.confirmarSelecionados = async function() {
+        const selecionados = document.querySelectorAll('.check-item:checked');
+        if (selecionados.length === 0) return;
+
+        const lancamentoIds = Array.from(selecionados).map(function(cb) {
+            return parseInt(cb.dataset.lancamentoId);
+        });
+
+        if (!confirm('Confirmar ' + lancamentoIds.length + ' match(es) selecionado(s)?')) return;
+
+        const btn = document.getElementById('btn-confirmar-selecionados');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Confirmando...';
+
+        try {
+            const resp = await fetchComRetry(
+                '/financeiro/comprovantes/api/match/confirmar-batch',
+                {
+                    method: 'POST',
+                    body: JSON.stringify({ lancamento_ids: lancamentoIds }),
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...getCsrfHeaders()
+                    }
+                }
+            );
+
+            const data = await resp.json();
+
+            if (data.sucesso) {
+                var msg = data.confirmados + ' de ' + data.total_solicitados + ' confirmado(s).';
+                if (data.erros && data.erros.length > 0) {
+                    msg += '\n\n' + data.erros.length + ' erro(s):';
+                    data.erros.forEach(function(e) {
+                        msg += '\n- ID ' + e.lancamento_id + ': ' + e.erro;
+                    });
+                }
+                alert(msg);
+                recarregarTabela();
+            } else {
+                alert('Erro: ' + (data.erro || 'Erro desconhecido'));
+            }
+        } catch (err) {
+            alert('Erro de conexao: ' + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-check-double"></i> Confirmar Selecionados (<span id="contagem-selecionados">0</span>)';
+            btn.style.display = 'none';
+            document.getElementById('check-todos').checked = false;
+        }
     };
 
     // =========================================================================

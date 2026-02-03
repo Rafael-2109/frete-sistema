@@ -1763,8 +1763,8 @@ class CarteiraService:
             from app.faturamento.models import FaturamentoProduto
             from app.separacao.models import Separacao
             from sqlalchemy import func
-            from app.utils.database_helpers import retry_on_ssl_error
-            
+            from app.utils.database_helpers import retry_on_ssl_error, ensure_connection
+
             # 🚀 OTIMIZAÇÃO: Buscar TODOS os dados em apenas 3 queries!
             
             # OTIMIZAÇÃO: Filtrar por pedidos_especificos ou modo incremental
@@ -1915,36 +1915,55 @@ class CarteiraService:
 
                 if pedidos_afetados:
                     logger.info(f"   ⚡ Modo incremental: carregando apenas {len(pedidos_afetados)} pedidos afetados...")
-                    todos_itens = CarteiraPrincipal.query.filter(
-                        CarteiraPrincipal.num_pedido.in_(list(pedidos_afetados))
-                    ).all()
+
+                    # Garantir conexão antes das queries incrementais
+                    ensure_connection()
+
+                    @retry_on_ssl_error(max_retries=3, backoff_factor=1.0)
+                    def buscar_carteira_incremental():
+                        """Busca carteira incremental com retry para evitar SSL timeout"""
+                        return CarteiraPrincipal.query.filter(
+                            CarteiraPrincipal.num_pedido.in_(list(pedidos_afetados))
+                        ).all()
+
+                    todos_itens = buscar_carteira_incremental()
                     logger.info(f"   ✅ {len(todos_itens)} itens carregados (apenas afetados)")
 
                     # Reprocessar faturamentos e separações apenas para pedidos afetados
-                    faturamentos = db.session.query(
-                        FaturamentoProduto.origem,
-                        FaturamentoProduto.cod_produto,
-                        func.sum(FaturamentoProduto.qtd_produto_faturado).label('qtd_faturada')
-                    ).filter(
-                        FaturamentoProduto.origem.in_(list(pedidos_afetados)),
-                        FaturamentoProduto.status_nf != 'Cancelado'
-                    ).group_by(
-                        FaturamentoProduto.origem,
-                        FaturamentoProduto.cod_produto
-                    ).all()
+                    @retry_on_ssl_error(max_retries=3, backoff_factor=1.0)
+                    def buscar_faturamentos_incremental():
+                        """Busca faturamentos incremental com retry para evitar SSL timeout"""
+                        return db.session.query(
+                            FaturamentoProduto.origem,
+                            FaturamentoProduto.cod_produto,
+                            func.sum(FaturamentoProduto.qtd_produto_faturado).label('qtd_faturada')
+                        ).filter(
+                            FaturamentoProduto.origem.in_(list(pedidos_afetados)),
+                            FaturamentoProduto.status_nf != 'Cancelado'
+                        ).group_by(
+                            FaturamentoProduto.origem,
+                            FaturamentoProduto.cod_produto
+                        ).all()
+
+                    faturamentos = buscar_faturamentos_incremental()
                     faturamentos_dict = {(f.origem, f.cod_produto): float(f.qtd_faturada or 0) for f in faturamentos}
 
-                    separacoes = db.session.query(
-                        Separacao.num_pedido,
-                        Separacao.cod_produto,
-                        func.sum(Separacao.qtd_saldo).label('qtd_em_separacao')
-                    ).filter(
-                        Separacao.num_pedido.in_(list(pedidos_afetados)),
-                        Separacao.sincronizado_nf == False
-                    ).group_by(
-                        Separacao.num_pedido,
-                        Separacao.cod_produto
-                    ).all()
+                    @retry_on_ssl_error(max_retries=3, backoff_factor=1.0)
+                    def buscar_separacoes_incremental():
+                        """Busca separações incremental com retry para evitar SSL timeout"""
+                        return db.session.query(
+                            Separacao.num_pedido,
+                            Separacao.cod_produto,
+                            func.sum(Separacao.qtd_saldo).label('qtd_em_separacao')
+                        ).filter(
+                            Separacao.num_pedido.in_(list(pedidos_afetados)),
+                            Separacao.sincronizado_nf == False
+                        ).group_by(
+                            Separacao.num_pedido,
+                            Separacao.cod_produto
+                        ).all()
+
+                    separacoes = buscar_separacoes_incremental()
                     separacoes_dict = {(s.num_pedido, s.cod_produto): float(s.qtd_em_separacao or 0) for s in separacoes}
             
             # 🆕 FASE 2.5: DETECTAR E PROCESSAR CANCELAMENTOS
@@ -2187,26 +2206,30 @@ class CarteiraService:
                 pedidos_com_alteracoes.add(aumento['num_pedido'])
             
             # PROTEÇÃO CRÍTICA: Processar pedidos removidos apenas se não estiverem faturados
+            # Garantir conexão antes do loop de verificação de separações
+            if itens_removidos:
+                ensure_connection()
+
             for num_pedido, _ in itens_removidos:
                 # CORREÇÃO: Verificar diretamente na tabela Separacao com sincronizado_nf=False
                 # em vez de usar a VIEW Pedido que ignora status='PREVISAO'
-                
+
                 # Buscar separações não sincronizadas (não faturadas)
                 try:
                     separacoes_nao_sincronizadas = Separacao.query.filter_by(
                         num_pedido=num_pedido,
                         sincronizado_nf=False  # CRÍTICO: apenas não sincronizadas
                     ).all()
-                    
+
                     if separacoes_nao_sincronizadas:
                         # Tem separações não faturadas, pode processar
                         pedidos_com_alteracoes.add(num_pedido)
-                        
+
                         # Log detalhado dos status encontrados
                         status_encontrados = set()
                         for sep in separacoes_nao_sincronizadas:
                             status_encontrados.add(sep.status)
-                        
+
                         status_str = ', '.join(sorted(status_encontrados))
                         logger.info(f"✅ Pedido {num_pedido} removido da carteira - será processado "
                                   f"({len(separacoes_nao_sincronizadas)} separações não sincronizadas com status: {status_str})")
@@ -2216,15 +2239,20 @@ class CarteiraService:
                             num_pedido=num_pedido,
                             sincronizado_nf=True
                         ).first()
-                        
+
                         if separacoes_sincronizadas:
                             logger.warning(f"🛡️ PROTEÇÃO: Pedido {num_pedido} removido mas NÃO será processado "
                                          f"(todas as separações já sincronizadas/faturadas)")
                         else:
                             logger.info(f"ℹ️ Pedido {num_pedido} removido - sem separações para processar")
-                            
+
                 except Exception as e:
                     logger.error(f"❌ Erro ao verificar separações do pedido {num_pedido}: {e}")
+                    # Tentar reconectar para o próximo pedido
+                    try:
+                        ensure_connection()
+                    except Exception:
+                        pass
                     # Em caso de erro, não adicionar para processamento por segurança
                     continue
             
@@ -2340,10 +2368,18 @@ class CarteiraService:
 
             registros_odoo_existentes = {}
             if pedidos_na_sincronizacao:
+                # Garantir conexão antes da query
+                ensure_connection()
+
+                @retry_on_ssl_error(max_retries=3, backoff_factor=1.0)
+                def buscar_registros_existentes():
+                    """Busca registros existentes com retry para evitar SSL timeout"""
+                    return db.session.query(CarteiraPrincipal).filter(
+                        CarteiraPrincipal.num_pedido.in_(list(pedidos_na_sincronizacao))
+                    ).all()
+
                 # Buscar APENAS produtos dos pedidos que vieram na sincronização atual
-                for item in db.session.query(CarteiraPrincipal).filter(
-                    CarteiraPrincipal.num_pedido.in_(list(pedidos_na_sincronizacao))
-                ).all():
+                for item in buscar_registros_existentes():
                     chave = (item.num_pedido, item.cod_produto)
                     registros_odoo_existentes[chave] = item
 
