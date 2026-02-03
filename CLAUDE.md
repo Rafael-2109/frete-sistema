@@ -86,6 +86,18 @@ def alterar_campo():
             db.session.rollback()
 ```
 
+### APOS ALTERAR MODELOS: Regenerar Schemas do Agente
+
+**OBRIGATORIO** apos adicionar/remover/alterar campos em qualquer modelo SQLAlchemy:
+
+```bash
+source .venv/bin/activate
+python .claude/skills/consultando-sql/scripts/generate_schemas.py
+```
+
+Atualiza `schemas/tables/*.json`, `catalog.json` e `relationships.json`.
+Sem isso, o agente web nao enxerga os campos novos.
+
 ---
 
 # INDICE DE REFERENCIAS

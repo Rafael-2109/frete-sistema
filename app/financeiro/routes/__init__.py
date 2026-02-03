@@ -29,7 +29,7 @@ financeiro_bp = Blueprint('financeiro', __name__, url_prefix='/financeiro')
 
 # Configuração de upload
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-UPLOAD_FOLDER = os.path.join(BASE_DIR, '..', '..', '..', 'uploads', 'financeiro')
+UPLOAD_FOLDER = os.path.normpath(os.path.join(BASE_DIR, '..', '..', '..', 'uploads', 'financeiro'))
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # Importar módulos de rotas (registra as rotas no blueprint)

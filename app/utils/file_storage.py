@@ -130,8 +130,14 @@ class FileStorage:
         # Criar diretórios intermediários se não existirem
         os.makedirs(os.path.dirname(full_path), exist_ok=True)
 
-        # Salvar arquivo no caminho completo
-        file.save(full_path)
+        # Salvar arquivo no caminho completo (suporta Werkzeug FileStorage e BytesIO)
+        if hasattr(file, 'save'):
+            file.save(full_path)
+        else:
+            # BytesIO ou similar — escrita manual
+            with open(full_path, 'wb') as f:
+                file.seek(0)
+                f.write(file.read())
 
         # Retorna caminho relativo para templates
         return f"uploads/{file_path}"

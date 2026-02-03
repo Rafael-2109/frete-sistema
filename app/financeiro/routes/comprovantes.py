@@ -17,7 +17,6 @@ Autor: Sistema de Fretes
 Data: 2026-01-29
 """
 
-import os
 import uuid
 import logging
 from io import BytesIO
@@ -27,7 +26,7 @@ from flask_login import login_required, current_user
 from sqlalchemy import desc
 from werkzeug.utils import secure_filename
 
-from app.financeiro.routes import financeiro_bp, UPLOAD_FOLDER
+from app.financeiro.routes import financeiro_bp
 from app.financeiro.models_comprovante import (
     ComprovantePagamentoBoleto,
     LancamentoComprovante,
@@ -36,9 +35,8 @@ from app.utils.file_storage import get_file_storage
 
 logger = logging.getLogger(__name__)
 
-# Pasta de upload temporário para batches
-COMPROVANTES_UPLOAD_DIR = os.path.join(UPLOAD_FOLDER, 'comprovantes')
-os.makedirs(COMPROVANTES_UPLOAD_DIR, exist_ok=True)
+# Pasta S3 para batches temporários de comprovantes
+COMPROVANTES_BATCH_S3_FOLDER = 'comprovantes_pagamento/batch'
 
 
 # =============================================================================
@@ -172,12 +170,11 @@ def comprovantes_api_upload_batch():
 
     Fluxo:
     1. Recebe PDFs via multipart/form-data
-    2. Salva em disco: uploads/comprovantes/batch_{uuid}/
-    3. Enfileira job no RQ
+    2. Faz upload para S3: comprovantes_pagamento/batch/{batch_id}/
+    3. Enfileira job no RQ com paths S3
     4. Retorna batch_id para polling de progresso
 
     O frontend pode enviar em chunks de 50 para respeitar MAX_CONTENT_LENGTH.
-    Se 'batch_id' for enviado como form field, adiciona ao batch existente.
     """
     from app.portal.workers import enqueue_job
     from app.financeiro.workers.comprovante_batch_jobs import processar_batch_comprovantes_job
@@ -206,24 +203,34 @@ def comprovantes_api_upload_batch():
         # Gerar batch_id
         batch_id = str(uuid.uuid4())
 
-        # Criar pasta temporária para o batch
-        pasta_batch = os.path.join(COMPROVANTES_UPLOAD_DIR, f'batch_{batch_id}')
-        os.makedirs(pasta_batch, exist_ok=True)
-
-        # Salvar PDFs no disco
+        # Upload PDFs para S3 (intermediário entre web service e worker)
+        storage = get_file_storage()
         arquivos_info = []
         for arquivo in arquivos_validos:
             nome = secure_filename(arquivo.filename)
-            # Garantir unicidade no nome (pode ter duplicatas de nomes)
-            caminho = os.path.join(pasta_batch, f'{len(arquivos_info):05d}_{nome}')
             try:
-                arquivo.save(caminho)
-                arquivos_info.append({
-                    'nome': nome,
-                    'caminho': caminho,
-                })
+                # Ler bytes do arquivo
+                pdf_bytes = arquivo.read()
+                pdf_io = BytesIO(pdf_bytes)
+                pdf_io.name = nome
+
+                # Upload para S3 na pasta do batch
+                s3_path = storage.save_file(
+                    file=pdf_io,
+                    folder=f'{COMPROVANTES_BATCH_S3_FOLDER}/{batch_id}',
+                    filename=f'{len(arquivos_info):05d}_{nome}',
+                    allowed_extensions=['pdf'],
+                )
+
+                if s3_path:
+                    arquivos_info.append({
+                        'nome': nome,
+                        's3_path': s3_path,
+                    })
+                else:
+                    logger.warning(f"Falha ao enviar PDF para S3: {nome}")
             except Exception as e:
-                logger.warning(f"Erro ao salvar PDF {nome}: {e}")
+                logger.warning(f"Erro ao enviar PDF {nome} para S3: {e}")
 
         if not arquivos_info:
             return jsonify({

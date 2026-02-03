@@ -7,10 +7,10 @@ Executados via Redis Queue na fila 'default'.
 
 Fluxo:
 1. Usuário faz upload de N PDFs via navegador
-2. Rota salva PDFs em disco e enfileira job com batch_id (UUID)
-3. Worker processa cada PDF ISOLADAMENTE via OCR
+2. Rota faz upload dos PDFs para S3 e enfileira job com batch_id (UUID)
+3. Worker baixa cada PDF do S3 e processa ISOLADAMENTE via OCR
 4. Progresso armazenado no Redis para acompanhamento em tempo real
-5. PDFs removidos do disco após processamento
+5. PDFs temporários removidos do S3 após processamento
 
 Timeout: 60 minutos para batch completo (OCR é CPU-intensivo)
 
@@ -136,16 +136,17 @@ def processar_batch_comprovantes_job(
     Processa batch de comprovantes PDF de forma assíncrona.
 
     Cada arquivo é processado ISOLADAMENTE:
+    - Baixa PDF do S3 (upload feito pelo web service)
     - OCR via tesserocr
     - Commit separado por comprovante
     - Erro em um não afeta os demais
     - Progresso atualizado no Redis após cada arquivo
-    - PDFs removidos do disco após processamento
+    - PDFs temporários removidos do S3 após processamento
 
     Args:
         batch_id: UUID do batch
-        arquivos_info: Lista de dicts com caminho e nome dos PDFs:
-            [{'nome': 'comprovante.pdf', 'caminho': '/path/to/file.pdf'}, ...]
+        arquivos_info: Lista de dicts com path S3 e nome dos PDFs:
+            [{'nome': 'comprovante.pdf', 's3_path': 'comprovantes_pagamento/batch/...'}, ...]
         usuario_nome: Nome do usuário que fez upload
 
     Returns:
@@ -190,7 +191,7 @@ def processar_batch_comprovantes_job(
 
             for idx, arq in enumerate(arquivos_info, 1):
                 nome = arq.get('nome', f'arquivo_{idx}.pdf')
-                caminho = arq.get('caminho', '')
+                batch_s3_path = arq.get('s3_path', '')
 
                 logger.info(f"[Comprovante Batch] Processando {idx}/{len(arquivos_info)}: {nome}")
 
@@ -199,33 +200,39 @@ def processar_batch_comprovantes_job(
                 _atualizar_progresso(batch_id, progresso)
 
                 try:
-                    # Ler PDF do disco
-                    if not os.path.exists(caminho):
-                        raise FileNotFoundError(f"Arquivo não encontrado: {caminho}")
+                    # Baixar PDF do S3 (arquivo temporário do batch)
+                    if not batch_s3_path:
+                        raise FileNotFoundError(f"Caminho S3 não informado para: {nome}")
 
-                    with open(caminho, 'rb') as f:
-                        pdf_bytes = f.read()
+                    storage = get_file_storage()
+                    pdf_buffer = BytesIO()
+                    storage.s3_client.download_fileobj(
+                        storage.bucket_name,
+                        batch_s3_path,
+                        pdf_buffer,
+                    )
+                    pdf_buffer.seek(0)
+                    pdf_bytes = pdf_buffer.read()
 
-                    # Upload PDF ao S3 (antes do processamento OCR)
-                    s3_path = None
+                    # Upload PDF definitivo ao S3 (path permanente)
+                    s3_path_definitivo = None
                     try:
-                        storage = get_file_storage()
                         pdf_io = BytesIO(pdf_bytes)
                         pdf_io.name = nome
-                        s3_path = storage.save_file(
+                        s3_path_definitivo = storage.save_file(
                             file=pdf_io,
                             folder='comprovantes_pagamento',
                             allowed_extensions=['pdf'],
                         )
                     except Exception as e:
-                        logger.warning(f"[Comprovante Batch] Erro ao salvar PDF no S3: {nome}: {e}")
+                        logger.warning(f"[Comprovante Batch] Erro ao salvar PDF definitivo no S3: {nome}: {e}")
 
                     # Processar via service (OCR + persistência com retry)
                     res = processar_pdf_comprovantes(
                         arquivo_bytes=pdf_bytes,
                         nome_arquivo=nome,
                         usuario=usuario_nome,
-                        arquivo_s3_path=s3_path,
+                        arquivo_s3_path=s3_path_definitivo,
                     )
 
                     # Acumular stats
@@ -266,12 +273,16 @@ def processar_batch_comprovantes_job(
                     progresso['detalhes'] = resultado['detalhes'][-200:]
 
                 finally:
-                    # Limpar PDF do disco após processar
+                    # Limpar PDF temporário do batch no S3 após processar
                     try:
-                        if caminho and os.path.exists(caminho):
-                            os.remove(caminho)
+                        if batch_s3_path:
+                            storage = get_file_storage()
+                            storage.s3_client.delete_object(
+                                Bucket=storage.bucket_name,
+                                Key=batch_s3_path,
+                            )
                     except Exception as e:
-                        logger.warning(f"Erro ao remover PDF temporário {caminho}: {e}")
+                        logger.warning(f"Erro ao remover PDF temporário do S3 {batch_s3_path}: {e}")
 
                 # Atualizar progresso — arquivo processado
                 progresso['arquivos_processados'] = idx
@@ -294,18 +305,25 @@ def processar_batch_comprovantes_job(
 
     _atualizar_progresso(batch_id, progresso)
 
-    # Limpar pasta do batch
+    # Limpar arquivos restantes do S3 (em caso de erro em algum arquivo)
     try:
         if arquivos_info:
-            pasta_batch = os.path.dirname(arquivos_info[0].get('caminho', ''))
-            if pasta_batch and os.path.isdir(pasta_batch) and 'batch_' in pasta_batch:
-                # Remover arquivos restantes (em caso de erro)
-                for f in os.listdir(pasta_batch):
-                    os.remove(os.path.join(pasta_batch, f))
-                os.rmdir(pasta_batch)
-                logger.info(f"[Comprovante Batch] Pasta temporária removida: {pasta_batch}")
+            with _app_context_safe():
+                from app.utils.file_storage import get_file_storage as _get_storage
+                storage = _get_storage()
+                for arq in arquivos_info:
+                    s3_key = arq.get('s3_path', '')
+                    if s3_key:
+                        try:
+                            storage.s3_client.delete_object(
+                                Bucket=storage.bucket_name,
+                                Key=s3_key,
+                            )
+                        except Exception:
+                            pass  # Já pode ter sido deletado no finally
+                logger.info(f"[Comprovante Batch] Limpeza S3 concluída para batch {batch_id}")
     except Exception as e:
-        logger.warning(f"Erro ao limpar pasta batch: {e}")
+        logger.warning(f"Erro ao limpar batch S3: {e}")
 
     logger.info(
         f"[Comprovante Batch] Concluído - batch_id: {batch_id} | "
