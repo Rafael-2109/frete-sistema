@@ -482,6 +482,148 @@ class BaixaPagamentosService:
                 raise
 
     # =========================================================================
+    # ATUALIZAÇÃO DE CAMPOS DO EXTRATO (PÓS-RECONCILIAÇÃO)
+    # =========================================================================
+
+    def atualizar_statement_line_partner(self, statement_line_id: int, partner_id: int) -> bool:
+        """
+        Atualiza o partner_id da account.bank.statement.line no Odoo.
+
+        Necessário porque o Odoo não mapeia automaticamente boletos
+        (payment_ref genérico como "DÉB.TIT.COMPE").
+
+        Args:
+            statement_line_id: ID da account.bank.statement.line
+            partner_id: ID do res.partner (fornecedor)
+
+        Returns:
+            True se atualizou, False se falhou
+        """
+        try:
+            self.connection.execute_kw(
+                'account.bank.statement.line',
+                'write',
+                [[statement_line_id], {'partner_id': partner_id}]
+            )
+            logger.info(f"  Partner atualizado na statement_line {statement_line_id}: partner_id={partner_id}")
+            return True
+        except Exception as e:
+            logger.warning(f"  Falha ao atualizar partner da statement_line {statement_line_id}: {e}")
+            return False
+
+    def trocar_conta_move_line_extrato(self, move_id: int, conta_origem: int, conta_destino: int) -> bool:
+        """
+        Troca o account_id da move line do extrato.
+
+        Necessário porque o Odoo usa CONTA_TRANSITORIA (22199) por padrão,
+        mas o correto para conciliação com payment é CONTA_PAGAMENTOS_PENDENTES (26868).
+
+        Args:
+            move_id: ID do account.move do extrato
+            conta_origem: ID da conta atual (22199 TRANSITÓRIA)
+            conta_destino: ID da conta desejada (26868 PENDENTES)
+
+        Returns:
+            True se atualizou, False se falhou
+        """
+        try:
+            # Buscar linha de débito na conta de origem
+            linhas = self.connection.search_read(
+                'account.move.line',
+                [
+                    ['move_id', '=', move_id],
+                    ['account_id', '=', conta_origem],
+                    ['debit', '>', 0]
+                ],
+                fields=['id'],
+                limit=1
+            )
+
+            if not linhas:
+                logger.warning(f"  Linha com conta {conta_origem} não encontrada no move {move_id}")
+                return False
+
+            line_id = linhas[0]['id']
+            self.connection.execute_kw(
+                'account.move.line',
+                'write',
+                [[line_id], {'account_id': conta_destino}]
+            )
+            logger.info(f"  Conta atualizada: move_line {line_id}, {conta_origem} → {conta_destino}")
+            return True
+        except Exception as e:
+            logger.warning(f"  Falha ao trocar conta do extrato move {move_id}: {e}")
+            return False
+
+    def atualizar_rotulo_extrato(self, move_id: int, statement_line_id: int, rotulo: str) -> bool:
+        """
+        Atualiza o rótulo (name) nas move lines do extrato E payment_ref da statement line.
+
+        Padrão correto: "Pagamento de fornecedor R$ {valor} - {fornecedor} - {data}"
+
+        Args:
+            move_id: ID do account.move do extrato
+            statement_line_id: ID da account.bank.statement.line
+            rotulo: Texto do rótulo formatado
+
+        Returns:
+            True se atualizou, False se falhou
+        """
+        try:
+            # 1. Atualizar payment_ref da statement line
+            self.connection.execute_kw(
+                'account.bank.statement.line',
+                'write',
+                [[statement_line_id], {'payment_ref': rotulo}]
+            )
+
+            # 2. Atualizar name das move lines do extrato
+            linhas = self.connection.search_read(
+                'account.move.line',
+                [['move_id', '=', move_id]],
+                fields=['id'],
+            )
+            if linhas:
+                line_ids = [l['id'] for l in linhas]
+                self.connection.execute_kw(
+                    'account.move.line',
+                    'write',
+                    [line_ids, {'name': rotulo}]
+                )
+
+            logger.info(f"  Rótulo atualizado: stmt={statement_line_id}, move={move_id}")
+            return True
+        except Exception as e:
+            logger.warning(f"  Falha ao atualizar rótulo do extrato: {e}")
+            return False
+
+    @staticmethod
+    def formatar_rotulo_pagamento(valor: float, nome_fornecedor: str, data_pagamento) -> str:
+        """
+        Formata o rótulo padrão para pagamentos de fornecedor.
+
+        Padrão: "Pagamento de fornecedor R$ {valor} - {fornecedor} - {data}"
+
+        Exemplo: "Pagamento de fornecedor R$ 657,80 - UNITECH SERVICOS - 02/02/2026"
+        """
+        # Formatar valor no padrão brasileiro
+        valor_formatado = f"{valor:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+
+        # Formatar data
+        if hasattr(data_pagamento, 'strftime'):
+            data_str = data_pagamento.strftime('%d/%m/%Y')
+        else:
+            # Se for string YYYY-MM-DD, converter
+            from datetime import datetime as dt_cls
+            try:
+                dt = dt_cls.strptime(str(data_pagamento), '%Y-%m-%d')
+                data_str = dt.strftime('%d/%m/%Y')
+            except (ValueError, TypeError):
+                data_str = str(data_pagamento)
+
+        return f"Pagamento de fornecedor R$ {valor_formatado} - {nome_fornecedor} - {data_str}"
+
+    # =========================================================================
     # SNAPSHOT
     # =========================================================================
 

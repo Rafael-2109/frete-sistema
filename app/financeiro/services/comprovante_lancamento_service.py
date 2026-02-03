@@ -170,14 +170,45 @@ class ComprovanteLancamentoService:
 
             # 5. Reconciliar payment com extrato (se comprovante tem vínculo Odoo)
             if credit_line_id and comp.odoo_statement_line_id and comp.odoo_move_id:
+                # 5a. Trocar conta do extrato: TRANSITÓRIA → PENDENTES (ANTES de reconciliar)
+                from app.financeiro.services.baixa_pagamentos_service import (
+                    CONTA_TRANSITORIA, CONTA_PAGAMENTOS_PENDENTES
+                )
+                self.baixa_service.trocar_conta_move_line_extrato(
+                    move_id=comp.odoo_move_id,
+                    conta_origem=CONTA_TRANSITORIA,
+                    conta_destino=CONTA_PAGAMENTOS_PENDENTES,
+                )
+
+                # 5b. Buscar linha de débito do extrato (agora na conta PENDENTES)
                 debit_line_extrato = self.baixa_service.buscar_linha_debito_extrato(
                     comp.odoo_move_id
                 )
                 if debit_line_extrato:
+                    # 5c. Reconciliar payment com extrato
                     self.baixa_service.reconciliar(credit_line_id, debit_line_extrato)
                     logger.info("  Reconciliado: payment ↔ extrato")
 
-                    # Buscar full_reconcile_id do extrato
+                    # 5d. Atualizar partner_id da statement line
+                    self.baixa_service.atualizar_statement_line_partner(
+                        statement_line_id=comp.odoo_statement_line_id,
+                        partner_id=lanc.odoo_partner_id,
+                    )
+
+                    # 5e. Atualizar rótulo do extrato
+                    from app.financeiro.services.baixa_pagamentos_service import BaixaPagamentosService
+                    rotulo = BaixaPagamentosService.formatar_rotulo_pagamento(
+                        valor=float(comp.valor_pago),
+                        nome_fornecedor=lanc.odoo_partner_name or '',
+                        data_pagamento=comp.data_pagamento,
+                    )
+                    self.baixa_service.atualizar_rotulo_extrato(
+                        move_id=comp.odoo_move_id,
+                        statement_line_id=comp.odoo_statement_line_id,
+                        rotulo=rotulo,
+                    )
+
+                    # 5f. Buscar full_reconcile_id do extrato
                     linha_extrato = self.baixa_service.connection.search_read(
                         'account.move.line',
                         [['id', '=', debit_line_extrato]],

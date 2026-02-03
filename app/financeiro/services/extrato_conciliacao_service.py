@@ -237,13 +237,20 @@ class ExtratoConciliacaoService:
                     f"saldo={payment_pendente_line.get('amount_residual')}"
                 )
 
+                # Trocar conta do extrato ANTES de reconciliar
+                self._trocar_conta_extrato(item.move_id)
+
                 # Executar reconciliação: linha PENDENTES <-> linha EXTRATO
                 logger.info(
                     f"  Reconciliando MULTI-COMPANY: "
                     f"payment_line={payment_pendente_line_id} (PENDENTES) <-> "
-                    f"extrato_line={item.credit_line_id} (TRANSITÓRIA)"
+                    f"extrato_line={item.credit_line_id}"
                 )
                 self._executar_reconcile(payment_pendente_line_id, item.credit_line_id)
+
+                # Atualizar partner e rótulo do extrato
+                p_id, p_name = self._extrair_partner_dados(titulo_odoo)
+                self._atualizar_campos_extrato(item, p_id, p_name)
 
                 # Buscar partial_reconcile criado na linha do payment
                 item.partial_reconcile_id = self._buscar_partial_reconcile_linha(payment_pendente_line_id)
@@ -314,11 +321,20 @@ class ExtratoConciliacaoService:
                 # MESMA EMPRESA: Reconciliar diretamente
                 # =====================================================================
                 logger.info(f"  Mesma empresa - reconciliação direta")
+
+                # Trocar conta do extrato ANTES de reconciliar
+                self._trocar_conta_extrato(item.move_id)
+
                 logger.info(
                     f"  Reconciliando DIRETO: "
                     f"credit_line={item.credit_line_id} <-> titulo={titulo_odoo_id}"
                 )
                 self._executar_reconcile(item.credit_line_id, titulo_odoo_id)
+
+                # Atualizar partner e rótulo do extrato
+                p_id, p_name = self._extrair_partner_dados(titulo_odoo)
+                self._atualizar_campos_extrato(item, p_id, p_name)
+
                 item.partial_reconcile_id = self._buscar_partial_reconcile(titulo_odoo_id)
 
             else:
@@ -405,11 +421,20 @@ class ExtratoConciliacaoService:
                 payment_pendente_line = self._buscar_linha_pendentes_payment(payment_id)
                 if payment_pendente_line:
                     payment_pendente_line_id = payment_pendente_line['id']
+
+                    # Trocar conta do extrato ANTES de reconciliar
+                    self._trocar_conta_extrato(item.move_id)
+
                     logger.info(
                         f"  Reconciliando extrato: "
                         f"payment_line={payment_pendente_line_id} <-> extrato_line={item.credit_line_id}"
                     )
                     self._executar_reconcile(payment_pendente_line_id, item.credit_line_id)
+
+                    # Atualizar partner e rótulo do extrato
+                    p_id, p_name = self._extrair_partner_dados(titulo_odoo)
+                    self._atualizar_campos_extrato(item, p_id, p_name)
+
                     item.partial_reconcile_id = self._buscar_partial_reconcile_linha(payment_pendente_line_id)
                 else:
                     logger.warning(f"  Linha PENDENTES não encontrada - extrato não conciliado")
@@ -664,6 +689,129 @@ class ExtratoConciliacaoService:
             # Ignorar erro de serialização - operação foi executada
             if "cannot marshal None" not in str(e):
                 raise
+
+    # =========================================================================
+    # ATUALIZAÇÃO DE CAMPOS DO EXTRATO (PÓS-RECONCILIAÇÃO)
+    # =========================================================================
+
+    def _trocar_conta_extrato(self, move_id: int) -> bool:
+        """
+        Troca account_id da move line do extrato: TRANSITÓRIA → PENDENTES.
+
+        Deve ser chamado ANTES da reconciliação, pois após reconciliar
+        pode não ser possível alterar a move line.
+
+        Args:
+            move_id: ID do account.move do extrato
+
+        Returns:
+            True se trocou, False se não encontrou ou falhou
+        """
+        if not move_id:
+            return False
+        try:
+            linhas = self.connection.search_read(
+                'account.move.line',
+                [
+                    ['move_id', '=', move_id],
+                    ['account_id', '=', CONTA_TRANSITORIA],
+                    ['debit', '>', 0]
+                ],
+                fields=['id'],
+                limit=1
+            )
+            if not linhas:
+                return False
+            self.connection.execute_kw(
+                'account.move.line',
+                'write',
+                [[linhas[0]['id']], {'account_id': CONTA_PAGAMENTOS_PENDENTES}]
+            )
+            logger.info(
+                f"  Conta atualizada: move_line {linhas[0]['id']}, "
+                f"{CONTA_TRANSITORIA} → {CONTA_PAGAMENTOS_PENDENTES}"
+            )
+            return True
+        except Exception as e:
+            logger.warning(f"  Falha ao trocar conta do extrato move {move_id}: {e}")
+            return False
+
+    def _atualizar_campos_extrato(
+        self, item: ExtratoItem, partner_id: int, partner_name: str
+    ) -> None:
+        """
+        Atualiza partner_id e rótulo do extrato no Odoo (PÓS reconciliação).
+
+        Corrige campos que o Odoo não preenche automaticamente para boletos:
+        1. partner_id da statement line
+        2. name/rótulo das move lines e payment_ref da statement line
+
+        Args:
+            item: ExtratoItem com statement_line_id e move_id
+            partner_id: ID do res.partner (fornecedor/cliente)
+            partner_name: Nome do fornecedor/cliente
+        """
+        if not item.statement_line_id or not item.move_id:
+            return
+
+        # 1. Atualizar partner_id da statement line
+        try:
+            self.connection.execute_kw(
+                'account.bank.statement.line',
+                'write',
+                [[item.statement_line_id], {'partner_id': partner_id}]
+            )
+            logger.info(
+                f"  Partner atualizado: statement_line "
+                f"{item.statement_line_id} → partner_id={partner_id}"
+            )
+        except Exception as e:
+            logger.warning(f"  Falha ao atualizar partner: {e}")
+
+        # 2. Atualizar rótulo
+        try:
+            from app.financeiro.services.baixa_pagamentos_service import BaixaPagamentosService
+            rotulo = BaixaPagamentosService.formatar_rotulo_pagamento(
+                valor=abs(float(item.valor)),
+                nome_fornecedor=partner_name or '',
+                data_pagamento=item.data_transacao,
+            )
+
+            # payment_ref da statement line
+            self.connection.execute_kw(
+                'account.bank.statement.line',
+                'write',
+                [[item.statement_line_id], {'payment_ref': rotulo}]
+            )
+
+            # name das move lines do extrato
+            linhas = self.connection.search_read(
+                'account.move.line',
+                [['move_id', '=', item.move_id]],
+                fields=['id'],
+            )
+            if linhas:
+                line_ids = [l['id'] for l in linhas]
+                self.connection.execute_kw(
+                    'account.move.line',
+                    'write',
+                    [line_ids, {'name': rotulo}]
+                )
+            logger.info(f"  Rótulo atualizado: {rotulo[:60]}...")
+        except Exception as e:
+            logger.warning(f"  Falha ao atualizar rótulo: {e}")
+
+    def _extrair_partner_dados(self, titulo_odoo: Dict) -> tuple:
+        """
+        Extrai partner_id (int) e partner_name (str) do título Odoo.
+
+        Returns:
+            Tuple (partner_id, partner_name)
+        """
+        partner = titulo_odoo.get('partner_id')
+        if isinstance(partner, (list, tuple)):
+            return partner[0], partner[1]
+        return partner, ''
 
     def _buscar_partial_reconcile(self, titulo_id: int) -> Optional[int]:
         """Busca o último partial_reconcile criado para o título."""
@@ -1124,8 +1272,15 @@ class ExtratoConciliacaoService:
                 )
 
                 try:
+                    # Trocar conta do extrato ANTES de reconciliar
+                    self._trocar_conta_extrato(item.move_id)
+
                     # Executar reconciliação no Odoo
                     self._executar_reconcile(payment_pendente_line_id, item.credit_line_id)
+
+                    # Atualizar partner e rótulo do extrato
+                    p_id, p_name = self._extrair_partner_dados(titulo_odoo)
+                    self._atualizar_campos_extrato(item, p_id, p_name)
 
                     # Buscar partial_reconcile criado
                     item.partial_reconcile_id = self._buscar_partial_reconcile_linha(
