@@ -47,7 +47,7 @@ RELATIONSHIPS_PATH = os.path.join(SCHEMAS_DIR, 'relationships.json')
 CORE_TABLES = {
     'carteira_principal', 'separacao', 'movimentacao_estoque',
     'programacao_producao', 'cadastro_palletizacao', 'faturamento_produto',
-    'embarques', 'embarque_itens', 'saldo_standby',
+    'embarques', 'embarque_itens',
 }
 
 # Keywords SQL proibidas (case-insensitive)
@@ -140,9 +140,33 @@ class SchemaProvider:
         # Cache de schemas detalhados já carregados
         self._table_cache = {}
 
-        # Pré-popular cache com tabelas core do schema.json manual
+        # Indexar metadados core (business_rules, description) por nome de tabela
+        self._core_metadata = {}
         for table in self.core_schema.get('tables', []):
-            self._table_cache[table['name']] = table
+            self._core_metadata[table['name']] = table
+
+        # Pré-carregar tabelas core fazendo MERGE:
+        # - Campos/indices/FKs: do JSON individual (fonte de verdade)
+        # - business_rules/description: do schema.json core (enriquecimento)
+        for table_name in list(self._core_metadata.keys()):
+            individual_path = os.path.join(TABLES_DIR, f"{table_name}.json")
+            try:
+                with open(individual_path, 'r', encoding='utf-8') as f:
+                    schema = json.load(f)
+                # Enriquecer com metadados core
+                core = self._core_metadata[table_name]
+                if core.get('business_rules'):
+                    schema['business_rules'] = core['business_rules']
+                if core.get('description') and not schema.get('description'):
+                    schema['description'] = core['description']
+                self._table_cache[table_name] = schema
+            except (FileNotFoundError, json.JSONDecodeError):
+                # Fallback: usar core puro se JSON individual não existe
+                self._table_cache[table_name] = self._core_metadata[table_name]
+                logger.warning(
+                    f"JSON individual não encontrado para tabela core '{table_name}', "
+                    f"usando schema.json (pode estar desatualizado)"
+                )
 
         # Mapa rápido: tabela -> True para validação
         self._known_tables = set()
