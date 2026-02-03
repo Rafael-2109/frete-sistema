@@ -604,6 +604,35 @@ Nunca invente informações."""
         except Exception as e:
             logger.warning(f"[AGENT_CLIENT] Erro ao registrar Custom Tool memory: {e}")
 
+        # =================================================================
+        # MCP Schema Tool (descoberta de schema para operações de cadastro)
+        # =================================================================
+        try:
+            from ..tools.schema_mcp_tool import schema_server
+            if schema_server is not None:
+                mcp_servers = options_dict.get("mcp_servers", {})
+                mcp_servers["schema"] = schema_server
+                options_dict["mcp_servers"] = mcp_servers
+
+                # Adicionar tools na allowed_tools
+                allowed = options_dict.get("allowed_tools", [])
+                schema_tool_names = [
+                    "mcp__schema__consultar_schema",
+                    "mcp__schema__consultar_valores_campo",
+                ]
+                for tool_name in schema_tool_names:
+                    if tool_name not in allowed:
+                        allowed.append(tool_name)
+                options_dict["allowed_tools"] = allowed
+
+                logger.info("[AGENT_CLIENT] Custom Tool MCP 'schema' registrada (2 operações)")
+            else:
+                logger.debug("[AGENT_CLIENT] schema_server é None — claude_agent_sdk não disponível")
+        except ImportError:
+            logger.debug("[AGENT_CLIENT] Custom Tool schema não disponível (módulo não encontrado)")
+        except Exception as e:
+            logger.warning(f"[AGENT_CLIENT] Erro ao registrar Custom Tool schema: {e}")
+
         return ClaudeAgentOptions(**options_dict)
 
     async def _stream_response(
@@ -1003,6 +1032,57 @@ Nunca invente informações."""
                     content={'text': full_text, 'session_id': result_session_id,
                              'error_recovery': True},
                     metadata={'error_type': 'json_decode_error'}
+                )
+
+        except BaseExceptionGroup as eg:
+            # Python 3.11+: asyncio.TaskGroup envolve erros de tools paralelas
+            # em BaseExceptionGroup, que herda de BaseException (NÃO Exception).
+            # Sem este handler, o erro propaga sem ser capturado.
+            elapsed_total = time.time() - stream_start_time
+            sub_exceptions = list(eg.exceptions)
+            sub_messages = [f"{type(se).__name__}: {se}" for se in sub_exceptions]
+
+            logger.error(
+                f"[AGENT_SDK] ExceptionGroup {elapsed_total:.1f}s | "
+                f"{len(sub_exceptions)} sub-exceptions: {'; '.join(sub_messages[:3])}",
+                exc_info=True
+            )
+
+            # Mensagem amigável baseada na primeira sub-exception
+            first_error = sub_exceptions[0] if sub_exceptions else eg
+            error_msg = str(first_error)
+
+            user_message = "Erro temporário ao executar ferramentas. Tente novamente."
+            if 'timeout' in error_msg.lower():
+                user_message = "Tempo limite excedido. Tente uma consulta mais simples."
+            elif 'connection' in error_msg.lower():
+                user_message = "Erro de conexão com a API. Tente novamente em alguns segundos."
+
+            yield StreamEvent(
+                type='error',
+                content=user_message,
+                metadata={
+                    'error_type': 'exception_group',
+                    'sub_exception_count': len(sub_exceptions),
+                    'original_error': error_msg[:500],
+                    'elapsed_seconds': elapsed_total,
+                    'last_tool': current_tool_name,
+                }
+            )
+
+            if not done_emitted:
+                done_emitted = True
+                yield StreamEvent(
+                    type='done',
+                    content={
+                        'text': full_text,
+                        'input_tokens': input_tokens,
+                        'output_tokens': output_tokens,
+                        'session_id': result_session_id,
+                        'tool_calls': len(tool_calls),
+                        'error_recovery': True,
+                    },
+                    metadata={'error_type': 'exception_group'}
                 )
 
         except Exception as e:

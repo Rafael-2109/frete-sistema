@@ -56,7 +56,8 @@
       "Bash(pip show:*)",
       "Bash(AGENT_TEXT_TO_SQL=true python:*)",
       "WebFetch(domain:www.anthropic.com)",
-      "WebFetch(domain:docs.claude.com)"
+      "WebFetch(domain:docs.claude.com)",
+      "Bash(sort:*)"
     ],
     "deny": []
   },

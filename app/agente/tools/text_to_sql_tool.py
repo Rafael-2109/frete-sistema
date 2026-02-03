@@ -51,7 +51,7 @@ def _get_pipeline():
     """
     if not hasattr(_get_pipeline, '_instance'):
         try:
-            from text_to_sql import TextToSQLPipeline
+            from text_to_sql import TextToSQLPipeline  # pyright: ignore[reportMissingImports]
             _get_pipeline._instance = TextToSQLPipeline()
             logger.info("[SQL_TOOL] TextToSQLPipeline instanciado com sucesso")
         except Exception as e:

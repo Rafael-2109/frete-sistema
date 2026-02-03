@@ -42,6 +42,8 @@ redis==5.0.8
 rq==1.16.2  # Redis Queue para processamento em background (atualizado)
 rq-dashboard==0.6.1  # Dashboard para monitorar jobs (opcional)
 APScheduler==3.11.0
+whitenoise==6.8.2  # Serve arquivos estaticos com compressao e cache no WSGI layer
+Flask-Compress==1.17  # Compressao gzip de respostas dinamicas (HTML, JSON)
 
 # ==========================================
 # VALIDATION

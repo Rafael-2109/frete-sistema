@@ -290,9 +290,21 @@ async def _async_stream_sdk_client(
             if should_continue:
                 continue
 
-    except Exception as e:
-        error_str = str(e)
-        logger.error(f"[AGENTE] Erro no stream: {error_str}", exc_info=True)
+    except (Exception, BaseExceptionGroup) as e:
+        if isinstance(e, BaseExceptionGroup):
+            sub_exceptions = list(e.exceptions)
+            error_str = (
+                f"Erro em ferramentas paralelas ({len(sub_exceptions)} erros): "
+                f"{sub_exceptions[0]}" if sub_exceptions else str(e)
+            )
+            logger.error(
+                f"[AGENTE] ExceptionGroup no stream: {len(sub_exceptions)} sub-exceptions",
+                exc_info=True
+            )
+        else:
+            error_str = str(e)
+            logger.error(f"[AGENTE] Erro no stream: {error_str}", exc_info=True)
+
         response_state['error_message'] = error_str
         event_queue.put(_sse_event('error', {
             'message': error_str[:200],
@@ -551,9 +563,20 @@ def _stream_chat_response(
             asyncio.run(async_stream_with_timeout())
             logger.info("[AGENTE] asyncio.run() completado com sucesso")
 
-        except Exception as e:
-            error_msg = str(e)
-            logger.error(f"[AGENTE] ERRO FATAL na thread: {error_msg}", exc_info=True)
+        except (Exception, BaseExceptionGroup) as e:
+            if isinstance(e, BaseExceptionGroup):
+                sub_exceptions = list(e.exceptions)
+                error_msg = (
+                    f"ExceptionGroup ({len(sub_exceptions)} erros): "
+                    f"{sub_exceptions[0]}" if sub_exceptions else str(e)
+                )
+                logger.error(
+                    f"[AGENTE] ExceptionGroup FATAL na thread: {error_msg}",
+                    exc_info=True
+                )
+            else:
+                error_msg = str(e)
+                logger.error(f"[AGENTE] ERRO FATAL na thread: {error_msg}", exc_info=True)
 
             # Tenta enviar erro para o frontend
             try:

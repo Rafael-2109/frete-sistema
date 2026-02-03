@@ -98,6 +98,30 @@ def numero_br(valor, decimais=3):
         return f"0,{'0' * decimais}" if decimais > 0 else "0"
 
 
+def asset_url(filename):
+    """
+    Filtro Jinja2 para versioning automatico de assets estaticos.
+    Gera URL com hash MD5 do conteudo do arquivo como query string.
+
+    Uso no template: {{ 'css/main.css'|asset_url }}
+    Resultado: /static/css/main.css?v=a3f2b1c8
+
+    Beneficio: Quando o arquivo muda, o hash muda automaticamente,
+    forcando o navegador a baixar a versao nova.
+    """
+    import hashlib
+    import os
+    from flask import url_for
+
+    filepath = os.path.join(current_app.root_path, 'static', filename)
+    try:
+        with open(filepath, 'rb') as f:
+            file_hash = hashlib.md5(f.read()).hexdigest()[:8]
+        return f"{url_for('static', filename=filename)}?v={file_hash}"
+    except FileNotFoundError:
+        return url_for('static', filename=filename)
+
+
 def register_template_filters(app):
     """Registra filtros customizados no Flask"""
     app.jinja_env.filters['file_url'] = file_url
@@ -105,4 +129,5 @@ def register_template_filters(app):
     app.jinja_env.filters['date_br'] = date_br
     app.jinja_env.filters['valor_br'] = valor_br
     app.jinja_env.filters['numero_br'] = numero_br
-    app.jinja_env.filters['from_json'] = from_json 
+    app.jinja_env.filters['from_json'] = from_json
+    app.jinja_env.filters['asset_url'] = asset_url

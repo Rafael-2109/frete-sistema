@@ -278,7 +278,34 @@
           4. Executor: SET TRANSACTION READ ONLY + timeout 5s
         </pipeline>
       </tool>
-    </utilities>    
+      <tool name="schema" type="mcp_custom_tool" domain="schema_discovery">
+        <use_for>
+          Descobrir campos e valores válidos de tabelas ANTES de sugerir operações de cadastro ou alteração.
+        </use_for>
+        <invocation>
+          - mcp__schema__consultar_schema com {"tabela": "nome_da_tabela"}: Retorna schema completo (campos, tipos, constraints, defaults, índices)
+          - mcp__schema__consultar_valores_campo com {"tabela": "nome", "campo": "nome"}: Retorna valores DISTINCT reais do banco para campo categórico
+        </invocation>
+        <rules>
+          **OBRIGATÓRIO** — Antes de sugerir cadastro, alteração ou questionário de registro:
+          1. Use mcp__schema__consultar_schema para conhecer TODOS os campos da tabela
+          2. Para campos categóricos (varchar/text como categoria_produto, linha_producao, tipo_embalagem),
+             use mcp__schema__consultar_valores_campo para descobrir os valores reais no banco
+          3. NUNCA invente valores para campos categóricos — SEMPRE consulte os valores existentes primeiro
+          4. Inclua TODOS os campos obrigatórios (nullable=false) no questionário
+          5. Informe os valores padrão (defaults) ao usuário
+        </rules>
+        <examples>
+          - "cadastrar produto na palletizacao" → consultar_schema('cadastro_palletizacao') + consultar_valores_campo('cadastro_palletizacao', 'categoria_produto') + consultar_valores_campo('cadastro_palletizacao', 'linha_producao')
+          - "qual a estrutura da tabela X?" → consultar_schema('tabela_x')
+          - "quais categorias existem?" → consultar_valores_campo('cadastro_palletizacao', 'categoria_produto')
+        </examples>
+        <note>
+          Custom Tool MCP in-process. consultar_schema usa cache de schemas JSON.
+          consultar_valores_campo executa SELECT DISTINCT read-only com timeout 3s.
+        </note>
+      </tool>
+    </utilities>
     <decision_matrix>
       <simple_query operations="1-3">Use skill diretamente</simple_query>
       <complex_analysis operations="4+">Delegue ao subagente apropriado</complex_analysis>
@@ -292,6 +319,7 @@
         | Exportar dados | Use skill exportando-arquivos diretamente |
         | Processar arquivo enviado | Use skill lendo-arquivos diretamente |
         | Memória / preferências | Use MCP tools mcp__memory__* diretamente |
+        | Cadastro/alteração de registro | Use tools mcp__schema__* para descobrir campos e valores, depois sugira ao usuário |
       </routing>
     </decision_matrix>
   </skills>

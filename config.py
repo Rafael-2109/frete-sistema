@@ -141,6 +141,16 @@ class Config:
     MAX_CONTENT_LENGTH = 32 * 1024 * 1024  # 32MB max upload
     UPLOAD_EXTENSIONS = ["jpg", "jpeg", "png", "pdf", "xlsx", "docx", "txt"]
 
+    # ===========================
+    # STATIC FILES & COMPRESSION
+    # ===========================
+    COMPRESS_MIMETYPES = [
+        'text/html', 'text/css', 'text/xml', 'text/javascript',
+        'application/json', 'application/javascript',
+        'application/xml', 'application/xhtml+xml',
+    ]
+    COMPRESS_ALGORITHM = ['gzip']
+    COMPRESS_MIN_SIZE = 512  # Comprime acima de 512 bytes
 
     # ==========================================
     # REDIS QUEUE - CONFIGURAÇÃO PARA WORKERS

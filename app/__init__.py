@@ -257,6 +257,10 @@ def create_app(config_name=None):
     migrate.init_app(app, db)
     Session(app)
 
+    # 🗜️ Compressao gzip de respostas dinamicas (HTML, JSON, APIs)
+    from flask_compress import Compress
+    Compress(app)
+
     # ✅ NOVO: Handler específico para erros CSRF
     from flask_wtf.csrf import CSRFError
 
@@ -349,6 +353,15 @@ def create_app(config_name=None):
                     # Alerta para requisições lentas
                     if duration > 3:
                         logger.warning(f"🐌 REQUISIÇÃO LENTA: {request.path} em {duration:.3f}s")
+
+            # 📦 Cache headers para arquivos estaticos
+            if request.path.startswith('/static/'):
+                if request.args.get('v') or request.path.endswith(('.woff', '.woff2', '.ttf', '.eot')):
+                    # Assets versionados (?v=X) ou fontes -> cache de 1 ano
+                    response.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+                else:
+                    # Assets sem versioning -> cache curto com revalidacao
+                    response.headers['Cache-Control'] = 'public, max-age=3600, must-revalidate'
 
             return response
 
@@ -1077,5 +1090,18 @@ def create_app(config_name=None):
                 db.session.remove()
             except Exception:
                 pass  # Ignora erro ao remover sessão morta
+
+    # 🚀 WhiteNoise: serve estaticos com eficiencia no WSGI layer (apenas producao)
+    # - Pre-calcula compressao gzip dos arquivos
+    # - Serve direto sem passar pelo Flask routing (libera workers)
+    # - Adiciona ETag e Last-Modified automaticamente
+    if app.config.get('ENVIRONMENT') == 'production':
+        from whitenoise import WhiteNoise
+        app.wsgi_app = WhiteNoise(
+            app.wsgi_app,
+            root=os.path.join(app.root_path, 'static'),
+            prefix='/static/',
+            max_age=31536000,  # 1 ano (assets usam ?v= para cache busting)
+        )
 
     return app

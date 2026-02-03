@@ -1534,5 +1534,5 @@ const cidadeOrigemPreset = '{{ entrega.municipio if entrega and entrega.municipi
 const PREFIXO_CNPJ = '{{ nfd.prefixo_cnpj_emitente or "" }}';
 </script>
 <!-- Script modularizado -->
-<script src="{{ url_for('static', filename='js/devolucao/ocorrencia-detalhe.js') }}?v=1"></script>
+<script src="{{ 'js/devolucao/ocorrencia-detalhe.js'|asset_url }}"></script>
 {% endblock %}
