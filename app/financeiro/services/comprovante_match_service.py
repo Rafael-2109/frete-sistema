@@ -315,17 +315,18 @@ class ComprovanteMatchService:
         lanc.confirmado_em = agora_brasil()
         lanc.confirmado_por = usuario
 
-        # Rejeitar outros lancamentos pendentes do mesmo comprovante
+        # Rejeitar outros lancamentos PENDENTES e CONFIRMADOS do mesmo comprovante
+        # (LANCADO nao e tocado — ja foi baixado no Odoo)
         outros = LancamentoComprovante.query.filter(
             LancamentoComprovante.comprovante_id == lanc.comprovante_id,
             LancamentoComprovante.id != lanc.id,
-            LancamentoComprovante.status == 'PENDENTE',
+            LancamentoComprovante.status.in_(['PENDENTE', 'CONFIRMADO']),
         ).all()
         for outro in outros:
             outro.status = 'REJEITADO'
             outro.rejeitado_em = agora_brasil()
-            outro.rejeitado_por = 'SISTEMA'
-            outro.motivo_rejeicao = f'Outro lancamento (ID {lancamento_id}) foi confirmado'
+            outro.rejeitado_por = usuario
+            outro.motivo_rejeicao = f'Substituido: lancamento {lancamento_id} confirmado por {usuario}'
 
         db.session.commit()
         logger.info(f"Lancamento {lancamento_id} CONFIRMADO por {usuario}")
@@ -404,6 +405,24 @@ class ComprovanteMatchService:
                 }
 
             fatura = faturas[0]
+
+            # Rejeitar lancamentos existentes (PENDENTE e CONFIRMADO) do mesmo comprovante
+            existentes = LancamentoComprovante.query.filter(
+                LancamentoComprovante.comprovante_id == comprovante_id,
+                LancamentoComprovante.status.in_(['PENDENTE', 'CONFIRMADO']),
+            ).all()
+            for existente in existentes:
+                existente.status = 'REJEITADO'
+                existente.rejeitado_em = agora_brasil()
+                existente.rejeitado_por = usuario
+                existente.motivo_rejeicao = (
+                    f'Substituido por vinculacao manual: NF {nf}/{parcela}'
+                )
+            if existentes:
+                logger.info(
+                    f"Vinculacao manual: rejeitados {len(existentes)} lancamento(s) "
+                    f"anteriores do comp={comprovante_id}"
+                )
 
             # Criar lancamento CONFIRMADO
             lanc = self._criar_lancamento(

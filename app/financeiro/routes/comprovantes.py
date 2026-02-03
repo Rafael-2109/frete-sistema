@@ -375,7 +375,9 @@ def comprovantes_api_dados():
     for lanc in lancamentos:
         existente = lancamentos_por_comp.get(lanc.comprovante_id)
         prioridade = {'LANCADO': 3, 'CONFIRMADO': 2, 'PENDENTE': 1}
-        if not existente or prioridade.get(lanc.status, 0) > prioridade.get(existente.status, 0):
+        prio_lanc = prioridade.get(lanc.status, 0)
+        prio_exist = prioridade.get(existente.status, 0) if existente else -1
+        if not existente or prio_lanc > prio_exist or (prio_lanc == prio_exist and lanc.id > existente.id):
             lancamentos_por_comp[lanc.comprovante_id] = lanc
 
     dados = []

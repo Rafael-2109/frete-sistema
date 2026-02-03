@@ -205,14 +205,9 @@ def processar_batch_comprovantes_job(
                         raise FileNotFoundError(f"Caminho S3 não informado para: {nome}")
 
                     storage = get_file_storage()
-                    pdf_buffer = BytesIO()
-                    storage.s3_client.download_fileobj(
-                        storage.bucket_name,
-                        batch_s3_path,
-                        pdf_buffer,
-                    )
-                    pdf_buffer.seek(0)
-                    pdf_bytes = pdf_buffer.read()
+                    pdf_bytes = storage.download_file(batch_s3_path)
+                    if not pdf_bytes:
+                        raise FileNotFoundError(f"Não foi possível baixar PDF do storage: {batch_s3_path}")
 
                     # Upload PDF definitivo ao S3 (path permanente)
                     s3_path_definitivo = None
@@ -277,10 +272,7 @@ def processar_batch_comprovantes_job(
                     try:
                         if batch_s3_path:
                             storage = get_file_storage()
-                            storage.s3_client.delete_object(
-                                Bucket=storage.bucket_name,
-                                Key=batch_s3_path,
-                            )
+                            storage.delete_file(batch_s3_path)
                     except Exception as e:
                         logger.warning(f"Erro ao remover PDF temporário do S3 {batch_s3_path}: {e}")
 
@@ -315,10 +307,7 @@ def processar_batch_comprovantes_job(
                     s3_key = arq.get('s3_path', '')
                     if s3_key:
                         try:
-                            storage.s3_client.delete_object(
-                                Bucket=storage.bucket_name,
-                                Key=s3_key,
-                            )
+                            storage.delete_file(s3_key)
                         except Exception:
                             pass  # Já pode ter sido deletado no finally
                 logger.info(f"[Comprovante Batch] Limpeza S3 concluída para batch {batch_id}")

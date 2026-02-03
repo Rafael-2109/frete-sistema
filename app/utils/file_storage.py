@@ -239,6 +239,64 @@ class FileStorage:
             # Para arquivos locais, retorna None (deve usar send_file)
             return None
 
+    def download_file(self, file_path):
+        """
+        Baixa arquivo do storage e retorna os bytes.
+
+        Args:
+            file_path: Caminho do arquivo (retornado por save_file())
+
+        Returns:
+            bytes: Conteúdo do arquivo ou None se erro
+        """
+        if not file_path:
+            return None
+
+        try:
+            if self.use_s3 and not file_path.startswith('uploads/'):
+                return self._download_from_s3(file_path)
+            else:
+                return self._download_locally(file_path)
+        except Exception as e:
+            current_app.logger.error(f"Erro ao baixar arquivo {file_path}: {str(e)}")
+            return None
+
+    def _download_from_s3(self, file_path):
+        """Baixa arquivo do S3 e retorna bytes."""
+        from io import BytesIO
+
+        try:
+            if file_path.startswith('s3://'):
+                bucket_name = file_path.split('/')[2]
+                object_key = '/'.join(file_path.split('/')[3:])
+            else:
+                bucket_name = self.bucket_name
+                object_key = file_path
+
+            buffer = BytesIO()
+            self.s3_client.download_fileobj(bucket_name, object_key, buffer)
+            buffer.seek(0)
+            return buffer.read()
+
+        except ClientError as e:
+            current_app.logger.error(f"Erro S3 download: {str(e)}")
+            raise
+
+    def _download_locally(self, file_path):
+        """Baixa arquivo local e retorna bytes."""
+        if file_path.startswith('s3://'):
+            local_path = '/'.join(file_path.split('/')[3:])
+            full_path = os.path.join(current_app.root_path, 'static', 'uploads', local_path)
+        else:
+            full_path = os.path.join(current_app.root_path, 'static', file_path)
+
+        if not os.path.exists(full_path):
+            current_app.logger.error(f"Arquivo local não encontrado: {full_path}")
+            return None
+
+        with open(full_path, 'rb') as f:
+            return f.read()
+
     def delete_file(self, file_path):
         """
         Remove arquivo do storage
@@ -251,23 +309,28 @@ class FileStorage:
         """
         if not file_path:
             return False
-        
+
         try:
             if file_path.startswith('s3://'):
-                # Remove do S3
+                # Path com prefixo S3 explícito
                 bucket_name = file_path.split('/')[2]
                 object_key = '/'.join(file_path.split('/')[3:])
-                
                 self.s3_client.delete_object(
                     Bucket=bucket_name,
                     Key=object_key
+                )
+            elif self.use_s3 and not file_path.startswith('uploads/'):
+                # Path S3 sem prefixo (retornado por save_file com S3 ativo)
+                self.s3_client.delete_object(
+                    Bucket=self.bucket_name,
+                    Key=file_path
                 )
             else:
                 # Remove arquivo local
                 full_path = os.path.join(current_app.root_path, 'static', file_path)
                 if os.path.exists(full_path):
                     os.remove(full_path)
-            
+
             return True
         except Exception as e:
             current_app.logger.error(f"Erro ao deletar arquivo {file_path}: {str(e)}")
