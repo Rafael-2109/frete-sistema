@@ -97,12 +97,17 @@
                                     {% endfor %}
                                 </select>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
+                                <label for="ordem_producao" class="form-label">Ordem Produção</label>
+                                <input type="text" class="form-control form-control-sm" id="ordem_producao" name="ordem_producao"
+                                       value="{{ ordem_producao_filtro }}" placeholder="OP-...">
+                            </div>
+                            <div class="col-md-2">
                                 <label for="observacao" class="form-label">Observações</label>
                                 <input type="text" class="form-control form-control-sm" id="observacao" name="observacao"
                                        value="{{ observacao_filtro }}" placeholder="Observação...">
                             </div>
-                            <div class="col-md-3 d-flex align-items-end gap-2">
+                            <div class="col-md-2 d-flex align-items-end gap-2">
                                 <button type="submit" class="btn btn-primary btn-sm">
                                     <i class="fas fa-search"></i> Pesquisar
                                 </button>

@@ -248,6 +248,7 @@ def listar_movimentacoes():
     data_inicio = request.args.get('data_inicio', '')
     data_fim = request.args.get('data_fim', '')
     observacao_filtro = request.args.get('observacao', '')
+    ordem_producao_filtro = request.args.get('ordem_producao', '')
 
     # Paginação
     try:
@@ -294,6 +295,8 @@ def listar_movimentacoes():
                     pass
             if observacao_filtro:
                 query = query.filter(MovimentacaoEstoque.observacao.ilike(f'%{observacao_filtro}%'))
+            if ordem_producao_filtro:
+                query = query.filter(MovimentacaoEstoque.ordem_producao.ilike(f'%{ordem_producao_filtro}%'))
 
             # Ordenação e paginação
             movimentacoes = query.order_by(MovimentacaoEstoque.data_movimentacao.desc()).paginate(
@@ -359,6 +362,7 @@ def listar_movimentacoes():
                          data_inicio=data_inicio,
                          data_fim=data_fim,
                          observacao_filtro=observacao_filtro,
+                         ordem_producao_filtro=ordem_producao_filtro,
                          tipos_disponiveis=tipos_disponiveis,
                          origens_disponiveis=origens_disponiveis,
                          status_disponiveis=status_disponiveis,

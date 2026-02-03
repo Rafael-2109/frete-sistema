@@ -6,6 +6,7 @@ Inclui agrupamento por Ordem de Produção (OP) + Produto
 from flask import render_template, request, jsonify
 from flask_login import login_required, current_user
 from datetime import datetime
+from types import SimpleNamespace
 import logging
 
 from app import db
@@ -163,17 +164,17 @@ def register_analise_producao_routes(bp):
         end = start + per_page
         itens_pagina = itens[start:end]
 
-        # Objeto de paginação simples
-        paginacao = {
-            'items': itens_pagina,
-            'total': total,
-            'page': page,
-            'pages': total_pages,
-            'has_prev': page > 1,
-            'has_next': page < total_pages,
-            'prev_num': page - 1,
-            'next_num': page + 1,
-        }
+        # Objeto de paginação (SimpleNamespace para acesso por atributo no Jinja2)
+        paginacao = SimpleNamespace(
+            items=itens_pagina,
+            total=total,
+            page=page,
+            pages=total_pages,
+            has_prev=page > 1,
+            has_next=page < total_pages,
+            prev_num=page - 1,
+            next_num=page + 1,
+        )
 
         return render_template(
             'manufatura/analise_producao/index.html',

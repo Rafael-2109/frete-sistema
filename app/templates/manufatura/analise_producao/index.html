@@ -134,8 +134,8 @@
     background-color: rgba(var(--bs-secondary-rgb), 0.05) !important;
     font-size: 0.85rem;
 }
-.row-subitem td:first-child {
-    padding-left: 2.5rem !important;
+.row-subitem td {
+    vertical-align: middle;
 }
 
 /* Badge de contagem */
@@ -268,17 +268,7 @@
                                 </button>
                             </td>
                         </tr>
-                        {# Container para sub-linhas expandidas #}
-                        <tr class="d-none" id="subitens-{{ item.ordem_producao }}-{{ item.cod_produto }}">
-                            <td colspan="8" class="p-0">
-                                <div class="subitens-container" style="display:none;">
-                                    <table class="table table-sm mb-0">
-                                        <tbody class="subitens-body">
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </td>
-                        </tr>
+                        {# Sub-linhas são inseridas diretamente no tbody via JS (toggleGrupo) #}
 
                         {% else %}
                         {# ===== LINHA INDIVIDUAL (sem OP) ===== #}
@@ -490,70 +480,92 @@ let componentesOriginais = {};
 function toggleGrupo(ordemProducao, codProduto) {
     const grupoId = `${ordemProducao}-${codProduto}`;
     const rowGrupo = document.getElementById(`grupo-${grupoId}`);
-    const rowSubitens = document.getElementById(`subitens-${grupoId}`);
-    const container = rowSubitens.querySelector('.subitens-container');
-    const tbody = rowSubitens.querySelector('.subitens-body');
+    // Usar data-attribute para selecionar sub-linhas (seguro contra chars especiais)
+    const seletor = `tr[data-grupo-id="${grupoId}"]`;
 
     if (rowGrupo.classList.contains('expanded')) {
-        // Fechar
+        // Fechar: ocultar sub-linhas
         rowGrupo.classList.remove('expanded');
-        rowSubitens.classList.add('d-none');
-        container.style.display = 'none';
+        document.querySelectorAll(seletor).forEach(tr => {
+            tr.style.display = 'none';
+        });
         return;
     }
 
-    // Abrir - carregar dados
+    // Abrir
     rowGrupo.classList.add('expanded');
-    rowSubitens.classList.remove('d-none');
-    container.style.display = 'block';
 
-    // Se já tem dados, não recarregar
-    if (tbody.children.length > 0 && !tbody.querySelector('.loading-row')) {
+    // Se já tem sub-linhas no DOM (cache), apenas exibir
+    const existentes = document.querySelectorAll(seletor);
+    if (existentes.length > 0) {
+        existentes.forEach(tr => {
+            tr.style.display = '';
+        });
         return;
     }
 
-    // Loading
-    tbody.innerHTML = `<tr class="loading-row"><td colspan="8" class="text-center py-2">
+    // Loading: inserir TR de loading após a linha do grupo
+    const loadingTr = document.createElement('tr');
+    loadingTr.className = 'row-subitem loading-row';
+    loadingTr.setAttribute('data-grupo-id', grupoId);
+    loadingTr.innerHTML = `<td colspan="8" class="text-center py-2">
         <i class="fas fa-spinner fa-spin me-2"></i> Carregando...
-    </td></tr>`;
+    </td>`;
+    rowGrupo.after(loadingTr);
 
     fetch(`/manufatura/analise-producao/grupo-detalhe?ordem_producao=${encodeURIComponent(ordemProducao)}&cod_produto=${encodeURIComponent(codProduto)}`)
         .then(response => response.json())
         .then(data => {
+            // Remover loading
+            loadingTr.remove();
+
             if (!data.success || !data.producoes || data.producoes.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-2">Nenhuma produção encontrada</td></tr>';
+                const emptyTr = document.createElement('tr');
+                emptyTr.className = 'row-subitem';
+                emptyTr.setAttribute('data-grupo-id', grupoId);
+                emptyTr.innerHTML = '<td colspan="8" class="text-center text-muted py-2">Nenhuma produção encontrada</td>';
+                rowGrupo.after(emptyTr);
                 return;
             }
 
-            let html = '';
+            // Inserir sub-linhas após a linha do grupo
+            const fragment = document.createDocumentFragment();
             data.producoes.forEach(prod => {
-                html += `
-                    <tr class="row-subitem">
-                        <td style="padding-left: 2.5rem;">
-                            <small class="text-muted"><i class="fas fa-arrow-right me-1"></i>#${prod.id}</small>
-                        </td>
-                        <td>${prod.data_movimentacao}</td>
-                        <td>${prod.cod_produto}</td>
-                        <td>${prod.nome_produto}</td>
-                        <td class="text-end text-success fw-bold">${parseFloat(prod.qtd_movimentacao).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-                        <td>${prod.local_movimentacao}</td>
-                        <td>-</td>
-                        <td class="text-center">
-                            <button type="button" class="btn btn-sm btn-outline-primary"
-                                    onclick="abrirModalComponentes(${prod.id})"
-                                    title="Analisar esta produção individual">
-                                <i class="fas fa-sitemap"></i>
-                            </button>
-                        </td>
-                    </tr>
+                const tr = document.createElement('tr');
+                tr.className = 'row-subitem';
+                tr.setAttribute('data-grupo-id', grupoId);
+                tr.innerHTML = `
+                    <td>
+                        <small class="text-muted" style="padding-left: 1.5rem;"><i class="fas fa-arrow-right me-1"></i>#${prod.id}</small>
+                    </td>
+                    <td>${prod.data_movimentacao}</td>
+                    <td>${prod.cod_produto}</td>
+                    <td>${prod.nome_produto}</td>
+                    <td class="text-end text-success fw-bold">${parseFloat(prod.qtd_movimentacao).toLocaleString('pt-BR', {minimumFractionDigits: 3})}</td>
+                    <td>${prod.local_movimentacao}</td>
+                    <td>-</td>
+                    <td class="text-center">
+                        <button type="button" class="btn btn-sm btn-outline-primary"
+                                onclick="abrirModalComponentes(${prod.id})"
+                                title="Analisar esta produção individual">
+                            <i class="fas fa-sitemap"></i>
+                        </button>
+                    </td>
                 `;
+                fragment.appendChild(tr);
             });
 
-            tbody.innerHTML = html;
+            // Inserir todas as linhas de uma vez após o grupo
+            rowGrupo.after(fragment);
         })
         .catch(error => {
             console.error('Erro:', error);
-            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger py-2">Erro ao carregar dados</td></tr>';
+            loadingTr.remove();
+            const errorTr = document.createElement('tr');
+            errorTr.className = 'row-subitem';
+            errorTr.setAttribute('data-grupo-id', grupoId);
+            errorTr.innerHTML = '<td colspan="8" class="text-center text-danger py-2">Erro ao carregar dados</td>';
+            rowGrupo.after(errorTr);
         });
 }
 
@@ -685,7 +697,8 @@ function preencherModalComponentes(data) {
         };
 
         // Calcular ajuste atual (diferença entre real e previsto)
-        const ajusteAtual = comp.consumo_real - comp.consumo_previsto;
+        // Invertido: negativo = consumiu mais, positivo = consumiu menos
+        const ajusteAtual = -(comp.consumo_real - comp.consumo_previsto);
 
         // Classes de indentação
         const nivelClass = `nivel-${Math.min(comp.nivel, 4)}`;
@@ -714,7 +727,7 @@ function preencherModalComponentes(data) {
                 <td class="text-end">
                     <span class="${comp.estoque_atual < 0 ? 'text-danger' : ''}">${formatarNumero(comp.estoque_atual)}</span>
                 </td>
-                <td class="text-end fw-bold">${formatarNumero(comp.consumo_previsto)}</td>
+                <td class="text-end fw-bold">${formatarNumero(-comp.consumo_previsto)}</td>
                 <td class="text-end">
                     <input type="number"
                            class="form-control form-control-sm input-ajuste"
@@ -728,7 +741,7 @@ function preencherModalComponentes(data) {
                     <input type="number"
                            class="form-control form-control-sm input-ajuste"
                            id="consumo-real-${comp.cod_produto}"
-                           value="${comp.consumo_real.toFixed(3)}"
+                           value="${(-comp.consumo_real).toFixed(3)}"
                            step="0.001"
                            onchange="calcularAjuste('${comp.cod_produto}')"
                            onfocus="this.select()">
@@ -750,7 +763,8 @@ function calcularConsumoReal(codProduto) {
     const inputConsumoReal = document.getElementById(`consumo-real-${codProduto}`);
 
     const ajuste = parseFloat(inputAjuste.value) || 0;
-    const consumoReal = original.consumo_previsto + ajuste;
+    // Consumo real = -previsto + ajuste (ambos negativos quando consumiu)
+    const consumoReal = -original.consumo_previsto + ajuste;
 
     inputConsumoReal.value = consumoReal.toFixed(3);
     marcarLinha(codProduto, ajuste);
@@ -762,7 +776,8 @@ function calcularAjuste(codProduto) {
     const inputConsumoReal = document.getElementById(`consumo-real-${codProduto}`);
 
     const consumoReal = parseFloat(inputConsumoReal.value) || 0;
-    const ajuste = consumoReal - original.consumo_previsto;
+    // Ajuste = consumoReal - (-previsto) = consumoReal + previsto
+    const ajuste = consumoReal + original.consumo_previsto;
 
     inputAjuste.value = ajuste.toFixed(3);
     marcarLinha(codProduto, ajuste);
@@ -770,7 +785,8 @@ function calcularAjuste(codProduto) {
 
 function marcarLinha(codProduto, ajuste) {
     const original = componentesOriginais[codProduto];
-    const ajusteOriginal = original.consumo_real - original.consumo_previsto;
+    // Invertido para semântica de saída: negativo = consumiu mais
+    const ajusteOriginal = -(original.consumo_real - original.consumo_previsto);
     const row = document.querySelector(`tr[data-cod="${codProduto}"]`);
     const inputAjuste = document.getElementById(`ajuste-${codProduto}`);
 
@@ -807,14 +823,15 @@ function salvarAjustes() {
         if (!inputAjuste) return;
 
         const ajusteNovo = parseFloat(inputAjuste.value) || 0;
-        const ajusteOriginal = original.ajuste_registrado || 0;
+        // Inverter: no frontend negativo = consumiu mais, backend espera positivo = consumiu mais
+        const ajusteOriginal = -(original.ajuste_registrado || 0);
 
         const diferenca = ajusteNovo - ajusteOriginal;
 
         if (Math.abs(diferenca) > 0.001) {
             ajustesParaSalvar.push({
                 cod_produto: codProduto,
-                qtd_ajuste: diferenca
+                qtd_ajuste: -diferenca  // Inverter para o backend
             });
         }
     });
@@ -827,7 +844,7 @@ function salvarAjustes() {
     Swal.fire({
         title: 'Confirmar Ajustes',
         html: `Serão salvos <strong>${ajustesParaSalvar.length}</strong> ajuste(s).<br><br>
-               <small class="text-muted">Ajustes positivos devolvem ao estoque, negativos consomem mais.</small>`,
+               <small class="text-muted">Ajustes negativos aumentam o consumo, positivos reduzem.</small>`,
         icon: 'question',
         showCancelButton: true,
         confirmButtonText: 'Salvar',
