@@ -270,34 +270,88 @@ def _detectar_layout_boleto(linhas: list[str]) -> str:
     """
     Detecta se o comprovante usa Layout V1 (seções) ou V2 (labels auto-descritivos).
 
-    V1: Sub-cabeçalho "PAGAMENTO DE BOLETO" (layout com seções separadas)
-    V2: Sub-cabeçalho "Comprovante de Pagamento de Boleto" (labels auto-descritivos)
+    V1 (novo, ~2026): Seções separadas ("Beneficiário:", "Pagador:", "Datas:", "Valores:")
+        com labels genéricos dentro de cada seção. 1 comprovante por página.
 
-    Usa heurística dupla:
-    1. Cabeçalho específico do V2
-    2. Presença de labels auto-descritivos exclusivos do V2
+    V2 (antigo, ~2024-2025): Labels auto-descritivos (ex: "CPF/CNPJ Beneficiário:").
+        1 ou 2 comprovantes por página.
+
+    Estratégia: Verificar marcadores EXCLUSIVOS do V2 (match positivo).
+    Se nenhum marcador V2 encontrado → V1 (default seguro).
+
+    NOTA: Ambos layouts contêm "COMPROVANTE DE PAGAMENTO DE BOLETO" no texto,
+    por isso NÃO usamos esse cabeçalho para diferenciação.
     """
     texto_junto = ' '.join(linhas).upper()
 
-    # Heurística 1: Cabeçalho específico do V2
-    if 'COMPROVANTE DE PAGAMENTO DE BOLETO' in texto_junto:
-        return 'V2'
-
-    # Heurística 2: Labels auto-descritivos exclusivos do V2
-    # (fallback caso OCR corrompa o cabeçalho)
+    # --- Marcadores EXCLUSIVOS do V2 (NÃO existem no V1) ---
+    # V2 usa labels auto-descritivos; V1 usa labels genéricos dentro de seções.
     marcadores_v2 = [
-        'CPF/CNPJ BENEFICI',
-        'NOME/RAZÃO SOCIAL DO BENEFICI',
-        'NOME/RAZAO SOCIAL DO BENEFICI',
-        'DATA AGENDAMENTO',
-        'NO. AGENDAMENTO',
-        'VALOR DOCUMENTO',
+        'CPF/CNPJ BENEFICI',               # V1 usa "CPF/CNPJ:" genérico
+        'NOME/RAZÃO SOCIAL DO BENEFICI',    # V1 usa "Nome/Razão Social:" genérico
+        'NOME/RAZAO SOCIAL DO BENEFICI',    # Variante sem acento (OCR)
+        'DATA AGENDAMENTO',                 # V1 não tem este label
+        'VALOR DOCUMENTO',                  # V1 usa "Documento:" (sem "Valor")
+        'VALOR PAGO',                       # V1 usa "Pago:" (sem "Valor")
+        'NO. AGENDAMENTO',                  # V1 usa "Número do agendamento:"
+        'PLATAFORMA DE SERVI',              # Rodapé exclusivo V2
     ]
+
     if any(m in texto_junto for m in marcadores_v2):
         return 'V2'
 
-    # V1: layout original (default)
+    # Marcador V2 por linha: "Coop.:" no início (V1 usa "Cooperativa:")
+    for linha in linhas:
+        if re.match(r'^Coop\.?\s*:', linha.strip(), re.IGNORECASE):
+            return 'V2'
+
+    # Default: V1 (layout com seções)
     return 'V1'
+
+
+def _split_v2_page_text(linhas: list[str]) -> list[list[str]]:
+    """
+    Detecta se uma página V2 contém 2 comprovantes e divide em segmentos.
+
+    Páginas V2 podem conter 1 ou 2 comprovantes empilhados verticalmente.
+    Detecta pela SEGUNDA ocorrência de "Coop.:" (primeira linha específica
+    do cabeçalho V2 que aparece após "COMPROVANTE DE PAGAMENTO DE BOLETO").
+
+    Returns:
+        Lista com 1 ou 2 listas de linhas (cada uma = 1 comprovante).
+    """
+    # Encontrar índices das linhas que iniciam um comprovante V2
+    # O marcador mais confiável: "Coop.:" ou "Coop:" no início da linha
+    # (formato V2: "Coop.: CÓDIGO / NOME" — dois-pontos obrigatório para
+    #  não casar com "Cooperativa" do V1)
+    indices_coop = []
+    for i, linha in enumerate(linhas):
+        if re.match(r'^Coop\.?\s*:\s*.+$', linha.strip(), re.IGNORECASE):
+            indices_coop.append(i)
+
+    if len(indices_coop) <= 1:
+        # Página com 1 comprovante (ou nenhum Coop encontrado)
+        return [linhas]
+
+    # 2 comprovantes: dividir no início do segundo
+    # O segundo comprovante começa algumas linhas ANTES do segundo "Coop"
+    # (com o header "COMPROVANTE DE PAGAMENTO DE BOLETO", "SICOOB", etc.)
+    split_idx = indices_coop[1]
+
+    # Retroceder para incluir linhas de cabeçalho do segundo comprovante
+    for j in range(split_idx - 1, max(split_idx - 6, 0), -1):
+        upper = linhas[j].strip().upper()
+        if any(kw in upper for kw in [
+            'COMPROVANTE DE', 'PAGAMENTO DE BOLETO',
+            'SICOOB', 'SISBR', 'PLATAFORMA',
+        ]):
+            split_idx = j
+            break
+
+    segmento1 = linhas[:split_idx]
+    segmento2 = linhas[split_idx:]
+
+    return [segmento1, segmento2]
 
 
 def _parse_formato_a(linhas: list[str], comprovante: ComprovanteBoleto) -> None:
@@ -501,12 +555,16 @@ def _parse_layout_v2(linhas: list[str], comprovante: ComprovanteBoleto) -> None:
             continue
 
         # --- Tentar formato "Label: Valor" (inline) ---
-        match_inline = re.match(r'^(.+?):\s+(.+)$', stripped)
+        # \s* (zero ou mais espaços) — OCR pode gerar "Label:Valor" sem espaço
+        match_inline = re.match(r'^(.+?):\s*(.+)$', stripped)
         if match_inline:
             label = _normalizar_label_v2(match_inline.group(1))
             valor = match_inline.group(2).strip()
 
             if label in MAPEAMENTO_CAMPOS_V2:
+                # Tratar placeholders "--" como valor ausente (FIDC/cessão)
+                if valor.strip() in ('--', '-', '---'):
+                    valor = None
                 setattr(comprovante, MAPEAMENTO_CAMPOS_V2[label], valor)
             continue
 
@@ -520,7 +578,9 @@ def _parse_layout_v2(linhas: list[str], comprovante: ComprovanteBoleto) -> None:
         if valores_pendentes:
             label = valores_pendentes.pop(0)
             if label in MAPEAMENTO_CAMPOS_V2:
-                setattr(comprovante, MAPEAMENTO_CAMPOS_V2[label], stripped)
+                # Tratar placeholders "--" como valor ausente (FIDC/cessão)
+                val = stripped if stripped not in ('--', '-', '---') else None
+                setattr(comprovante, MAPEAMENTO_CAMPOS_V2[label], val)
             continue
 
 
@@ -616,41 +676,60 @@ def _eh_comprovante_boleto(texto: str) -> bool:
     return 'PAGAMENTO DE BOLETO' in texto.upper()
 
 
-def parse_comprovante(texto: str, pagina: int) -> ComprovanteBoleto:
+def parse_comprovantes_from_text(texto: str, pagina: int) -> list[ComprovanteBoleto]:
     """
-    Faz o parsing do texto OCR de um comprovante e retorna os dados estruturados.
+    Faz o parsing do texto OCR e retorna 1 ou mais comprovantes.
 
-    Detecta automaticamente o layout do comprovante:
-    - Layout V2: Labels auto-descritivos ("Comprovante de Pagamento de Boleto")
-    - Layout V1: Seções separadas ("PAGAMENTO DE BOLETO")
-      - Formato A: Labels em bloco separado dos valores (OCR leu colunas separadas)
-      - Formato B: Labels e valores inline "Label: Valor" (OCR leu linha a linha)
+    Para V2: detecta se há 2 comprovantes na mesma página e divide em segmentos.
+    Para V1: sempre retorna 1 comprovante.
+
+    Args:
+        texto: Texto OCR da página do PDF
+        pagina: Número da página (1-indexed)
+
+    Returns:
+        Lista de ComprovanteBoleto extraídos (1 ou 2 para V2, sempre 1 para V1).
     """
-    comprovante = ComprovanteBoleto(pagina=pagina)
-
     linhas = texto.strip().split('\n')
     linhas = [ln.strip() for ln in linhas if ln.strip()]
 
     if not linhas:
-        return comprovante
+        return [ComprovanteBoleto(pagina=pagina)]
 
     # Detectar layout do comprovante (V1 com seções ou V2 auto-descritivo)
     layout = _detectar_layout_boleto(linhas)
 
     if layout == 'V2':
-        _parse_layout_v2(linhas, comprovante)
+        # V2 pode ter 1 ou 2 comprovantes por página
+        segmentos = _split_v2_page_text(linhas)
+        comprovantes = []
+        for seg in segmentos:
+            comp = ComprovanteBoleto(pagina=pagina)
+            _parse_layout_v2(seg, comp)
+            comp = _validar_comprovante(comp)
+            comprovantes.append(comp)
+        return comprovantes
     else:
-        # Layout V1: detectar formato OCR (A ou B)
+        # Layout V1: sempre 1 comprovante por página
+        comprovante = ComprovanteBoleto(pagina=pagina)
         formato = _detectar_formato(linhas)
         if formato == 'A':
             _parse_formato_a(linhas, comprovante)
         else:
             _parse_formato_b(linhas, comprovante)
+        comprovante = _validar_comprovante(comprovante)
+        return [comprovante]
 
-    # Validação pós-parse: anula campos com valores inconsistentes (OCR errado)
-    comprovante = _validar_comprovante(comprovante)
 
-    return comprovante
+def parse_comprovante(texto: str, pagina: int) -> ComprovanteBoleto:
+    """
+    Faz o parsing do texto OCR de um comprovante e retorna os dados estruturados.
+
+    Backward-compatible: retorna o primeiro comprovante da página.
+    Para obter todos os comprovantes (V2 pode ter 2), use parse_comprovantes_from_text().
+    """
+    resultados = parse_comprovantes_from_text(texto, pagina)
+    return resultados[0] if resultados else ComprovanteBoleto(pagina=pagina)
 
 
 def extrair_comprovantes(pdf_path: str) -> list[ComprovanteBoleto]:
@@ -689,15 +768,16 @@ def extrair_comprovantes(pdf_path: str) -> list[ComprovanteBoleto]:
             pulados += 1
             continue
 
-        # Parsear
-        comprovante = parse_comprovante(texto, pagina=i + 1)
-        comprovantes.append(comprovante)
+        # Parsear (V2 pode ter 1 ou 2 comprovantes por página)
+        resultados = parse_comprovantes_from_text(texto, pagina=i + 1)
+        comprovantes.extend(resultados)
 
         # Feedback
-        if comprovante.beneficiario_razao_social:
-            print(f"OK → {comprovante.beneficiario_razao_social}")
-        else:
-            print("OK (sem beneficiário identificado)")
+        for comp in resultados:
+            if comp.beneficiario_razao_social:
+                print(f"OK → {comp.beneficiario_razao_social}")
+            else:
+                print("OK (sem beneficiário identificado)")
 
     print("-" * 60)
     print(f"Total extraído: {len(comprovantes)} comprovante(s)")
@@ -731,8 +811,9 @@ def extrair_comprovantes_from_bytes(pdf_bytes: bytes) -> list[ComprovanteBoleto]
         if not _eh_comprovante_boleto(texto):
             continue
 
-        comprovante = parse_comprovante(texto, pagina=i + 1)
-        comprovantes.append(comprovante)
+        # V2 pode ter 1 ou 2 comprovantes por página
+        resultados = parse_comprovantes_from_text(texto, pagina=i + 1)
+        comprovantes.extend(resultados)
 
     return comprovantes
 

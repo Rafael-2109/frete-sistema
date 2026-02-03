@@ -57,7 +57,9 @@
       "Bash(AGENT_TEXT_TO_SQL=true python:*)",
       "WebFetch(domain:www.anthropic.com)",
       "WebFetch(domain:docs.claude.com)",
-      "Bash(sort:*)"
+      "Bash(sort:*)",
+      "Bash(head:*)",
+      "WebFetch(domain:oneryalcin.medium.com)"
     ],
     "deny": []
   },

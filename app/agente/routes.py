@@ -706,29 +706,39 @@ def _stream_chat_response(
         if thread.is_alive():
             logger.warning("[AGENTE] Thread ainda ativa após timeout de 10s")
 
-        # FEAT-030: Salva mensagens no banco após streaming completo
-        # IMPORTANTE: salvar ANTES de destruir o client, para que sdk_session_id
-        # esteja persistido no DB para resume no próximo turno.
-        _save_messages_to_db(
-            app=app,
-            our_session_id=response_state['our_session_id'],
-            sdk_session_id=response_state['sdk_session_id'],
-            user_id=user_id,
-            user_message=original_message,
-            assistant_message=response_state['full_text'],
-            input_tokens=response_state['input_tokens'],
-            output_tokens=response_state['output_tokens'],
-            tools_used=response_state['tools_used'],
-            model=model,
-            session_expired=response_state['session_expired'],
-        )
-
         # query() limpa o CLI process automaticamente — sem pool, sem destroy.
-        logger.info("[AGENTE] Thread finalizada e mensagens salvas")
+        logger.info("[AGENTE] Thread finalizada com sucesso")
 
     except Exception as e:
         logger.error(f"[AGENTE] Erro no streaming: {e}", exc_info=True)
         yield _sse_event('error', {'message': str(e)})
+
+    finally:
+        # =================================================================
+        # GARANTIA: SEMPRE salva mensagens no banco, mesmo em caso de erro
+        # =================================================================
+        # CRÍTICO: Se o stream falhar (ex: "stream closed" no ExitPlanMode),
+        # o sdk_session_id capturado do SystemMessage (init) precisa ser salvo
+        # no banco para que o resume funcione na próxima mensagem.
+        # Sem isso, o agente perde o contexto da conversa.
+        # =================================================================
+        try:
+            _save_messages_to_db(
+                app=app,
+                our_session_id=response_state['our_session_id'],
+                sdk_session_id=response_state['sdk_session_id'],
+                user_id=user_id,
+                user_message=original_message,
+                assistant_message=response_state['full_text'],
+                input_tokens=response_state['input_tokens'],
+                output_tokens=response_state['output_tokens'],
+                tools_used=response_state['tools_used'],
+                model=model,
+                session_expired=response_state['session_expired'],
+            )
+            logger.info("[AGENTE] Mensagens salvas no banco (finally)")
+        except Exception as save_error:
+            logger.error(f"[AGENTE] ERRO ao salvar mensagens no finally: {save_error}", exc_info=True)
 
 
 def _sse_event(event_type: str, data: dict) -> str:

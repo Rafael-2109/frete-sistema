@@ -36,19 +36,36 @@ class AgentSettings:
     # Skills estão em: .claude/skills/ (gerindo-expedicao, memoria-usuario, etc.)
     # Referência: https://platform.claude.com/docs/pt-BR/agent-sdk/skills
     tools_enabled: List[str] = field(default_factory=lambda: [
-        'Skill',    # OBRIGATÓRIO - permite invocar Skills
-        'Bash',     # OBRIGATÓRIO - executa scripts das Skills
-        'Task',     # Invocar subagentes (.claude/agents/)
-        'Read',     # Leitura de arquivos
-        'Glob',     # Busca de arquivos
-        'Grep',     # Busca em conteúdo
-        # 'Memory' REMOVIDO — agora usa MCP tools (mcp__memory__*)
-        'Write',    # Escrita de arquivos (RESTRITO a /tmp via can_use_tool)
-        'Edit',     # Edição de arquivos (RESTRITO a /tmp via can_use_tool)
-        'TodoWrite',  # Gerenciamento de tarefas (feedback visual)
-        'WebSearch',  # Busca na web
-        'WebFetch',  # Busca e salva na web
-        'MultiEdit',  # Edição de arquivos (múltiplos arquivos)
+        # Core — operações de arquivo e busca
+        'Skill',            # OBRIGATÓRIO - permite invocar Skills
+        'Bash',             # OBRIGATÓRIO - executa scripts das Skills
+        'Task',             # Invocar subagentes (.claude/agents/)
+        'Read',             # Leitura de arquivos
+        'Glob',             # Busca de arquivos
+        'Grep',             # Busca em conteúdo
+        'Write',            # Escrita de arquivos (RESTRITO a /tmp via can_use_tool)
+        'Edit',             # Edição de arquivos (RESTRITO a /tmp via can_use_tool)
+        'MultiEdit',        # Edição múltipla (RESTRITO a /tmp via can_use_tool)
+        'TodoWrite',        # Gerenciamento de tarefas (feedback visual)
+        'WebSearch',        # Busca na web
+        'WebFetch',         # Fetch e análise de conteúdo web
+        # Interação com usuário
+        # FONTE: https://platform.claude.com/docs/en/agent-sdk/user-input
+        # "If you specify a tools array, include AskUserQuestion in that array."
+        'AskUserQuestion',  # Perguntas interativas ao usuário
+        # Plan Mode
+        'ExitPlanMode',     # Sair do modo planejamento
+        'EnterPlanMode',    # Entrar no modo planejamento
+        # Background tasks
+        'TaskOutput',       # Ler output de Task em background
+        'TaskStop',         # Parar Task em background
+        'BashOutput',       # Ler output de Bash em background (skills longas)
+        'KillBash',         # Parar Bash em background
+        # MCP resources
+        'ListMcpResources', # Listar resources disponíveis dos MCP servers
+        'ReadMcpResource',  # Ler resources de MCP servers
+        # Discovery
+        'ToolSearch',       # Descobrir e carregar tools deferred antes de usá-las
     ])
 
     # Custos

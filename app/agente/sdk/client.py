@@ -505,6 +505,18 @@ Nunca invente informações."""
         try:
             from claude_agent_sdk import HookMatcher, PostToolUseHookInput, PreCompactHookInput, HookContext
 
+            async def _keep_stream_open(hook_input, signal, context: HookContext):
+                """Hook OBRIGATÓRIO: mantém stream aberto para can_use_tool funcionar.
+
+                FONTE: https://platform.claude.com/docs/en/agent-sdk/user-input
+                'In Python, can_use_tool requires streaming mode and a PreToolUse hook
+                that returns {"continue_": True} to keep the stream open. Without this
+                hook, the stream closes before the permission callback can be invoked.'
+
+                Sem este hook, AskUserQuestion e ExitPlanMode falham com 'stream closed'.
+                """
+                return {"continue_": True}
+
             async def _audit_post_tool_use(hook_input: PostToolUseHookInput, signal, context: HookContext):
                 """Registra execução de tools para auditoria."""
                 tool_name = getattr(hook_input, 'tool_name', 'unknown')
@@ -525,6 +537,12 @@ Nunca invente informações."""
                 }
 
             options_dict["hooks"] = {
+                "PreToolUse": [
+                    HookMatcher(
+                        matcher=None,  # Aplica a TODAS as tools
+                        hooks=[_keep_stream_open],
+                    ),
+                ],
                 "PostToolUse": [
                     HookMatcher(
                         matcher="Bash|Skill",
@@ -537,7 +555,7 @@ Nunca invente informações."""
                     ),
                 ],
             }
-            logger.debug("[AGENT_CLIENT] Hooks SDK (PostToolUse + PreCompact) configurados")
+            logger.debug("[AGENT_CLIENT] Hooks SDK (PreToolUse + PostToolUse + PreCompact) configurados")
         except (ImportError, Exception) as e:
             logger.warning(f"[AGENT_CLIENT] Hooks SDK não disponíveis: {e}")
 
