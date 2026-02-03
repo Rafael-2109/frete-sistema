@@ -3,15 +3,16 @@ Rotas para Análise de Produção
 Permite visualizar produções realizadas e ajustar consumos de componentes
 Inclui agrupamento por Ordem de Produção (OP) + Produto
 """
-from flask import render_template, request, jsonify
+from flask import render_template, request, jsonify, make_response
 from flask_login import login_required, current_user
-from datetime import datetime
+from datetime import datetime, date
 from types import SimpleNamespace
 import logging
 
 from app import db
 from app.estoque.models import MovimentacaoEstoque
 from app.manufatura.services.bom_service import ServicoBOM
+from app.manufatura.services.analise_producao_export_service import AnaliseProducaoExportService
 from app.producao.models import CadastroPalletizacao
 from app.estoque.services.estoque_simples import ServicoEstoqueSimples
 from sqlalchemy import func, literal_column
@@ -188,6 +189,220 @@ def register_analise_producao_routes(bp):
                 'local_movimentacao': local_filtro,
             }
         )
+
+    # ===== HELPER: Aplicar filtros comuns =====
+    def _aplicar_filtros_producao(query, data_inicio, data_fim, cod_produto, nome_produto, ordem_producao, local_mov):
+        """Aplica filtros comuns a queries de produção"""
+        if data_inicio:
+            try:
+                dt_inicio = datetime.strptime(data_inicio, '%Y-%m-%d').date()
+                query = query.filter(MovimentacaoEstoque.data_movimentacao >= dt_inicio)
+            except ValueError:
+                pass
+        if data_fim:
+            try:
+                dt_fim = datetime.strptime(data_fim, '%Y-%m-%d').date()
+                query = query.filter(MovimentacaoEstoque.data_movimentacao <= dt_fim)
+            except ValueError:
+                pass
+        if cod_produto:
+            query = query.filter(MovimentacaoEstoque.cod_produto.ilike(f'%{cod_produto}%'))
+        if nome_produto:
+            query = query.filter(MovimentacaoEstoque.nome_produto.ilike(f'%{nome_produto}%'))
+        if ordem_producao:
+            query = query.filter(MovimentacaoEstoque.ordem_producao.ilike(f'%{ordem_producao}%'))
+        if local_mov:
+            query = query.filter(MovimentacaoEstoque.local_movimentacao.ilike(f'%{local_mov}%'))
+        return query
+
+    @bp.route('/analise-producao/exportar')  # type: ignore
+    @login_required
+    def exportar_analise_producao():
+        """
+        Exporta Análise de Produção para Excel.
+        Suporta agrupamento por Ordem ou Dia, com/sem Lista de Materiais (BOM).
+
+        Query params:
+            - agrupamento: 'ordem' (default) ou 'dia'
+            - com_bom: 'true' ou 'false' (default 'false')
+            - data_inicio, data_fim, cod_produto, nome_produto, ordem_producao, local_movimentacao
+        """
+        try:
+            # Parâmetros de exportação
+            agrupamento = request.args.get('agrupamento', 'ordem')
+            com_bom = request.args.get('com_bom', 'false').lower() == 'true'
+
+            # Parâmetros de filtro
+            data_inicio = request.args.get('data_inicio', '')
+            data_fim = request.args.get('data_fim', '')
+            cod_produto = request.args.get('cod_produto', '')
+            nome_produto_filtro = request.args.get('nome_produto', '')
+            ordem_producao_filtro = request.args.get('ordem_producao', '')
+            local_filtro = request.args.get('local_movimentacao', '')
+
+            itens = []
+
+            if agrupamento == 'dia':
+                # ===== AGRUPAMENTO POR DIA + ORDEM + PRODUTO =====
+                # Cada combinação (data, ordem_producao, cod_produto) gera 1 linha
+                query_dia = db.session.query(
+                    MovimentacaoEstoque.data_movimentacao,
+                    MovimentacaoEstoque.ordem_producao,
+                    MovimentacaoEstoque.cod_produto,
+                    func.max(MovimentacaoEstoque.nome_produto).label('nome_produto'),
+                    func.sum(MovimentacaoEstoque.qtd_movimentacao).label('qtd_total'),
+                    func.count(MovimentacaoEstoque.id).label('qtd_producoes'),
+                    func.max(MovimentacaoEstoque.local_movimentacao).label('local_movimentacao'),
+                    func.string_agg(
+                        MovimentacaoEstoque.operacao_producao_id.cast(db.String),
+                        literal_column("','")
+                    ).label('operacao_ids')
+                ).filter(
+                    MovimentacaoEstoque.tipo_movimentacao.in_(['PRODUÇÃO', 'PRODUCAO']),
+                    MovimentacaoEstoque.tipo_origem_producao == 'RAIZ',
+                    MovimentacaoEstoque.ativo == True  # noqa: E712
+                )
+
+                query_dia = _aplicar_filtros_producao(
+                    query_dia, data_inicio, data_fim, cod_produto,
+                    nome_produto_filtro, ordem_producao_filtro, local_filtro
+                )
+
+                query_dia = query_dia.group_by(
+                    MovimentacaoEstoque.data_movimentacao,
+                    MovimentacaoEstoque.ordem_producao,
+                    MovimentacaoEstoque.cod_produto
+                ).order_by(
+                    MovimentacaoEstoque.data_movimentacao.desc(),
+                    MovimentacaoEstoque.ordem_producao
+                )
+
+                resultados = query_dia.all()
+
+                for row in resultados:
+                    itens.append({
+                        'data_movimentacao': row.data_movimentacao,
+                        'ordem_producao': row.ordem_producao or '',
+                        'cod_produto': row.cod_produto,
+                        'nome_produto': row.nome_produto,
+                        'qtd_total': float(row.qtd_total or 0),
+                        'qtd_producoes': row.qtd_producoes,
+                        'local_movimentacao': row.local_movimentacao,
+                        'operacao_ids': row.operacao_ids or '',
+                    })
+
+            else:
+                # ===== AGRUPAMENTO POR ORDEM =====
+                # Produções COM ordem_producao (agrupadas)
+                query_agrupada = db.session.query(
+                    MovimentacaoEstoque.ordem_producao,
+                    MovimentacaoEstoque.cod_produto,
+                    func.max(MovimentacaoEstoque.nome_produto).label('nome_produto'),
+                    func.sum(MovimentacaoEstoque.qtd_movimentacao).label('qtd_total'),
+                    func.count(MovimentacaoEstoque.id).label('qtd_producoes'),
+                    func.max(MovimentacaoEstoque.data_movimentacao).label('ultima_data'),
+                    func.max(MovimentacaoEstoque.local_movimentacao).label('local_movimentacao'),
+                    func.string_agg(
+                        MovimentacaoEstoque.operacao_producao_id.cast(db.String),
+                        literal_column("','")
+                    ).label('operacao_ids')
+                ).filter(
+                    MovimentacaoEstoque.tipo_movimentacao.in_(['PRODUÇÃO', 'PRODUCAO']),
+                    MovimentacaoEstoque.tipo_origem_producao == 'RAIZ',
+                    MovimentacaoEstoque.ativo == True,  # noqa: E712
+                    MovimentacaoEstoque.ordem_producao != None,  # noqa: E711
+                    MovimentacaoEstoque.ordem_producao != ''
+                )
+
+                query_agrupada = _aplicar_filtros_producao(
+                    query_agrupada, data_inicio, data_fim, cod_produto,
+                    nome_produto_filtro, ordem_producao_filtro, local_filtro
+                )
+
+                query_agrupada = query_agrupada.group_by(
+                    MovimentacaoEstoque.ordem_producao,
+                    MovimentacaoEstoque.cod_produto
+                ).order_by(func.max(MovimentacaoEstoque.data_movimentacao).desc())
+
+                for row in query_agrupada.all():
+                    itens.append({
+                        'ordem_producao': row.ordem_producao,
+                        'cod_produto': row.cod_produto,
+                        'nome_produto': row.nome_produto,
+                        'qtd_total': float(row.qtd_total or 0),
+                        'qtd_producoes': row.qtd_producoes,
+                        'ultima_data': row.ultima_data,
+                        'local_movimentacao': row.local_movimentacao,
+                        'operacao_ids': row.operacao_ids or '',
+                    })
+
+                # Produções SEM ordem_producao (individuais)
+                if not ordem_producao_filtro:
+                    query_individual = MovimentacaoEstoque.query.filter(
+                        MovimentacaoEstoque.tipo_movimentacao.in_(['PRODUÇÃO', 'PRODUCAO']),
+                        MovimentacaoEstoque.tipo_origem_producao == 'RAIZ',
+                        MovimentacaoEstoque.ativo == True,  # noqa: E712
+                        db.or_(
+                            MovimentacaoEstoque.ordem_producao == None,  # noqa: E711
+                            MovimentacaoEstoque.ordem_producao == ''
+                        )
+                    )
+
+                    query_individual = _aplicar_filtros_producao(
+                        query_individual, data_inicio, data_fim, cod_produto,
+                        nome_produto_filtro, '', local_filtro
+                    )
+
+                    for prod in query_individual.order_by(MovimentacaoEstoque.data_movimentacao.desc()).all():
+                        itens.append({
+                            'ordem_producao': '',
+                            'cod_produto': prod.cod_produto,
+                            'nome_produto': prod.nome_produto,
+                            'qtd_total': float(prod.qtd_movimentacao or 0),
+                            'qtd_producoes': 1,
+                            'ultima_data': prod.data_movimentacao,
+                            'local_movimentacao': prod.local_movimentacao,
+                            'operacao_ids': prod.operacao_producao_id or '',
+                        })
+
+            # Validar se tem dados
+            if not itens:
+                return jsonify({
+                    'success': False,
+                    'message': 'Nenhum registro encontrado para exportar com os filtros aplicados'
+                }), 404
+
+            filtros = {
+                'data_inicio': data_inicio,
+                'data_fim': data_fim,
+                'cod_produto': cod_produto,
+                'nome_produto': nome_produto_filtro,
+                'ordem_producao': ordem_producao_filtro,
+                'local_movimentacao': local_filtro,
+            }
+
+            # Gerar Excel
+            excel_bytes = AnaliseProducaoExportService.exportar(
+                itens=itens,
+                agrupamento=agrupamento,
+                com_bom=com_bom,
+                filtros=filtros
+            )
+
+            # Retornar como download
+            sufixo_bom = '_com_bom' if com_bom else ''
+            filename = f'analise_producao_{agrupamento}{sufixo_bom}_{date.today().strftime("%Y%m%d")}.xlsx'
+            response = make_response(excel_bytes)
+            response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+            return response
+
+        except Exception as e:
+            logger.error(f"Erro ao exportar análise de produção: {e}")
+            return jsonify({
+                'success': False,
+                'message': f'Erro ao gerar exportação: {str(e)}'
+            }), 500
 
     @bp.route('/analise-producao/grupo-detalhe')  # type: ignore
     @login_required

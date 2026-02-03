@@ -1,5 +1,6 @@
 Preciso acrescentar um campo de ordem de produção nas produções realizadas.
 <producoes_realizadas>
+
 <tela_movimentacao_estoque>
 1- Nas produções que são importadas através da tela de movimentacoes de estoque, tabela MovimentacaoEstoque, preciso acrescentar esse campo de ordem de produção.
 2- Esse campo deverá ser exibido em uma coluna na tela de movimentações após "Observações".
@@ -9,6 +10,7 @@ Preciso acrescentar um campo de ordem de produção nas produções realizadas.
 Esse botão deverá renderizar um MODAL com todas as linhas do tipo_movimentacao=PRODUCAO (ou PRODUÇÃO, não sei como está registrado, por precaução busque sempre sem "Ç" e "~") sem ordem de produção preenchida do Tipo Origem RAIZ com o campo de ordem de produção para ser preenchido.
 Ao salvar, deverá ser propagado para todos os componentes recursivamente para manter o vinculo correto.
 </tela_movimentacao_estoque>
+
 <tela_manufatura_analise_producao>
 1- Nessa tela, deverá ser agrupado por ordem de produção + produto.
 2- Esse campo de Ordem de produção, tambem deverá ser exibido na tela em coluna no lugar de OPERAÇÂO.
@@ -16,4 +18,5 @@ Ao salvar, deverá ser propagado para todos os componentes recursivamente para m
 4- O modal tambem deverá somar as qtds da ordem de produção + produto.
 5- Os ajustes quando realizados, deverão ser registrados com a ordem de produção e se necessario pode usar a última "OPERAÇÂO" encontrada.
 </tela_manufatura_analise_producao>
+
 </producoes_realizadas>
