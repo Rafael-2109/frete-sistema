@@ -221,29 +221,110 @@ def _buscar_dados_conciliacao_preexistente(connection, linhas_reconciliadas):
             return {}
 
         # ─── QUERY 3: Buscar dados dos títulos (payable) ────────────────
+        campos_titulo = [
+            'id', 'move_id', 'partner_id', 'company_id',
+            'x_studio_nf_e', 'l10n_br_cobranca_parcela',
+            'credit', 'amount_residual', 'date_maturity',
+            'full_reconcile_id', 'reconciled',
+        ]
+
         titulos = connection.search_read(
             'account.move.line',
             [
                 ['id', 'in', list(counterpart_line_ids)],
                 ['account_type', '=', 'liability_payable'],
             ],
-            fields=[
-                'id', 'move_id', 'partner_id', 'company_id',
-                'x_studio_nf_e', 'l10n_br_cobranca_parcela',
-                'credit', 'amount_residual', 'date_maturity',
-                'full_reconcile_id', 'reconciled',
-            ],
+            fields=campos_titulo,
         )
-
-        if not titulos:
-            logger.info(
-                f"[OFX Conciliação] Nenhum título payable encontrado entre "
-                f"{len(counterpart_line_ids)} counterpart lines"
-            )
-            return {}
 
         # Indexar títulos por ID para lookup
         titulos_por_id = {t['id']: t for t in titulos}
+
+        # ─── QUERY 3B (FALLBACK): Segundo hop via payment ─────────────
+        # Quando o extrato foi reconciliado com a linha do PAYMENT (não diretamente
+        # com o título payable), precisamos navegar um nível adicional:
+        #   extrato → payment line (bancária/PENDENTES) → título payable
+        #
+        # Identificar counterpart lines que NÃO são payable e têm payment_id
+        ids_nao_payable = list(counterpart_line_ids - set(titulos_por_id.keys()))
+
+        if ids_nao_payable:
+            # Buscar essas linhas para verificar se têm payment_id
+            linhas_intermediarias = connection.search_read(
+                'account.move.line',
+                [['id', 'in', ids_nao_payable]],
+                fields=['id', 'payment_id', 'move_id'],
+            )
+
+            # Coletar todos os payment_ids para busca em batch
+            # Manter mapeamento: linha_intermediaria_id → payment_id
+            linha_para_payment: dict[int, int] = {}
+            payment_ids_unicos: set[int] = set()
+
+            for li in linhas_intermediarias:
+                payment_val = li.get('payment_id')
+                if payment_val:
+                    pid = payment_val[0] if isinstance(payment_val, (list, tuple)) else payment_val
+                    if pid:
+                        linha_para_payment[li['id']] = pid
+                        payment_ids_unicos.add(pid)
+
+            if payment_ids_unicos:
+                # Buscar TODOS os payments de uma vez (batch)
+                payments_odoo = connection.search_read(
+                    'account.payment',
+                    [['id', 'in', list(payment_ids_unicos)]],
+                    fields=['id', 'move_id'],
+                )
+
+                # Mapear: payment_id → payment_move_id
+                payment_para_move: dict[int, int] = {}
+                payment_move_ids: set[int] = set()
+                for pay in payments_odoo:
+                    pm = pay.get('move_id')
+                    if pm:
+                        pm_id = pm[0] if isinstance(pm, (list, tuple)) else pm
+                        payment_para_move[pay['id']] = pm_id
+                        payment_move_ids.add(pm_id)
+
+                if payment_move_ids:
+                    # Buscar linhas payable nos moves dos payments
+                    titulos_2hop = connection.search_read(
+                        'account.move.line',
+                        [
+                            ['move_id', 'in', list(payment_move_ids)],
+                            ['account_type', '=', 'liability_payable'],
+                        ],
+                        fields=campos_titulo,
+                    )
+
+                    if titulos_2hop:
+                        logger.info(
+                            f"[OFX Conciliação] [2-HOP] Encontrados {len(titulos_2hop)} "
+                            f"títulos payable via payment intermediário"
+                        )
+
+                        # Indexar títulos payable por move_id para associação correta
+                        titulos_por_move_id: dict[int, dict] = {}
+                        for t2 in titulos_2hop:
+                            t2_move = t2.get('move_id')
+                            t2_move_id = t2_move[0] if isinstance(t2_move, (list, tuple)) else t2_move
+                            if t2_move_id:
+                                titulos_por_move_id[t2_move_id] = t2
+
+                        # Mapear cada linha intermediária ao título payable
+                        # do seu respectivo payment
+                        for li_id, pid in linha_para_payment.items():
+                            move_id_do_payment = payment_para_move.get(pid)
+                            if move_id_do_payment and move_id_do_payment in titulos_por_move_id:
+                                titulos_por_id[li_id] = titulos_por_move_id[move_id_do_payment]
+
+        if not titulos_por_id:
+            logger.info(
+                f"[OFX Conciliação] Nenhum título payable encontrado entre "
+                f"{len(counterpart_line_ids)} counterpart lines (incluindo 2-hop)"
+            )
+            return {}
 
         # ─── MONTAGEM DO RESULTADO ──────────────────────────────────────
         # Para cada comprovante reconciliado, encontrar o título correspondente
