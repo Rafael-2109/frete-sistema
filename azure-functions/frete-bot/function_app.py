@@ -9,11 +9,17 @@ import azure.functions as func
 import json
 import logging
 
-from bot import BOT_APP
-
 app = func.FunctionApp()
 
 logger = logging.getLogger(__name__)
+
+# Import do bot com tratamento de erro para nao bloquear registro da function
+BOT_APP = None
+try:
+    from bot import BOT_APP
+    logger.info("[FUNC] BOT_APP carregado com sucesso")
+except Exception as e:
+    logger.exception(f"[FUNC] ERRO ao carregar BOT_APP: {e}")
 
 
 @app.route(
@@ -28,6 +34,14 @@ async def messages(req: func.HttpRequest) -> func.HttpResponse:
     A autenticacao e feita pelo BotFrameworkAdapter (validacao de JWT),
     por isso o auth_level e ANONYMOUS no nivel do Azure Functions.
     """
+    if BOT_APP is None:
+        logger.error("[FUNC] BOT_APP nao foi inicializado")
+        return func.HttpResponse(
+            body=json.dumps({"error": "Bot nao inicializado. Verifique logs."}),
+            status_code=500,
+            mimetype="application/json",
+        )
+
     try:
         body = req.get_body().decode("utf-8")
         auth_header = req.headers.get("Authorization", "")

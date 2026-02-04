@@ -1,0 +1,57 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.16/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.16",
+  "version": "1.0.0",
+  "id": "048d90b8-a792-4c84-99a5-e14a2f3bce42",
+  "packageName": "com.nacomgoya.agente-logistico",
+  "name": {
+    "short": "Agente Logistico",
+    "full": "Agente Logistico Nacom Goya"
+  },
+  "description": {
+    "short": "Assistente de logistica e gestao de frete",
+    "full": "Agente Logistico Nacom Goya - Consulte pedidos, estoque, entregas, notas fiscais e muito mais diretamente no Teams."
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "accentColor": "#0078D4",
+  "developer": {
+    "name": "Nacom Goya",
+    "websiteUrl": "https://nacomgoya.com.br",
+    "privacyUrl": "https://nacomgoya.com.br",
+    "termsOfUseUrl": "https://nacomgoya.com.br"
+  },
+  "bots": [
+    {
+      "botId": "048d90b8-a792-4c84-99a5-e14a2f3bce42",
+      "scopes": ["personal", "team", "groupchat"],
+      "isNotificationOnly": false,
+      "supportsFiles": false,
+      "commandLists": [
+        {
+          "scopes": ["personal", "team", "groupchat"],
+          "commands": [
+            {
+              "title": "ajuda",
+              "description": "Exibe informacoes de ajuda"
+            },
+            {
+              "title": "estoque",
+              "description": "Consulta estoque de produtos"
+            },
+            {
+              "title": "carteira",
+              "description": "Consulta carteira de pedidos"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "permissions": ["identity", "messageTeamMembers"],
+  "validDomains": [
+    "frete-bot-func-d4awggfge3awcqap.brazilsouth-01.azurewebsites.net"
+  ]
+}

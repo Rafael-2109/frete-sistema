@@ -225,7 +225,7 @@ class FreteBot(ActivityHandler):
             return
 
         # Mensagem de texto normal
-        text = (turn_context.activity.text or "").strip()
+        text = self._remove_bot_mention(turn_context)
         if not text:
             await turn_context.send_activity(
                 "Por favor, envie uma mensagem de texto."
@@ -364,14 +364,35 @@ class FreteBot(ActivityHandler):
                 "Acao nao reconhecida. Por favor, envie uma nova mensagem."
             )
 
+    @staticmethod
+    def _remove_bot_mention(turn_context: TurnContext) -> str:
+        """
+        Remove a mencao ao bot do texto da mensagem.
+
+        Em grupos/canais, o Teams envia o texto como:
+        "<at>BotName</at> qual o estoque?"
+        Este metodo limpa a mencao e retorna so a pergunta.
+        Em chats 1:1, retorna o texto original.
+        """
+        import re
+
+        text = (turn_context.activity.text or "").strip()
+        if not text:
+            return ""
+
+        # Remove tags <at>...</at> (mencao do bot)
+        text = re.sub(r"<at>.*?</at>\s*", "", text).strip()
+
+        return text
+
     async def on_members_added_activity(self, members_added, turn_context):
         """Mensagem de boas-vindas quando o bot e adicionado."""
         for member in members_added:
             if member.id != turn_context.activity.recipient.id:
                 await turn_context.send_activity(
                     "Ola! Sou o Agente Logistico da Nacom Goya. "
-                    "Envie uma mensagem para consultar pedidos, "
-                    "estoque, entregas e mais."
+                    "Mencione-me com @bot e sua pergunta para consultar "
+                    "pedidos, estoque, entregas e mais."
                 )
 
 
@@ -391,7 +412,6 @@ class BotApp:
             app_id=MICROSOFT_APP_ID,
             app_password=MICROSOFT_APP_PASSWORD,
             channel_auth_tenant=MICROSOFT_APP_TENANT_ID,
-            app_type="SingleTenant",
         )
         self.adapter = BotFrameworkAdapter(self.settings)
         self.adapter.on_turn_error = self._on_error
