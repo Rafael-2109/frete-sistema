@@ -1,0 +1,18 @@
+# Azure Functions
+local.settings.json
+__azurite_db*__.json
+.python_packages/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+
+# Environment
+.env

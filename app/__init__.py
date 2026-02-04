@@ -993,7 +993,7 @@ def create_app(config_name=None):
     app.register_blueprint(tagplus_webhook)  # Sem prefixo para manter URLs simples
     app.register_blueprint(tagplus_oauth_bp)  # Rotas OAuth2
 
-    # 💬 Teams Integration - Webhook para Agente Claude
+    # 💬 Teams Integration - Bot API para Azure Function
     from app.teams import teams_bp
     app.register_blueprint(teams_bp)
 
