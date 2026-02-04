@@ -272,11 +272,27 @@ async def _async_stream_sdk_client(
         f"images={len(image_files) if image_files else 0}"
     )
 
+    # =================================================================
+    # P1-2: Sentiment Detection — ajusta tom se frustração detectada
+    # =================================================================
+    enriched_prompt = message
+    try:
+        from .config.feature_flags import USE_SENTIMENT_DETECTION
+
+        if USE_SENTIMENT_DETECTION:
+            from .services.sentiment_detector import enrich_message_if_frustrated
+            enriched_prompt = enrich_message_if_frustrated(
+                message=message,
+                response_state=response_state,
+            )
+    except Exception as sentiment_err:
+        logger.warning(f"[AGENTE] Erro na detecção de sentimento (ignorado): {sentiment_err}")
+
     try:
         # ─── STREAMING direto com query() ───
         # Sem pool, sem locks, sem connect/disconnect
         async for event in client.stream_response(
-            prompt=message,
+            prompt=enriched_prompt,
             user_name=user_name,
             model=model,
             thinking_enabled=thinking_enabled,
@@ -526,6 +542,32 @@ def _stream_chat_response(
                 image_files=image_files,
                 app=app,
             )
+
+            # =============================================================
+            # P1-1: Prompt Suggestions (best-effort, após done)
+            # Gera 2-3 sugestões contextuais via Haiku (~300-800ms)
+            # O evento 'done' já foi emitido — frontend já mostra resposta
+            # =============================================================
+            try:
+                from .config.feature_flags import USE_PROMPT_SUGGESTIONS
+
+                if USE_PROMPT_SUGGESTIONS and response_state.get('full_text'):
+                    from .services.suggestion_generator import generate_suggestions
+
+                    suggestions = generate_suggestions(
+                        user_message=message,
+                        assistant_response=response_state['full_text'],
+                        tools_used=response_state.get('tools_used', []),
+                    )
+                    if suggestions:
+                        event_queue.put(_sse_event('suggestions', {
+                            'suggestions': suggestions,
+                        }))
+            except Exception as suggestions_error:
+                # SILENCIOSO: sugestões falham não devem afetar nada
+                logger.warning(
+                    f"[AGENTE] Erro ao gerar sugestões (ignorado): {suggestions_error}"
+                )
 
         # =================================================================
         # CRÍTICO: GARANTIA DE FINALIZAÇÃO
@@ -820,6 +862,48 @@ def _save_messages_to_db(
             db.session.commit()
             logger.debug(f"[AGENTE] Mensagens salvas na sessão {our_session_id[:8]}...")
 
+            # =============================================================
+            # P0-2: Sumarização Estruturada (best-effort, após commit)
+            # Roda APÓS mensagens salvas — falha não afeta salvamento
+            # =============================================================
+            try:
+                from .config.feature_flags import USE_SESSION_SUMMARY, SESSION_SUMMARY_THRESHOLD
+
+                if USE_SESSION_SUMMARY and session.needs_summarization(SESSION_SUMMARY_THRESHOLD):
+                    logger.info(
+                        f"[AGENTE] Trigger sumarização para sessão {our_session_id[:8]}... "
+                        f"(msgs={session.message_count}, threshold={SESSION_SUMMARY_THRESHOLD})"
+                    )
+                    from .services.session_summarizer import summarize_and_save
+                    summarize_and_save(
+                        app=app,
+                        session_id=our_session_id,
+                        user_id=user_id,
+                    )
+            except Exception as summary_error:
+                # SILENCIOSO: sumarização falha não deve afetar nada
+                logger.warning(f"[AGENTE] Erro na sumarização (ignorado): {summary_error}")
+
+            # =============================================================
+            # P1-3: Aprendizado de Padrões (best-effort, após commit)
+            # Analisa sessões históricas a cada N sessões do usuário
+            # =============================================================
+            try:
+                from .config.feature_flags import USE_PATTERN_LEARNING, PATTERN_LEARNING_THRESHOLD
+
+                if USE_PATTERN_LEARNING:
+                    from .services.pattern_analyzer import should_analyze_patterns, analyze_and_save as analyze_patterns_and_save
+
+                    if should_analyze_patterns(user_id, PATTERN_LEARNING_THRESHOLD):
+                        logger.info(
+                            f"[AGENTE] Trigger análise de padrões para usuário {user_id} "
+                            f"(threshold={PATTERN_LEARNING_THRESHOLD})"
+                        )
+                        analyze_patterns_and_save(app=app, user_id=user_id)
+            except Exception as pattern_error:
+                # SILENCIOSO: análise de padrões falha não deve afetar nada
+                logger.warning(f"[AGENTE] Erro na análise de padrões (ignorado): {pattern_error}")
+
     except Exception as e:
         logger.error(f"[AGENTE] Erro ao salvar mensagens: {e}")
         try:
@@ -918,13 +1002,23 @@ def api_get_session_messages(session_id: str):
 
         messages = session.get_messages()
 
-        return jsonify({
+        response_data = {
             'success': True,
             'session_id': session_id,
             'title': session.title,
             'messages': messages,
             'total_tokens': session.get_total_tokens(),
-        })
+        }
+
+        # P0-2: Inclui summary se disponível
+        if session.summary:
+            response_data['summary'] = session.summary
+            response_data['summary_updated_at'] = (
+                session.summary_updated_at.isoformat()
+                if session.summary_updated_at else None
+            )
+
+        return jsonify(response_data)
 
     except Exception as e:
         logger.error(f"[AGENTE] Erro ao buscar mensagens: {e}")
@@ -1656,3 +1750,120 @@ def api_user_answer():
     except Exception as e:
         logger.error(f"[AGENTE] Erro em /api/user-answer: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# =============================================================================
+# P2-2: INSIGHTS DASHBOARD (Admin Only)
+# =============================================================================
+
+@agente_bp.route('/insights', methods=['GET'])
+@login_required
+def pagina_insights():
+    """
+    P2-2: Página de analytics do agente (admin only).
+
+    GET /agente/insights
+
+    Requer:
+    - Perfil 'administrador'
+    - Flag USE_AGENT_INSIGHTS ativa
+    """
+    from .config.feature_flags import USE_AGENT_INSIGHTS
+
+    if not USE_AGENT_INSIGHTS:
+        return jsonify({'error': 'Insights desabilitado'}), 404
+
+    if current_user.perfil != 'administrador':
+        return jsonify({'error': 'Acesso restrito a administradores'}), 403
+
+    return render_template('agente/insights.html')
+
+
+@agente_bp.route('/api/insights/data', methods=['GET'])
+@login_required
+def api_insights_data():
+    """
+    P2-2: API de dados de insights.
+
+    GET /agente/api/insights/data?days=30&user_id=123
+
+    Params:
+        days: Período em dias (default 30, max 90)
+        user_id: Filtrar por usuário específico (opcional)
+
+    Response:
+        JSON com seções: overview, costs, tools, users, sessions, daily
+    """
+    from .config.feature_flags import USE_AGENT_INSIGHTS
+
+    if not USE_AGENT_INSIGHTS:
+        return jsonify({'error': 'Insights desabilitado'}), 404
+
+    if current_user.perfil != 'administrador':
+        return jsonify({'error': 'Acesso restrito a administradores'}), 403
+
+    try:
+        days = request.args.get('days', 30, type=int)
+        days = min(max(days, 1), 90)  # Limita entre 1 e 90 dias
+
+        filter_user_id = request.args.get('user_id', None, type=int)
+
+        from .services.insights_service import get_insights_data
+
+        data = get_insights_data(days=days, user_id=filter_user_id)
+
+        return jsonify({
+            'success': True,
+            'data': data,
+        })
+
+    except Exception as e:
+        logger.error(f"[AGENTE] Erro ao gerar insights: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@agente_bp.route('/api/insights/friction', methods=['GET'])
+@login_required
+def api_insights_friction():
+    """
+    P2-4: API de análise de fricção.
+
+    GET /agente/api/insights/friction?days=30
+
+    Params:
+        days: Período em dias (default 30, max 90)
+
+    Response:
+        JSON com seções: friction_score, repeated_queries, abandoned_sessions,
+        frustration_signals, no_tool_sessions, summary
+    """
+    from .config.feature_flags import USE_AGENT_INSIGHTS, USE_FRICTION_ANALYSIS
+
+    if not USE_AGENT_INSIGHTS or not USE_FRICTION_ANALYSIS:
+        return jsonify({'error': 'Análise de fricção desabilitada'}), 404
+
+    if current_user.perfil != 'administrador':
+        return jsonify({'error': 'Acesso restrito a administradores'}), 403
+
+    try:
+        days = request.args.get('days', 30, type=int)
+        days = min(max(days, 1), 90)
+
+        from .services.friction_analyzer import analyze_friction
+
+        data = analyze_friction(days=days)
+
+        return jsonify({
+            'success': True,
+            'data': data,
+        })
+
+    except Exception as e:
+        logger.error(f"[AGENTE] Erro na análise de fricção: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500

@@ -71,16 +71,16 @@
   ],
   "indices": [
     {
-      "name": "ix_previsao_demanda_data_ano",
+      "name": "ix_previsao_demanda_cod_produto",
       "columns": [
-        "data_ano"
+        "cod_produto"
       ],
       "unique": false
     },
     {
-      "name": "ix_previsao_demanda_cod_produto",
+      "name": "ix_previsao_demanda_data_ano",
       "columns": [
-        "cod_produto"
+        "data_ano"
       ],
       "unique": false
     }

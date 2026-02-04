@@ -59,6 +59,11 @@ class AgentSession(db.Model):
     # Dados extras em JSONB - HISTÓRICO COMPLETO (FEAT-030)
     data = db.Column(db.JSON, default=dict)
 
+    # P0-2: Sumarização Estruturada de Sessões
+    summary = db.Column(db.JSON, nullable=True)  # Resumo estruturado (JSONB)
+    summary_updated_at = db.Column(db.DateTime, nullable=True)  # Quando foi gerado
+    summary_message_count = db.Column(db.Integer, default=0)  # message_count quando gerado
+
     # Timestamps
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -78,7 +83,7 @@ class AgentSession(db.Model):
 
     def to_dict(self) -> Dict[str, Any]:
         """Converte para dicionário (API response)."""
-        return {
+        result = {
             'id': self.id,
             'session_id': self.session_id,
             'user_id': self.user_id,
@@ -90,6 +95,16 @@ class AgentSession(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }
+
+        # P0-2: Inclui summary se disponível
+        if self.summary:
+            result['summary'] = self.summary
+            result['summary_updated_at'] = (
+                self.summary_updated_at.isoformat()
+                if self.summary_updated_at else None
+            )
+
+        return result
 
     def _generate_title(self) -> str:
         """Gera título a partir da primeira mensagem do usuário."""
@@ -263,6 +278,57 @@ class AgentSession(db.Model):
         if len(messages) > MAX_MESSAGES_IN_CONTEXT:
             return messages[-MAX_MESSAGES_IN_CONTEXT:]
         return messages
+
+    # =========================================================================
+    # MÉTODOS DE SUMARIZAÇÃO (P0-2)
+    # =========================================================================
+
+    def get_summary(self) -> Optional[Dict[str, Any]]:
+        """Retorna summary estruturado da sessão."""
+        return self.summary
+
+    def set_summary(self, summary_data: Dict[str, Any]) -> None:
+        """
+        Define summary estruturado.
+
+        Args:
+            summary_data: Dicionário com resumo estruturado
+        """
+        self.summary = summary_data
+        self.summary_updated_at = datetime.utcnow()
+        self.summary_message_count = self.message_count or 0
+
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(self, 'summary')
+
+    def needs_summarization(self, threshold: int = 5) -> bool:
+        """
+        Verifica se a sessão precisa de (re)sumarização.
+
+        Critérios:
+        1. message_count >= threshold
+        2. Não tem summary OU summary está stale
+           (stale = message_count cresceu >= threshold desde último summary)
+
+        Args:
+            threshold: Número mínimo de mensagens para trigger
+
+        Returns:
+            True se precisa sumarizar
+        """
+        current_count = self.message_count or 0
+
+        # Muito poucas mensagens
+        if current_count < threshold:
+            return False
+
+        # Nunca foi sumarizada
+        if not self.summary:
+            return True
+
+        # Summary stale: cresceu N+ mensagens desde última sumarização
+        messages_since_summary = current_count - (self.summary_message_count or 0)
+        return messages_since_summary >= threshold
 
     # =========================================================================
     # MÉTODOS DE CLASSE

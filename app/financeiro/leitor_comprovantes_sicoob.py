@@ -736,6 +736,8 @@ def extrair_comprovantes(pdf_path: str) -> list[ComprovanteBoleto]:
     """
     Extrai todos os comprovantes de um PDF.
 
+    Estratégia: pypdf (texto nativo) primeiro, OCR Tesseract como fallback.
+
     Args:
         pdf_path: Caminho do arquivo PDF
 
@@ -745,12 +747,54 @@ def extrair_comprovantes(pdf_path: str) -> list[ComprovanteBoleto]:
     if not os.path.exists(pdf_path):
         raise FileNotFoundError(f"Arquivo não encontrado: {pdf_path}")
 
+    print(f"Processando: {pdf_path}")
+
+    # ── Método 1: pypdf (texto nativo — rápido e preciso) ──
+    with open(pdf_path, 'rb') as f:
+        pdf_bytes = f.read()
+
+    paginas_pypdf = _extrair_texto_pypdf(pdf_bytes)
+
+    if paginas_pypdf:
+        total = len(paginas_pypdf)
+        print(f"Total de páginas: {total} (pypdf — texto nativo)")
+        print("-" * 60)
+
+        comprovantes = []
+        pulados = 0
+
+        for pagina, texto in paginas_pypdf:
+            print(f"  Página {pagina}/{total}... ", end="", flush=True)
+
+            if not _eh_comprovante_boleto(texto):
+                print("PULADA (não é boleto)")
+                pulados += 1
+                continue
+
+            resultados = parse_comprovantes_from_text(texto, pagina=pagina)
+            comprovantes.extend(resultados)
+
+            for comp in resultados:
+                if comp.beneficiario_razao_social:
+                    print(f"OK → {comp.beneficiario_razao_social}")
+                else:
+                    print("OK (sem beneficiário identificado)")
+
+        if comprovantes:
+            print("-" * 60)
+            print(f"Total extraído: {len(comprovantes)} comprovante(s) via pypdf")
+            if pulados:
+                print(f"Páginas puladas (não são boleto): {pulados}")
+            return comprovantes
+
+        print("  ⚠️ pypdf não extraiu comprovantes válidos — tentando OCR...")
+
+    # ── Método 2: OCR Tesseract (fallback para PDFs scan/imagem) ──
     pdf = pdfium.PdfDocument(pdf_path)
     total_paginas = len(pdf)
     comprovantes = []
 
-    print(f"Processando: {pdf_path}")
-    print(f"Total de páginas: {total_paginas}")
+    print(f"Total de páginas: {total_paginas} (OCR Tesseract)")
     print("-" * 60)
 
     pulados = 0
@@ -758,21 +802,17 @@ def extrair_comprovantes(pdf_path: str) -> list[ComprovanteBoleto]:
     for i in range(total_paginas):
         print(f"  Página {i + 1}/{total_paginas}... ", end="", flush=True)
 
-        # Renderizar e OCR
         imagem = renderizar_pagina(pdf_path, i)
         texto = extrair_texto_ocr(imagem)
 
-        # Verificar se é comprovante de boleto
         if not _eh_comprovante_boleto(texto):
             print("PULADA (não é boleto)")
             pulados += 1
             continue
 
-        # Parsear (V2 pode ter 1 ou 2 comprovantes por página)
         resultados = parse_comprovantes_from_text(texto, pagina=i + 1)
         comprovantes.extend(resultados)
 
-        # Feedback
         for comp in resultados:
             if comp.beneficiario_razao_social:
                 print(f"OK → {comp.beneficiario_razao_social}")
@@ -780,16 +820,63 @@ def extrair_comprovantes(pdf_path: str) -> list[ComprovanteBoleto]:
                 print("OK (sem beneficiário identificado)")
 
     print("-" * 60)
-    print(f"Total extraído: {len(comprovantes)} comprovante(s)")
+    print(f"Total extraído: {len(comprovantes)} comprovante(s) via OCR")
     if pulados:
         print(f"Páginas puladas (não são boleto): {pulados}")
 
     return comprovantes
 
 
+def _extrair_texto_pypdf(pdf_bytes: bytes) -> list[tuple[int, str]]:
+    """
+    Extrai texto nativo de cada página do PDF usando pypdf.
+
+    PDFs gerados pelo Internet Banking SICOOB contêm texto embutido —
+    NÃO são scans/imagens. A extração via pypdf é instantânea e 100%
+    precisa (preserva "--", não desalinha colunas).
+
+    Returns:
+        Lista de (pagina_1indexed, texto) para páginas com texto nativo.
+        Lista vazia se o PDF não contém texto (é scan/imagem).
+    """
+    from pypdf import PdfReader
+    from io import BytesIO
+
+    try:
+        reader = PdfReader(BytesIO(pdf_bytes))
+    except Exception as e:
+        print(f"  ⚠️ pypdf falhou ao abrir PDF: {e}")
+        return []
+
+    resultados = []
+    total = len(reader.pages)
+
+    for idx, page in enumerate(reader.pages):
+        try:
+            texto = page.extract_text() or ''
+        except Exception:
+            texto = ''
+
+        pagina = idx + 1
+
+        # Verificar se tem conteúdo textual mínimo (não é scan)
+        if len(texto.strip()) > 50:
+            resultados.append((pagina, texto))
+
+    # Se menos da metade das páginas tem texto, provavelmente é scan
+    if resultados and len(resultados) < total * 0.3:
+        print(f"  ⚠️ pypdf: apenas {len(resultados)}/{total} páginas com texto — provavelmente scan")
+        return []
+
+    return resultados
+
+
 def extrair_comprovantes_from_bytes(pdf_bytes: bytes) -> list[ComprovanteBoleto]:
     """
     Extrai comprovantes a partir de bytes do PDF (uso em APIs web).
+
+    Estratégia: pypdf (texto nativo) como método primário, OCR Tesseract como fallback.
+    Os PDFs SICOOB têm texto embutido — pypdf é mais rápido e preciso que OCR.
 
     Args:
         pdf_bytes: Conteúdo binário do PDF
@@ -797,6 +884,30 @@ def extrair_comprovantes_from_bytes(pdf_bytes: bytes) -> list[ComprovanteBoleto]
     Returns:
         Lista de ComprovanteBoleto extraídos
     """
+    # ── Método 1: pypdf (texto nativo — rápido e preciso) ──
+    paginas_pypdf = _extrair_texto_pypdf(pdf_bytes)
+
+    if paginas_pypdf:
+        comprovantes = []
+        total = len(paginas_pypdf)
+        pulados = 0
+
+        for pagina, texto in paginas_pypdf:
+            if not _eh_comprovante_boleto(texto):
+                pulados += 1
+                continue
+
+            resultados = parse_comprovantes_from_text(texto, pagina=pagina)
+            comprovantes.extend(resultados)
+
+        if comprovantes:
+            print(f"  ✅ pypdf: {len(comprovantes)} comprovante(s) extraído(s) "
+                  f"({total} páginas, {pulados} puladas)")
+            return comprovantes
+
+        print("  ⚠️ pypdf não extraiu comprovantes válidos — tentando OCR...")
+
+    # ── Método 2: OCR Tesseract (fallback para PDFs scan/imagem) ──
     pdf = pdfium.PdfDocument(pdf_bytes)
     total_paginas = len(pdf)
     comprovantes = []

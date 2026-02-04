@@ -508,6 +508,9 @@ async function sendMessage(event) {
     // Limpa thinking anterior
     clearThinking();
 
+    // P1-1: Remove chips de sugestão anteriores
+    document.querySelectorAll('.suggestion-chips').forEach(el => el.remove());
+
     // Mostra indicador e botão stop
     // FEAT-002: Indica quando pensamento profundo está ativo
     if (thinkingEnabled) {
@@ -925,6 +928,21 @@ function processSSEEvent(eventType, data, state) {
                     injectFeedbackButtons(state.msgElement, state.text);
                 }
                 break;
+
+            // P1-1: Sugestões de prompt contextuais (chips clicáveis)
+            case 'suggestions': {
+                const suggestions = data.suggestions || [];
+                if (suggestions.length > 0 && state.msgElement) {
+                    renderSuggestionChips(suggestions, state.msgElement);
+                }
+                break;
+            }
+
+            // P2-3: Aviso de ação destrutiva (reversibilidade)
+            case 'destructive_action_warning': {
+                renderDestructiveWarning(data, state.msgElement);
+                break;
+            }
         }
     } catch (e) {
         // =================================================================
@@ -1178,6 +1196,104 @@ function injectFeedbackButtons(msgElement, text) {
             showToast(rating === 'positive' ? '👍 Obrigado!' : '👎 Anotado, vou melhorar!', 2000);
         });
     });
+}
+
+// ============================================
+// P1-1: SUGESTÕES DE PROMPT — Chips Clicáveis
+// ============================================
+
+/**
+ * Renderiza chips de sugestão de follow-up abaixo da mensagem do assistente.
+ * Cada chip é clicável: preenche o input e auto-envia a mensagem.
+ *
+ * @param {string[]} suggestions - Array de 2-3 strings com sugestões
+ * @param {HTMLElement} msgElement - Elemento .message onde inserir os chips
+ */
+function renderSuggestionChips(suggestions, msgElement) {
+    // Guard: evita duplicação
+    if (msgElement.querySelector('.suggestion-chips')) return;
+
+    const contentDiv = msgElement.querySelector('.message-content');
+    if (!contentDiv) return;
+
+    const container = document.createElement('div');
+    container.className = 'suggestion-chips';
+
+    suggestions.forEach(text => {
+        const chip = document.createElement('button');
+        chip.className = 'suggestion-chip';
+        chip.textContent = text;
+        chip.title = text;
+
+        chip.addEventListener('click', () => {
+            // Remove todos os chips
+            document.querySelectorAll('.suggestion-chips').forEach(el => el.remove());
+
+            // Preenche o input e envia
+            messageInput.value = text;
+            sendMessage(null);
+        });
+
+        container.appendChild(chip);
+    });
+
+    contentDiv.appendChild(container);
+
+    // Scroll para mostrar os chips
+    scrollToBottom();
+}
+
+// ============================================
+// P2-3: Aviso de ação destrutiva (reversibilidade)
+// ============================================
+
+/**
+ * Renderiza aviso de ação destrutiva no chat.
+ * Mostra banner informativo sobre a ação que está sendo executada.
+ * NÃO bloqueia — apenas notifica. O SDK já usa AskUserQuestion para confirmar.
+ *
+ * @param {object} data - Dados do evento SSE
+ * @param {HTMLElement} msgElement - Elemento de mensagem atual (pode ser null)
+ */
+function renderDestructiveWarning(data, msgElement) {
+    const reversibilityLabels = {
+        'irreversible': { text: 'Irreversivel', icon: 'fa-exclamation-triangle', cls: 'destructive-irreversible' },
+        'hard_to_reverse': { text: 'Dificil reverter', icon: 'fa-exclamation-circle', cls: 'destructive-hard' },
+        'reversible': { text: 'Reversivel', icon: 'fa-info-circle', cls: 'destructive-reversible' },
+    };
+
+    const level = reversibilityLabels[data.reversibility] || reversibilityLabels['hard_to_reverse'];
+
+    const banner = document.createElement('div');
+    banner.className = `destructive-warning ${level.cls}`;
+    banner.innerHTML = `
+        <div class="destructive-warning-icon">
+            <i class="fas ${level.icon}"></i>
+        </div>
+        <div class="destructive-warning-content">
+            <div class="destructive-warning-title">
+                <strong>${escapeHtml(data.description || data.action)}</strong>
+                <span class="destructive-warning-badge">${level.text}</span>
+            </div>
+            <div class="destructive-warning-detail">
+                Tool: ${escapeHtml(data.tool_name || '')} &mdash; ${escapeHtml(data.action || '')}
+            </div>
+        </div>
+    `;
+
+    // Insere no chat
+    const target = msgElement?.querySelector('.message-content') || document.getElementById('chatMessages');
+    if (target) {
+        target.appendChild(banner);
+        scrollToBottom();
+    }
+
+    // Auto-remove após 15 segundos
+    setTimeout(() => {
+        banner.style.opacity = '0';
+        banner.style.transition = 'opacity 0.3s';
+        setTimeout(() => banner.remove(), 300);
+    }, 15000);
 }
 
 // ============================================

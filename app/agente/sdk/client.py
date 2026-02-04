@@ -503,7 +503,10 @@ Nunca invente informações."""
         # Hooks SDK formais para auditoria
         # =================================================================
         try:
-            from claude_agent_sdk import HookMatcher, PostToolUseHookInput, PreCompactHookInput, HookContext
+            from claude_agent_sdk import (
+                HookMatcher, PostToolUseHookInput, PreCompactHookInput,
+                StopHookInput, UserPromptSubmitHookInput, HookContext,
+            )
 
             async def _keep_stream_open(hook_input, signal, context: HookContext):
                 """Hook OBRIGATÓRIO: mantém stream aberto para can_use_tool funcionar.
@@ -525,17 +528,129 @@ Nunca invente informações."""
                 return {}
 
             async def _pre_compact_hook(hook_input: PreCompactHookInput, signal, context: HookContext):
-                """Antes de compactação, instrui modelo a salvar contexto crítico."""
+                """Antes de compactação, instrui modelo a salvar contexto logístico estruturado.
+
+                P0-1: Melhoria do Pre-Compaction Hook.
+                Com USE_STRUCTURED_COMPACTION=true (default), instrui o modelo a salvar
+                pedidos, decisões, tarefas e contexto em formato XML estruturado.
+                Sem a flag, mantém comportamento genérico original como fallback.
+                """
+                from ..config.feature_flags import USE_STRUCTURED_COMPACTION
+
                 logger.info("[COMPACTION] PreCompact hook ativado — contexto será compactado")
+
+                if not USE_STRUCTURED_COMPACTION:
+                    return {
+                        "custom_instructions": (
+                            "O contexto será compactado agora. ANTES de continuar, "
+                            "salve informações críticas usando mcp__memory__save_memory "
+                            "em /memories/context/session_notes.xml. "
+                            "Após compactação, consulte suas memórias para recuperar estado."
+                        )
+                    }
+
                 return {
                     "custom_instructions": (
-                        "O contexto será compactado agora. ANTES de continuar, "
-                        "salve informações críticas (pedidos em discussão, clientes, decisões) "
-                        "usando mcp__memory__save_memory em /memories/context/session_notes.xml. "
-                        "Após compactação, consulte suas memórias para recuperar estado."
+                        "⚠️ COMPACTAÇÃO IMINENTE — O contexto será reduzido agora.\n\n"
+                        "ANTES de continuar, salve o estado da conversa usando "
+                        "mcp__memory__save_memory no path /memories/context/session_notes.xml.\n\n"
+                        "Use EXATAMENTE este formato XML:\n"
+                        "```xml\n"
+                        "<session_context>\n"
+                        "  <pedidos_em_discussao>\n"
+                        "    <!-- Liste TODOS os pedidos mencionados com código VCD/VFB, cliente e valor -->\n"
+                        "    <pedido codigo=\"VCDxxx\" cliente=\"Nome\" valor=\"R$ X.XXX,XX\" status=\"pendente|parcial|concluido\" />\n"
+                        "  </pedidos_em_discussao>\n"
+                        "  <decisoes_tomadas>\n"
+                        "    <!-- Decisões já confirmadas pelo usuário -->\n"
+                        "    <decisao>Descrição da decisão</decisao>\n"
+                        "  </decisoes_tomadas>\n"
+                        "  <tarefas_pendentes>\n"
+                        "    <!-- O que falta fazer nesta conversa -->\n"
+                        "    <tarefa>Descrição</tarefa>\n"
+                        "  </tarefas_pendentes>\n"
+                        "  <dados_consultados>\n"
+                        "    <!-- Últimas consultas SQL ou resultados relevantes -->\n"
+                        "    <consulta tipo=\"sql|estoque|separacao\">Resumo do resultado</consulta>\n"
+                        "  </dados_consultados>\n"
+                        "  <contexto_usuario>\n"
+                        "    <!-- Preferências e contexto mencionados -->\n"
+                        "    <nota>Informação relevante sobre o usuário</nota>\n"
+                        "  </contexto_usuario>\n"
+                        "</session_context>\n"
+                        "```\n\n"
+                        "APÓS salvar, consulte /memories/context/session_notes.xml para "
+                        "recuperar o estado e continue a conversa normalmente."
                     )
                 }
 
+            # ─── P3-2: Stop Hook — loga métricas finais da sessão ───
+            async def _stop_hook(hook_input: StopHookInput, signal, context: HookContext):
+                """Hook de encerramento: loga métricas finais da sessão.
+
+                P3-2: Expanded Hooks.
+                Executado pelo SDK quando a sessão termina (após ResultMessage).
+                Loga: session_id, duração, indicador de stop_hook_active.
+
+                Quando USE_EXPANDED_HOOKS=false, retorna {} silenciosamente (noop).
+                """
+                from ..config.feature_flags import USE_EXPANDED_HOOKS
+
+                if not USE_EXPANDED_HOOKS:
+                    return {}
+
+                session_id = hook_input.get('session_id', 'unknown')
+                stop_active = hook_input.get('stop_hook_active', False)
+
+                logger.info(
+                    f"[HOOK:Stop] Sessão encerrada: "
+                    f"session={session_id[:12]}... | "
+                    f"stop_hook_active={stop_active}"
+                )
+
+                return {}
+
+            # ─── P3-2: UserPromptSubmit Hook — enriquece prompt antes de processar ───
+            async def _user_prompt_submit_hook(
+                hook_input: UserPromptSubmitHookInput, signal, context: HookContext
+            ):
+                """Hook de submissão: pode enriquecer o prompt do usuário.
+
+                P3-2: Expanded Hooks.
+                Executado pelo SDK ANTES de processar o prompt do usuário.
+                Pode adicionar contexto adicional via hookSpecificOutput.additionalContext.
+
+                Uso atual: loga o prompt para auditoria.
+                Uso futuro: pode injetar contexto de sentimento, padrões aprendidos,
+                ou informações de sessão anterior automaticamente.
+
+                Quando USE_EXPANDED_HOOKS=false, retorna {} silenciosamente (noop).
+                """
+                from ..config.feature_flags import USE_EXPANDED_HOOKS
+
+                if not USE_EXPANDED_HOOKS:
+                    return {}
+
+                prompt = hook_input.get('prompt', '')
+                session_id = hook_input.get('session_id', 'unknown')
+
+                logger.info(
+                    f"[HOOK:UserPromptSubmit] Prompt recebido: "
+                    f"session={session_id[:12]}... | "
+                    f"prompt_len={len(prompt)} chars"
+                )
+
+                # Retorna sem enriquecer — pronto para uso futuro.
+                # Para adicionar contexto ao prompt, descomentar:
+                # return {
+                #     "hookSpecificOutput": {
+                #         "hookEventName": "UserPromptSubmit",
+                #         "additionalContext": "Contexto adicional aqui"
+                #     }
+                # }
+                return {}
+
+            # ─── Registrar TODOS os hooks ───
             options_dict["hooks"] = {
                 "PreToolUse": [
                     HookMatcher(
@@ -554,8 +669,21 @@ Nunca invente informações."""
                         hooks=[_pre_compact_hook],
                     ),
                 ],
+                "Stop": [
+                    HookMatcher(
+                        hooks=[_stop_hook],
+                    ),
+                ],
+                "UserPromptSubmit": [
+                    HookMatcher(
+                        hooks=[_user_prompt_submit_hook],
+                    ),
+                ],
             }
-            logger.debug("[AGENT_CLIENT] Hooks SDK (PreToolUse + PostToolUse + PreCompact) configurados")
+            logger.debug(
+                "[AGENT_CLIENT] Hooks SDK configurados: "
+                "PreToolUse + PostToolUse + PreCompact + Stop + UserPromptSubmit"
+            )
         except (ImportError, Exception) as e:
             logger.warning(f"[AGENT_CLIENT] Hooks SDK não disponíveis: {e}")
 
@@ -650,6 +778,40 @@ Nunca invente informações."""
             logger.debug("[AGENT_CLIENT] Custom Tool schema não disponível (módulo não encontrado)")
         except Exception as e:
             logger.warning(f"[AGENT_CLIENT] Erro ao registrar Custom Tool schema: {e}")
+
+        # =================================================================
+        # P2-1: MCP Sessions Search Tool (busca em sessões anteriores)
+        # =================================================================
+        try:
+            from ..tools.session_search_tool import sessions_server
+            from ..tools.session_search_tool import set_current_user_id as set_session_search_user_id
+
+            if sessions_server is not None:
+                if user_id:
+                    set_session_search_user_id(user_id)
+
+                mcp_servers = options_dict.get("mcp_servers", {})
+                mcp_servers["sessions"] = sessions_server
+                options_dict["mcp_servers"] = mcp_servers
+
+                # Adicionar tools na allowed_tools
+                allowed = options_dict.get("allowed_tools", [])
+                sessions_tool_names = [
+                    "mcp__sessions__search_sessions",
+                    "mcp__sessions__list_recent_sessions",
+                ]
+                for tool_name in sessions_tool_names:
+                    if tool_name not in allowed:
+                        allowed.append(tool_name)
+                options_dict["allowed_tools"] = allowed
+
+                logger.info("[AGENT_CLIENT] Custom Tool MCP 'sessions' registrada (2 operações)")
+            else:
+                logger.debug("[AGENT_CLIENT] sessions_server é None — claude_agent_sdk não disponível")
+        except ImportError:
+            logger.debug("[AGENT_CLIENT] Custom Tool sessions não disponível (módulo não encontrado)")
+        except Exception as e:
+            logger.warning(f"[AGENT_CLIENT] Erro ao registrar Custom Tool sessions: {e}")
 
         return ClaudeAgentOptions(**options_dict)
 

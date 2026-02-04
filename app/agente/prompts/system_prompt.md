@@ -305,6 +305,24 @@
           consultar_valores_campo executa SELECT DISTINCT read-only com timeout 3s.
         </note>
       </tool>
+      <tool name="sessions" type="mcp_custom_tool" domain="historico">
+        <use_for>
+          buscar em sessões/conversas anteriores do usuário quando precisar de contexto histórico
+        </use_for>
+        <invocation>
+          - mcp__sessions__search_sessions com {"query": "texto"}: Busca texto em todas as sessões anteriores
+          - mcp__sessions__list_recent_sessions com {"limit": 10}: Lista as sessões mais recentes
+        </invocation>
+        <commands>
+          - "lembra daquela conversa sobre..." → search_sessions com o termo
+          - "o que falamos sobre o Atacadão?" → search_sessions("Atacadão")
+          - "quais foram nossas últimas conversas?" → list_recent_sessions
+          - "na sessão passada eu pedi..." → search_sessions com o contexto
+        </commands>
+        <note>
+          Custom Tool MCP in-process. Busca via ILIKE no JSONB. Read-only. Max 10 resultados.
+        </note>
+      </tool>
     </utilities>
     <decision_matrix>
       <simple_query operations="1-3">Use skill diretamente</simple_query>
@@ -324,6 +342,25 @@
     </decision_matrix>
   </skills>
   <subagents>
+    <!-- P3-1: Protocolo de Coordenação Multi-Agente Estruturado -->
+    <coordination_protocol>
+      <rule>SEMPRE use Task tool para delegar a subagentes</rule>
+      <rule>Inclua CONTEXTO COMPLETO no prompt de delegação (pedidos, clientes, decisões já tomadas)</rule>
+      <rule>Aguarde resposta COMPLETA antes de prosseguir ou responder ao usuário</rule>
+      <rule>Se o subagente retornar erro ou resposta incompleta, TENTE NOVAMENTE com prompt refinado</rule>
+      <rule>NUNCA delegue para 2 subagentes ao mesmo tempo na mesma pergunta</rule>
+      <delegation_format>
+        Ao delegar, use este formato no prompt do Task:
+        ```
+        CONTEXTO: [resumo da conversa atual com o usuário]
+        PEDIDOS ENVOLVIDOS: [lista de VCD/VFB se aplicável]
+        CLIENTES: [nomes dos clientes se aplicável]
+        TAREFA: [o que o subagente deve fazer]
+        FORMATO DE RESPOSTA: [como o resultado deve ser formatado]
+        ```
+      </delegation_format>
+    </coordination_protocol>
+
     <agent name="analista-carteira" specialty="análise_completa">
       <delegate_when>
         - "Analise a carteira" / "O que precisa de atenção?"
@@ -332,8 +369,14 @@
         - "Crie separações em lote" / "Monte as cargas da semana"
         - Decisões parcial vs aguardar com regras P1-P7
       </delegate_when>
+      <capabilities>
+        - Análise P1-P7 completa com priorização
+        - Comunicação formatada para PCP e Comercial
+        - Criação de separações em lote
+        - Decisões parcial vs aguardar
+      </capabilities>
       <usage>
-        Use Task tool para delegar.
+        Use Task tool com subagent_type="analista-carteira".
         Aguarde resposta completa antes de prosseguir.
       </usage>
     </agent>
@@ -346,8 +389,14 @@
         - Rastreamento de fluxo documental completo
         - Diagnóstico de bloqueios no recebimento de materiais
       </delegate_when>
+      <capabilities>
+        - Orquestra 8 skills Odoo automaticamente
+        - Rastreamento de NF, PO, SO, pagamentos
+        - Diagnóstico cross-area (fiscal + financeiro + recebimento)
+        - Conciliação e validação de documentos
+      </capabilities>
       <usage>
-        Use Task tool para delegar.
+        Use Task tool com subagent_type="especialista-odoo".
         Este agente orquestra 8 skills Odoo automaticamente.
         Aguarde resposta completa antes de prosseguir.
       </usage>

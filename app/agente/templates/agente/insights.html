@@ -1,0 +1,981 @@
+{% extends "base.html" %}
+
+{% block extra_css %}
+<style>
+  /* ============================================
+   * P2-2: Dashboard de Insights do Agente
+   * ============================================ */
+
+  .insights-page {
+    padding: 1.5rem;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  .insights-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .insights-header h2 {
+    margin: 0;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .insights-header h2 i {
+    color: var(--nc-accent-primary, #6366f1);
+  }
+
+  .insights-controls {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+  }
+
+  .insights-controls select {
+    padding: 0.4rem 0.75rem;
+    border-radius: 6px;
+    border: 1px solid var(--bs-border-color, #444);
+    background: var(--bs-body-bg, #1a1a2e);
+    color: var(--bs-body-color, #e0e0e0);
+    font-size: 0.875rem;
+  }
+
+  .insights-controls .btn-refresh {
+    padding: 0.4rem 0.75rem;
+    border-radius: 6px;
+    border: 1px solid var(--bs-border-color, #444);
+    background: transparent;
+    color: var(--bs-body-color, #e0e0e0);
+    cursor: pointer;
+    font-size: 0.875rem;
+    transition: all 0.2s;
+  }
+
+  .insights-controls .btn-refresh:hover {
+    background: var(--nc-accent-primary, #6366f1);
+    color: #fff;
+    border-color: var(--nc-accent-primary, #6366f1);
+  }
+
+  .insights-controls .btn-refresh.loading i {
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  /* KPI Cards */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .kpi-card {
+    background: var(--bs-body-bg, #1a1a2e);
+    border: 1px solid var(--bs-border-color, #333);
+    border-radius: 10px;
+    padding: 1.25rem;
+    text-align: center;
+    transition: border-color 0.2s;
+  }
+
+  .kpi-card:hover {
+    border-color: var(--nc-accent-primary, #6366f1);
+  }
+
+  .kpi-card .kpi-icon {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+    opacity: 0.7;
+  }
+
+  .kpi-card .kpi-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--nc-accent-primary, #6366f1);
+    line-height: 1.2;
+  }
+
+  .kpi-card .kpi-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0.6;
+    margin-top: 0.25rem;
+  }
+
+  /* Chart sections */
+  .charts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .chart-card {
+    background: var(--bs-body-bg, #1a1a2e);
+    border: 1px solid var(--bs-border-color, #333);
+    border-radius: 10px;
+    padding: 1.25rem;
+  }
+
+  .chart-card h5 {
+    margin: 0 0 1rem 0;
+    font-weight: 600;
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .chart-card h5 i {
+    opacity: 0.6;
+  }
+
+  .chart-card canvas {
+    max-height: 300px;
+  }
+
+  /* Tables */
+  .table-card {
+    background: var(--bs-body-bg, #1a1a2e);
+    border: 1px solid var(--bs-border-color, #333);
+    border-radius: 10px;
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .table-card h5 {
+    margin: 0 0 1rem 0;
+    font-weight: 600;
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .insights-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+
+  .insights-table th {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 2px solid var(--bs-border-color, #333);
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0.6;
+  }
+
+  .insights-table td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--bs-border-color, #222);
+  }
+
+  .insights-table tr:hover td {
+    background: rgba(99, 102, 241, 0.05);
+  }
+
+  .insights-table .cost-badge {
+    font-weight: 600;
+    color: var(--nc-accent-primary, #6366f1);
+  }
+
+  /* Loading overlay */
+  .insights-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem;
+    opacity: 0.5;
+  }
+
+  .insights-loading i {
+    font-size: 2rem;
+    animation: spin 1s linear infinite;
+    margin-bottom: 1rem;
+  }
+
+  /* Empty state */
+  .insights-empty {
+    text-align: center;
+    padding: 3rem;
+    opacity: 0.5;
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .insights-page {
+      padding: 1rem;
+    }
+    .kpi-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .charts-grid {
+      grid-template-columns: 1fr;
+    }
+    .kpi-card .kpi-value {
+      font-size: 1.25rem;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .kpi-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="insights-page">
+
+  <!-- Header -->
+  <div class="insights-header">
+    <h2><i class="fas fa-chart-bar"></i> Insights do Agente</h2>
+    <div class="insights-controls">
+      <select id="periodSelect" onchange="loadInsights()">
+        <option value="7">7 dias</option>
+        <option value="14">14 dias</option>
+        <option value="30" selected>30 dias</option>
+        <option value="60">60 dias</option>
+        <option value="90">90 dias</option>
+      </select>
+      <button class="btn-refresh" onclick="loadInsights()" id="refreshBtn" title="Atualizar dados">
+        <i class="fas fa-sync-alt"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Loading State -->
+  <div id="loadingState" class="insights-loading">
+    <i class="fas fa-spinner"></i>
+    <span>Carregando insights...</span>
+  </div>
+
+  <!-- Content (hidden until data loads) -->
+  <div id="insightsContent" style="display:none;">
+
+    <!-- KPI Cards -->
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-icon"><i class="fas fa-comments"></i></div>
+        <div class="kpi-value" id="kpiSessions">0</div>
+        <div class="kpi-label">Sessoes</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon"><i class="fas fa-envelope"></i></div>
+        <div class="kpi-value" id="kpiMessages">0</div>
+        <div class="kpi-label">Mensagens</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon"><i class="fas fa-dollar-sign"></i></div>
+        <div class="kpi-value" id="kpiCost">$0</div>
+        <div class="kpi-label">Custo Total</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon"><i class="fas fa-chart-line"></i></div>
+        <div class="kpi-value" id="kpiAvgMsg">0</div>
+        <div class="kpi-label">Msgs / Sessao</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon"><i class="fas fa-users"></i></div>
+        <div class="kpi-value" id="kpiUsers">0</div>
+        <div class="kpi-label">Usuarios Ativos</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon"><i class="fas fa-file-alt"></i></div>
+        <div class="kpi-value" id="kpiSummaries">0</div>
+        <div class="kpi-label">Com Summary</div>
+      </div>
+    </div>
+
+    <!-- Charts Row 1 -->
+    <div class="charts-grid">
+      <div class="chart-card">
+        <h5><i class="fas fa-chart-area"></i> Atividade Diaria</h5>
+        <canvas id="dailyChart"></canvas>
+      </div>
+      <div class="chart-card">
+        <h5><i class="fas fa-wrench"></i> Tools Mais Usadas</h5>
+        <canvas id="toolsChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Charts Row 2 -->
+    <div class="charts-grid">
+      <div class="chart-card">
+        <h5><i class="fas fa-money-bill-wave"></i> Custo Semanal</h5>
+        <canvas id="costChart"></canvas>
+      </div>
+      <div class="chart-card">
+        <h5><i class="fas fa-user-chart"></i> Usuarios Mais Ativos</h5>
+        <canvas id="usersChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Tables -->
+    <div class="charts-grid">
+      <div class="table-card">
+        <h5><i class="fas fa-trophy"></i> Sessoes Mais Longas</h5>
+        <table class="insights-table">
+          <thead>
+            <tr>
+              <th>Titulo</th>
+              <th>Msgs</th>
+              <th>Custo</th>
+              <th>Data</th>
+            </tr>
+          </thead>
+          <tbody id="longestSessions"></tbody>
+        </table>
+      </div>
+      <div class="table-card">
+        <h5><i class="fas fa-dollar-sign"></i> Sessoes Mais Caras</h5>
+        <table class="insights-table">
+          <thead>
+            <tr>
+              <th>Titulo</th>
+              <th>Msgs</th>
+              <th>Custo</th>
+              <th>Data</th>
+            </tr>
+          </thead>
+          <tbody id="expensiveSessions"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Cost by User Table -->
+    <div class="table-card">
+      <h5><i class="fas fa-users-cog"></i> Custo por Usuario</h5>
+      <table class="insights-table">
+        <thead>
+          <tr>
+            <th>Usuario</th>
+            <th>Sessoes</th>
+            <th>Custo Total</th>
+          </tr>
+        </thead>
+        <tbody id="costByUser"></tbody>
+      </table>
+    </div>
+
+    <!-- Recent Sessions -->
+    <div class="table-card">
+      <h5><i class="fas fa-clock"></i> Sessoes Recentes</h5>
+      <table class="insights-table">
+        <thead>
+          <tr>
+            <th>Titulo</th>
+            <th>Msgs</th>
+            <th>Custo</th>
+            <th>Summary</th>
+            <th>Data</th>
+          </tr>
+        </thead>
+        <tbody id="recentSessions"></tbody>
+      </table>
+    </div>
+
+    <!-- P2-4: Friction Analysis Section -->
+    <div id="frictionSection" style="display:none;">
+      <hr style="border-color: var(--bs-border-color, #333); margin: 2rem 0;">
+
+      <!-- Friction Score KPI -->
+      <div class="insights-header" style="margin-bottom: 1rem;">
+        <h3 style="margin:0; display:flex; align-items:center; gap:0.5rem;">
+          <i class="fas fa-exclamation-triangle" style="color: #fbbf24;"></i>
+          Analise de Friccao
+        </h3>
+        <div>
+          <span class="kpi-card" style="display:inline-block; padding:0.5rem 1rem;">
+            <span class="kpi-label" style="font-size:0.7rem;">SCORE</span>
+            <span class="kpi-value" id="frictionScore" style="font-size:1.25rem;">0</span>
+            <span class="kpi-label" style="font-size:0.65rem;">/100</span>
+          </span>
+        </div>
+      </div>
+
+      <!-- Friction Summary -->
+      <div class="chart-card" style="margin-bottom:1.5rem;">
+        <p id="frictionSummary" style="margin:0; font-size:0.9rem; line-height:1.5;"></p>
+      </div>
+
+      <!-- Friction Tables -->
+      <div class="charts-grid">
+        <div class="table-card">
+          <h5><i class="fas fa-redo"></i> Queries Repetidas</h5>
+          <table class="insights-table">
+            <thead>
+              <tr>
+                <th>Query</th>
+                <th>Vezes</th>
+                <th>Sessoes</th>
+              </tr>
+            </thead>
+            <tbody id="repeatedQueries"></tbody>
+          </table>
+        </div>
+        <div class="table-card">
+          <h5><i class="fas fa-door-open"></i> Sessoes Abandonadas</h5>
+          <table class="insights-table">
+            <thead>
+              <tr>
+                <th>Titulo</th>
+                <th>Msgs</th>
+                <th>Data</th>
+              </tr>
+            </thead>
+            <tbody id="abandonedSessions"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="charts-grid">
+        <div class="table-card">
+          <h5><i class="fas fa-angry"></i> Sinais de Frustracao</h5>
+          <table class="insights-table">
+            <thead>
+              <tr>
+                <th>Sessao</th>
+                <th>Sinais</th>
+                <th>Data</th>
+              </tr>
+            </thead>
+            <tbody id="frustrationSignals"></tbody>
+          </table>
+        </div>
+        <div class="table-card">
+          <h5><i class="fas fa-tools"></i> Sessoes sem Ferramentas</h5>
+          <table class="insights-table">
+            <thead>
+              <tr>
+                <th>Titulo</th>
+                <th>Msgs</th>
+                <th>Primeira Msg</th>
+              </tr>
+            </thead>
+            <tbody id="noToolSessions"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+/* ============================================
+ * P2-2: Dashboard de Insights — Frontend
+ * ============================================ */
+
+// Chart instances (para destruir ao re-render)
+let dailyChartInstance = null;
+let toolsChartInstance = null;
+let costChartInstance = null;
+let usersChartInstance = null;
+
+// CSRF token
+const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+
+// Cores do tema
+function getChartColors() {
+  const accent = getComputedStyle(document.documentElement)
+    .getPropertyValue('--nc-accent-primary')?.trim() || '#6366f1';
+  return {
+    primary: accent,
+    primaryRgb: '99, 102, 241',
+    secondary: '#22d3ee',
+    secondaryRgb: '34, 211, 238',
+    warning: '#fbbf24',
+    success: '#34d399',
+    error: '#f87171',
+    text: getComputedStyle(document.documentElement)
+      .getPropertyValue('--bs-body-color')?.trim() || '#e0e0e0',
+    grid: 'rgba(255, 255, 255, 0.08)',
+  };
+}
+
+// Defaults de Chart.js
+function configureChartDefaults() {
+  const colors = getChartColors();
+  Chart.defaults.color = colors.text;
+  Chart.defaults.borderColor = colors.grid;
+  Chart.defaults.font.family = 'system-ui, -apple-system, sans-serif';
+  Chart.defaults.font.size = 12;
+}
+
+async function loadInsights() {
+  const days = document.getElementById('periodSelect').value;
+  const refreshBtn = document.getElementById('refreshBtn');
+  const loadingState = document.getElementById('loadingState');
+  const content = document.getElementById('insightsContent');
+
+  // Loading state
+  refreshBtn.classList.add('loading');
+  loadingState.style.display = 'flex';
+  content.style.display = 'none';
+
+  try {
+    const resp = await fetch(`/agente/api/insights/data?days=${days}`, {
+      headers: {
+        'X-CSRFToken': csrfToken,
+      }
+    });
+
+    if (!resp.ok) {
+      throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+    }
+
+    const json = await resp.json();
+    if (!json.success) {
+      throw new Error(json.error || 'Erro ao carregar insights');
+    }
+
+    renderInsights(json.data);
+
+    loadingState.style.display = 'none';
+    content.style.display = 'block';
+
+    // P2-4: Carregar fricção em paralelo (best-effort)
+    loadFriction(days);
+
+  } catch (err) {
+    console.error('[INSIGHTS] Erro:', err);
+    loadingState.innerHTML = `
+      <i class="fas fa-exclamation-triangle" style="animation:none; color: var(--bs-danger, #f87171);"></i>
+      <span>Erro ao carregar: ${err.message}</span>
+    `;
+  } finally {
+    refreshBtn.classList.remove('loading');
+  }
+}
+
+async function loadFriction(days) {
+  const frictionSection = document.getElementById('frictionSection');
+  try {
+    const resp = await fetch(`/agente/api/insights/friction?days=${days}`, {
+      headers: { 'X-CSRFToken': csrfToken }
+    });
+
+    if (!resp.ok) {
+      // 404 = feature desabilitada — esconde seção silenciosamente
+      frictionSection.style.display = 'none';
+      return;
+    }
+
+    const json = await resp.json();
+    if (!json.success) {
+      frictionSection.style.display = 'none';
+      return;
+    }
+
+    renderFriction(json.data);
+    frictionSection.style.display = 'block';
+
+  } catch (err) {
+    console.warn('[INSIGHTS] Fricção não disponível:', err.message);
+    frictionSection.style.display = 'none';
+  }
+}
+
+function renderInsights(data) {
+  configureChartDefaults();
+
+  renderKPIs(data.overview);
+  renderDailyChart(data.daily);
+  renderToolsChart(data.tools);
+  renderCostChart(data.costs);
+  renderUsersChart(data.users);
+  renderSessionTables(data.sessions);
+  renderCostByUser(data.costs);
+}
+
+function renderKPIs(overview) {
+  document.getElementById('kpiSessions').textContent = overview.total_sessions.toLocaleString('pt-BR');
+  document.getElementById('kpiMessages').textContent = overview.total_messages.toLocaleString('pt-BR');
+  document.getElementById('kpiCost').textContent = `$${overview.total_cost_usd.toFixed(2)}`;
+  document.getElementById('kpiAvgMsg').textContent = overview.avg_messages_per_session.toFixed(1);
+  document.getElementById('kpiUsers').textContent = overview.unique_users;
+  document.getElementById('kpiSummaries').textContent = overview.sessions_with_summary;
+}
+
+function renderDailyChart(daily) {
+  if (dailyChartInstance) dailyChartInstance.destroy();
+
+  const colors = getChartColors();
+  const ctx = document.getElementById('dailyChart').getContext('2d');
+
+  // Formatar labels DD/MM
+  const labels = daily.dates.map(d => {
+    const parts = d.split('-');
+    return `${parts[2]}/${parts[1]}`;
+  });
+
+  dailyChartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Sessoes',
+          data: daily.session_counts,
+          borderColor: colors.primary,
+          backgroundColor: `rgba(${colors.primaryRgb}, 0.1)`,
+          borderWidth: 2,
+          fill: true,
+          tension: 0.3,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+        },
+        {
+          label: 'Mensagens',
+          data: daily.message_counts,
+          borderColor: colors.secondary,
+          backgroundColor: `rgba(${colors.secondaryRgb}, 0.05)`,
+          borderWidth: 2,
+          fill: false,
+          tension: 0.3,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          yAxisID: 'y1',
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      interaction: { intersect: false, mode: 'index' },
+      plugins: {
+        legend: { position: 'top', labels: { boxWidth: 12, padding: 15 } },
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { maxRotation: 0, maxTicksLimit: 10 },
+        },
+        y: {
+          position: 'left',
+          title: { display: true, text: 'Sessoes' },
+          beginAtZero: true,
+        },
+        y1: {
+          position: 'right',
+          title: { display: true, text: 'Mensagens' },
+          beginAtZero: true,
+          grid: { drawOnChartArea: false },
+        }
+      }
+    }
+  });
+}
+
+function renderToolsChart(toolsData) {
+  if (toolsChartInstance) toolsChartInstance.destroy();
+
+  const colors = getChartColors();
+  const ctx = document.getElementById('toolsChart').getContext('2d');
+
+  const items = toolsData.most_used.slice(0, 10);
+  const labels = items.map(t => t.tool.replace('mcp__', '').replace('__', ' > '));
+  const values = items.map(t => t.count);
+
+  // Gradiente de cores
+  const barColors = items.map((_, i) => {
+    const opacity = 1 - (i * 0.07);
+    return `rgba(${colors.primaryRgb}, ${opacity})`;
+  });
+
+  toolsChartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Usos',
+        data: values,
+        backgroundColor: barColors,
+        borderRadius: 4,
+        barThickness: 20,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { display: false },
+      },
+      scales: {
+        x: { beginAtZero: true },
+        y: {
+          ticks: { font: { size: 11 } },
+        }
+      }
+    }
+  });
+}
+
+function renderCostChart(costsData) {
+  if (costChartInstance) costChartInstance.destroy();
+
+  const colors = getChartColors();
+  const ctx = document.getElementById('costChart').getContext('2d');
+
+  const labels = costsData.weekly.map(w => w.week);
+  const values = costsData.weekly.map(w => w.cost_usd);
+
+  costChartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Custo (USD)',
+        data: values,
+        backgroundColor: `rgba(${colors.primaryRgb}, 0.7)`,
+        borderColor: colors.primary,
+        borderWidth: 1,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `$${ctx.raw.toFixed(4)}`
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          title: { display: true, text: 'USD' },
+        }
+      }
+    }
+  });
+}
+
+function renderUsersChart(usersData) {
+  if (usersChartInstance) usersChartInstance.destroy();
+
+  const colors = getChartColors();
+  const ctx = document.getElementById('usersChart').getContext('2d');
+
+  const items = usersData.most_active.slice(0, 8);
+  const labels = items.map(u => u.name || `User #${u.user_id}`);
+  const sessionValues = items.map(u => u.sessions);
+  const messageValues = items.map(u => u.messages);
+
+  usersChartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Sessoes',
+          data: sessionValues,
+          backgroundColor: `rgba(${colors.primaryRgb}, 0.7)`,
+          borderRadius: 4,
+        },
+        {
+          label: 'Mensagens',
+          data: messageValues,
+          backgroundColor: `rgba(${colors.secondaryRgb}, 0.7)`,
+          borderRadius: 4,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { position: 'top', labels: { boxWidth: 12, padding: 15 } },
+      },
+      scales: {
+        x: {
+          ticks: { maxRotation: 45, font: { size: 11 } },
+        },
+        y: { beginAtZero: true }
+      }
+    }
+  });
+}
+
+function renderSessionTables(sessionsData) {
+  // Sessoes Mais Longas
+  const longestTbody = document.getElementById('longestSessions');
+  longestTbody.innerHTML = sessionsData.longest.map(s => `
+    <tr>
+      <td title="${escHtml(s.session_id)}">${escHtml(truncate(s.title, 40))}</td>
+      <td>${s.message_count}</td>
+      <td class="cost-badge">$${s.cost_usd.toFixed(4)}</td>
+      <td>${formatDate(s.created_at)}</td>
+    </tr>
+  `).join('');
+
+  // Sessoes Mais Caras
+  const expensiveTbody = document.getElementById('expensiveSessions');
+  expensiveTbody.innerHTML = sessionsData.most_expensive.map(s => `
+    <tr>
+      <td title="${escHtml(s.session_id)}">${escHtml(truncate(s.title, 40))}</td>
+      <td>${s.message_count}</td>
+      <td class="cost-badge">$${s.cost_usd.toFixed(4)}</td>
+      <td>${formatDate(s.created_at)}</td>
+    </tr>
+  `).join('');
+
+  // Sessoes Recentes
+  const recentTbody = document.getElementById('recentSessions');
+  recentTbody.innerHTML = sessionsData.recent.map(s => `
+    <tr>
+      <td title="${escHtml(s.session_id)}">${escHtml(truncate(s.title, 40))}</td>
+      <td>${s.message_count}</td>
+      <td class="cost-badge">$${s.cost_usd.toFixed(4)}</td>
+      <td>${s.has_summary ? '<i class="fas fa-check text-success"></i>' : '<i class="fas fa-times text-muted"></i>'}</td>
+      <td>${formatDate(s.created_at)}</td>
+    </tr>
+  `).join('');
+}
+
+function renderCostByUser(costsData) {
+  const tbody = document.getElementById('costByUser');
+  tbody.innerHTML = costsData.by_user.map(u => `
+    <tr>
+      <td>${escHtml(u.name || 'User #' + u.user_id)}</td>
+      <td>${u.sessions}</td>
+      <td class="cost-badge">$${u.cost_usd.toFixed(4)}</td>
+    </tr>
+  `).join('');
+}
+
+// Helpers
+function escHtml(str) {
+  if (!str) return '';
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function truncate(str, max) {
+  if (!str) return '(sem titulo)';
+  return str.length > max ? str.substring(0, max) + '...' : str;
+}
+
+function formatDate(iso) {
+  if (!iso) return '-';
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+  } catch {
+    return iso;
+  }
+}
+
+// ============================================
+// P2-4: Friction Analysis Rendering
+// ============================================
+
+function renderFriction(data) {
+  // Score
+  const scoreEl = document.getElementById('frictionScore');
+  scoreEl.textContent = data.friction_score.toFixed(1);
+
+  // Cor do score baseado no valor
+  if (data.friction_score >= 50) {
+    scoreEl.style.color = '#f87171';  // Vermelho
+  } else if (data.friction_score >= 20) {
+    scoreEl.style.color = '#fbbf24';  // Amarelo
+  } else {
+    scoreEl.style.color = '#34d399';  // Verde
+  }
+
+  // Summary
+  document.getElementById('frictionSummary').textContent = data.summary || '';
+
+  // Queries repetidas
+  const repeatedTbody = document.getElementById('repeatedQueries');
+  if (data.repeated_queries.length === 0) {
+    repeatedTbody.innerHTML = '<tr><td colspan="3" style="text-align:center; opacity:0.5;">Nenhuma query repetida</td></tr>';
+  } else {
+    repeatedTbody.innerHTML = data.repeated_queries.map(q => `
+      <tr>
+        <td title="${escHtml(q.examples ? q.examples[0] : '')}">${escHtml(truncate(q.query, 50))}</td>
+        <td>${q.count}</td>
+        <td>${q.sessions}</td>
+      </tr>
+    `).join('');
+  }
+
+  // Sessoes abandonadas
+  const abandonedTbody = document.getElementById('abandonedSessions');
+  if (data.abandoned_sessions.length === 0) {
+    abandonedTbody.innerHTML = '<tr><td colspan="3" style="text-align:center; opacity:0.5;">Nenhuma sessao abandonada</td></tr>';
+  } else {
+    abandonedTbody.innerHTML = data.abandoned_sessions.map(s => `
+      <tr>
+        <td>${escHtml(truncate(s.title, 40))}</td>
+        <td>${s.message_count}</td>
+        <td>${formatDate(s.created_at)}</td>
+      </tr>
+    `).join('');
+  }
+
+  // Sinais de frustração
+  const frustrationTbody = document.getElementById('frustrationSignals');
+  if (data.frustration_signals.length === 0) {
+    frustrationTbody.innerHTML = '<tr><td colspan="3" style="text-align:center; opacity:0.5;">Nenhum sinal de frustracao</td></tr>';
+  } else {
+    frustrationTbody.innerHTML = data.frustration_signals.map(f => `
+      <tr>
+        <td>${escHtml(truncate(f.title, 40))}</td>
+        <td>${f.signal_count}</td>
+        <td>${formatDate(f.created_at)}</td>
+      </tr>
+    `).join('');
+  }
+
+  // Sessoes sem tools
+  const noToolsTbody = document.getElementById('noToolSessions');
+  if (data.no_tool_sessions.length === 0) {
+    noToolsTbody.innerHTML = '<tr><td colspan="3" style="text-align:center; opacity:0.5;">Todas as sessoes usaram ferramentas</td></tr>';
+  } else {
+    noToolsTbody.innerHTML = data.no_tool_sessions.map(s => `
+      <tr>
+        <td>${escHtml(truncate(s.title, 30))}</td>
+        <td>${s.message_count}</td>
+        <td>${escHtml(truncate(s.first_message, 40))}</td>
+      </tr>
+    `).join('');
+  }
+}
+
+// Carregar ao abrir pagina
+document.addEventListener('DOMContentLoaded', () => {
+  loadInsights();
+});
+</script>
+{% endblock %}

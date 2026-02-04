@@ -611,6 +611,16 @@
             </a>
           </li>
 
+          <!-- 📊 Insights do Agente (admin only, P2-2) -->
+          {% if current_user.perfil == 'administrador' %}
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('agente.pagina_insights') }}"
+              title="Insights e Analytics do Agente">
+              <i class="fas fa-chart-bar text-warning"></i> Insights
+            </a>
+          </li>
+          {% endif %}
+
           <!-- Theme Toggle -->
           <li class="nav-item">
             <button class="nc-theme-toggle" type="button" title="Alternar tema">

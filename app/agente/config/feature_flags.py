@@ -42,3 +42,83 @@ USE_PROMPT_CACHING = os.getenv("AGENT_PROMPT_CACHING", "false").lower() == "true
 # Self-correction — validar output antes de entregar
 # Chamada Haiku rapida para verificar coerencia da resposta
 USE_SELF_CORRECTION = os.getenv("AGENT_SELF_CORRECTION", "false").lower() == "true"
+
+# ====================================================================
+# Melhorias de Contexto e Memoria (P0)
+# ====================================================================
+
+# Structured Pre-Compaction — salva contexto logistico detalhado antes de compactacao
+# Instrui modelo a salvar pedidos, decisoes, tarefas em formato XML estruturado
+# ATIVO por default: melhoria direta sem risco, substitui instrucao generica por estruturada
+USE_STRUCTURED_COMPACTION = os.getenv("AGENT_STRUCTURED_COMPACTION", "true").lower() == "true"
+
+# Session Summary — gera resumo estruturado ao final de cada interacao
+# Usa Haiku para extrair pedidos, decisoes, tarefas e alertas da conversa
+# Custo: ~$0.001 por resumo (Haiku: $0.25/1M input + $1.25/1M output)
+# Default false: requer migration de banco antes de ativar
+USE_SESSION_SUMMARY = os.getenv("AGENT_SESSION_SUMMARY", "false").lower() == "true"
+
+# Threshold de mensagens para trigger de sumarizacao
+# Sumariza quando message_count >= threshold e summary esta stale (delta >= threshold)
+SESSION_SUMMARY_THRESHOLD = int(os.getenv("AGENT_SESSION_SUMMARY_THRESHOLD", "5"))
+
+# ====================================================================
+# Melhorias de UX (P1)
+# ====================================================================
+
+# Prompt Suggestions — gera 2-3 sugestoes contextuais apos cada resposta
+# Usa Haiku para sugestoes relevantes ao dominio logistico
+# Custo: ~$0.001 por chamada (~500 tokens input, ~200 output)
+# Default false: ativar apos verificar que Haiku esta respondendo rapido (<1s)
+USE_PROMPT_SUGGESTIONS = os.getenv("AGENT_PROMPT_SUGGESTIONS", "false").lower() == "true"
+
+# Sentiment Detection — detecta frustração do operador e ajusta tom da resposta
+# Heuristicas locais (sem chamada API): mensagens curtas, repetidas, marcadores explicitos
+# Custo: zero (deteccao local por regex/heuristica)
+# Default false: ativar apos validar que os sinais de frustracao sao precisos
+USE_SENTIMENT_DETECTION = os.getenv("AGENT_SENTIMENT_DETECTION", "false").lower() == "true"
+
+# Pattern Learning — analisa sessoes historicas e identifica padroes recorrentes
+# Usa Haiku para detectar: clientes frequentes, queries repetidas, preferencias
+# Salva padroes em /memories/learned/patterns.xml para uso proativo
+# Custo: ~$0.002 por analise (~4K tokens input, ~800 output Haiku)
+# Trigger: a cada N sessoes do usuario (default 10)
+# Default false: requer historico suficiente de sessoes para ser util
+USE_PATTERN_LEARNING = os.getenv("AGENT_PATTERN_LEARNING", "false").lower() == "true"
+
+# Numero de sessoes entre analises de padrao
+# Analisa quando total_sessions % threshold == 0
+PATTERN_LEARNING_THRESHOLD = int(os.getenv("AGENT_PATTERN_LEARNING_THRESHOLD", "10"))
+
+# ====================================================================
+# Dashboard e Analytics (P2)
+# ====================================================================
+
+# Agent Insights Dashboard — pagina admin com analytics de uso do agente
+# Mostra: top queries, custos por usuario, tools mais usadas, erros, duracao
+# Acesso: apenas usuarios com perfil 'administrador'
+# Default false: ativar quando quiser visualizar metricas
+USE_AGENT_INSIGHTS = os.getenv("AGENT_INSIGHTS", "false").lower() == "true"
+
+# Reversibility Check — classifica acoes por reversibilidade e pede confirmacao extra
+# Intercepta Skills e Bash que podem executar acoes destrutivas (criar separacao, modificar dados)
+# Emite evento SSE 'destructive_action_warning' para dialog de confirmacao no frontend
+# Default false: ativar apos validar que a classificacao nao gera falsos positivos
+USE_REVERSIBILITY_CHECK = os.getenv("AGENT_REVERSIBILITY_CHECK", "false").lower() == "true"
+
+# Friction Analysis — analisa sessoes e identifica pontos de friccao
+# Detecta: queries repetidas (operador nao obteve resposta), mensagens curtas apos erro,
+# sessoes abandonadas, uso excessivo de tools sem resultado
+# Integrado ao Dashboard de Insights (P2-2)
+# Default false: requer historico suficiente de sessoes para ser util
+USE_FRICTION_ANALYSIS = os.getenv("AGENT_FRICTION_ANALYSIS", "false").lower() == "true"
+
+# ====================================================================
+# Hooks Expandidos (P3)
+# ====================================================================
+
+# Expanded Hooks — adiciona hooks Stop e UserPromptSubmit alem dos 3 existentes
+# Stop: loga metricas finais da sessao (tokens, custo, duracao, tools usadas)
+# UserPromptSubmit: pode enriquecer o prompt do usuario antes de processar
+# Default false: ativar apos validar que nao causa overhead excessivo
+USE_EXPANDED_HOOKS = os.getenv("AGENT_EXPANDED_HOOKS", "false").lower() == "true"

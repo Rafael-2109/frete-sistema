@@ -295,6 +295,36 @@ async def can_use_tool(
             return PermissionResultAllow(updated_input=updated)
 
         # ================================================================
+        # P2-3: Reversibility Check — ações destrutivas requerem confirmação
+        # ================================================================
+        from .feature_flags import USE_REVERSIBILITY_CHECK
+
+        if USE_REVERSIBILITY_CHECK:
+            destructive_info = _classify_destructive_action(tool_name, tool_input)
+            if destructive_info:
+                current_session_id = get_current_session_id()
+                if current_session_id:
+                    event_queue = get_event_queue(current_session_id)
+                    if event_queue:
+                        logger.info(
+                            f"[PERMISSION] Ação destrutiva detectada: "
+                            f"{destructive_info['action']} (reversibility={destructive_info['reversibility']})"
+                        )
+                        # Emite warning SSE — o frontend mostra notificação
+                        # mas NÃO bloqueia (o AskUserQuestion do SDK já cuida da confirmação)
+                        sse_data = {
+                            'session_id': current_session_id,
+                            'action': destructive_info['action'],
+                            'description': destructive_info['description'],
+                            'reversibility': destructive_info['reversibility'],
+                            'tool_name': tool_name,
+                        }
+                        event_queue.put(
+                            f"event: destructive_action_warning\n"
+                            f"data: {json.dumps(sse_data, ensure_ascii=False)}\n\n"
+                        )
+
+        # ================================================================
         # DEFAULT: Permite outras tools
         # ================================================================
         logger.debug(f"[PERMISSION] Tool '{tool_name}' permitida")
@@ -312,3 +342,88 @@ async def can_use_tool(
         return PermissionResultDeny(
             message=f"Erro interno de permissão: {e}"
         )
+
+
+# =============================================================================
+# P2-3: CLASSIFICAÇÃO DE AÇÕES DESTRUTIVAS
+# =============================================================================
+
+# Padrões que indicam ações destrutivas por tool
+# Formato: (tool_name_pattern, input_field, value_patterns, action, description, reversibility)
+# reversibility: 'irreversible' | 'hard_to_reverse' | 'reversible'
+_DESTRUCTIVE_PATTERNS = [
+    # Skill: gerindo-expedicao — criar separação
+    {
+        'tool': 'Skill',
+        'input_field': 'skill',
+        'value_patterns': ['criar-separacao'],
+        'action': 'criar_separacao',
+        'description': 'Criação de separação de pedido',
+        'reversibility': 'hard_to_reverse',
+    },
+    # Bash: comandos que modificam dados
+    {
+        'tool': 'Bash',
+        'input_field': 'command',
+        'value_patterns': [
+            'DELETE FROM', 'DROP TABLE', 'TRUNCATE',
+            'UPDATE.*SET', 'ALTER TABLE.*DROP',
+        ],
+        'action': 'sql_destrutivo',
+        'description': 'Comando SQL que modifica ou apaga dados',
+        'reversibility': 'irreversible',
+    },
+    # Write em paths críticos (já bloqueado para fora de /tmp, mas double-check)
+    {
+        'tool': 'Write',
+        'input_field': 'file_path',
+        'value_patterns': ['/etc/', '/var/lib/', '/home/'],
+        'action': 'escrita_critica',
+        'description': 'Escrita em diretório sensível',
+        'reversibility': 'hard_to_reverse',
+    },
+]
+
+
+def _classify_destructive_action(
+    tool_name: str,
+    tool_input: dict,
+) -> dict | None:
+    """
+    Classifica se uma ação é destrutiva.
+
+    Args:
+        tool_name: Nome da tool
+        tool_input: Parâmetros da tool
+
+    Returns:
+        Dict com action, description, reversibility se destrutiva, None caso contrário
+    """
+    import re
+
+    for pattern in _DESTRUCTIVE_PATTERNS:
+        if tool_name != pattern['tool']:
+            continue
+
+        field_value = str(tool_input.get(pattern['input_field'], ''))
+        if not field_value:
+            continue
+
+        for value_pattern in pattern['value_patterns']:
+            try:
+                if re.search(value_pattern, field_value, re.IGNORECASE):
+                    return {
+                        'action': pattern['action'],
+                        'description': pattern['description'],
+                        'reversibility': pattern['reversibility'],
+                    }
+            except re.error:
+                # Se o regex for inválido, tenta match simples
+                if value_pattern.lower() in field_value.lower():
+                    return {
+                        'action': pattern['action'],
+                        'description': pattern['description'],
+                        'reversibility': pattern['reversibility'],
+                    }
+
+    return None

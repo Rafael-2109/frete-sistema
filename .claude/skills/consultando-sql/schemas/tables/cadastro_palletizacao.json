@@ -132,16 +132,16 @@
       "unique": true
     },
     {
-      "name": "ix_cadastro_palletizacao_tipo_embalagem",
+      "name": "ix_cadastro_palletizacao_categoria_produto",
       "columns": [
-        "tipo_embalagem"
+        "categoria_produto"
       ],
       "unique": false
     },
     {
-      "name": "ix_cadastro_palletizacao_categoria_produto",
+      "name": "ix_cadastro_palletizacao_tipo_embalagem",
       "columns": [
-        "categoria_produto"
+        "tipo_embalagem"
       ],
       "unique": false
     },

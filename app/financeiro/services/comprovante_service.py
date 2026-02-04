@@ -12,6 +12,7 @@ Proteções:
 - Logging estruturado
 """
 
+import hashlib
 import os
 import re
 import time
@@ -197,6 +198,44 @@ def _truncar_campos_seguros(comp) -> None:
 
 
 # =============================================================================
+# CHAVE SUBSTITUTA PARA COMPROVANTES SEM AGENDAMENTO
+# =============================================================================
+
+def _gerar_chave_surrogate(comp) -> str | None:
+    """
+    Gera chave substituta para comprovantes sem numero_agendamento.
+
+    Quando o OCR não consegue extrair o numero_agendamento (desalinhamento
+    no Formato A causado por valores "--" que o Tesseract perde/mescla),
+    usa a autenticacao (UUID bancário, único por transação) como chave.
+
+    Prefixo SA- distingue de chaves reais numéricas e evita colisão
+    com CHECKNUMs do OFX (que são sempre numéricos).
+
+    Returns:
+        Chave substituta prefixada com 'SA-' ou None se sem dados.
+    """
+    # Estratégia 1: autenticacao (UUID bancário, mais confiável)
+    if comp.autenticacao:
+        auth_clean = re.sub(r'\s+', '', comp.autenticacao.strip())
+        return f'SA-{auth_clean}'
+
+    # Estratégia 2: hash determinístico de campos identificadores
+    parts = [
+        comp.beneficiario_cnpj_cpf or '',
+        comp.valor_pago or '',
+        comp.data_pagamento or comp.data_comprovante or '',
+        comp.linha_digitavel or '',
+    ]
+    combined = '|'.join(parts)
+    if not any(parts):
+        return None
+
+    hash_val = hashlib.md5(combined.encode()).hexdigest()[:16]
+    return f'SA-{hash_val}'
+
+
+# =============================================================================
 # PROCESSAMENTO PRINCIPAL
 # =============================================================================
 
@@ -261,16 +300,22 @@ def processar_pdf_comprovantes(
             'valor_pago': comp.valor_pago,
         }
 
-        # Validar chave única
+        # Validar chave única — se OCR não extraiu, gerar chave substituta
         if not comp.numero_agendamento:
-            detalhe['status'] = 'erro'
-            detalhe['mensagem'] = 'Sem número de agendamento'
-            resultado['erros'] += 1
-            resultado['detalhes'].append(detalhe)
-            continue
+            chave = _gerar_chave_surrogate(comp)
+            if not chave:
+                detalhe['status'] = 'erro'
+                detalhe['mensagem'] = 'Sem número de agendamento e sem dados para identificação única'
+                resultado['erros'] += 1
+                resultado['detalhes'].append(detalhe)
+                continue
+            comp.numero_agendamento = chave
+            detalhe['numero_agendamento'] = chave
+            logger.info(f"[Comprovante] p.{comp.pagina}: Gerada chave surrogate: {chave}")
 
         # Validar que numero_agendamento é numérico (proteção OCR — campo desalinhado)
-        if not re.match(r'^\d+$', comp.numero_agendamento):
+        # Chaves surrogate (prefixo SA-) são permitidas
+        if not comp.numero_agendamento.startswith('SA-') and not re.match(r'^\d+$', comp.numero_agendamento):
             detalhe['status'] = 'erro'
             detalhe['mensagem'] = f'OCR inconsistente: numero_agendamento="{comp.numero_agendamento}"'
             resultado['erros'] += 1
