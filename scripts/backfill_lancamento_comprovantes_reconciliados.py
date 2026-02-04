@@ -8,8 +8,12 @@ Comprovantes importados via OFX ANTES da FASE 3.5 podem ter
 
 Este script:
 1. Busca comprovantes "órfãos" (reconciliados, sem lançamento LANCADO)
-2. Consulta Odoo para buscar dados da conciliação pré-existente
+2. Consulta Odoo em chunks de 200 para buscar dados da conciliação pré-existente
 3. Cria LancamentoComprovante com status LANCADO para cada um
+
+Otimizado para 5.000+ registros:
+- Queries ao Odoo em chunks de 200 (evita timeout XML-RPC)
+- Commit ao DB local a cada 50 registros
 
 Uso:
     # Dry-run (apenas mostra o que faria, sem criar nada)
@@ -24,6 +28,7 @@ Data: 2026-02-04
 
 import sys
 import os
+import time
 
 # Adiciona o diretório raiz ao path para importar módulos do app
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -38,7 +43,8 @@ from app.financeiro.services.ofx_vinculacao_service import (
     _criar_lancamento_pre_conciliado,
 )
 
-BATCH_SIZE = 50  # Commit a cada N registros
+ODOO_CHUNK_SIZE = 200  # IDs por query ao Odoo (evita timeout XML-RPC)
+COMMIT_BATCH_SIZE = 50  # Commit ao DB local a cada N registros
 
 
 def buscar_comprovantes_orfaos():
@@ -72,6 +78,56 @@ def buscar_comprovantes_orfaos():
     return orfaos
 
 
+def chunked(iterable, size):
+    """Divide um iterável em chunks de tamanho fixo."""
+    for i in range(0, len(iterable), size):
+        yield iterable[i:i + size]
+
+
+def buscar_conciliacoes_em_chunks(connection, orfaos):
+    """
+    Busca dados de conciliação no Odoo processando em chunks de ODOO_CHUNK_SIZE.
+
+    Evita timeout XML-RPC ao não enviar 5.000+ IDs numa única query.
+    Cada chunk gera 3 queries ao Odoo (~1-2s cada).
+
+    Args:
+        connection: Conexão Odoo autenticada.
+        orfaos: Lista de ComprovantePagamentoBoleto.
+
+    Returns:
+        tuple (dados_conciliacao_total, comprovantes_por_id)
+    """
+    dados_conciliacao_total = {}
+    comprovantes_por_id = {}
+    total_chunks = (len(orfaos) + ODOO_CHUNK_SIZE - 1) // ODOO_CHUNK_SIZE
+
+    for idx_chunk, chunk in enumerate(chunked(orfaos, ODOO_CHUNK_SIZE), 1):
+        # Montar dict do chunk
+        linhas_chunk = {}
+        for comp in chunk:
+            linhas_chunk[comp.id] = {
+                'statement_line_id': comp.odoo_statement_line_id,
+                'odoo_move_id': comp.odoo_move_id,
+            }
+            comprovantes_por_id[comp.id] = comp
+
+        t0 = time.time()
+        dados_chunk = _buscar_dados_conciliacao_preexistente(
+            connection, linhas_chunk
+        )
+        elapsed = time.time() - t0
+
+        dados_conciliacao_total.update(dados_chunk)
+        print(
+            f"  Chunk {idx_chunk}/{total_chunks}: "
+            f"{len(chunk)} comprovantes -> {len(dados_chunk)} titulos encontrados "
+            f"({elapsed:.1f}s)"
+        )
+
+    return dados_conciliacao_total, comprovantes_por_id
+
+
 def main():
     dry_run = '--dry-run' in sys.argv
 
@@ -86,25 +142,40 @@ def main():
         print()
 
         # ─── ETAPA 1: Buscar comprovantes órfãos ──────────────────────
-        print("[Etapa 1] Buscando comprovantes reconciliados sem lançamento LANCADO...")
+        print("[Etapa 1] Buscando comprovantes reconciliados sem lancamento LANCADO...")
         orfaos = buscar_comprovantes_orfaos()
         total = len(orfaos)
 
-        print(f"  Encontrados: {total} comprovante(s) órfão(s)")
+        print(f"  Encontrados: {total} comprovante(s) orfao(s)")
         print()
 
         if total == 0:
             print("Nenhum comprovante para processar. Script finalizado.")
             return
 
-        # Listar resumo
-        for comp in orfaos:
+        # Listar amostra (primeiros 20 + últimos 5)
+        amostra = orfaos[:20]
+        if total > 25:
+            amostra_final = orfaos[-5:]
+        else:
+            amostra_final = []
+
+        for comp in amostra:
             print(
                 f"  ID={comp.id} | Agendamento={comp.numero_agendamento} "
                 f"| Valor=R$ {float(comp.valor_pago or 0):.2f} "
                 f"| Odoo move_id={comp.odoo_move_id} "
                 f"| statement_line_id={comp.odoo_statement_line_id}"
             )
+        if total > 25:
+            print(f"  ... ({total - 25} registros omitidos) ...")
+            for comp in amostra_final:
+                print(
+                    f"  ID={comp.id} | Agendamento={comp.numero_agendamento} "
+                    f"| Valor=R$ {float(comp.valor_pago or 0):.2f} "
+                    f"| Odoo move_id={comp.odoo_move_id} "
+                    f"| statement_line_id={comp.odoo_statement_line_id}"
+                )
         print()
 
         # ─── ETAPA 2: Conectar ao Odoo ────────────────────────────────
@@ -120,26 +191,26 @@ def main():
             return
         print()
 
-        # ─── ETAPA 3: Montar batch e buscar dados de conciliação ──────
-        print("[Etapa 3] Buscando dados de conciliacao pre-existente no Odoo...")
-
-        # Montar dict {comp.id: {statement_line_id, odoo_move_id}}
-        linhas_reconciliadas = {}
-        comprovantes_por_id = {}
-        for comp in orfaos:
-            linhas_reconciliadas[comp.id] = {
-                'statement_line_id': comp.odoo_statement_line_id,
-                'odoo_move_id': comp.odoo_move_id,
-            }
-            comprovantes_por_id[comp.id] = comp
-
-        dados_conciliacao = _buscar_dados_conciliacao_preexistente(
-            connection, linhas_reconciliadas
+        # ─── ETAPA 3: Buscar dados de conciliação em chunks ─────────
+        total_chunks = (total + ODOO_CHUNK_SIZE - 1) // ODOO_CHUNK_SIZE
+        print(
+            f"[Etapa 3] Buscando dados de conciliacao no Odoo "
+            f"({total} registros em {total_chunks} chunks de {ODOO_CHUNK_SIZE})..."
         )
+
+        t0_total = time.time()
+        dados_conciliacao, comprovantes_por_id = buscar_conciliacoes_em_chunks(
+            connection, orfaos
+        )
+        elapsed_total = time.time() - t0_total
 
         encontrados = len(dados_conciliacao)
         sem_dados = total - encontrados
-        print(f"  Dados de conciliacao encontrados: {encontrados}/{total}")
+        print()
+        print(
+            f"  Dados de conciliacao encontrados: {encontrados}/{total} "
+            f"(tempo total: {elapsed_total:.1f}s)"
+        )
         if sem_dados > 0:
             print(
                 f"  AVISO: {sem_dados} comprovante(s) reconciliado(s) "
@@ -194,13 +265,14 @@ def main():
                     )
 
                     # Commit por batch
-                    if criados % BATCH_SIZE == 0:
+                    if criados % COMMIT_BATCH_SIZE == 0:
                         db.session.commit()
                         print(f"  ... commit parcial ({criados}/{encontrados})")
 
                 except Exception as e:
                     erros += 1
                     print(f"  ERRO comp_id={comp_id}: {e}")
+                    db.session.rollback()
 
         # ─── ETAPA 5: Commit final ────────────────────────────────────
         if not dry_run and criados > 0:

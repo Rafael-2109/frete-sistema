@@ -59,7 +59,8 @@
       "WebFetch(domain:docs.claude.com)",
       "Bash(sort:*)",
       "Bash(head:*)",
-      "WebFetch(domain:oneryalcin.medium.com)"
+      "WebFetch(domain:oneryalcin.medium.com)",
+      "WebFetch(domain:pypi.org)"
     ],
     "deny": []
   },
