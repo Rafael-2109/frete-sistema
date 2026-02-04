@@ -239,6 +239,37 @@ def _gerar_chave_surrogate(comp) -> str | None:
 # PROCESSAMENTO PRINCIPAL
 # =============================================================================
 
+def _bulk_check_duplicatas(chaves: list[str]) -> set[str]:
+    """
+    Verifica duplicatas em bulk usando uma única query IN(...).
+
+    Substitui N queries individuais por 1 query, reduzindo latência
+    significativamente para PDFs com muitos comprovantes.
+
+    Args:
+        chaves: Lista de numero_agendamento a verificar.
+
+    Returns:
+        Set de numero_agendamento que já existem no banco.
+    """
+    if not chaves:
+        return set()
+
+    try:
+        rows = _query_com_retry(
+            lambda: ComprovantePagamentoBoleto.query.filter(
+                ComprovantePagamentoBoleto.numero_agendamento.in_(chaves)
+            ).with_entities(
+                ComprovantePagamentoBoleto.numero_agendamento
+            ).all()
+        )
+        return {r[0] for r in rows} if rows else set()
+    except Exception as e:
+        logger.error(f"[Comprovante] Erro no bulk check de duplicatas: {e}")
+        db.session.rollback()
+        return set()
+
+
 def processar_pdf_comprovantes(
     arquivo_bytes: bytes,
     nome_arquivo: str,
@@ -248,13 +279,16 @@ def processar_pdf_comprovantes(
     """
     Processa um PDF de comprovantes e persiste os dados no banco.
 
-    Cada comprovante é commitado isoladamente — falha em um não afeta outros.
-    Operações de banco têm retry automático para erros de SSL/conexão.
+    Otimizações:
+    - Bulk check de duplicatas: 1 query IN(...) em vez de N queries individuais.
+    - Savepoint commits: 1 commit real no final com savepoints por comprovante.
+      Se o commit final falhar, faz fallback para commits individuais.
 
     Args:
         arquivo_bytes: Conteúdo binário do PDF
         nome_arquivo: Nome original do arquivo
         usuario: Nome do usuário que fez o upload
+        arquivo_s3_path: Caminho do PDF no S3 (opcional)
 
     Returns:
         dict com resumo:
@@ -291,7 +325,12 @@ def processar_pdf_comprovantes(
         })
         return resultado
 
-    # Persistir cada comprovante com commit isolado
+    if not comprovantes:
+        return resultado
+
+    # ── FASE 1: Pré-computar chaves e validar ──
+    # Gerar surrogates e validar ANTES do loop de persistência
+    comprovantes_validos = []
     for comp in comprovantes:
         detalhe = {
             'pagina': comp.pagina,
@@ -300,7 +339,7 @@ def processar_pdf_comprovantes(
             'valor_pago': comp.valor_pago,
         }
 
-        # Validar chave única — se OCR não extraiu, gerar chave substituta
+        # Gerar chave substituta se necessário
         if not comp.numero_agendamento:
             chave = _gerar_chave_surrogate(comp)
             if not chave:
@@ -313,7 +352,7 @@ def processar_pdf_comprovantes(
             detalhe['numero_agendamento'] = chave
             logger.info(f"[Comprovante] p.{comp.pagina}: Gerada chave surrogate: {chave}")
 
-        # Validar que numero_agendamento é numérico (proteção OCR — campo desalinhado)
+        # Validar que numero_agendamento é numérico (proteção OCR)
         # Chaves surrogate (prefixo SA-) são permitidas
         if not comp.numero_agendamento.startswith('SA-') and not re.match(r'^\d+$', comp.numero_agendamento):
             detalhe['status'] = 'erro'
@@ -322,25 +361,23 @@ def processar_pdf_comprovantes(
             resultado['detalhes'].append(detalhe)
             continue
 
-        # Verificar duplicata (com retry)
-        try:
-            existente = _query_com_retry(
-                lambda: ComprovantePagamentoBoleto.query.filter_by(
-                    numero_agendamento=comp.numero_agendamento
-                ).first()
-            )
-        except Exception as e:
-            db.session.rollback()  # Garantir sessão limpa para próximo comprovante
-            logger.error(f"Erro ao verificar duplicata {comp.numero_agendamento}: {e}")
-            detalhe['status'] = 'erro'
-            detalhe['mensagem'] = f'Erro de conexão ao verificar duplicata: {str(e)}'
-            resultado['erros'] += 1
-            resultado['detalhes'].append(detalhe)
-            continue
+        comprovantes_validos.append((comp, detalhe))
 
-        if existente:
+    if not comprovantes_validos:
+        return resultado
+
+    # ── FASE 2: Bulk check de duplicatas (1 query em vez de N) ──
+    todas_chaves = [comp.numero_agendamento for comp, _ in comprovantes_validos]
+    existentes_db = _bulk_check_duplicatas(todas_chaves)
+
+    # ── FASE 3: Persistir com savepoints (1 commit real no final) ──
+    novos_detalhes = []  # Detalhes dos que tentamos inserir (para fallback)
+
+    for comp, detalhe in comprovantes_validos:
+        # Check duplicata via set em memória (O(1))
+        if comp.numero_agendamento in existentes_db:
             detalhe['status'] = 'duplicado'
-            detalhe['mensagem'] = f'Já importado em {existente.importado_em.strftime("%d/%m/%Y %H:%M") if existente.importado_em else "?"}'
+            detalhe['mensagem'] = 'Já importado anteriormente'
             resultado['duplicados'] += 1
             resultado['detalhes'].append(detalhe)
             continue
@@ -348,7 +385,122 @@ def processar_pdf_comprovantes(
         # Truncar campos longos antes do insert (proteção OCR)
         _truncar_campos_seguros(comp)
 
-        # Criar registro e commit isolado
+        # Inserir com savepoint (rollback granular sem perder outros registros)
+        try:
+            savepoint = db.session.begin_nested()
+            registro = ComprovantePagamentoBoleto(
+                numero_agendamento=comp.numero_agendamento,
+                data_comprovante=_converter_data_br(comp.data_comprovante),
+                cooperativa=comp.cooperativa,
+                conta=comp.conta,
+                cliente=comp.cliente,
+                linha_digitavel=comp.linha_digitavel,
+                numero_documento=comp.numero_documento,
+                nosso_numero=comp.nosso_numero,
+                instituicao_emissora=comp.instituicao_emissora,
+                tipo_documento=comp.tipo_documento,
+                beneficiario_razao_social=comp.beneficiario_razao_social,
+                beneficiario_nome_fantasia=comp.beneficiario_nome_fantasia,
+                beneficiario_cnpj_cpf=comp.beneficiario_cnpj_cpf,
+                pagador_razao_social=comp.pagador_razao_social,
+                pagador_nome_fantasia=comp.pagador_nome_fantasia,
+                pagador_cnpj_cpf=comp.pagador_cnpj_cpf,
+                data_realizado=comp.data_realizado,
+                data_pagamento=_converter_data_br(comp.data_pagamento),
+                data_vencimento=_converter_data_br(comp.data_vencimento),
+                valor_documento=_converter_valor_br(comp.valor_documento),
+                valor_desconto_abatimento=_converter_valor_br(comp.valor_desconto_abatimento),
+                valor_juros_multa=_converter_valor_br(comp.valor_juros_multa),
+                valor_pago=_converter_valor_br(comp.valor_pago),
+                situacao=comp.situacao,
+                autenticacao=comp.autenticacao,
+                arquivo_origem=nome_arquivo,
+                pagina_origem=comp.pagina,
+                importado_por=usuario,
+                arquivo_s3_path=arquivo_s3_path,
+            )
+            db.session.add(registro)
+            savepoint.commit()
+
+            detalhe['status'] = 'novo'
+            detalhe['mensagem'] = 'Importado com sucesso'
+            resultado['novos'] += 1
+            # Marcar no set para dedup intra-PDF
+            existentes_db.add(comp.numero_agendamento)
+
+        except IntegrityError:
+            # Duplicata detectada pelo banco (race condition — outro worker inseriu primeiro)
+            savepoint.rollback()
+            detalhe['status'] = 'duplicado'
+            detalhe['mensagem'] = 'Duplicata detectada (inserção concorrente)'
+            resultado['duplicados'] += 1
+
+        except OperationalError as e:
+            savepoint.rollback()
+            logger.error(f"Erro de conexão ao salvar comprovante {comp.numero_agendamento}: {e}")
+            detalhe['status'] = 'erro'
+            detalhe['mensagem'] = f'Erro de conexão: {str(e)}'
+            resultado['erros'] += 1
+
+        except Exception as e:
+            savepoint.rollback()
+            logger.error(f"Erro ao salvar comprovante {comp.numero_agendamento}: {e}")
+            detalhe['status'] = 'erro'
+            detalhe['mensagem'] = str(e)
+            resultado['erros'] += 1
+
+        novos_detalhes.append(detalhe)
+        resultado['detalhes'].append(detalhe)
+
+    # ── FASE 4: Commit final (1 commit real para todos os savepoints) ──
+    if resultado['novos'] > 0:
+        try:
+            _commit_com_retry()
+            logger.info(
+                f"[Comprovante] {nome_arquivo}: {resultado['novos']} novo(s) commitados em batch"
+            )
+        except (OperationalError, Exception) as e:
+            # Commit final falhou — todos os inserts são perdidos
+            db.session.rollback()
+            logger.error(
+                f"[Comprovante] Commit final falhou para {nome_arquivo}: {e}. "
+                f"Tentando fallback com commits individuais..."
+            )
+            # Fallback: re-tentar cada comprovante com commit individual
+            _fallback_commit_individual(
+                comprovantes_validos, nome_arquivo, usuario,
+                arquivo_s3_path, resultado, novos_detalhes,
+            )
+
+    return resultado
+
+
+def _fallback_commit_individual(
+    comprovantes_validos, nome_arquivo, usuario,
+    arquivo_s3_path, resultado, novos_detalhes,
+):
+    """
+    Fallback: re-insere comprovantes com commit individual quando o commit batch falha.
+
+    Chamado apenas quando _commit_com_retry() final falha (ex: conexão SSL caiu).
+    Re-tenta cada comprovante que tinha status='novo' com commit isolado.
+    """
+    # Zerar contadores dos que estavam como 'novo' (o rollback perdeu tudo)
+    novos_perdidos = 0
+    for detalhe in novos_detalhes:
+        if detalhe['status'] == 'novo':
+            novos_perdidos += 1
+            detalhe['status'] = 'erro'
+            detalhe['mensagem'] = 'Commit batch falhou — tentando individual...'
+
+    resultado['novos'] -= novos_perdidos
+    resultado['erros'] += novos_perdidos
+
+    # Re-tentar cada comprovante com commit individual
+    for comp, detalhe in comprovantes_validos:
+        if detalhe['status'] != 'erro' or 'Commit batch' not in detalhe.get('mensagem', ''):
+            continue
+
         try:
             registro = ComprovantePagamentoBoleto(
                 numero_agendamento=comp.numero_agendamento,
@@ -382,35 +534,22 @@ def processar_pdf_comprovantes(
                 arquivo_s3_path=arquivo_s3_path,
             )
             db.session.add(registro)
-
-            # Commit isolado por comprovante (com retry SSL)
             _commit_com_retry()
 
             detalhe['status'] = 'novo'
-            detalhe['mensagem'] = 'Importado com sucesso'
+            detalhe['mensagem'] = 'Importado com sucesso (fallback individual)'
             resultado['novos'] += 1
+            resultado['erros'] -= 1
 
         except IntegrityError:
-            # Duplicata detectada pelo banco (race condition — outro worker inseriu primeiro)
             db.session.rollback()
             detalhe['status'] = 'duplicado'
-            detalhe['mensagem'] = 'Duplicata detectada (inserção concorrente)'
+            detalhe['mensagem'] = 'Duplicata detectada (fallback individual)'
             resultado['duplicados'] += 1
-
-        except OperationalError as e:
-            db.session.rollback()
-            logger.error(f"Erro de conexão ao salvar comprovante {comp.numero_agendamento}: {e}")
-            detalhe['status'] = 'erro'
-            detalhe['mensagem'] = f'Erro de conexão: {str(e)}'
-            resultado['erros'] += 1
+            resultado['erros'] -= 1
 
         except Exception as e:
             db.session.rollback()
-            logger.error(f"Erro ao salvar comprovante {comp.numero_agendamento}: {e}")
             detalhe['status'] = 'erro'
-            detalhe['mensagem'] = str(e)
-            resultado['erros'] += 1
-
-        resultado['detalhes'].append(detalhe)
-
-    return resultado
+            detalhe['mensagem'] = f'Erro no fallback individual: {str(e)}'
+            logger.error(f"[Comprovante] Fallback falhou para {comp.numero_agendamento}: {e}")

@@ -436,60 +436,109 @@ def _parse_formato_a(linhas: list[str], comprovante: ComprovanteBoleto) -> None:
 
 def _parse_formato_b(linhas: list[str], comprovante: ComprovanteBoleto) -> None:
     """
-    Parse do Formato B: labels e valores inline ("Label: Valor").
-    O OCR leu linha por linha, da esquerda para direita.
+    Parse do Formato B: labels e valores inline ("Label: Valor" ou "Label Valor").
+
+    Suporta dois sub-formatos:
+    - COM dois-pontos (V1 original): "Cooperativa: 4351-6 / ..."
+    - SEM dois-pontos (V1-Direita):  "Cooperativa 4351-6 / ..."
+
+    Estratégia: tenta COM dois-pontos primeiro (mais preciso), depois
+    fallback por prefixo de label conhecido (para formato sem dois-pontos).
     """
-    # Pular cabeçalho SICOOB e extrair data do comprovante da linha mista
     secao_atual = None
     valores_pendentes = []  # Para labels sem valor na mesma linha
 
     for linha in linhas:
+        stripped = linha.strip()
+        if not stripped:
+            continue
+
+        upper = stripped.upper()
+
         # Ignorar linhas de cabeçalho/rodapé
-        if any(kw in linha.upper() for kw in [
+        # Mas extrair data_comprovante se a linha contiver "DD/MM/YYYY COMPROVANTE DE"
+        if any(kw in upper for kw in [
             'SICOOB - SISTEMA', 'SISBR - SISTEMA', 'COMPROVANTE DE',
-            'OUVIDORIA', 'V1.0'
+            'OUVIDORIA', 'V1.0',
         ]):
+            if comprovante.data_comprovante is None:
+                match_data_header = re.match(r'^(\d{2}/\d{2}/\d{4})', stripped)
+                if match_data_header:
+                    comprovante.data_comprovante = match_data_header.group(1)
             continue
 
-        # Linha com data + "PAGAMENTO DE BOLETO" + hora
-        match_data_cabecalho = re.match(
-            r'^(\d{2}/\d{2}/\d{4})\s+PAGAMENTO DE BOLETO\s+(\d{2}:\d{2}:\d{2})$',
-            linha.strip()
-        )
-        if match_data_cabecalho:
-            comprovante.data_comprovante = match_data_cabecalho.group(1)
+        # Linha "PAGAMENTO DE BOLETO [HH:MM:SS]" (ambos formatos)
+        # Tratada ANTES do match por label para evitar falso positivo com label "pagamento"
+        if 'PAGAMENTO DE BOLETO' in upper:
+            # No formato V1 original, data vem na mesma linha: "DD/MM/YYYY PAGAMENTO DE BOLETO HH:MM:SS"
+            match_data_boleto = re.match(
+                r'^(\d{2}/\d{2}/\d{4})\s+PAGAMENTO DE BOLETO',
+                stripped, re.IGNORECASE,
+            )
+            if match_data_boleto:
+                comprovante.data_comprovante = match_data_boleto.group(1)
             continue
 
-        # Hora solta (rodapé)
-        if re.match(r'^\d{2}:\d{2}:\d{2}$', linha.strip()):
+        # Data solta no cabeçalho (V1-Direita: "DD/MM/YYYY COMPROVANTE DE" já foi ignorada,
+        # mas pode ter "DD/MM/YYYY" sozinha ou "DD/MM/YYYY HH:MM:SS")
+        match_data = re.match(r'^(\d{2}/\d{2}/\d{4})', stripped)
+        if match_data and comprovante.data_comprovante is None:
+            comprovante.data_comprovante = match_data.group(1)
             continue
 
-        # Detectar seções
-        label_normalizado = normalizar_label(linha)
-        if label_normalizado in SECOES:
-            secao_atual = label_normalizado.replace('á', 'a').replace('é', 'e')
+        # Hora solta (rodapé ou cabeçalho)
+        if re.match(r'^\d{2}:\d{2}:\d{2}$', stripped):
             continue
 
-        # Tentar formato "Label: Valor" (com dois-pontos seguido de valor)
-        match_inline = re.match(r'^(.+?):\s+(.+)$', linha.strip())
+        # ── PASSO 1: Tentar formato COM dois-pontos (mais preciso) ──
+
+        # Seção com ":" no final (ex: "Beneficiário:")
+        if stripped.endswith(':'):
+            label_norm = normalizar_label(stripped)
+            if label_norm in SECOES:
+                secao_atual = label_norm.replace('á', 'a').replace('é', 'e')
+                continue
+            # Label sem valor na mesma linha (ex: "Cooperativa:" sozinha)
+            valores_pendentes.append((label_norm, secao_atual))
+            continue
+
+        # Inline com ":" (ex: "Cooperativa: 4351-6 / ...")
+        match_inline = re.match(r'^(.+?):\s+(.+)$', stripped)
         if match_inline:
             label = normalizar_label(match_inline.group(1))
             valor = match_inline.group(2).strip()
-
-            # Verificar se não é label sem valor (label que termina em ":" sozinha)
             _atribuir_campo(comprovante, label, valor, secao_atual)
             continue
 
-        # Linha que é apenas um label com ":" (sem valor)
-        if linha.strip().endswith(':'):
-            label = normalizar_label(linha)
-            valores_pendentes.append((label, secao_atual))
+        # ── PASSO 2: Fallback SEM dois-pontos (V1-Direita) ──
+        # Testa se a linha começa com um label V1 conhecido (case-insensitive).
+        # Labels são testados do mais longo para o mais curto para evitar
+        # match parcial (ex: "nome/razão social" antes de "nome fantasia").
+        label_lower = stripped.lower()
+        matched_sem_colon = False
+
+        for label_conhecido in _ALL_V1_LABELS_SORTED:
+            if label_lower.startswith(label_conhecido):
+                resto = stripped[len(label_conhecido):].strip()
+                if resto:
+                    # Label com valor inline (ex: "Cooperativa 4351-6 / ...")
+                    _atribuir_campo(comprovante, label_conhecido, resto, secao_atual)
+                else:
+                    # Seção ou label sem valor (ex: "Beneficiário" sozinha)
+                    if label_conhecido in SECOES:
+                        secao_atual = label_conhecido.replace('á', 'a').replace('é', 'e')
+                    else:
+                        valores_pendentes.append((label_conhecido, secao_atual))
+                matched_sem_colon = True
+                break
+
+        if matched_sem_colon:
             continue
 
         # Linha que é apenas um valor (sem label) — consumir label pendente
         if valores_pendentes:
             label, secao_contexto = valores_pendentes.pop(0)
-            _atribuir_campo(comprovante, label, linha.strip(), secao_contexto)
+            _atribuir_campo(comprovante, label, stripped, secao_contexto)
             continue
 
 

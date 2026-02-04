@@ -338,7 +338,8 @@ Fluxo de 7 passos para correcao retroativa (registros JA reconciliados):
 ### Referencia
 - Script completo: `scripts/correcao_campos_extrato_odoo.py`
 - Documentacao detalhada: `.claude/references/odoo/GOTCHAS.md` secao "Correcao Retroativa"
-- Resultado (04/02/2026): 1.524 registros processados (20 comprovantes + 1.504 extratos), 0 erros
+- Resultado (04/02/2026): 1.524 registros processados (20 comprovantes + 1.504 extratos), 0 erros, 0 parciais
+- Bug encontrado e corrigido: `_buscar_partner_do_titulo_odoo()` — iterar TODOS os resultados do `search_read`, nao apenas o primeiro (pode ter `partner_id=False`)
 
 ---
 

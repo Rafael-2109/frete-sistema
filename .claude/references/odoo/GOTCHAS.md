@@ -292,7 +292,9 @@ Modos disponiveis:
 - `--batch-comprovantes` / `--batch-extratos`
 - `--verificar-amostra`
 
-> **Resultado da execucao (04/02/2026)**: 20 comprovantes (20/20 OK) + 1.504 extratos (1.497 corrigidos, 7 ja corretos, 86 parciais sem partner_id). Total: 1.524 registros processados com 0 erros.
+> **Resultado da execucao (04/02/2026)**: 20 comprovantes (20/20 OK) + 1.504 extratos (1.504/1.504 OK). Total: 1.524 registros processados com 0 erros, 0 parciais.
+>
+> **Bug corrigido**: `_buscar_partner_do_titulo_odoo()` pegava o PRIMEIRO resultado de `account.move` com `ref ilike titulo_nf`, mas esse resultado podia ter `partner_id=False` (move de entry sem partner). Corrigido para iterar TODOS os resultados ate encontrar um com partner valido.
 
 ---
 
