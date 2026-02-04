@@ -1086,6 +1086,25 @@ Nunca invente informações."""
                     if message.result:
                         full_text = message.result
 
+                    # Capturar usage do ResultMessage (única fonte confiável)
+                    # NOTA: AssistantMessage NÃO possui campo 'usage' no SDK.
+                    # Tokens e custos só existem no ResultMessage.
+                    if message.usage:
+                        usage = message.usage
+                        if isinstance(usage, dict):
+                            input_tokens = usage.get('input_tokens', input_tokens)
+                            output_tokens = usage.get('output_tokens', output_tokens)
+                        else:
+                            input_tokens = getattr(usage, 'input_tokens', input_tokens) or input_tokens
+                            output_tokens = getattr(usage, 'output_tokens', output_tokens) or output_tokens
+
+                    logger.info(
+                        f"[AGENT_SDK] ResultMessage | cost={message.total_cost_usd} | "
+                        f"usage={message.usage} | turns={message.num_turns} | "
+                        f"duration={message.duration_ms}ms | "
+                        f"tokens_captured=({input_tokens},{output_tokens})"
+                    )
+
                     # Detectar interrupt
                     is_interrupted = (
                         getattr(message, 'subtype', '') in ('interrupted', 'canceled', 'cancelled')
@@ -1148,6 +1167,7 @@ Nunca invente informações."""
                         'text': full_text,
                         'input_tokens': input_tokens,
                         'output_tokens': output_tokens,
+                        'total_cost_usd': 0,
                         'session_id': result_session_id,
                         'tool_calls': len(tool_calls),
                         'self_corrected': correction is not None if correction else False,
@@ -1175,7 +1195,8 @@ Nunca invente informações."""
                 yield StreamEvent(
                     type='done',
                     content={'text': full_text, 'input_tokens': input_tokens,
-                             'output_tokens': output_tokens, 'session_id': result_session_id,
+                             'output_tokens': output_tokens, 'total_cost_usd': 0,
+                             'session_id': result_session_id,
                              'tool_calls': len(tool_calls), 'error_recovery': True},
                     metadata={'error_type': 'process_error'}
                 )
@@ -1192,7 +1213,9 @@ Nunca invente informações."""
                 done_emitted = True
                 yield StreamEvent(
                     type='done',
-                    content={'text': full_text, 'session_id': result_session_id,
+                    content={'text': full_text, 'input_tokens': input_tokens,
+                             'output_tokens': output_tokens, 'total_cost_usd': 0,
+                             'session_id': result_session_id,
                              'error_recovery': True},
                     metadata={'error_type': 'cli_not_found'}
                 )
@@ -1209,7 +1232,9 @@ Nunca invente informações."""
                 done_emitted = True
                 yield StreamEvent(
                     type='done',
-                    content={'text': full_text, 'session_id': result_session_id,
+                    content={'text': full_text, 'input_tokens': input_tokens,
+                             'output_tokens': output_tokens, 'total_cost_usd': 0,
+                             'session_id': result_session_id,
                              'error_recovery': True},
                     metadata={'error_type': 'json_decode_error'}
                 )
@@ -1258,6 +1283,7 @@ Nunca invente informações."""
                         'text': full_text,
                         'input_tokens': input_tokens,
                         'output_tokens': output_tokens,
+                        'total_cost_usd': 0,
                         'session_id': result_session_id,
                         'tool_calls': len(tool_calls),
                         'error_recovery': True,
@@ -1299,6 +1325,7 @@ Nunca invente informações."""
                         'text': full_text,
                         'input_tokens': input_tokens,
                         'output_tokens': output_tokens,
+                        'total_cost_usd': 0,
                         'session_id': result_session_id,
                         'tool_calls': len(tool_calls),
                         'error_recovery': True,

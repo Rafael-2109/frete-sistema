@@ -386,8 +386,8 @@ def processar_upload_canhoto(token):
 
     # Validar extensão
     extensao = file.filename.split('.')[-1].lower()
-    if extensao not in ['jpg', 'jpeg', 'png', 'pdf']:
-        return jsonify({'success': False, 'message': 'Apenas JPG, PNG ou PDF'}), 400
+    if extensao not in ['jpg', 'jpeg', 'jfif', 'png', 'pdf']:
+        return jsonify({'success': False, 'message': 'Apenas JPG, JFIF, PNG ou PDF'}), 400
 
     try:
         # Obter coordenadas do upload
@@ -401,7 +401,7 @@ def processar_upload_canhoto(token):
         file_path = storage.save_file(
             file=file,
             folder='canhotos_rastreamento',  # Mesma pasta do monitoramento
-            allowed_extensions=['jpg', 'jpeg', 'png', 'pdf']
+            allowed_extensions=['jpg', 'jpeg', 'jfif', 'png', 'pdf']
         )
 
         if not file_path:

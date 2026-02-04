@@ -493,6 +493,10 @@ def _stream_chat_response(
                     response_state['output_tokens'] = event.content.get('output_tokens', 0)
                     cost_usd = event.content.get('total_cost_usd', 0)
 
+                    # Salvar custo do SDK no response_state para uso em _save_messages_to_db
+                    if cost_usd and cost_usd > 0:
+                        response_state['sdk_cost_usd'] = cost_usd
+
                     # CRÍTICO: Capturar session_id REAL do SDK para resume
                     # Este é o ResultMessage.session_id — NÃO nosso UUID
                     sdk_real_session_id = event.content.get('session_id')
@@ -777,6 +781,7 @@ def _stream_chat_response(
                 tools_used=response_state['tools_used'],
                 model=model,
                 session_expired=response_state['session_expired'],
+                sdk_cost_usd=response_state.get('sdk_cost_usd', 0),
             )
             logger.info("[AGENTE] Mensagens salvas no banco (finally)")
         except Exception as save_error:
@@ -800,6 +805,7 @@ def _save_messages_to_db(
     tools_used: List[str],
     model: str,
     session_expired: bool,
+    sdk_cost_usd: float = 0,
 ) -> None:
     """
     FEAT-030: Salva mensagens do usuário e assistente no banco.
@@ -816,6 +822,7 @@ def _save_messages_to_db(
         tools_used: Lista de tools usadas
         model: Modelo usado
         session_expired: Se a sessão SDK expirou
+        sdk_cost_usd: Custo informado pelo SDK (ResultMessage.total_cost_usd)
     """
     if not our_session_id:
         logger.warning("[AGENTE] Não foi possível salvar: session_id não definido")
@@ -855,9 +862,20 @@ def _save_messages_to_db(
             if model:
                 session.model = model
 
-            # Calcula custo aproximado (valores do Claude)
-            cost_usd = _calculate_cost(model, input_tokens, output_tokens)
+            # Priorizar custo do SDK (ResultMessage.total_cost_usd) sobre recálculo local
+            sdk_cost = sdk_cost_usd
+            calc_cost = _calculate_cost(model, input_tokens, output_tokens)
+            if sdk_cost and sdk_cost > 0:
+                cost_usd = sdk_cost
+            else:
+                cost_usd = calc_cost
             session.total_cost_usd = float(session.total_cost_usd or 0) + cost_usd
+
+            logger.info(
+                f"[AGENTE] Custo sessão {our_session_id[:8]}: "
+                f"sdk_cost={sdk_cost}, calc_cost={calc_cost:.6f}, "
+                f"final={cost_usd:.6f}, tokens=({input_tokens},{output_tokens})"
+            )
 
             db.session.commit()
             logger.debug(f"[AGENTE] Mensagens salvas na sessão {our_session_id[:8]}...")

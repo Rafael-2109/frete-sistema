@@ -671,10 +671,10 @@ def api_upload_anexo(ocorrencia_id):
         # Extensoes permitidas por tipo
         extensoes_por_tipo = {
             'EMAIL': ['msg', 'eml'],
-            'FOTO': ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+            'FOTO': ['jpg', 'jpeg', 'jfif', 'png', 'gif', 'webp'],
             'DOCUMENTO': ['pdf', 'doc', 'docx', 'txt'],
             'PLANILHA': ['xls', 'xlsx', 'csv'],
-            'OUTROS': ['pdf', 'doc', 'docx', 'txt', 'xls', 'xlsx', 'csv', 'jpg', 'jpeg', 'png', 'gif', 'msg', 'eml', 'zip']
+            'OUTROS': ['pdf', 'doc', 'docx', 'txt', 'xls', 'xlsx', 'csv', 'jpg', 'jpeg', 'jfif', 'png', 'gif', 'msg', 'eml', 'zip']
         }
 
         # Salvar arquivo

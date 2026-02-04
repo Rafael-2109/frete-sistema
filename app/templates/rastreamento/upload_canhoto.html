@@ -143,7 +143,7 @@
             <i class="fas fa-cloud-upload-alt fa-3x text-success mb-3"></i>
             <p class="mb-2"><strong>Clique para escolher arquivo</strong></p>
             <p class="text-muted small">ou arraste e solte aqui</p>
-            <p class="text-muted small">JPG, PNG ou PDF (max. 10MB)</p>
+            <p class="text-muted small">JPG, JFIF, PNG ou PDF (max. 10MB)</p>
         </div>
 
         <input type="file" id="fileInput" accept="image/*,application/pdf" capture="environment" style="display: none;">
@@ -243,8 +243,10 @@
         function processarArquivo(file) {
             // Validar tipo
             const tiposPermitidos = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
-            if (!tiposPermitidos.includes(file.type)) {
-                mostrarAlerta('Apenas arquivos JPG, PNG ou PDF sao permitidos.', 'danger');
+            const extensoesPermitidas = ['jpg', 'jpeg', 'jfif', 'png', 'pdf'];
+            const ext = file.name.split('.').pop().toLowerCase();
+            if (!tiposPermitidos.includes(file.type) && !extensoesPermitidas.includes(ext)) {
+                mostrarAlerta('Apenas arquivos JPG, JFIF, PNG ou PDF sao permitidos.', 'danger');
                 return;
             }
 

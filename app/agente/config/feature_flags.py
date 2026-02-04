@@ -55,8 +55,8 @@ USE_STRUCTURED_COMPACTION = os.getenv("AGENT_STRUCTURED_COMPACTION", "true").low
 # Session Summary — gera resumo estruturado ao final de cada interacao
 # Usa Haiku para extrair pedidos, decisoes, tarefas e alertas da conversa
 # Custo: ~$0.001 por resumo (Haiku: $0.25/1M input + $1.25/1M output)
-# Default false: requer migration de banco antes de ativar
-USE_SESSION_SUMMARY = os.getenv("AGENT_SESSION_SUMMARY", "false").lower() == "true"
+# ATIVO por default: migration ja aplicada, implementacao estavel
+USE_SESSION_SUMMARY = os.getenv("AGENT_SESSION_SUMMARY", "true").lower() == "true"
 
 # Threshold de mensagens para trigger de sumarizacao
 # Sumariza quando message_count >= threshold e summary esta stale (delta >= threshold)
@@ -97,8 +97,8 @@ PATTERN_LEARNING_THRESHOLD = int(os.getenv("AGENT_PATTERN_LEARNING_THRESHOLD", "
 # Agent Insights Dashboard — pagina admin com analytics de uso do agente
 # Mostra: top queries, custos por usuario, tools mais usadas, erros, duracao
 # Acesso: apenas usuarios com perfil 'administrador'
-# Default false: ativar quando quiser visualizar metricas
-USE_AGENT_INSIGHTS = os.getenv("AGENT_INSIGHTS", "false").lower() == "true"
+# ATIVO por default: dashboard estavel, acesso restrito a admin
+USE_AGENT_INSIGHTS = os.getenv("AGENT_INSIGHTS", "true").lower() == "true"
 
 # Reversibility Check — classifica acoes por reversibilidade e pede confirmacao extra
 # Intercepta Skills e Bash que podem executar acoes destrutivas (criar separacao, modificar dados)
@@ -110,8 +110,8 @@ USE_REVERSIBILITY_CHECK = os.getenv("AGENT_REVERSIBILITY_CHECK", "false").lower(
 # Detecta: queries repetidas (operador nao obteve resposta), mensagens curtas apos erro,
 # sessoes abandonadas, uso excessivo de tools sem resultado
 # Integrado ao Dashboard de Insights (P2-2)
-# Default false: requer historico suficiente de sessoes para ser util
-USE_FRICTION_ANALYSIS = os.getenv("AGENT_FRICTION_ANALYSIS", "false").lower() == "true"
+# ATIVO por default: historico suficiente acumulado, integrado ao Insights
+USE_FRICTION_ANALYSIS = os.getenv("AGENT_FRICTION_ANALYSIS", "true").lower() == "true"
 
 # ====================================================================
 # Hooks Expandidos (P3)

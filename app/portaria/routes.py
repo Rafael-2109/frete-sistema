@@ -32,7 +32,7 @@ def salvar_foto_documento(foto):
         file_path = storage.save_file(
             file=foto,
             folder='motoristas',
-            allowed_extensions=['jpg', 'jpeg', 'png']
+            allowed_extensions=['jpg', 'jpeg', 'jfif', 'png']
         )
         return file_path
     except Exception as e:

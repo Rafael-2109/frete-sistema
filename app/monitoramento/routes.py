@@ -1225,7 +1225,7 @@ def visualizar_arquivos(id):
                 file_path = storage.save_file(
                     file=file,
                     folder=f'entregas/{entrega.id}',
-                    allowed_extensions=['pdf', 'jpg', 'jpeg', 'png', 'xlsx', 'docx', 'txt']
+                    allowed_extensions=['pdf', 'jpg', 'jpeg', 'jfif', 'png', 'xlsx', 'docx', 'txt']
                 )
                 
                 if file_path:
@@ -1485,7 +1485,7 @@ def adicionar_comentario(id):
                 arquivo_path = storage.save_file(
                     file=form.arquivo.data,
                     folder=f'comentarios_nf',
-                    allowed_extensions=['pdf', 'jpg', 'jpeg', 'png', 'xlsx', 'docx', 'txt']
+                    allowed_extensions=['pdf', 'jpg', 'jpeg', 'jfif', 'png', 'xlsx', 'docx', 'txt']
                 )
                 
                 if not arquivo_path:
@@ -2257,8 +2257,8 @@ def upload_canhoto(id):
     
     # Validar extensão
     extensao = file.filename.split('.')[-1].lower()
-    if extensao not in ['jpg', 'jpeg', 'png', 'pdf']:
-        return jsonify({'success': False, 'message': 'Apenas arquivos JPG, PNG ou PDF são permitidos'})
+    if extensao not in ['jpg', 'jpeg', 'jfif', 'png', 'pdf']:
+        return jsonify({'success': False, 'message': 'Apenas arquivos JPG, JFIF, PNG ou PDF são permitidos'})
     
     try:
         # 🌐 Salvar no S3
@@ -2267,9 +2267,9 @@ def upload_canhoto(id):
         file_path = storage.save_file(
             file=file,
             folder='canhotos',
-            allowed_extensions=['jpg', 'jpeg', 'png', 'pdf']
+            allowed_extensions=['jpg', 'jpeg', 'jfif', 'png', 'pdf']
         )
-        
+
         if file_path:
             # Remove canhoto anterior se existir
             if entrega.canhoto_arquivo:
@@ -2279,12 +2279,12 @@ def upload_canhoto(id):
                 except Exception as e:
                     logger.error(f"Erro ao excluir arquivo: {e}")
                     pass
-            
+
             entrega.canhoto_arquivo = file_path
             db.session.commit()
-            
+
             return jsonify({
-                'success': True, 
+                'success': True,
                 'message': f'Canhoto anexado com sucesso para NF {entrega.numero_nf}!'
             })
         else:
@@ -2334,7 +2334,7 @@ def upload_canhotos_lote():
                 
                 # Validar extensão
                 extensao = file.filename.split('.')[-1].lower()
-                if extensao not in ['jpg', 'jpeg', 'png', 'pdf']:
+                if extensao not in ['jpg', 'jpeg', 'jfif', 'png', 'pdf']:
                     resultados['erro'].append(f'{file.filename}: Extensão não permitida')
                     continue
                 
@@ -2344,7 +2344,7 @@ def upload_canhotos_lote():
                 file_path = storage.save_file(
                     file=file,
                     folder='canhotos',
-                    allowed_extensions=['jpg', 'jpeg', 'png', 'pdf']
+                    allowed_extensions=['jpg', 'jpeg', 'jfif', 'png', 'pdf']
                 )
                 
                 if file_path:

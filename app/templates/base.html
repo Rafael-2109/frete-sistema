@@ -602,24 +602,25 @@
           </li>
           {% endif %}
 
-          <!-- 🤖 Agente Logístico - Claude Agent SDK -->
-          <li class="nav-item">
-            <a class="nav-link" href="{{ url_for('agente.pagina_chat') }}"
-              title="Agente Logístico - Consultas inteligentes de pedidos e estoque">
-              <i class="fas fa-robot text-info"></i> Agente
-              <span class="badge bg-primary ms-1" style="font-size: 0.6rem;">SDK</span>
+          <!-- 🤖 IA - Agente e Analytics -->
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="menuIA" role="button" data-bs-toggle="dropdown">
+              <i class="fas fa-robot text-info"></i> IA
             </a>
+            <ul class="dropdown-menu">
+              <li><a class="dropdown-item" href="{{ url_for('agente.pagina_chat') }}"
+                  title="Agente Logístico - Consultas inteligentes de pedidos e estoque">
+                  <i class="fas fa-comments text-info"></i> Agente
+                  <span class="badge bg-primary ms-1" style="font-size: 0.6rem;">SDK</span>
+                </a></li>
+              {% if current_user.perfil == 'administrador' %}
+              <li><a class="dropdown-item" href="{{ url_for('agente.pagina_insights') }}"
+                  title="Insights e Analytics do Agente">
+                  <i class="fas fa-chart-bar text-warning"></i> Insights
+                </a></li>
+              {% endif %}
+            </ul>
           </li>
-
-          <!-- 📊 Insights do Agente (admin only, P2-2) -->
-          {% if current_user.perfil == 'administrador' %}
-          <li class="nav-item">
-            <a class="nav-link" href="{{ url_for('agente.pagina_insights') }}"
-              title="Insights e Analytics do Agente">
-              <i class="fas fa-chart-bar text-warning"></i> Insights
-            </a>
-          </li>
-          {% endif %}
 
           <!-- Theme Toggle -->
           <li class="nav-item">

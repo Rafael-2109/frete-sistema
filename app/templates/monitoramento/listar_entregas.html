@@ -1989,10 +1989,10 @@ nav.navbar .navbar-brand .badge.bg-primary {
                    class="form-control" 
                    id="arquivo-canhoto" 
                    name="canhoto" 
-                   accept=".jpg,.jpeg,.png,.pdf"
+                   accept=".jpg,.jpeg,.jfif,.png,.pdf"
                    required>
             <div class="form-text">
-              Formatos aceitos: JPG, PNG, PDF (máx. 10MB)
+              Formatos aceitos: JPG, JFIF, PNG, PDF (máx. 10MB)
             </div>
           </div>
           
@@ -2499,8 +2499,8 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Validar extensão
     const extensao = file.name.split('.').pop().toLowerCase();
-    if (!['jpg', 'jpeg', 'png', 'pdf'].includes(extensao)) {
-      alert('Formato não permitido. Use apenas JPG, PNG ou PDF.');
+    if (!['jpg', 'jpeg', 'jfif', 'png', 'pdf'].includes(extensao)) {
+      alert('Formato não permitido. Use apenas JPG, JFIF, PNG ou PDF.');
       return;
     }
     
