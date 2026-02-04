@@ -127,6 +127,25 @@ class ComprovanteLancamentoService:
         )
 
         try:
+            # 0. Verificar se o título ainda tem saldo a pagar no Odoo
+            titulo_check = self.baixa_service.buscar_titulo_por_id(lanc.odoo_move_line_id)
+            if not titulo_check:
+                return {
+                    'sucesso': False,
+                    'erro': f'Título {lanc.odoo_move_line_id} não encontrado no Odoo',
+                }
+
+            titulo_reconciliado = titulo_check.get('reconciled', False)
+            titulo_residual = abs(float(titulo_check.get('amount_residual', 0)))
+
+            if titulo_reconciliado or titulo_residual < 0.01:
+                logger.info(
+                    f"  Título {lanc.odoo_move_line_id} já quitado no Odoo "
+                    f"(reconciled={titulo_reconciliado}, residual={titulo_residual:.2f}). "
+                    f"Sincronizando sem criar payment."
+                )
+                return self._sincronizar_titulo_ja_quitado(lanc, comp, titulo_check, usuario)
+
             # 1. Determinar se há juros (valor_pago > valor do título)
             valor_pago = float(comp.valor_pago)
             valor_titulo = abs(float(lanc.odoo_valor_residual or lanc.odoo_valor_original or 0))
@@ -216,17 +235,13 @@ class ComprovanteLancamentoService:
                     comp.odoo_move_id
                 )
                 if debit_line_extrato:
-                    # 5c. Reconciliar payment com extrato
-                    self.baixa_service.reconciliar(credit_line_id, debit_line_extrato)
-                    logger.info("  Reconciliado: payment ↔ extrato")
-
-                    # 5d. Atualizar partner_id da statement line
+                    # 5c. Atualizar partner_id da statement line (ANTES de reconciliar)
                     self.baixa_service.atualizar_statement_line_partner(
                         statement_line_id=comp.odoo_statement_line_id,
                         partner_id=lanc.odoo_partner_id,
                     )
 
-                    # 5e. Atualizar rótulo do extrato
+                    # 5d. Atualizar rótulo do extrato (ANTES de reconciliar)
                     from app.financeiro.services.baixa_pagamentos_service import BaixaPagamentosService
                     rotulo = BaixaPagamentosService.formatar_rotulo_pagamento(
                         valor=float(comp.valor_pago),
@@ -238,6 +253,10 @@ class ComprovanteLancamentoService:
                         statement_line_id=comp.odoo_statement_line_id,
                         rotulo=rotulo,
                     )
+
+                    # 5e. Reconciliar payment com extrato (DEPOIS de atualizar partner/rótulo)
+                    self.baixa_service.reconciliar(credit_line_id, debit_line_extrato)
+                    logger.info("  Reconciliado: payment ↔ extrato")
 
                     # 5f. Buscar full_reconcile_id do extrato
                     linha_extrato = self.baixa_service.connection.search_read(
@@ -367,6 +386,81 @@ class ComprovanteLancamentoService:
     # =========================================================================
     # MÉTODOS AUXILIARES
     # =========================================================================
+
+    def _sincronizar_titulo_ja_quitado(
+        self,
+        lanc: LancamentoComprovante,
+        comp: ComprovantePagamentoBoleto,
+        titulo_check: Dict,
+        usuario: str,
+    ) -> Dict:
+        """
+        Quando o título já foi quitado no Odoo (manualmente),
+        sincronizar os dados e marcar como LANCADO.
+
+        Evita criar payment "fantasma" no Odoo quando o título
+        já foi pago por outro meio.
+
+        Args:
+            lanc: LancamentoComprovante a ser atualizado
+            comp: ComprovantePagamentoBoleto associado
+            titulo_check: Dados do título retornados por buscar_titulo_por_id
+            usuario: Nome do usuário
+
+        Returns:
+            Dict com resultado da operação
+        """
+        # Extrair full_reconcile_id do título
+        full_rec = titulo_check.get('full_reconcile_id')
+        if full_rec:
+            lanc.odoo_full_reconcile_id = (
+                full_rec[0] if isinstance(full_rec, (list, tuple)) else full_rec
+            )
+
+        # Verificar se o extrato também já está reconciliado
+        if comp.odoo_statement_line_id and comp.odoo_move_id:
+            try:
+                linhas_extrato = self.baixa_service.connection.search_read(
+                    'account.move.line',
+                    [
+                        ['move_id', '=', comp.odoo_move_id],
+                        ['credit', '>', 0],
+                    ],
+                    fields=['id', 'reconciled', 'full_reconcile_id'],
+                    limit=1,
+                )
+                if linhas_extrato and linhas_extrato[0].get('reconciled'):
+                    ext_full_rec = linhas_extrato[0].get('full_reconcile_id')
+                    if ext_full_rec:
+                        lanc.odoo_full_reconcile_extrato_id = (
+                            ext_full_rec[0] if isinstance(ext_full_rec, (list, tuple)) else ext_full_rec
+                        )
+                    logger.info(
+                        f"  Extrato também já reconciliado no Odoo "
+                        f"(full_reconcile_extrato={lanc.odoo_full_reconcile_extrato_id})"
+                    )
+            except Exception as e:
+                logger.warning(f"  Falha ao verificar extrato reconciliado: {e}")
+
+        lanc.status = 'LANCADO'
+        lanc.lancado_em = agora_brasil()
+        lanc.lancado_por = usuario
+        lanc.erro_lancamento = None
+        comp.odoo_is_reconciled = True
+
+        db.session.commit()
+
+        logger.info(
+            f"  ✅ Lançamento {lanc.id} sincronizado (título já quitado no Odoo). "
+            f"full_reconcile={lanc.odoo_full_reconcile_id}"
+        )
+        return {
+            'sucesso': True,
+            'lancamento_id': lanc.id,
+            'full_reconcile_id': lanc.odoo_full_reconcile_id,
+            'full_reconcile_extrato_id': lanc.odoo_full_reconcile_extrato_id,
+            'sincronizado': True,
+        }
 
     def _validar_dados(
         self, lanc: LancamentoComprovante, comp: ComprovantePagamentoBoleto
