@@ -55,6 +55,16 @@ CAMPOS_SNAPSHOT_TITULO = [
 CONTA_PAGAMENTOS_PENDENTES = 26868  # 1110100004 PAGAMENTOS/RECEBIMENTOS PENDENTES
 CONTA_TRANSITORIA = 22199           # 1110100003 TRANSITÓRIA DE VALORES
 
+# Conta 3701010003 JUROS DE PAGAMENTOS EM ATRASO (expense)
+# Quando pagamento a fornecedor tem juros (valor_pago > saldo do título),
+# a diferença vai para esta conta como DESPESA
+CONTA_JUROS_PAGAMENTOS_POR_COMPANY = {
+    1: 22769,  # NACOM GOYA - FB
+    3: 24051,  # NACOM GOYA - SC
+    4: 25335,  # NACOM GOYA - CD
+    5: 26619,  # LA FAMIGLIA - LF
+}
+
 # Regex para extrair CNPJ do payment_ref
 REGEX_CNPJ = re.compile(r'(\d{2}[.\s]?\d{3}[.\s]?\d{3}[/\s]?\d{4}[-.\s]?\d{2})')
 
@@ -406,6 +416,130 @@ class BaixaPagamentosService:
         )
 
         payment_name = payment[0]['name'] if payment else f'Payment #{payment_id}'
+
+        return payment_id, payment_name
+
+    def criar_pagamento_outbound_com_writeoff(
+        self,
+        titulo_id: int,
+        partner_id: int,
+        valor_titulo: float,
+        valor_juros: float,
+        journal_id: int,
+        ref: str,
+        data,
+        company_id: int
+    ) -> Tuple[int, str]:
+        """
+        Cria pagamento OUTBOUND usando wizard account.payment.register com Write-Off para juros.
+
+        Quando pagamento a fornecedor tem valor > saldo do título, a diferença (juros)
+        vai para conta de despesa 3701010003 JUROS DE PAGAMENTOS EM ATRASO.
+
+        O wizard automaticamente:
+        1. Cria o payment com valor_total (principal + juros)
+        2. Separa principal vs juros
+        3. Lança juros na conta contábil correta
+        4. Reconcilia TOTALMENTE o título
+
+        Args:
+            titulo_id: ID da linha do título (account.move.line)
+            partner_id: ID do fornecedor (res.partner)
+            valor_titulo: Valor do título (saldo a pagar, sem juros)
+            valor_juros: Valor dos juros a ser lançado como write-off
+            journal_id: ID do journal de pagamento
+            ref: Referência (nome do move/NF)
+            data: Data do pagamento
+            company_id: ID da empresa
+
+        Returns:
+            Tuple com (payment_id, payment_name)
+        """
+        # Converter data para string
+        data_str = data.strftime('%Y-%m-%d') if hasattr(data, 'strftime') else str(data)
+
+        # Buscar conta de juros para a empresa
+        conta_juros_id = CONTA_JUROS_PAGAMENTOS_POR_COMPANY.get(company_id)
+        if not conta_juros_id:
+            raise ValueError(f"Conta de juros de pagamentos não mapeada para company_id={company_id}")
+
+        # Valor total do pagamento (principal + juros)
+        valor_total = round(valor_titulo + valor_juros, 2)
+
+        logger.info(
+            f"  Criando pagamento OUTBOUND com Write-Off: "
+            f"Principal={valor_titulo:.2f}, Juros={valor_juros:.2f}, "
+            f"Total={valor_total:.2f}, Conta Juros={conta_juros_id}"
+        )
+
+        # 1. Criar o wizard account.payment.register vinculado ao título
+        wizard_context = {
+            'active_model': 'account.move.line',
+            'active_ids': [titulo_id],
+        }
+
+        wizard_data = {
+            'payment_type': 'outbound',      # SAÍDA (pagamento a fornecedor)
+            'partner_type': 'supplier',       # FORNECEDOR
+            'partner_id': partner_id,
+            'amount': valor_total,            # Valor total (principal + juros)
+            'journal_id': journal_id,
+            'payment_date': data_str,
+            'communication': ref,
+            'payment_difference_handling': 'reconcile',  # Marcar como totalmente pago
+            'writeoff_account_id': conta_juros_id,       # Conta de juros
+            'writeoff_label': 'Juros de pagamento em atraso',
+        }
+
+        # Criar wizard com contexto
+        wizard_id = self.connection.execute_kw(
+            'account.payment.register',
+            'create',
+            [wizard_data],
+            {'context': wizard_context}
+        )
+
+        logger.info(f"  Wizard criado: ID={wizard_id}")
+
+        # 2. Executar o wizard para criar o pagamento
+        try:
+            self.connection.execute_kw(
+                'account.payment.register',
+                'action_create_payments',
+                [[wizard_id]],
+                {'context': wizard_context}
+            )
+        except Exception as e:
+            if "cannot marshal None" not in str(e):
+                raise
+
+        # 3. Buscar o pagamento criado pelo wizard
+        payments = self.connection.execute_kw(
+            'account.payment',
+            'search_read',
+            [[
+                ['partner_id', '=', partner_id],
+                ['amount', '=', valor_total],
+                ['journal_id', '=', journal_id],
+                ['company_id', '=', company_id],
+            ]],
+            {
+                'fields': ['id', 'name', 'move_id', 'state'],
+                'order': 'id desc',
+                'limit': 1
+            }
+        )
+
+        if not payments:
+            raise ValueError("Pagamento não encontrado após criar via wizard")
+
+        payment_id = payments[0]['id']
+        payment_name = payments[0]['name']
+
+        logger.info(
+            f"  Pagamento OUTBOUND com Write-Off criado: "
+            f"{payment_name} (ID={payment_id}, state={payments[0].get('state')})"
+        )
 
         return payment_id, payment_name
 

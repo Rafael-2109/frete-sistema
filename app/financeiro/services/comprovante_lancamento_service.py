@@ -127,23 +127,49 @@ class ComprovanteLancamentoService:
         )
 
         try:
-            # 1. Criar payment outbound
-            payment_id, payment_name = self.baixa_service.criar_pagamento_outbound(
-                partner_id=lanc.odoo_partner_id,
-                valor=float(comp.valor_pago),
-                journal_id=journal_id,
-                ref=lanc.odoo_move_name or f'NF {lanc.nf_numero}',
-                data=comp.data_pagamento,
-                company_id=lanc.odoo_company_id,
-            )
-            logger.info(f"  Payment criado: {payment_name} (ID: {payment_id})")
+            # 1. Determinar se há juros (valor_pago > valor do título)
+            valor_pago = float(comp.valor_pago)
+            valor_titulo = abs(float(lanc.odoo_valor_residual or lanc.odoo_valor_original or 0))
+            juros = round(valor_pago - valor_titulo, 2) if valor_pago > valor_titulo + 0.01 else 0
+            usou_writeoff = False
+
+            if juros > 0:
+                # 1a. COM JUROS: usar wizard com write-off
+                logger.info(
+                    f"  Juros detectado: valor_pago={valor_pago:.2f}, "
+                    f"valor_titulo={valor_titulo:.2f}, juros={juros:.2f}"
+                )
+                payment_id, payment_name = self.baixa_service.criar_pagamento_outbound_com_writeoff(
+                    titulo_id=lanc.odoo_move_line_id,
+                    partner_id=lanc.odoo_partner_id,
+                    valor_titulo=valor_titulo,
+                    valor_juros=juros,
+                    journal_id=journal_id,
+                    ref=lanc.odoo_move_name or f'NF {lanc.nf_numero}',
+                    data=comp.data_pagamento,
+                    company_id=lanc.odoo_company_id,
+                )
+                usou_writeoff = True
+                logger.info(f"  Payment com Write-Off criado: {payment_name} (ID: {payment_id})")
+            else:
+                # 1b. SEM JUROS: fluxo original (payment outbound simples)
+                payment_id, payment_name = self.baixa_service.criar_pagamento_outbound(
+                    partner_id=lanc.odoo_partner_id,
+                    valor=valor_pago,
+                    journal_id=journal_id,
+                    ref=lanc.odoo_move_name or f'NF {lanc.nf_numero}',
+                    data=comp.data_pagamento,
+                    company_id=lanc.odoo_company_id,
+                )
+                logger.info(f"  Payment criado: {payment_name} (ID: {payment_id})")
 
             lanc.odoo_payment_id = payment_id
             lanc.odoo_payment_name = payment_name
 
-            # 2. Postar payment
-            self.baixa_service.postar_pagamento(payment_id)
-            logger.info("  Payment postado")
+            if not usou_writeoff:
+                # 2. Postar payment (wizard já posta automaticamente)
+                self.baixa_service.postar_pagamento(payment_id)
+                logger.info("  Payment postado")
 
             # 3. Buscar linhas do payment
             linhas_payment = self.baixa_service.buscar_linhas_payment(payment_id)
@@ -156,10 +182,15 @@ class ComprovanteLancamentoService:
 
             # 4. Reconciliar payment com título
             if debit_line_id and lanc.odoo_move_line_id:
-                self.baixa_service.reconciliar(debit_line_id, lanc.odoo_move_line_id)
-                logger.info("  Reconciliado: payment ↔ título")
+                if usou_writeoff:
+                    # Wizard já reconciliou o título automaticamente
+                    logger.info("  Write-Off: reconciliação título feita pelo wizard")
+                else:
+                    # Fluxo normal: reconciliar manualmente
+                    self.baixa_service.reconciliar(debit_line_id, lanc.odoo_move_line_id)
+                    logger.info("  Reconciliado: payment ↔ título")
 
-                # Buscar full_reconcile_id
+                # Buscar full_reconcile_id (funciona em ambos os casos)
                 titulo_atualizado = self.baixa_service.buscar_titulo_por_id(lanc.odoo_move_line_id)
                 if titulo_atualizado:
                     full_rec = titulo_atualizado.get('full_reconcile_id')

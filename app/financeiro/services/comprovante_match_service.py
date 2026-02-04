@@ -193,10 +193,10 @@ class ComprovanteMatchService:
         if comprovante_ids:
             query = query.filter(ComprovantePagamentoBoleto.id.in_(comprovante_ids))
         else:
-            # Todos que NAO tem lancamento CONFIRMADO
+            # Todos que NAO tem lancamento CONFIRMADO ou LANCADO
             subq = db.session.query(LancamentoComprovante.comprovante_id).filter(
-                LancamentoComprovante.status == 'CONFIRMADO'
-            ).subquery()
+                LancamentoComprovante.status.in_(['CONFIRMADO', 'LANCADO'])
+            )
             query = query.filter(~ComprovantePagamentoBoleto.id.in_(subq))
 
         if filtros:
@@ -214,6 +214,10 @@ class ComprovanteMatchService:
         logger.info(f"Comprovantes a processar: {total}")
 
         for idx, comp in enumerate(comprovantes, 1):
+            # Guardar IDs ANTES do processamento (evita lazy load apos erro de conexao)
+            comp_id = comp.id
+            comp_doc = comp.numero_documento
+
             try:
                 resultado = self._processar_comprovante(comp)
                 detalhes.append(resultado)
@@ -227,15 +231,15 @@ class ComprovanteMatchService:
                 try:
                     db.session.commit()
                 except Exception as e:
-                    logger.error(f"Erro commit comp={comp.id}: {e}", exc_info=True)
+                    logger.error(f"Erro commit comp={comp_id}: {e}", exc_info=True)
                     db.session.rollback()
 
             except Exception as e:
-                logger.error(f"Erro no comprovante {comp.id}: {e}", exc_info=True)
+                logger.error(f"Erro no comprovante {comp_id}: {e}", exc_info=True)
                 self.estatisticas['erros'] += 1
                 detalhes.append({
-                    'comprovante_id': comp.id,
-                    'numero_documento': comp.numero_documento,
+                    'comprovante_id': comp_id,
+                    'numero_documento': comp_doc,
                     'match_encontrado': False,
                     'erro': str(e),
                 })

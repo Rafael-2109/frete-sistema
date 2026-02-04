@@ -31,6 +31,26 @@ CONTA_JUROS_RECEBIMENTOS_POR_COMPANY = {
 }
 ```
 
+## Contas de Juros de Pagamento
+
+**Conta**: `3701010003 JUROS DE PAGAMENTOS EM ATRASO`
+
+| Company ID | Company Nome | Account ID |
+|------------|--------------|------------|
+| 1 | NACOM GOYA - FB | 22769 |
+| 3 | NACOM GOYA - SC | 24051 |
+| 4 | NACOM GOYA - CD | 25335 |
+| 5 | LA FAMIGLIA - LF | 26619 |
+
+```python
+CONTA_JUROS_PAGAMENTOS_POR_COMPANY = {
+    1: 22769,  # NACOM GOYA - FB
+    3: 24051,  # NACOM GOYA - SC
+    4: 25335,  # NACOM GOYA - CD
+    5: 26619,  # LA FAMIGLIA - LF
+}
+```
+
 ## Contas Comuns (Todas as Empresas)
 
 ### Contas de Ativo

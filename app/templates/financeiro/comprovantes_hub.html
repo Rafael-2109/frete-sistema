@@ -60,6 +60,17 @@
     #dropdown-confianca .form-check { padding: 3px 8px 3px 28px; border-radius: 4px; }
     #dropdown-confianca .form-check:hover { background: #f0f4ff; }
     #dropdown-confianca .form-check-label { cursor: pointer; font-size: 0.85em; white-space: nowrap; }
+
+    /* Tri-state checkboxes: include (verde) */
+    .filtro-check[data-tristate="include"] + label {
+        color: #198754;
+        font-weight: 600;
+    }
+    /* Tri-state checkboxes: exclude (vermelho, riscado) */
+    .filtro-check[data-tristate="exclude"] + label {
+        text-decoration: line-through;
+        color: #dc3545;
+    }
 </style>
 {% endblock %}
 
@@ -391,23 +402,23 @@
 
                     <!-- Checkboxes Pipeline -->
                     <div class="form-check form-check-inline mb-0">
-                        <input class="form-check-input filtro-check" type="checkbox" id="filtro-ofx" value="ofx">
+                        <input class="form-check-input filtro-check" type="checkbox" id="filtro-ofx" value="ofx" data-tristate="neutral">
                         <label class="form-check-label" for="filtro-ofx">OFX</label>
                     </div>
                     <div class="form-check form-check-inline mb-0">
-                        <input class="form-check-input filtro-check" type="checkbox" id="filtro-extrato" value="extrato">
+                        <input class="form-check-input filtro-check" type="checkbox" id="filtro-extrato" value="extrato" data-tristate="neutral">
                         <label class="form-check-label" for="filtro-extrato">Extrato</label>
                     </div>
                     <div class="form-check form-check-inline mb-0">
-                        <input class="form-check-input filtro-check" type="checkbox" id="filtro-match" value="match">
+                        <input class="form-check-input filtro-check" type="checkbox" id="filtro-match" value="match" data-tristate="neutral">
                         <label class="form-check-label" for="filtro-match">Match</label>
                     </div>
                     <div class="form-check form-check-inline mb-0">
-                        <input class="form-check-input filtro-check" type="checkbox" id="filtro-confirmado" value="confirmado">
+                        <input class="form-check-input filtro-check" type="checkbox" id="filtro-confirmado" value="confirmado" data-tristate="neutral">
                         <label class="form-check-label" for="filtro-confirmado">Confirmado</label>
                     </div>
                     <div class="form-check form-check-inline mb-0">
-                        <input class="form-check-input filtro-check" type="checkbox" id="filtro-baixado" value="baixado">
+                        <input class="form-check-input filtro-check" type="checkbox" id="filtro-baixado" value="baixado" data-tristate="neutral">
                         <label class="form-check-label" for="filtro-baixado">Baixado</label>
                     </div>
 
@@ -1055,7 +1066,13 @@ document.addEventListener('DOMContentLoaded', function() {
             {
                 data: 'data_pagamento',
                 render: function(val, type, row) {
-                    if (type !== 'display') return val || '';
+                    // Ordenacao: converter DD/MM/YYYY -> YYYYMMDD para sort cronologico
+                    if (type === 'sort' || type === 'type') {
+                        if (!val) return '';
+                        var p = val.split('/');
+                        return p.length === 3 ? p[2] + p[1] + p[0] : val;
+                    }
+                    if (type === 'filter') return val || '';
                     var html = '<div class="fw-semibold" style="font-size:0.88em">' + (val || '-') + '</div>';
                     if (row.data_vencimento) {
                         html += '<div style="font-size:0.75em" class="text-muted">Venc: ' + row.data_vencimento + '</div>';
@@ -1135,6 +1152,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // ── COL 4: PIPELINE (OFX + Extrato + Status/Score/Reconcile) ──
             {
                 data: 'lancamento_status',
+                type: 'num',
                 render: function(val, type, row) {
                     // Para ordenacao: usar match_score numerico (null = -1 para ir pro final)
                     if (type === 'sort') {
@@ -1358,6 +1376,12 @@ document.addEventListener('DOMContentLoaded', function() {
         pageLength: 25,
         autoWidth: false,
         scrollX: false,
+    });
+
+    // Inicializar checkboxes tri-state como neutro (indeterminate)
+    document.querySelectorAll('.filtro-check').forEach(function(cb) {
+        cb.indeterminate = true;
+        cb.dataset.tristate = 'neutral';
     });
 
     window.recarregarTabela = function() {
@@ -2572,25 +2596,25 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!matchConfianca) return false;
         }
 
-        // --- 2. Checkboxes (OR entre si, AND com confianca) ---
-        var checkOFX = document.getElementById('filtro-ofx').checked;
-        var checkExtrato = document.getElementById('filtro-extrato').checked;
-        var checkMatch = document.getElementById('filtro-match').checked;
-        var checkConfirmado = document.getElementById('filtro-confirmado').checked;
-        var checkBaixado = document.getElementById('filtro-baixado').checked;
+        // --- 2. Checkboxes tri-state (AND entre si) ---
+        var filtros = [
+            { id: 'filtro-ofx',        condicao: function(r) { return !!r.ofx_fitid; } },
+            { id: 'filtro-extrato',    condicao: function(r) { return !!r.odoo_statement_line_id; } },
+            { id: 'filtro-match',      condicao: function(r) { return !!r.lancamento_status; } },
+            { id: 'filtro-confirmado', condicao: function(r) { return r.lancamento_status === 'CONFIRMADO'; } },
+            { id: 'filtro-baixado',    condicao: function(r) { return r.lancamento_status === 'LANCADO'; } },
+        ];
 
-        var algumCheckAtivo = checkOFX || checkExtrato || checkMatch || checkConfirmado || checkBaixado;
+        for (var i = 0; i < filtros.length; i++) {
+            var el = document.getElementById(filtros[i].id);
+            var estado = el.dataset.tristate || 'neutral';
 
-        if (algumCheckAtivo) {
-            var matchCheck = false;
+            if (estado === 'neutral') continue; // sem filtro
 
-            if (checkOFX && rowData.ofx_fitid) matchCheck = true;
-            if (checkExtrato && rowData.odoo_statement_line_id) matchCheck = true;
-            if (checkMatch && rowData.lancamento_status) matchCheck = true;
-            if (checkConfirmado && rowData.lancamento_status === 'CONFIRMADO') matchCheck = true;
-            if (checkBaixado && rowData.lancamento_status === 'LANCADO') matchCheck = true;
+            var temCondicao = filtros[i].condicao(rowData);
 
-            if (!matchCheck) return false;
+            if (estado === 'include' && !temCondicao) return false;  // quer SIM, mas nao tem
+            if (estado === 'exclude' && temCondicao)  return false;  // quer NAO, mas tem
         }
 
         return true;
@@ -2601,7 +2625,29 @@ document.addEventListener('DOMContentLoaded', function() {
         tabela.draw();
     });
 
-    $('.filtro-check').on('change', function() {
+    // Handler tri-state: neutral -> include -> exclude -> neutral
+    $('.filtro-check').on('click', function(e) {
+        e.preventDefault();
+        var cb = this;
+        var estado = cb.dataset.tristate || 'neutral';
+
+        if (estado === 'neutral') {
+            // neutral -> include (checked, label verde)
+            cb.dataset.tristate = 'include';
+            cb.checked = true;
+            cb.indeterminate = false;
+        } else if (estado === 'include') {
+            // include -> exclude (unchecked, label riscado vermelho)
+            cb.dataset.tristate = 'exclude';
+            cb.checked = false;
+            cb.indeterminate = false;
+        } else {
+            // exclude -> neutral (indeterminate, sem filtro)
+            cb.dataset.tristate = 'neutral';
+            cb.checked = false;
+            cb.indeterminate = true;
+        }
+
         tabela.draw();
     });
 
@@ -2623,9 +2669,11 @@ document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll('.confianca-check').forEach(function(cb) {
             cb.checked = false;
         });
-        // Reset checkboxes de pipeline
+        // Reset checkboxes de pipeline (tri-state -> neutro)
         document.querySelectorAll('.filtro-check').forEach(function(cb) {
             cb.checked = false;
+            cb.indeterminate = true;
+            cb.dataset.tristate = 'neutral';
         });
         tabela.draw();
     });
@@ -2647,8 +2695,10 @@ document.addEventListener('DOMContentLoaded', function() {
             badgeConf.style.display = 'none';
         }
 
-        // Contar checkboxes de pipeline marcados
-        document.querySelectorAll('.filtro-check:checked').forEach(function() { count++; });
+        // Contar checkboxes de pipeline ativos (tri-state: include ou exclude)
+        document.querySelectorAll('.filtro-check').forEach(function(cb) {
+            if (cb.dataset.tristate && cb.dataset.tristate !== 'neutral') count++;
+        });
 
         // Atualizar badge geral (botao Filtros)
         var badge = document.getElementById('badge-filtros-ativos');
