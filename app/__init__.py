@@ -281,8 +281,12 @@ def create_app(config_name=None):
             print(f"Erro ao logar erro CSRF: {e}")
             pass
 
-        # Para requisições AJAX, retorna JSON
-        if request.is_json or "XMLHttpRequest" in request.headers.get("X-Requested-With", ""):
+        # Para requisições AJAX/API, retorna JSON
+        if (
+            '/api/' in request.path
+            or request.is_json
+            or "XMLHttpRequest" in request.headers.get("X-Requested-With", "")
+        ):
             return {
                 "success": False,
                 "message": "Sua sessão expirou. Por favor, recarregue a página e tente novamente.",

@@ -569,10 +569,13 @@ def _buscar_partner_do_titulo_odoo(connection, titulo_nf: str) -> tuple:
     )
 
     if moves:
-        partner = moves[0].get('partner_id')
-        if isinstance(partner, (list, tuple)) and partner:
-            return partner[0], partner[1]
-        return partner, ''
+        # Iterar todos os resultados — o primeiro pode ter partner_id=False
+        # (ex: move entry sem partner, mas outro move entry TEM o partner)
+        for move in moves:
+            partner = move.get('partner_id')
+            if isinstance(partner, (list, tuple)) and partner:
+                return partner[0], partner[1]
+        # Se nenhum tem partner como [id, name], cai para busca 2
 
     # Busca 2: Fallback por move_line (caso raro)
     titulos = connection.search_read(

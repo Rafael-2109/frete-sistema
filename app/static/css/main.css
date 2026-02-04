@@ -52,6 +52,7 @@
 @import url('./components/_modals.css') layer(components);
 @import url('./components/_forms.css') layer(components);
 @import url('./components/_tables.css') layer(components);
+@import url('./components/_tags.css') layer(components);
 @import url('./components/_layout.css') layer(components);
 
 /* Modules - Feature-specific styles */

@@ -56,6 +56,13 @@
   ],
   "indices": [
     {
+      "name": "ix_portal_sendas_filial_depara_cnpj",
+      "columns": [
+        "cnpj"
+      ],
+      "unique": true
+    },
+    {
       "name": "ix_portal_sendas_filial_depara_ativo",
       "columns": [
         "ativo"
@@ -75,13 +82,6 @@
         "numero"
       ],
       "unique": false
-    },
-    {
-      "name": "ix_portal_sendas_filial_depara_cnpj",
-      "columns": [
-        "cnpj"
-      ],
-      "unique": true
     }
   ]
 }

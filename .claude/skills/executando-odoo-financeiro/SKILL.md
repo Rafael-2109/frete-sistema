@@ -249,6 +249,23 @@ baixa_service.atualizar_rotulo_extrato(extrato_move_id, statement_line_id, rotul
 > **REGRA:** Qualquer operacao que reconcilie payment ↔ extrato DEVE incluir estes 3 passos.
 > Ver [erros-comuns.md](references/erros-comuns.md) Erro 11 e `.claude/references/odoo/GOTCHAS.md` secao "Extrato Bancario: 3 Campos".
 
+### Correcao Retroativa (Registros Ja Conciliados)
+
+Quando registros JA estao reconciliados (`is_reconciled=True`) mas com campos incorretos (lancamentos anteriores a 03/02/2026), usar o fluxo **CORRETIVO** de 7 passos:
+
+**Diferenca dos fluxos:**
+- **PREVENTIVO** (acima): Corrige ANTES de reconciliar — simples, sem desconciliacao
+- **CORRETIVO**: Corrige DEPOIS de ja reconciliado — exige desconciliar → draft → editar → post → re-reconciliar
+
+**Gotchas criticos:**
+- Odoo RECRIA move lines ao editar em draft (IDs mudam!)
+- `account_id` DEVE ser ultimo campo alterado antes de `action_post`
+- TRANSITORIA pode estar no debito (pagamentos) OU credito (recebimentos)
+
+**Script**: `scripts/correcao_campos_extrato_odoo.py` — modos `--verificar-*` e `--corrigir-*`
+
+> Ver [erros-comuns.md](references/erros-comuns.md) Erro 12 e `.claude/references/odoo/GOTCHAS.md` secao "Correcao Retroativa" para fluxo completo.
+
 ## Skills Relacionadas
 
 | Skill | Quando usar |

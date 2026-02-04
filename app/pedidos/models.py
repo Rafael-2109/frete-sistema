@@ -44,6 +44,9 @@ class Pedido(db.Model):
     # Campo de equipe de vendas (via JOIN com CarteiraPrincipal na VIEW)
     equipe_vendas = db.Column(db.String(100), nullable=True) #Vem de CarteiraPrincipal.equipe_vendas
 
+    # 🏷️ Tags do pedido (de Separacao, via VIEW)
+    tags_pedido = db.Column(db.Text, nullable=True)  # JSON: [{"name": "VIP", "color": 5}]
+
     # Campos de transporte (virão NULL da VIEW, precisam JOIN com cotacao)
     transportadora = db.Column(db.String(100))
     valor_frete = db.Column(db.Float)

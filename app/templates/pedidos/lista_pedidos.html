@@ -35,6 +35,19 @@
     border-radius: var(--radius-md);
     margin-bottom: 1rem;
 }
+
+/* Colunas compactas: CNPJ e Peso nunca quebram linha */
+.table tbody td:nth-child(4),  /* CNPJ */
+.table tbody td:nth-child(9) { /* Peso */
+    white-space: nowrap;
+}
+
+/* Cidade: limitar largura para não dominar a tabela */
+.table tbody td:nth-child(6) { /* Cidade */
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 </style>
 {% endblock %}
 
@@ -730,8 +743,18 @@
                       <i class="fas fa-info-circle"></i> Info Separação
                     </button>
                   {% endif %}
+                  {% if p.tags_pedido %}
+                  <div class="mt-1">
+                    {% set tags = p.tags_pedido|from_json %}
+                    {% for tag in tags %}
+                    <span class="badge badge-tag" data-color="{{ tag.color }}">
+                      <i class="fas fa-tag me-1"></i>{{ tag.name }}
+                    </span>
+                    {% endfor %}
+                  </div>
+                  {% endif %}
                 </td>
-                
+
                 <td>
                   <strong>{{ p.raz_social_red or '' }}</strong>
                   {% if p.equipe_vendas %}

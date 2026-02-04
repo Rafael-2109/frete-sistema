@@ -32,7 +32,10 @@ class Separacao(db.Model):
     agendamento_confirmado = db.Column(db.Boolean, default=False)  # Flag para confirmação de agendamento
     protocolo = db.Column(db.String(50), nullable=True)
     pedido_cliente = db.Column(db.String(100), nullable=True)  # 🆕 Pedido de Compra do Cliente
-    
+
+    # 🏷️ TAGS DO PEDIDO (ODOO) — sincronizado de CarteiraPrincipal
+    tags_pedido = db.Column(db.Text, nullable=True)  # JSON: [{"name": "VIP", "color": 5}]
+
     # 🎯 ETAPA 2: CAMPO TIPO DE ENVIO (ADICIONADO NA MIGRAÇÃO)
     tipo_envio = db.Column(db.String(10), default='total', nullable=True)  # total, parcial
     

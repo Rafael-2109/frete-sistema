@@ -218,6 +218,84 @@ baixa_service.atualizar_rotulo_extrato(extrato_move_id, statement_line_id, rotul
 
 ---
 
+## Correcao Retroativa de Extrato Ja Reconciliado
+
+Quando um extrato JA foi reconciliado (`is_reconciled=True`) mas os 3 campos estao incorretos (registros anteriores ao commit `13cef821` de 03/02/2026), a correcao exige um fluxo especifico de 7 passos.
+
+### ⚠️ GOTCHAS Criticos
+
+1. **Odoo RECRIA move lines ao voltar para draft**: Apos `button_draft` + qualquer edicao, os IDs das `account.move.line` mudam. Usar IDs antigos causa `MissingError`.
+2. **`account_id` DEVE ser o ULTIMO campo alterado antes do `action_post`**: Se alterar antes de outros campos, o Odoo pode resetar para a conta default ao recriar lines.
+3. **Assimetria debito/credito**: Para pagamentos (fornecedor), TRANSITORIA esta na linha de DEBITO. Para recebimentos (cliente), TRANSITORIA esta na linha de CREDITO. Sempre verificar AMBOS.
+
+### Fluxo Completo (7 Passos)
+
+```
+1. DESCONCILIAR
+   → Buscar account.partial.reconcile ligados ao move_id
+   → Guardar counterpart_ids (lines do PAYMENT, nao do extrato)
+   → Executar unlink nos partial_reconcile
+
+2. BUTTON_DRAFT
+   → connection.execute_kw('account.move', 'button_draft', [[move_id]])
+
+3. ATUALIZAR PARTNER_ID
+   → connection.execute_kw('account.bank.statement.line', 'write',
+     [[statement_line_id], {'partner_id': partner_id}])
+
+4. ATUALIZAR ROTULO
+   → connection.execute_kw('account.bank.statement.line', 'write',
+     [[statement_line_id], {'payment_ref': rotulo}])
+   → Buscar NOVAS move lines: search_read('account.move.line', [['move_id', '=', move_id]])
+   → connection.execute_kw('account.move.line', 'write', [line_ids, {'name': rotulo}])
+
+5. TROCAR ACCOUNT_ID (ULTIMO antes do post!)
+   → Buscar move line com account_id = TRANSITORIA (22199)
+   → Verificar debit > 0 OU credit > 0 (ambos os lados!)
+   → connection.execute_kw('account.move.line', 'write',
+     [[line_id], {'account_id': CONTA_PAGAMENTOS_PENDENTES}])  # 26868
+
+6. ACTION_POST
+   → connection.execute_kw('account.move', 'action_post', [[move_id]])
+
+7. RE-RECONCILIAR
+   → Buscar NOVA move line com account_id = 26868 no move_id
+   → Para cada counterpart_id guardado no passo 1:
+     connection.execute_kw('account.move.line', 'reconcile',
+       [[new_line_id, counterpart_id]])
+```
+
+### Identificacao de Counterparts (Passo 1)
+
+```python
+# Buscar move lines do extrato
+linhas = connection.search_read('account.move.line', [['move_id', '=', move_id]], ['id'])
+extrato_line_ids = {ln['id'] for ln in linhas}
+
+# Para cada partial_reconcile, identificar qual lado eh o counterpart
+for pr in partial_reconciles:
+    debit_id = pr['debit_move_id'][0]
+    credit_id = pr['credit_move_id'][0]
+    if debit_id in extrato_line_ids and credit_id not in extrato_line_ids:
+        counterpart_ids.append(credit_id)  # Line do payment
+    elif credit_id in extrato_line_ids and debit_id not in extrato_line_ids:
+        counterpart_ids.append(debit_id)   # Line do payment
+```
+
+### Script de Referencia
+
+Script completo: `scripts/correcao_campos_extrato_odoo.py`
+
+Modos disponiveis:
+- `--verificar-comprovante ID` / `--corrigir-comprovante ID`
+- `--verificar-extrato ID` / `--corrigir-extrato ID`
+- `--batch-comprovantes` / `--batch-extratos`
+- `--verificar-amostra`
+
+> **Resultado da execucao (04/02/2026)**: 20 comprovantes (20/20 OK) + 1.504 extratos (1.497 corrigidos, 7 ja corretos, 86 parciais sem partner_id). Total: 1.524 registros processados com 0 erros.
+
+---
+
 ## Matriz de Erros
 
 | Erro | Causa | Solucao |

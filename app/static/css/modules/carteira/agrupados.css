@@ -523,33 +523,7 @@ td .badge-incoterm-red,
     }
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   TAGS DO PEDIDO (ODOO) - MINIMALISTA (95% cinza + semantico)
-   ═══════════════════════════════════════════════════════════════════════════ */
-.badge-tag {
-    font-size: 0.7rem;
-    padding: 0.25rem 0.5rem;
-    margin-right: 0.25rem;
-    margin-bottom: 0.25rem;
-    display: inline-block;
-    border-radius: var(--radius-sm);
-    font-weight: 500;
-    color: white !important;
-}
-
-/* Mapeamento de cores do Odoo */
-.badge-tag[data-color="0"] { background-color: var(--gray-50) !important; }
-.badge-tag[data-color="1"] { background-color: var(--semantic-danger) !important; }
-.badge-tag[data-color="2"] { background-color: var(--semantic-warning) !important; color: var(--gray-10) !important; }
-.badge-tag[data-color="3"] { background-color: var(--semantic-warning) !important; color: var(--gray-10) !important; }
-.badge-tag[data-color="4"] { background-color: var(--semantic-success) !important; }
-.badge-tag[data-color="5"] { background-color: var(--semantic-success) !important; }
-.badge-tag[data-color="6"] { background-color: var(--gray-50) !important; }
-.badge-tag[data-color="7"] { background-color: var(--gray-50) !important; }
-.badge-tag[data-color="8"] { background-color: var(--gray-50) !important; }
-.badge-tag[data-color="9"] { background-color: var(--gray-50) !important; }
-.badge-tag[data-color="10"] { background-color: var(--gray-30) !important; }
-.badge-tag[data-color="11"] { background-color: var(--gray-30) !important; }
+/* TAGS DO PEDIDO (ODOO) - Movido para components/_tags.css */
 
 /* ═══════════════════════════════════════════════════════════════════════════
    ANIMACOES

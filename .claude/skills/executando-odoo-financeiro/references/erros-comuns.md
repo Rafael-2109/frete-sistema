@@ -304,6 +304,44 @@ Ver `.claude/references/odoo/GOTCHAS.md` secao "Extrato Bancario: 3 Campos" para
 
 ---
 
+## Erro 12: Correcao Retroativa de Registros Ja Reconciliados
+
+### Sintoma
+Registros antigos com `is_reconciled=True` mas campos incorretos:
+- `partner_id` = False na statement line
+- `account_id` = TRANSITORIA (22199) em vez de PENDENTES (26868) na move line
+- `payment_ref` / `name` generico ou ausente
+
+### Causa
+Lancamentos feitos ANTES do commit `13cef821` (deploy: 03/02/2026 21:48 UTC) que adicionou a correcao automatica dos 3 campos. Todos os registros anteriores a esse deploy ficaram sem os campos.
+
+### Solucao
+Fluxo de 7 passos para correcao retroativa (registros JA reconciliados):
+
+1. **Desconciliar**: Buscar `account.partial.reconcile` → guardar `counterpart_ids` → `unlink`
+2. **Draft**: `button_draft` no move do extrato
+3. **Partner**: Atualizar `partner_id` na `account.bank.statement.line`
+4. **Rotulo**: Atualizar `payment_ref` + `name` nas move lines
+5. **Account (ULTIMO!)**: Trocar `account_id` TRANSITORIA → PENDENTES
+6. **Post**: `action_post` no move
+7. **Re-reconciliar**: Usar NOVOS IDs (Odoo recria lines ao editar em draft)
+
+### Armadilhas
+
+| Armadilha | Descricao |
+|-----------|-----------|
+| IDs invalidados | Odoo RECRIA move lines ao voltar para draft. IDs antigos dao `MissingError` |
+| Ordem do account_id | DEVE ser ultimo campo antes de `action_post`. Se alterar antes, Odoo reseta ao recriar lines |
+| Debito vs credito | Pagamentos: TRANSITORIA no debito. Recebimentos: TRANSITORIA no credito. Verificar AMBOS |
+| Counterpart IDs | Ao desconciliar, guardar IDs das lines do PAYMENT (nao do extrato) para re-reconciliar |
+
+### Referencia
+- Script completo: `scripts/correcao_campos_extrato_odoo.py`
+- Documentacao detalhada: `.claude/references/odoo/GOTCHAS.md` secao "Correcao Retroativa"
+- Resultado (04/02/2026): 1.524 registros processados (20 comprovantes + 1.504 extratos), 0 erros
+
+---
+
 ## Checklist de Verificacao
 
 Antes de executar operacoes financeiras:

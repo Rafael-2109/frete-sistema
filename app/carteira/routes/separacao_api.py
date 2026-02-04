@@ -146,6 +146,7 @@ def gerar_separacao_completa_pedido(num_pedido):
                 protocolo=protocolo,
                 agendamento_confirmado=agendamento_confirmado,
                 pedido_cliente=item.pedido_cliente,
+                tags_pedido=item.tags_pedido,
                 tipo_envio="total",  # SEMPRE total quando vem de gerar_separacao_completa
                 status='ABERTO',  # CORRIGIDO: Cria como ABERTO primeiro
                 sincronizado_nf=False,  # IMPORTANTE: Sempre criar com False (não NULL)
@@ -410,8 +411,7 @@ def salvar_separacao_generic():
                 tipo_envio=data.get("tipo_envio", "parcial"),  # Por padrão parcial no drag & drop
                 observ_ped_1=truncar_observacao(item_carteira.observ_ped_1),
                 pedido_cliente=item_carteira.pedido_cliente,
-                # vendedor=item_carteira.vendedor,  # REMOVIDO: campo não existe em Separacao
-                # equipe_vendas=item_carteira.equipe_vendas,  # REMOVIDO: campo não existe em Separacao
+                tags_pedido=item_carteira.tags_pedido,
                 rota=rota,
                 sub_rota=sub_rota,
                 status=status,

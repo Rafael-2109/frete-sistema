@@ -38,6 +38,7 @@ class AtualizarDadosService:
         5. Rota (com regra de incoterm FOB e RED)
         6. SubRota
         7. Observação
+        8. Tags do Pedido (Odoo)
         
         Returns:
             dict: Resumo da atualização
@@ -135,7 +136,12 @@ class AtualizarDadosService:
                         if separacao.observ_ped_1 != observacao_truncada:
                             separacao.observ_ped_1 = observacao_truncada
                             campos_alterados.append('observ_ped_1')
-                        
+
+                        # Tags do Pedido (Odoo)
+                        if separacao.tags_pedido != item_produto.tags_pedido:
+                            separacao.tags_pedido = item_produto.tags_pedido
+                            campos_alterados.append('tags_pedido')
+
                         if campos_alterados:
                             self.total_separacoes_atualizadas += 1
                             status_info = f" [{separacao.status}]" if separacao.status else ""

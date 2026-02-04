@@ -163,6 +163,19 @@ SECOES = {
     'pagador', 'datas', 'valores',
 }
 
+# Set pré-computado de TODOS os labels V1 conhecidos (para match sem dois-pontos).
+# Usado pelo fallback no _parse_formato_b() quando o PDF não contém ":" nos labels.
+# Ordenados por tamanho desc (mais longo primeiro) para match correto:
+# "nome/razão social" deve casar ANTES de "nome fantasia".
+_ALL_V1_LABELS = (
+    set(MAPEAMENTO_CAMPOS.keys())
+    | set(CAMPOS_CONTEXTUAIS.keys())
+    | set(CAMPOS_DATAS.keys())
+    | set(CAMPOS_VALORES.keys())
+    | SECOES
+)
+_ALL_V1_LABELS_SORTED = sorted(_ALL_V1_LABELS, key=len, reverse=True)
+
 
 # ---------------------------------------------------------------------------
 # Mapeamento de campos — Layout V2 ("Comprovante de Pagamento de Boleto")

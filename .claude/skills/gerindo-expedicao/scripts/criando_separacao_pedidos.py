@@ -458,6 +458,7 @@ def simular_separacao(
             rota, sub_rota = calcular_rota_subrota(item)
 
             itens_processados.append({
+                'data_pedido': item.data_pedido,
                 'cod_produto': item.cod_produto,
                 'nome_produto': item.nome_produto,
                 'qtd_disponivel': qtd_final,
@@ -475,8 +476,8 @@ def simular_separacao(
                 'raz_social_red': item.raz_social_red,
                 'nome_cidade': item.nome_cidade,
                 'cod_uf': item.cod_uf,
-                'data_pedido': item.data_pedido,
-                'pedido_cliente': item.pedido_cliente
+                'pedido_cliente': item.pedido_cliente,
+                'tags_pedido': item.tags_pedido
             })
 
     if not itens_processados:
@@ -620,6 +621,7 @@ def executar_separacao(simulacao: dict) -> dict:
                 protocolo=simulacao.get('protocolo'),
                 agendamento_confirmado=simulacao.get('agendamento_confirmado', False),
                 pedido_cliente=item.get('pedido_cliente'),
+                tags_pedido=item.get('tags_pedido'),
                 tipo_envio=simulacao['tipo_envio'],
                 status='ABERTO',
                 sincronizado_nf=False,

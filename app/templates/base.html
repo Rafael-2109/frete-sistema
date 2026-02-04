@@ -820,6 +820,7 @@
           options.headers['X-CSRFToken'] = token;
           options.headers['X-CSRF-Token'] = token;
           options.headers['HTTP_X_CSRF_TOKEN'] = token;
+          options.headers['X-Requested-With'] = 'XMLHttpRequest';
 
           // Se está enviando FormData, adiciona também no body
           if (options.body instanceof FormData) {

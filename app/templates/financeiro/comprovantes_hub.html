@@ -47,6 +47,19 @@
     .det-value.mono { font-family: monospace; font-size: 0.92em; }
     .det-odoo-link { text-decoration: none; }
     .det-odoo-link:hover { text-decoration: underline; }
+
+    /* Filter bar */
+    .filter-bar {
+        background: #f8f9fa;
+        border-bottom: 1px solid #dee2e6;
+        padding: 10px 15px;
+        font-size: 0.85em;
+    }
+    .filter-bar .form-check-label { font-size: 0.9em; }
+    .filter-bar .badge-filtro-ativo { font-size: 0.7em; }
+    #dropdown-confianca .form-check { padding: 3px 8px 3px 28px; border-radius: 4px; }
+    #dropdown-confianca .form-check:hover { background: #f0f4ff; }
+    #dropdown-confianca .form-check-label { cursor: pointer; font-size: 0.85em; white-space: nowrap; }
 </style>
 {% endblock %}
 
@@ -160,25 +173,35 @@
             <small class="text-muted ms-2">Vincular comprovantes com extrato bancario e Odoo</small>
         </div>
         <div class="card-body">
-            <input type="file" id="input-ofx" accept=".ofx" style="display: none;">
+            <!-- Inputs ocultos -->
+            <input type="file" id="input-ofx" accept=".ofx" multiple style="display: none;">
+            <input type="file" id="input-ofx-pasta" webkitdirectory style="display: none;">
 
+            <!-- Botoes de selecao -->
             <div class="d-flex gap-2 mb-3">
                 <button type="button" class="btn btn-outline-info" id="btn-selecionar-ofx">
-                    <i class="fas fa-file-code"></i> Selecionar Arquivo OFX
+                    <i class="fas fa-file-code"></i> Selecionar Arquivo(s)
+                </button>
+                <button type="button" class="btn btn-outline-info" id="btn-selecionar-ofx-pasta">
+                    <i class="fas fa-folder-open"></i> Selecionar Pasta
                 </button>
             </div>
 
-            <div id="ofx-arquivo-selecionado" style="display: none;" class="mb-3">
-                <div class="d-flex justify-content-between align-items-center">
-                    <span><i class="fas fa-file-code text-info me-2"></i> <strong id="ofx-nome-arquivo"></strong></span>
+            <!-- Lista de arquivos OFX selecionados -->
+            <div id="ofx-arquivos-selecionados" style="display: none;">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <strong><i class="fas fa-list me-1"></i> Arquivos OFX Selecionados</strong>
                     <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-limpar-ofx">
                         <i class="fas fa-times"></i> Limpar
                     </button>
                 </div>
+                <div id="ofx-lista-selecionados" class="list-group list-group-flush small"
+                     style="max-height: 200px; overflow-y: auto;"></div>
             </div>
 
+            <hr>
             <button type="button" id="btn-processar-ofx" class="btn btn-info text-white" disabled>
-                <i class="fas fa-link"></i> Importar e Vincular
+                <i class="fas fa-link"></i> Importar e Vincular <span id="ofx-contagem-arquivos">(0 arquivos)</span>
             </button>
         </div>
         <!-- Resultado da vinculação OFX -->
@@ -322,6 +345,12 @@
         <div class="card-header bg-light d-flex justify-content-between align-items-center">
             <strong><i class="fas fa-table"></i> Comprovantes Importados</strong>
             <div class="d-flex gap-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse"
+                        data-bs-target="#filtros-comprovantes" aria-expanded="false"
+                        aria-controls="filtros-comprovantes" id="btn-toggle-filtros">
+                    <i class="fas fa-filter"></i> Filtros
+                    <span class="badge bg-primary badge-filtro-ativo" id="badge-filtros-ativos" style="display:none;">0</span>
+                </button>
                 <button type="button" id="btn-confirmar-selecionados" class="btn btn-sm btn-success"
                         style="display: none;" onclick="confirmarSelecionados()">
                     <i class="fas fa-check-double"></i> Confirmar Selecionados (<span id="contagem-selecionados">0</span>)
@@ -329,6 +358,67 @@
                 <button class="btn btn-sm btn-outline-primary" onclick="recarregarTabela()">
                     <i class="fas fa-sync"></i> Atualizar
                 </button>
+            </div>
+        </div>
+        <!-- Filter Bar (collapsible) -->
+        <div class="collapse" id="filtros-comprovantes">
+            <div class="filter-bar">
+                <div class="d-flex flex-wrap align-items-center gap-3">
+                    <span class="text-muted small fw-bold"><i class="fas fa-filter me-1"></i>Filtros:</span>
+
+                    <!-- Dropdown Multiplo: % Confianca -->
+                    <div class="dropdown d-inline-block">
+                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
+                                id="btn-filtro-confianca" data-bs-toggle="dropdown" data-bs-auto-close="outside"
+                                aria-expanded="false">
+                            <i class="fas fa-percentage me-1"></i>Confiança
+                            <span class="badge bg-primary ms-1" id="badge-confianca-count" style="display:none;">0</span>
+                        </button>
+                        <div class="dropdown-menu p-2" id="dropdown-confianca" style="min-width: 200px;">
+                            <div class="small text-muted mb-1 px-1">Valores distintos:</div>
+                            <div id="confianca-checks-container">
+                                <div class="text-muted small px-1"><i class="fas fa-spinner fa-spin"></i> Carregando...</div>
+                            </div>
+                            <div class="dropdown-divider"></div>
+                            <div class="d-flex justify-content-between px-1">
+                                <a href="#" class="small" id="confianca-selecionar-todos">Todos</a>
+                                <a href="#" class="small" id="confianca-limpar">Limpar</a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <span class="text-muted">|</span>
+
+                    <!-- Checkboxes Pipeline -->
+                    <div class="form-check form-check-inline mb-0">
+                        <input class="form-check-input filtro-check" type="checkbox" id="filtro-ofx" value="ofx">
+                        <label class="form-check-label" for="filtro-ofx">OFX</label>
+                    </div>
+                    <div class="form-check form-check-inline mb-0">
+                        <input class="form-check-input filtro-check" type="checkbox" id="filtro-extrato" value="extrato">
+                        <label class="form-check-label" for="filtro-extrato">Extrato</label>
+                    </div>
+                    <div class="form-check form-check-inline mb-0">
+                        <input class="form-check-input filtro-check" type="checkbox" id="filtro-match" value="match">
+                        <label class="form-check-label" for="filtro-match">Match</label>
+                    </div>
+                    <div class="form-check form-check-inline mb-0">
+                        <input class="form-check-input filtro-check" type="checkbox" id="filtro-confirmado" value="confirmado">
+                        <label class="form-check-label" for="filtro-confirmado">Confirmado</label>
+                    </div>
+                    <div class="form-check form-check-inline mb-0">
+                        <input class="form-check-input filtro-check" type="checkbox" id="filtro-baixado" value="baixado">
+                        <label class="form-check-label" for="filtro-baixado">Baixado</label>
+                    </div>
+
+                    <span class="text-muted">|</span>
+
+                    <!-- Limpar Filtros -->
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-limpar-filtros"
+                            title="Limpar todos os filtros">
+                        <i class="fas fa-eraser"></i> Limpar
+                    </button>
+                </div>
             </div>
         </div>
         <div class="card-body p-0">
@@ -1046,6 +1136,10 @@ document.addEventListener('DOMContentLoaded', function() {
             {
                 data: 'lancamento_status',
                 render: function(val, type, row) {
+                    // Para ordenacao: usar match_score numerico (null = -1 para ir pro final)
+                    if (type === 'sort') {
+                        return row.lancamento_match_score != null ? row.lancamento_match_score : -1;
+                    }
                     if (type !== 'display') return val || '';
                     var html = '<div class="pipeline-badges">';
 
@@ -1268,11 +1362,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     window.recarregarTabela = function() {
         tabela.ajax.reload(function() {
-            const info = tabela.page.info();
-            document.getElementById('total-comprovantes').textContent = info.recordsTotal;
             // Resetar checkboxes apos reload
             document.getElementById('check-todos').checked = false;
             atualizarBtnConfirmar();
+            // Repopular dropdown de confianca com valores atualizados
+            popularFiltroConfianca();
+            // Contador atualizado automaticamente pelo evento 'draw'
         });
     };
 
@@ -1380,107 +1475,211 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     // =========================================================================
-    // UPLOAD OFX — Vincular com comprovantes e Odoo
+    // UPLOAD OFX — Vincular com comprovantes e Odoo (multi-arquivo + pasta)
     // =========================================================================
     const inputOfx = document.getElementById('input-ofx');
+    const inputOfxPasta = document.getElementById('input-ofx-pasta');
     const btnProcessarOfx = document.getElementById('btn-processar-ofx');
     const btnLimparOfx = document.getElementById('btn-limpar-ofx');
-    const ofxNomeArquivo = document.getElementById('ofx-nome-arquivo');
-    const ofxArquivoSelecionado = document.getElementById('ofx-arquivo-selecionado');
+    const ofxListaSelecionados = document.getElementById('ofx-lista-selecionados');
+    const ofxDivSelecionados = document.getElementById('ofx-arquivos-selecionados');
+    const ofxContagemArquivos = document.getElementById('ofx-contagem-arquivos');
 
-    let arquivoOfx = null;
+    let arquivosOfxSelecionados = [];
 
-    // Botão "Selecionar Arquivo OFX"
+    // Botao "Selecionar Arquivo(s) OFX"
     document.getElementById('btn-selecionar-ofx').addEventListener('click', () => {
         inputOfx.click();
     });
 
+    // Botao "Selecionar Pasta"
+    document.getElementById('btn-selecionar-ofx-pasta').addEventListener('click', () => {
+        inputOfxPasta.click();
+    });
+
     inputOfx.addEventListener('change', () => {
-        if (inputOfx.files.length > 0) {
-            selecionarOfx(inputOfx.files[0]);
-        }
+        const files = Array.from(inputOfx.files).filter(f => f.name.toLowerCase().endsWith('.ofx'));
+        adicionarArquivosOfx(files);
         inputOfx.value = '';
     });
 
-    btnLimparOfx.addEventListener('click', () => {
-        arquivoOfx = null;
-        ofxArquivoSelecionado.style.display = 'none';
-        btnProcessarOfx.disabled = true;
+    inputOfxPasta.addEventListener('change', () => {
+        const files = Array.from(inputOfxPasta.files).filter(f => f.name.toLowerCase().endsWith('.ofx'));
+        adicionarArquivosOfx(files);
+        inputOfxPasta.value = '';
     });
 
-    function selecionarOfx(file) {
-        arquivoOfx = file;
-        ofxNomeArquivo.textContent = file.name;
-        ofxArquivoSelecionado.style.display = 'block';
-        btnProcessarOfx.disabled = false;
+    btnLimparOfx.addEventListener('click', () => {
+        arquivosOfxSelecionados = [];
+        atualizarListaOfx();
+    });
+
+    function adicionarArquivosOfx(files) {
+        for (const f of files) {
+            // Evitar duplicados pelo nome
+            if (!arquivosOfxSelecionados.find(a => a.name === f.name)) {
+                arquivosOfxSelecionados.push(f);
+            }
+        }
+        atualizarListaOfx();
     }
 
+    function atualizarListaOfx() {
+        if (arquivosOfxSelecionados.length === 0) {
+            ofxDivSelecionados.style.display = 'none';
+            btnProcessarOfx.disabled = true;
+            ofxContagemArquivos.textContent = '(0 arquivos)';
+            return;
+        }
+
+        ofxDivSelecionados.style.display = 'block';
+        btnProcessarOfx.disabled = false;
+        ofxContagemArquivos.textContent = `(${arquivosOfxSelecionados.length} arquivo${arquivosOfxSelecionados.length > 1 ? 's' : ''})`;
+
+        ofxListaSelecionados.innerHTML = arquivosOfxSelecionados.map((f, i) => `
+            <div class="list-group-item d-flex justify-content-between align-items-center py-1">
+                <span><i class="fas fa-file-code text-info me-2"></i>${f.name}</span>
+                <button class="btn btn-sm btn-link text-danger p-0" onclick="removerArquivoOfx(${i})">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `).join('');
+    }
+
+    window.removerArquivoOfx = function(idx) {
+        arquivosOfxSelecionados.splice(idx, 1);
+        atualizarListaOfx();
+    };
+
+    // --- Processamento sequencial de multiplos OFX ---
     btnProcessarOfx.addEventListener('click', async () => {
-        if (!arquivoOfx) return;
+        if (arquivosOfxSelecionados.length === 0) return;
 
         btnProcessarOfx.disabled = true;
-        btnProcessarOfx.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+        const totalArquivos = arquivosOfxSelecionados.length;
 
-        const formData = new FormData();
-        formData.append('arquivo_ofx', arquivoOfx);
+        // Acumuladores de stats
+        let totalTransacoes = 0, totalVinculados = 0, totalOdoo = 0;
+        let totalSemComp = 0, totalSemOdoo = 0, totalJaVinculados = 0;
+        let todosDetalhes = [];
+        let erros = [];
 
-        try {
-            const resp = await fetchComRetry(
-                '{{ url_for("financeiro.comprovantes_api_upload_ofx") }}',
-                { method: 'POST', body: formData, headers: getCsrfHeaders() }
-            );
+        for (let i = 0; i < totalArquivos; i++) {
+            const arquivo = arquivosOfxSelecionados[i];
+            btnProcessarOfx.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Processando ${i + 1}/${totalArquivos}...`;
 
-            const data = await resp.json();
+            const formData = new FormData();
+            formData.append('arquivo_ofx', arquivo);
 
-            // Mostrar resultado
-            const resultado = document.getElementById('ofx-resultado');
-            resultado.style.display = 'block';
+            try {
+                const resp = await fetchComRetry(
+                    '{{ url_for("financeiro.comprovantes_api_upload_ofx") }}',
+                    { method: 'POST', body: formData, headers: getCsrfHeaders() }
+                );
 
-            document.getElementById('ofx-stat-total').textContent = data.total_transacoes || 0;
-            document.getElementById('ofx-stat-vinculados').textContent = data.vinculados_comprovante || 0;
-            document.getElementById('ofx-stat-odoo').textContent = data.vinculados_odoo || 0;
-            document.getElementById('ofx-stat-sem-comp').textContent = data.sem_comprovante || 0;
-            document.getElementById('ofx-stat-sem-odoo').textContent = data.sem_odoo || 0;
-            document.getElementById('ofx-stat-ja-vinculados').textContent = data.ja_vinculados || 0;
+                // Verificar se resposta e OK
+                if (!resp.ok) {
+                    const ct = resp.headers.get('content-type') || '';
+                    if (ct.includes('application/json')) {
+                        const errData = await resp.json();
+                        throw new Error(errData.message || errData.mensagem || `Erro ${resp.status}`);
+                    }
+                    throw new Error(`Servidor retornou erro ${resp.status}`);
+                }
 
-            // Detalhes
-            const listaDetalhes = document.getElementById('ofx-lista-detalhes');
-            listaDetalhes.innerHTML = '';
+                // Verificar content-type antes de parsear JSON
+                const ct = resp.headers.get('content-type') || '';
+                if (!ct.includes('application/json')) {
+                    throw new Error('Sessao expirada. Recarregue a pagina e tente novamente.');
+                }
 
-            if (data.detalhes && data.detalhes.length > 0) {
-                for (const det of data.detalhes) {
-                    const iconComp = det.status_comprovante === 'vinculado' ? '&#x2705;' :
-                                     det.status_comprovante === 'ja_vinculado' ? '&#x26A0;&#xFE0F;' :
-                                     det.status_comprovante === 'sem_match' ? '&#x2796;' : '&#x274C;';
-                    const iconOdoo = det.status_odoo === 'vinculado' ? '&#x2705;' :
-                                     det.status_odoo === 'sem_match' ? '&#x2796;' :
-                                     det.status_odoo === 'nao_buscou' ? '&#x2B1C;' : '&#x274C;';
+                const data = await resp.json();
 
-                    const valorStr = det.valor != null
-                        ? 'R$ ' + Math.abs(det.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})
-                        : '';
+                // Acumular stats
+                totalTransacoes += (data.total_transacoes || 0);
+                totalVinculados += (data.vinculados_comprovante || 0);
+                totalOdoo += (data.vinculados_odoo || 0);
+                totalSemComp += (data.sem_comprovante || 0);
+                totalSemOdoo += (data.sem_odoo || 0);
+                totalJaVinculados += (data.ja_vinculados || 0);
 
-                    listaDetalhes.innerHTML += `
-                        <div class="mb-1 border-bottom pb-1">
-                            <span title="Comprovante">${iconComp}</span>
-                            <span title="Odoo">${iconOdoo}</span>
-                            <strong>CHECKNUM ${det.checknum || '?'}</strong>
-                            ${det.data ? ' — ' + det.data : ''}
-                            ${valorStr ? ' — ' + valorStr : ''}
-                            <br><small class="text-muted">${det.mensagem || ''}</small>
-                        </div>`;
+                if (data.detalhes && data.detalhes.length > 0) {
+                    todosDetalhes = todosDetalhes.concat(data.detalhes);
+                }
+
+            } catch (err) {
+                erros.push({ arquivo: arquivo.name, erro: err.message });
+                // Se sessao expirou, parar e recarregar
+                if (err.message.includes('Sessao expirada') || err.message.includes('csrf')) {
+                    alert('Sessao expirada. A pagina sera recarregada.');
+                    window.location.reload();
+                    return;
                 }
             }
-
-            // Recarregar tabela para mostrar novas vinculações
-            recarregarTabela();
-
-        } catch (err) {
-            alert('Erro ao processar OFX: ' + err.message);
-        } finally {
-            btnProcessarOfx.disabled = false;
-            btnProcessarOfx.innerHTML = '<i class="fas fa-link"></i> Importar e Vincular';
         }
+
+        // Mostrar resultado agregado
+        const resultado = document.getElementById('ofx-resultado');
+        resultado.style.display = 'block';
+
+        document.getElementById('ofx-stat-total').textContent = totalTransacoes;
+        document.getElementById('ofx-stat-vinculados').textContent = totalVinculados;
+        document.getElementById('ofx-stat-odoo').textContent = totalOdoo;
+        document.getElementById('ofx-stat-sem-comp').textContent = totalSemComp;
+        document.getElementById('ofx-stat-sem-odoo').textContent = totalSemOdoo;
+        document.getElementById('ofx-stat-ja-vinculados').textContent = totalJaVinculados;
+
+        // Detalhes
+        const listaDetalhes = document.getElementById('ofx-lista-detalhes');
+        listaDetalhes.innerHTML = '';
+
+        // Mostrar erros primeiro
+        for (const e of erros) {
+            listaDetalhes.innerHTML += `
+                <div class="mb-1 border-bottom pb-1 text-danger">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>${e.arquivo}</strong> — ${e.erro}
+                </div>`;
+        }
+
+        // Mostrar detalhes de transacoes
+        for (const det of todosDetalhes) {
+            const iconComp = det.status_comprovante === 'vinculado' ? '&#x2705;' :
+                             det.status_comprovante === 'ja_vinculado' ? '&#x26A0;&#xFE0F;' :
+                             det.status_comprovante === 'sem_match' ? '&#x2796;' : '&#x274C;';
+            const iconOdoo = det.status_odoo === 'vinculado' ? '&#x2705;' :
+                             det.status_odoo === 'sem_match' ? '&#x2796;' :
+                             det.status_odoo === 'nao_buscou' ? '&#x2B1C;' : '&#x274C;';
+
+            const valorStr = det.valor != null
+                ? 'R$ ' + Math.abs(det.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})
+                : '';
+
+            listaDetalhes.innerHTML += `
+                <div class="mb-1 border-bottom pb-1">
+                    <span title="Comprovante">${iconComp}</span>
+                    <span title="Odoo">${iconOdoo}</span>
+                    <strong>CHECKNUM ${det.checknum || '?'}</strong>
+                    ${det.data ? ' — ' + det.data : ''}
+                    ${valorStr ? ' — ' + valorStr : ''}
+                    <br><small class="text-muted">${det.mensagem || ''}</small>
+                </div>`;
+        }
+
+        // Recarregar tabela para mostrar novas vinculacoes
+        recarregarTabela();
+
+        // Mostrar resumo de erros se houver
+        if (erros.length > 0) {
+            alert(`Processamento concluido com ${erros.length} erro(s). Verifique os detalhes.`);
+        }
+
+        btnProcessarOfx.disabled = false;
+        btnProcessarOfx.innerHTML = '<i class="fas fa-link"></i> Importar e Vincular <span id="ofx-contagem-arquivos">(0 arquivos)</span>';
+
+        // Limpar selecao apos processar
+        arquivosOfxSelecionados = [];
+        atualizarListaOfx();
     });
 
     // =========================================================================
@@ -2294,6 +2493,186 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('modalDetalhesBody').innerHTML = html;
         new bootstrap.Modal(document.getElementById('modalDetalhes')).show();
     };
+
+    // =========================================================================
+    // FILTROS CLIENT-SIDE (DataTables custom search)
+    // =========================================================================
+
+    // Popular dropdown de confianca com valores DISTINTOS dos dados
+    function popularFiltroConfianca() {
+        var dados = tabela.rows().data().toArray();
+        var valoresSet = new Set();
+        dados.forEach(function(row) {
+            var s = row.lancamento_match_score;
+            valoresSet.add(s != null ? s : '__sem__');
+        });
+
+        // Preservar selecoes atuais
+        var selecionados = new Set();
+        document.querySelectorAll('.confianca-check:checked').forEach(function(cb) {
+            selecionados.add(cb.value);
+        });
+
+        var valores = Array.from(valoresSet).sort(function(a, b) {
+            if (a === '__sem__') return 1;
+            if (b === '__sem__') return -1;
+            return b - a; // decrescente
+        });
+
+        var container = document.getElementById('confianca-checks-container');
+        container.innerHTML = '';
+
+        valores.forEach(function(v) {
+            var id = 'confianca-val-' + (v === '__sem__' ? 'sem' : v);
+            var label = v === '__sem__' ? 'Sem Match' : v + '%';
+            var badgeCls = v === '__sem__' ? 'bg-light text-muted' :
+                           v >= 85 ? 'bg-success' :
+                           v >= 60 ? 'bg-warning text-dark' : 'bg-danger';
+            var checked = selecionados.has(String(v)) ? ' checked' : '';
+
+            var div = document.createElement('div');
+            div.className = 'form-check';
+            div.innerHTML = '<input class="form-check-input confianca-check" type="checkbox" ' +
+                            'id="' + id + '" value="' + v + '"' + checked + '>' +
+                            '<label class="form-check-label d-flex align-items-center gap-2" for="' + id + '">' +
+                            '<span class="badge ' + badgeCls + '" style="min-width:42px">' + label + '</span>' +
+                            '</label>';
+            container.appendChild(div);
+        });
+    }
+
+    // Chamar apos primeiro carregamento da tabela
+    tabela.on('init.dt', function() {
+        popularFiltroConfianca();
+    });
+
+    // Custom search function registrada no DataTables
+    $.fn.dataTable.ext.search.push(function(settings, searchData, dataIndex) {
+        // Aplicar apenas na tabela de comprovantes
+        if (settings.nTable.id !== 'tabela-comprovantes') return true;
+
+        var rowData = tabela.row(dataIndex).data();
+        if (!rowData) return true;
+
+        // --- 1. Filtro de Confianca (dropdown com checkboxes) ---
+        var confiancaSel = [];
+        document.querySelectorAll('.confianca-check:checked').forEach(function(cb) {
+            confiancaSel.push(cb.value);
+        });
+
+        if (confiancaSel.length > 0) {
+            var score = rowData.lancamento_match_score;
+            var matchConfianca = false;
+
+            for (var i = 0; i < confiancaSel.length; i++) {
+                if (confiancaSel[i] === '__sem__' && score == null) { matchConfianca = true; break; }
+                if (parseInt(confiancaSel[i]) === score) { matchConfianca = true; break; }
+            }
+
+            if (!matchConfianca) return false;
+        }
+
+        // --- 2. Checkboxes (OR entre si, AND com confianca) ---
+        var checkOFX = document.getElementById('filtro-ofx').checked;
+        var checkExtrato = document.getElementById('filtro-extrato').checked;
+        var checkMatch = document.getElementById('filtro-match').checked;
+        var checkConfirmado = document.getElementById('filtro-confirmado').checked;
+        var checkBaixado = document.getElementById('filtro-baixado').checked;
+
+        var algumCheckAtivo = checkOFX || checkExtrato || checkMatch || checkConfirmado || checkBaixado;
+
+        if (algumCheckAtivo) {
+            var matchCheck = false;
+
+            if (checkOFX && rowData.ofx_fitid) matchCheck = true;
+            if (checkExtrato && rowData.odoo_statement_line_id) matchCheck = true;
+            if (checkMatch && rowData.lancamento_status) matchCheck = true;
+            if (checkConfirmado && rowData.lancamento_status === 'CONFIRMADO') matchCheck = true;
+            if (checkBaixado && rowData.lancamento_status === 'LANCADO') matchCheck = true;
+
+            if (!matchCheck) return false;
+        }
+
+        return true;
+    });
+
+    // Event handlers para mudanca nos filtros
+    $('#dropdown-confianca').on('change', '.confianca-check', function() {
+        tabela.draw();
+    });
+
+    $('.filtro-check').on('change', function() {
+        tabela.draw();
+    });
+
+    // Links "Todos" e "Limpar" dentro do dropdown de confianca
+    $('#confianca-selecionar-todos').on('click', function(e) {
+        e.preventDefault();
+        document.querySelectorAll('.confianca-check').forEach(function(cb) { cb.checked = true; });
+        tabela.draw();
+    });
+    $('#confianca-limpar').on('click', function(e) {
+        e.preventDefault();
+        document.querySelectorAll('.confianca-check').forEach(function(cb) { cb.checked = false; });
+        tabela.draw();
+    });
+
+    // Limpar todos os filtros (botao geral)
+    document.getElementById('btn-limpar-filtros').addEventListener('click', function() {
+        // Reset checkboxes de confianca
+        document.querySelectorAll('.confianca-check').forEach(function(cb) {
+            cb.checked = false;
+        });
+        // Reset checkboxes de pipeline
+        document.querySelectorAll('.filtro-check').forEach(function(cb) {
+            cb.checked = false;
+        });
+        tabela.draw();
+    });
+
+    // Atualizar badges de filtros ativos e contador total
+    function atualizarContadorFiltros() {
+        var count = 0;
+
+        // Contar checkboxes de confianca selecionados
+        var confiancaCount = document.querySelectorAll('.confianca-check:checked').length;
+        count += confiancaCount;
+
+        // Atualizar badge do botao de confianca
+        var badgeConf = document.getElementById('badge-confianca-count');
+        if (confiancaCount > 0) {
+            badgeConf.textContent = confiancaCount;
+            badgeConf.style.display = 'inline';
+        } else {
+            badgeConf.style.display = 'none';
+        }
+
+        // Contar checkboxes de pipeline marcados
+        document.querySelectorAll('.filtro-check:checked').forEach(function() { count++; });
+
+        // Atualizar badge geral (botao Filtros)
+        var badge = document.getElementById('badge-filtros-ativos');
+        if (count > 0) {
+            badge.textContent = count;
+            badge.style.display = 'inline';
+        } else {
+            badge.style.display = 'none';
+        }
+
+        // Atualizar total (filtrado vs total)
+        var info = tabela.page.info();
+        var el = document.getElementById('total-comprovantes');
+        if (count > 0) {
+            el.textContent = info.recordsDisplay + ' de ' + info.recordsTotal;
+        } else {
+            el.textContent = info.recordsTotal;
+        }
+    }
+
+    // Atualizar contador a cada redraw da tabela
+    tabela.on('draw', function() {
+        atualizarContadorFiltros();
+    });
 
 });
 </script>
