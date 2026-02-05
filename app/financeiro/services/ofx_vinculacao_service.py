@@ -741,10 +741,10 @@ def processar_ofx_e_vincular(
                         d['status_odoo'] = 'ja_conciliado'
                         d['mensagem'] += (
                             f' | Conciliação pré-existente: '
-                            f'NF {titulo["nf_numero"]}'
-                            f'{f"/{titulo["parcela"]}" if titulo.get("parcela") else ""}'
-                            f' | {titulo["partner_name"]}'
-                            f' | R$ {titulo["credit"]:.2f}'
+                            f"NF {titulo['nf_numero']}"
+                            f"{'/' + titulo['parcela'] if titulo.get('parcela') else ''}"
+                            f" | {titulo['partner_name']}"
+                            f" | R$ {titulo['credit']:.2f}"
                             f' | Lançamento #{lanc.id} criado como LANCADO'
                         )
                         break

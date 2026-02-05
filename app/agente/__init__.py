@@ -5,7 +5,7 @@ Módulo principal do agente inteligente baseado no Claude Agent SDK oficial.
 
 Versão: 1.0
 Data: 30/11/2025
-Modelo: claude-opus-4-5-20251101
+Modelo: claude-opus-4-6
 """
 
 from flask import Blueprint

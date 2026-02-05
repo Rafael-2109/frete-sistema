@@ -450,9 +450,20 @@ Nunca invente informações."""
         }
 
         # Extended Thinking
+        # TODO: Migrar para adaptive thinking (thinking: {type: "adaptive"})
+        #   quando claude-agent-sdk suportar o campo nativamente.
+        #   Opus 4.6 suporta adaptive thinking na API direta, mas o SDK
+        #   v0.1.26 só expõe max_thinking_tokens. budget_tokens é deprecated
+        #   no Opus 4.6, porém funcional como fallback.
         if thinking_enabled:
-            options_dict["max_thinking_tokens"] = 20000
-            logger.info("[AGENT_CLIENT] Extended Thinking ativado (max_thinking_tokens=20000)")
+            current_model = str(options_dict.get("model", self.settings.model))
+            # Opus 4.6: max_output 128K, budget thinking proporcional (32K)
+            if "opus-4-6" in current_model or "opus_4_6" in current_model:
+                options_dict["max_thinking_tokens"] = 32000
+                logger.info("[AGENT_CLIENT] Extended Thinking ativado (Opus 4.6, max_thinking_tokens=32000)")
+            else:
+                options_dict["max_thinking_tokens"] = 20000
+                logger.info("[AGENT_CLIENT] Extended Thinking ativado (max_thinking_tokens=20000)")
 
         # Callback de permissão
         if can_use_tool:
@@ -473,18 +484,23 @@ Nunca invente informações."""
             options_dict["max_budget_usd"] = MAX_BUDGET_USD
             logger.info(f"[AGENT_CLIENT] Budget control nativo: max ${MAX_BUDGET_USD}/request")
 
-        # Extended Context (1M tokens) — apenas Sonnet
+        # Extended Context (1M tokens) — Sonnet e Opus 4.6+
         if USE_EXTENDED_CONTEXT:
-            current_model = options_dict.get("model", self.settings.model)
-            if "sonnet" in str(current_model).lower():
+            current_model = str(options_dict.get("model", self.settings.model)).lower()
+            supports_extended = (
+                "sonnet" in current_model
+                or "opus-4-6" in current_model
+                or "opus_4_6" in current_model
+            )
+            if supports_extended:
                 betas = options_dict.get("betas", [])
                 betas.append("context-1m-2025-08-07")
                 options_dict["betas"] = betas
-                logger.info("[AGENT_CLIENT] Extended Context habilitado (1M tokens)")
+                logger.info(f"[AGENT_CLIENT] Extended Context habilitado (1M tokens) para {current_model}")
             else:
                 logger.warning(
                     f"[AGENT_CLIENT] Extended Context IGNORADO — "
-                    f"modelo '{current_model}' não suportado (apenas Sonnet)"
+                    f"modelo '{current_model}' não suportado (Sonnet ou Opus 4.6+)"
                 )
 
         # Context Clearing automático

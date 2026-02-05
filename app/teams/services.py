@@ -208,7 +208,7 @@ def _get_or_create_teams_session(
                 session_id=session_id,
                 user_id=user_id,
                 title=f"Teams - {usuario}",
-                model="claude-opus-4-5-20251101",
+                model="claude-opus-4-6",
                 data={'messages': [], 'total_tokens': 0},
             )
             logger.info(f"[TEAMS-BOT] user_id gerado para '{usuario}': {user_id}")

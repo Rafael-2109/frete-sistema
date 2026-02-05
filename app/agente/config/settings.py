@@ -28,7 +28,7 @@ class AgentSettings:
     """
 
     # Modelo e API
-    model: str = "claude-opus-4-5-20251101"
+    model: str = "claude-opus-4-6"
     api_key: Optional[str] = None
 
     # Tools do SDK (ferramentas padrão permitidas)
@@ -75,8 +75,9 @@ class AgentSettings:
     # Preços por modelo (por 1M tokens) — [input, output]
     # Ref: https://www.anthropic.com/pricing
     MODEL_PRICING: dict = field(default_factory=lambda: {
-        'claude-opus-4-5-20251101': (5.00, 25.00),
-        'claude-sonnet-4-5-20250929': (3.00, 15.00),   # Corrigido: model ID e preço
+        'claude-opus-4-6': (5.00, 25.00),
+        'claude-opus-4-5-20251101': (5.00, 25.00),     # Legacy: sessões existentes
+        'claude-sonnet-4-5-20250929': (3.00, 15.00),
         'claude-haiku-4-5-20251001': (0.25, 1.25),
     })
 
@@ -119,7 +120,7 @@ class AgentSettings:
         # Fallback para Opus se modelo desconhecido
         input_price, output_price = self.MODEL_PRICING.get(
             model_id,
-            self.MODEL_PRICING.get('claude-opus-4-5-20251101', (5.00, 25.00)),
+            self.MODEL_PRICING.get('claude-opus-4-6', (5.00, 25.00)),
         )
         input_cost = (input_tokens / 1_000_000) * input_price
         output_cost = (output_tokens / 1_000_000) * output_price

@@ -12,7 +12,8 @@ import os
 # ====================================================================
 
 # Extended context window (1M tokens)
-# RESTRICAO: So funciona com Sonnet 4/4.5 — NAO com Opus
+# Suportado por: Sonnet 4/4.5 e Opus 4.6+
+# Opus 4.5 e anteriores NAO suportam
 # Requer organizacao no tier 4 ou custom rate limits
 # Acima de 200K tokens: input 2x, output 1.5x mais caro
 USE_EXTENDED_CONTEXT = os.getenv("AGENT_EXTENDED_CONTEXT", "false").lower() == "true"
