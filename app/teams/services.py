@@ -10,9 +10,13 @@ Suporta sessoes persistentes por conversation_id do Teams.
 import logging
 import asyncio
 import re
+from datetime import datetime, timedelta
 from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
+
+# TTL de sessão do Teams: após 4h de inatividade, cria nova sessão
+TEAMS_SESSION_TTL_HOURS = 4
 
 
 def processar_mensagem_bot(
@@ -92,6 +96,9 @@ def _get_or_create_teams_session(
     """
     Obtém ou cria AgentSession para uma conversa do Teams.
 
+    Implementa TTL de 4 horas: se a última mensagem foi há mais de 4h,
+    cria uma nova sessão para evitar contexto infinito em grupos ativos.
+
     Args:
         conversation_id: ID da conversa do Teams (ex: 19:xyz@thread.skype)
         usuario: Nome do usuário
@@ -108,21 +115,46 @@ def _get_or_create_teams_session(
         from app import db
 
         # Prefixo para identificar sessoes do Teams
-        session_id = f"teams_{conversation_id}"
+        base_session_id = f"teams_{conversation_id}"
 
-        session, created = AgentSession.get_or_create(
-            session_id=session_id,
-            user_id=None,  # Teams nao tem user_id no nosso sistema
-        )
+        # Busca sessão existente
+        session = AgentSession.query.filter(
+            AgentSession.session_id.like(f"{base_session_id}%")
+        ).order_by(AgentSession.updated_at.desc()).first()
 
-        if created:
-            session.title = f"Teams - {usuario}"
-            session.model = "claude-opus-4-5-20251101"
+        # Verifica se sessão expirou (TTL de 4h)
+        session_expired = False
+        if session and session.updated_at:
+            ttl_threshold = datetime.utcnow() - timedelta(hours=TEAMS_SESSION_TTL_HOURS)
+            if session.updated_at < ttl_threshold:
+                session_expired = True
+                hours_inactive = (datetime.utcnow() - session.updated_at).total_seconds() / 3600
+                logger.info(
+                    f"[TEAMS-BOT] Sessao expirada ({hours_inactive:.1f}h inativa), "
+                    f"criando nova"
+                )
+
+        # Cria nova sessão se não existe ou expirou
+        if not session or session_expired:
+            # Adiciona timestamp para sessões expiradas (permite histórico)
+            if session_expired:
+                session_id = f"{base_session_id}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+            else:
+                session_id = base_session_id
+
+            session = AgentSession(
+                session_id=session_id,
+                user_id=None,  # Teams nao tem user_id no nosso sistema
+                title=f"Teams - {usuario}",
+                model="claude-opus-4-5-20251101",
+                data={'messages': [], 'total_tokens': 0},
+            )
+            db.session.add(session)
             db.session.commit()
             logger.info(f"[TEAMS-BOT] Nova sessao criada: {session_id[:50]}...")
         else:
             logger.info(
-                f"[TEAMS-BOT] Sessao existente: {session_id[:50]}... "
+                f"[TEAMS-BOT] Sessao existente: {session.session_id[:50]}... "
                 f"({session.message_count or 0} msgs)"
             )
 
