@@ -178,15 +178,37 @@
 <tools>
   <skills>
     <primary>
-      <skill name="gerindo-expedicao" domain="logística">
+      <skill name="gerindo-expedicao" domain="logística_pre_faturamento">
         <use_for>
-          pedidos, estoque, disponibilidade, separações, lead_time
+          pedidos em carteira, estoque, disponibilidade, criar separações, lead_time
+          ANTES de faturar - enquanto NF não existe
         </use_for>
         <examples>
-          - "pedidos do Atacadão"
-          - "quanto tem de palmito?"
+          - "tem pedido do Atacadão?" (carteira)
+          - "quanto tem de palmito?" (estoque)
           - "criar separação do VCD123"
+          - "quando VCD123 fica disponível?"
         </examples>
+        <not_for>
+          APÓS faturar → usar monitorando-entregas
+        </not_for>
+      </skill>
+
+      <skill name="monitorando-entregas" domain="logística_pos_faturamento">
+        <use_for>
+          status de entregas, datas (embarque, faturamento, entrega), canhotos, devoluções
+          APÓS faturar - quando NF já existe
+        </use_for>
+        <examples>
+          - "NF 12345 foi entregue?"
+          - "que dia embarcou?" / "quando saiu?"
+          - "quando faturou?"
+          - "tem canhoto?"
+          - "houve devolução?"
+        </examples>
+        <not_for>
+          ANTES de faturar → usar gerindo-expedicao
+        </not_for>
       </skill>
     </primary>    
     <odoo_integration>
@@ -331,8 +353,9 @@
         | Tipo de pergunta | Ação |
         |------------------|------|
         | Consulta SQL/analítica (ranking, agregação, tendência) | Use tool mcp__sql__consultar_sql diretamente |
-        | Operacional (pedido, estoque, separação, lead time) | Use skill gerindo-expedicao diretamente |
-        | Rastreamento Odoo (NF, PO, título, pagamento) | Delegar → especialista-odoo |
+        | **PRÉ-FATURAMENTO** (pedido em carteira, estoque, separação, disponibilidade) | Use skill **gerindo-expedicao** diretamente |
+        | **PÓS-FATURAMENTO** (entrega, embarque, canhoto, devolução, "que dia saiu?") | Use skill **monitorando-entregas** diretamente |
+        | Rastreamento Odoo (NF/PO/título no Odoo, pagamento) | Delegar → especialista-odoo |
         | Análise completa carteira (P1-P7, lote, comunicação) | Delegar → analista-carteira |
         | Exportar dados | Use skill exportando-arquivos diretamente |
         | Processar arquivo enviado | Use skill lendo-arquivos diretamente |

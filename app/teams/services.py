@@ -10,10 +10,68 @@ Suporta sessoes persistentes por conversation_id do Teams.
 import logging
 import asyncio
 import re
+import hashlib
 from datetime import datetime, timedelta
 from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
+
+
+def _get_teams_user_id(usuario: str) -> int:
+    """
+    Gera user_id determinístico baseado no nome do usuário do Teams.
+
+    Usa MD5 truncado para 8 hex chars (32 bits) → int positivo.
+    Mesmo usuário sempre gera mesmo ID, permitindo memória persistente.
+
+    Args:
+        usuario: Nome do usuário do Teams (ex: "Rafael Nascimento")
+
+    Returns:
+        int: user_id determinístico (ex: 2938471234)
+    """
+    normalized = usuario.lower().strip()
+    hash_hex = hashlib.md5(normalized.encode('utf-8')).hexdigest()[:8]
+    return int(hash_hex, 16)
+
+
+def _get_teams_context() -> str:
+    """
+    Gera contexto específico para Teams com data atual e instruções anti-verbosidade.
+
+    Returns:
+        str: Contexto formatado para prefixar a mensagem do usuário
+    """
+    data_atual = datetime.now().strftime("%d/%m/%Y")
+    dias_semana = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
+    dia_semana = dias_semana[datetime.now().weekday()]
+
+    return f"""[CONTEXTO: Resposta via Microsoft Teams]
+
+DATA ATUAL: {dia_semana}, {data_atual}
+
+REGRAS OBRIGATÓRIAS:
+1. RESPOSTA ÚNICA - Você terá APENAS UMA chance de responder
+2. SEJA DIRETO - Vá direto ao ponto, sem introduções
+3. AÇÃO SILENCIOSA - NUNCA diga "vou consultar...", "deixa eu verificar...", "analisando..."
+   Execute as consultas SILENCIOSAMENTE e retorne APENAS o resultado
+4. SEM MARKDOWN COMPLEXO - NÃO use tabelas (| col |), headers (##), code blocks
+   Use apenas: texto simples, listas com "- item", negrito com *texto*
+5. TAMANHO MÁXIMO - 2000 caracteres
+
+PROIBIDO:
+❌ "Vou consultar o banco de dados..."
+❌ "Deixa eu verificar os pedidos..."
+❌ "Analisando os dados disponíveis..."
+❌ "Primeiro preciso..."
+
+CORRETO:
+✅ "Encontrei 3 pedidos do Atacadão: [lista]"
+✅ "O estoque de palmito é 1.500 caixas"
+✅ "NF 144533 foi entregue em 15/01/2025"
+
+PERGUNTA DO USUÁRIO:
+"""
 
 # TTL de sessão do Teams: após 4h de inatividade, cria nova sessão
 TEAMS_SESSION_TTL_HOURS = 4
@@ -142,13 +200,18 @@ def _get_or_create_teams_session(
             else:
                 session_id = base_session_id
 
+            # Gerar user_id determinístico baseado no nome do usuário Teams
+            # Isso permite que a memória persista entre sessões para o mesmo usuário
+            user_id = _get_teams_user_id(usuario)
+
             session = AgentSession(
                 session_id=session_id,
-                user_id=None,  # Teams nao tem user_id no nosso sistema
+                user_id=user_id,
                 title=f"Teams - {usuario}",
                 model="claude-opus-4-5-20251101",
                 data={'messages': [], 'total_tokens': 0},
             )
+            logger.info(f"[TEAMS-BOT] user_id gerado para '{usuario}': {user_id}")
             db.session.add(session)
             db.session.commit()
             logger.info(f"[TEAMS-BOT] Nova sessao criada: {session_id[:50]}...")
@@ -188,21 +251,8 @@ def _obter_resposta_agente(
         logger.error(f"[TEAMS-BOT] Erro ao obter client: {e}")
         return None, None
 
-    # Contexto especial para Teams: instruir agente a dar resposta direta
-    contexto_teams = """[CONTEXTO: Resposta via Microsoft Teams]
-REGRAS OBRIGATORIAS:
-- Voce tera APENAS UMA chance de responder
-- NAO diga "vou consultar...", "deixa eu verificar..." - faca silenciosamente
-- Responda APENAS com a informacao final e completa
-- NAO use tabelas markdown (| col1 | col2 |) - nao renderiza no Teams
-- NAO use headers (##, ###)
-- USE apenas texto simples com quebras de linha
-- Para listas use: "- item" em linhas separadas
-- Mantenha resposta CONCISA (maximo 2000 caracteres)
-
-PERGUNTA DO USUARIO:
-"""
-
+    # Contexto especial para Teams: data atual + instruções anti-verbosidade
+    contexto_teams = _get_teams_context()
     prompt_completo = contexto_teams + mensagem
 
     # Executa a coroutine de forma sincrona

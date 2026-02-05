@@ -28,7 +28,7 @@ from collections import defaultdict
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..')))
 
 # Importar modulo centralizado de resolucao de entidades
-from resolver_entidades import ( # type: ignore # noqa: E402
+from resolver_entidades import (
     resolver_pedido,
     get_prefixos_grupo,
     listar_grupos_disponiveis,

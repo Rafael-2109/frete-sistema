@@ -1,6 +1,28 @@
 {
   "name": "entregas_monitoradas",
-  "description": "Monitoramento de entregas com status e ocorrências.",
+  "description": "Monitoramento de entregas com status e ocorrências. Cada registro representa uma NF em processo de entrega.",
+  "business_rules": {
+    "status_finalizacao": {
+      "valid_values": ["Entregue", "Cancelada", "Devolvida", "Troca de NF", "Sinistro", "nao_finalizado"],
+      "description": "Status final da entrega. NULL = em andamento/pendente. 'nao_finalizado' é usado para NFs que saíram do monitoramento sem conclusão."
+    },
+    "entregue": {
+      "description": "Boolean. True APENAS quando status_finalizacao='Entregue'. Não usar isoladamente para filtrar pendentes."
+    },
+    "nf_cd": {
+      "description": "Boolean. True = NF está fisicamente no CD (Centro de Distribuição). Pode ser NF que nunca saiu OU que saiu e voltou."
+    },
+    "reagendar": {
+      "description": "Boolean. True = cliente solicitou reagendamento da entrega."
+    },
+    "formulas": {
+      "entregas_pendentes": "status_finalizacao IS NULL",
+      "entregas_finalizadas": "status_finalizacao IS NOT NULL",
+      "entregas_com_problema": "nf_cd = True OR reagendar = True",
+      "entregas_entregues": "status_finalizacao = 'Entregue'",
+      "entregas_devolvidas": "status_finalizacao = 'Devolvida' OR teve_devolucao = True"
+    }
+  },
   "fields": [
     {
       "name": "id",

@@ -1,6 +1,19 @@
 ---
 name: gerindo-expedicao
-description: Consulta e opera dados logisticos da Nacom Goya. Consulta pedidos, estoque, disponibilidade, lead time. Cria separacoes. Resolve entidades (pedido, produto, cliente, grupo). Use para perguntas como 'tem pedido do Atacadao?', 'quanto tem de palmito?', 'quando fica disponivel?', 'crie separacao do VCD123'.
+description: |
+  Consulta pedidos em carteira, estoque, disponibilidade e cria separacoes.
+
+  USAR QUANDO (ANTES de faturar):
+  - Pedidos: "tem pedido do Atacadao?", "pedido VCD123 esta em separacao?"
+  - Estoque: "quanto tem de palmito?", "chegou cogumelo?"
+  - Disponibilidade: "quando VCD123 fica disponivel?", "o que vai dar falta?"
+  - Lead time: "se embarcar amanha, quando chega?"
+  - Criar separacao: "crie separacao do VCD123 pra amanha"
+
+  NAO USAR QUANDO (APOS faturar):
+  - Status de entrega → usar **monitorando-entregas**
+  - "que dia embarcou?", "foi entregue?" → usar **monitorando-entregas**
+  - Rastrear NF no Odoo → usar **rastreando-odoo**
 allowed-tools: Read, Bash, Glob, Grep
 ---
 

@@ -1,6 +1,6 @@
 # [PRECISION MODE] - MODO PRECISION ENGINEER ATIVO
 
-**Ultima Atualizacao**: 31/01/2026
+**Ultima Atualizacao**: 05/02/2026
 
 ## REGRAS ABSOLUTAS - NUNCA IGNORAR:
 
@@ -188,6 +188,7 @@ Se a resposta esta no reference -> NAO usar skill.
 ## Agente Web (Render/Producao)
 Skills usadas exclusivamente pelo agente logistico web:
 - `gerindo-expedicao` - Consultas logisticas, estoque, separacoes
+- `monitorando-entregas` - Status de entregas, canhotos, devolucoes
 - `memoria-usuario` - Memoria persistente entre sessoes
 
 Custom Tools MCP (in-process, sem subprocess):
@@ -222,6 +223,7 @@ Skills para desenvolvimento no Cursor/Terminal:
 | `exportando-arquivos` | Gerar Excel, CSV, JSON |
 | `lendo-arquivos` | Processar Excel/CSV enviados |
 | `consultando-sql` | Consultas analiticas SQL via linguagem natural (CLI para Claude Code; Custom Tool MCP para agente web) |
+| `resolvendo-entidades` | Resolver cliente/grupo/produto/pedido para IDs do sistema |
 
 ---
 
