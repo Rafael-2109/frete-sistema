@@ -1029,7 +1029,7 @@ Para cada campo listado acima, preciso que você responda:
 
 #### A) COMO OS DADOS SE CONECTAM
 **Pergunta:** Como você explicaria a relação entre estes modelos?
-- Exemplo: "1 Embarque tem vários Pedidos, 1 Pedido vira 1 Frete"
+- Exemplo: "1 Embarque tem vários Pedidos, 1 CNPJ podem ter varios pedidos, 1 CNPJ vira 1 Frete"
 
 #### B) CONSULTAS TÍPICAS
 **Pergunta:** Que tipo de pergunta você faz que envolve múltiplas tabelas?

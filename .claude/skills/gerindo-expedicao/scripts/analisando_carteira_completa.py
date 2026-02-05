@@ -772,7 +772,7 @@ def analisar_carteira_completa(limit=None, prioridade_filtro=None):
         elif incoterm and incoterm.upper() == 'FOB':
             prioridade = 2
         # P3: Cargas diretas fora de SP (>=26 pallets ou >=20.000kg)
-        elif (pallets >= LIMITE_PALLETS_CARGA_DIRETA or peso >= LIMITE_PESO_CARGA_DIRETA) and uf != 'SP':
+        elif (pallets >= LIMITE_PALLETS_CARGA_DIRETA or peso >= LIMITE_PESO_CARGA_DIRETA) and uf != 'SP': # type: ignore
             prioridade = 3
         # P7: Atacadao 183 - por ultimo (evitar ruptura em outros)
         elif grupo == 'atacadao' and eh_atacadao_183(cliente):
