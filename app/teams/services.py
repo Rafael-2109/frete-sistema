@@ -3,26 +3,32 @@ Servicos para integracao Teams Bot <-> Agente Claude SDK.
 
 Recebe mensagens do bot Azure Function, envia para o Agente Claude,
 e retorna a resposta como texto puro (cards sao montados na Azure Function).
+
+Suporta sessoes persistentes por conversation_id do Teams.
 """
 
 import logging
 import asyncio
 import re
-from typing import Optional
+from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
 
-def processar_mensagem_bot(mensagem: str, usuario: str) -> str:
+def processar_mensagem_bot(
+    mensagem: str,
+    usuario: str,
+    conversation_id: str = None,
+) -> str:
     """
     Processa mensagem do bot Teams enviando para o Agente Claude SDK.
 
-    Retorna texto puro (sem Adaptive Card).
-    A formatacao como card e responsabilidade da Azure Function.
+    Mantém sessão persistente por conversation_id do Teams.
 
     Args:
         mensagem: Texto da mensagem do usuario
         usuario: Nome do usuario que enviou
+        conversation_id: ID da conversa do Teams para sessao persistente
 
     Returns:
         str: Texto da resposta do agente
@@ -31,12 +37,46 @@ def processar_mensagem_bot(mensagem: str, usuario: str) -> str:
         ValueError: Se mensagem estiver vazia
         RuntimeError: Se o agente nao retornar resposta
     """
-    logger.info(f"[TEAMS-BOT] Processando mensagem de '{usuario}': {mensagem[:100]}...")
+    logger.info(
+        f"[TEAMS-BOT] Processando mensagem de '{usuario}' "
+        f"conv={conversation_id[:30] if conversation_id else 'N/A'}...: "
+        f"{mensagem[:100]}..."
+    )
 
     if not mensagem or not mensagem.strip():
         raise ValueError("Mensagem vazia recebida")
 
-    resposta_texto = _obter_resposta_agente(mensagem, usuario)
+    # Obter ou criar sessao para esta conversa Teams
+    session = _get_or_create_teams_session(conversation_id, usuario)
+
+    # Obter sdk_session_id para resume (se existir)
+    sdk_session_id = session.get_sdk_session_id() if session else None
+
+    if sdk_session_id:
+        logger.info(f"[TEAMS-BOT] Resuming sessao SDK: {sdk_session_id[:20]}...")
+
+    # Obter resposta do agente
+    resposta_texto, new_sdk_session_id = _obter_resposta_agente(
+        mensagem=mensagem,
+        usuario=usuario,
+        sdk_session_id=sdk_session_id,
+    )
+
+    # Salvar mensagens e atualizar sdk_session_id
+    if session:
+        try:
+            from app import db
+
+            session.add_user_message(mensagem)
+            if resposta_texto:
+                session.add_assistant_message(resposta_texto)
+            if new_sdk_session_id and new_sdk_session_id != sdk_session_id:
+                session.set_sdk_session_id(new_sdk_session_id)
+                logger.info(f"[TEAMS-BOT] Novo sdk_session_id salvo: {new_sdk_session_id[:20]}...")
+            db.session.commit()
+        except Exception as e:
+            logger.error(f"[TEAMS-BOT] Erro ao salvar sessao: {e}", exc_info=True)
+            # Nao bloqueia resposta se falhar ao salvar
 
     if not resposta_texto:
         raise RuntimeError("O agente nao retornou uma resposta")
@@ -45,23 +85,76 @@ def processar_mensagem_bot(mensagem: str, usuario: str) -> str:
     return resposta_texto
 
 
-def _obter_resposta_agente(mensagem: str, usuario: str) -> Optional[str]:
+def _get_or_create_teams_session(
+    conversation_id: str,
+    usuario: str,
+):
+    """
+    Obtém ou cria AgentSession para uma conversa do Teams.
+
+    Args:
+        conversation_id: ID da conversa do Teams (ex: 19:xyz@thread.skype)
+        usuario: Nome do usuário
+
+    Returns:
+        AgentSession ou None se conversation_id não fornecido
+    """
+    if not conversation_id:
+        logger.warning("[TEAMS-BOT] conversation_id nao fornecido — sessao nao persistente")
+        return None
+
+    try:
+        from app.agente.models import AgentSession
+        from app import db
+
+        # Prefixo para identificar sessoes do Teams
+        session_id = f"teams_{conversation_id}"
+
+        session, created = AgentSession.get_or_create(
+            session_id=session_id,
+            user_id=None,  # Teams nao tem user_id no nosso sistema
+        )
+
+        if created:
+            session.title = f"Teams - {usuario}"
+            session.model = "claude-opus-4-5-20251101"
+            db.session.commit()
+            logger.info(f"[TEAMS-BOT] Nova sessao criada: {session_id[:50]}...")
+        else:
+            logger.info(
+                f"[TEAMS-BOT] Sessao existente: {session_id[:50]}... "
+                f"({session.message_count or 0} msgs)"
+            )
+
+        return session
+
+    except Exception as e:
+        logger.error(f"[TEAMS-BOT] Erro ao obter/criar sessao: {e}", exc_info=True)
+        return None
+
+
+def _obter_resposta_agente(
+    mensagem: str,
+    usuario: str,
+    sdk_session_id: str = None,
+) -> Tuple[Optional[str], Optional[str]]:
     """
     Obtem resposta do Agente Claude SDK.
 
     Args:
         mensagem: Mensagem do usuario
         usuario: Nome do usuario
+        sdk_session_id: ID da sessao SDK para resume (opcional)
 
     Returns:
-        str: Texto da resposta do agente
+        Tuple[resposta_texto, new_sdk_session_id]
     """
     try:
         from app.agente.sdk import get_client
         client = get_client()
     except Exception as e:
         logger.error(f"[TEAMS-BOT] Erro ao obter client: {e}")
-        return None
+        return None, None
 
     # Contexto especial para Teams: instruir agente a dar resposta direta
     contexto_teams = """[CONTEXTO: Resposta via Microsoft Teams]
@@ -94,19 +187,24 @@ PERGUNTA DO USUARIO:
             client.get_response(
                 prompt=prompt_completo,
                 user_name=usuario,
+                sdk_session_id=sdk_session_id,
             )
         )
 
         resposta_texto = _extrair_texto_resposta(response)
-        return resposta_texto
+
+        # Capturar novo sdk_session_id do response
+        new_sdk_session_id = getattr(response, 'session_id', None)
+
+        return resposta_texto, new_sdk_session_id
 
     except asyncio.TimeoutError:
         logger.error("[TEAMS-BOT] Timeout ao aguardar resposta do agente")
-        return "Desculpe, a consulta demorou muito. Tente novamente com uma pergunta mais especifica."
+        return "Desculpe, a consulta demorou muito. Tente novamente com uma pergunta mais especifica.", None
 
     except Exception as e:
         logger.error(f"[TEAMS-BOT] Erro ao obter resposta do agente: {e}", exc_info=True)
-        return None
+        return None, None
 
 
 def _extrair_texto_resposta(response) -> Optional[str]:

@@ -241,8 +241,15 @@ class FreteBot(ActivityHandler):
             or ""
         )
 
+        # Extrair conversation_id para manter sessao persistente
+        conversation_id = (
+            turn_context.activity.conversation.id
+            if turn_context.activity.conversation else ""
+        )
+
         logger.info(
-            f"[BOT] Mensagem de {user_name} ({user_id}): {text[:100]}"
+            f"[BOT] Mensagem de {user_name} ({user_id}) "
+            f"conv={conversation_id[:30]}...: {text[:100]}"
         )
 
         # 1. Typing indicator
@@ -258,6 +265,7 @@ class FreteBot(ActivityHandler):
                     "mensagem": text,
                     "usuario": user_name,
                     "usuario_id": str(user_id),
+                    "conversation_id": conversation_id,
                 },
             )
         except TimeoutError:
@@ -317,9 +325,15 @@ class FreteBot(ActivityHandler):
             turn_context.activity.from_property.name or "Usuario"
         )
 
+        # Extrair conversation_id para manter sessao persistente
+        conversation_id = (
+            turn_context.activity.conversation.id
+            if turn_context.activity.conversation else ""
+        )
+
         logger.info(
             f"[BOT] Card response: action={action}, "
-            f"task_id={task_id}, user={user_name}"
+            f"task_id={task_id}, user={user_name}, conv={conversation_id[:30]}..."
         )
 
         if action == "confirm" and task_id:
@@ -331,7 +345,10 @@ class FreteBot(ActivityHandler):
             try:
                 result = await call_backend(
                     endpoint="/api/teams/bot/execute",
-                    payload={"task_id": task_id},
+                    payload={
+                        "task_id": task_id,
+                        "conversation_id": conversation_id,
+                    },
                 )
                 resposta = result.get(
                     "resposta", "Operacao executada com sucesso."

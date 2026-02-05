@@ -61,7 +61,8 @@ def bot_message():
     {
         "mensagem": "texto da mensagem do usuario",
         "usuario": "nome do usuario",
-        "usuario_id": "id do usuario no Teams"
+        "usuario_id": "id do usuario no Teams",
+        "conversation_id": "id da conversa no Teams (para sessao persistente)"
     }
 
     Output JSON (resposta direta):
@@ -84,17 +85,23 @@ def bot_message():
         mensagem = str(dados.get("mensagem", "")).strip()
         usuario = str(dados.get("usuario", "Usuario")).strip()
         usuario_id = str(dados.get("usuario_id", "")).strip()
+        conversation_id = str(dados.get("conversation_id", "")).strip()
 
         if not mensagem:
             return jsonify({"error": "Campo 'mensagem' e obrigatorio"}), 400
 
         logger.info(
-            f"[TEAMS-BOT] Mensagem de {usuario} ({usuario_id}): "
+            f"[TEAMS-BOT] Mensagem de {usuario} ({usuario_id}) "
+            f"conv={conversation_id[:30] if conversation_id else 'N/A'}...: "
             f"{mensagem[:100]}"
         )
 
-        # Processa mensagem via Agent SDK
-        resposta = processar_mensagem_bot(mensagem, usuario)
+        # Processa mensagem via Agent SDK COM sessao persistente
+        resposta = processar_mensagem_bot(
+            mensagem=mensagem,
+            usuario=usuario,
+            conversation_id=conversation_id,
+        )
 
         return jsonify({"resposta": resposta})
 
