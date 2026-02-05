@@ -14,7 +14,7 @@ Uso:
 
     # Usar com o SDK da Anthropic
     runner = client.beta.messages.tool_runner(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-5-20250929",
         tools=[memory],
         ...
     )
