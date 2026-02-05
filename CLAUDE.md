@@ -131,6 +131,7 @@ Sem isso, o agente web nao enxerga os campos novos.
 | CONSULTA ANALITICA (agregacoes, rankings, distribuicoes) | "quantos por estado", "top 10", "valor total por", comparacoes | -> `consultando-sql` |
 | OPERACAO ODOO (API, modelos, integracoes) | NF, PO, picking, Odoo, pagamento, extrato | -> Passos 2 e 3 abaixo |
 | DESENVOLVIMENTO FRONTEND | Criar tela, dashboard, CSS, template | -> `frontend-design` |
+| COTACAO DE FRETE | "qual preco", "quanto custa frete", "tabelas para", "cotacao" | -> `cotando-frete` |
 | EXPORTAR/IMPORTAR DADOS | Gerar Excel, CSV, processar planilha | -> `exportando-arquivos` / `lendo-arquivos` |
 
 ### Passo 2 (ODOO): Tem dado ESTATICO ja documentado?
@@ -223,6 +224,7 @@ Skills para desenvolvimento no Cursor/Terminal:
 | `exportando-arquivos` | Gerar Excel, CSV, JSON |
 | `lendo-arquivos` | Processar Excel/CSV enviados |
 | `consultando-sql` | Consultas analiticas SQL via linguagem natural (CLI para Claude Code; Custom Tool MCP para agente web) |
+| `cotando-frete` | Cotacao de fretes, consulta de tabelas, calculo detalhado |
 | `resolvendo-entidades` | Resolver cliente/grupo/produto/pedido para IDs do sistema |
 
 ---

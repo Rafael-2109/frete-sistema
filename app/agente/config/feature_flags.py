@@ -115,6 +115,32 @@ USE_REVERSIBILITY_CHECK = os.getenv("AGENT_REVERSIBILITY_CHECK", "false").lower(
 USE_FRICTION_ANALYSIS = os.getenv("AGENT_FRICTION_ANALYSIS", "true").lower() == "true"
 
 # ====================================================================
+# Memoria Persistente (P0)
+# ====================================================================
+
+# Auto-inject de memorias do usuario via UserPromptSubmit hook
+# Carrega memorias do banco e injeta como additionalContext no inicio de cada turno
+# Garante que o modelo SEMPRE tem contexto de memorias, mesmo se nao chamar tools
+# ATIVO por default: feature core do agente, kill switch para rollback
+# Para desativar: AGENT_AUTO_MEMORY_INJECTION=false
+USE_AUTO_MEMORY_INJECTION = os.getenv("AGENT_AUTO_MEMORY_INJECTION", "true").lower() == "true"
+
+# Consolidacao periodica de memorias via Haiku
+# Quando usuario excede thresholds, consolida memorias redundantes em resumos compactos
+# Custo: ~$0.002 por consolidacao (~4K input + ~800 output Haiku)
+# Frequencia: ~1x por semana por usuario ativo
+# ATIVO por default: mantem memorias compactas sem intervencao manual
+USE_MEMORY_CONSOLIDATION = os.getenv("AGENT_MEMORY_CONSOLIDATION", "true").lower() == "true"
+
+# Thresholds para trigger de consolidacao
+# Consolida quando: total_arquivos > FILES OU total_chars > CHARS
+MEMORY_CONSOLIDATION_THRESHOLD_FILES = int(os.getenv("AGENT_MEMORY_CONSOLIDATION_FILES", "15"))
+MEMORY_CONSOLIDATION_THRESHOLD_CHARS = int(os.getenv("AGENT_MEMORY_CONSOLIDATION_CHARS", "6000"))
+
+# Minimo de arquivos em um diretorio para ser candidato a consolidacao
+MEMORY_CONSOLIDATION_MIN_GROUP = int(os.getenv("AGENT_MEMORY_CONSOLIDATION_MIN_GROUP", "3"))
+
+# ====================================================================
 # Hooks Expandidos (P3)
 # ====================================================================
 

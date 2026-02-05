@@ -44,6 +44,80 @@ import anthropic
 logger = logging.getLogger(__name__)
 
 
+# =====================================================================
+# HELPER: Auto-injeção de memórias do usuário
+# =====================================================================
+
+def _load_user_memories_for_context(user_id: int) -> Optional[str]:
+    """
+    Carrega memórias do usuário e formata como contexto para injeção.
+
+    Chamado pelo UserPromptSubmit hook para injetar memórias
+    automaticamente no início de cada turno via additionalContext.
+
+    Args:
+        user_id: ID do usuário no banco
+
+    Returns:
+        String XML formatada com memórias ou None se vazio
+    """
+    if not user_id:
+        return None
+
+    try:
+        # Obter Flask app context
+        try:
+            from flask import current_app
+            _ = current_app.name
+            ctx = None
+        except RuntimeError:
+            from app import create_app
+            app = create_app()
+            ctx = app.app_context()
+
+        def _load():
+            from ..models import AgentMemory
+
+            memories = AgentMemory.query.filter_by(
+                user_id=user_id,
+                is_directory=False,
+            ).order_by(AgentMemory.updated_at.desc()).limit(20).all()
+
+            if not memories:
+                return None
+
+            parts = [
+                "<user_memories>",
+                "<!-- Memórias persistentes do usuário — use para personalizar respostas -->",
+            ]
+
+            for mem in memories:
+                path = mem.path
+                content = (mem.content or "").strip()
+                if content:
+                    parts.append(f'<memory path="{path}">\n{content}\n</memory>')
+
+            parts.append("</user_memories>")
+
+            result = "\n".join(parts)
+
+            # Limitar a 4000 chars para controle de tokens (~1000 tokens)
+            if len(result) > 4000:
+                result = result[:4000] + "\n... (memórias truncadas)"
+
+            return result
+
+        if ctx is None:
+            return _load()
+        else:
+            with ctx:
+                return _load()
+
+    except Exception as e:
+        logger.warning(f"[MEMORY_INJECT] Erro ao carregar memórias (ignorado): {e}")
+        return None
+
+
 @dataclass
 class ToolCall:
     """Representa uma chamada de ferramenta."""
@@ -520,8 +594,9 @@ Nunca invente informações."""
         # =================================================================
         try:
             from claude_agent_sdk import (
-                HookMatcher, PostToolUseHookInput, PreCompactHookInput,
-                StopHookInput, UserPromptSubmitHookInput, HookContext,
+                HookMatcher, PostToolUseHookInput, PostToolUseFailureHookInput,
+                PreCompactHookInput, StopHookInput, UserPromptSubmitHookInput,
+                HookContext,
             )
 
             async def _keep_stream_open(hook_input, signal, context: HookContext):
@@ -541,6 +616,62 @@ Nunca invente informações."""
                 tool_name = getattr(hook_input, 'tool_name', 'unknown')
                 tool_input_str = str(getattr(hook_input, 'tool_input', ''))[:200]
                 logger.info(f"[AUDIT] PostToolUse: {tool_name} | input: {tool_input_str}")
+                return {}
+
+            async def _post_tool_use_failure(
+                hook_input: PostToolUseFailureHookInput, signal, context: HookContext
+            ):
+                """Hook de falha de tool: loga erro e fornece contexto corretivo ao modelo.
+
+                Dispara quando qualquer tool falha. Categoriza o erro e opcionalmente
+                retorna additionalContext para guiar o modelo na recuperação.
+
+                Sempre ativo (não depende de feature flag) — custo zero, benefício
+                de logging estruturado + contexto corretivo.
+                """
+                tool_name = hook_input.get('tool_name', 'unknown')
+                tool_input_data = hook_input.get('tool_input', {})
+                error_msg = hook_input.get('error', 'unknown error')
+                is_interrupt = hook_input.get('is_interrupt', False)
+
+                # Interrupt do usuário — não é erro real
+                log_prefix = "[HOOK:PostToolUseFailure]"
+                if is_interrupt:
+                    logger.info(f"{log_prefix} INTERRUPT: {tool_name}")
+                    return {}
+
+                logger.warning(
+                    f"{log_prefix} {tool_name} falhou | "
+                    f"error={error_msg[:300]} | "
+                    f"input={str(tool_input_data)[:200]}"
+                )
+
+                # Contexto corretivo por categoria de tool
+                additional = None
+
+                if 'sql' in tool_name.lower() or 'consultar' in tool_name.lower():
+                    if 'timeout' in error_msg.lower():
+                        additional = (
+                            "A consulta SQL excedeu o timeout. Simplifique: "
+                            "use LIMIT, reduza JOINs, ou filtre por período menor."
+                        )
+                    elif 'permission' in error_msg.lower() or 'read only' in error_msg.lower():
+                        additional = "Apenas consultas SELECT são permitidas no banco de dados."
+
+                elif tool_name == 'Bash':
+                    if 'permission denied' in error_msg.lower():
+                        additional = "Comando sem permissão. Verifique o caminho e permissões."
+                    elif 'not found' in error_msg.lower():
+                        additional = "Comando ou arquivo não encontrado. Verifique se existe."
+
+                if additional:
+                    return {
+                        "hookSpecificOutput": {
+                            "hookEventName": "PostToolUseFailure",
+                            "additionalContext": additional,
+                        }
+                    }
+
                 return {}
 
             async def _pre_compact_hook(hook_input: PreCompactHookInput, signal, context: HookContext):
@@ -626,44 +757,58 @@ Nunca invente informações."""
 
                 return {}
 
-            # ─── P3-2: UserPromptSubmit Hook — enriquece prompt antes de processar ───
+            # ─── UserPromptSubmit Hook — injeta memórias + logging ───
             async def _user_prompt_submit_hook(
                 hook_input: UserPromptSubmitHookInput, signal, context: HookContext
             ):
-                """Hook de submissão: pode enriquecer o prompt do usuário.
+                """Hook de submissão: injeta memórias do usuário como contexto adicional.
 
-                P3-2: Expanded Hooks.
-                Executado pelo SDK ANTES de processar o prompt do usuário.
-                Pode adicionar contexto adicional via hookSpecificOutput.additionalContext.
+                SEMPRE ATIVO: A injeção de memória é independente de USE_EXPANDED_HOOKS.
+                USE_EXPANDED_HOOKS controla apenas o logging extra.
 
-                Uso atual: loga o prompt para auditoria.
-                Uso futuro: pode injetar contexto de sentimento, padrões aprendidos,
-                ou informações de sessão anterior automaticamente.
+                Fluxo:
+                1. Carrega memórias do usuário do banco via _load_user_memories_for_context
+                2. Formata como XML estruturado
+                3. Retorna via hookSpecificOutput.additionalContext
+                4. SDK injeta automaticamente no contexto da conversa
 
-                Quando USE_EXPANDED_HOOKS=false, retorna {} silenciosamente (noop).
+                Ref: https://platform.claude.com/docs/en/agent-sdk/hooks
                 """
-                from ..config.feature_flags import USE_EXPANDED_HOOKS
-
-                if not USE_EXPANDED_HOOKS:
-                    return {}
+                from ..config.feature_flags import USE_EXPANDED_HOOKS, USE_AUTO_MEMORY_INJECTION
 
                 prompt = hook_input.get('prompt', '')
-                session_id = hook_input.get('session_id', 'unknown')
 
-                logger.info(
-                    f"[HOOK:UserPromptSubmit] Prompt recebido: "
-                    f"session={session_id[:12]}... | "
-                    f"prompt_len={len(prompt)} chars"
-                )
+                if USE_EXPANDED_HOOKS:
+                    logger.info(
+                        f"[HOOK:UserPromptSubmit] Prompt recebido: "
+                        f"prompt_len={len(prompt)} chars"
+                    )
 
-                # Retorna sem enriquecer — pronto para uso futuro.
-                # Para adicionar contexto ao prompt, descomentar:
-                # return {
-                #     "hookSpecificOutput": {
-                #         "hookEventName": "UserPromptSubmit",
-                #         "additionalContext": "Contexto adicional aqui"
-                #     }
-                # }
+                # ============================================================
+                # Injeção automática de memórias (independente de EXPANDED_HOOKS)
+                # ============================================================
+                additional_context = None
+                if USE_AUTO_MEMORY_INJECTION and user_id:
+                    try:
+                        additional_context = _load_user_memories_for_context(user_id)
+                    except Exception as mem_err:
+                        logger.warning(
+                            f"[HOOK:UserPromptSubmit] Erro ao carregar memórias "
+                            f"(ignorado): {mem_err}"
+                        )
+
+                if additional_context:
+                    logger.info(
+                        f"[HOOK:UserPromptSubmit] Memórias injetadas: "
+                        f"{len(additional_context)} chars"
+                    )
+                    return {
+                        "hookSpecificOutput": {
+                            "hookEventName": "UserPromptSubmit",
+                            "additionalContext": additional_context,
+                        }
+                    }
+
                 return {}
 
             # ─── Registrar TODOS os hooks ───
@@ -678,6 +823,12 @@ Nunca invente informações."""
                     HookMatcher(
                         matcher="Bash|Skill",
                         hooks=[_audit_post_tool_use],
+                    ),
+                ],
+                "PostToolUseFailure": [
+                    HookMatcher(
+                        matcher=None,  # Todas as tools
+                        hooks=[_post_tool_use_failure],
                     ),
                 ],
                 "PreCompact": [
@@ -698,7 +849,7 @@ Nunca invente informações."""
             }
             logger.debug(
                 "[AGENT_CLIENT] Hooks SDK configurados: "
-                "PreToolUse + PostToolUse + PreCompact + Stop + UserPromptSubmit"
+                "PreToolUse + PostToolUse + PostToolUseFailure + PreCompact + Stop + UserPromptSubmit"
             )
         except (ImportError, Exception) as e:
             logger.warning(f"[AGENT_CLIENT] Hooks SDK não disponíveis: {e}")

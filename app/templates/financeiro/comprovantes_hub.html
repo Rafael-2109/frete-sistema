@@ -400,6 +400,35 @@
 
                     <span class="text-muted">|</span>
 
+                    <!-- Filtros de Data (Dia/Mês/Ano) -->
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="small text-muted"><i class="fas fa-calendar-alt me-1"></i>Data Pgto:</span>
+                        <input type="number" class="form-control form-control-sm filtro-data"
+                               id="filtro-dia" placeholder="Dia" min="1" max="31"
+                               style="width: 70px;">
+                        <select class="form-select form-select-sm filtro-data"
+                                id="filtro-mes" style="width: 100px;">
+                            <option value="">Mês</option>
+                            <option value="01">Jan</option>
+                            <option value="02">Fev</option>
+                            <option value="03">Mar</option>
+                            <option value="04">Abr</option>
+                            <option value="05">Mai</option>
+                            <option value="06">Jun</option>
+                            <option value="07">Jul</option>
+                            <option value="08">Ago</option>
+                            <option value="09">Set</option>
+                            <option value="10">Out</option>
+                            <option value="11">Nov</option>
+                            <option value="12">Dez</option>
+                        </select>
+                        <input type="number" class="form-control form-control-sm filtro-data"
+                               id="filtro-ano" placeholder="Ano" min="2020" max="2030"
+                               style="width: 85px;">
+                    </div>
+
+                    <span class="text-muted">|</span>
+
                     <!-- Checkboxes Pipeline -->
                     <div class="form-check form-check-inline mb-0">
                         <input class="form-check-input filtro-check" type="checkbox" id="filtro-ofx" value="ofx" data-tristate="neutral">
@@ -2578,6 +2607,27 @@ document.addEventListener('DOMContentLoaded', function() {
         var rowData = tabela.row(dataIndex).data();
         if (!rowData) return true;
 
+        // --- 0. Filtro de Data (Dia/Mês/Ano) ---
+        var filtroDia = document.getElementById('filtro-dia').value.trim();
+        var filtroMes = document.getElementById('filtro-mes').value;
+        var filtroAno = document.getElementById('filtro-ano').value.trim();
+
+        if (filtroDia || filtroMes || filtroAno) {
+            var dataPgto = rowData.data_pagamento; // formato "DD/MM/YYYY"
+            if (!dataPgto) return false;
+
+            var partes = dataPgto.split('/');
+            if (partes.length !== 3) return false;
+
+            var dia = partes[0];   // "02"
+            var mes = partes[1];   // "01"
+            var ano = partes[2];   // "2026"
+
+            if (filtroDia && parseInt(dia) !== parseInt(filtroDia)) return false;
+            if (filtroMes && mes !== filtroMes) return false;
+            if (filtroAno && ano !== filtroAno) return false;
+        }
+
         // --- 1. Filtro de Confianca (dropdown com checkboxes) ---
         var confiancaSel = [];
         document.querySelectorAll('.confianca-check:checked').forEach(function(cb) {
@@ -2621,6 +2671,11 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Event handlers para mudanca nos filtros
+    // Handler filtros de data (dia/mes/ano)
+    $('.filtro-data').on('change input', function() {
+        tabela.draw();
+    });
+
     $('#dropdown-confianca').on('change', '.confianca-check', function() {
         tabela.draw();
     });
@@ -2669,6 +2724,10 @@ document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll('.confianca-check').forEach(function(cb) {
             cb.checked = false;
         });
+        // Reset filtros de data
+        document.getElementById('filtro-dia').value = '';
+        document.getElementById('filtro-mes').value = '';
+        document.getElementById('filtro-ano').value = '';
         // Reset checkboxes de pipeline (tri-state -> neutro)
         document.querySelectorAll('.filtro-check').forEach(function(cb) {
             cb.checked = false;
@@ -2694,6 +2753,11 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             badgeConf.style.display = 'none';
         }
+
+        // Contar filtros de data ativos
+        if (document.getElementById('filtro-dia').value.trim()) count++;
+        if (document.getElementById('filtro-mes').value) count++;
+        if (document.getElementById('filtro-ano').value.trim()) count++;
 
         // Contar checkboxes de pipeline ativos (tri-state: include ou exclude)
         document.querySelectorAll('.filtro-check').forEach(function(cb) {

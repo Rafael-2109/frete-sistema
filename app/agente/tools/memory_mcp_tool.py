@@ -178,10 +178,12 @@ try:
 
     @tool(
         "view_memories",
-        "Visualiza o conteúdo de um arquivo de memória ou lista o conteúdo de um diretório. "
-        "Use path='/memories' para listar todos os diretórios raiz. "
-        "Use path='/memories/user.xml' para ver um arquivo específico. "
-        "SEMPRE consulte suas memórias no início de uma nova sessão para recuperar contexto.",
+        "OBRIGATÓRIO no início de cada sessão: visualiza memórias persistentes do usuário. "
+        "Consulte ANTES de responder a primeira mensagem para recuperar preferências, "
+        "correções e contexto de sessões anteriores. "
+        "Use path='/memories' para listar diretórios. "
+        "Use path='/memories/user.xml' para ver arquivo específico. "
+        "Esta ferramenta é sua ÚNICA fonte de contexto cross-session.",
         {"path": str}
     )
     async def view_memories(args: dict[str, Any]) -> dict[str, Any]:
@@ -249,15 +251,14 @@ try:
 
     @tool(
         "save_memory",
-        "Cria ou atualiza um arquivo de memória persistente. "
-        "Use para salvar fatos sobre o usuário, preferências, correções, "
-        "regras de negócio e contexto de trabalho. "
-        "Paths recomendados: "
-        "/memories/user.xml (info do usuário), "
-        "/memories/preferences.xml (preferências de comunicação), "
-        "/memories/context/session_notes.xml (notas de sessão), "
-        "/memories/learned/regras.xml (regras de negócio aprendidas), "
-        "/memories/corrections/dominio.xml (correções do domínio). "
+        "Salva fato, preferência ou correção na memória persistente do usuário. "
+        "Use PROATIVAMENTE quando detectar: correções do usuário, preferências reveladas, "
+        "regras de negócio mencionadas, informações pessoais/profissionais, "
+        "ou quando o usuário pedir explicitamente ('lembre que...', 'anote...'). "
+        "Paths: /memories/user.xml (info pessoal), "
+        "/memories/preferences.xml (estilo/comunicação), "
+        "/memories/learned/regras.xml (regras de negócio), "
+        "/memories/corrections/dominio.xml (correções). "
         "Se o arquivo já existir, o conteúdo será SUBSTITUÍDO.",
         {"path": str, "content": str}
     )
@@ -316,6 +317,16 @@ try:
 
             action = _execute_with_context(_save)
             logger.info(f"[MEMORY_MCP] save_memory: {path} ({action})")
+
+            # Best-effort: verificar se memórias precisam de consolidação
+            try:
+                from ..services.memory_consolidator import maybe_consolidate
+                maybe_consolidate(user_id)
+            except Exception as consolidation_err:
+                logger.debug(
+                    f"[MEMORY_MCP] Consolidação não executada (ignorado): {consolidation_err}"
+                )
+
             return {
                 "content": [{"type": "text", "text": f"Memória {action} em {path}"}]
             }
@@ -455,8 +466,9 @@ try:
 
     @tool(
         "list_memories",
-        "Lista todos os arquivos de memória do usuário com seus paths. "
-        "Útil para ter uma visão geral de todas as memórias salvas.",
+        "Lista todos os arquivos de memória persistente do usuário. "
+        "Use no INÍCIO de cada sessão para verificar o que há salvo. "
+        "Retorna paths e preview do conteúdo de cada memória.",
         {}
     )
     async def list_memories(args: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG001
