@@ -530,16 +530,43 @@ PERGUNTA ORIGINAL: {question}
 SQL GERADA:
 {sql}
 
-VERIFIQUE COM RIGOR:
-1. A SQL responde corretamente a pergunta?
-2. Todos os campos e tabelas existem no schema acima? Se um campo NAO existe, corrija para o nome correto.
-3. Os campos corretos estao sendo usados? (ex: qtd_saldo_produto_pedido na carteira_principal, qtd_saldo na separacao — NUNCA trocar)
-4. Filtros necessarios estao presentes? (ativo=True, sincronizado_nf=False, status_nf='Lancado', etc.)
-5. JOINs usam os campos de FK corretos conforme os relacionamentos?
-6. Tem LIMIT? (maximo 500)
-7. A SQL e segura? (apenas SELECT, sem funcoes perigosas)
+VERIFIQUE COM RIGOR (todos os itens sao obrigatorios):
 
-IMPORTANTE: Se algum campo nao existir no schema, CORRIJA o nome para um campo que exista.
+1. A SQL responde corretamente a pergunta?
+
+2. VALIDACAO DE CAMPOS (CRITICO): Para CADA coluna referenciada na SQL, incluindo aliases
+   (ex: em.campo, cp.campo), resolva o alias para a tabela correspondente e confirme que
+   o campo EXISTE na lista de "Campos:" dessa tabela no schema acima.
+   Se o campo NAO aparece na lista da tabela, e um ERRO — corrija para o campo mais proximo
+   que exista, ou remova a referencia.
+   NUNCA aprove SQL com campos que nao existem no schema.
+
+3. Os campos corretos estao sendo usados? (ex: qtd_saldo_produto_pedido na carteira_principal,
+   qtd_saldo na separacao — NUNCA trocar)
+
+4. VALIDACAO DE TIPOS (CRITICO): Em CADA clausula WHERE, ON, HAVING, verifique que o tipo do
+   campo e compativel com o valor comparado:
+   - Campos varchar/text: comparar SOMENTE com strings entre aspas simples ('valor'),
+     NUNCA com numeros sem aspas.
+   - Campos integer/numeric/float: comparar com numeros (com ou sem aspas, PostgreSQL aceita).
+   - Campos boolean: comparar com true/false (sem aspas).
+   - Campos date/timestamp: comparar com strings de data entre aspas ('2024-01-01').
+   Exemplos de ERRO que voce DEVE corrigir:
+     WHERE cnpj_cliente = 123           -> WHERE cnpj_cliente = '123'
+     WHERE cod_uf = 35                  -> WHERE cod_uf = '35'
+     WHERE numero_nf = 12345           -> WHERE numero_nf = '12345'
+
+5. Filtros necessarios estao presentes? (ativo=True, sincronizado_nf=False, status_nf='Lancado', etc.)
+
+6. JOINs usam os campos de FK corretos conforme os relacionamentos?
+
+7. Tem LIMIT? (maximo 500)
+
+8. A SQL e segura? (apenas SELECT, sem funcoes perigosas)
+
+REGRA DE FALLBACK: Se a SQL tem campos que NAO existem no schema e voce NAO consegue
+determinar o campo correto, retorne approved=false com improved_sql=null e reason
+explicando quais campos nao existem. NUNCA aprove SQL com campos inexistentes.
 
 Responda APENAS com um JSON valido neste formato exato:
 {{"approved": true, "improved_sql": null, "reason": "SQL correta"}}
@@ -788,14 +815,18 @@ class TextToSQLPipeline:
                     result["tabelas_usadas"] = tables_in_sql
                     schema_text = self.schema_provider.get_tables_schema_text(tables_in_sql)
                 else:
+                    # MAX RETRIES EXCEEDED — NÃO continuar com SQL possivelmente quebrada
+                    result["sucesso"] = False
                     result["aviso"] = (
                         f"Evaluator reprovou apos {MAX_EVAL_RETRIES} tentativas: "
                         f"{evaluation['reason']}"
                     )
+                    result["etapas"]["evaluator_ms"] = int((time.time() - t2) * 1000)
                     logger.warning(
                         f"[TEXT_TO_SQL] Evaluator reprovou apos {MAX_EVAL_RETRIES} "
-                        f"tentativas: {evaluation['reason']}"
+                        f"tentativas — pipeline INTERROMPIDO: {evaluation['reason']}"
                     )
+                    return result
 
             result["etapas"]["evaluator_ms"] = int((time.time() - t2) * 1000)
 

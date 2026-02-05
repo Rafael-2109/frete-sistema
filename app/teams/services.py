@@ -11,28 +11,75 @@ import logging
 import asyncio
 import re
 import hashlib
+import uuid
 from datetime import datetime, timedelta
 from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
 
-def _get_teams_user_id(usuario: str) -> int:
+def _get_or_create_teams_user(usuario: str) -> Optional[int]:
     """
-    Gera user_id determinístico baseado no nome do usuário do Teams.
+    Obtém ou auto-cadastra usuário do Teams como Usuario real no banco.
 
-    Usa MD5 truncado para 8 hex chars (32 bits) → int positivo.
-    Mesmo usuário sempre gera mesmo ID, permitindo memória persistente.
+    Cria um usuário "oculto" com email determinístico @teams.nacomgoya.local
+    e senha aleatória. Isso permite que a FK de AgentMemory/AgentSession
+    funcione corretamente, habilitando memórias persistentes no Teams.
+
+    O usuário é criado com status='ativo' e perfil='logistica'.
+    Não consegue fazer login no sistema web (não sabe a senha).
+    Facilmente identificável pelo email @teams.nacomgoya.local.
 
     Args:
         usuario: Nome do usuário do Teams (ex: "Rafael Nascimento")
 
     Returns:
-        int: user_id determinístico (ex: 2938471234)
+        int: user_id real na tabela usuarios, ou None se falhar
     """
-    normalized = usuario.lower().strip()
-    hash_hex = hashlib.md5(normalized.encode('utf-8')).hexdigest()[:8]
-    return int(hash_hex, 16)
+    if not usuario or not usuario.strip():
+        return None
+
+    try:
+        from app.auth.models import Usuario
+        from app import db
+
+        # Gera email determinístico baseado no nome normalizado
+        normalized = usuario.lower().strip()
+        hash_hex = hashlib.md5(normalized.encode('utf-8')).hexdigest()[:12]
+        teams_email = f"teams_{hash_hex}@teams.nacomgoya.local"
+
+        # Busca usuário existente pelo email
+        existing = Usuario.query.filter_by(email=teams_email).first()
+        if existing:
+            return existing.id
+
+        # Auto-cadastra novo usuário
+        new_user = Usuario(
+            nome=usuario.strip(),
+            email=teams_email,
+            perfil='logistica',
+            status='ativo',
+            empresa='Nacom Goya (Teams)',
+            cargo='Usuário Teams',
+            sistema_logistica=True,
+            sistema_motochefe=False,
+            aprovado_em=datetime.utcnow(),
+            aprovado_por='sistema-teams-bot',
+            observacoes='Auto-cadastrado via Teams Bot',
+        )
+        new_user.set_senha(uuid.uuid4().hex)  # Senha aleatória — ninguém precisa saber
+        db.session.add(new_user)
+        db.session.commit()
+
+        logger.info(
+            f"[TEAMS-BOT] Usuário auto-cadastrado: "
+            f"id={new_user.id} nome='{usuario}' email='{teams_email}'"
+        )
+        return new_user.id
+
+    except Exception as e:
+        logger.error(f"[TEAMS-BOT] Erro ao obter/criar usuário Teams: {e}", exc_info=True)
+        return None
 
 
 def _get_teams_context() -> str:
@@ -108,8 +155,11 @@ def processar_mensagem_bot(
     if not mensagem or not mensagem.strip():
         raise ValueError("Mensagem vazia recebida")
 
+    # Obter ou criar usuário real no banco para o usuário do Teams
+    teams_user_id = _get_or_create_teams_user(usuario)
+
     # Obter ou criar sessao para esta conversa Teams
-    session = _get_or_create_teams_session(conversation_id, usuario)
+    session = _get_or_create_teams_session(conversation_id, usuario, user_id=teams_user_id)
 
     # Obter sdk_session_id para resume (se existir)
     sdk_session_id = session.get_sdk_session_id() if session else None
@@ -122,6 +172,7 @@ def processar_mensagem_bot(
         mensagem=mensagem,
         usuario=usuario,
         sdk_session_id=sdk_session_id,
+        user_id=teams_user_id,
     )
 
     # Salvar mensagens e atualizar sdk_session_id
@@ -150,6 +201,7 @@ def processar_mensagem_bot(
 def _get_or_create_teams_session(
     conversation_id: str,
     usuario: str,
+    user_id: int = None,
 ):
     """
     Obtém ou cria AgentSession para uma conversa do Teams.
@@ -160,6 +212,7 @@ def _get_or_create_teams_session(
     Args:
         conversation_id: ID da conversa do Teams (ex: 19:xyz@thread.skype)
         usuario: Nome do usuário
+        user_id: ID real do usuário na tabela usuarios (auto-cadastrado)
 
     Returns:
         AgentSession ou None se conversation_id não fornecido
@@ -174,6 +227,11 @@ def _get_or_create_teams_session(
 
         # Prefixo para identificar sessoes do Teams
         base_session_id = f"teams_{conversation_id}"
+
+        # Garantir que session_id caiba no campo VARCHAR(255)
+        if len(base_session_id) > 250:
+            conv_hash = hashlib.md5(conversation_id.encode()).hexdigest()[:20]
+            base_session_id = f"teams_{conv_hash}"
 
         # Busca sessão existente
         session = AgentSession.query.filter(
@@ -200,18 +258,15 @@ def _get_or_create_teams_session(
             else:
                 session_id = base_session_id
 
-            # Gerar user_id determinístico baseado no nome do usuário Teams
-            # Isso permite que a memória persista entre sessões para o mesmo usuário
-            user_id = _get_teams_user_id(usuario)
+            from app.agente.config.feature_flags import TEAMS_DEFAULT_MODEL
 
             session = AgentSession(
                 session_id=session_id,
-                user_id=user_id,
+                user_id=user_id,  # User real auto-cadastrado via _get_or_create_teams_user
                 title=f"Teams - {usuario}",
-                model="claude-opus-4-6",
+                model=TEAMS_DEFAULT_MODEL,
                 data={'messages': [], 'total_tokens': 0},
             )
-            logger.info(f"[TEAMS-BOT] user_id gerado para '{usuario}': {user_id}")
             db.session.add(session)
             db.session.commit()
             logger.info(f"[TEAMS-BOT] Nova sessao criada: {session_id[:50]}...")
@@ -232,6 +287,7 @@ def _obter_resposta_agente(
     mensagem: str,
     usuario: str,
     sdk_session_id: str = None,
+    user_id: int = None,
 ) -> Tuple[Optional[str], Optional[str]]:
     """
     Obtem resposta do Agente Claude SDK.
@@ -240,6 +296,7 @@ def _obter_resposta_agente(
         mensagem: Mensagem do usuario
         usuario: Nome do usuario
         sdk_session_id: ID da sessao SDK para resume (opcional)
+        user_id: ID real do usuario na tabela usuarios (para memorias)
 
     Returns:
         Tuple[resposta_texto, new_sdk_session_id]
@@ -254,6 +311,9 @@ def _obter_resposta_agente(
     # Contexto especial para Teams: data atual + instruções anti-verbosidade
     contexto_teams = _get_teams_context()
     prompt_completo = contexto_teams + mensagem
+
+    # Modelo padrão para Teams (Sonnet por velocidade)
+    from app.agente.config.feature_flags import TEAMS_DEFAULT_MODEL
 
     # Executa a coroutine de forma sincrona
     try:
@@ -270,6 +330,8 @@ def _obter_resposta_agente(
                 prompt=prompt_completo,
                 user_name=usuario,
                 sdk_session_id=sdk_session_id,
+                user_id=user_id,
+                model=TEAMS_DEFAULT_MODEL,
             )
         )
 

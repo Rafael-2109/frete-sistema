@@ -46,7 +46,7 @@ class AgentSession(db.Model):
     __tablename__ = 'agent_sessions'
 
     id = db.Column(db.Integer, primary_key=True)
-    session_id = db.Column(db.String(100), unique=True, nullable=False, index=True)
+    session_id = db.Column(db.String(255), unique=True, nullable=False, index=True)
     user_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True, index=True)
 
     # Campos para UI (FEAT-011)

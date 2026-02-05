@@ -613,10 +613,14 @@ Nunca invente informações."""
 
             async def _audit_post_tool_use(hook_input: PostToolUseHookInput, signal, context: HookContext):
                 """Registra execução de tools para auditoria."""
-                tool_name = getattr(hook_input, 'tool_name', 'unknown')
-                tool_input_str = str(getattr(hook_input, 'tool_input', ''))[:200]
-                logger.info(f"[AUDIT] PostToolUse: {tool_name} | input: {tool_input_str}")
-                return {}
+                try:
+                    tool_name = getattr(hook_input, 'tool_name', 'unknown')
+                    tool_input_str = str(getattr(hook_input, 'tool_input', ''))[:200]
+                    logger.info(f"[AUDIT] PostToolUse: {tool_name} | input: {tool_input_str}")
+                    return {}
+                except Exception as e:
+                    logger.debug(f"[HOOK:PostToolUse] Suppressed (stream likely closed): {e}")
+                    return {}
 
             async def _post_tool_use_failure(
                 hook_input: PostToolUseFailureHookInput, signal, context: HookContext
@@ -629,50 +633,54 @@ Nunca invente informações."""
                 Sempre ativo (não depende de feature flag) — custo zero, benefício
                 de logging estruturado + contexto corretivo.
                 """
-                tool_name = hook_input.get('tool_name', 'unknown')
-                tool_input_data = hook_input.get('tool_input', {})
-                error_msg = hook_input.get('error', 'unknown error')
-                is_interrupt = hook_input.get('is_interrupt', False)
+                try:
+                    tool_name = hook_input.get('tool_name', 'unknown')
+                    tool_input_data = hook_input.get('tool_input', {})
+                    error_msg = hook_input.get('error', 'unknown error')
+                    is_interrupt = hook_input.get('is_interrupt', False)
 
-                # Interrupt do usuário — não é erro real
-                log_prefix = "[HOOK:PostToolUseFailure]"
-                if is_interrupt:
-                    logger.info(f"{log_prefix} INTERRUPT: {tool_name}")
-                    return {}
+                    # Interrupt do usuário — não é erro real
+                    log_prefix = "[HOOK:PostToolUseFailure]"
+                    if is_interrupt:
+                        logger.info(f"{log_prefix} INTERRUPT: {tool_name}")
+                        return {}
 
-                logger.warning(
-                    f"{log_prefix} {tool_name} falhou | "
-                    f"error={error_msg[:300]} | "
-                    f"input={str(tool_input_data)[:200]}"
-                )
+                    logger.warning(
+                        f"{log_prefix} {tool_name} falhou | "
+                        f"error={error_msg[:300]} | "
+                        f"input={str(tool_input_data)[:200]}"
+                    )
 
-                # Contexto corretivo por categoria de tool
-                additional = None
+                    # Contexto corretivo por categoria de tool
+                    additional = None
 
-                if 'sql' in tool_name.lower() or 'consultar' in tool_name.lower():
-                    if 'timeout' in error_msg.lower():
-                        additional = (
-                            "A consulta SQL excedeu o timeout. Simplifique: "
-                            "use LIMIT, reduza JOINs, ou filtre por período menor."
-                        )
-                    elif 'permission' in error_msg.lower() or 'read only' in error_msg.lower():
-                        additional = "Apenas consultas SELECT são permitidas no banco de dados."
+                    if 'sql' in tool_name.lower() or 'consultar' in tool_name.lower():
+                        if 'timeout' in error_msg.lower():
+                            additional = (
+                                "A consulta SQL excedeu o timeout. Simplifique: "
+                                "use LIMIT, reduza JOINs, ou filtre por período menor."
+                            )
+                        elif 'permission' in error_msg.lower() or 'read only' in error_msg.lower():
+                            additional = "Apenas consultas SELECT são permitidas no banco de dados."
 
-                elif tool_name == 'Bash':
-                    if 'permission denied' in error_msg.lower():
-                        additional = "Comando sem permissão. Verifique o caminho e permissões."
-                    elif 'not found' in error_msg.lower():
-                        additional = "Comando ou arquivo não encontrado. Verifique se existe."
+                    elif tool_name == 'Bash':
+                        if 'permission denied' in error_msg.lower():
+                            additional = "Comando sem permissão. Verifique o caminho e permissões."
+                        elif 'not found' in error_msg.lower():
+                            additional = "Comando ou arquivo não encontrado. Verifique se existe."
 
-                if additional:
-                    return {
-                        "hookSpecificOutput": {
-                            "hookEventName": "PostToolUseFailure",
-                            "additionalContext": additional,
+                    if additional:
+                        return {
+                            "hookSpecificOutput": {
+                                "hookEventName": "PostToolUseFailure",
+                                "additionalContext": additional,
+                            }
                         }
-                    }
 
-                return {}
+                    return {}
+                except Exception as e:
+                    logger.debug(f"[HOOK:PostToolUseFailure] Suppressed (stream likely closed): {e}")
+                    return {}
 
             async def _pre_compact_hook(hook_input: PreCompactHookInput, signal, context: HookContext):
                 """Antes de compactação, instrui modelo a salvar contexto logístico estruturado.
@@ -682,54 +690,58 @@ Nunca invente informações."""
                 pedidos, decisões, tarefas e contexto em formato XML estruturado.
                 Sem a flag, mantém comportamento genérico original como fallback.
                 """
-                from ..config.feature_flags import USE_STRUCTURED_COMPACTION
+                try:
+                    from ..config.feature_flags import USE_STRUCTURED_COMPACTION
 
-                logger.info("[COMPACTION] PreCompact hook ativado — contexto será compactado")
+                    logger.info("[COMPACTION] PreCompact hook ativado — contexto será compactado")
 
-                if not USE_STRUCTURED_COMPACTION:
+                    if not USE_STRUCTURED_COMPACTION:
+                        return {
+                            "custom_instructions": (
+                                "O contexto será compactado agora. ANTES de continuar, "
+                                "salve informações críticas usando mcp__memory__save_memory "
+                                "em /memories/context/session_notes.xml. "
+                                "Após compactação, consulte suas memórias para recuperar estado."
+                            )
+                        }
+
                     return {
                         "custom_instructions": (
-                            "O contexto será compactado agora. ANTES de continuar, "
-                            "salve informações críticas usando mcp__memory__save_memory "
-                            "em /memories/context/session_notes.xml. "
-                            "Após compactação, consulte suas memórias para recuperar estado."
+                            "⚠️ COMPACTAÇÃO IMINENTE — O contexto será reduzido agora.\n\n"
+                            "ANTES de continuar, salve o estado da conversa usando "
+                            "mcp__memory__save_memory no path /memories/context/session_notes.xml.\n\n"
+                            "Use EXATAMENTE este formato XML:\n"
+                            "```xml\n"
+                            "<session_context>\n"
+                            "  <pedidos_em_discussao>\n"
+                            "    <!-- Liste TODOS os pedidos mencionados com código VCD/VFB, cliente e valor -->\n"
+                            "    <pedido codigo=\"VCDxxx\" cliente=\"Nome\" valor=\"R$ X.XXX,XX\" status=\"pendente|parcial|concluido\" />\n"
+                            "  </pedidos_em_discussao>\n"
+                            "  <decisoes_tomadas>\n"
+                            "    <!-- Decisões já confirmadas pelo usuário -->\n"
+                            "    <decisao>Descrição da decisão</decisao>\n"
+                            "  </decisoes_tomadas>\n"
+                            "  <tarefas_pendentes>\n"
+                            "    <!-- O que falta fazer nesta conversa -->\n"
+                            "    <tarefa>Descrição</tarefa>\n"
+                            "  </tarefas_pendentes>\n"
+                            "  <dados_consultados>\n"
+                            "    <!-- Últimas consultas SQL ou resultados relevantes -->\n"
+                            "    <consulta tipo=\"sql|estoque|separacao\">Resumo do resultado</consulta>\n"
+                            "  </dados_consultados>\n"
+                            "  <contexto_usuario>\n"
+                            "    <!-- Preferências e contexto mencionados -->\n"
+                            "    <nota>Informação relevante sobre o usuário</nota>\n"
+                            "  </contexto_usuario>\n"
+                            "</session_context>\n"
+                            "```\n\n"
+                            "APÓS salvar, consulte /memories/context/session_notes.xml para "
+                            "recuperar o estado e continue a conversa normalmente."
                         )
                     }
-
-                return {
-                    "custom_instructions": (
-                        "⚠️ COMPACTAÇÃO IMINENTE — O contexto será reduzido agora.\n\n"
-                        "ANTES de continuar, salve o estado da conversa usando "
-                        "mcp__memory__save_memory no path /memories/context/session_notes.xml.\n\n"
-                        "Use EXATAMENTE este formato XML:\n"
-                        "```xml\n"
-                        "<session_context>\n"
-                        "  <pedidos_em_discussao>\n"
-                        "    <!-- Liste TODOS os pedidos mencionados com código VCD/VFB, cliente e valor -->\n"
-                        "    <pedido codigo=\"VCDxxx\" cliente=\"Nome\" valor=\"R$ X.XXX,XX\" status=\"pendente|parcial|concluido\" />\n"
-                        "  </pedidos_em_discussao>\n"
-                        "  <decisoes_tomadas>\n"
-                        "    <!-- Decisões já confirmadas pelo usuário -->\n"
-                        "    <decisao>Descrição da decisão</decisao>\n"
-                        "  </decisoes_tomadas>\n"
-                        "  <tarefas_pendentes>\n"
-                        "    <!-- O que falta fazer nesta conversa -->\n"
-                        "    <tarefa>Descrição</tarefa>\n"
-                        "  </tarefas_pendentes>\n"
-                        "  <dados_consultados>\n"
-                        "    <!-- Últimas consultas SQL ou resultados relevantes -->\n"
-                        "    <consulta tipo=\"sql|estoque|separacao\">Resumo do resultado</consulta>\n"
-                        "  </dados_consultados>\n"
-                        "  <contexto_usuario>\n"
-                        "    <!-- Preferências e contexto mencionados -->\n"
-                        "    <nota>Informação relevante sobre o usuário</nota>\n"
-                        "  </contexto_usuario>\n"
-                        "</session_context>\n"
-                        "```\n\n"
-                        "APÓS salvar, consulte /memories/context/session_notes.xml para "
-                        "recuperar o estado e continue a conversa normalmente."
-                    )
-                }
+                except Exception as e:
+                    logger.debug(f"[HOOK:PreCompact] Suppressed (stream likely closed): {e}")
+                    return {}
 
             # ─── P3-2: Stop Hook — loga métricas finais da sessão ───
             async def _stop_hook(hook_input: StopHookInput, signal, context: HookContext):
@@ -741,21 +753,25 @@ Nunca invente informações."""
 
                 Quando USE_EXPANDED_HOOKS=false, retorna {} silenciosamente (noop).
                 """
-                from ..config.feature_flags import USE_EXPANDED_HOOKS
+                try:
+                    from ..config.feature_flags import USE_EXPANDED_HOOKS
 
-                if not USE_EXPANDED_HOOKS:
+                    if not USE_EXPANDED_HOOKS:
+                        return {}
+
+                    session_id = hook_input.get('session_id', 'unknown')
+                    stop_active = hook_input.get('stop_hook_active', False)
+
+                    logger.info(
+                        f"[HOOK:Stop] Sessão encerrada: "
+                        f"session={session_id[:12]}... | "
+                        f"stop_hook_active={stop_active}"
+                    )
+
                     return {}
-
-                session_id = hook_input.get('session_id', 'unknown')
-                stop_active = hook_input.get('stop_hook_active', False)
-
-                logger.info(
-                    f"[HOOK:Stop] Sessão encerrada: "
-                    f"session={session_id[:12]}... | "
-                    f"stop_hook_active={stop_active}"
-                )
-
-                return {}
+                except Exception as e:
+                    logger.debug(f"[HOOK:Stop] Suppressed (stream likely closed): {e}")
+                    return {}
 
             # ─── UserPromptSubmit Hook — injeta memórias + logging ───
             async def _user_prompt_submit_hook(
@@ -774,42 +790,46 @@ Nunca invente informações."""
 
                 Ref: https://platform.claude.com/docs/en/agent-sdk/hooks
                 """
-                from ..config.feature_flags import USE_EXPANDED_HOOKS, USE_AUTO_MEMORY_INJECTION
+                try:
+                    from ..config.feature_flags import USE_EXPANDED_HOOKS, USE_AUTO_MEMORY_INJECTION
 
-                prompt = hook_input.get('prompt', '')
+                    prompt = hook_input.get('prompt', '')
 
-                if USE_EXPANDED_HOOKS:
-                    logger.info(
-                        f"[HOOK:UserPromptSubmit] Prompt recebido: "
-                        f"prompt_len={len(prompt)} chars"
-                    )
-
-                # ============================================================
-                # Injeção automática de memórias (independente de EXPANDED_HOOKS)
-                # ============================================================
-                additional_context = None
-                if USE_AUTO_MEMORY_INJECTION and user_id:
-                    try:
-                        additional_context = _load_user_memories_for_context(user_id)
-                    except Exception as mem_err:
-                        logger.warning(
-                            f"[HOOK:UserPromptSubmit] Erro ao carregar memórias "
-                            f"(ignorado): {mem_err}"
+                    if USE_EXPANDED_HOOKS:
+                        logger.info(
+                            f"[HOOK:UserPromptSubmit] Prompt recebido: "
+                            f"prompt_len={len(prompt)} chars"
                         )
 
-                if additional_context:
-                    logger.info(
-                        f"[HOOK:UserPromptSubmit] Memórias injetadas: "
-                        f"{len(additional_context)} chars"
-                    )
-                    return {
-                        "hookSpecificOutput": {
-                            "hookEventName": "UserPromptSubmit",
-                            "additionalContext": additional_context,
-                        }
-                    }
+                    # ============================================================
+                    # Injeção automática de memórias (independente de EXPANDED_HOOKS)
+                    # ============================================================
+                    additional_context = None
+                    if USE_AUTO_MEMORY_INJECTION and user_id:
+                        try:
+                            additional_context = _load_user_memories_for_context(user_id)
+                        except Exception as mem_err:
+                            logger.warning(
+                                f"[HOOK:UserPromptSubmit] Erro ao carregar memórias "
+                                f"(ignorado): {mem_err}"
+                            )
 
-                return {}
+                    if additional_context:
+                        logger.info(
+                            f"[HOOK:UserPromptSubmit] Memórias injetadas: "
+                            f"{len(additional_context)} chars"
+                        )
+                        return {
+                            "hookSpecificOutput": {
+                                "hookEventName": "UserPromptSubmit",
+                                "additionalContext": additional_context,
+                            }
+                        }
+
+                    return {}
+                except Exception as e:
+                    logger.debug(f"[HOOK:UserPromptSubmit] Suppressed (stream likely closed): {e}")
+                    return {}
 
             # ─── Registrar TODOS os hooks ───
             options_dict["hooks"] = {
@@ -1549,6 +1569,7 @@ Nunca invente informações."""
         model: Optional[str] = None,
         sdk_session_id: Optional[str] = None,
         can_use_tool: Optional[Callable] = None,
+        user_id: Optional[int] = None,
         # LEGADO: aceitar pooled_client para compatibilidade (ignorado)
         pooled_client: Any = None,
     ) -> AgentResponse:
@@ -1561,6 +1582,7 @@ Nunca invente informações."""
             model: Modelo a usar
             sdk_session_id: Session ID do SDK para resume
             can_use_tool: Callback de permissão
+            user_id: ID do usuário (para Memory Tool e hooks)
             pooled_client: LEGADO — ignorado
 
         Returns:
@@ -1579,6 +1601,7 @@ Nunca invente informações."""
             model=model,
             sdk_session_id=sdk_session_id,
             can_use_tool=can_use_tool,
+            user_id=user_id,
         ):
             if event.type == 'init':
                 result_session_id = event.content.get('session_id')

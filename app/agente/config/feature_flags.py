@@ -40,9 +40,11 @@ USE_PROMPT_CACHING = os.getenv("AGENT_PROMPT_CACHING", "false").lower() == "true
 # Architecture + Seguranca
 # ====================================================================
 
-# Self-correction — validar output antes de entregar
-# Chamada Haiku rapida para verificar coerencia da resposta
-USE_SELF_CORRECTION = os.getenv("AGENT_SELF_CORRECTION", "false").lower() == "true"
+# Self-correction — DESATIVADO permanentemente
+# Haiku gerava falsos positivos frequentes na "Observacao de validacao"
+# que contradiziam a resposta correta e confundiam o operador.
+# Para reativar: melhorar o prompt de validacao em client.py._self_correct_response() primeiro.
+USE_SELF_CORRECTION = False
 
 # ====================================================================
 # Melhorias de Contexto e Memoria (P0)
@@ -139,6 +141,16 @@ MEMORY_CONSOLIDATION_THRESHOLD_CHARS = int(os.getenv("AGENT_MEMORY_CONSOLIDATION
 
 # Minimo de arquivos em um diretorio para ser candidato a consolidacao
 MEMORY_CONSOLIDATION_MIN_GROUP = int(os.getenv("AGENT_MEMORY_CONSOLIDATION_MIN_GROUP", "3"))
+
+# ====================================================================
+# Teams Bot
+# ====================================================================
+
+# Modelo padrao para o bot do Teams (Sonnet para velocidade)
+# Opus 4.6: ~91s por resposta com tools, custo $5/$25 per 1M tokens
+# Sonnet 4.5: ~15-25s por resposta com tools, custo $3/$15 per 1M tokens
+# Para usar Opus no Teams: TEAMS_DEFAULT_MODEL=claude-opus-4-6
+TEAMS_DEFAULT_MODEL = os.getenv("TEAMS_DEFAULT_MODEL", "claude-sonnet-4-5-20250929")
 
 # ====================================================================
 # Hooks Expandidos (P3)
