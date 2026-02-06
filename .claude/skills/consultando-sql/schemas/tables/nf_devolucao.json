@@ -230,13 +230,6 @@
   ],
   "indices": [
     {
-      "name": "ix_nf_devolucao_numero_nfd",
-      "columns": [
-        "numero_nfd"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_nfd_numero_serie",
       "columns": [
         "numero_nfd",
@@ -252,17 +245,17 @@
       "unique": false
     },
     {
-      "name": "idx_nfd_cnpj_status",
+      "name": "ix_nf_devolucao_origem_registro",
       "columns": [
-        "cnpj_emitente",
-        "status"
+        "origem_registro"
       ],
       "unique": false
     },
     {
-      "name": "ix_nf_devolucao_origem_registro",
+      "name": "idx_nfd_cnpj_status",
       "columns": [
-        "origem_registro"
+        "cnpj_emitente",
+        "status"
       ],
       "unique": false
     },
@@ -274,13 +267,6 @@
       "unique": false
     },
     {
-      "name": "idx_nfd_nf_venda",
-      "columns": [
-        "numero_nf_venda"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_nf_devolucao_numero_nf_venda",
       "columns": [
         "numero_nf_venda"
@@ -288,9 +274,9 @@
       "unique": false
     },
     {
-      "name": "idx_nfd_odoo_dfe",
+      "name": "idx_nfd_nf_venda",
       "columns": [
-        "odoo_dfe_id"
+        "numero_nf_venda"
       ],
       "unique": false
     },
@@ -302,9 +288,9 @@
       "unique": false
     },
     {
-      "name": "idx_nfd_tipo_documento",
+      "name": "idx_nfd_odoo_dfe",
       "columns": [
-        "tipo_documento"
+        "odoo_dfe_id"
       ],
       "unique": false
     },
@@ -314,6 +300,13 @@
         "odoo_dfe_id"
       ],
       "unique": true
+    },
+    {
+      "name": "idx_nfd_tipo_documento",
+      "columns": [
+        "tipo_documento"
+      ],
+      "unique": false
     },
     {
       "name": "idx_nfd_odoo_nf_venda",
@@ -383,6 +376,13 @@
       "name": "ix_nf_devolucao_cnpj_destinatario",
       "columns": [
         "cnpj_destinatario"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_numero_nfd",
+      "columns": [
+        "numero_nfd"
       ],
       "unique": false
     }

@@ -237,6 +237,13 @@
       "unique": false
     },
     {
+      "name": "ix_separacao_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_separacao_separacao_lote_id",
       "columns": [
         "separacao_lote_id"
@@ -348,13 +355,6 @@
       "columns": [
         "num_pedido",
         "sincronizado_nf"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_separacao_status",
-      "columns": [
-        "status"
       ],
       "unique": false
     },

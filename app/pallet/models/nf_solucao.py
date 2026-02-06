@@ -69,6 +69,15 @@ class PalletNFSolucao(db.Model):
     odoo_account_move_id = db.Column(db.Integer, nullable=True)
     odoo_dfe_id = db.Column(db.Integer, nullable=True)
 
+    # ID do picking de devolução criado/modificado no Odoo
+    odoo_picking_id = db.Column(db.Integer, nullable=True, index=True)
+
+    # Status do processamento assíncrono no Odoo (via worker)
+    # None = sem processamento, 'pendente', 'processando', 'concluido', 'erro'
+    odoo_status = db.Column(db.String(20), nullable=True, default=None, index=True)
+    odoo_job_id = db.Column(db.String(100), nullable=True)
+    odoo_erro = db.Column(db.Text, nullable=True)
+
     # Emitente da NF de solução
     cnpj_emitente = db.Column(db.String(20), nullable=True, index=True)
     nome_emitente = db.Column(db.String(255), nullable=True)
@@ -205,6 +214,7 @@ class PalletNFSolucao(db.Model):
             'motivo_rejeicao': self.motivo_rejeicao,
             'info_complementar': self.info_complementar,
             'observacao': self.observacao,
+            'odoo_picking_id': self.odoo_picking_id,
             'criado_em': self.criado_em.isoformat() if self.criado_em else None,
             'criado_por': self.criado_por,
         }
@@ -290,6 +300,7 @@ class PalletNFSolucao(db.Model):
                         data_nf, cnpj_emitente: str, nome_emitente: str,
                         usuario: str, vinculacao: str = 'MANUAL',
                         chave_nfe: str = None, serie: str = None,
+                        odoo_dfe_id: int = None, odoo_picking_id: int = None,
                         observacao: str = None):
         """
         Factory method para criar solução tipo DEVOLUCAO.
@@ -305,6 +316,8 @@ class PalletNFSolucao(db.Model):
             vinculacao: Tipo de vinculação
             chave_nfe: Chave da NF-e (opcional)
             serie: Série da NF (opcional)
+            odoo_dfe_id: ID do DFe no Odoo (opcional)
+            odoo_picking_id: ID do picking de devolução no Odoo (opcional)
             observacao: Observações (opcional)
 
         Returns:
@@ -320,6 +333,8 @@ class PalletNFSolucao(db.Model):
             data_nf_solucao=data_nf,
             cnpj_emitente=cnpj_emitente,
             nome_emitente=nome_emitente,
+            odoo_dfe_id=odoo_dfe_id,
+            odoo_picking_id=odoo_picking_id,
             vinculacao=vinculacao,
             confirmado=(vinculacao != 'SUGESTAO'),
             criado_por=usuario,

@@ -186,7 +186,31 @@ def processar_mensagem_bot(
             if new_sdk_session_id and new_sdk_session_id != sdk_session_id:
                 session.set_sdk_session_id(new_sdk_session_id)
                 logger.info(f"[TEAMS-BOT] Novo sdk_session_id salvo: {new_sdk_session_id[:20]}...")
-            db.session.commit()
+
+            # Commit com retry — conexão PostgreSQL pode cair durante requests longas (30-40s)
+            # O agente processa tools enquanto a conexão fica idle → SSL dropped pelo Render.
+            try:
+                db.session.commit()
+            except Exception as commit_err:
+                err_str = str(commit_err).lower()
+                if 'ssl' in err_str or 'connection' in err_str or 'closed' in err_str:
+                    logger.warning(
+                        f"[TEAMS-BOT] Conexão perdida no commit, reconectando: {commit_err}"
+                    )
+                    db.session.rollback()
+                    db.session.close()  # Devolve conexão stale ao pool, obtém fresh
+                    # Retry com conexão nova
+                    try:
+                        db.session.commit()
+                        logger.info("[TEAMS-BOT] Retry commit bem-sucedido")
+                    except Exception as retry_err:
+                        logger.error(
+                            f"[TEAMS-BOT] Retry commit falhou: {retry_err}",
+                            exc_info=True
+                        )
+                        db.session.rollback()
+                else:
+                    raise  # Erro não relacionado a conexão — propaga
         except Exception as e:
             logger.error(f"[TEAMS-BOT] Erro ao salvar sessao: {e}", exc_info=True)
             # Nao bloqueia resposta se falhar ao salvar

@@ -121,13 +121,6 @@
   ],
   "indices": [
     {
-      "name": "ix_requisicao_compras_requisicao_odoo_id",
-      "columns": [
-        "requisicao_odoo_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_requisicao_compras_status",
       "columns": [
         "status"
@@ -159,6 +152,13 @@
       "name": "ix_requisicao_compras_company_id",
       "columns": [
         "company_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_requisicao_compras_requisicao_odoo_id",
+      "columns": [
+        "requisicao_odoo_id"
       ],
       "unique": false
     },

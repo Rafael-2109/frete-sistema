@@ -592,6 +592,122 @@
     color: var(--text-muted);
 }
 
+/* ===== Modal Venda v2 - Redesigned ===== */
+.venda-top-section,
+.venda-body-section {
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.venda-section-title {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.75rem;
+}
+
+.venda-section-title i {
+    margin-right: 0.25rem;
+}
+
+.venda-info-card {
+    background: hsla(145 60% 40% / 0.08);
+    border: 1px solid hsla(145 60% 40% / 0.25);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+}
+
+.venda-info-cliente {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--text);
+}
+
+.venda-info-qtd {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--semantic-success, #28a745);
+}
+
+.venda-info-valor {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.venda-totais-badge {
+    background: var(--bg-dark, #f0f0f0);
+    border-radius: 6px;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.85rem;
+    color: var(--text);
+}
+
+/* Autocomplete dropdown para modal de venda */
+.venda-autocomplete-dropdown {
+    display: none;
+    position: absolute;
+    z-index: 1060;
+    width: 100%;
+    max-height: 280px;
+    overflow-y: auto;
+    background: var(--bg-light, #fff);
+    border: 1px solid var(--border, #ddd);
+    border-radius: 0 0 0.375rem 0.375rem;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    margin-top: -1px;
+}
+
+.venda-autocomplete-item {
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border, #eee);
+    transition: background 0.15s;
+}
+
+.venda-autocomplete-item:hover {
+    background: var(--bg, #f5f5f5);
+}
+
+.venda-autocomplete-item:last-child {
+    border-bottom: none;
+}
+
+/* Linhas de remessa na tabela */
+.remessa-row .remessa-autocomplete-wrapper {
+    position: relative;
+}
+
+.remessa-row .venda-autocomplete-dropdown {
+    left: 0;
+    right: 0;
+}
+
+/* Fix: autocomplete da remessa nao ficar cortado pelo table-responsive */
+#modalVenda .table-responsive {
+    overflow: visible;
+}
+
+#modalVenda .venda-autocomplete-dropdown {
+    z-index: 1070;
+}
+
+.btn-remove-remessa {
+    background: none;
+    border: none;
+    color: var(--semantic-danger, #dc3545);
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    opacity: 0.5;
+    font-size: 0.9rem;
+    transition: opacity 0.15s;
+}
+
+.btn-remove-remessa:hover {
+    opacity: 1;
+}
+
 /* Checkbox selection for batch operations */
 .select-checkbox {
     width: 18px;
@@ -653,6 +769,12 @@
     <div class="page-header">
         <h1><i class="fas fa-tasks"></i> Soluções de Pallets</h1>
         <div class="d-flex gap-2">
+            <button type="button" class="btn btn-success" onclick="openVendaModalLimpo()">
+                <i class="fas fa-dollar-sign"></i> Nova Venda
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="openSubstituicaoModalLimpo()">
+                <i class="fas fa-exchange-alt"></i> Nova Substituição
+            </button>
             <a href="{{ url_for('pallet_v2.controle_pallets.historico_solucoes') }}" class="btn btn-outline-secondary">
                 <i class="fas fa-history"></i> Histórico
             </a>
@@ -1039,10 +1161,10 @@
 </div>
 
 <!-- =============================================
-     MODAL: REGISTRAR VENDA
+     MODAL: REGISTRAR VENDA (Redesigned v2)
      ============================================= -->
 <div class="modal fade" id="modalVenda" tabindex="-1" aria-labelledby="modalVendaLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header modal-venda">
                 <h5 class="modal-title" id="modalVendaLabel">
@@ -1050,55 +1172,101 @@
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
             </div>
-            <form method="POST" action="{{ url_for('pallet_v2.controle_pallets.registrar_venda') }}" id="formVenda">
+            <form method="POST" action="{{ url_for('pallet_v2.controle_pallets.registrar_venda') }}" id="formVenda" onsubmit="return validarFormVenda()">
                 <div class="modal-body">
                     <input type="hidden" name="creditos" id="venda_creditos_json">
 
-                    <!-- Info dos créditos selecionados -->
-                    <div class="info-card">
-                        <h6>Créditos para Venda</h6>
-                        <div id="venda_creditos_lista">
-                            <!-- Preenchido via JS -->
+                    <!-- ===== TOPO: NF de Venda ===== -->
+                    <div class="venda-top-section">
+                        <h6 class="venda-section-title"><i class="fas fa-file-invoice"></i> NF de Venda</h6>
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-5">
+                                <label for="venda_nf" class="form-label">Buscar NF de Venda <span class="text-danger">*</span></label>
+                                <div style="position: relative;">
+                                    <input type="text" class="form-control" id="venda_nf" name="nf_venda"
+                                           required placeholder="Digite numero da NF ou nome do cliente..."
+                                           autocomplete="off">
+                                    <div id="listaNfVenda" class="venda-autocomplete-dropdown"></div>
+                                </div>
+                            </div>
+                            <div class="col-md-7">
+                                <div id="vendaInfoCard" class="venda-info-card" style="display: none;">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <div class="venda-info-cliente" id="venda_info_cliente">-</div>
+                                            <small class="text-muted" id="venda_info_data">-</small>
+                                        </div>
+                                        <div class="text-end">
+                                            <div class="venda-info-qtd"><span id="venda_info_qtd">0</span> pallets</div>
+                                            <div class="venda-info-valor">R$ <span id="venda_info_valor">0,00</span></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="mt-2">
-                            Total: <strong id="venda_total_pallets">0</strong> pallets
+
+                        <!-- Campos adicionais (colapsados) -->
+                        <div class="row g-2 mt-2">
+                            <div class="col-md-3">
+                                <label for="venda_cnpj" class="form-label form-label-sm">CNPJ Comprador</label>
+                                <input type="text" class="form-control form-control-sm" id="venda_cnpj" name="cnpj_comprador" placeholder="00.000.000/0000-00">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="venda_nome" class="form-label form-label-sm">Nome Comprador</label>
+                                <input type="text" class="form-control form-control-sm" id="venda_nome" name="nome_comprador" placeholder="Razao Social">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="venda_data" class="form-label form-label-sm">Data Venda</label>
+                                <input type="date" class="form-control form-control-sm" id="venda_data" name="data_venda">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="venda_valor" class="form-label form-label-sm">Vlr. Unitario (R$)</label>
+                                <input type="text" class="form-control form-control-sm" id="venda_valor" name="valor_unitario" value="35,00">
+                            </div>
                         </div>
                     </div>
 
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label for="venda_nf" class="form-label">Número da NF de Venda <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="venda_nf" name="nf_venda" required placeholder="Ex: 123456">
+                    <hr class="my-3">
+
+                    <!-- ===== CORPO: NFs de Remessa ===== -->
+                    <div class="venda-body-section">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="venda-section-title mb-0"><i class="fas fa-truck"></i> NFs de Remessa</h6>
+                            <div class="venda-totais-badge">
+                                Total: <strong id="venda_total_pallets">0</strong> pallets
+                                &middot; R$ <strong id="venda_total_valor">0,00</strong>
+                            </div>
                         </div>
-                        <div class="col-md-6">
-                            <label for="venda_data" class="form-label">Data da Venda</label>
-                            <input type="date" class="form-control" id="venda_data" name="data_venda" value="{{ now().strftime('%Y-%m-%d') if now is defined else '' }}">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover mb-1" id="tabelaRemessasVenda">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 35%">NF Remessa</th>
+                                        <th style="width: 25%">Responsavel</th>
+                                        <th style="width: 13%" class="text-center">Saldo</th>
+                                        <th style="width: 17%" class="text-center">Qtd Venda</th>
+                                        <th style="width: 10%"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="vendaRemessasBody">
+                                    <!-- Linhas dinamicas via JS -->
+                                </tbody>
+                            </table>
                         </div>
-                        <div class="col-md-6">
-                            <label for="venda_valor" class="form-label">Valor Unitário (R$)</label>
-                            <input type="text" class="form-control" id="venda_valor" name="valor_unitario" value="35,00" placeholder="35,00">
-                        </div>
-                        <div class="col-md-6">
-                            <label for="venda_chave" class="form-label">Chave NFe</label>
-                            <input type="text" class="form-control" id="venda_chave" name="chave_nfe" maxlength="44" placeholder="44 dígitos">
-                        </div>
-                        <div class="col-md-6">
-                            <label for="venda_cnpj" class="form-label">CNPJ do Comprador</label>
-                            <input type="text" class="form-control" id="venda_cnpj" name="cnpj_comprador" placeholder="00.000.000/0000-00">
-                        </div>
-                        <div class="col-md-6">
-                            <label for="venda_nome" class="form-label">Nome do Comprador</label>
-                            <input type="text" class="form-control" id="venda_nome" name="nome_comprador" placeholder="Razão Social">
-                        </div>
-                        <div class="col-12">
-                            <label for="venda_observacao" class="form-label">Observações</label>
-                            <textarea class="form-control" id="venda_observacao" name="observacao" rows="2" placeholder="Observações adicionais..."></textarea>
-                        </div>
+                        <button type="button" class="btn btn-outline-success btn-sm" onclick="adicionarLinhaRemessa()">
+                            <i class="fas fa-plus"></i> Adicionar +
+                        </button>
+                    </div>
+
+                    <!-- Observacoes -->
+                    <div class="mt-3">
+                        <label for="venda_observacao" class="form-label form-label-sm">Observacoes</label>
+                        <textarea class="form-control form-control-sm" id="venda_observacao" name="observacao" rows="2" placeholder="Observacoes adicionais..."></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-success">
+                    <button type="submit" class="btn btn-success" id="btnConfirmarVenda">
                         <i class="fas fa-dollar-sign"></i> Confirmar Venda
                     </button>
                 </div>
@@ -1162,7 +1330,7 @@
 </div>
 
 <!-- =============================================
-     MODAL: SUBSTITUIÇÃO DE RESPONSABILIDADE
+     MODAL: SUBSTITUIÇÃO DE RESPONSABILIDADE (v2)
      ============================================= -->
 <div class="modal fade" id="modalSubstituicao" tabindex="-1" aria-labelledby="modalSubstituicaoLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
@@ -1173,62 +1341,97 @@
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
             </div>
-            <form method="POST" action="{{ url_for('pallet_v2.controle_pallets.registrar_substituicao') }}">
+            <form method="POST" action="{{ url_for('pallet_v2.controle_pallets.registrar_substituicao') }}" id="formSubstituicao">
                 <div class="modal-body">
                     <input type="hidden" name="credito_origem_id" id="substituicao_credito_id">
+                    <input type="hidden" name="nf_remessa_destino_id" id="substituicao_nf_destino_id">
 
-                    <!-- Info do crédito de origem -->
-                    <div class="info-card">
-                        <h6>Crédito de Origem</h6>
-                        <div class="info-value" id="substituicao_info_nf">-</div>
-                        <div class="info-detail" id="substituicao_info_responsavel">-</div>
-                        <div class="info-detail">Saldo disponível: <strong id="substituicao_info_saldo">-</strong> pallets</div>
-                    </div>
-
-                    <div class="alert alert-info">
+                    <div class="alert alert-info mb-3">
                         <i class="fas fa-info-circle"></i>
-                        A substituição transfere a responsabilidade dos pallets de um devedor para outro.
-                        O saldo do crédito de origem será reduzido e um novo crédito será criado ou incrementado no destino.
+                        Selecione a NF de origem (de onde saem os pallets) e a NF de destino (para onde transferir a responsabilidade).
                     </div>
 
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label for="substituicao_quantidade" class="form-label">Quantidade a Transferir <span class="text-danger">*</span></label>
-                            <input type="number" class="form-control" id="substituicao_quantidade" name="quantidade" min="1" required>
+                    <!-- PASSO 1: NF de Origem (autocomplete) -->
+                    <div class="mb-3" id="substituicao_origem_busca">
+                        <label for="substituicao_nf_origem_input" class="form-label">
+                            NF de Origem <span class="text-danger">*</span>
+                        </label>
+                        <div style="position: relative;">
+                            <input type="text" class="form-control" id="substituicao_nf_origem_input"
+                                   placeholder="Digite o número da NF de remessa..."
+                                   autocomplete="off">
+                            <div id="listaSubstOrigem" class="venda-autocomplete-dropdown"></div>
                         </div>
-                        <div class="col-md-6">
-                            <label for="substituicao_tipo_destino" class="form-label">Tipo do Novo Responsável <span class="text-danger">*</span></label>
-                            <select class="form-select" id="substituicao_tipo_destino" name="tipo_responsavel_destino" required>
-                                <option value="">Selecione...</option>
-                                <option value="TRANSPORTADORA">Transportadora</option>
-                                <option value="CLIENTE">Cliente</option>
-                            </select>
+                    </div>
+
+                    <!-- Info card da ORIGEM (exibido após selecionar) -->
+                    <div class="info-card mb-3" id="substituicao_origem_card" style="display: none;">
+                        <h6><i class="fas fa-file-export"></i> Crédito de Origem</h6>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="info-value" id="substituicao_info_nf">-</div>
+                                <div class="info-detail" id="substituicao_info_responsavel">-</div>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge bg-warning text-dark" id="substituicao_info_saldo_badge">0 pallets</span>
+                                <div class="info-detail">Saldo disponível</div>
+                            </div>
                         </div>
-                        <div class="col-md-6">
-                            <label for="substituicao_cnpj_destino" class="form-label">CNPJ do Novo Responsável <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="substituicao_cnpj_destino" name="cnpj_destino" required placeholder="00.000.000/0000-00">
+                        <button type="button" class="btn btn-sm btn-outline-secondary mt-2" onclick="limparOrigemSubstituicao()">
+                            <i class="fas fa-times"></i> Alterar
+                        </button>
+                    </div>
+
+                    <!-- PASSO 2: Quantidade -->
+                    <div class="mb-3" id="substituicao_qtd_wrapper" style="display: none;">
+                        <label for="substituicao_quantidade" class="form-label">
+                            Quantidade a Transferir <span class="text-danger">*</span>
+                        </label>
+                        <input type="number" class="form-control" id="substituicao_quantidade"
+                               name="quantidade" min="1" required>
+                        <small class="text-muted">Máximo: <span id="substituicao_max_info">0</span> pallets</small>
+                    </div>
+
+                    <!-- PASSO 3: NF de Destino (autocomplete) -->
+                    <div class="mb-3" id="substituicao_destino_busca" style="display: none;">
+                        <label for="substituicao_nf_destino_input" class="form-label">
+                            NF de Remessa Destino <span class="text-danger">*</span>
+                        </label>
+                        <div style="position: relative;">
+                            <input type="text" class="form-control" id="substituicao_nf_destino_input"
+                                   placeholder="Digite o número da NF de remessa destino..."
+                                   autocomplete="off">
+                            <div id="listaSubstDestino" class="venda-autocomplete-dropdown"></div>
                         </div>
-                        <div class="col-md-6">
-                            <label for="substituicao_nome_destino" class="form-label">Nome do Novo Responsável</label>
-                            <input type="text" class="form-control" id="substituicao_nome_destino" name="nome_destino" placeholder="Razão Social">
+                    </div>
+
+                    <!-- Info card do DESTINO (exibido após selecionar) -->
+                    <div class="info-card mb-3" id="substituicao_destino_card" style="display: none;">
+                        <h6><i class="fas fa-file-import"></i> NF de Destino</h6>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="info-value" id="substituicao_dest_nf">-</div>
+                                <div class="info-detail" id="substituicao_dest_responsavel">-</div>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge bg-info text-dark" id="substituicao_dest_qtd_badge">0 pallets</span>
+                            </div>
                         </div>
-                        <div class="col-12">
-                            <label for="substituicao_nf_destino" class="form-label">NF de Remessa Destino (opcional)</label>
-                            <select class="form-select" id="substituicao_nf_destino" name="nf_remessa_destino_id">
-                                <option value="">Criar novo crédito</option>
-                                <!-- Será preenchido via JS se necessário -->
-                            </select>
-                            <small class="text-muted">Deixe vazio para criar um novo crédito para o novo responsável</small>
-                        </div>
-                        <div class="col-12">
-                            <label for="substituicao_observacao" class="form-label">Observações</label>
-                            <textarea class="form-control" id="substituicao_observacao" name="observacao" rows="2" placeholder="Motivo da substituição..."></textarea>
-                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-secondary mt-2" onclick="limparDestinoSubstituicao()">
+                            <i class="fas fa-times"></i> Alterar
+                        </button>
+                    </div>
+
+                    <!-- PASSO 4: Observações -->
+                    <div class="mb-3" id="substituicao_obs_wrapper" style="display: none;">
+                        <label for="substituicao_observacao" class="form-label">Observações</label>
+                        <textarea class="form-control" id="substituicao_observacao" name="observacao"
+                                  rows="2" placeholder="Motivo da substituição (opcional)..."></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-secondary">
+                    <button type="submit" class="btn btn-primary" id="btnConfirmarSubstituicao" disabled>
                         <i class="fas fa-exchange-alt"></i> Confirmar Substituição
                     </button>
                 </div>
@@ -1330,69 +1533,401 @@ function openBaixaModal(creditoId, saldo, nf, responsavel) {
 }
 
 // =============================================
-// MODAL VENDA (individual)
+// MODAL VENDA (Redesigned v2)
 // =============================================
-function openVendaModal(creditoId, saldo, nf, responsavel) {
-    // Configurar como venda individual
-    creditosSelecionados = [{
-        id: creditoId,
-        saldo: saldo,
-        nf: nf,
-        responsavel: responsavel
-    }];
+let vendaLinhaCounter = 0;
+let vendaLinhas = []; // {linhaId, credito_id, numero_nf, nome_responsavel, qtd_saldo, quantidade}
+let vendaNfTimeout = null;
+let remessaTimeouts = {};
 
-    atualizarModalVenda();
+// ---- Abrir modal ----
+function openVendaModal(creditoId, saldo, nf, responsavel) {
+    resetVendaModal();
+    adicionarLinhaRemessaPreenchida(creditoId, nf, responsavel, saldo, saldo);
     new bootstrap.Modal(document.getElementById('modalVenda')).show();
 }
 
-// MODAL VENDA (lote)
 function openVendaLoteModal() {
     if (creditosSelecionados.length === 0) {
-        alert('Selecione pelo menos um crédito para a venda.');
+        alert('Selecione pelo menos um credito para a venda.');
+        return;
+    }
+    resetVendaModal();
+    creditosSelecionados.forEach(c => {
+        adicionarLinhaRemessaPreenchida(c.id, c.nf, c.responsavel, c.saldo, c.saldo);
+    });
+    new bootstrap.Modal(document.getElementById('modalVenda')).show();
+}
+
+function openVendaModalLimpo() {
+    resetVendaModal();
+    adicionarLinhaRemessa();
+    new bootstrap.Modal(document.getElementById('modalVenda')).show();
+}
+
+function resetVendaModal() {
+    vendaLinhaCounter = 0;
+    vendaLinhas = [];
+    document.getElementById('vendaRemessasBody').innerHTML = '';
+    document.getElementById('venda_nf').value = '';
+    document.getElementById('venda_cnpj').value = '';
+    document.getElementById('venda_nome').value = '';
+    document.getElementById('venda_observacao').value = '';
+    document.getElementById('venda_valor').value = '35,00';
+    document.getElementById('vendaInfoCard').style.display = 'none';
+
+    const dataVenda = document.getElementById('venda_data');
+    dataVenda.value = new Date().toISOString().split('T')[0];
+
+    recalcularTotaisVenda();
+}
+
+// ---- Autocomplete: NF de Venda (topo) ----
+function buscarNfVenda(termo) {
+    const lista = document.getElementById('listaNfVenda');
+
+    if (vendaNfTimeout) clearTimeout(vendaNfTimeout);
+
+    if (termo.trim().length < 2) {
+        lista.style.display = 'none';
         return;
     }
 
-    atualizarModalVenda();
-    new bootstrap.Modal(document.getElementById('modalVenda')).show();
+    vendaNfTimeout = setTimeout(function() {
+        const url = '{{ url_for("pallet_v2.controle_pallets.api_buscar_vendas_pallet") }}' +
+            '?q=' + encodeURIComponent(termo.trim()) + '&limit=10';
+
+        fetch(url)
+            .then(r => r.json())
+            .then(data => {
+                lista.innerHTML = '';
+                if (data && data.length > 0) {
+                    data.forEach(venda => {
+                        const valorFmt = venda.valor_total ? parseFloat(venda.valor_total).toFixed(2).replace('.', ',') : '0,00';
+                        const jaVinc = venda.ja_vinculada ? ' <span class="badge bg-secondary">vinculada</span>' : '';
+                        const div = document.createElement('div');
+                        div.className = 'venda-autocomplete-item';
+                        div.innerHTML = `
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>NF ${venda.numero_nf}</strong>${jaVinc}
+                                    <br><small class="text-muted">${venda.nome_comprador || '-'}</small>
+                                </div>
+                                <div class="text-end">
+                                    <span class="badge bg-warning text-dark">${venda.quantidade} plt</span>
+                                    <br><small class="text-muted">R$ ${valorFmt}</small>
+                                </div>
+                            </div>
+                        `;
+                        div.addEventListener('click', function() {
+                            selecionarNfVenda(venda);
+                            lista.style.display = 'none';
+                        });
+                        lista.appendChild(div);
+                    });
+                    lista.style.display = 'block';
+                } else {
+                    lista.innerHTML = '<div class="p-2 text-muted text-center small">Nenhuma NF de venda encontrada</div>';
+                    lista.style.display = 'block';
+                }
+            })
+            .catch(err => {
+                console.error('Erro buscar NF venda:', err);
+                lista.style.display = 'none';
+            });
+    }, 300);
 }
 
-function atualizarModalVenda() {
-    const listaDiv = document.getElementById('venda_creditos_lista');
-    let html = '<ul class="list-unstyled mb-0">';
-    let totalPallets = 0;
+function selecionarNfVenda(venda) {
+    document.getElementById('venda_nf').value = venda.numero_nf;
+    document.getElementById('venda_cnpj').value = venda.cnpj_comprador || '';
+    document.getElementById('venda_nome').value = venda.nome_comprador || '';
 
-    const creditos = [];
+    // Calcular valor unitario a partir do total
+    const qtd = venda.quantidade || 1;
+    const valorTotal = parseFloat(venda.valor_total) || 0;
+    const valorUnit = qtd > 0 ? (valorTotal / qtd) : 35;
+    document.getElementById('venda_valor').value = valorUnit.toFixed(2).replace('.', ',');
 
-    creditosSelecionados.forEach(c => {
-        html += `<li class="d-flex justify-content-between align-items-center mb-1">
-            <span>NF ${c.nf} - ${c.responsavel}</span>
-            <input type="number" class="form-control form-control-sm ms-2" style="width: 80px;"
-                   id="venda_qtd_${c.id}" value="${c.saldo}" min="1" max="${c.saldo}"
-                   onchange="atualizarTotalVenda()">
-        </li>`;
-        totalPallets += c.saldo;
-        creditos.push({ credito_id: c.id, quantidade: c.saldo });
+    // Exibir info card
+    const card = document.getElementById('vendaInfoCard');
+    document.getElementById('venda_info_cliente').textContent = venda.nome_comprador || '-';
+    document.getElementById('venda_info_data').textContent = venda.data_venda || '-';
+    document.getElementById('venda_info_qtd').textContent = qtd;
+    document.getElementById('venda_info_valor').textContent = valorTotal.toFixed(2).replace('.', ',');
+    card.style.display = 'block';
+
+    recalcularTotaisVenda();
+}
+
+// ---- Linhas de Remessa (corpo) ----
+function adicionarLinhaRemessa() {
+    const linhaId = vendaLinhaCounter++;
+    const tbody = document.getElementById('vendaRemessasBody');
+
+    const tr = document.createElement('tr');
+    tr.className = 'remessa-row';
+    tr.id = 'remessa_row_' + linhaId;
+    tr.innerHTML = `
+        <td>
+            <div class="remessa-autocomplete-wrapper" style="position: relative;">
+                <input type="text" class="form-control form-control-sm"
+                       id="remessa_busca_${linhaId}"
+                       placeholder="Buscar NF remessa..."
+                       autocomplete="off"
+                       oninput="buscarRemessa(${linhaId}, this.value)">
+                <input type="hidden" id="remessa_credito_id_${linhaId}">
+                <div class="venda-autocomplete-dropdown" id="remessa_lista_${linhaId}"></div>
+            </div>
+        </td>
+        <td>
+            <span class="text-muted small" id="remessa_responsavel_${linhaId}">-</span>
+        </td>
+        <td class="text-center">
+            <span class="text-muted" id="remessa_saldo_${linhaId}">-</span>
+        </td>
+        <td class="text-center">
+            <input type="number" class="form-control form-control-sm text-center"
+                   id="remessa_qtd_${linhaId}" min="1" value=""
+                   disabled
+                   onchange="recalcularTotaisVenda()">
+        </td>
+        <td class="text-center">
+            <button type="button" class="btn-remove-remessa" onclick="removerLinhaRemessa(${linhaId})" title="Remover">
+                <i class="fas fa-times"></i>
+            </button>
+        </td>
+    `;
+
+    tbody.appendChild(tr);
+
+    vendaLinhas.push({
+        linhaId: linhaId,
+        credito_id: null,
+        numero_nf: null,
+        nome_responsavel: null,
+        qtd_saldo: 0,
+        quantidade: 0
     });
 
-    html += '</ul>';
-    listaDiv.innerHTML = html;
-    document.getElementById('venda_total_pallets').textContent = totalPallets;
+    document.getElementById('remessa_busca_' + linhaId).focus();
+}
+
+function adicionarLinhaRemessaPreenchida(creditoId, nf, responsavel, saldo, quantidade) {
+    const linhaId = vendaLinhaCounter++;
+    const tbody = document.getElementById('vendaRemessasBody');
+
+    const tr = document.createElement('tr');
+    tr.className = 'remessa-row';
+    tr.id = 'remessa_row_' + linhaId;
+    tr.innerHTML = `
+        <td>
+            <div class="remessa-autocomplete-wrapper" style="position: relative;">
+                <input type="text" class="form-control form-control-sm"
+                       id="remessa_busca_${linhaId}"
+                       value="NF ${nf || 'N/A'}"
+                       autocomplete="off"
+                       oninput="buscarRemessa(${linhaId}, this.value)">
+                <input type="hidden" id="remessa_credito_id_${linhaId}" value="${creditoId}">
+                <div class="venda-autocomplete-dropdown" id="remessa_lista_${linhaId}"></div>
+            </div>
+        </td>
+        <td>
+            <span class="text-muted small" id="remessa_responsavel_${linhaId}">${responsavel || '-'}</span>
+        </td>
+        <td class="text-center">
+            <span id="remessa_saldo_${linhaId}"><strong>${saldo}</strong></span>
+        </td>
+        <td class="text-center">
+            <input type="number" class="form-control form-control-sm text-center"
+                   id="remessa_qtd_${linhaId}" min="1" max="${saldo}" value="${quantidade}"
+                   onchange="recalcularTotaisVenda()">
+        </td>
+        <td class="text-center">
+            <button type="button" class="btn-remove-remessa" onclick="removerLinhaRemessa(${linhaId})" title="Remover">
+                <i class="fas fa-times"></i>
+            </button>
+        </td>
+    `;
+
+    tbody.appendChild(tr);
+
+    vendaLinhas.push({
+        linhaId: linhaId,
+        credito_id: creditoId,
+        numero_nf: nf,
+        nome_responsavel: responsavel,
+        qtd_saldo: saldo,
+        quantidade: quantidade
+    });
+
+    recalcularTotaisVenda();
+}
+
+function removerLinhaRemessa(linhaId) {
+    const row = document.getElementById('remessa_row_' + linhaId);
+    if (row) row.remove();
+    vendaLinhas = vendaLinhas.filter(l => l.linhaId !== linhaId);
+    recalcularTotaisVenda();
+}
+
+// ---- Autocomplete: NF de Remessa ----
+function buscarRemessa(linhaId, termo) {
+    // Limpar selecao anterior
+    document.getElementById('remessa_credito_id_' + linhaId).value = '';
+    document.getElementById('remessa_responsavel_' + linhaId).textContent = '-';
+    document.getElementById('remessa_saldo_' + linhaId).textContent = '-';
+    const qtdInput = document.getElementById('remessa_qtd_' + linhaId);
+    qtdInput.value = '';
+    qtdInput.disabled = true;
+
+    const linhaData = vendaLinhas.find(l => l.linhaId === linhaId);
+    if (linhaData) {
+        linhaData.credito_id = null;
+        linhaData.qtd_saldo = 0;
+        linhaData.quantidade = 0;
+    }
+
+    const lista = document.getElementById('remessa_lista_' + linhaId);
+    termo = termo.trim();
+
+    if (remessaTimeouts[linhaId]) clearTimeout(remessaTimeouts[linhaId]);
+
+    if (termo.length < 1) {
+        lista.style.display = 'none';
+        recalcularTotaisVenda();
+        return;
+    }
+
+    remessaTimeouts[linhaId] = setTimeout(function() {
+        const url = '{{ url_for("pallet_v2.controle_pallets.api_listar_creditos") }}' +
+            '?q=' + encodeURIComponent(termo) + '&status=PENDENTE,PARCIAL&limit=15';
+
+        fetch(url)
+            .then(r => r.json())
+            .then(data => {
+                lista.innerHTML = '';
+
+                // Filtrar creditos ja selecionados em outras linhas
+                const creditosJaSelecionados = vendaLinhas
+                    .filter(l => l.linhaId !== linhaId && l.credito_id)
+                    .map(l => l.credito_id);
+
+                const disponiveis = data.filter(c => !creditosJaSelecionados.includes(c.id));
+
+                if (!disponiveis || disponiveis.length === 0) {
+                    lista.innerHTML = '<div class="p-2 text-muted text-center small">Nenhum credito disponivel</div>';
+                } else {
+                    disponiveis.forEach(credito => {
+                        const div = document.createElement('div');
+                        div.className = 'venda-autocomplete-item';
+                        div.innerHTML = `
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>NF ${credito.numero_nf || 'N/A'}</strong>
+                                    <br><small class="text-muted">${credito.nome_responsavel || credito.cnpj_responsavel || '-'}</small>
+                                </div>
+                                <span class="badge bg-warning text-dark">${credito.qtd_saldo} plt</span>
+                            </div>
+                        `;
+                        div.addEventListener('click', function() {
+                            selecionarRemessa(linhaId, credito);
+                            lista.style.display = 'none';
+                        });
+                        lista.appendChild(div);
+                    });
+                }
+                lista.style.display = 'block';
+            })
+            .catch(err => {
+                console.error('Erro buscar remessa:', err);
+                lista.innerHTML = '<div class="p-2 text-danger text-center small">Erro na busca</div>';
+                lista.style.display = 'block';
+            });
+    }, 300);
+}
+
+function selecionarRemessa(linhaId, credito) {
+    document.getElementById('remessa_busca_' + linhaId).value = 'NF ' + (credito.numero_nf || 'N/A');
+    document.getElementById('remessa_credito_id_' + linhaId).value = credito.id;
+    document.getElementById('remessa_responsavel_' + linhaId).textContent = credito.nome_responsavel || credito.cnpj_responsavel || '-';
+    document.getElementById('remessa_saldo_' + linhaId).innerHTML = '<strong>' + credito.qtd_saldo + '</strong>';
+
+    const qtdInput = document.getElementById('remessa_qtd_' + linhaId);
+    qtdInput.disabled = false;
+    qtdInput.max = credito.qtd_saldo;
+    qtdInput.value = credito.qtd_saldo;
+
+    const linhaData = vendaLinhas.find(l => l.linhaId === linhaId);
+    if (linhaData) {
+        linhaData.credito_id = credito.id;
+        linhaData.numero_nf = credito.numero_nf;
+        linhaData.nome_responsavel = credito.nome_responsavel;
+        linhaData.qtd_saldo = credito.qtd_saldo;
+        linhaData.quantidade = credito.qtd_saldo;
+    }
+
+    recalcularTotaisVenda();
+}
+
+// ---- Totais e JSON ----
+function recalcularTotaisVenda() {
+    let totalQtd = 0;
+    const creditos = [];
+
+    vendaLinhas.forEach(linha => {
+        const qtdInput = document.getElementById('remessa_qtd_' + linha.linhaId);
+        if (qtdInput && linha.credito_id) {
+            const qtd = parseInt(qtdInput.value) || 0;
+            linha.quantidade = qtd;
+            totalQtd += qtd;
+            creditos.push({ credito_id: linha.credito_id, quantidade: qtd });
+        }
+    });
+
+    document.getElementById('venda_total_pallets').textContent = totalQtd;
+
+    // Calcular valor total
+    const valorStr = document.getElementById('venda_valor').value.replace(/\./g, '').replace(',', '.');
+    const valorUnitario = parseFloat(valorStr) || 35.0;
+    const totalValor = totalQtd * valorUnitario;
+    document.getElementById('venda_total_valor').textContent = totalValor.toFixed(2).replace('.', ',');
+
+    // Atualizar JSON hidden
     document.getElementById('venda_creditos_json').value = JSON.stringify(creditos);
 }
 
-function atualizarTotalVenda() {
-    let total = 0;
-    const creditos = [];
+// ---- Validacao ----
+function validarFormVenda() {
+    const nfVenda = document.getElementById('venda_nf').value.trim();
+    if (!nfVenda) {
+        alert('Informe o numero da NF de venda.');
+        return false;
+    }
 
-    creditosSelecionados.forEach(c => {
-        const input = document.getElementById('venda_qtd_' + c.id);
-        const qtd = parseInt(input.value) || 0;
-        total += qtd;
-        creditos.push({ credito_id: c.id, quantidade: qtd });
-    });
+    const creditosValidos = vendaLinhas.filter(l => l.credito_id && l.quantidade > 0);
+    if (creditosValidos.length === 0) {
+        alert('Adicione pelo menos uma NF de remessa com quantidade.');
+        return false;
+    }
 
-    document.getElementById('venda_total_pallets').textContent = total;
-    document.getElementById('venda_creditos_json').value = JSON.stringify(creditos);
+    for (const linha of vendaLinhas) {
+        if (linha.credito_id) {
+            const qtdInput = document.getElementById('remessa_qtd_' + linha.linhaId);
+            const qtd = parseInt(qtdInput.value) || 0;
+            if (qtd <= 0) {
+                alert('Quantidade invalida na linha da NF ' + (linha.numero_nf || 'N/A') + '.');
+                return false;
+            }
+            if (qtd > linha.qtd_saldo) {
+                alert('Quantidade (' + qtd + ') excede saldo (' + linha.qtd_saldo + ') na NF ' + (linha.numero_nf || 'N/A') + '.');
+                return false;
+            }
+        }
+    }
+
+    recalcularTotaisVenda();
+    return true;
 }
 
 // =============================================
@@ -1414,17 +1949,256 @@ function openRecebimentoModal(creditoId, saldo, nf, responsavel) {
 }
 
 // =============================================
-// MODAL SUBSTITUIÇÃO
+// MODAL SUBSTITUIÇÃO (v2 - autocomplete)
 // =============================================
+let substOrigemTimeout = null;
+let substDestinoTimeout = null;
+let substOrigemSelecionado = null;
+let substDestinoSelecionado = null;
+
+// Abrir modal LIMPO (botão global)
+function openSubstituicaoModalLimpo() {
+    resetSubstituicaoModal();
+    new bootstrap.Modal(document.getElementById('modalSubstituicao')).show();
+}
+
+// Abrir modal PRÉ-SELECIONADO (botão por linha)
 function openSubstituicaoModal(creditoId, saldo, nf, responsavel) {
+    resetSubstituicaoModal();
+
+    substOrigemSelecionado = {
+        credito_id: creditoId,
+        saldo: saldo,
+        nf: nf,
+        responsavel: responsavel
+    };
+
     document.getElementById('substituicao_credito_id').value = creditoId;
     document.getElementById('substituicao_info_nf').textContent = 'NF ' + (nf || 'N/A');
     document.getElementById('substituicao_info_responsavel').textContent = responsavel || 'N/A';
-    document.getElementById('substituicao_info_saldo').textContent = saldo;
-    document.getElementById('substituicao_quantidade').max = saldo;
-    document.getElementById('substituicao_quantidade').value = saldo;
+    document.getElementById('substituicao_info_saldo_badge').textContent = saldo + ' pallets';
+
+    document.getElementById('substituicao_origem_busca').style.display = 'none';
+    document.getElementById('substituicao_origem_card').style.display = 'block';
+
+    mostrarPassosSubstituicao(saldo);
 
     new bootstrap.Modal(document.getElementById('modalSubstituicao')).show();
+}
+
+function resetSubstituicaoModal() {
+    substOrigemSelecionado = null;
+    substDestinoSelecionado = null;
+
+    document.getElementById('substituicao_credito_id').value = '';
+    document.getElementById('substituicao_nf_destino_id').value = '';
+    document.getElementById('substituicao_nf_origem_input').value = '';
+    document.getElementById('substituicao_nf_destino_input').value = '';
+    document.getElementById('substituicao_quantidade').value = '';
+    document.getElementById('substituicao_observacao').value = '';
+
+    document.getElementById('substituicao_origem_busca').style.display = 'block';
+    document.getElementById('substituicao_origem_card').style.display = 'none';
+    document.getElementById('substituicao_qtd_wrapper').style.display = 'none';
+    document.getElementById('substituicao_destino_busca').style.display = 'none';
+    document.getElementById('substituicao_destino_card').style.display = 'none';
+    document.getElementById('substituicao_obs_wrapper').style.display = 'none';
+    document.getElementById('btnConfirmarSubstituicao').disabled = true;
+
+    document.getElementById('listaSubstOrigem').style.display = 'none';
+    document.getElementById('listaSubstDestino').style.display = 'none';
+}
+
+function mostrarPassosSubstituicao(saldo) {
+    document.getElementById('substituicao_qtd_wrapper').style.display = 'block';
+    document.getElementById('substituicao_quantidade').max = saldo;
+    document.getElementById('substituicao_quantidade').value = saldo;
+    document.getElementById('substituicao_max_info').textContent = saldo;
+    document.getElementById('substituicao_destino_busca').style.display = 'block';
+    document.getElementById('substituicao_obs_wrapper').style.display = 'block';
+}
+
+// Autocomplete: NF Origem (busca créditos pendentes)
+function buscarNfOrigem(termo) {
+    const lista = document.getElementById('listaSubstOrigem');
+
+    if (substOrigemTimeout) clearTimeout(substOrigemTimeout);
+
+    if (termo.trim().length < 2) {
+        lista.style.display = 'none';
+        return;
+    }
+
+    substOrigemTimeout = setTimeout(function() {
+        const url = '{{ url_for("pallet_v2.controle_pallets.api_listar_creditos") }}' +
+            '?q=' + encodeURIComponent(termo.trim()) + '&status=PENDENTE,PARCIAL&limit=10';
+
+        fetch(url)
+            .then(r => r.json())
+            .then(data => {
+                lista.innerHTML = '';
+                if (data && data.length > 0) {
+                    data.forEach(credito => {
+                        const div = document.createElement('div');
+                        div.className = 'venda-autocomplete-item';
+                        div.innerHTML = `
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>NF ${credito.numero_nf || 'N/A'}</strong>
+                                    <br><small class="text-muted">${credito.nome_responsavel || credito.cnpj_responsavel || '-'} (${credito.tipo_responsavel})</small>
+                                </div>
+                                <div class="text-end">
+                                    <span class="badge bg-warning text-dark">${credito.qtd_saldo} plt</span>
+                                    <br><small class="text-muted">de ${credito.qtd_original}</small>
+                                </div>
+                            </div>
+                        `;
+                        div.addEventListener('click', function() {
+                            selecionarOrigemSubstituicao(credito);
+                            lista.style.display = 'none';
+                        });
+                        lista.appendChild(div);
+                    });
+                    lista.style.display = 'block';
+                } else {
+                    lista.innerHTML = '<div class="p-2 text-muted text-center small">Nenhum crédito pendente encontrado</div>';
+                    lista.style.display = 'block';
+                }
+            })
+            .catch(err => {
+                console.error('Erro buscar NF origem:', err);
+                lista.style.display = 'none';
+            });
+    }, 300);
+}
+
+function selecionarOrigemSubstituicao(credito) {
+    substOrigemSelecionado = {
+        credito_id: credito.id,
+        saldo: credito.qtd_saldo,
+        nf: credito.numero_nf,
+        responsavel: credito.nome_responsavel || credito.cnpj_responsavel
+    };
+
+    document.getElementById('substituicao_credito_id').value = credito.id;
+    document.getElementById('substituicao_info_nf').textContent = 'NF ' + (credito.numero_nf || 'N/A');
+    document.getElementById('substituicao_info_responsavel').textContent =
+        (credito.nome_responsavel || credito.cnpj_responsavel || '-') + ' (' + credito.tipo_responsavel + ')';
+    document.getElementById('substituicao_info_saldo_badge').textContent = credito.qtd_saldo + ' pallets';
+
+    document.getElementById('substituicao_origem_busca').style.display = 'none';
+    document.getElementById('substituicao_origem_card').style.display = 'block';
+
+    mostrarPassosSubstituicao(credito.qtd_saldo);
+    atualizarBotaoSubstituicao();
+}
+
+function limparOrigemSubstituicao() {
+    substOrigemSelecionado = null;
+    document.getElementById('substituicao_credito_id').value = '';
+    document.getElementById('substituicao_nf_origem_input').value = '';
+    document.getElementById('substituicao_origem_busca').style.display = 'block';
+    document.getElementById('substituicao_origem_card').style.display = 'none';
+    document.getElementById('substituicao_qtd_wrapper').style.display = 'none';
+    document.getElementById('substituicao_destino_busca').style.display = 'none';
+    document.getElementById('substituicao_destino_card').style.display = 'none';
+    document.getElementById('substituicao_obs_wrapper').style.display = 'none';
+    document.getElementById('btnConfirmarSubstituicao').disabled = true;
+}
+
+// Autocomplete: NF Destino (busca NFs de remessa)
+function buscarNfDestino(termo) {
+    const lista = document.getElementById('listaSubstDestino');
+
+    if (substDestinoTimeout) clearTimeout(substDestinoTimeout);
+
+    if (termo.trim().length < 2) {
+        lista.style.display = 'none';
+        return;
+    }
+
+    substDestinoTimeout = setTimeout(function() {
+        const url = '{{ url_for("pallet_v2.nf_remessa.api_buscar") }}' +
+            '?q=' + encodeURIComponent(termo.trim()) + '&limit=10';
+
+        fetch(url)
+            .then(r => r.json())
+            .then(data => {
+                lista.innerHTML = '';
+                if (data && data.length > 0) {
+                    data.forEach(nf => {
+                        const div = document.createElement('div');
+                        div.className = 'venda-autocomplete-item';
+                        div.innerHTML = `
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>NF ${nf.numero_nf}</strong>
+                                    <br><small class="text-muted">${nf.nome_destinatario || '-'} (${nf.tipo_destinatario || '-'})</small>
+                                </div>
+                                <div class="text-end">
+                                    <span class="badge bg-info text-dark">${nf.quantidade || 0} plt</span>
+                                    <br><small class="text-muted">${nf.data_emissao || '-'}</small>
+                                </div>
+                            </div>
+                        `;
+                        div.addEventListener('click', function() {
+                            selecionarDestinoSubstituicao(nf);
+                            lista.style.display = 'none';
+                        });
+                        lista.appendChild(div);
+                    });
+                    lista.style.display = 'block';
+                } else {
+                    lista.innerHTML = '<div class="p-2 text-muted text-center small">Nenhuma NF de remessa encontrada</div>';
+                    lista.style.display = 'block';
+                }
+            })
+            .catch(err => {
+                console.error('Erro buscar NF destino:', err);
+                lista.style.display = 'none';
+            });
+    }, 300);
+}
+
+function selecionarDestinoSubstituicao(nf) {
+    substDestinoSelecionado = {
+        nf_id: nf.id,
+        numero_nf: nf.numero_nf,
+        nome: nf.nome_destinatario,
+        cnpj: nf.cnpj_destinatario,
+        tipo: nf.tipo_destinatario,
+        quantidade: nf.quantidade
+    };
+
+    document.getElementById('substituicao_nf_destino_id').value = nf.id;
+    document.getElementById('substituicao_dest_nf').textContent = 'NF ' + nf.numero_nf;
+    document.getElementById('substituicao_dest_responsavel').textContent =
+        (nf.nome_destinatario || nf.cnpj_destinatario || '-') + ' (' + (nf.tipo_destinatario || '-') + ')';
+    document.getElementById('substituicao_dest_qtd_badge').textContent = (nf.quantidade || 0) + ' pallets';
+
+    document.getElementById('substituicao_destino_busca').style.display = 'none';
+    document.getElementById('substituicao_destino_card').style.display = 'block';
+
+    atualizarBotaoSubstituicao();
+}
+
+function limparDestinoSubstituicao() {
+    substDestinoSelecionado = null;
+    document.getElementById('substituicao_nf_destino_id').value = '';
+    document.getElementById('substituicao_nf_destino_input').value = '';
+    document.getElementById('substituicao_destino_busca').style.display = 'block';
+    document.getElementById('substituicao_destino_card').style.display = 'none';
+    document.getElementById('btnConfirmarSubstituicao').disabled = true;
+}
+
+function atualizarBotaoSubstituicao() {
+    const temOrigem = !!substOrigemSelecionado;
+    const temDestino = !!substDestinoSelecionado;
+    const quantidade = parseInt(document.getElementById('substituicao_quantidade').value) || 0;
+    const max = parseInt(document.getElementById('substituicao_quantidade').max) || 0;
+
+    document.getElementById('btnConfirmarSubstituicao').disabled =
+        !(temOrigem && temDestino && quantidade > 0 && quantidade <= max);
 }
 
 // =============================================
@@ -1507,7 +2281,7 @@ function openDetalhesModal(creditoId) {
 // =============================================
 document.addEventListener('DOMContentLoaded', function() {
     // Máscara de CNPJ
-    const cnpjInputs = document.querySelectorAll('#venda_cnpj, #substituicao_cnpj_destino');
+    const cnpjInputs = document.querySelectorAll('#venda_cnpj');
     cnpjInputs.forEach(input => {
         input.addEventListener('input', function(e) {
             let value = e.target.value.replace(/\D/g, '');
@@ -1536,6 +2310,8 @@ document.addEventListener('DOMContentLoaded', function() {
             value = value.replace('.', ',');
             e.target.value = value;
         });
+        // Recalcular totais ao mudar valor unitario
+        valorInput.addEventListener('change', recalcularTotaisVenda);
     }
 
     // Data padrão para recebimento
@@ -1549,6 +2325,64 @@ document.addEventListener('DOMContentLoaded', function() {
     if (dataVenda && !dataVenda.value) {
         dataVenda.value = new Date().toISOString().split('T')[0];
     }
+
+    // Autocomplete: NF de Venda (topo do modal)
+    const vendaNfInput = document.getElementById('venda_nf');
+    if (vendaNfInput) {
+        vendaNfInput.addEventListener('input', function() {
+            buscarNfVenda(this.value);
+        });
+    }
+
+    // Autocomplete: NF Origem para Substituição
+    const substOrigemInput = document.getElementById('substituicao_nf_origem_input');
+    if (substOrigemInput) {
+        substOrigemInput.addEventListener('input', function() {
+            buscarNfOrigem(this.value);
+        });
+    }
+
+    // Autocomplete: NF Destino para Substituição
+    const substDestinoInput = document.getElementById('substituicao_nf_destino_input');
+    if (substDestinoInput) {
+        substDestinoInput.addEventListener('input', function() {
+            buscarNfDestino(this.value);
+        });
+    }
+
+    // Quantidade de Substituição: validar ao mudar
+    const substQtdInput = document.getElementById('substituicao_quantidade');
+    if (substQtdInput) {
+        substQtdInput.addEventListener('input', atualizarBotaoSubstituicao);
+    }
+
+    // Validação do form de Substituição no submit
+    const formSubstituicao = document.getElementById('formSubstituicao');
+    if (formSubstituicao) {
+        formSubstituicao.addEventListener('submit', function(e) {
+            if (!substOrigemSelecionado || !substDestinoSelecionado) {
+                e.preventDefault();
+                alert('Selecione a NF de origem e a NF de destino.');
+                return false;
+            }
+            const quantidade = parseInt(document.getElementById('substituicao_quantidade').value) || 0;
+            if (quantidade <= 0 || quantidade > substOrigemSelecionado.saldo) {
+                e.preventDefault();
+                alert('Quantidade inválida. Máximo: ' + substOrigemSelecionado.saldo + ' pallets.');
+                return false;
+            }
+        });
+    }
+
+    // Fechar dropdowns de autocomplete ao clicar fora
+    document.addEventListener('click', function(e) {
+        document.querySelectorAll('.venda-autocomplete-dropdown').forEach(function(dropdown) {
+            const wrapper = dropdown.parentElement;
+            if (wrapper && !wrapper.contains(e.target)) {
+                dropdown.style.display = 'none';
+            }
+        });
+    });
 });
 </script>
 {% endblock %}

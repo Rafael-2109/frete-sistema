@@ -238,14 +238,18 @@ class OdooConnection:
         # 🔧 Usar Circuit Breaker para proteger execução
         return self.circuit_breaker.call(_do_execute)
     
-    def search_read(self, model: str, domain: list, fields: Optional[list] = None, limit: Optional[int] = None) -> list:
+    def search_read(self, model: str, domain: list, fields: Optional[list] = None, limit: Optional[int] = None, offset: Optional[int] = None, order: Optional[str] = None) -> list:
         """Busca registros no Odoo"""
         kwargs = {}
         if fields:
             kwargs['fields'] = fields
         if limit:
             kwargs['limit'] = limit
-        
+        if offset:
+            kwargs['offset'] = offset
+        if order:
+            kwargs['order'] = order
+
         return self.execute_kw(model, 'search_read', [domain], kwargs)
     
     def search(self, model: str, domain: list, limit: Optional[int] = None) -> list:

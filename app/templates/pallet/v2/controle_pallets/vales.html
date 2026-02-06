@@ -6,11 +6,12 @@
 <style>
 /* ============================================
    VALES/DOCUMENTOS - Controle de Pallets v2
+   Migrado para Design Tokens - Dark Mode Ready
    ============================================ */
 
 .pallet-vales {
     padding: 1.5rem;
-    background-color: #f8f9fa;
+    background-color: var(--bg);
     min-height: calc(100vh - 60px);
 }
 
@@ -27,12 +28,12 @@
 .page-header h1 {
     font-size: 1.75rem;
     font-weight: 600;
-    color: #212529;
+    color: var(--text);
     margin: 0;
 }
 
 .page-header h1 i {
-    color: #6c63ff;
+    color: var(--amber-55);
     margin-right: 0.5rem;
 }
 
@@ -49,16 +50,16 @@
 }
 
 .breadcrumb-nav .breadcrumb-item a {
-    color: #6c757d;
+    color: var(--text-muted);
     text-decoration: none;
 }
 
 .breadcrumb-nav .breadcrumb-item a:hover {
-    color: #6c63ff;
+    color: var(--amber-55);
 }
 
 .breadcrumb-nav .breadcrumb-item.active {
-    color: #212529;
+    color: var(--text);
 }
 
 /* Stats Cards */
@@ -70,10 +71,10 @@
 }
 
 .stat-card {
-    background: white;
+    background: var(--bg-light);
     border-radius: 12px;
     padding: 1.25rem;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    box-shadow: var(--shadow);
     display: flex;
     align-items: center;
     gap: 1rem;
@@ -82,7 +83,7 @@
 
 .stat-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    box-shadow: var(--shadow-lg);
 }
 
 .stat-icon {
@@ -95,36 +96,36 @@
     font-size: 1.5rem;
 }
 
-.stat-icon.total { background: #e8f4fd; color: #0d6efd; }
-.stat-icon.canhoto { background: #fff3cd; color: #ffc107; }
-.stat-icon.vale { background: #d1e7dd; color: #198754; }
-.stat-icon.recebido { background: #d3d3d3; color: #6c757d; }
+.stat-icon.total { background: hsla(210 100% 52% / 0.2); color: hsl(210 100% 60%); }
+.stat-icon.canhoto { background: hsla(45 100% 65% / 0.2); color: var(--amber-55); }
+.stat-icon.vale { background: hsla(145 60% 40% / 0.2); color: var(--semantic-success); }
+.stat-icon.recebido { background: hsla(0 0% 50% / 0.15); color: var(--text-muted); }
 
 .stat-content h4 {
     font-size: 1.75rem;
     font-weight: 700;
     margin: 0;
-    color: #212529;
+    color: var(--text);
 }
 
 .stat-content span {
     font-size: 0.875rem;
-    color: #6c757d;
+    color: var(--text-muted);
 }
 
 /* Filtros */
 .filter-card {
-    background: white;
+    background: var(--bg-light);
     border-radius: 12px;
     padding: 1.25rem;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    box-shadow: var(--shadow);
     margin-bottom: 1.5rem;
 }
 
 .filter-card .filter-title {
     font-size: 0.875rem;
     font-weight: 600;
-    color: #6c757d;
+    color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-bottom: 1rem;
@@ -146,7 +147,7 @@
     display: block;
     font-size: 0.875rem;
     font-weight: 500;
-    color: #495057;
+    color: var(--text);
     margin-bottom: 0.5rem;
 }
 
@@ -154,16 +155,18 @@
 .filter-group input {
     width: 100%;
     padding: 0.5rem 0.75rem;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--border);
     border-radius: 8px;
     font-size: 0.875rem;
+    background-color: var(--bg-light);
+    color: var(--text);
     transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .filter-group select:focus,
 .filter-group input:focus {
-    border-color: #6c63ff;
-    box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.15);
+    border-color: var(--amber-55);
+    box-shadow: 0 0 0 3px hsla(45 100% 50% / 0.15);
     outline: none;
 }
 
@@ -181,37 +184,37 @@
 }
 
 .btn-filter-primary {
-    background: #6c63ff;
-    color: white;
+    background: var(--amber-55);
+    color: hsl(0 0% 10%);
     border: none;
 }
 
 .btn-filter-primary:hover {
-    background: #5a52d9;
-    color: white;
+    background: var(--amber-60);
+    color: hsl(0 0% 10%);
 }
 
 .btn-filter-secondary {
-    background: #f8f9fa;
-    color: #495057;
-    border: 1px solid #dee2e6;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
 }
 
 .btn-filter-secondary:hover {
-    background: #e9ecef;
+    background: var(--bg-light);
 }
 
 /* Tabela de Documentos */
 .table-card {
-    background: white;
+    background: var(--bg-light);
     border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    box-shadow: var(--shadow);
     overflow: hidden;
 }
 
 .table-header {
     padding: 1rem 1.25rem;
-    border-bottom: 1px solid #e9ecef;
+    border-bottom: 1px solid var(--border);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -220,7 +223,7 @@
 .table-header h3 {
     font-size: 1rem;
     font-weight: 600;
-    color: #212529;
+    color: var(--text);
     margin: 0;
 }
 
@@ -240,14 +243,14 @@
 }
 
 .table-vales thead th {
-    background: #f8f9fa;
+    background: var(--bg);
     font-size: 0.75rem;
     font-weight: 600;
-    color: #6c757d;
+    color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     padding: 0.75rem 1rem;
-    border-bottom: 2px solid #e9ecef;
+    border-bottom: 2px solid var(--border);
     position: sticky;
     top: 0;
     z-index: 10;
@@ -257,11 +260,11 @@
     padding: 0.75rem 1rem;
     vertical-align: middle;
     font-size: 0.875rem;
-    border-bottom: 1px solid #f1f3f4;
+    border-bottom: 1px solid var(--border);
 }
 
 .table-vales tbody tr:hover {
-    background-color: #f8f9fa;
+    background-color: var(--bg);
 }
 
 /* Badges de status */
@@ -276,23 +279,23 @@
 }
 
 .status-badge.pendente {
-    background: #fff3cd;
-    color: #856404;
+    background: hsla(45 100% 65% / 0.2);
+    color: var(--amber-55);
 }
 
 .status-badge.recebido {
-    background: #d4edda;
-    color: #155724;
+    background: hsla(145 60% 40% / 0.2);
+    color: var(--semantic-success);
 }
 
 .status-badge.vencido {
-    background: #f8d7da;
-    color: #721c24;
+    background: hsla(0 70% 50% / 0.2);
+    color: var(--semantic-danger);
 }
 
 .status-badge.a-vencer {
-    background: #ffe5d0;
-    color: #7c4a03;
+    background: hsla(30 100% 50% / 0.2);
+    color: hsl(30 100% 45%);
 }
 
 /* Tipo de documento badge */
@@ -307,16 +310,16 @@
 }
 
 .tipo-badge.canhoto {
-    background: #e8f4fd;
-    color: #0d6efd;
+    background: hsla(210 100% 52% / 0.2);
+    color: hsl(210 100% 60%);
 }
 
 .tipo-badge.vale {
-    background: #d1e7dd;
-    color: #198754;
+    background: hsla(145 60% 40% / 0.2);
+    color: var(--semantic-success);
 }
 
-/* Botões de ação na tabela */
+/* Botoes de acao na tabela */
 .action-buttons {
     display: flex;
     gap: 0.5rem;
@@ -333,31 +336,31 @@
 }
 
 .btn-receber {
-    background: #d4edda;
-    color: #155724;
+    background: hsla(145 60% 40% / 0.2);
+    color: var(--semantic-success);
 }
 
 .btn-receber:hover {
-    background: #c3e6cb;
+    background: hsla(145 60% 40% / 0.3);
 }
 
 .btn-detalhes {
-    background: #e9ecef;
-    color: #495057;
+    background: var(--bg);
+    color: var(--text-muted);
 }
 
 .btn-detalhes:hover {
-    background: #dee2e6;
+    background: var(--border);
 }
 
-/* Célula de responsável */
+/* Celula de responsavel */
 .responsavel-cell {
     max-width: 200px;
 }
 
 .responsavel-nome {
     font-weight: 500;
-    color: #212529;
+    color: var(--text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -366,7 +369,7 @@
 
 .responsavel-cnpj {
     font-size: 0.75rem;
-    color: #6c757d;
+    color: var(--text-muted);
     font-family: 'Monaco', 'Consolas', monospace;
 }
 
@@ -378,25 +381,25 @@
 
 .empty-state i {
     font-size: 3rem;
-    color: #dee2e6;
+    color: var(--border);
     margin-bottom: 1rem;
 }
 
 .empty-state h4 {
-    color: #6c757d;
+    color: var(--text-muted);
     font-weight: 500;
     margin-bottom: 0.5rem;
 }
 
 .empty-state p {
-    color: #adb5bd;
+    color: var(--text-muted);
     margin: 0;
 }
 
-/* Paginação */
+/* Paginacao */
 .pagination-wrapper {
     padding: 1rem 1.25rem;
-    border-top: 1px solid #e9ecef;
+    border-top: 1px solid var(--border);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -404,7 +407,7 @@
 
 .pagination-info {
     font-size: 0.875rem;
-    color: #6c757d;
+    color: var(--text-muted);
 }
 
 .pagination {
@@ -415,23 +418,24 @@
     border-radius: 6px;
     margin: 0 0.15rem;
     border: none;
-    color: #495057;
+    color: var(--text);
+    background: var(--bg-light);
     font-size: 0.875rem;
 }
 
 .pagination .page-link:hover {
-    background: #e9ecef;
+    background: var(--bg);
 }
 
 .pagination .page-item.active .page-link {
-    background: #6c63ff;
-    color: white;
+    background: var(--amber-55);
+    color: hsl(0 0% 10%);
 }
 
-/* Botão de ação principal */
+/* Botao de acao principal */
 .btn-primary-action {
-    background: linear-gradient(135deg, #6c63ff 0%, #5a52d9 100%);
-    color: white;
+    background: linear-gradient(135deg, var(--amber-55) 0%, var(--amber-50) 100%);
+    color: hsl(0 0% 10%);
     border: none;
     padding: 0.625rem 1.25rem;
     border-radius: 10px;
@@ -441,13 +445,13 @@
     align-items: center;
     gap: 0.5rem;
     transition: all 0.2s;
-    box-shadow: 0 2px 8px rgba(108, 99, 255, 0.25);
+    box-shadow: 0 2px 8px hsla(45 100% 50% / 0.25);
 }
 
 .btn-primary-action:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(108, 99, 255, 0.35);
-    color: white;
+    box-shadow: 0 4px 12px hsla(45 100% 50% / 0.35);
+    color: hsl(0 0% 10%);
 }
 
 /* Vencimento highlight */
@@ -456,26 +460,26 @@
 }
 
 .vencimento-cell.vencido {
-    color: #dc3545;
+    color: var(--semantic-danger);
 }
 
 .vencimento-cell.a-vencer {
-    color: #fd7e14;
+    color: hsl(30 100% 45%);
 }
 
 .vencimento-cell.ok {
-    color: #198754;
+    color: var(--semantic-success);
 }
 
 /* Modal */
 .modal-header {
-    background: linear-gradient(135deg, #6c63ff 0%, #5a52d9 100%);
-    color: white;
+    background: linear-gradient(135deg, var(--amber-55) 0%, var(--amber-50) 100%);
+    color: hsl(0 0% 10%);
     border-radius: 12px 12px 0 0;
 }
 
 .modal-header .btn-close {
-    filter: brightness(0) invert(1);
+    filter: brightness(0);
 }
 
 .modal-content {
@@ -484,7 +488,25 @@
 }
 
 .modal-footer {
-    border-top: 1px solid #e9ecef;
+    border-top: 1px solid var(--border);
+}
+
+/* Autocomplete dropdown */
+.autocomplete-dropdown {
+    display: none;
+    position: absolute;
+    z-index: 1050;
+    width: 100%;
+    max-height: 250px;
+    overflow-y: auto;
+    background: var(--bg-light);
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+    box-shadow: var(--shadow-lg);
+}
+
+.autocomplete-dropdown .autocomplete-item:hover {
+    background-color: var(--bg);
 }
 </style>
 {% endblock %}
@@ -780,13 +802,16 @@
             <form method="POST" action="{{ url_for('pallet_v2.controle_pallets.registrar_documento') }}">
                 <div class="modal-body">
                     <div class="row g-3">
-                        <!-- Crédito (busca via API) -->
+                        <!-- Crédito (autocomplete por NF) -->
                         <div class="col-md-6">
-                            <label for="credito_id" class="form-label">Crédito de Pallet <span class="text-danger">*</span></label>
-                            <select name="credito_id" id="credito_id" class="form-select" required>
-                                <option value="">Selecione um crédito...</option>
-                            </select>
-                            <small class="text-muted">Selecione o crédito ao qual vincular este documento</small>
+                            <label for="buscaCredito" class="form-label">Crédito de Pallet <span class="text-danger">*</span></label>
+                            <div style="position: relative;">
+                                <input type="text" class="form-control" id="buscaCredito"
+                                       placeholder="Digite o numero da NF..." autocomplete="off">
+                                <input type="hidden" name="credito_id" id="credito_id" required>
+                                <div id="listaCreditos" class="autocomplete-dropdown"></div>
+                            </div>
+                            <small class="text-muted">Busque pela NF para vincular o credito</small>
                         </div>
 
                         <!-- Tipo de Documento -->
@@ -967,46 +992,88 @@
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Carregar créditos pendentes no modal de novo documento
-    const modalNovoDocumento = document.getElementById('modalNovoDocumento');
-    const selectCredito = document.getElementById('credito_id');
+    // =========================================
+    // AUTOCOMPLETE: Credito por NF
+    // =========================================
+    const buscaCredito = document.getElementById('buscaCredito');
+    const creditoId = document.getElementById('credito_id');
+    const listaCreditos = document.getElementById('listaCreditos');
+    let timeoutCredito = null;
 
-    if (modalNovoDocumento && selectCredito) {
-        modalNovoDocumento.addEventListener('show.bs.modal', function() {
-            carregarCreditosPendentes();
-        });
-    }
+    function buscarCreditos(termo) {
+        const url = '{{ url_for("pallet_v2.controle_pallets.api_listar_creditos") }}' +
+            '?q=' + encodeURIComponent(termo) + '&status=PENDENTE,PARCIAL&limit=20';
 
-    function carregarCreditosPendentes() {
-        selectCredito.innerHTML = '<option value="">Carregando...</option>';
-
-        fetch('{{ url_for("pallet_v2.controle_pallets.api_listar_creditos") }}?status=PENDENTE&limit=100')
+        fetch(url)
             .then(response => response.json())
             .then(data => {
-                selectCredito.innerHTML = '<option value="">Selecione um crédito...</option>';
-
-                if (data && data.length > 0) {
-                    data.forEach(function(credito) {
-                        const option = document.createElement('option');
-                        option.value = credito.id;
-                        option.textContent = `#${credito.id} - NF ${credito.numero_nf || 'N/A'} - ${credito.nome_responsavel || credito.cnpj_responsavel} (Saldo: ${credito.qtd_saldo})`;
-                        selectCredito.appendChild(option);
-                    });
+                listaCreditos.innerHTML = '';
+                if (!data || data.length === 0) {
+                    listaCreditos.innerHTML = '<div class="p-3 text-muted text-center">Nenhum credito encontrado</div>';
                 } else {
-                    const option = document.createElement('option');
-                    option.value = '';
-                    option.textContent = 'Nenhum crédito pendente encontrado';
-                    option.disabled = true;
-                    selectCredito.appendChild(option);
+                    data.forEach(function(credito) {
+                        const div = document.createElement('div');
+                        div.className = 'p-2 border-bottom autocomplete-item';
+                        div.style.cursor = 'pointer';
+                        div.innerHTML = `
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>NF ${credito.numero_nf || 'N/A'}</strong>
+                                    <br><small class="text-muted">${credito.nome_responsavel || credito.cnpj_responsavel || '-'}</small>
+                                </div>
+                                <span class="badge bg-warning text-dark">${credito.qtd_saldo} pallets</span>
+                            </div>
+                        `;
+                        div.addEventListener('click', function() {
+                            creditoId.value = credito.id;
+                            buscaCredito.value = `NF ${credito.numero_nf || 'N/A'} - ${credito.nome_responsavel || '-'} (saldo: ${credito.qtd_saldo})`;
+                            listaCreditos.style.display = 'none';
+                        });
+                        listaCreditos.appendChild(div);
+                    });
                 }
+                listaCreditos.style.display = 'block';
             })
             .catch(error => {
-                console.error('Erro ao carregar créditos:', error);
-                selectCredito.innerHTML = '<option value="">Erro ao carregar créditos</option>';
+                console.error('Erro ao buscar creditos:', error);
+                listaCreditos.innerHTML = '<div class="p-3 text-danger text-center">Erro na busca</div>';
+                listaCreditos.style.display = 'block';
             });
     }
 
-    // Máscara de CNPJ
+    if (buscaCredito) {
+        buscaCredito.addEventListener('input', function() {
+            const termo = this.value.trim();
+            // Limpar selecao anterior quando usuario digita algo novo
+            creditoId.value = '';
+            if (timeoutCredito) clearTimeout(timeoutCredito);
+            if (termo.length < 1) {
+                listaCreditos.style.display = 'none';
+                return;
+            }
+            timeoutCredito = setTimeout(function() { buscarCreditos(termo); }, 300);
+        });
+    }
+
+    // Limpar campo ao abrir modal
+    const modalNovoDocumento = document.getElementById('modalNovoDocumento');
+    if (modalNovoDocumento) {
+        modalNovoDocumento.addEventListener('show.bs.modal', function() {
+            if (buscaCredito) buscaCredito.value = '';
+            if (creditoId) creditoId.value = '';
+            if (listaCreditos) listaCreditos.style.display = 'none';
+        });
+    }
+
+    // Fechar lista ao clicar fora
+    document.addEventListener('click', function(e) {
+        if (buscaCredito && listaCreditos &&
+            !buscaCredito.contains(e.target) && !listaCreditos.contains(e.target)) {
+            listaCreditos.style.display = 'none';
+        }
+    });
+
+    // Mascara de CNPJ
     const cnpjInput = document.getElementById('cnpj_emissor');
     if (cnpjInput) {
         cnpjInput.addEventListener('input', function(e) {

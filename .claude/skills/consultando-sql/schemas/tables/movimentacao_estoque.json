@@ -214,28 +214,6 @@
       "default": true
     }
   ],
-  "query_hints": [
-    {
-      "descricao": "Historico de movimentacoes de um produto",
-      "sql": "SELECT data_movimentacao, tipo_movimentacao, local_movimentacao, qtd_movimentacao, numero_nf, num_pedido FROM movimentacao_estoque WHERE cod_produto = :cod_produto AND ativo = True ORDER BY data_movimentacao DESC"
-    },
-    {
-      "descricao": "Origem do estoque (composicao por tipo de entrada)",
-      "sql": "SELECT tipo_movimentacao, local_movimentacao, SUM(qtd_movimentacao) AS total FROM movimentacao_estoque WHERE cod_produto = :cod_produto AND tipo_movimentacao = 'ENTRADA' AND ativo = True GROUP BY tipo_movimentacao, local_movimentacao"
-    },
-    {
-      "descricao": "Estoque parado ha mais de 30 dias (sem saida recente)",
-      "sql": "SELECT cod_produto, nome_produto, MAX(data_movimentacao) AS ultima_saida FROM movimentacao_estoque WHERE tipo_movimentacao = 'SAIDA' AND ativo = True GROUP BY cod_produto, nome_produto HAVING MAX(data_movimentacao) < CURRENT_DATE - INTERVAL '30 days'"
-    },
-    {
-      "descricao": "Giro de estoque (saidas no periodo / saldo medio)",
-      "sql": "SELECT cod_produto, nome_produto, SUM(CASE WHEN tipo_movimentacao = 'SAIDA' THEN qtd_movimentacao ELSE 0 END) AS total_saidas, SUM(CASE WHEN tipo_movimentacao = 'ENTRADA' THEN qtd_movimentacao ELSE 0 END) AS total_entradas FROM movimentacao_estoque WHERE ativo = True AND data_movimentacao >= CURRENT_DATE - INTERVAL '90 days' GROUP BY cod_produto, nome_produto ORDER BY total_saidas DESC"
-    },
-    {
-      "descricao": "Estoque comprometido (separado mas nao faturado)",
-      "sql": "SELECT me.cod_produto, me.nome_produto, SUM(me.qtd_movimentacao) AS qtd_comprometida FROM movimentacao_estoque me WHERE me.tipo_movimentacao = 'SAIDA' AND me.local_movimentacao = 'VENDA' AND me.status_nf IS NULL AND me.ativo = True GROUP BY me.cod_produto, me.nome_produto"
-    }
-  ],
   "foreign_keys": [
     {
       "column": "codigo_embarque",
@@ -268,9 +246,88 @@
   ],
   "indices": [
     {
+      "name": "ix_movimentacao_estoque_odoo_picking_id",
+      "columns": [
+        "odoo_picking_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_produto_data",
+      "columns": [
+        "cod_produto",
+        "data_movimentacao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_ordem_producao",
+      "columns": [
+        "ordem_producao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_odoo_move_id",
+      "columns": [
+        "odoo_move_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_movimentacao_estoque_cnpj_destinatario",
       "columns": [
         "cnpj_destinatario"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_tipo_data",
+      "columns": [
+        "tipo_movimentacao",
+        "data_movimentacao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_nf",
+      "columns": [
+        "numero_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_lote",
+      "columns": [
+        "separacao_lote_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_pedido",
+      "columns": [
+        "num_pedido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_recebimento_fisico_id",
+      "columns": [
+        "recebimento_fisico_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_data_movimentacao",
+      "columns": [
+        "data_movimentacao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_tipo_origem",
+      "columns": [
+        "tipo_origem"
       ],
       "unique": false
     },
@@ -303,16 +360,9 @@
       "unique": false
     },
     {
-      "name": "ix_movimentacao_estoque_recebimento_fisico_id",
+      "name": "ix_movimentacao_estoque_tipo_movimentacao",
       "columns": [
-        "recebimento_fisico_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_movimentacao_estoque_data_movimentacao",
-      "columns": [
-        "data_movimentacao"
+        "tipo_movimentacao"
       ],
       "unique": false
     },
@@ -320,6 +370,13 @@
       "name": "idx_movimentacao_tipo_destinatario",
       "columns": [
         "tipo_destinatario"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_recebimento_lote_id",
+      "columns": [
+        "recebimento_lote_id"
       ],
       "unique": false
     },
@@ -338,37 +395,9 @@
       "unique": false
     },
     {
-      "name": "ix_movimentacao_estoque_tipo_movimentacao",
-      "columns": [
-        "tipo_movimentacao"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_movimentacao_cnpj_responsavel",
       "columns": [
         "cnpj_responsavel"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_movimentacao_estoque_recebimento_lote_id",
-      "columns": [
-        "recebimento_lote_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_movimentacao_recebimento_fisico",
-      "columns": [
-        "recebimento_fisico_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_movimentacao_recebimento_lote",
-      "columns": [
-        "recebimento_lote_id"
       ],
       "unique": false
     },
@@ -387,9 +416,16 @@
       "unique": false
     },
     {
-      "name": "ix_movimentacao_estoque_numero_nf",
+      "name": "idx_movimentacao_recebimento_fisico",
       "columns": [
-        "numero_nf"
+        "recebimento_fisico_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_recebimento_lote",
+      "columns": [
+        "recebimento_lote_id"
       ],
       "unique": false
     },
@@ -397,6 +433,13 @@
       "name": "ix_movimentacao_estoque_cnpj_responsavel",
       "columns": [
         "cnpj_responsavel"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_numero_nf",
+      "columns": [
+        "numero_nf"
       ],
       "unique": false
     },
@@ -439,71 +482,6 @@
       "name": "ix_movimentacao_estoque_producao_pai_id",
       "columns": [
         "producao_pai_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_movimentacao_produto_data",
-      "columns": [
-        "cod_produto",
-        "data_movimentacao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_movimentacao_estoque_odoo_picking_id",
-      "columns": [
-        "odoo_picking_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_movimentacao_estoque_odoo_move_id",
-      "columns": [
-        "odoo_move_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_movimentacao_estoque_ordem_producao",
-      "columns": [
-        "ordem_producao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_movimentacao_tipo_data",
-      "columns": [
-        "tipo_movimentacao",
-        "data_movimentacao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_movimentacao_nf",
-      "columns": [
-        "numero_nf"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_movimentacao_lote",
-      "columns": [
-        "separacao_lote_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_movimentacao_pedido",
-      "columns": [
-        "num_pedido"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_movimentacao_tipo_origem",
-      "columns": [
-        "tipo_origem"
       ],
       "unique": false
     }

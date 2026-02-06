@@ -291,10 +291,10 @@ td[style*="background-color:#198754"] {
     color: var(--text) !important;
 }
 
-/* EXCEÇÃO: text-dark em badges warning DEVE permanecer escuro */
-[data-bs-theme="dark"] .badge.bg-warning.text-dark,
+/* bg-warning SEMPRE com texto escuro (fundo amarelo + texto branco = ilegivel) */
+[data-bs-theme="dark"] .bg-warning,
+[data-theme="dark"] .bg-warning,
 [data-bs-theme="dark"] .bg-warning.text-dark,
-[data-theme="dark"] .badge.bg-warning.text-dark,
 [data-theme="dark"] .bg-warning.text-dark {
     color: hsl(0 0% 10%) !important;
 }

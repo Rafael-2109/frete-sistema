@@ -140,33 +140,26 @@
       "type": "varchar(100)"
     }
   ],
-  "query_hints": [
-    {
-      "descricao": "Link pedido -> NF (FaturamentoProduto.origem = num_pedido)",
-      "sql": "SELECT numero_nf, cod_produto, nome_produto, qtd_produto_faturado, valor_produto_faturado, data_fatura FROM faturamento_produto WHERE origem = :num_pedido"
-    },
-    {
-      "descricao": "Comparativo mensal de faturamento",
-      "sql": "SELECT DATE_TRUNC('month', data_fatura) AS mes, SUM(valor_produto_faturado) AS total_faturado, COUNT(DISTINCT numero_nf) AS qtd_nfs FROM faturamento_produto WHERE revertida = False GROUP BY mes ORDER BY mes DESC"
-    },
-    {
-      "descricao": "Clientes novos no mes atual (primeira compra)",
-      "sql": "SELECT DISTINCT cnpj_cliente, nome_cliente FROM faturamento_produto WHERE data_fatura >= DATE_TRUNC('month', CURRENT_DATE) AND revertida = False AND cnpj_cliente NOT IN (SELECT DISTINCT cnpj_cliente FROM faturamento_produto WHERE data_fatura < DATE_TRUNC('month', CURRENT_DATE))"
-    },
-    {
-      "descricao": "% frete sobre faturamento (requer JOIN com fretes via embarque chain)",
-      "sql": "SELECT SUM(f.valor_pago) AS total_frete, SUM(fp.valor_produto_faturado) AS total_faturado, SUM(f.valor_pago) / NULLIF(SUM(fp.valor_produto_faturado), 0) * 100 AS pct_frete FROM faturamento_produto fp JOIN separacao s ON s.numero_nf = fp.numero_nf AND s.sincronizado_nf = True JOIN embarque_itens ei ON ei.separacao_lote_id = s.separacao_lote_id JOIN fretes f ON f.embarque_id = ei.embarque_id WHERE f.valor_pago IS NOT NULL AND fp.revertida = False"
-    },
-    {
-      "descricao": "Ranking produtos mais faturados",
-      "sql": "SELECT cod_produto, nome_produto, SUM(valor_produto_faturado) AS total, SUM(qtd_produto_faturado) AS qtd_total FROM faturamento_produto WHERE revertida = False GROUP BY cod_produto, nome_produto ORDER BY total DESC LIMIT 20"
-    }
-  ],
   "indices": [
     {
-      "name": "ix_faturamento_produto_numero_nf",
+      "name": "ix_faturamento_produto_revertida",
       "columns": [
-        "numero_nf"
+        "revertida"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_faturamento_cliente_data",
+      "columns": [
+        "cnpj_cliente",
+        "data_fatura"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_faturamento_pedido",
+      "columns": [
+        "origem"
       ],
       "unique": false
     },
@@ -181,6 +174,13 @@
       "name": "ix_faturamento_produto_origem",
       "columns": [
         "origem"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_faturamento_produto_cnpj_cliente",
+      "columns": [
+        "cnpj_cliente"
       ],
       "unique": false
     },
@@ -200,31 +200,9 @@
       "unique": false
     },
     {
-      "name": "ix_faturamento_produto_cnpj_cliente",
+      "name": "ix_faturamento_produto_numero_nf",
       "columns": [
-        "cnpj_cliente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_faturamento_cliente_data",
-      "columns": [
-        "cnpj_cliente",
-        "data_fatura"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_faturamento_produto_revertida",
-      "columns": [
-        "revertida"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_faturamento_pedido",
-      "columns": [
-        "origem"
+        "numero_nf"
       ],
       "unique": false
     }

@@ -486,7 +486,12 @@ Nunca invente informações."""
         )  # Raiz do projeto: /home/.../frete_sistema
 
         # Modo de permissão
-        permission_mode = "plan" if plan_mode else "default"
+        # Em ambiente headless (servidor), usar "acceptEdits" para evitar prompts interativos.
+        # "default" faz o CLI tentar prompts no stdin (que não existe em servidor)
+        # → timeout → "Stream closed" → "Claude Code has been suspended".
+        # "acceptEdits" auto-aprova edições; can_use_tool callback controla permissões reais.
+        # "bypassPermissions" seria alternativa mas remove TODAS as barreiras de segurança.
+        permission_mode = "plan" if plan_mode else "acceptEdits"
 
         options_dict = {
             # Modelo
@@ -521,6 +526,15 @@ Nunca invente informações."""
             "disallowed_tools": [
                 "NotebookEdit",   # Não há Jupyter notebooks no sistema
             ],
+
+            # Env vars passadas ao subprocess CLI do SDK
+            # CLAUDE_CODE_STREAM_CLOSE_TIMEOUT: timeout para hooks/MCP (default 60s).
+            # Em ambiente cloud (Render), MCP tools podem demorar mais (API calls, DB queries).
+            # AskUserQuestion bloqueia até 55s. Aumentar para 120s previne stream closure prematura.
+            # FONTE: claude_agent_sdk/_internal/query.py:116
+            "env": {
+                "CLAUDE_CODE_STREAM_CLOSE_TIMEOUT": "120000",  # 120s em ms
+            },
         }
 
         # Extended Thinking
@@ -1064,6 +1078,14 @@ Nunca invente informações."""
             logger.debug("[AGENT_CLIENT] Custom Tool render não disponível (módulo não encontrado)")
         except Exception as e:
             logger.warning(f"[AGENT_CLIENT] Erro ao registrar Custom Tool render: {e}")
+
+        # Log de diagnóstico — útil para validar configuração em produção
+        logger.info(
+            f"[AGENT_CLIENT] Options: model={options_dict.get('model')}, "
+            f"permission_mode={permission_mode}, "
+            f"mcp_servers={list(options_dict.get('mcp_servers', {}).keys())}, "
+            f"allowed_tools_count={len(options_dict.get('allowed_tools', []))}"
+        )
 
         return ClaudeAgentOptions(**options_dict)
 

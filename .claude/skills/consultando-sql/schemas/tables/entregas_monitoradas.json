@@ -146,32 +146,6 @@
       "default": false
     }
   ],
-  "query_hints": [
-    {
-      "descricao": "Lead time medio de entrega (dias)",
-      "sql": "SELECT AVG(DATE_PART('day', data_hora_entrega_realizada - data_embarque::timestamp)) AS lead_time_medio FROM entregas_monitoradas WHERE data_hora_entrega_realizada IS NOT NULL AND data_embarque IS NOT NULL"
-    },
-    {
-      "descricao": "Entregas atrasadas (prevista passou sem entrega)",
-      "sql": "SELECT numero_nf, cliente, transportadora, municipio, uf, data_entrega_prevista FROM entregas_monitoradas WHERE status_finalizacao IS NULL AND data_entrega_prevista < CURRENT_DATE AND nf_cd = False ORDER BY data_entrega_prevista"
-    },
-    {
-      "descricao": "Taxa de sucesso de entrega (%)",
-      "sql": "SELECT COUNT(CASE WHEN entregue = True THEN 1 END)::float / NULLIF(COUNT(*), 0) * 100 AS taxa_sucesso FROM entregas_monitoradas WHERE data_embarque IS NOT NULL"
-    },
-    {
-      "descricao": "Em transito agora",
-      "sql": "SELECT numero_nf, cliente, transportadora, uf, data_embarque FROM entregas_monitoradas WHERE data_embarque IS NOT NULL AND status_finalizacao IS NULL AND nf_cd = False"
-    },
-    {
-      "descricao": "Ranking transportadoras por velocidade (lead time medio)",
-      "sql": "SELECT transportadora, AVG(DATE_PART('day', data_hora_entrega_realizada - data_embarque::timestamp)) AS lead_time_medio, COUNT(*) AS qtd FROM entregas_monitoradas WHERE data_hora_entrega_realizada IS NOT NULL AND data_embarque IS NOT NULL GROUP BY transportadora ORDER BY lead_time_medio"
-    },
-    {
-      "descricao": "Performance semanal de entregas",
-      "sql": "SELECT DATE_TRUNC('week', data_embarque) AS semana, COUNT(*) AS embarques, COUNT(CASE WHEN entregue = True THEN 1 END) AS entregues, COUNT(CASE WHEN teve_devolucao = True THEN 1 END) AS devolucoes FROM entregas_monitoradas WHERE data_embarque IS NOT NULL GROUP BY semana ORDER BY semana DESC"
-    }
-  ],
   "foreign_keys": [
     {
       "column": "substituida_por_nf_id",
@@ -180,16 +154,16 @@
   ],
   "indices": [
     {
-      "name": "ix_entregas_monitoradas_cnpj_cliente",
+      "name": "ix_entregas_monitoradas_separacao_lote_id",
       "columns": [
-        "cnpj_cliente"
+        "separacao_lote_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_entregas_monitoradas_separacao_lote_id",
+      "name": "ix_entregas_monitoradas_cnpj_cliente",
       "columns": [
-        "separacao_lote_id"
+        "cnpj_cliente"
       ],
       "unique": false
     },

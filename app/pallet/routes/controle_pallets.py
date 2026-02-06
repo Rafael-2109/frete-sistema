@@ -19,11 +19,15 @@ from flask import Blueprint, render_template, request, jsonify, flash, redirect,
 from flask_login import login_required, current_user
 from sqlalchemy import func
 
+import re
+
 from app import db
 from app.pallet.models import (
     PalletCredito, PalletDocumento, PalletSolucao
 )
+from app.pallet.models.nf_remessa import PalletNFRemessa
 from app.pallet.services import CreditoService, SolucaoPalletService
+from app.estoque.models import MovimentacaoEstoque
 from app.utils.valores_brasileiros import converter_valor_brasileiro
 
 logger = logging.getLogger(__name__)
@@ -589,48 +593,59 @@ def registrar_substituicao():
     """
     Registra uma substituição (transferência de responsabilidade).
 
+    Fluxo: Seleciona NF origem (crédito) → quantidade → NF destino (remessa).
+    O backend busca crédito existente para a NF destino ou cria novo automaticamente.
+
     Form params:
     - credito_origem_id: ID do crédito de origem (obrigatório)
-    - credito_destino_id: ID do crédito de destino (pode ser None para criar novo)
+    - nf_remessa_destino_id: ID da NF de remessa destino (obrigatório)
     - quantidade: Quantidade sendo transferida (obrigatório)
-    - nf_remessa_destino_id: ID da NF de remessa destino (se criando novo crédito)
-    - tipo_responsavel_destino: TRANSPORTADORA ou CLIENTE
-    - cnpj_destino: CNPJ do novo responsável
-    - nome_destino: Nome do novo responsável
-    - observacao: Observações
+    - observacao: Observações (opcional)
     """
     credito_origem_id = request.form.get('credito_origem_id', type=int)
+    nf_remessa_destino_id = request.form.get('nf_remessa_destino_id', type=int)
     quantidade = request.form.get('quantidade', type=int)
 
-    if not credito_origem_id or not quantidade:
-        flash('Crédito de origem e quantidade são obrigatórios!', 'danger')
+    if not credito_origem_id or not quantidade or not nf_remessa_destino_id:
+        flash('Crédito de origem, NF destino e quantidade são obrigatórios!', 'danger')
         return redirect(request.referrer or url_for('pallet_v2.controle_pallets.listar_solucoes'))
 
     try:
         usuario = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
 
-        credito_destino_id = request.form.get('credito_destino_id', type=int)
+        # Buscar crédito existente (PENDENTE ou PARCIAL) para a NF de destino
+        credito_destino = PalletCredito.query.filter(
+            PalletCredito.nf_remessa_id == nf_remessa_destino_id,
+            PalletCredito.ativo == True,
+            PalletCredito.status.in_(['PENDENTE', 'PARCIAL'])
+        ).first()
 
-        # Se não tem crédito destino, pode criar novo
-        if not credito_destino_id:
-            nf_remessa_destino_id = request.form.get('nf_remessa_destino_id', type=int)
-            if nf_remessa_destino_id:
-                # Criar novo crédito para a NF de destino
-                novo_credito = SolucaoPalletService.criar_credito_para_substituicao(
-                    nf_remessa_id=nf_remessa_destino_id,
-                    quantidade=quantidade,
-                    tipo_responsavel=request.form.get('tipo_responsavel_destino', 'CLIENTE'),
-                    cnpj_responsavel=request.form.get('cnpj_destino', '').replace('.', '').replace('-', '').replace('/', ''),
-                    nome_responsavel=request.form.get('nome_destino', '').strip(),
-                    usuario=usuario
-                )
-                credito_destino_id = novo_credito.id
+        if credito_destino:
+            credito_destino_id = credito_destino.id
+        else:
+            # Buscar dados da NF de remessa destino para criar crédito
+            nf_destino = PalletNFRemessa.query.get(nf_remessa_destino_id)
+            if not nf_destino:
+                flash('NF de remessa destino não encontrada!', 'danger')
+                return redirect(request.referrer or url_for('pallet_v2.controle_pallets.listar_solucoes'))
 
-        motivo = request.form.get('motivo', '').strip()
-        if not motivo:
-            motivo = "Substituição de responsabilidade"  # Motivo padrão
+            novo_credito = SolucaoPalletService.criar_credito_para_substituicao(
+                nf_remessa_id=nf_remessa_destino_id,
+                tipo_responsavel=nf_destino.tipo_destinatario or 'CLIENTE',
+                cnpj_responsavel=nf_destino.cnpj_destinatario or '',
+                nome_responsavel=nf_destino.nome_destinatario or '',
+                usuario=usuario
+            )
+            credito_destino_id = novo_credito.id
 
-        solucao, credito_origem = SolucaoPalletService.registrar_substituicao(
+        # Validar que origem != destino
+        if credito_origem_id == credito_destino_id:
+            flash('O crédito de origem e destino não podem ser iguais!', 'danger')
+            return redirect(request.referrer or url_for('pallet_v2.controle_pallets.listar_solucoes'))
+
+        motivo = "Substituição de responsabilidade"
+
+        resultado = SolucaoPalletService.registrar_substituicao(
             credito_origem_id=credito_origem_id,
             credito_destino_id=credito_destino_id,
             quantidade=quantidade,
@@ -641,14 +656,14 @@ def registrar_substituicao():
 
         flash(
             f'Substituição de {quantidade} pallet(s) registrada! '
-            f'Saldo origem: {credito_origem.qtd_saldo}',
+            f'Saldo origem: {resultado["credito_origem"]["saldo_atual"]}',
             'success'
         )
 
     except ValueError as e:
         flash(f'Erro de validação: {str(e)}', 'danger')
     except Exception as e:
-        logger.exception(f"Erro ao registrar substituição")
+        logger.exception("Erro ao registrar substituição")
         flash(f'Erro ao registrar substituição: {str(e)}', 'danger')
 
     return redirect(request.referrer or url_for('pallet_v2.controle_pallets.listar_solucoes'))
@@ -665,19 +680,41 @@ def api_listar_creditos():
     API para listar créditos pendentes.
 
     Query params:
-    - status: PENDENTE, PARCIAL, RESOLVIDO
+    - q: Busca textual por numero da NF (autocomplete)
+    - status: PENDENTE, PARCIAL, RESOLVIDO (aceita virgula para multiplos)
     - cnpj: CNPJ do responsável
     - limit: Limite de resultados (default: 50)
     """
+    q = request.args.get('q', '').strip()
     status = request.args.get('status', '')
     cnpj = request.args.get('cnpj', '').strip()
     limit = request.args.get('limit', 50, type=int)
 
-    creditos = CreditoService.listar_creditos_pendentes(
-        cnpj_responsavel=cnpj if cnpj else None,
-        status=status if status else None,
-        limite=limit
-    )
+    if q:
+        # Busca por numero da NF com JOIN em PalletNFRemessa
+        query = PalletCredito.query.join(
+            PalletNFRemessa, PalletCredito.nf_remessa_id == PalletNFRemessa.id
+        ).filter(
+            PalletNFRemessa.numero_nf.ilike(f'%{q}%'),
+            PalletCredito.ativo == True
+        )
+
+        # Filtrar por status (aceita virgula: PENDENTE,PARCIAL)
+        if status:
+            status_list = [s.strip() for s in status.split(',') if s.strip()]
+            if status_list:
+                query = query.filter(PalletCredito.status.in_(status_list))
+        else:
+            # Default: apenas pendentes/parciais quando buscando
+            query = query.filter(PalletCredito.status.in_(['PENDENTE', 'PARCIAL']))
+
+        creditos = query.order_by(PalletNFRemessa.numero_nf).limit(limit).all()
+    else:
+        creditos = CreditoService.listar_creditos_pendentes(
+            cnpj_responsavel=cnpj if cnpj else None,
+            status=status if status else None,
+            limite=limit
+        )
 
     return jsonify([{
         'id': c.id,
@@ -754,3 +791,71 @@ def api_resumo_responsavel(cnpj):
     cnpj_limpo = cnpj.replace('.', '').replace('-', '').replace('/', '')
     resumo = CreditoService.obter_resumo_por_responsavel(cnpj_limpo)
     return jsonify(resumo)
+
+
+def _extrair_valor_observacao(obs):
+    """Extrai valor R$ da observacao 'Venda de pallet - NF X - R$ 210.00'"""
+    if not obs:
+        return 0.0
+    match = re.search(r'R\$\s*([\d.,]+)', obs)
+    if match:
+        valor_str = match.group(1)
+        # Detectar formato: BR (1.234,56) vs US (7980.00)
+        if ',' in valor_str and '.' in valor_str:
+            # BR com milhar: 1.234,56
+            valor_str = valor_str.replace('.', '').replace(',', '.')
+        elif ',' in valor_str:
+            # BR sem milhar: 210,00
+            valor_str = valor_str.replace(',', '.')
+        # else: formato US puro (210.00) — manter como esta
+        try:
+            return float(valor_str)
+        except ValueError:
+            return 0.0
+    return 0.0
+
+
+@controle_pallets_bp.route('/api/vendas-pallet')
+@login_required
+def api_buscar_vendas_pallet():
+    """
+    Busca NFs de venda de pallet na movimentacao_estoque.
+    Fonte: SAIDA + PALLET (sincronizadas do Odoo).
+
+    Query params:
+    - q: Termo de busca (numero NF, CNPJ ou nome)
+    - limit: Limite de resultados (default: 15)
+    """
+    termo = request.args.get('q', '').strip()
+    limit = request.args.get('limit', 15, type=int)
+
+    query = MovimentacaoEstoque.query.filter(
+        MovimentacaoEstoque.local_movimentacao == 'PALLET',
+        MovimentacaoEstoque.tipo_movimentacao == 'SAIDA',
+        MovimentacaoEstoque.ativo == True
+    )
+
+    if termo:
+        termo_limpo = termo.replace('.', '').replace('-', '').replace('/', '')
+        query = query.filter(
+            db.or_(
+                MovimentacaoEstoque.numero_nf.ilike(f'%{termo}%'),
+                MovimentacaoEstoque.nome_destinatario.ilike(f'%{termo}%'),
+                MovimentacaoEstoque.cnpj_destinatario.ilike(f'%{termo_limpo}%')
+            )
+        )
+
+    vendas = query.order_by(
+        MovimentacaoEstoque.data_movimentacao.desc()
+    ).limit(limit).all()
+
+    return jsonify([{
+        'id': v.id,
+        'numero_nf': v.numero_nf,
+        'cnpj_comprador': v.cnpj_destinatario,
+        'nome_comprador': v.nome_destinatario,
+        'quantidade': int(v.qtd_movimentacao) if v.qtd_movimentacao else 0,
+        'valor_total': _extrair_valor_observacao(v.observacao),
+        'data_venda': v.data_movimentacao.strftime('%d/%m/%Y') if v.data_movimentacao else None,
+        'ja_vinculada': v.baixado or False
+    } for v in vendas])

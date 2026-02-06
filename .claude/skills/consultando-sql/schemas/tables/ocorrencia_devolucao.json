@@ -153,6 +153,13 @@
   ],
   "indices": [
     {
+      "name": "ix_ocorrencia_devolucao_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_ocorrencia_devolucao_numero_ocorrencia",
       "columns": [
         "numero_ocorrencia"
@@ -201,13 +208,6 @@
       "name": "idx_ocorrencia_data_abertura",
       "columns": [
         "data_abertura"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_ocorrencia_devolucao_status",
-      "columns": [
-        "status"
       ],
       "unique": false
     }

@@ -18,6 +18,9 @@ from app.carteira.models import FaturamentoParcialJustificativa, InconsistenciaF
 
 logger = logging.getLogger(__name__)
 
+# Produto PALLET — movimentacao gerenciada pelo PalletSyncService (evitar duplicacao)
+COD_PRODUTO_PALLET = '208000012'
+
 
 class ProcessadorFaturamento:
     """
@@ -665,6 +668,9 @@ class ProcessadorFaturamento:
         self._criar_inconsistencia_nf_sem_separacao(nf, produtos, usuario)
 
         for produto in produtos:
+            # Pallet tem sync proprio (PalletSyncService) — pular para evitar duplicacao
+            if produto.cod_produto == COD_PRODUTO_PALLET:
+                continue
             try:
                 mov = MovimentacaoEstoque()
                 mov.cod_produto = produto.cod_produto
@@ -741,6 +747,9 @@ class ProcessadorFaturamento:
         logger.info(f"📦 Criando {len(produtos)} movimentações com lote {lote_id} para NF {nf.numero_nf}")
 
         for produto in produtos:
+            # Pallet tem sync proprio (PalletSyncService) — pular para evitar duplicacao
+            if produto.cod_produto == COD_PRODUTO_PALLET:
+                continue
             try:
                 mov = MovimentacaoEstoque()
                 mov.cod_produto = produto.cod_produto

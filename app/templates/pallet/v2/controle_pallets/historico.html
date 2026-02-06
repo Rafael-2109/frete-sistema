@@ -5,12 +5,13 @@
 {% block extra_css %}
 <style>
 /* ============================================
-   HISTÓRICO DE SOLUÇÕES - Controle de Pallets v2
+   HISTORICO DE SOLUCOES - Controle de Pallets v2
+   Migrado para Design Tokens - Dark Mode Ready
    ============================================ */
 
 .pallet-historico {
     padding: 1.5rem;
-    background-color: #f8f9fa;
+    background-color: var(--bg);
     min-height: calc(100vh - 60px);
 }
 
@@ -27,12 +28,12 @@
 .page-header h1 {
     font-size: 1.75rem;
     font-weight: 600;
-    color: #212529;
+    color: var(--text);
     margin: 0;
 }
 
 .page-header h1 i {
-    color: #0d6efd;
+    color: var(--amber-55);
     margin-right: 0.5rem;
 }
 
@@ -49,16 +50,16 @@
 }
 
 .breadcrumb-nav .breadcrumb-item a {
-    color: #6c757d;
+    color: var(--text-muted);
     text-decoration: none;
 }
 
 .breadcrumb-nav .breadcrumb-item a:hover {
-    color: #0d6efd;
+    color: var(--amber-55);
 }
 
 .breadcrumb-nav .breadcrumb-item.active {
-    color: #212529;
+    color: var(--text);
 }
 
 /* Stats Cards */
@@ -70,10 +71,10 @@
 }
 
 .stat-card {
-    background: white;
+    background: var(--bg-light);
     border-radius: 12px;
     padding: 1rem;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    box-shadow: var(--shadow);
     display: flex;
     align-items: center;
     gap: 0.75rem;
@@ -82,7 +83,7 @@
 
 .stat-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    box-shadow: var(--shadow-lg);
 }
 
 .stat-icon {
@@ -95,36 +96,36 @@
     font-size: 1.25rem;
 }
 
-.stat-icon.baixa { background: #f8d7da; color: #dc3545; }
-.stat-icon.venda { background: #d1e7dd; color: #198754; }
-.stat-icon.recebimento { background: #cff4fc; color: #0dcaf0; }
-.stat-icon.substituicao { background: #e2e3e5; color: #6c757d; }
+.stat-icon.baixa { background: hsla(0 70% 50% / 0.2); color: var(--semantic-danger); }
+.stat-icon.venda { background: hsla(145 60% 40% / 0.2); color: var(--semantic-success); }
+.stat-icon.recebimento { background: hsla(190 90% 50% / 0.2); color: hsl(190 90% 50%); }
+.stat-icon.substituicao { background: hsla(0 0% 50% / 0.15); color: var(--text-muted); }
 
 .stat-content h4 {
     font-size: 1.5rem;
     font-weight: 700;
     margin: 0;
-    color: #212529;
+    color: var(--text);
 }
 
 .stat-content span {
     font-size: 0.75rem;
-    color: #6c757d;
+    color: var(--text-muted);
 }
 
 /* Filtros */
 .filter-card {
-    background: white;
+    background: var(--bg-light);
     border-radius: 12px;
     padding: 1.25rem;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    box-shadow: var(--shadow);
     margin-bottom: 1.5rem;
 }
 
 .filter-card .filter-title {
     font-size: 0.875rem;
     font-weight: 600;
-    color: #6c757d;
+    color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-bottom: 1rem;
@@ -146,7 +147,7 @@
     display: block;
     font-size: 0.875rem;
     font-weight: 500;
-    color: #495057;
+    color: var(--text);
     margin-bottom: 0.5rem;
 }
 
@@ -154,16 +155,18 @@
 .filter-group input {
     width: 100%;
     padding: 0.5rem 0.75rem;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--border);
     border-radius: 8px;
     font-size: 0.875rem;
+    background-color: var(--bg-light);
+    color: var(--text);
     transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .filter-group select:focus,
 .filter-group input:focus {
-    border-color: #0d6efd;
-    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15);
+    border-color: var(--amber-55);
+    box-shadow: 0 0 0 3px hsla(45 100% 50% / 0.15);
     outline: none;
 }
 
@@ -181,37 +184,37 @@
 }
 
 .btn-filter-primary {
-    background: #0d6efd;
-    color: white;
+    background: var(--amber-55);
+    color: hsl(0 0% 10%);
     border: none;
 }
 
 .btn-filter-primary:hover {
-    background: #0b5ed7;
-    color: white;
+    background: var(--amber-60);
+    color: hsl(0 0% 10%);
 }
 
 .btn-filter-secondary {
-    background: #f8f9fa;
-    color: #495057;
-    border: 1px solid #dee2e6;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
 }
 
 .btn-filter-secondary:hover {
-    background: #e9ecef;
+    background: var(--bg-light);
 }
 
 /* Tabela */
 .table-card {
-    background: white;
+    background: var(--bg-light);
     border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    box-shadow: var(--shadow);
     overflow: hidden;
 }
 
 .table-header {
     padding: 1rem 1.25rem;
-    border-bottom: 1px solid #e9ecef;
+    border-bottom: 1px solid var(--border);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -220,7 +223,7 @@
 .table-header h3 {
     font-size: 1rem;
     font-weight: 600;
-    color: #212529;
+    color: var(--text);
     margin: 0;
 }
 
@@ -240,14 +243,14 @@
 }
 
 .table-historico thead th {
-    background: #f8f9fa;
+    background: var(--bg);
     font-size: 0.75rem;
     font-weight: 600;
-    color: #6c757d;
+    color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     padding: 0.75rem 1rem;
-    border-bottom: 2px solid #e9ecef;
+    border-bottom: 2px solid var(--border);
     position: sticky;
     top: 0;
     z-index: 10;
@@ -257,11 +260,11 @@
     padding: 0.75rem 1rem;
     vertical-align: middle;
     font-size: 0.875rem;
-    border-bottom: 1px solid #f1f3f4;
+    border-bottom: 1px solid var(--border);
 }
 
 .table-historico tbody tr:hover {
-    background-color: #f8f9fa;
+    background-color: var(--bg);
 }
 
 /* Badges de tipo */
@@ -276,33 +279,33 @@
 }
 
 .tipo-badge.BAIXA {
-    background: #f8d7da;
-    color: #721c24;
+    background: hsla(0 70% 50% / 0.2);
+    color: var(--semantic-danger);
 }
 
 .tipo-badge.VENDA {
-    background: #d4edda;
-    color: #155724;
+    background: hsla(145 60% 40% / 0.2);
+    color: var(--semantic-success);
 }
 
 .tipo-badge.RECEBIMENTO {
-    background: #d1ecf1;
-    color: #0c5460;
+    background: hsla(190 90% 50% / 0.2);
+    color: hsl(190 90% 50%);
 }
 
 .tipo-badge.SUBSTITUICAO {
-    background: #e2e3e5;
-    color: #383d41;
+    background: hsla(0 0% 50% / 0.15);
+    color: var(--text-muted);
 }
 
-/* Célula de responsável */
+/* Celula de responsavel */
 .responsavel-cell {
     max-width: 180px;
 }
 
 .responsavel-nome {
     font-weight: 500;
-    color: #212529;
+    color: var(--text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -311,7 +314,7 @@
 
 .responsavel-cnpj {
     font-size: 0.75rem;
-    color: #6c757d;
+    color: var(--text-muted);
     font-family: 'Monaco', 'Consolas', monospace;
 }
 
@@ -323,25 +326,25 @@
 
 .empty-state i {
     font-size: 3rem;
-    color: #dee2e6;
+    color: var(--border);
     margin-bottom: 1rem;
 }
 
 .empty-state h4 {
-    color: #6c757d;
+    color: var(--text-muted);
     font-weight: 500;
     margin-bottom: 0.5rem;
 }
 
 .empty-state p {
-    color: #adb5bd;
+    color: var(--text-muted);
     margin: 0;
 }
 
-/* Paginação */
+/* Paginacao */
 .pagination-wrapper {
     padding: 1rem 1.25rem;
-    border-top: 1px solid #e9ecef;
+    border-top: 1px solid var(--border);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -349,7 +352,7 @@
 
 .pagination-info {
     font-size: 0.875rem;
-    color: #6c757d;
+    color: var(--text-muted);
 }
 
 .pagination {
@@ -360,23 +363,24 @@
     border-radius: 6px;
     margin: 0 0.15rem;
     border: none;
-    color: #495057;
+    color: var(--text);
+    background: var(--bg-light);
     font-size: 0.875rem;
 }
 
 .pagination .page-link:hover {
-    background: #e9ecef;
+    background: var(--bg);
 }
 
 .pagination .page-item.active .page-link {
-    background: #0d6efd;
-    color: white;
+    background: var(--amber-55);
+    color: hsl(0 0% 10%);
 }
 
-/* Detalhes da solução */
+/* Detalhes da solucao */
 .detail-row {
     font-size: 0.8rem;
-    color: #6c757d;
+    color: var(--text-muted);
     margin-top: 0.25rem;
 }
 </style>

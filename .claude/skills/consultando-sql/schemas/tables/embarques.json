@@ -262,20 +262,6 @@
       "default": 0
     }
   ],
-  "query_hints": [
-    {
-      "descricao": "Co-passageiros de um embarque (quem embarcou junto)",
-      "sql": "SELECT ei.cnpj_cliente, ei.cliente, ei.pedido, ei.nota_fiscal, ei.peso, ei.valor, ei.uf_destino, ei.cidade_destino FROM embarque_itens ei WHERE ei.embarque_id = :embarque_id"
-    },
-    {
-      "descricao": "Concentracao de embarques por dia da semana",
-      "sql": "SELECT EXTRACT(DOW FROM data_embarque) AS dia_semana, COUNT(*) AS qtd FROM embarques WHERE data_embarque IS NOT NULL AND status = 'ativo' GROUP BY dia_semana ORDER BY dia_semana"
-    },
-    {
-      "descricao": "Embarques com pallet pendente (separados > trazidos)",
-      "sql": "SELECT e.numero, e.data_embarque, t.razao_social, e.qtd_pallets_separados, e.qtd_pallets_trazidos, (e.qtd_pallets_separados - e.qtd_pallets_trazidos) AS pendente FROM embarques e LEFT JOIN transportadoras t ON t.id = e.transportadora_id WHERE e.qtd_pallets_separados > e.qtd_pallets_trazidos AND e.status = 'ativo' ORDER BY pendente DESC"
-    }
-  ],
   "foreign_keys": [
     {
       "column": "transportadora_id",

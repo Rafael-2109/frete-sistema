@@ -858,3 +858,218 @@ def api_detalhe_solucao(solucao_id):
         'confirmado_por': solucao.confirmado_por,
         'observacao': solucao.observacao
     })
+
+
+# =============================================================================
+# VINCULACAO DFe DEVOLUCAO (Wizard com Odoo)
+# =============================================================================
+
+@tratativa_nfs_bp.route('/vincular-dfe-devolucao')
+@login_required
+def vincular_dfe_devolucao():
+    """
+    Wizard para vincular DFe de devolucao de pallet a NFs de remessa.
+
+    Fluxo:
+    1. Lista NFDs do DFe (finnfe=4, produto pallet)
+    2. Usuario seleciona NFD + empresa destino
+    3. AJAX carrega remessas candidatas (FIFO)
+    4. Usuario distribui quantidades manualmente
+    5. POST confirma: cria PO + picking + moves no Odoo + registra localmente
+    """
+    try:
+        match_service = MatchService()
+        devolucoes = match_service.buscar_nfs_devolucao_pallet_dfe(
+            apenas_nao_processadas=True
+        )
+    except Exception as e:
+        logger.exception("Erro ao buscar devolucoes do DFe")
+        devolucoes = []
+        flash(f'Erro ao buscar devoluções no DFe: {str(e)}', 'danger')
+
+    return render_template(
+        'pallet/v2/tratativa_nfs/vincular_dfe_devolucao.html',
+        devolucoes=devolucoes
+    )
+
+
+@tratativa_nfs_bp.route('/api/sugerir-vinculacao-dfe/<int:dfe_id>')
+@login_required
+def api_sugerir_vinculacao_dfe(dfe_id):
+    """
+    API para buscar remessas candidatas para uma NFD de devolucao do DFe.
+
+    Retorna lista de NFs de remessa ordenadas por FIFO (mais antigas primeiro)
+    com quantidades sugeridas para distribuicao.
+
+    Path params:
+    - dfe_id: ID do DFe no Odoo
+
+    Query params:
+    - cnpj_emitente: CNPJ do emitente (para filtrar remessas do mesmo CNPJ)
+    - quantidade: Quantidade total de pallets da devolucao
+    """
+    cnpj_emitente = request.args.get('cnpj_emitente', '').strip()
+    quantidade = request.args.get('quantidade', 0, type=int)
+
+    if not cnpj_emitente:
+        return jsonify({'sucesso': False, 'erro': 'CNPJ do emitente e obrigatorio'}), 400
+
+    try:
+        # Limpar CNPJ
+        cnpj_limpo = cnpj_emitente.replace('.', '').replace('-', '').replace('/', '')
+
+        # Buscar remessas ativas do mesmo CNPJ (FIFO - mais antigas primeiro)
+        remessas = PalletNFRemessa.query.filter(
+            PalletNFRemessa.ativo == True,
+            PalletNFRemessa.status == 'ATIVA',
+            PalletNFRemessa.cnpj_destinatario.ilike(f'%{cnpj_limpo}%')
+        ).order_by(
+            PalletNFRemessa.data_emissao.asc()
+        ).all()
+
+        # Distribuir quantidade FIFO
+        restante = quantidade
+        candidatas = []
+
+        for remessa in remessas:
+            qtd_pendente = remessa.qtd_pendente
+            if qtd_pendente <= 0:
+                continue
+
+            qtd_sugerida = min(qtd_pendente, restante) if restante > 0 else 0
+
+            candidatas.append({
+                'nf_remessa_id': remessa.id,
+                'numero_nf': remessa.numero_nf,
+                'data_emissao': remessa.data_emissao.strftime('%d/%m/%Y') if remessa.data_emissao else '',
+                'empresa': remessa.empresa,
+                'tipo_destinatario': remessa.tipo_destinatario,
+                'nome_destinatario': remessa.nome_destinatario,
+                'quantidade_total': remessa.quantidade,
+                'qtd_resolvida': remessa.qtd_resolvida or 0,
+                'qtd_pendente': qtd_pendente,
+                'qtd_sugerida': qtd_sugerida,
+                'odoo_picking_id': remessa.odoo_picking_id,
+            })
+
+            restante -= qtd_sugerida
+
+        return jsonify({
+            'sucesso': True,
+            'candidatas': candidatas,
+            'total_pendente': sum(c['qtd_pendente'] for c in candidatas),
+            'total_sugerido': sum(c['qtd_sugerida'] for c in candidatas),
+            'restante_nao_alocado': max(0, restante),
+        })
+
+    except Exception as e:
+        logger.exception(f"Erro ao sugerir vinculacao DFe {dfe_id}")
+        return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+
+@tratativa_nfs_bp.route('/api/vincular-dfe-devolucao', methods=['POST'])
+@login_required
+def api_vincular_dfe_devolucao():
+    """
+    Executa vinculacao completa: cria PO + picking + moves no Odoo + registra localmente.
+
+    Ordem: Odoo PRIMEIRO (se falhar, nao cria registros locais). Local SEGUNDO.
+
+    JSON params:
+    - odoo_dfe_id: ID do DFe no Odoo
+    - company_id: ID da empresa que recebe (1=FB, 3=SC, 4=CD)
+    - nf_devolucao: Dados da NF de devolucao (numero_nf, serie, chave_nfe, etc.)
+    - vinculacoes: Lista de {nf_remessa_id, quantidade, odoo_picking_remessa_id}
+    """
+    try:
+        data = request.get_json()
+
+        if not data:
+            return jsonify({'sucesso': False, 'erro': 'Payload JSON obrigatorio'}), 400
+
+        odoo_dfe_id = data.get('odoo_dfe_id')
+        company_id = data.get('company_id')
+        nf_devolucao_data = data.get('nf_devolucao', {})
+        vinculacoes = data.get('vinculacoes', [])
+
+        if not odoo_dfe_id:
+            return jsonify({'sucesso': False, 'erro': 'odoo_dfe_id obrigatorio'}), 400
+        if not company_id:
+            return jsonify({'sucesso': False, 'erro': 'company_id obrigatorio'}), 400
+        if not vinculacoes:
+            return jsonify({'sucesso': False, 'erro': 'vinculacoes obrigatorio (lista nao vazia)'}), 400
+
+        usuario = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
+
+        # Calcular quantidade total
+        quantidade_total = sum(v['quantidade'] for v in vinculacoes)
+
+        # =====================================================================
+        # ETAPA 1: Odoo — Criar PO + Picking + Vincular moves
+        # =====================================================================
+        from app.pallet.services.odoo_devolucao_service import OdooDevolucaoService
+
+        odoo_service = OdooDevolucaoService()
+        resultado_odoo = odoo_service.processar_devolucao_completa(
+            dfe_id=odoo_dfe_id,
+            company_id=company_id,
+            quantidade_total=quantidade_total,
+            vinculacoes=[
+                {
+                    'odoo_picking_remessa_id': v.get('odoo_picking_remessa_id'),
+                    'quantidade': v['quantidade'],
+                }
+                for v in vinculacoes
+            ]
+        )
+
+        picking_id_odoo = resultado_odoo.get('picking_id')
+
+        # =====================================================================
+        # ETAPA 2: Local — Registrar PalletNFSolucao
+        # =====================================================================
+        nf_remessa_ids = [v['nf_remessa_id'] for v in vinculacoes]
+        quantidades = {v['nf_remessa_id']: v['quantidade'] for v in vinculacoes}
+
+        # Enriquecer dados da NF de devolucao com odoo_dfe_id
+        nf_devolucao_data['odoo_dfe_id'] = odoo_dfe_id
+
+        match_service = MatchService()
+        solucoes = match_service.vincular_devolucao_manual_multiplas(
+            nf_remessa_ids=nf_remessa_ids,
+            nf_devolucao=nf_devolucao_data,
+            quantidades=quantidades,
+            usuario=usuario
+        )
+
+        # Atualizar solucoes com odoo_picking_id
+        if picking_id_odoo and solucoes:
+            for solucao in solucoes:
+                solucao.odoo_picking_id = picking_id_odoo
+            db.session.commit()
+
+        return jsonify({
+            'sucesso': True,
+            'odoo': {
+                'po_id': resultado_odoo.get('po_id'),
+                'po_name': resultado_odoo.get('po_name'),
+                'picking_id': picking_id_odoo,
+                'picking_name': resultado_odoo.get('picking_name'),
+                'etapa_2_moves': resultado_odoo.get('etapa_2_moves'),
+                'etapa_3_validacao': resultado_odoo.get('etapa_3_validacao'),
+            },
+            'local': {
+                'solucoes_criadas': len(solucoes),
+                'solucao_ids': [s.id for s in solucoes],
+            },
+            'quantidade_total': quantidade_total,
+        })
+
+    except ValueError as e:
+        logger.error(f"Erro de validacao na vinculacao DFe: {e}")
+        return jsonify({'sucesso': False, 'erro': str(e)}), 400
+
+    except Exception as e:
+        logger.exception("Erro ao vincular DFe de devolucao")
+        return jsonify({'sucesso': False, 'erro': str(e)}), 500

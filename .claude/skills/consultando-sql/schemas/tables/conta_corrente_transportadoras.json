@@ -82,16 +82,6 @@
       "nullable": false
     }
   ],
-  "query_hints": [
-    {
-      "descricao": "Saldo por transportadora (creditos - debitos)",
-      "sql": "SELECT t.razao_social, SUM(cc.valor_credito) AS total_credito, SUM(cc.valor_debito) AS total_debito, SUM(cc.valor_credito) - SUM(cc.valor_debito) AS saldo FROM conta_corrente_transportadoras cc JOIN transportadoras t ON t.id = cc.transportadora_id WHERE cc.status = 'ATIVO' GROUP BY t.razao_social ORDER BY saldo DESC"
-    },
-    {
-      "descricao": "Movimentacoes de uma transportadora",
-      "sql": "SELECT cc.tipo_movimentacao, cc.valor_diferenca, cc.valor_credito, cc.valor_debito, cc.descricao, cc.status, cc.criado_em FROM conta_corrente_transportadoras cc WHERE cc.transportadora_id = :transportadora_id ORDER BY cc.criado_em DESC"
-    }
-  ],
   "foreign_keys": [
     {
       "column": "transportadora_id",

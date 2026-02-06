@@ -26,7 +26,7 @@
 
 .pallet-dashboard__subtitle {
     font-size: 0.875rem;
-    color: var(--text-muted, #6c757d);
+    color: var(--text-muted);
     margin-top: 0.25rem;
 }
 
@@ -39,10 +39,10 @@
 }
 
 .pallet-stat-card {
-    background: var(--bg-light, #1a1a2e);
+    background: var(--bg-light);
     border-radius: 12px;
     padding: 1.25rem;
-    border: 1px solid var(--border, rgba(255,255,255,0.1));
+    border: 1px solid var(--border);
     transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -116,7 +116,7 @@
 
 .pallet-stat-card__label {
     font-size: 0.875rem;
-    color: var(--text-muted, #6c757d);
+    color: var(--text-muted);
 }
 
 /* Tabs de Navegacao */
@@ -128,7 +128,7 @@
     border-radius: 8px 8px 0 0;
     padding: 0.75rem 1.25rem;
     font-weight: 500;
-    color: var(--text-muted, #6c757d);
+    color: var(--text-muted);
     border: 1px solid transparent;
     border-bottom: none;
 }
@@ -140,23 +140,23 @@
 
 .pallet-tabs .nav-link.active {
     color: var(--bs-primary);
-    background: var(--bg-light, #1a1a2e);
-    border-color: var(--border, rgba(255,255,255,0.1));
+    background: var(--bg-light);
+    border-color: var(--border);
 }
 
 /* Conteudo das Tabs */
 .pallet-tab-content {
-    background: var(--bg-light, #1a1a2e);
+    background: var(--bg-light);
     border-radius: 0 12px 12px 12px;
     padding: 1.5rem;
-    border: 1px solid var(--border, rgba(255,255,255,0.1));
+    border: 1px solid var(--border);
 }
 
 /* Cards de Secao */
 .pallet-section-card {
-    background: var(--bg, #0f0f1a);
+    background: var(--bg);
     border-radius: 10px;
-    border: 1px solid var(--border, rgba(255,255,255,0.1));
+    border: 1px solid var(--border);
     margin-bottom: 1rem;
 }
 
@@ -165,7 +165,7 @@
     justify-content: space-between;
     align-items: center;
     padding: 1rem 1.25rem;
-    border-bottom: 1px solid var(--border, rgba(255,255,255,0.1));
+    border-bottom: 1px solid var(--border);
 }
 
 .pallet-section-card__title {
@@ -187,20 +187,20 @@
 }
 
 .pallet-table thead th {
-    background: var(--bg, #0f0f1a);
-    border-bottom: 2px solid var(--border, rgba(255,255,255,0.15));
+    background: var(--bg);
+    border-bottom: 2px solid var(--border);
     font-weight: 600;
     font-size: 0.8rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: var(--text-muted, #6c757d);
+    color: var(--text-muted);
     padding: 0.75rem 1rem;
 }
 
 .pallet-table tbody td {
     padding: 0.75rem 1rem;
     vertical-align: middle;
-    border-bottom: 1px solid var(--border, rgba(255,255,255,0.05));
+    border-bottom: 1px solid var(--border);
 }
 
 .pallet-table tbody tr:hover {
@@ -284,7 +284,7 @@
 
 .pallet-mini-stat__label {
     font-size: 0.75rem;
-    color: var(--text-muted, #6c757d);
+    color: var(--text-muted);
 }
 
 /* Alertas de Vencimento */
@@ -313,33 +313,37 @@
     padding: 1rem;
 }
 
-/* Light mode */
-[data-bs-theme="light"] .pallet-dashboard,
-[data-bs-theme="light"] .pallet-stat-card,
-[data-bs-theme="light"] .pallet-tab-content,
-[data-bs-theme="light"] .pallet-section-card {
-    background: #fff;
-}
-
-[data-bs-theme="light"] .pallet-section-card {
-    background: #f8f9fa;
-}
-
-[data-bs-theme="light"] .pallet-table thead th {
-    background: #f8f9fa;
-}
+/* Light/Dark mode: handled by design tokens (--bg, --bg-light) */
 
 /* Empty state */
 .pallet-empty-state {
     text-align: center;
     padding: 3rem 1rem;
-    color: var(--text-muted, #6c757d);
+    color: var(--text-muted);
 }
 
 .pallet-empty-state__icon {
     font-size: 3rem;
     opacity: 0.3;
     margin-bottom: 1rem;
+}
+
+/* Autocomplete dropdown */
+.autocomplete-dropdown-dash {
+    display: none;
+    position: absolute;
+    z-index: 1050;
+    width: 100%;
+    max-height: 250px;
+    overflow-y: auto;
+    background: var(--bg-light);
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+    box-shadow: var(--shadow-lg);
+}
+
+.autocomplete-dropdown-dash .autocomplete-item-dash:hover {
+    background-color: var(--bg);
 }
 
 /* Responsive */
@@ -859,10 +863,12 @@
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Credito (NF Remessa) *</label>
-                            <select name="credito_id" class="form-select" required id="selectCredito">
-                                <option value="">Selecione...</option>
-                                {# Sera preenchido via JS #}
-                            </select>
+                            <div style="position: relative;">
+                                <input type="text" class="form-control" id="buscaCreditoDash"
+                                       placeholder="Digite o numero da NF..." autocomplete="off">
+                                <input type="hidden" name="credito_id" id="creditoIdDash" required>
+                                <div id="listaCreditosDash" class="autocomplete-dropdown-dash"></div>
+                            </div>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Numero do Documento</label>
@@ -955,38 +961,90 @@
 <script>
 // Abrir modal de registrar documento
 function openDocumentoModal() {
+    // Limpar campos
+    const buscaInput = document.getElementById('buscaCreditoDash');
+    const creditoHidden = document.getElementById('creditoIdDash');
+    const listaDiv = document.getElementById('listaCreditosDash');
+    if (buscaInput) buscaInput.value = '';
+    if (creditoHidden) creditoHidden.value = '';
+    if (listaDiv) listaDiv.style.display = 'none';
+
     const modal = new bootstrap.Modal(document.getElementById('modalRegistrarDocumento'));
-
-    // Carregar creditos pendentes
-    fetch('{{ url_for("pallet_v2.controle_pallets.api_listar_creditos") }}?status=PENDENTE,PARCIAL')
-        .then(response => response.json())
-        .then(data => {
-            const select = document.getElementById('selectCredito');
-            select.innerHTML = '<option value="">Selecione...</option>';
-
-            // API retorna array direto, não objeto com .creditos
-            if (data && data.length > 0) {
-                data.forEach(credito => {
-                    const option = document.createElement('option');
-                    option.value = credito.id;
-                    option.textContent = `NF ${credito.numero_nf || '-'} - ${credito.nome_responsavel || credito.cnpj_responsavel || '-'} (saldo: ${credito.qtd_saldo})`;
-                    select.appendChild(option);
-                });
-            } else {
-                const option = document.createElement('option');
-                option.value = '';
-                option.textContent = 'Nenhum credito pendente';
-                option.disabled = true;
-                select.appendChild(option);
-            }
-        })
-        .catch(error => {
-            console.error('Erro ao carregar creditos:', error);
-            toastr.error('Erro ao carregar creditos');
-        });
-
     modal.show();
 }
+
+// =========================================
+// AUTOCOMPLETE: Credito por NF (Dashboard)
+// =========================================
+(function() {
+    let timeoutCreditoDash = null;
+    const buscaCreditoDash = document.getElementById('buscaCreditoDash');
+    const creditoIdDash = document.getElementById('creditoIdDash');
+    const listaCreditosDash = document.getElementById('listaCreditosDash');
+
+    function buscarCreditosDash(termo) {
+        const url = '{{ url_for("pallet_v2.controle_pallets.api_listar_creditos") }}' +
+            '?q=' + encodeURIComponent(termo) + '&status=PENDENTE,PARCIAL&limit=20';
+
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                listaCreditosDash.innerHTML = '';
+                if (!data || data.length === 0) {
+                    listaCreditosDash.innerHTML = '<div class="p-3 text-muted text-center">Nenhum credito encontrado</div>';
+                } else {
+                    data.forEach(function(credito) {
+                        const div = document.createElement('div');
+                        div.className = 'p-2 border-bottom';
+                        div.style.cursor = 'pointer';
+                        div.innerHTML = `
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>NF ${credito.numero_nf || 'N/A'}</strong>
+                                    <br><small class="text-muted">${credito.nome_responsavel || credito.cnpj_responsavel || '-'}</small>
+                                </div>
+                                <span class="badge bg-warning text-dark">${credito.qtd_saldo} pallets</span>
+                            </div>
+                        `;
+                        div.addEventListener('click', function() {
+                            creditoIdDash.value = credito.id;
+                            buscaCreditoDash.value = 'NF ' + (credito.numero_nf || 'N/A') + ' - ' + (credito.nome_responsavel || '-') + ' (saldo: ' + credito.qtd_saldo + ')';
+                            listaCreditosDash.style.display = 'none';
+                        });
+                        div.classList.add('autocomplete-item-dash');
+                        listaCreditosDash.appendChild(div);
+                    });
+                }
+                listaCreditosDash.style.display = 'block';
+            })
+            .catch(function(error) {
+                console.error('Erro ao buscar creditos:', error);
+                listaCreditosDash.innerHTML = '<div class="p-3 text-danger text-center">Erro na busca</div>';
+                listaCreditosDash.style.display = 'block';
+            });
+    }
+
+    if (buscaCreditoDash) {
+        buscaCreditoDash.addEventListener('input', function() {
+            const termo = this.value.trim();
+            creditoIdDash.value = '';
+            if (timeoutCreditoDash) clearTimeout(timeoutCreditoDash);
+            if (termo.length < 1) {
+                listaCreditosDash.style.display = 'none';
+                return;
+            }
+            timeoutCreditoDash = setTimeout(function() { buscarCreditosDash(termo); }, 300);
+        });
+    }
+
+    // Fechar lista ao clicar fora
+    document.addEventListener('click', function(e) {
+        if (buscaCreditoDash && listaCreditosDash &&
+            !buscaCreditoDash.contains(e.target) && !listaCreditosDash.contains(e.target)) {
+            listaCreditosDash.style.display = 'none';
+        }
+    });
+})();
 
 // Auto-refresh stats a cada 5 minutos
 setInterval(function() {
