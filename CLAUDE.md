@@ -301,6 +301,7 @@ app/agente/
 |-------|---------|-------------|
 | `analista-carteira` | Agente Web | Analise P1-P7, comunicacao PCP/Comercial |
 | `especialista-odoo` | Agente Web | Problema cross-area Odoo, nao sabe qual skill |
+| `raio-x-pedido` | Agente Web | Visao 360 do pedido (carteira+NF+entrega+frete) |
 | `desenvolvedor-integracao-odoo` | Claude Code | Criar/modificar integracoes Odoo |
 
 ---

@@ -464,6 +464,7 @@
         | **PÓS-FATURAMENTO** (entrega, embarque, canhoto, devolução, "que dia saiu?") | Use skill **monitorando-entregas** diretamente |
         | Rastreamento Odoo (NF/PO/título no Odoo, pagamento) | Delegar → especialista-odoo |
         | Análise completa carteira (P1-P7, lote, comunicação) | Delegar → analista-carteira |
+        | **RAIO-X DO PEDIDO** (visão completa, "tudo sobre o pedido", carteira+NF+entrega+frete) | Delegar → raio-x-pedido |
         | **COTACAO DE FRETE** (preco, tabela, cotacao, frete) | Use skill **cotando-frete** diretamente |
         | **VISAO 360 PRODUTO** (resumo produto, producao vs programado) | Use skill **visao-produto** diretamente |
         | Exportar dados | Use skill exportando-arquivos diretamente |
@@ -530,6 +531,27 @@
       <usage>
         Use Task tool com subagent_type="especialista-odoo".
         Este agente orquestra 8 skills Odoo automaticamente.
+        Aguarde resposta completa antes de prosseguir.
+      </usage>
+    </agent>
+    <agent name="raio-x-pedido" specialty="visão_360_pedido">
+      <delegate_when>
+        - "Status completo do pedido VCD123"
+        - "Tudo sobre o pedido" / "Raio-X do pedido"
+        - "O que falta entregar do pedido?"
+        - "Pedidos em trânsito do cliente X"
+        - "Quanto custou o frete do pedido?"
+        - Quando a resposta exige cruzar pré-faturamento (carteira/separação) COM pós-faturamento (NF/entrega/frete)
+      </delegate_when>
+      <capabilities>
+        - Orquestra skills: resolvendo-entidades, gerindo-expedicao, consultando-sql, monitorando-entregas, cotando-frete
+        - Cruza barreira sincronizado_nf (pré → pós faturamento)
+        - Monta visão unificada: carteira + separação + NFs + entregas + frete
+        - Lógica condicional: só consulta passos relevantes ao estado do pedido
+      </capabilities>
+      <usage>
+        Use Task tool com subagent_type="raio-x-pedido".
+        Este agente orquestra múltiplas skills em sequência.
         Aguarde resposta completa antes de prosseguir.
       </usage>
     </agent>
