@@ -1,0 +1,87 @@
+{
+  "name": "recebimento_lf_lote",
+  "description": "Lote + quantidade para produto do Recebimento LF.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "recebimento_lf_id",
+      "type": "integer",
+      "description": "FK → recebimento_lf.id",
+      "nullable": false
+    },
+    {
+      "name": "odoo_product_id",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "odoo_product_name",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "odoo_dfe_line_id",
+      "type": "integer"
+    },
+    {
+      "name": "cfop",
+      "type": "varchar(10)"
+    },
+    {
+      "name": "tipo",
+      "type": "varchar(10)",
+      "description": "'manual' ou 'auto'",
+      "nullable": false
+    },
+    {
+      "name": "lote_nome",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "quantidade",
+      "type": "numeric(15,3)",
+      "nullable": false
+    },
+    {
+      "name": "data_validade",
+      "type": "date"
+    },
+    {
+      "name": "produto_tracking",
+      "type": "varchar(20)",
+      "default": "lot"
+    },
+    {
+      "name": "odoo_lot_id",
+      "type": "integer"
+    },
+    {
+      "name": "odoo_move_line_id",
+      "type": "integer"
+    },
+    {
+      "name": "processado",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "recebimento_lf_id",
+      "references": "recebimento_lf.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_recebimento_lf_lote_recebimento_lf_id",
+      "columns": [
+        "recebimento_lf_id"
+      ],
+      "unique": false
+    }
+  ]
+}

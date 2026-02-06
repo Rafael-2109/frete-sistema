@@ -34,3 +34,7 @@ def init_app(app):
     # APIs e Views de Recebimento Fisico (Fase 4)
     from .routes.recebimento_fisico_routes import recebimento_fisico_bp
     app.register_blueprint(recebimento_fisico_bp)
+
+    # APIs e Views de Recebimento LF (La Famiglia)
+    from .routes.recebimento_lf_routes import recebimento_lf_bp
+    app.register_blueprint(recebimento_lf_bp)

@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 171,
+  "total_relationships": 172,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -894,6 +894,12 @@
       "from_table": "recebimento_fisico",
       "from_column": "validacao_id",
       "to_table": "validacao_nf_po_dfe",
+      "to_column": "id"
+    },
+    {
+      "from_table": "recebimento_lf_lote",
+      "from_column": "recebimento_lf_id",
+      "to_table": "recebimento_lf",
       "to_column": "id"
     },
     {

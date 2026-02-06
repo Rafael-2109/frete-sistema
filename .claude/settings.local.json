@@ -60,7 +60,8 @@
       "Bash(sort:*)",
       "Bash(head:*)",
       "WebFetch(domain:oneryalcin.medium.com)",
-      "WebFetch(domain:pypi.org)"
+      "WebFetch(domain:pypi.org)",
+      "mcp__ide__getDiagnostics"
     ],
     "deny": []
   },

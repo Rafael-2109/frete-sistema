@@ -187,9 +187,9 @@
       "unique": false
     },
     {
-      "name": "idx_comp_pagador_cnpj",
+      "name": "idx_comp_ofx_checknum",
       "columns": [
-        "pagador_cnpj_cpf"
+        "ofx_checknum"
       ],
       "unique": false
     },
@@ -199,6 +199,13 @@
         "numero_agendamento"
       ],
       "unique": true
+    },
+    {
+      "name": "idx_comp_pagador_cnpj",
+      "columns": [
+        "pagador_cnpj_cpf"
+      ],
+      "unique": false
     },
     {
       "name": "idx_comp_data_pagamento",
@@ -222,9 +229,9 @@
       "unique": false
     },
     {
-      "name": "idx_comp_odoo_statement_line",
+      "name": "idx_comp_beneficiario_cnpj",
       "columns": [
-        "odoo_statement_line_id"
+        "beneficiario_cnpj_cpf"
       ],
       "unique": false
     },
@@ -236,16 +243,9 @@
       "unique": false
     },
     {
-      "name": "idx_comp_ofx_checknum",
+      "name": "idx_comp_odoo_statement_line",
       "columns": [
-        "ofx_checknum"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_comp_beneficiario_cnpj",
-      "columns": [
-        "beneficiario_cnpj_cpf"
+        "odoo_statement_line_id"
       ],
       "unique": false
     },

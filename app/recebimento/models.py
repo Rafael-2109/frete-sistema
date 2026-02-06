@@ -21,6 +21,10 @@ FASE 4 - Recebimento Fisico:
 - RecebimentoLote: Lotes + quantidades por produto
 - RecebimentoQualityCheck: Quality checks preenchidos localmente
 
+RECEBIMENTO LF (La Famiglia -> Nacom Goya):
+- RecebimentoLf: Registro principal (DFe -> PO -> Picking -> Invoice)
+- RecebimentoLfLote: Lotes por produto (manual ou automatico por CFOP)
+
 CACHE DE PICKINGS (Sync Odoo -> Local via APScheduler):
 - PickingRecebimento: Cache de pickings incoming com purchase_id
 - PickingRecebimentoProduto: Produtos (stock.move) do picking
@@ -1445,4 +1449,172 @@ class PickingRecebimentoQualityCheck(db.Model):
             'norm_unit': self.norm_unit or '',
             'tolerance_min': float(self.tolerance_min) if self.tolerance_min else 0,
             'tolerance_max': float(self.tolerance_max) if self.tolerance_max else 0,
+        }
+
+
+# =========================================================================
+# RECEBIMENTO LF (La Famiglia -> Nacom Goya)
+# =========================================================================
+
+
+class RecebimentoLf(db.Model):
+    """
+    Registro principal de Recebimento LF (Retorno de Industrializacao).
+    Fluxo completo automatizado: DFe -> PO -> Picking -> Invoice.
+
+    Contexto: LA FAMIGLIA (LF, company_id=5) envia insumos para industrializacao
+    na NACOM GOYA (FB, company_id=1). Ao retornar, FB recebe NF da LF.
+    - Produtos CFOP=1902: retorno de insumos/embalagens (lotes copiados automaticamente)
+    - Produtos CFOP!=1902: produto acabado (lotes preenchidos pelo usuario)
+
+    Status flow: pendente -> processando -> processado | erro
+    Fases: 0=nao iniciado, 1=DFe, 2=PO, 3=Picking, 4=Invoice, 5=Finalizado
+    """
+    __tablename__ = 'recebimento_lf'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # DFe / NF de entrada
+    odoo_dfe_id = db.Column(db.Integer, nullable=False, index=True, unique=True)
+    numero_nf = db.Column(db.String(50), nullable=True)
+    chave_nfe = db.Column(db.String(44), nullable=True, index=True)
+    cnpj_emitente = db.Column(db.String(20), nullable=True)
+
+    # PO gerado
+    odoo_po_id = db.Column(db.Integer, nullable=True)
+    odoo_po_name = db.Column(db.String(50), nullable=True)
+
+    # Picking gerado
+    odoo_picking_id = db.Column(db.Integer, nullable=True)
+    odoo_picking_name = db.Column(db.String(50), nullable=True)
+
+    # Invoice gerada
+    odoo_invoice_id = db.Column(db.Integer, nullable=True)
+    odoo_invoice_name = db.Column(db.String(50), nullable=True)
+
+    # Company (FB = 1, ja que FB recebe a NF)
+    company_id = db.Column(db.Integer, nullable=False, default=1)
+
+    # Status do processamento
+    status = db.Column(db.String(20), default='pendente', nullable=False, index=True)
+    fase_atual = db.Column(db.Integer, default=0, nullable=False)
+    etapa_atual = db.Column(db.Integer, default=0, nullable=False)
+    total_etapas = db.Column(db.Integer, default=18, nullable=False)
+
+    # Erro e retentativas
+    erro_mensagem = db.Column(db.Text, nullable=True)
+    tentativas = db.Column(db.Integer, default=0, nullable=False)
+    max_tentativas = db.Column(db.Integer, default=3, nullable=False)
+
+    # Job RQ
+    job_id = db.Column(db.String(100), nullable=True)
+
+    # Auditoria
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    processado_em = db.Column(db.DateTime, nullable=True)
+    usuario = db.Column(db.String(100), nullable=True)
+
+    # Relacionamentos
+    lotes = db.relationship(
+        'RecebimentoLfLote', backref='recebimento_lf',
+        lazy='dynamic', cascade='all, delete-orphan'
+    )
+
+    def __repr__(self):
+        return f'<RecebimentoLf {self.id} NF={self.numero_nf} status={self.status}>'
+
+    def to_dict(self):
+        """Serializa para dicionario."""
+        return {
+            'id': self.id,
+            'odoo_dfe_id': self.odoo_dfe_id,
+            'numero_nf': self.numero_nf,
+            'chave_nfe': self.chave_nfe,
+            'cnpj_emitente': self.cnpj_emitente,
+            'odoo_po_id': self.odoo_po_id,
+            'odoo_po_name': self.odoo_po_name,
+            'odoo_picking_id': self.odoo_picking_id,
+            'odoo_picking_name': self.odoo_picking_name,
+            'odoo_invoice_id': self.odoo_invoice_id,
+            'odoo_invoice_name': self.odoo_invoice_name,
+            'company_id': self.company_id,
+            'status': self.status,
+            'fase_atual': self.fase_atual,
+            'etapa_atual': self.etapa_atual,
+            'total_etapas': self.total_etapas,
+            'erro_mensagem': self.erro_mensagem,
+            'tentativas': self.tentativas,
+            'job_id': self.job_id,
+            'criado_em': self.criado_em.isoformat() if self.criado_em else None,
+            'atualizado_em': self.atualizado_em.isoformat() if self.atualizado_em else None,
+            'processado_em': self.processado_em.isoformat() if self.processado_em else None,
+            'usuario': self.usuario,
+        }
+
+
+class RecebimentoLfLote(db.Model):
+    """
+    Lote + quantidade para produto do Recebimento LF.
+
+    Tipos:
+    - tipo='manual': CFOP!=1902 (produto acabado, preenchido pelo usuario)
+    - tipo='auto': CFOP=1902 (retorno insumo/embalagem, copiado da NF da LF)
+    """
+    __tablename__ = 'recebimento_lf_lote'
+
+    id = db.Column(db.Integer, primary_key=True)
+    recebimento_lf_id = db.Column(
+        db.Integer, db.ForeignKey('recebimento_lf.id', ondelete='CASCADE'),
+        nullable=False, index=True
+    )
+
+    # Produto (Odoo)
+    odoo_product_id = db.Column(db.Integer, nullable=False)
+    odoo_product_name = db.Column(db.String(255), nullable=True)
+    odoo_dfe_line_id = db.Column(db.Integer, nullable=True)
+
+    # CFOP da linha DFe
+    cfop = db.Column(db.String(10), nullable=True)
+
+    # Tipo do preenchimento
+    tipo = db.Column(db.String(10), nullable=False)  # 'manual' ou 'auto'
+
+    # Lote e quantidade
+    lote_nome = db.Column(db.String(100), nullable=True)
+    quantidade = db.Column(db.Numeric(15, 3), nullable=False)
+    data_validade = db.Column(db.Date, nullable=True)
+
+    # Tracking do produto (lot/serial/none)
+    produto_tracking = db.Column(db.String(20), nullable=True, default='lot')
+
+    # IDs no Odoo (preenchidos apos processamento pelo worker)
+    odoo_lot_id = db.Column(db.Integer, nullable=True)
+    odoo_move_line_id = db.Column(db.Integer, nullable=True)
+
+    # Status
+    processado = db.Column(db.Boolean, default=False, nullable=False)
+
+    def __repr__(self):
+        return (
+            f'<RecebimentoLfLote {self.id} '
+            f'produto={self.odoo_product_id} '
+            f'lote={self.lote_nome} tipo={self.tipo}>'
+        )
+
+    def to_dict(self):
+        """Serializa para dicionario."""
+        return {
+            'id': self.id,
+            'recebimento_lf_id': self.recebimento_lf_id,
+            'odoo_product_id': self.odoo_product_id,
+            'odoo_product_name': self.odoo_product_name,
+            'odoo_dfe_line_id': self.odoo_dfe_line_id,
+            'cfop': self.cfop,
+            'tipo': self.tipo,
+            'lote_nome': self.lote_nome,
+            'quantidade': float(self.quantidade) if self.quantidade else 0,
+            'data_validade': self.data_validade.isoformat() if self.data_validade else None,
+            'produto_tracking': self.produto_tracking,
+            'processado': self.processado,
         }

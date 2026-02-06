@@ -1,0 +1,138 @@
+{
+  "name": "recebimento_lf",
+  "description": "Registro principal de Recebimento LF (Retorno de Industrializacao).",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "odoo_dfe_id",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "numero_nf",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "chave_nfe",
+      "type": "varchar(44)"
+    },
+    {
+      "name": "cnpj_emitente",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "odoo_po_id",
+      "type": "integer"
+    },
+    {
+      "name": "odoo_po_name",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "odoo_picking_id",
+      "type": "integer"
+    },
+    {
+      "name": "odoo_picking_name",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "odoo_invoice_id",
+      "type": "integer"
+    },
+    {
+      "name": "odoo_invoice_name",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "company_id",
+      "type": "integer",
+      "nullable": false,
+      "default": 1
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "pendente"
+    },
+    {
+      "name": "fase_atual",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "etapa_atual",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "total_etapas",
+      "type": "integer",
+      "nullable": false,
+      "default": 18
+    },
+    {
+      "name": "erro_mensagem",
+      "type": "text"
+    },
+    {
+      "name": "tentativas",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "max_tentativas",
+      "type": "integer",
+      "nullable": false,
+      "default": 3
+    },
+    {
+      "name": "job_id",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "processado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "usuario",
+      "type": "varchar(100)"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_recebimento_lf_odoo_dfe_id",
+      "columns": [
+        "odoo_dfe_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_recebimento_lf_chave_nfe",
+      "columns": [
+        "chave_nfe"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_recebimento_lf_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    }
+  ]
+}

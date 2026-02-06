@@ -1,0 +1,879 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-industry text-warning me-2"></i>Recebimento LF (Industrializacao)</h2>
+            <p class="text-muted mb-0">Retorno de industrializacao La Famiglia &rarr; Nacom Goya</p>
+        </div>
+        <div>
+            <a href="{{ url_for('recebimento_lf_views.status') }}" class="btn btn-outline-info me-2">
+                <i class="fas fa-tasks"></i> Status
+            </a>
+            <a href="{{ url_for('recebimento_views.central_compras') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    <!-- Lista de DFes -->
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h6 class="mb-0"><i class="fas fa-file-invoice me-2"></i>NFs da La Famiglia Disponiveis</h6>
+            <button class="btn btn-outline-primary btn-sm" onclick="buscarDfes()">
+                <i class="fas fa-sync-alt"></i> Atualizar
+            </button>
+        </div>
+        <div class="card-body" id="containerDfes">
+            <!-- Estado vazio -->
+            <div id="estadoVazio" class="text-center py-5 text-muted">
+                <i class="fas fa-file-invoice fa-3x mb-3"></i>
+                <p>Clique em "Atualizar" para buscar NFs da La Famiglia no Odoo.</p>
+            </div>
+
+            <!-- Loading -->
+            <div id="loadingDfes" class="text-center py-5" style="display: none;">
+                <div class="spinner-border text-warning" role="status">
+                    <span class="visually-hidden">Carregando...</span>
+                </div>
+                <p class="mt-2">Buscando NFs da La Famiglia no Odoo...</p>
+            </div>
+
+            <!-- Cards de DFes -->
+            <div id="listaDfes" class="row g-3" style="display: none;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- =====================================================
+     MODAL: Detalhes do DFe + Preenchimento de Lotes
+     ===================================================== -->
+<div class="modal fade" id="modalRecebimentoLf" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title">
+                    <i class="fas fa-industry me-2"></i>
+                    Recebimento LF: <span id="modalNfNumero" class="fw-bold"></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Info do DFe -->
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <small class="text-muted">Emitente</small>
+                        <div id="modalEmitente" class="fw-bold small"></div>
+                    </div>
+                    <div class="col-md-3">
+                        <small class="text-muted">Data Emissao</small>
+                        <div id="modalDataEmissao" class="fw-bold"></div>
+                    </div>
+                    <div class="col-md-3">
+                        <small class="text-muted">Valor Total</small>
+                        <div id="modalValorTotal" class="fw-bold text-primary"></div>
+                    </div>
+                    <div class="col-md-3">
+                        <small class="text-muted">Status DFe</small>
+                        <div id="modalStatusDfe"></div>
+                    </div>
+                </div>
+
+                <hr>
+
+                <!-- Loading detalhes -->
+                <div id="loadingDetalhes" class="text-center py-4">
+                    <div class="spinner-border text-warning" role="status"></div>
+                    <p class="mt-2">Carregando produtos e lotes...</p>
+                </div>
+
+                <!-- Conteudo do formulario -->
+                <div id="conteudoRecebimento" style="display: none;">
+
+                    <!-- Secao: Produtos CFOP != 1902 (preenchimento manual) -->
+                    <div id="secaoManuais" style="display: none;">
+                        <h6 class="mb-3 text-warning">
+                            <i class="fas fa-edit me-1"></i> Produtos Acabados (CFOP &ne; 1902)
+                            <small class="text-muted ms-2">Preencher lote + quantidade manualmente</small>
+                        </h6>
+                        <div id="listaManuais">
+                            <!-- Produtos manuais inseridos via JS -->
+                        </div>
+                    </div>
+
+                    <!-- Secao: Produtos CFOP = 1902 (automaticos) -->
+                    <div id="secaoAuto" style="display: none;">
+                        <hr>
+                        <h6 class="mb-3 text-success">
+                            <i class="fas fa-magic me-1"></i> Retorno Insumos/Embalagens (CFOP = 1902)
+                            <small class="text-muted ms-2">Lotes copiados automaticamente do faturamento LF</small>
+                        </h6>
+                        <div id="listaAuto">
+                            <!-- Produtos auto inseridos via JS -->
+                        </div>
+                    </div>
+
+                    <!-- Sem produtos -->
+                    <div id="semProdutos" class="text-center py-4 text-muted" style="display: none;">
+                        <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                        <p>Nenhum produto encontrado neste DFe.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-warning" id="btnProcessar" onclick="salvarRecebimentoLf()">
+                    <i class="fas fa-cogs"></i> Processar Recebimento
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .card-dfe {
+        cursor: pointer;
+        transition: all 0.2s ease;
+        border-left: 4px solid var(--bs-warning);
+    }
+    .card-dfe:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+    }
+    .card-dfe.tem-po {
+        border-left-color: var(--bs-info);
+    }
+
+    .nf-destaque {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--bs-warning);
+    }
+
+    .produto-card {
+        border: 1px solid var(--bs-border-color);
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+    .produto-card.auto {
+        background-color: rgba(25, 135, 84, 0.05);
+        border-color: var(--bs-success);
+    }
+    .produto-card .produto-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.75rem;
+    }
+
+    .lote-row {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+    .lote-row input {
+        font-size: 0.85rem;
+    }
+
+    .validacao-qtd {
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+    .validacao-qtd.ok { color: var(--bs-success); }
+    .validacao-qtd.erro { color: var(--bs-danger); }
+
+    .badge-auto {
+        background-color: var(--bs-success);
+        color: white;
+        font-size: 0.7rem;
+    }
+    .badge-manual {
+        background-color: var(--bs-warning);
+        color: var(--bs-dark);
+        font-size: 0.7rem;
+    }
+    .badge-nao-encontrado {
+        background-color: var(--bs-secondary);
+        color: white;
+        font-size: 0.7rem;
+    }
+
+    .status-badge {
+        font-size: 0.7rem;
+        padding: 0.2em 0.5em;
+    }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// =====================================================
+// Estado global
+// =====================================================
+let dfeAtual = null;
+let detalhesAtual = null;
+
+// =====================================================
+// UTILITARIOS
+// =====================================================
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function formatarQtd(valor) {
+    if (valor === null || valor === undefined || isNaN(valor)) return '0';
+    const num = parseFloat(valor);
+    if (Number.isInteger(num)) return num.toLocaleString('pt-BR');
+    return num.toLocaleString('pt-BR', {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 3,
+    });
+}
+
+function formatarMoeda(valor) {
+    if (valor === null || valor === undefined || isNaN(valor)) return 'R$ 0,00';
+    return parseFloat(valor).toLocaleString('pt-BR', {
+        style: 'currency',
+        currency: 'BRL',
+    });
+}
+
+function formatarData(dataStr) {
+    if (!dataStr) return '-';
+    try {
+        const d = new Date(dataStr);
+        return d.toLocaleDateString('pt-BR');
+    } catch {
+        return dataStr;
+    }
+}
+
+function getStatusDfeBadge(status) {
+    const map = {
+        '01': { label: 'Pendente', class: 'bg-secondary' },
+        '02': { label: 'Ciencia', class: 'bg-info' },
+        '03': { label: 'Confirmado', class: 'bg-primary' },
+        '04': { label: 'Desconhecido', class: 'bg-warning text-dark' },
+        '06': { label: 'Concluido', class: 'bg-success' },
+    };
+    const info = map[status] || { label: status || '?', class: 'bg-secondary' };
+    return `<span class="badge ${info.class} status-badge">${info.label}</span>`;
+}
+
+// =====================================================
+// FORMATACAO DE LOTES - Padrao ME {XXX}-{DDD}/{AA}
+// =====================================================
+function getMascaraLote(tipo = 'ME') {
+    if (tipo === 'MP') return '';
+    const hoje = new Date();
+    const inicioAno = new Date(hoje.getFullYear(), 0, 0);
+    const diff = hoje - inicioAno;
+    const diaDoAno = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const ddd = String(diaDoAno).padStart(3, '0');
+    const aa = String(hoje.getFullYear()).slice(-2);
+    return `${tipo} ___-${ddd}/${aa}`;
+}
+
+function formatarLoteNome(codigo, tipo = 'ME') {
+    const codigoLimpo = codigo.trim();
+    if (tipo === 'MP') return codigoLimpo;
+    if (!/^\d{3}$/.test(codigoLimpo)) return '';
+
+    const hoje = new Date();
+    const inicioAno = new Date(hoje.getFullYear(), 0, 0);
+    const diff = hoje - inicioAno;
+    const diaDoAno = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const ddd = String(diaDoAno).padStart(3, '0');
+    const aa = String(hoje.getFullYear()).slice(-2);
+
+    return `${tipo} ${codigoLimpo}-${ddd}/${aa}`;
+}
+
+function atualizarLoteFormatado(inputCodigo) {
+    const row = inputCodigo.closest('.lote-row');
+    const inputNome = row.querySelector('.lote-nome');
+    const selectTipo = row.querySelector('.lote-tipo');
+    const tipo = selectTipo ? selectTipo.value : 'ME';
+
+    if (tipo === 'MP') {
+        inputNome.value = inputCodigo.value.trim();
+    } else if (inputCodigo.value.length === 3) {
+        inputNome.value = formatarLoteNome(inputCodigo.value, tipo);
+    } else {
+        inputNome.value = getMascaraLote(tipo);
+    }
+}
+
+function atualizarInputLote(input) {
+    const row = input.closest('.lote-row');
+    const selectTipo = row.querySelector('.lote-tipo');
+    const tipo = selectTipo ? selectTipo.value : 'ME';
+
+    if (tipo !== 'MP') {
+        input.value = input.value.replace(/[^\d]/g, '').slice(0, 3);
+    }
+    atualizarLoteFormatado(input);
+}
+
+function onTipoLoteChange(select) {
+    const row = select.closest('.lote-row');
+    const inputCodigo = row.querySelector('.lote-codigo');
+    const inputNome = row.querySelector('.lote-nome');
+    const tipo = select.value;
+
+    if (tipo === 'MP') {
+        inputCodigo.removeAttribute('maxlength');
+        inputCodigo.removeAttribute('pattern');
+        inputCodigo.placeholder = 'Lote fornecedor';
+        inputCodigo.title = 'Digite o lote exatamente como no fornecedor';
+        inputNome.value = inputCodigo.value.trim();
+    } else {
+        inputCodigo.setAttribute('maxlength', '3');
+        inputCodigo.setAttribute('pattern', '\\d{3}');
+        inputCodigo.placeholder = '000';
+        inputCodigo.title = 'Digite 3 digitos numericos';
+        if (!/^\d{0,3}$/.test(inputCodigo.value)) {
+            inputCodigo.value = '';
+        }
+        atualizarLoteFormatado(inputCodigo);
+    }
+}
+
+// =====================================================
+// BUSCAR DFes DA LF
+// =====================================================
+function buscarDfes() {
+    document.getElementById('estadoVazio').style.display = 'none';
+    document.getElementById('listaDfes').style.display = 'none';
+    document.getElementById('loadingDfes').style.display = 'block';
+
+    fetch('/recebimento/lf/dfes')
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('loadingDfes').style.display = 'none';
+
+            if (data.error) {
+                toastr.error(data.error);
+                document.getElementById('estadoVazio').style.display = 'block';
+                return;
+            }
+
+            if (!data.dfes || data.dfes.length === 0) {
+                document.getElementById('estadoVazio').innerHTML = `
+                    <i class="fas fa-inbox fa-3x mb-3"></i>
+                    <p>Nenhuma NF da La Famiglia disponivel para recebimento.</p>
+                    <small class="text-muted">Todas as NFs ja foram processadas ou nao ha NFs pendentes no Odoo.</small>
+                `;
+                document.getElementById('estadoVazio').style.display = 'block';
+                return;
+            }
+
+            renderDfes(data.dfes);
+        })
+        .catch(err => {
+            document.getElementById('loadingDfes').style.display = 'none';
+            document.getElementById('estadoVazio').style.display = 'block';
+            toastr.error('Erro ao buscar DFes: ' + err.message);
+        });
+}
+
+function renderDfes(dfes) {
+    const container = document.getElementById('listaDfes');
+    container.innerHTML = '';
+
+    dfes.forEach(dfe => {
+        const dataFormatada = formatarData(dfe.data_emissao);
+        const valorFormatado = formatarMoeda(dfe.valor_total);
+        const statusBadge = getStatusDfeBadge(dfe.status_dfe);
+        const poBadge = dfe.tem_po
+            ? '<span class="badge bg-info status-badge">c/ PO</span>'
+            : '';
+
+        container.innerHTML += `
+            <div class="col-md-4 col-lg-3">
+                <div class="card card-dfe ${dfe.tem_po ? 'tem-po' : ''}"
+                     onclick="abrirRecebimentoLf(${dfe.id})">
+                    <div class="card-body py-3">
+                        <div class="d-flex justify-content-between align-items-start mb-1">
+                            <span class="nf-destaque">NF ${escapeHtml(dfe.numero_nf) || '-'}</span>
+                            <div>
+                                ${statusBadge}
+                                ${poBadge}
+                            </div>
+                        </div>
+                        <p class="mb-1 small">
+                            <i class="fas fa-building me-1 text-muted"></i>
+                            ${escapeHtml(dfe.emitente_nome) || 'La Famiglia'}
+                        </p>
+                        <div class="d-flex justify-content-between align-items-center mt-2">
+                            <small class="text-muted">
+                                <i class="fas fa-calendar me-1"></i>${dataFormatada}
+                            </small>
+                            <strong class="text-primary small">${valorFormatado}</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    container.style.display = 'flex';
+}
+
+// =====================================================
+// ABRIR MODAL DE RECEBIMENTO LF
+// =====================================================
+function abrirRecebimentoLf(dfeId) {
+    dfeAtual = dfeId;
+
+    // Reset modal
+    document.getElementById('loadingDetalhes').style.display = 'block';
+    document.getElementById('conteudoRecebimento').style.display = 'none';
+    document.getElementById('btnProcessar').disabled = false;
+    document.getElementById('btnProcessar').innerHTML = '<i class="fas fa-cogs"></i> Processar Recebimento';
+
+    const modal = new bootstrap.Modal(document.getElementById('modalRecebimentoLf'));
+    modal.show();
+
+    // Buscar detalhes
+    fetch(`/recebimento/lf/dfe/${dfeId}/detalhes`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                toastr.error(data.error);
+                modal.hide();
+                return;
+            }
+
+            detalhesAtual = data;
+            renderDetalhesLf(data);
+        })
+        .catch(err => {
+            toastr.error('Erro ao carregar detalhes: ' + err.message);
+            modal.hide();
+        });
+}
+
+function renderDetalhesLf(data) {
+    const info = data.info_dfe;
+
+    // Header
+    document.getElementById('modalNfNumero').textContent = `NF ${info.numero_nf || '-'}`;
+    document.getElementById('modalEmitente').textContent = info.emitente_nome || 'La Famiglia';
+    document.getElementById('modalDataEmissao').textContent = formatarData(info.data_emissao);
+    document.getElementById('modalValorTotal').textContent = formatarMoeda(info.valor_total);
+    document.getElementById('modalStatusDfe').innerHTML = getStatusDfeBadge(info.status_dfe);
+
+    const manuais = data.linhas_manuais || [];
+    const auto = data.linhas_auto || [];
+
+    // Render manuais (CFOP != 1902)
+    if (manuais.length > 0) {
+        renderProdutosManuais(manuais);
+        document.getElementById('secaoManuais').style.display = 'block';
+    } else {
+        document.getElementById('secaoManuais').style.display = 'none';
+    }
+
+    // Render auto (CFOP = 1902)
+    if (auto.length > 0) {
+        renderProdutosAuto(auto);
+        document.getElementById('secaoAuto').style.display = 'block';
+    } else {
+        document.getElementById('secaoAuto').style.display = 'none';
+    }
+
+    // Nenhum produto
+    if (manuais.length === 0 && auto.length === 0) {
+        document.getElementById('semProdutos').style.display = 'block';
+        document.getElementById('btnProcessar').disabled = true;
+    } else {
+        document.getElementById('semProdutos').style.display = 'none';
+    }
+
+    document.getElementById('loadingDetalhes').style.display = 'none';
+    document.getElementById('conteudoRecebimento').style.display = 'block';
+}
+
+// =====================================================
+// RENDER PRODUTOS MANUAIS (CFOP != 1902)
+// =====================================================
+function renderProdutosManuais(linhas) {
+    const container = document.getElementById('listaManuais');
+    container.innerHTML = '';
+
+    linhas.forEach((item, idx) => {
+        const qtdFormatada = formatarQtd(item.quantidade);
+        const mascaraLote = getMascaraLote();
+
+        container.innerHTML += `
+            <div class="produto-card" data-product-id="${item.product_id}"
+                 data-dfe-line-id="${item.dfe_line_id}" data-cfop="${item.cfop}"
+                 data-qtd-nf="${item.quantidade}" data-tipo="manual">
+                <div class="produto-header">
+                    <div>
+                        <strong>${escapeHtml(item.nome_produto)}</strong>
+                        <span class="badge badge-manual ms-2">CFOP ${escapeHtml(item.cfop)}</span>
+                        <div class="small text-muted">
+                            Cod: ${escapeHtml(item.cod_produto) || '-'} |
+                            Qtd NF: ${qtdFormatada} ${escapeHtml(item.unidade) || ''}
+                        </div>
+                    </div>
+                    <span class="badge bg-warning text-dark">Manual</span>
+                </div>
+                <div class="lotes-container" id="lotes-manual-${idx}">
+                    <div class="lote-row" data-idx="0">
+                        <select class="form-select form-select-sm lote-tipo"
+                                style="flex: 0.4; min-width: 55px;"
+                                onchange="onTipoLoteChange(this)">
+                            <option value="ME" selected>ME</option>
+                            <option value="MI">MI</option>
+                            <option value="MP">MP</option>
+                        </select>
+                        <input type="text" class="form-control form-control-sm lote-codigo"
+                               placeholder="000" maxlength="3" pattern="\\d{3}"
+                               style="flex: 0.6; text-align: center; font-family: monospace; font-weight: bold;"
+                               oninput="atualizarInputLote(this)"
+                               title="Digite 3 digitos numericos">
+                        <input type="text" class="form-control form-control-sm lote-nome"
+                               readonly value="${mascaraLote}"
+                               style="flex: 1.4; font-family: monospace; background-color: var(--input-bg, #f8f9fa); opacity: 0.9;">
+                        <input type="number" class="form-control form-control-sm lote-qtd"
+                               placeholder="Qtd" step="0.001" min="0"
+                               onchange="validarSomaLotes('manual', ${idx})" style="flex: 1;">
+                        <input type="date" class="form-control form-control-sm lote-validade"
+                               placeholder="Validade" style="flex: 1.2;">
+                        <button class="btn btn-outline-danger btn-sm"
+                                onclick="removerLote('manual', ${idx}, this)" title="Remover">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+                <button class="btn btn-outline-success btn-sm mt-1"
+                        onclick="adicionarLote('manual', ${idx})">
+                    <i class="fas fa-plus"></i> Adicionar Lote
+                </button>
+                <div class="validacao-qtd mt-1" id="validacao-manual-${idx}">
+                    Soma: 0 / ${qtdFormatada} ${item.unidade || ''}
+                </div>
+            </div>
+        `;
+    });
+}
+
+// =====================================================
+// RENDER PRODUTOS AUTO (CFOP = 1902)
+// =====================================================
+function renderProdutosAuto(linhas) {
+    const container = document.getElementById('listaAuto');
+    container.innerHTML = '';
+
+    linhas.forEach((item, idx) => {
+        const qtdFormatada = formatarQtd(item.quantidade);
+        const loteNome = item.lote_nome || '';
+        const loteOrigem = item.lote_origem || 'nao_encontrado';
+
+        let loteBadge = '';
+        let loteDisplay = '';
+
+        if (loteOrigem === 'faturamento_lf' && loteNome) {
+            loteBadge = '<span class="badge badge-auto">Automatico - copiado da NF</span>';
+            loteDisplay = `<code class="text-success">${escapeHtml(loteNome)}</code>`;
+        } else {
+            loteBadge = '<span class="badge badge-nao-encontrado">Lote nao encontrado</span>';
+            loteDisplay = '<span class="text-muted small">Sera preenchido sem lote</span>';
+        }
+
+        const dataValidade = item.data_validade
+            ? new Date(item.data_validade).toLocaleDateString('pt-BR')
+            : '-';
+
+        container.innerHTML += `
+            <div class="produto-card auto" data-product-id="${item.product_id}"
+                 data-dfe-line-id="${item.dfe_line_id}" data-cfop="1902"
+                 data-qtd-nf="${item.quantidade}" data-tipo="auto"
+                 data-lote-nome="${loteNome}" data-data-validade="${item.data_validade || ''}">
+                <div class="produto-header">
+                    <div>
+                        <strong>${escapeHtml(item.nome_produto)}</strong>
+                        <span class="badge bg-secondary status-badge ms-2">CFOP 1902</span>
+                        <div class="small text-muted">
+                            Cod: ${escapeHtml(item.cod_produto) || '-'} |
+                            Qtd NF: ${qtdFormatada} ${escapeHtml(item.unidade) || ''}
+                        </div>
+                    </div>
+                    ${loteBadge}
+                </div>
+                <div class="row g-2 small">
+                    <div class="col-md-4">
+                        <label class="text-muted">Lote</label>
+                        <div>${loteDisplay}</div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="text-muted">Quantidade</label>
+                        <div class="fw-bold">${qtdFormatada}</div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="text-muted">Validade</label>
+                        <div>${dataValidade}</div>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <span class="badge bg-success"><i class="fas fa-check me-1"></i>Auto</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+}
+
+// =====================================================
+// LOTES: Adicionar / Remover / Validar
+// =====================================================
+function adicionarLote(tipo, prodIdx) {
+    const container = document.getElementById(`lotes-${tipo}-${prodIdx}`);
+    const numLotes = container.querySelectorAll('.lote-row').length;
+    const mascaraLote = getMascaraLote();
+
+    const row = document.createElement('div');
+    row.className = 'lote-row';
+    row.dataset.idx = numLotes;
+    row.innerHTML = `
+        <select class="form-select form-select-sm lote-tipo"
+                style="flex: 0.4; min-width: 55px;"
+                onchange="onTipoLoteChange(this)">
+            <option value="ME" selected>ME</option>
+            <option value="MI">MI</option>
+            <option value="MP">MP</option>
+        </select>
+        <input type="text" class="form-control form-control-sm lote-codigo"
+               placeholder="000" maxlength="3" pattern="\\d{3}"
+               style="flex: 0.6; text-align: center; font-family: monospace; font-weight: bold;"
+               oninput="atualizarInputLote(this)"
+               title="Digite 3 digitos numericos">
+        <input type="text" class="form-control form-control-sm lote-nome"
+               readonly value="${mascaraLote}"
+               style="flex: 1.4; font-family: monospace; background-color: var(--input-bg, #f8f9fa); opacity: 0.9;">
+        <input type="number" class="form-control form-control-sm lote-qtd"
+               placeholder="Qtd" step="0.001" min="0"
+               onchange="validarSomaLotes('${tipo}', ${prodIdx})" style="flex: 1;">
+        <input type="date" class="form-control form-control-sm lote-validade"
+               placeholder="Validade" style="flex: 1.2;">
+        <button class="btn btn-outline-danger btn-sm"
+                onclick="removerLote('${tipo}', ${prodIdx}, this)" title="Remover">
+            <i class="fas fa-times"></i>
+        </button>
+    `;
+    container.appendChild(row);
+}
+
+function removerLote(tipo, prodIdx, btn) {
+    const container = document.getElementById(`lotes-${tipo}-${prodIdx}`);
+    const rows = container.querySelectorAll('.lote-row');
+    if (rows.length <= 1) {
+        toastr.warning('Deve haver pelo menos 1 lote por produto.');
+        return;
+    }
+    btn.closest('.lote-row').remove();
+    validarSomaLotes(tipo, prodIdx);
+}
+
+function validarSomaLotes(tipo, prodIdx) {
+    const container = document.getElementById(`lotes-${tipo}-${prodIdx}`);
+    const prodCard = container.closest('.produto-card');
+    const qtdNf = parseFloat(prodCard.dataset.qtdNf);
+
+    const inputs = container.querySelectorAll('.lote-qtd');
+    let soma = 0;
+    inputs.forEach(input => {
+        soma += parseFloat(input.value) || 0;
+    });
+
+    const divValidacao = document.getElementById(`validacao-${tipo}-${prodIdx}`);
+    const somaFormatada = formatarQtd(soma);
+    const nfFormatada = formatarQtd(qtdNf);
+
+    const diff = Math.abs(soma - qtdNf);
+    if (diff < 0.001) {
+        divValidacao.className = 'validacao-qtd mt-1 ok';
+        divValidacao.innerHTML = `<i class="fas fa-check"></i> Soma: ${somaFormatada} / ${nfFormatada}`;
+    } else {
+        divValidacao.className = 'validacao-qtd mt-1 erro';
+        divValidacao.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Soma: ${somaFormatada} / ${nfFormatada}`;
+    }
+}
+
+// =====================================================
+// SALVAR RECEBIMENTO LF
+// =====================================================
+function salvarRecebimentoLf() {
+    const btnProcessar = document.getElementById('btnProcessar');
+    btnProcessar.disabled = true;
+    btnProcessar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+
+    try {
+        const info = detalhesAtual.info_dfe;
+
+        // Coletar lotes manuais
+        const lotesManuais = [];
+        let valido = true;
+
+        const cardsManuais = document.querySelectorAll('#listaManuais .produto-card');
+        cardsManuais.forEach((card, idx) => {
+            const productId = parseInt(card.dataset.productId);
+            const dfeLineId = parseInt(card.dataset.dfeLineId);
+            const cfop = card.dataset.cfop;
+            const qtdNf = parseFloat(card.dataset.qtdNf);
+            const productName = card.querySelector('strong').textContent;
+
+            const container = document.getElementById(`lotes-manual-${idx}`);
+            const rows = container.querySelectorAll('.lote-row');
+
+            let somaLotes = 0;
+            rows.forEach(row => {
+                const selectTipo = row.querySelector('.lote-tipo');
+                const tipo = selectTipo ? selectTipo.value : 'ME';
+                const inputCodigo = row.querySelector('.lote-codigo');
+                const nome = row.querySelector('.lote-nome').value.trim();
+                const qtd = parseFloat(row.querySelector('.lote-qtd').value) || 0;
+                const validadeInput = row.querySelector('.lote-validade');
+                const validade = validadeInput ? validadeInput.value : null;
+
+                // Validar codigo para ME/MI
+                if (tipo !== 'MP' && inputCodigo) {
+                    const codigo = inputCodigo.value.trim();
+                    if (codigo.length !== 3 || !/^\d{3}$/.test(codigo)) {
+                        valido = false;
+                        toastr.error(`Codigo do lote deve ter 3 digitos para: ${productName}`);
+                        return;
+                    }
+                }
+
+                if (!nome) {
+                    valido = false;
+                    toastr.error(`Lote sem nome para produto: ${productName}`);
+                    return;
+                }
+                if (qtd <= 0) {
+                    valido = false;
+                    toastr.error(`Quantidade invalida para produto: ${productName}`);
+                    return;
+                }
+
+                somaLotes += qtd;
+                lotesManuais.push({
+                    product_id: productId,
+                    product_name: productName,
+                    dfe_line_id: dfeLineId,
+                    cfop: cfop,
+                    lote_nome: nome,
+                    quantidade: qtd,
+                    data_validade: validade,
+                    produto_tracking: 'lot',
+                });
+            });
+
+            // Validar soma
+            if (Math.abs(somaLotes - qtdNf) >= 0.001) {
+                valido = false;
+                toastr.error(`Soma dos lotes (${formatarQtd(somaLotes)}) diferente da qtd NF (${formatarQtd(qtdNf)}) para: ${productName}`);
+            }
+        });
+
+        if (!valido) {
+            btnProcessar.disabled = false;
+            btnProcessar.innerHTML = '<i class="fas fa-cogs"></i> Processar Recebimento';
+            return;
+        }
+
+        // Coletar lotes auto
+        const lotesAuto = [];
+        const cardsAuto = document.querySelectorAll('#listaAuto .produto-card');
+        cardsAuto.forEach(card => {
+            const productId = parseInt(card.dataset.productId);
+            const dfeLineId = parseInt(card.dataset.dfeLineId);
+            const qtdNf = parseFloat(card.dataset.qtdNf);
+            const productName = card.querySelector('strong').textContent;
+            const loteNome = card.dataset.loteNome || '';
+            const dataValidade = card.dataset.dataValidade || null;
+
+            lotesAuto.push({
+                product_id: productId,
+                product_name: productName,
+                dfe_line_id: dfeLineId,
+                cfop: '1902',
+                lote_nome: loteNome,
+                quantidade: qtdNf,
+                data_validade: dataValidade,
+                produto_tracking: 'lot',
+            });
+        });
+
+        // Montar payload
+        const payload = {
+            dfe_id: dfeAtual,
+            numero_nf: info.numero_nf,
+            chave_nfe: info.chave_nfe,
+            cnpj_emitente: info.emitente_cnpj,
+            lotes_manuais: lotesManuais,
+            lotes_auto: lotesAuto,
+        };
+
+        // Enviar
+        fetch('/recebimento/lf/salvar', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '',
+            },
+            body: JSON.stringify(payload),
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                toastr.error(data.error);
+                btnProcessar.disabled = false;
+                btnProcessar.innerHTML = '<i class="fas fa-cogs"></i> Processar Recebimento';
+                return;
+            }
+
+            toastr.success(data.message || 'Recebimento LF salvo com sucesso!');
+            bootstrap.Modal.getInstance(document.getElementById('modalRecebimentoLf')).hide();
+
+            // Redirect para status
+            setTimeout(() => {
+                window.location.href = '/recebimento/lf/status';
+            }, 1500);
+        })
+        .catch(err => {
+            toastr.error('Erro ao salvar: ' + err.message);
+            btnProcessar.disabled = false;
+            btnProcessar.innerHTML = '<i class="fas fa-cogs"></i> Processar Recebimento';
+        });
+
+    } catch (err) {
+        toastr.error('Erro inesperado: ' + err.message);
+        btnProcessar.disabled = false;
+        btnProcessar.innerHTML = '<i class="fas fa-cogs"></i> Processar Recebimento';
+    }
+}
+
+// =====================================================
+// INIT
+// =====================================================
+document.addEventListener('DOMContentLoaded', function() {
+    // Buscar DFes automaticamente ao carregar
+    buscarDfes();
+});
+</script>
+{% endblock %}

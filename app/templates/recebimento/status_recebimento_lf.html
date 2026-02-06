@@ -1,0 +1,572 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Link voltar -->
+    <a href="{{ url_for('recebimento_views.central_compras') }}" class="btn btn-sm btn-outline-secondary mb-3">
+        <i class="fas fa-arrow-left"></i> Central de Compras
+    </a>
+
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-tasks text-info me-2"></i>Status Recebimentos LF</h2>
+            <p class="text-muted mb-0">Acompanhar processamento de recebimentos La Famiglia no Odoo</p>
+        </div>
+        <div>
+            <a href="{{ url_for('recebimento_lf_views.index') }}" class="btn btn-outline-warning">
+                <i class="fas fa-industry"></i> Novo Recebimento LF
+            </a>
+            <button class="btn btn-outline-primary ms-2" onclick="carregarRecebimentos()">
+                <i class="fas fa-sync-alt"></i> Atualizar
+            </button>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body py-3">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small">Status</label>
+                    <select id="filtroStatus" class="form-select form-select-sm">
+                        <option value="">Todos</option>
+                        <option value="pendente">Pendente</option>
+                        <option value="processando">Processando</option>
+                        <option value="processado">Processado</option>
+                        <option value="erro">Erro</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Limite</label>
+                    <select id="filtroLimite" class="form-select form-select-sm">
+                        <option value="20">20</option>
+                        <option value="50" selected>50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-primary btn-sm w-100" onclick="carregarRecebimentos()">
+                        <i class="fas fa-search"></i> Filtrar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cards de Estatisticas -->
+    <div class="row mb-4" id="statsCards" style="display: none;">
+        <div class="col">
+            <div class="card border-left-warning">
+                <div class="card-body py-2">
+                    <h6 class="text-muted text-uppercase small mb-1">Pendentes</h6>
+                    <h3 class="mb-0 text-warning" id="statPendente">0</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card border-left-info">
+                <div class="card-body py-2">
+                    <h6 class="text-muted text-uppercase small mb-1">Processando</h6>
+                    <h3 class="mb-0 text-info" id="statProcessando">0</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card border-left-success">
+                <div class="card-body py-2">
+                    <h6 class="text-muted text-uppercase small mb-1">Processados</h6>
+                    <h3 class="mb-0 text-success" id="statProcessado">0</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card border-left-danger">
+                <div class="card-body py-2">
+                    <h6 class="text-muted text-uppercase small mb-1">Erros</h6>
+                    <h3 class="mb-0 text-danger" id="statErro">0</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela de Recebimentos -->
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>NF</th>
+                            <th>DFe ID</th>
+                            <th>PO</th>
+                            <th>Picking</th>
+                            <th>Invoice</th>
+                            <th>Fase</th>
+                            <th>Status</th>
+                            <th>Tentativas</th>
+                            <th>Criado em</th>
+                            <th>Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelaRecebimentos">
+                        <tr>
+                            <td colspan="11" class="text-center py-4 text-muted">
+                                <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
+                                Clique em "Filtrar" para carregar os recebimentos LF.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading -->
+    <div id="loadingStatus" class="text-center py-4" style="display: none;">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="mt-2 small">Carregando recebimentos...</p>
+    </div>
+</div>
+
+<!-- Modal: Detalhes do Recebimento + Progresso -->
+<div class="modal fade" id="modalDetalhes" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Recebimento LF #<span id="detalheId"></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Barra de progresso de fases -->
+                <div id="progressoFases" class="mb-4" style="display: none;">
+                    <h6 class="mb-2"><i class="fas fa-cogs me-1"></i> Progresso</h6>
+                    <div class="progress mb-2" style="height: 25px;">
+                        <div class="progress-bar bg-warning progress-bar-striped progress-bar-animated"
+                             id="barraProgresso" role="progressbar" style="width: 0%;">
+                            0%
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-between small text-muted">
+                        <span id="faseLabel">Aguardando...</span>
+                        <span id="etapaLabel">0/18</span>
+                    </div>
+                    <!-- Fases -->
+                    <div class="d-flex justify-content-between mt-3">
+                        <div class="text-center fase-step" id="fase1">
+                            <i class="fas fa-file-alt fa-lg mb-1"></i>
+                            <div class="small">DFe</div>
+                        </div>
+                        <div class="fase-connector"></div>
+                        <div class="text-center fase-step" id="fase2">
+                            <i class="fas fa-shopping-cart fa-lg mb-1"></i>
+                            <div class="small">PO</div>
+                        </div>
+                        <div class="fase-connector"></div>
+                        <div class="text-center fase-step" id="fase3">
+                            <i class="fas fa-boxes fa-lg mb-1"></i>
+                            <div class="small">Picking</div>
+                        </div>
+                        <div class="fase-connector"></div>
+                        <div class="text-center fase-step" id="fase4">
+                            <i class="fas fa-file-invoice-dollar fa-lg mb-1"></i>
+                            <div class="small">Invoice</div>
+                        </div>
+                        <div class="fase-connector"></div>
+                        <div class="text-center fase-step" id="fase5">
+                            <i class="fas fa-check-circle fa-lg mb-1"></i>
+                            <div class="small">Fim</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="detalheConteudo">
+                    <!-- Preenchido via JS -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .badge-status {
+        font-size: 0.75rem;
+        padding: 0.3em 0.6em;
+    }
+    .badge-pendente { background-color: var(--bs-warning); color: var(--bs-dark); }
+    .badge-processando { background-color: var(--bs-info); color: white; }
+    .badge-processado { background-color: var(--bs-success); color: white; }
+    .badge-erro { background-color: var(--bs-danger); color: white; }
+
+    .btn-action {
+        padding: 0.2rem 0.4rem;
+        font-size: 0.75rem;
+    }
+
+    .erro-msg {
+        font-size: 0.75rem;
+        color: var(--bs-danger);
+        max-width: 200px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .fase-step {
+        width: 60px;
+        color: var(--bs-secondary);
+        transition: color 0.3s;
+    }
+    .fase-step.ativa {
+        color: var(--bs-info);
+        font-weight: bold;
+    }
+    .fase-step.concluida {
+        color: var(--bs-success);
+    }
+    .fase-step.erro {
+        color: var(--bs-danger);
+    }
+    .fase-connector {
+        flex: 1;
+        height: 2px;
+        background-color: var(--bs-border-color);
+        align-self: center;
+        margin: 0 5px;
+    }
+
+    .fase-badge {
+        font-size: 0.7rem;
+        white-space: nowrap;
+    }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+let pollingInterval = null;
+let pollingRecebimentoId = null;
+
+// =====================================================
+// CARREGAR RECEBIMENTOS
+// =====================================================
+function carregarRecebimentos() {
+    const status = document.getElementById('filtroStatus').value;
+    const limit = document.getElementById('filtroLimite').value;
+
+    document.getElementById('loadingStatus').style.display = 'block';
+
+    let url = `/recebimento/lf/status/listar?limit=${limit}`;
+    if (status) url += `&status=${status}`;
+
+    fetch(url)
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('loadingStatus').style.display = 'none';
+
+            if (data.error) {
+                toastr.error(data.error);
+                return;
+            }
+
+            renderRecebimentos(data.recebimentos || []);
+            atualizarStats(data.recebimentos || []);
+        })
+        .catch(err => {
+            document.getElementById('loadingStatus').style.display = 'none';
+            toastr.error('Erro ao carregar: ' + err.message);
+        });
+}
+
+function renderRecebimentos(recebimentos) {
+    const tbody = document.getElementById('tabelaRecebimentos');
+
+    if (recebimentos.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="11" class="text-center py-4 text-muted">
+                    Nenhum recebimento LF encontrado com os filtros atuais.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    // Guardar dados para uso no modal sem JSON.stringify no onclick
+    window._recebimentosCache = {};
+    recebimentos.forEach(r => { window._recebimentosCache[r.id] = r; });
+
+    tbody.innerHTML = recebimentos.map(r => {
+        const statusBadge = `<span class="badge badge-status badge-${r.status}">${r.status}</span>`;
+        const criadoEm = r.criado_em ? new Date(r.criado_em).toLocaleString('pt-BR') : '-';
+
+        // Fase badge
+        const faseLabels = ['', 'DFe', 'PO', 'Picking', 'Invoice', 'Fim'];
+        const faseLabel = faseLabels[r.fase_atual] || `F${r.fase_atual}`;
+        const faseBadge = r.status === 'processando'
+            ? `<span class="badge bg-info fase-badge">${faseLabel} (${r.etapa_atual}/${r.total_etapas})</span>`
+            : r.status === 'processado'
+                ? '<span class="badge bg-success fase-badge">Concluido</span>'
+                : '';
+
+        let acoes = '';
+        if (r.status === 'erro') {
+            acoes += `<button class="btn btn-outline-warning btn-action me-1" onclick="retryRecebimento(${r.id})" title="Retentar">
+                <i class="fas fa-redo"></i>
+            </button>`;
+        }
+        acoes += `<button class="btn btn-outline-secondary btn-action" data-id="${r.id}" onclick="verDetalhes(${r.id})" title="Detalhes">
+            <i class="fas fa-eye"></i>
+        </button>`;
+
+        const erroMsg = r.erro_mensagem
+            ? `<div class="erro-msg" title="${escapeHtml(r.erro_mensagem)}">${escapeHtml(r.erro_mensagem)}</div>`
+            : '';
+
+        return `
+            <tr>
+                <td>${r.id}</td>
+                <td><strong>${escapeHtml(r.numero_nf) || '-'}</strong></td>
+                <td>${r.odoo_dfe_id || '-'}</td>
+                <td>${escapeHtml(r.odoo_po_name) || '-'}</td>
+                <td>${escapeHtml(r.odoo_picking_name) || '-'}</td>
+                <td>${escapeHtml(r.odoo_invoice_name) || '-'}</td>
+                <td>${faseBadge}</td>
+                <td>${statusBadge}${erroMsg}</td>
+                <td>${r.tentativas}</td>
+                <td><small>${criadoEm}</small></td>
+                <td class="text-nowrap">${acoes}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function atualizarStats(recebimentos) {
+    const stats = { pendente: 0, processando: 0, processado: 0, erro: 0 };
+    recebimentos.forEach(r => {
+        if (stats.hasOwnProperty(r.status)) {
+            stats[r.status]++;
+        }
+    });
+
+    document.getElementById('statPendente').textContent = stats.pendente;
+    document.getElementById('statProcessando').textContent = stats.processando;
+    document.getElementById('statProcessado').textContent = stats.processado;
+    document.getElementById('statErro').textContent = stats.erro;
+    document.getElementById('statsCards').style.display = 'flex';
+}
+
+// =====================================================
+// ACOES
+// =====================================================
+function retryRecebimento(recebimentoId) {
+    if (!confirm('Retentar processamento deste recebimento LF?')) return;
+
+    fetch(`/recebimento/lf/status/${recebimentoId}/retry`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '',
+        },
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            toastr.error(data.error);
+            return;
+        }
+        toastr.success(data.message || 'Re-enfileirado com sucesso!');
+        carregarRecebimentos();
+    })
+    .catch(err => toastr.error('Erro: ' + err.message));
+}
+
+function verDetalhes(recebimentoId) {
+    const recebimento = window._recebimentosCache && window._recebimentosCache[recebimentoId];
+    if (!recebimento) {
+        toastr.error('Dados do recebimento nao encontrados. Atualize a lista.');
+        return;
+    }
+
+    document.getElementById('detalheId').textContent = recebimentoId;
+
+    // Se processando, iniciar polling de progresso
+    if (recebimento.status === 'processando') {
+        document.getElementById('progressoFases').style.display = 'block';
+        iniciarPolling(recebimentoId);
+    } else {
+        document.getElementById('progressoFases').style.display = 'none';
+        pararPolling();
+    }
+
+    // Atualizar fases visuais
+    atualizarFasesVisuais(recebimento.fase_atual || 0, recebimento.status);
+
+    const criadoEm = recebimento.criado_em
+        ? new Date(recebimento.criado_em).toLocaleString('pt-BR') : '-';
+    const processadoEm = recebimento.processado_em
+        ? new Date(recebimento.processado_em).toLocaleString('pt-BR') : '-';
+
+    let html = `
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <table class="table table-sm table-borderless">
+                    <tr><th class="text-muted">NF:</th><td><strong>${escapeHtml(recebimento.numero_nf) || '-'}</strong></td></tr>
+                    <tr><th class="text-muted">DFe ID:</th><td>${recebimento.odoo_dfe_id || '-'}</td></tr>
+                    <tr><th class="text-muted">Chave NFe:</th><td><code class="small">${escapeHtml(recebimento.chave_nfe) || '-'}</code></td></tr>
+                    <tr><th class="text-muted">PO:</th><td>${escapeHtml(recebimento.odoo_po_name) || '-'} <small class="text-muted">(${recebimento.odoo_po_id || '-'})</small></td></tr>
+                    <tr><th class="text-muted">Picking:</th><td>${escapeHtml(recebimento.odoo_picking_name) || '-'} <small class="text-muted">(${recebimento.odoo_picking_id || '-'})</small></td></tr>
+                    <tr><th class="text-muted">Invoice:</th><td>${escapeHtml(recebimento.odoo_invoice_name) || '-'} <small class="text-muted">(${recebimento.odoo_invoice_id || '-'})</small></td></tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <table class="table table-sm table-borderless">
+                    <tr><th class="text-muted">Status:</th><td><span class="badge badge-status badge-${recebimento.status}">${recebimento.status}</span></td></tr>
+                    <tr><th class="text-muted">Fase:</th><td>${recebimento.fase_atual || 0} / 5</td></tr>
+                    <tr><th class="text-muted">Etapa:</th><td>${recebimento.etapa_atual || 0} / ${recebimento.total_etapas || 18}</td></tr>
+                    <tr><th class="text-muted">Tentativas:</th><td>${recebimento.tentativas}</td></tr>
+                    <tr><th class="text-muted">Criado em:</th><td>${criadoEm}</td></tr>
+                    <tr><th class="text-muted">Processado em:</th><td>${processadoEm}</td></tr>
+                    <tr><th class="text-muted">Usuario:</th><td>${escapeHtml(recebimento.usuario) || '-'}</td></tr>
+                    <tr><th class="text-muted">Job ID:</th><td><code class="small">${escapeHtml(recebimento.job_id) || '-'}</code></td></tr>
+                </table>
+            </div>
+        </div>
+    `;
+
+    if (recebimento.erro_mensagem) {
+        html += `
+            <div class="alert alert-danger small">
+                <strong>Erro:</strong><br>
+                <pre class="mb-0" style="white-space: pre-wrap; font-size: 0.8rem;">${escapeHtml(recebimento.erro_mensagem)}</pre>
+            </div>
+        `;
+    }
+
+    if (recebimento.lotes && recebimento.lotes.length > 0) {
+        html += `
+            <h6 class="mt-3"><i class="fas fa-cubes me-1"></i> Lotes (${recebimento.lotes.length})</h6>
+            <table class="table table-sm small">
+                <thead><tr><th>Produto</th><th>CFOP</th><th>Tipo</th><th>Lote</th><th>Qtd</th><th>Processado</th></tr></thead>
+                <tbody>
+                    ${recebimento.lotes.map(l => `
+                        <tr>
+                            <td>${escapeHtml(l.odoo_product_name) || l.odoo_product_id}</td>
+                            <td>${escapeHtml(l.cfop) || '-'}</td>
+                            <td><span class="badge ${l.tipo === 'auto' ? 'bg-success' : 'bg-warning text-dark'}">${l.tipo}</span></td>
+                            <td><code>${escapeHtml(l.lote_nome) || '-'}</code></td>
+                            <td>${parseFloat(l.quantidade).toLocaleString('pt-BR', {minimumFractionDigits: 3})}</td>
+                            <td>${l.processado ? '<i class="fas fa-check text-success"></i>' : '<i class="fas fa-clock text-warning"></i>'}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    }
+
+    document.getElementById('detalheConteudo').innerHTML = html;
+    new bootstrap.Modal(document.getElementById('modalDetalhes')).show();
+}
+
+// =====================================================
+// POLLING DE PROGRESSO
+// =====================================================
+function iniciarPolling(recebimentoId) {
+    pararPolling();
+    pollingRecebimentoId = recebimentoId;
+
+    // Polling a cada 3 segundos
+    pollingInterval = setInterval(() => {
+        fetch(`/recebimento/lf/status/${recebimentoId}/progresso`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) return;
+
+                const percentual = data.percentual || 0;
+                const mensagem = data.mensagem || '';
+                const fase = data.fase || 0;
+                const etapa = data.etapa || 0;
+                const total = data.total_etapas || 18;
+
+                // Atualizar barra
+                const barra = document.getElementById('barraProgresso');
+                barra.style.width = percentual + '%';
+                barra.textContent = percentual + '%';
+
+                if (percentual >= 100) {
+                    barra.classList.remove('progress-bar-animated', 'bg-warning');
+                    barra.classList.add('bg-success');
+                }
+
+                // Labels
+                document.getElementById('faseLabel').textContent = mensagem;
+                document.getElementById('etapaLabel').textContent = `${etapa}/${total}`;
+
+                // Fases visuais
+                const status = data.status || (percentual >= 100 ? 'processado' : 'processando');
+                atualizarFasesVisuais(fase, status);
+
+                // Se concluido ou erro, parar polling e recarregar tabela
+                if (status === 'processado' || status === 'erro') {
+                    pararPolling();
+                    carregarRecebimentos();
+                }
+            })
+            .catch(() => {});
+    }, 3000);
+}
+
+function pararPolling() {
+    if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+    }
+    pollingRecebimentoId = null;
+}
+
+function atualizarFasesVisuais(faseAtual, status) {
+    for (let i = 1; i <= 5; i++) {
+        const el = document.getElementById(`fase${i}`);
+        if (!el) continue;
+
+        el.classList.remove('ativa', 'concluida', 'erro');
+
+        if (status === 'erro' && i === faseAtual) {
+            el.classList.add('erro');
+        } else if (i < faseAtual || (i === faseAtual && status === 'processado')) {
+            el.classList.add('concluida');
+        } else if (i === faseAtual) {
+            el.classList.add('ativa');
+        }
+    }
+}
+
+// Parar polling ao fechar modal
+document.addEventListener('DOMContentLoaded', function() {
+    const modal = document.getElementById('modalDetalhes');
+    if (modal) {
+        modal.addEventListener('hidden.bs.modal', function() {
+            pararPolling();
+        });
+    }
+
+    // Auto-carregar ao abrir a pagina
+    carregarRecebimentos();
+});
+</script>
+{% endblock %}

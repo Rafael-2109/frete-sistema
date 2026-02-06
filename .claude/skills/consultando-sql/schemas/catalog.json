@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 105,
+  "total_tabelas": 107,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -904,6 +904,24 @@
         "odoo_picking_id",
         "odoo_picking_name",
         "odoo_purchase_order_id"
+      ]
+    },
+    {
+      "name": "recebimento_lf",
+      "description": "Registro principal de Recebimento LF (Retorno de Industrializacao).",
+      "key_fields": [
+        "odoo_dfe_id",
+        "numero_nf",
+        "chave_nfe"
+      ]
+    },
+    {
+      "name": "recebimento_lf_lote",
+      "description": "Lote + quantidade para produto do Recebimento LF.",
+      "key_fields": [
+        "recebimento_lf_id",
+        "odoo_product_id",
+        "odoo_product_name"
       ]
     },
     {

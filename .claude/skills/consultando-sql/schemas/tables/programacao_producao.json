@@ -76,17 +76,17 @@
       "unique": false
     },
     {
-      "name": "ix_programacao_producao_cod_produto",
-      "columns": [
-        "cod_produto"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_programacao_data_linha",
       "columns": [
         "data_programacao",
         "linha_producao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_programacao_producao_cod_produto",
+      "columns": [
+        "cod_produto"
       ],
       "unique": false
     },

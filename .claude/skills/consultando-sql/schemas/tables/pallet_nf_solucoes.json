@@ -155,9 +155,9 @@
   ],
   "indices": [
     {
-      "name": "ix_pallet_nf_solucoes_odoo_picking_id",
+      "name": "ix_pallet_nf_solucoes_cnpj_emitente",
       "columns": [
-        "odoo_picking_id"
+        "cnpj_emitente"
       ],
       "unique": false
     },
@@ -170,6 +170,13 @@
       "unique": false
     },
     {
+      "name": "ix_pallet_nf_solucoes_odoo_picking_id",
+      "columns": [
+        "odoo_picking_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_pallet_nf_solucoes_nf_remessa_id",
       "columns": [
         "nf_remessa_id"
@@ -177,16 +184,16 @@
       "unique": false
     },
     {
-      "name": "ix_pallet_nf_solucoes_tipo",
+      "name": "ix_pallet_nf_solucoes_odoo_status",
       "columns": [
-        "tipo"
+        "odoo_status"
       ],
       "unique": false
     },
     {
-      "name": "ix_pallet_nf_solucoes_odoo_status",
+      "name": "ix_pallet_nf_solucoes_tipo",
       "columns": [
-        "odoo_status"
+        "tipo"
       ],
       "unique": false
     },
@@ -199,13 +206,6 @@
       "unique": false
     },
     {
-      "name": "ix_pallet_nf_solucoes_numero_nf_solucao",
-      "columns": [
-        "numero_nf_solucao"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_nf_solucao_emitente",
       "columns": [
         "cnpj_emitente",
@@ -214,9 +214,9 @@
       "unique": false
     },
     {
-      "name": "ix_pallet_nf_solucoes_cnpj_emitente",
+      "name": "ix_pallet_nf_solucoes_numero_nf_solucao",
       "columns": [
-        "cnpj_emitente"
+        "numero_nf_solucao"
       ],
       "unique": false
     }

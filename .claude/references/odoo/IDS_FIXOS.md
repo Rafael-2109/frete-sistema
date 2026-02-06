@@ -78,6 +78,7 @@ def _obter_operacao_correta(operacao_atual_id, company_destino_id):
 | payment_provider_id | 30 | Payment Provider padrao |
 | product_id (FRETE) | 29993 | Produto FRETE - SERVICO (PRODUTO_SERVICO_FRETE_ID) |
 | product_tmpl_id (FRETE) | ~~34~~ | **VERIFICAR** - pode ter mudado junto com product_id |
+| PAYMENT_TERM_A_VISTA | 2791 | account.payment.term "A VISTA" |
 
 ---
 
