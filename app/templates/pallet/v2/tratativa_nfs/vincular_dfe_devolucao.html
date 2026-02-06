@@ -630,8 +630,8 @@
     <div class="loading-overlay" id="loading-overlay">
         <div class="loading-box">
             <div class="spinner"></div>
-            <p>Processando vinculacao no Odoo...</p>
-            <p style="font-size: 0.8rem; color: var(--text-muted);">Criando PO, picking e vinculando moves. Pode levar ate 2 minutos.</p>
+            <p id="loading-msg">Registrando vinculacao...</p>
+            <p id="loading-submsg" style="font-size: 0.8rem; color: var(--text-muted);">Aguarde enquanto processamos sua solicitacao.</p>
         </div>
     </div>
 </div>
@@ -861,11 +861,16 @@ function irParaEtapa3() {
 }
 
 // ============================================
-// ETAPA 4: Executar vinculacao
+// ETAPA 4: Executar vinculacao (2 etapas)
 // ============================================
+
+let pollInterval = null;
+let pollTimeout = null;
 
 async function executarVinculacao() {
     document.getElementById('loading-overlay').classList.add('active');
+    document.getElementById('loading-msg').textContent = 'Registrando vinculacao local...';
+    document.getElementById('loading-submsg').textContent = 'Criando solucoes no banco de dados.';
     document.getElementById('btn-confirmar').disabled = true;
 
     const nfd = state.nfdSelecionada;
@@ -895,6 +900,7 @@ async function executarVinculacao() {
     };
 
     try {
+        // POST retorna 202 com job_id
         const resp = await fetch('{{ url_for("pallet_v2.tratativa_nfs.api_vincular_dfe_devolucao") }}', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -902,43 +908,162 @@ async function executarVinculacao() {
         });
         const data = await resp.json();
 
-        document.getElementById('loading-overlay').classList.remove('active');
-        mostrarEtapa(4);
-
-        if (data.sucesso) {
-            document.getElementById('resultado-container').innerHTML = `
-                <div class="resultado-card">
-                    <div class="icon-big sucesso"><i class="fas fa-check-circle"></i></div>
-                    <h2>Vinculacao Realizada com Sucesso!</h2>
-                    <div style="text-align: left; max-width: 400px; margin: 1.5rem auto;">
-                        <div class="resumo-item"><span>PO criado</span><span><strong>${data.odoo.po_name || '-'}</strong></span></div>
-                        <div class="resumo-item"><span>Picking</span><span><strong>${data.odoo.picking_name || '-'}</strong></span></div>
-                        <div class="resumo-item"><span>Solucoes registradas</span><span><strong>${data.local.solucoes_criadas}</strong></span></div>
-                        <div class="resumo-item"><span>Total vinculado</span><span><strong>${data.quantidade_total} pallets</strong></span></div>
-                    </div>
-                </div>
-            `;
-        } else {
-            document.getElementById('resultado-container').innerHTML = `
-                <div class="resultado-card erro">
-                    <div class="icon-big erro"><i class="fas fa-times-circle"></i></div>
-                    <h2>Erro na Vinculacao</h2>
-                    <p style="margin-top: 1rem; color: var(--semantic-danger);">${data.erro || 'Erro desconhecido'}</p>
-                </div>
-            `;
+        if (!data.sucesso) {
+            document.getElementById('loading-overlay').classList.remove('active');
+            mostrarEtapa(4);
+            mostrarResultadoErro(data.erro || 'Erro desconhecido');
+            return;
         }
+
+        // Vinculacao local concluida — feedback imediato
+        document.getElementById('loading-msg').textContent =
+            `Vinculacao local registrada (${data.solucoes_criadas} solucoes)`;
+        document.getElementById('loading-submsg').textContent =
+            'Processando no Odoo... Criando PO, picking e vinculando moves.';
+
+        // Iniciar polling do job
+        pollJobStatus(data.job_id, data);
 
     } catch (err) {
         document.getElementById('loading-overlay').classList.remove('active');
         mostrarEtapa(4);
-        document.getElementById('resultado-container').innerHTML = `
-            <div class="resultado-card erro">
-                <div class="icon-big erro"><i class="fas fa-times-circle"></i></div>
-                <h2>Erro de Comunicacao</h2>
-                <p style="margin-top: 1rem;">${err.message}</p>
-            </div>
-        `;
+        mostrarResultadoErro('Erro de comunicacao: ' + err.message);
     }
+}
+
+function pollJobStatus(jobId, dadosLocais) {
+    const pollUrl = `{{ url_for("pallet_v2.tratativa_nfs.api_devolucao_job_status", job_id="__JOB_ID__") }}`.replace('__JOB_ID__', jobId);
+
+    pollInterval = setInterval(async () => {
+        try {
+            const resp = await fetch(pollUrl);
+            const status = await resp.json();
+
+            if (status.status === 'started') {
+                document.getElementById('loading-msg').textContent = 'Processando no Odoo...';
+                document.getElementById('loading-submsg').textContent =
+                    'Criando PO, confirmando, gerando picking e vinculando moves.';
+            }
+
+            if (status.status === 'finished') {
+                limparPolling();
+                document.getElementById('loading-overlay').classList.remove('active');
+                mostrarEtapa(4);
+                mostrarResultadoSucesso(dadosLocais, status.result);
+            }
+
+            if (status.status === 'failed') {
+                limparPolling();
+                document.getElementById('loading-overlay').classList.remove('active');
+                mostrarEtapa(4);
+                mostrarResultadoParcial(dadosLocais, status.error);
+            }
+        } catch (e) {
+            // Retry silencioso — rede pode oscilar
+            console.warn('Erro no polling:', e);
+        }
+    }, 3000); // Poll a cada 3 segundos
+
+    // Timeout de seguranca: 10 minutos
+    pollTimeout = setTimeout(() => {
+        limparPolling();
+        document.getElementById('loading-overlay').classList.remove('active');
+        mostrarEtapa(4);
+        mostrarResultadoTimeout(dadosLocais, jobId);
+    }, 600000);
+}
+
+function limparPolling() {
+    if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+    if (pollTimeout) { clearTimeout(pollTimeout); pollTimeout = null; }
+}
+
+function mostrarResultadoSucesso(dadosLocais, resultadoOdoo) {
+    document.getElementById('resultado-container').innerHTML = `
+        <div class="resultado-card">
+            <div class="icon-big sucesso"><i class="fas fa-check-circle"></i></div>
+            <h2>Vinculacao Completa!</h2>
+            <div style="text-align: left; max-width: 450px; margin: 1.5rem auto;">
+                <div class="resumo-item"><span>Solucoes registradas</span><span><strong>${dadosLocais.solucoes_criadas}</strong></span></div>
+                <div class="resumo-item"><span>Total vinculado</span><span><strong>${dadosLocais.quantidade_total} pallets</strong></span></div>
+                <div class="resumo-item"><span>PO criado</span><span><strong>${resultadoOdoo?.po_name || '-'}</strong></span></div>
+                <div class="resumo-item"><span>Picking</span><span><strong>${resultadoOdoo?.picking_name || '-'}</strong></span></div>
+                <div class="resumo-item"><span>Tempo Odoo</span><span><strong>${resultadoOdoo?.tempo_segundos ? resultadoOdoo.tempo_segundos.toFixed(1) + 's' : '-'}</strong></span></div>
+            </div>
+            <div style="margin-top: 1.5rem;">
+                <a href="{{ url_for('pallet_v2.tratativa_nfs.vincular_dfe_devolucao') }}" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Nova Vinculacao
+                </a>
+                <a href="{{ url_for('pallet_v2.tratativa_nfs.listar_solucoes') }}" class="btn btn-outline-secondary" style="margin-left: 0.5rem;">
+                    <i class="fas fa-history"></i> Ver Historico
+                </a>
+            </div>
+        </div>
+    `;
+}
+
+function mostrarResultadoParcial(dadosLocais, erro) {
+    // Vinculacao local OK, mas Odoo falhou
+    document.getElementById('resultado-container').innerHTML = `
+        <div class="resultado-card" style="border-left: 4px solid var(--amber-55);">
+            <div class="icon-big" style="color: var(--amber-55);"><i class="fas fa-exclamation-triangle"></i></div>
+            <h2>Vinculacao Local OK — Erro no Odoo</h2>
+            <p style="margin-top: 1rem;">
+                As <strong>${dadosLocais.solucoes_criadas}</strong> solucoes foram registradas localmente com sucesso.
+            </p>
+            <p style="margin-top: 0.5rem; color: var(--semantic-danger); font-size: 0.85rem;">
+                Erro Odoo: ${erro || 'Erro desconhecido'}
+            </p>
+            <p style="margin-top: 1rem; font-size: 0.85rem; color: var(--text-muted);">
+                O processamento Odoo pode ser retentado posteriormente.
+                As vinculacoes locais ja estao registradas.
+            </p>
+            <div style="margin-top: 1.5rem;">
+                <a href="{{ url_for('pallet_v2.tratativa_nfs.vincular_dfe_devolucao') }}" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Nova Vinculacao
+                </a>
+            </div>
+        </div>
+    `;
+}
+
+function mostrarResultadoTimeout(dadosLocais, jobId) {
+    document.getElementById('resultado-container').innerHTML = `
+        <div class="resultado-card" style="border-left: 4px solid var(--amber-55);">
+            <div class="icon-big" style="color: var(--amber-55);"><i class="fas fa-clock"></i></div>
+            <h2>Processamento em Andamento</h2>
+            <p style="margin-top: 1rem;">
+                As <strong>${dadosLocais.solucoes_criadas}</strong> solucoes foram registradas localmente.
+            </p>
+            <p style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-muted);">
+                O processamento no Odoo ainda esta em andamento.<br>
+                Job ID: <code>${jobId}</code>
+            </p>
+            <p style="margin-top: 0.5rem; font-size: 0.85rem;">
+                Voce pode verificar o status na pagina de historico.
+            </p>
+            <div style="margin-top: 1.5rem;">
+                <a href="{{ url_for('pallet_v2.tratativa_nfs.listar_solucoes') }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-history"></i> Ver Historico
+                </a>
+            </div>
+        </div>
+    `;
+}
+
+function mostrarResultadoErro(mensagem) {
+    document.getElementById('resultado-container').innerHTML = `
+        <div class="resultado-card erro">
+            <div class="icon-big erro"><i class="fas fa-times-circle"></i></div>
+            <h2>Erro na Vinculacao</h2>
+            <p style="margin-top: 1rem; color: var(--semantic-danger);">${mensagem}</p>
+            <div style="margin-top: 1.5rem;">
+                <button onclick="mostrarEtapa(3)" class="btn btn-outline-primary">
+                    <i class="fas fa-arrow-left"></i> Voltar e Tentar Novamente
+                </button>
+            </div>
+        </div>
+    `;
 }
 
 // ============================================

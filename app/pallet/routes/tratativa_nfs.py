@@ -972,9 +972,11 @@ def api_sugerir_vinculacao_dfe(dfe_id):
 @login_required
 def api_vincular_dfe_devolucao():
     """
-    Executa vinculacao completa: cria PO + picking + moves no Odoo + registra localmente.
+    Vinculacao em 2 etapas:
+    - ETAPA 1 (sincrona): Cria PalletNFSolucao localmente
+    - ETAPA 2 (assincrona): Enfileira job para processar no Odoo via worker
 
-    Ordem: Odoo PRIMEIRO (se falhar, nao cria registros locais). Local SEGUNDO.
+    Retorna HTTP 202 com job_id para polling.
 
     JSON params:
     - odoo_dfe_id: ID do DFe no Odoo
@@ -1006,28 +1008,7 @@ def api_vincular_dfe_devolucao():
         quantidade_total = sum(v['quantidade'] for v in vinculacoes)
 
         # =====================================================================
-        # ETAPA 1: Odoo — Criar PO + Picking + Vincular moves
-        # =====================================================================
-        from app.pallet.services.odoo_devolucao_service import OdooDevolucaoService
-
-        odoo_service = OdooDevolucaoService()
-        resultado_odoo = odoo_service.processar_devolucao_completa(
-            dfe_id=odoo_dfe_id,
-            company_id=company_id,
-            quantidade_total=quantidade_total,
-            vinculacoes=[
-                {
-                    'odoo_picking_remessa_id': v.get('odoo_picking_remessa_id'),
-                    'quantidade': v['quantidade'],
-                }
-                for v in vinculacoes
-            ]
-        )
-
-        picking_id_odoo = resultado_odoo.get('picking_id')
-
-        # =====================================================================
-        # ETAPA 2: Local — Registrar PalletNFSolucao
+        # ETAPA 1: LOCAL — Registrar PalletNFSolucao (sincrono)
         # =====================================================================
         nf_remessa_ids = [v['nf_remessa_id'] for v in vinculacoes]
         quantidades = {v['nf_remessa_id']: v['quantidade'] for v in vinculacoes}
@@ -1043,28 +1024,59 @@ def api_vincular_dfe_devolucao():
             usuario=usuario
         )
 
-        # Atualizar solucoes com odoo_picking_id
-        if picking_id_odoo and solucoes:
-            for solucao in solucoes:
-                solucao.odoo_picking_id = picking_id_odoo
-            db.session.commit()
+        # Marcar status como pendente de processamento Odoo
+        for solucao in solucoes:
+            solucao.odoo_status = 'pendente'
+        db.session.commit()
+
+        solucao_ids = [s.id for s in solucoes]
+
+        # =====================================================================
+        # ETAPA 2: ENFILEIRAR JOB — Worker processa no Odoo (assincrono)
+        # =====================================================================
+        from app.pallet.workers.devolucao_odoo_jobs import processar_devolucao_odoo_job
+        from app.portal.workers import enqueue_job
+
+        job = enqueue_job(
+            processar_devolucao_odoo_job,
+            solucao_ids,
+            odoo_dfe_id,
+            company_id,
+            quantidade_total,
+            [
+                {
+                    'odoo_picking_remessa_id': v.get('odoo_picking_remessa_id'),
+                    'quantidade': v['quantidade'],
+                }
+                for v in vinculacoes
+            ],
+            usuario,
+            queue_name='odoo_lancamento',
+            timeout='10m'
+        )
+
+        # Salvar job_id nas solucoes para rastreabilidade
+        for solucao in solucoes:
+            solucao.odoo_job_id = job.id
+        db.session.commit()
+
+        logger.info(
+            f"Vinculacao DFe {odoo_dfe_id}: {len(solucoes)} solucoes criadas, "
+            f"job {job.id} enfileirado"
+        )
 
         return jsonify({
             'sucesso': True,
-            'odoo': {
-                'po_id': resultado_odoo.get('po_id'),
-                'po_name': resultado_odoo.get('po_name'),
-                'picking_id': picking_id_odoo,
-                'picking_name': resultado_odoo.get('picking_name'),
-                'etapa_2_moves': resultado_odoo.get('etapa_2_moves'),
-                'etapa_3_validacao': resultado_odoo.get('etapa_3_validacao'),
-            },
-            'local': {
-                'solucoes_criadas': len(solucoes),
-                'solucao_ids': [s.id for s in solucoes],
-            },
+            'job_id': job.id,
+            'solucoes_criadas': len(solucoes),
+            'solucao_ids': solucao_ids,
             'quantidade_total': quantidade_total,
-        })
+            'status': 'queued',
+            'mensagem': (
+                'Vinculacao local registrada. '
+                'Processamento Odoo iniciado em background.'
+            )
+        }), 202
 
     except ValueError as e:
         logger.error(f"Erro de validacao na vinculacao DFe: {e}")
@@ -1073,3 +1085,31 @@ def api_vincular_dfe_devolucao():
     except Exception as e:
         logger.exception("Erro ao vincular DFe de devolucao")
         return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+
+@tratativa_nfs_bp.route('/api/devolucao-job/<job_id>/status')
+@login_required
+def api_devolucao_job_status(job_id):
+    """
+    Polling endpoint para status do job de devolucao no Odoo.
+
+    Chamado pelo frontend a cada 3s enquanto o job esta rodando.
+
+    Returns:
+        JSON com status do job (queued, started, finished, failed)
+        Se finished: inclui resultado (po_name, picking_name, etc.)
+        Se failed: inclui mensagem de erro
+    """
+    from app.pallet.workers.devolucao_odoo_jobs import get_devolucao_job_status
+
+    try:
+        status = get_devolucao_job_status(job_id)
+        return jsonify(status)
+    except Exception as e:
+        logger.error(f"Erro ao consultar status do job {job_id}: {e}")
+        return jsonify({
+            'job_id': job_id,
+            'status': 'error',
+            'status_display': 'Erro ao consultar',
+            'error': str(e)
+        }), 500

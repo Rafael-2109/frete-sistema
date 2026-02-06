@@ -58,16 +58,16 @@
       "unique": false
     },
     {
-      "name": "ix_regiao_tabela_rede_uf",
+      "name": "idx_regiao_rede_uf",
       "columns": [
+        "rede",
         "uf"
       ],
       "unique": false
     },
     {
-      "name": "idx_regiao_rede_uf",
+      "name": "ix_regiao_tabela_rede_uf",
       "columns": [
-        "rede",
         "uf"
       ],
       "unique": false

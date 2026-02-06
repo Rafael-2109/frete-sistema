@@ -68,8 +68,9 @@
   ],
   "indices": [
     {
-      "name": "ix_programacao_producao_data_programacao",
+      "name": "idx_programacao_produto_data",
       "columns": [
+        "cod_produto",
         "data_programacao"
       ],
       "unique": false
@@ -90,9 +91,8 @@
       "unique": false
     },
     {
-      "name": "idx_programacao_produto_data",
+      "name": "ix_programacao_producao_data_programacao",
       "columns": [
-        "cod_produto",
         "data_programacao"
       ],
       "unique": false

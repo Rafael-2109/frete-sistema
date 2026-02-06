@@ -215,6 +215,9 @@ class PalletNFSolucao(db.Model):
             'info_complementar': self.info_complementar,
             'observacao': self.observacao,
             'odoo_picking_id': self.odoo_picking_id,
+            'odoo_status': self.odoo_status,
+            'odoo_job_id': self.odoo_job_id,
+            'odoo_erro': self.odoo_erro,
             'criado_em': self.criado_em.isoformat() if self.criado_em else None,
             'criado_por': self.criado_por,
         }

@@ -52,6 +52,18 @@
       "type": "integer"
     },
     {
+      "name": "odoo_status",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "odoo_job_id",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "odoo_erro",
+      "type": "text"
+    },
+    {
       "name": "cnpj_emitente",
       "type": "varchar(20)"
     },
@@ -143,25 +155,9 @@
   ],
   "indices": [
     {
-      "name": "idx_nf_solucao_confirmado",
+      "name": "ix_pallet_nf_solucoes_odoo_picking_id",
       "columns": [
-        "confirmado",
-        "vinculacao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_nf_solucao_emitente",
-      "columns": [
-        "cnpj_emitente",
-        "tipo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pallet_nf_solucoes_numero_nf_solucao",
-      "columns": [
-        "numero_nf_solucao"
+        "odoo_picking_id"
       ],
       "unique": false
     },
@@ -174,9 +170,9 @@
       "unique": false
     },
     {
-      "name": "ix_pallet_nf_solucoes_odoo_picking_id",
+      "name": "ix_pallet_nf_solucoes_nf_remessa_id",
       "columns": [
-        "odoo_picking_id"
+        "nf_remessa_id"
       ],
       "unique": false
     },
@@ -188,16 +184,39 @@
       "unique": false
     },
     {
-      "name": "ix_pallet_nf_solucoes_cnpj_emitente",
+      "name": "ix_pallet_nf_solucoes_odoo_status",
       "columns": [
-        "cnpj_emitente"
+        "odoo_status"
       ],
       "unique": false
     },
     {
-      "name": "ix_pallet_nf_solucoes_nf_remessa_id",
+      "name": "idx_nf_solucao_confirmado",
       "columns": [
-        "nf_remessa_id"
+        "confirmado",
+        "vinculacao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_nf_solucoes_numero_nf_solucao",
+      "columns": [
+        "numero_nf_solucao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nf_solucao_emitente",
+      "columns": [
+        "cnpj_emitente",
+        "tipo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_nf_solucoes_cnpj_emitente",
+      "columns": [
+        "cnpj_emitente"
       ],
       "unique": false
     }
