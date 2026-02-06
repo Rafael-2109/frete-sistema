@@ -1,6 +1,6 @@
 {
   "name": "nf_devolucao_linha",
-  "description": "Linhas/itens de NF de devolução.",
+  "description": "Linhas/itens de NF de devolucao. Produtos devolvidos: GROUP BY codigo_produto_cliente ou codigo_produto_interno para ranking. Campo quantidade (NAO qtd_devolvida). Campos: nfd_id (FK nf_devolucao), codigo_produto_cliente, codigo_produto_interno, quantidade, valor_total.",
   "fields": [
     {
       "name": "id",
@@ -115,16 +115,16 @@
       "unique": false
     },
     {
-      "name": "idx_nfd_linha_produto_cliente",
+      "name": "ix_nf_devolucao_linha_nf_devolucao_id",
       "columns": [
-        "codigo_produto_cliente"
+        "nf_devolucao_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_nf_devolucao_linha_nf_devolucao_id",
+      "name": "idx_nfd_linha_produto_cliente",
       "columns": [
-        "nf_devolucao_id"
+        "codigo_produto_cliente"
       ],
       "unique": false
     },

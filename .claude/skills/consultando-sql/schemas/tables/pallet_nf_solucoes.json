@@ -139,28 +139,6 @@
   ],
   "indices": [
     {
-      "name": "ix_pallet_nf_solucoes_nf_remessa_id",
-      "columns": [
-        "nf_remessa_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_nf_solucao_confirmado",
-      "columns": [
-        "confirmado",
-        "vinculacao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pallet_nf_solucoes_tipo",
-      "columns": [
-        "tipo"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_nf_solucao_emitente",
       "columns": [
         "cnpj_emitente",
@@ -187,6 +165,28 @@
       "columns": [
         "tipo",
         "vinculacao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_nf_solucoes_nf_remessa_id",
+      "columns": [
+        "nf_remessa_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nf_solucao_confirmado",
+      "columns": [
+        "confirmado",
+        "vinculacao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_nf_solucoes_tipo",
+      "columns": [
+        "tipo"
       ],
       "unique": false
     }

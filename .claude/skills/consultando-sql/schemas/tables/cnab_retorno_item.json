@@ -165,9 +165,9 @@
   ],
   "indices": [
     {
-      "name": "ix_cnab_retorno_item_nosso_numero",
+      "name": "ix_cnab_retorno_item_lote_id",
       "columns": [
-        "nosso_numero"
+        "lote_id"
       ],
       "unique": false
     },
@@ -186,17 +186,16 @@
       "unique": false
     },
     {
-      "name": "ix_cnab_retorno_item_extrato_item_id",
+      "name": "ix_cnab_retorno_item_nosso_numero",
       "columns": [
-        "extrato_item_id"
+        "nosso_numero"
       ],
       "unique": false
     },
     {
-      "name": "idx_cnab_item_lote_status",
+      "name": "ix_cnab_retorno_item_extrato_item_id",
       "columns": [
-        "lote_id",
-        "status_match"
+        "extrato_item_id"
       ],
       "unique": false
     },
@@ -208,9 +207,10 @@
       "unique": false
     },
     {
-      "name": "ix_cnab_retorno_item_lote_id",
+      "name": "idx_cnab_item_lote_status",
       "columns": [
-        "lote_id"
+        "lote_id",
+        "status_match"
       ],
       "unique": false
     },

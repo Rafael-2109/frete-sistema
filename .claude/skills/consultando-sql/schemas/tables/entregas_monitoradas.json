@@ -1,28 +1,6 @@
 {
   "name": "entregas_monitoradas",
-  "description": "Monitoramento de entregas com status e ocorrências. Cada registro representa uma NF em processo de entrega.",
-  "business_rules": {
-    "status_finalizacao": {
-      "valid_values": ["Entregue", "Cancelada", "Devolvida", "Troca de NF", "Sinistro", "nao_finalizado"],
-      "description": "Status final da entrega. NULL = em andamento/pendente. 'nao_finalizado' é usado para NFs que saíram do monitoramento sem conclusão."
-    },
-    "entregue": {
-      "description": "Boolean. True APENAS quando status_finalizacao='Entregue'. Não usar isoladamente para filtrar pendentes."
-    },
-    "nf_cd": {
-      "description": "Boolean. True = NF está fisicamente no CD (Centro de Distribuição). Pode ser NF que nunca saiu OU que saiu e voltou."
-    },
-    "reagendar": {
-      "description": "Boolean. True = cliente solicitou reagendamento da entrega."
-    },
-    "formulas": {
-      "entregas_pendentes": "status_finalizacao IS NULL",
-      "entregas_finalizadas": "status_finalizacao IS NOT NULL",
-      "entregas_com_problema": "nf_cd = True OR reagendar = True",
-      "entregas_entregues": "status_finalizacao = 'Entregue'",
-      "entregas_devolvidas": "status_finalizacao = 'Devolvida' OR teve_devolucao = True"
-    }
-  },
+  "description": "Monitoramento de entregas com status e ocorrencias. Atraso: status_finalizacao IS NULL AND data_entrega_prevista < CURRENT_DATE. Em transito: data_embarque IS NOT NULL AND status_finalizacao IS NULL AND nf_cd=False. Lead time: data_hora_entrega_realizada - data_embarque. Taxa sucesso: COUNT(entregue=True)/COUNT(*). Campos: numero_nf, cnpj_cliente, transportadora, uf, municipio, valor_nf, separacao_lote_id.",
   "fields": [
     {
       "name": "id",
@@ -168,6 +146,32 @@
       "default": false
     }
   ],
+  "query_hints": [
+    {
+      "descricao": "Lead time medio de entrega (dias)",
+      "sql": "SELECT AVG(DATE_PART('day', data_hora_entrega_realizada - data_embarque::timestamp)) AS lead_time_medio FROM entregas_monitoradas WHERE data_hora_entrega_realizada IS NOT NULL AND data_embarque IS NOT NULL"
+    },
+    {
+      "descricao": "Entregas atrasadas (prevista passou sem entrega)",
+      "sql": "SELECT numero_nf, cliente, transportadora, municipio, uf, data_entrega_prevista FROM entregas_monitoradas WHERE status_finalizacao IS NULL AND data_entrega_prevista < CURRENT_DATE AND nf_cd = False ORDER BY data_entrega_prevista"
+    },
+    {
+      "descricao": "Taxa de sucesso de entrega (%)",
+      "sql": "SELECT COUNT(CASE WHEN entregue = True THEN 1 END)::float / NULLIF(COUNT(*), 0) * 100 AS taxa_sucesso FROM entregas_monitoradas WHERE data_embarque IS NOT NULL"
+    },
+    {
+      "descricao": "Em transito agora",
+      "sql": "SELECT numero_nf, cliente, transportadora, uf, data_embarque FROM entregas_monitoradas WHERE data_embarque IS NOT NULL AND status_finalizacao IS NULL AND nf_cd = False"
+    },
+    {
+      "descricao": "Ranking transportadoras por velocidade (lead time medio)",
+      "sql": "SELECT transportadora, AVG(DATE_PART('day', data_hora_entrega_realizada - data_embarque::timestamp)) AS lead_time_medio, COUNT(*) AS qtd FROM entregas_monitoradas WHERE data_hora_entrega_realizada IS NOT NULL AND data_embarque IS NOT NULL GROUP BY transportadora ORDER BY lead_time_medio"
+    },
+    {
+      "descricao": "Performance semanal de entregas",
+      "sql": "SELECT DATE_TRUNC('week', data_embarque) AS semana, COUNT(*) AS embarques, COUNT(CASE WHEN entregue = True THEN 1 END) AS entregues, COUNT(CASE WHEN teve_devolucao = True THEN 1 END) AS devolucoes FROM entregas_monitoradas WHERE data_embarque IS NOT NULL GROUP BY semana ORDER BY semana DESC"
+    }
+  ],
   "foreign_keys": [
     {
       "column": "substituida_por_nf_id",
@@ -183,16 +187,16 @@
       "unique": false
     },
     {
-      "name": "ix_entregas_monitoradas_numero_nf",
+      "name": "ix_entregas_monitoradas_separacao_lote_id",
       "columns": [
-        "numero_nf"
+        "separacao_lote_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_entregas_monitoradas_separacao_lote_id",
+      "name": "ix_entregas_monitoradas_numero_nf",
       "columns": [
-        "separacao_lote_id"
+        "numero_nf"
       ],
       "unique": false
     }

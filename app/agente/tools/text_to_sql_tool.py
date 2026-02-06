@@ -175,7 +175,7 @@ def _format_result(result: dict) -> str:
 # =====================================================================
 
 try:
-    from claude_agent_sdk import tool, create_sdk_mcp_server
+    from claude_agent_sdk import tool, create_sdk_mcp_server, ToolAnnotations
 
     @tool(
         "consultar_sql",
@@ -186,7 +186,13 @@ try:
         "Exemplos: 'Top 10 clientes por valor', 'Pedidos pendentes por estado', "
         "'Valor médio de frete por transportadora'. "
         "A query é validada em 3 camadas de segurança (apenas SELECT permitido).",
-        {"pergunta": str}
+        {"pergunta": str},
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
     )
     async def consultar_sql(args: dict[str, Any]) -> dict[str, Any]:
         """

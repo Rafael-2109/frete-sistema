@@ -1,6 +1,6 @@
 # [PRECISION MODE] - MODO PRECISION ENGINEER ATIVO
 
-**Ultima Atualizacao**: 05/02/2026
+**Ultima Atualizacao**: 06/02/2026
 
 ## REGRAS ABSOLUTAS - NUNCA IGNORAR:
 
@@ -106,7 +106,10 @@ Sem isso, o agente web nao enxerga os campos novos.
 |---------------|-----------|
 | Campos de CarteiraPrincipal / Separacao | `.claude/references/modelos/CAMPOS_CARTEIRA_SEPARACAO.md` |
 | Campos de outros modelos (Embarque, Faturamento, etc.) | `.claude/references/modelos/MODELOS_CAMPOS.md` |
+| Cadeia Pedido -> Entrega (JOINs, estados, formulas) | `.claude/references/modelos/CADEIA_PEDIDO_ENTREGA.md` |
 | Regras de negocio (CNPJ, bonificacao, roteirizacao) | `.claude/references/negocio/REGRAS_NEGOCIO.md` |
+| Frete Real vs Teorico (4 valores, divergencias, conta corrente) | `.claude/references/negocio/FRETE_REAL_VS_TEORICO.md` |
+| Margem e Custeio (formula margem, tabelas de custo) | `.claude/references/negocio/MARGEM_CUSTEIO.md` |
 | Queries SQL e JOINs entre tabelas | `.claude/references/modelos/QUERIES_MAPEAMENTO.md` |
 | Indice completo de toda documentacao | `.claude/references/INDEX.md` |
 
@@ -132,6 +135,7 @@ Sem isso, o agente web nao enxerga os campos novos.
 | OPERACAO ODOO (API, modelos, integracoes) | NF, PO, picking, Odoo, pagamento, extrato | -> Passos 2 e 3 abaixo |
 | DESENVOLVIMENTO FRONTEND | Criar tela, dashboard, CSS, template | -> `frontend-design` |
 | COTACAO DE FRETE | "qual preco", "quanto custa frete", "tabelas para", "cotacao" | -> `cotando-frete` |
+| VISAO 360 PRODUTO | "resumo do produto", "producao vs programado", "visao completa do produto" | -> `visao-produto` |
 | EXPORTAR/IMPORTAR DADOS | Gerar Excel, CSV, processar planilha | -> `exportando-arquivos` / `lendo-arquivos` |
 
 ### Passo 2 (ODOO): Tem dado ESTATICO ja documentado?
@@ -194,6 +198,9 @@ Skills usadas exclusivamente pelo agente logistico web:
 
 Custom Tools MCP (in-process, sem subprocess):
 - `consultar_sql` (mcp__sql__consultar_sql) - Consultas analiticas SQL via linguagem natural
+- `consultar_logs` (mcp__render__consultar_logs) - Logs de aplicacao/request/build dos servicos Render
+- `consultar_erros` (mcp__render__consultar_erros) - Erros recentes dos servicos Render
+- `status_servicos` (mcp__render__status_servicos) - Status, deploys e metricas dos servicos Render
 
 ## Claude Code (Desenvolvimento)
 Skills para desenvolvimento no Cursor/Terminal:
@@ -225,6 +232,7 @@ Skills para desenvolvimento no Cursor/Terminal:
 | `lendo-arquivos` | Processar Excel/CSV enviados |
 | `consultando-sql` | Consultas analiticas SQL via linguagem natural (CLI para Claude Code; Custom Tool MCP para agente web) |
 | `cotando-frete` | Cotacao de fretes, consulta de tabelas, calculo detalhado |
+| `visao-produto` | Visao 360 de produto (cadastro, estoque, custo, demanda, faturamento, producao) |
 | `resolvendo-entidades` | Resolver cliente/grupo/produto/pedido para IDs do sistema |
 
 ---
@@ -321,27 +329,62 @@ resolve-library-id("sqlalchemy") -> query-docs("/...", "bulk insert")
 
 # INFORMAÇÕES SOBRE DOMINIO E SERVIDOR
 
-## RENDER
+## RENDER — MCP Server (OBRIGATORIO)
 
-### WEB SERVICE
+### REGRA: DADOS DE PRODUCAO = RENDER
+Quando o usuario perguntar sobre dados, registros, quantidades, status de servicos,
+metricas, logs ou deploys, SEMPRE consultar via MCP Render (`mcp__render__*`).
+Os dados reais estao no Render. O banco local existe para desenvolvimento e migrations.
 
-- sistema-fretes
-- Dominio: sistema-fretes-onrender.com
-- Instance: Pro 4 GB 2 CPU
-- Build Command: chmod +x build.sh && ./build.sh
-- Start Command: ./start_render.sh
+### IDs dos Recursos (usar direto nas tools)
 
-### KEY VALUE
+| Recurso | ID | Nome |
+|---------|----|------|
+| Postgres | `dpg-d13m38vfte5s738t6p50-a` | sistema-fretes-db |
+| Web Service (Pro) | `srv-d13m38vfte5s738t6p60` | sistema-fretes |
+| Worker | `srv-d2muidggjchc73d4segg` | sistema-fretes-worker-atacadao |
+| Web Service (free) | `srv-d1k6gcbe5dus73e5o3hg` | frete-sistema (DEPRECATED) |
+| Redis | `red-d1c4jheuk2gs73absk10` | sistema-fretes-redis |
 
-- sistema-fretes-redis
-- Instance: Starter 256 MB RAM
+### Ferramentas MCP Disponiveis
 
-### BACKGROUND WORKER
+| Ferramenta | Uso |
+|------------|-----|
+| `query_render_postgres` | Consulta SQL read-only no banco de producao |
+| `list_services` | Listar servicos e status |
+| `list_deploys` | Historico de deploys por servico |
+| `get_deploy` | Detalhes de um deploy especifico |
+| `get_metrics` | CPU, memoria, HTTP requests, latencia, bandwidth |
+| `list_logs` | Logs de app, request e build |
+| `list_postgres_instances` | Info do Postgres |
+| `list_key_value` | Info do Redis |
+| `get_service` | Detalhes de um servico |
 
-- sistema-fretes-worker-atacadao
-- Instance: Standard 2 GB 1 CPU
-- Build Command: pip install -r requirements.txt && python -m playwright install chromium && bash install_libreoffice_render.sh
-- Start Command: ./start_worker_render.sh
+### Exemplos de Uso
+
+```
+# Consultar dados de producao
+mcp__render__query_render_postgres(postgresId="dpg-d13m38vfte5s738t6p50-a", sql="SELECT ...")
+
+# Ver metricas
+mcp__render__get_metrics(resourceId="srv-d13m38vfte5s738t6p60", metricTypes=["cpu_usage", "memory_usage"])
+
+# Ver logs recentes
+mcp__render__list_logs(resource=["srv-d13m38vfte5s738t6p60"], limit=20)
+
+# Ver ultimos deploys
+mcp__render__list_deploys(serviceId="srv-d13m38vfte5s738t6p60", limit=5)
+```
+
+### Servicos
+
+| Servico | Tipo | Plano | Dominio |
+|---------|------|-------|---------|
+| sistema-fretes | Web Service | Pro 4GB 2CPU | sistema-fretes.onrender.com |
+| frete-sistema | Web Service | Free | frete-sistema.onrender.com | # Deprecated
+| sistema-fretes-worker-atacadao | Background Worker | Standard 2GB 1CPU | — |
+| sistema-fretes-redis | Key Value | Starter 256MB | — |
+| sistema-fretes-db | Postgres | Basic 1GB | — |
 
 ## ODOO
 

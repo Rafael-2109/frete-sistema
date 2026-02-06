@@ -109,8 +109,8 @@ IRRELEVANT_TABLES = {
     'historico_pedidos', 'historico_data_prevista',
     'faturamento_parcial_justificativa', 'inconsistencia_faturamento',
     'relatorio_faturamento_importado',
-    # Fretes — tabelas auxiliares (conta corrente, cotações, histórico)
-    'conta_corrente_transportadoras', 'cotacao_itens', 'cotacoes',
+    # Fretes — tabelas auxiliares (cotações, histórico)
+    'cotacao_itens', 'cotacoes',
     'historico_tabelas_frete',
     # Financeiro — lotes/headers (itens mantidos), logs, pendências
     'baixa_pagamento_lote', 'baixa_titulo_lote',
@@ -139,12 +139,12 @@ TABLE_DESCRIPTIONS = {
     # Core (já no schema.json)
     'carteira_principal': 'Pedidos com saldo pendente. Fonte da verdade para demanda.',
     'separacao': 'Itens separados para expedição. Projeta saídas de estoque.',
-    'movimentacao_estoque': 'Movimentos de estoque: entradas, saídas, ajustes, produção.',
+    'movimentacao_estoque': 'Movimentos de estoque: entradas, saidas, ajustes, producao. Historico: ORDER BY data_movimentacao DESC. Origem do estoque: GROUP BY tipo_movimentacao. Estoque parado: MAX(data_movimentacao WHERE tipo=SAIDA) < 30 dias + saldo > 0. Giro: saidas_periodo / saldo_medio.',
     'programacao_producao': 'Produção programada por data e linha.',
     'cadastro_palletizacao': 'Cadastro de produtos com peso, pallet, conversões.',
-    'faturamento_produto': 'NFs emitidas por produto. Registros de faturamento.',
-    'embarques': 'Embarques que agrupam separações para transporte.',
-    'embarque_itens': 'Itens individuais dentro de um embarque.',
+    'faturamento_produto': 'NFs emitidas por produto. IMPORTANTE: campo origem = num_pedido (link direto pedido->NF). Comparativo mensal: SUM(valor_produto_faturado) GROUP BY DATE_TRUNC(month, data_fatura). Clientes novos: cnpj_cliente NOT IN subquery periodo anterior. Campos: numero_nf, cnpj_cliente, nome_cliente, cod_produto, nome_produto, qtd_faturada, valor_produto_faturado, data_fatura, origem.',
+    'embarques': 'Embarques que agrupam separacoes para transporte. Campos: numero (unico), data_embarque, tipo_carga (DIRETA ou FRACIONADA), transportadora_id, peso_total, valor_total, pallet_total, status. Concentracao semanal: EXTRACT(DOW FROM data_embarque). Co-passageiros: JOIN embarque_itens WHERE embarque_id = X.',
+    'embarque_itens': 'Itens individuais dentro de um embarque. Campos: embarque_id, separacao_lote_id, cnpj_cliente, cliente, pedido, nota_fiscal, peso, valor, volumes, pallets, uf_destino, cidade_destino. Para co-passageiros: SELECT * FROM embarque_itens WHERE embarque_id = X.',
     'saldo_standby': 'Pedidos em espera: saldo, comercial ou PCP.',
     # Financeiro
     'contas_a_receber': 'Títulos a receber de clientes. Dados do Odoo enriquecidos.',
@@ -169,16 +169,16 @@ TABLE_DESCRIPTIONS = {
     'lancamento_comprovante': 'Lançamentos de comprovantes financeiros.',
     'correcao_data_nf_credito': 'Correções de data de NFs de crédito.',
     # Fretes
-    'fretes': 'Fretes contratados para embarques. Valores e transportadoras.',
+    'fretes': 'Fretes contratados para embarques. 4 tipos de valor: valor_cotado (calculado pela tabela de frete), valor_cte (cobrado pela transportadora no CTe), valor_considerado (validado internamente), valor_pago (efetivamente pago). Para custo real use valor_pago. Divergencia: ABS(valor_cte - valor_cotado). numeros_nfs e campo CSV com NFs do frete. tipo_carga: DIRETA ou FRACIONADA. Pendentes Odoo: status=APROVADO AND lancado_odoo_em IS NULL.',
     'faturas_frete': 'Faturas de frete emitidas por transportadoras.',
-    'despesas_extras': 'Despesas extras de frete (estadia, pedágio, etc.).',
-    'conta_corrente_transportadoras': 'Conta corrente com transportadoras.',
+    'despesas_extras': 'Despesas extras de frete. tipo_despesa: REENTREGA, TDE, DEVOLUCAO, PERNOITE, DIARIA, COMPLEMENTO DE FRETE, COMPRA/AVARIA, TRANSFERENCIA, DESCARGA, ESTACIONAMENTO, CARRO DEDICADO, ARMAZENAGEM. Para custo de devolucao: tipo_despesa=DEVOLUCAO. Link para NFDevolucao via nfd_id. valor_despesa contem o valor.',
+    'conta_corrente_transportadoras': 'Conta corrente com transportadoras. Saldo = SUM(valor_credito) - SUM(valor_debito). tipo_movimentacao: CREDITO, DEBITO, COMPENSACAO. status: ATIVO, COMPENSADO, DESCONSIDERADO. Cada registro vincula a um frete_id.',
     'aprovacoes_frete': 'Aprovações de fretes por alçada.',
     'fretes_lancados': 'Fretes lançados no Odoo.',
     'conhecimento_transporte': 'CT-es (Conhecimento de Transporte Eletrônico).',
     # Devoluções
     'nf_devolucao': 'NFs de devolução recebidas.',
-    'nf_devolucao_linha': 'Linhas/itens de NF de devolução.',
+    'nf_devolucao_linha': 'Linhas/itens de NF de devolucao. Produtos devolvidos: GROUP BY codigo_produto_cliente ou codigo_produto_interno para ranking. Campo quantidade (NAO qtd_devolvida). Campos: nfd_id (FK nf_devolucao), codigo_produto_cliente, codigo_produto_interno, quantidade, valor_total.',
     'nf_devolucao_nf_referenciada': 'NFs referenciadas em devoluções.',
     'ocorrencia_devolucao': 'Ocorrências/motivos de devolução.',
     'frete_devolucao': 'Fretes de devoluções.',
@@ -212,8 +212,8 @@ TABLE_DESCRIPTIONS = {
     'logs_rastreamento': 'Logs de rastreamento.',
     'configuracao_rastreamento': 'Configurações de rastreamento.',
     'entregas_rastreadas': 'Entregas com rastreamento ativo.',
-    'entregas_monitoradas': 'Monitoramento de entregas com status e ocorrências.',
-    'agendamentos_entrega': 'Agendamentos de entrega.',
+    'entregas_monitoradas': 'Monitoramento de entregas com status e ocorrencias. Atraso: status_finalizacao IS NULL AND data_entrega_prevista < CURRENT_DATE. Em transito: data_embarque IS NOT NULL AND status_finalizacao IS NULL AND nf_cd=False. Lead time: data_hora_entrega_realizada - data_embarque. Taxa sucesso: COUNT(entregue=True)/COUNT(*). Campos: numero_nf, cnpj_cliente, transportadora, uf, municipio, valor_nf, separacao_lote_id.',
+    'agendamentos_entrega': 'Agendamentos de entrega. Reagendamentos: GROUP BY entrega_id HAVING COUNT(*) > N. Campos: entrega_id, data_agendada, hora_agendada, forma_agendamento, status (aguardando, confirmado, etc.).',
     'eventos_entrega': 'Eventos de entrega (tentativa, sucesso, falha).',
     'custos_extra_entrega': 'Custos extras de entrega.',
     'logs_entrega': 'Logs de entrega.',
@@ -247,7 +247,9 @@ TABLE_DESCRIPTIONS = {
     'carteira_copia': 'Cópia de segurança da carteira.',
     # Portaria
     'motoristas': 'Cadastro de motoristas.',
-    'controle_portaria': 'Controle de entrada/saída na portaria.',
+    'controle_portaria': 'Controle de entrada/saida na portaria da fabrica. Veiculos na fabrica: data_saida IS NULL. Tempo carregamento: hora_saida - hora_entrada. Campos: placa, empresa, tipo_carga (Coleta, Devolucao, etc.), hora_chegada, hora_entrada, hora_saida, data_chegada, data_entrada, data_saida, embarque_id, motorista_id. NOTA: status e property calculada, NAO coluna.',
+    # Pallet
+    'pallet_creditos': 'Creditos de pallets a receber. Saldo por responsavel: SUM(qtd_saldo) WHERE status IN (PENDENTE, PARCIAL). tipo_responsavel: TRANSPORTADORA ou CLIENTE. Campos: cnpj_responsavel, nome_responsavel, qtd_original, qtd_saldo, status, prazo_dias, data_vencimento, nf_remessa_id.',
     # Notificações
     'alerta_notificacoes': 'Alertas e notificações do sistema.',
     'webhook_configs': 'Configurações de webhooks.',

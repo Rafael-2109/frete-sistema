@@ -32,7 +32,7 @@ from claude_agent_sdk import (
     ToolResultBlock,   # Resultado de execução de ferramenta
     TextBlock,
     ThinkingBlock,     # FEAT-002: Extended Thinking
-    # SDK 0.1.26+: Error classes especializadas
+    # SDK 0.1.31: Error classes especializadas
     CLINotFoundError,
     ProcessError,
     CLIJSONDecodeError,
@@ -594,12 +594,13 @@ Nunca invente informações."""
         # =================================================================
         try:
             from claude_agent_sdk import (
-                HookMatcher, PostToolUseHookInput, PostToolUseFailureHookInput,
+                HookMatcher, PreToolUseHookInput, PostToolUseHookInput,
+                PostToolUseFailureHookInput,
                 PreCompactHookInput, StopHookInput, UserPromptSubmitHookInput,
                 HookContext,
             )
 
-            async def _keep_stream_open(hook_input, signal, context: HookContext):
+            async def _keep_stream_open(hook_input: PreToolUseHookInput, signal, context: HookContext):
                 """Hook OBRIGATÓRIO: mantém stream aberto para can_use_tool funcionar.
 
                 FONTE: https://platform.claude.com/docs/en/agent-sdk/user-input
@@ -608,15 +609,48 @@ Nunca invente informações."""
                 hook, the stream closes before the permission callback can be invoked.'
 
                 Sem este hook, AskUserQuestion e ExitPlanMode falham com 'stream closed'.
+
+                SDK 0.1.29+: PreToolUseHookInput agora inclui tool_use_id e suporta
+                additionalContext no output para injetar contexto antes da execução.
                 """
+                # Contexto adicional pré-execução para tools de consulta
+                tool_name = hook_input.get('tool_name', '')
+                additional = None
+
+                # Injetar lembrete de campos corretos antes de queries SQL
+                if tool_name == 'mcp__sql__consultar_sql':
+                    additional = (
+                        "LEMBRETE: carteira_principal NÃO tem codigo_ibge (usar nome_cidade+cod_uf). "
+                        "faturamento_produto usa cnpj_cliente/nome_cliente (NÃO cnpj_cpf/razao_social). "
+                        "separacao tem cnpj_cpf, raz_social_red, cidade_normalizada, uf_normalizada, codigo_ibge."
+                    )
+
+                if additional:
+                    return {
+                        "continue_": True,
+                        "hookSpecificOutput": {
+                            "hookEventName": "PreToolUse",
+                            "additionalContext": additional,
+                        },
+                    }
+
                 return {"continue_": True}
 
             async def _audit_post_tool_use(hook_input: PostToolUseHookInput, signal, context: HookContext):
-                """Registra execução de tools para auditoria."""
+                """Registra execução de tools para auditoria.
+
+                SDK 0.1.29+: PostToolUseHookInput agora inclui tool_use_id
+                para correlação precisa tool_call → tool_result.
+                """
                 try:
-                    tool_name = getattr(hook_input, 'tool_name', 'unknown')
-                    tool_input_str = str(getattr(hook_input, 'tool_input', ''))[:200]
-                    logger.info(f"[AUDIT] PostToolUse: {tool_name} | input: {tool_input_str}")
+                    tool_name = hook_input.get('tool_name', 'unknown')
+                    tool_use_id = hook_input.get('tool_use_id', '')
+                    tool_input_str = str(hook_input.get('tool_input', ''))[:200]
+                    logger.info(
+                        f"[AUDIT] PostToolUse: {tool_name} "
+                        f"| id={tool_use_id[:12] if tool_use_id else 'N/A'} "
+                        f"| input: {tool_input_str}"
+                    )
                     return {}
                 except Exception as e:
                     logger.debug(f"[HOOK:PostToolUse] Suppressed (stream likely closed): {e}")
@@ -868,8 +902,9 @@ Nunca invente informações."""
                 ],
             }
             logger.debug(
-                "[AGENT_CLIENT] Hooks SDK configurados: "
-                "PreToolUse + PostToolUse + PostToolUseFailure + PreCompact + Stop + UserPromptSubmit"
+                "[AGENT_CLIENT] Hooks SDK configurados (SDK 0.1.31): "
+                "PreToolUse(+additionalContext) + PostToolUse(+tool_use_id) + "
+                "PostToolUseFailure + PreCompact + Stop + UserPromptSubmit"
             )
         except (ImportError, Exception) as e:
             logger.warning(f"[AGENT_CLIENT] Hooks SDK não disponíveis: {e}")
@@ -1000,6 +1035,36 @@ Nunca invente informações."""
         except Exception as e:
             logger.warning(f"[AGENT_CLIENT] Erro ao registrar Custom Tool sessions: {e}")
 
+        # =================================================================
+        # MCP Render Logs Tool (consulta de logs e metricas do Render)
+        # =================================================================
+        try:
+            from ..tools.render_logs_tool import render_server
+
+            if render_server is not None:
+                mcp_servers = options_dict.get("mcp_servers", {})
+                mcp_servers["render"] = render_server
+                options_dict["mcp_servers"] = mcp_servers
+
+                allowed = options_dict.get("allowed_tools", [])
+                render_tool_names = [
+                    "mcp__render__consultar_logs",
+                    "mcp__render__consultar_erros",
+                    "mcp__render__status_servicos",
+                ]
+                for tool_name in render_tool_names:
+                    if tool_name not in allowed:
+                        allowed.append(tool_name)
+                options_dict["allowed_tools"] = allowed
+
+                logger.info("[AGENT_CLIENT] Custom Tool MCP 'render' registrada (3 operações)")
+            else:
+                logger.debug("[AGENT_CLIENT] render_server é None — claude_agent_sdk não disponível")
+        except ImportError:
+            logger.debug("[AGENT_CLIENT] Custom Tool render não disponível (módulo não encontrado)")
+        except Exception as e:
+            logger.warning(f"[AGENT_CLIENT] Erro ao registrar Custom Tool render: {e}")
+
         return ClaudeAgentOptions(**options_dict)
 
     async def _stream_response(
@@ -1070,7 +1135,7 @@ Nunca invente informações."""
         # CRÍTICO: can_use_tool EXIGE streaming mode (AsyncIterable, não string)
         # FONTE: _internal/client.py:53-58
         # Portanto SEMPRE usamos AsyncIterable wrapper.
-        query_prompt = self._make_streaming_prompt(prompt, image_files)
+        query_prompt = AgentClient._make_streaming_prompt(prompt, image_files)
 
         # ─── Emitir init sintético ───
         yield StreamEvent(

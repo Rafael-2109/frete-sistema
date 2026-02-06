@@ -684,6 +684,194 @@ def consultar_situacao_completa_produto(args):
     return resultado
 
 
+def scan_ruptura_global(args):
+    """
+    SCAN GLOBAL DE RUPTURA: Analisa APENAS produtos com separacoes ativas.
+    Foca em produtos com DEMANDA REAL programada (separacoes nao faturadas).
+
+    Retorna produtos em risco ordenados por severidade:
+    - CRITICO: dias_ate_ruptura <= 2 OU deficit_imediato < 0
+    - ALERTA: dias_ate_ruptura <= 5
+    - ATENCAO: dias_ate_ruptura > 5
+
+    Inclui impacto financeiro e operacional (pedidos afetados, valor).
+    """
+    from app.separacao.models import Separacao
+    from app.producao.models import CadastroPalletizacao, ProgramacaoProducao
+    from app.estoque.services.estoque_simples import ServicoEstoqueSimples
+    from sqlalchemy import func
+
+    resultado = {
+        'sucesso': True,
+        'tipo_analise': 'SCAN_RUPTURA_GLOBAL',
+        'horizonte_dias': args.dias,
+        'total_produtos_analisados': 0,
+        'total_em_risco': 0,
+        'produtos_risco': [],
+        'resumo': {}
+    }
+
+    hoje = date.today()
+    data_limite_producao = hoje + timedelta(days=14)
+
+    # 1. Buscar produtos DISTINTOS com separacoes ativas
+    produtos_com_separacao = Separacao.query.filter(
+        Separacao.sincronizado_nf == False,
+        Separacao.qtd_saldo > 0
+    ).with_entities(
+        Separacao.cod_produto.distinct()
+    ).all()
+
+    cod_produtos = [p[0] for p in produtos_com_separacao]
+    resultado['total_produtos_analisados'] = len(cod_produtos)
+
+    produtos_risco_lista = []
+
+    # 2. Analisar cada produto
+    for cod_produto in cod_produtos:
+        # Buscar cadastro
+        cadastro = CadastroPalletizacao.query.filter_by(cod_produto=cod_produto).first()
+        nome_produto = cadastro.nome_produto if cadastro else cod_produto
+
+        # Calcular estoque atual
+        estoque_atual = ServicoEstoqueSimples.calcular_estoque_atual(cod_produto)
+
+        # Somar demanda (separacoes ativas)
+        separacoes = Separacao.query.filter(
+            Separacao.cod_produto == cod_produto,
+            Separacao.sincronizado_nf == False,
+            Separacao.qtd_saldo > 0
+        ).all()
+
+        demanda_separacoes = sum(float(s.qtd_saldo or 0) for s in separacoes)
+
+        # Contar pedidos afetados e valor total
+        pedidos_afetados = set()
+        valor_impactado = 0
+        for sep in separacoes:
+            if sep.num_pedido:
+                pedidos_afetados.add(sep.num_pedido)
+            valor_impactado += float(sep.valor_saldo or 0)
+
+        # Calcular deficit imediato
+        deficit_imediato = estoque_atual - demanda_separacoes
+
+        # Calcular projecao
+        projecao = ServicoEstoqueSimples.calcular_projecao(cod_produto, dias=args.dias)
+        dia_ruptura = projecao.get('dia_ruptura')
+        dias_ate_ruptura = None
+
+        if dia_ruptura:
+            dias_ate_ruptura = (date.fromisoformat(dia_ruptura) - hoje).days
+
+        # Buscar producao programada
+        programacao = ProgramacaoProducao.query.filter(
+            ProgramacaoProducao.cod_produto == cod_produto,
+            ProgramacaoProducao.data_programacao >= hoje,
+            ProgramacaoProducao.data_programacao <= data_limite_producao
+        ).with_entities(
+            func.sum(ProgramacaoProducao.qtd_programada)
+        ).scalar() or 0
+
+        # Filtrar: incluir apenas produtos em risco
+        em_risco = (dia_ruptura is not None and dias_ate_ruptura <= args.dias) or deficit_imediato < 0
+
+        if em_risco:
+            # Classificar severidade
+            if dias_ate_ruptura is not None and dias_ate_ruptura <= 2:
+                severidade = 'CRITICO'
+            elif deficit_imediato < 0:
+                severidade = 'CRITICO'
+            elif dias_ate_ruptura is not None and dias_ate_ruptura <= 5:
+                severidade = 'ALERTA'
+            else:
+                severidade = 'ATENCAO'
+
+            produtos_risco_lista.append({
+                'cod_produto': cod_produto,
+                'nome_produto': nome_produto,
+                'estoque_atual': round(estoque_atual, 2),
+                'demanda_separacoes': round(demanda_separacoes, 2),
+                'deficit_imediato': round(deficit_imediato, 2),
+                'dia_ruptura': dia_ruptura,
+                'dias_ate_ruptura': dias_ate_ruptura,
+                'pedidos_afetados': len(pedidos_afetados),
+                'valor_impactado': round(valor_impactado, 2),
+                'severidade': severidade,
+                'producao_programada': round(float(programacao), 2)
+            })
+
+    # 3. Ordenar por severidade (dias ate ruptura ASC, valor impacto DESC)
+    def chave_ordenacao(p):
+        # Prioridade: 1) dias ate ruptura (None = 999), 2) valor DESC
+        dias = p['dias_ate_ruptura'] if p['dias_ate_ruptura'] is not None else 999
+        return (dias, -p['valor_impactado'])
+
+    produtos_risco_lista.sort(key=chave_ordenacao)
+
+    # 4. Limitar resultados
+    resultado['produtos_risco'] = produtos_risco_lista[:args.limit]
+    resultado['total_em_risco'] = len(produtos_risco_lista)
+
+    # 5. Gerar resumo
+    criticos = [p for p in produtos_risco_lista if p['severidade'] == 'CRITICO']
+    alertas = [p for p in produtos_risco_lista if p['severidade'] == 'ALERTA']
+    atencoes = [p for p in produtos_risco_lista if p['severidade'] == 'ATENCAO']
+
+    total_critico = len(criticos)
+    total_alerta = len(alertas)
+    total_atencao = len(atencoes)
+
+    data_limite_str = (hoje + timedelta(days=args.dias)).strftime('%d/%m')
+
+    msg_linhas = [f"SCAN GLOBAL DE RUPTURA - Produtos com separacoes ativas (ate {data_limite_str}):"]
+    msg_linhas.append(f"Produtos analisados: {resultado['total_produtos_analisados']}")
+    msg_linhas.append(f"Produtos em risco: {resultado['total_em_risco']}")
+
+    if total_critico > 0:
+        msg_linhas.append(f"\n🚨 CRITICO: {total_critico} produto(s)")
+        for p in criticos[:5]:
+            msg_linhas.append(
+                f"  - {p['nome_produto']}: "
+                f"Estoque={p['estoque_atual']:.0f}, Demanda={p['demanda_separacoes']:.0f}, "
+                f"Deficit={p['deficit_imediato']:+.0f} | "
+                f"{p['pedidos_afetados']} pedidos, R$ {p['valor_impactado']:,.2f}"
+            )
+
+    if total_alerta > 0:
+        msg_linhas.append(f"\n⚠️ ALERTA: {total_alerta} produto(s)")
+        for p in alertas[:5]:
+            msg_linhas.append(
+                f"  - {p['nome_produto']}: "
+                f"Ruptura em {p['dia_ruptura']} ({p['dias_ate_ruptura']} dias) | "
+                f"{p['pedidos_afetados']} pedidos, R$ {p['valor_impactado']:,.2f}"
+            )
+
+    if total_atencao > 0:
+        msg_linhas.append(f"\nℹ️ ATENCAO: {total_atencao} produto(s)")
+        for p in atencoes[:5]:
+            msg_linhas.append(
+                f"  - {p['nome_produto']}: "
+                f"Ruptura em {p['dia_ruptura']} ({p['dias_ate_ruptura']} dias) | "
+                f"{p['pedidos_afetados']} pedidos"
+            )
+
+    if resultado['total_em_risco'] == 0:
+        msg_linhas = [
+            f"Scan concluido: {resultado['total_produtos_analisados']} produtos analisados",
+            f"✅ Nenhum produto em risco de ruptura nos proximos {args.dias} dias"
+        ]
+
+    resultado['resumo'] = {
+        'criticos': total_critico,
+        'alerta': total_alerta,
+        'atencao': total_atencao,
+        'mensagem': '\n'.join(msg_linhas)
+    }
+
+    return resultado
+
+
 def consultar_produtos_previsao_ruptura(args):
     """
     Query 20: O que vai dar falta essa semana?
@@ -829,7 +1017,9 @@ A opcao --completo retorna:
     parser.add_argument('--saidas', action='store_true', help='Mostrar saidas recentes (qtd < 0)')
     parser.add_argument('--pendente', action='store_true', help='Mostrar pendente de embarque')
     parser.add_argument('--sobra', action='store_true', help='Calcular sobra de estoque')
-    parser.add_argument('--ruptura', action='store_true', help='Previsao de rupturas')
+    parser.add_argument('--scan-ruptura-global', action='store_true', dest='scan_ruptura_global',
+                        help='Scan global: analisa APENAS produtos com separacoes ativas, retorna lista priorizada por risco')
+    parser.add_argument('--ruptura', action='store_true', help='Previsao de rupturas (todos produtos com movimentacao)')
     parser.add_argument('--dias', type=int, default=7, help='Horizonte de projecao em dias (default: 7)')
     parser.add_argument('--limit', type=int, default=100, help='Limite de resultados (default: 100)')
     parser.add_argument('--limit-entradas', type=int, default=100, dest='limit_entradas',
@@ -850,12 +1040,14 @@ A opcao --completo retorna:
             resultado = consultar_produtos_pendente_embarque(args)
         elif args.produto and args.sobra:
             resultado = consultar_produtos_sobra_estoque(args)
+        elif args.scan_ruptura_global:
+            resultado = scan_ruptura_global(args)
         elif args.ruptura:
             resultado = consultar_produtos_previsao_ruptura(args)
         else:
             resultado = {
                 'sucesso': False,
-                'erro': 'Informe ao menos um filtro: --produto com (--completo, --entradas, --saidas, --pendente ou --sobra), ou --ruptura'
+                'erro': 'Informe ao menos um filtro: --produto com (--completo, --entradas, --saidas, --pendente ou --sobra), --scan-ruptura-global, ou --ruptura'
             }
 
         print(json.dumps(resultado, ensure_ascii=False, indent=2, default=decimal_default))

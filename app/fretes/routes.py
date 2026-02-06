@@ -1215,57 +1215,29 @@ def auditoria_odoo(frete_id):
     )
 
 
-@fretes_bp.route("/analise-diferencas/<int:frete_id>")
-@login_required
-def analise_diferencas(frete_id):
-    """Mostra análise detalhada das diferenças com dados da tabela - VERSÃO ATUALIZADA"""
-    frete = Frete.query.get_or_404(frete_id)
+def _calcular_componentes_analise(frete, tabela_dados, transportadora_config):
+    """
+    Calcula componentes detalhados e resumo para a tela de análise de diferenças.
+    Função auxiliar reutilizável para diferentes fontes de tabela (embarque ou cadastrada).
 
-    # Importações necessárias
-    from app.utils.tabela_frete_manager import TabelaFreteManager
+    Args:
+        frete: Objeto Frete (para peso_total, valor_total_nfs)
+        tabela_dados: Dict normalizado com campos da tabela (sem prefixo)
+        transportadora_config: Dict com configurações da transportadora (pós-mínimo, etc.)
+
+    Returns:
+        tuple: (componentes, resumo_cotacao, configuracao_info)
+    """
     from app.utils.calculadora_frete import CalculadoraFrete
 
-    # Preparar dados da tabela usando o manager
-    tabela_dados = TabelaFreteManager.preparar_dados_tabela(frete)
-    tabela_dados["icms_destino"] = frete.tabela_icms_destino
-    tabela_dados["transportadora_optante"] = frete.transportadora.optante if frete.transportadora else True
-
-    # Dados básicos para cálculo
     peso_real = frete.peso_total
     valor_mercadoria = frete.valor_total_nfs
-
-    # Buscar configuração da transportadora
-    transportadora_config = {
-        "aplica_gris_pos_minimo": False,
-        "aplica_adv_pos_minimo": False,
-        "aplica_rca_pos_minimo": False,
-        "aplica_pedagio_pos_minimo": False,
-        "aplica_tas_pos_minimo": False,
-        "aplica_despacho_pos_minimo": False,
-        "aplica_cte_pos_minimo": False,
-        "pedagio_por_fracao": True,
-    }
-
-    if frete.transportadora:
-        # Buscar configurações reais da transportadora
-        transp = frete.transportadora
-        if hasattr(transp, "aplica_gris_pos_minimo"):
-            transportadora_config = {
-                "aplica_gris_pos_minimo": transp.aplica_gris_pos_minimo or False,
-                "aplica_adv_pos_minimo": transp.aplica_adv_pos_minimo or False,
-                "aplica_rca_pos_minimo": transp.aplica_rca_pos_minimo or False,
-                "aplica_pedagio_pos_minimo": transp.aplica_pedagio_pos_minimo or False,
-                "aplica_tas_pos_minimo": transp.aplica_tas_pos_minimo or False,
-                "aplica_despacho_pos_minimo": transp.aplica_despacho_pos_minimo or False,
-                "aplica_cte_pos_minimo": transp.aplica_cte_pos_minimo or False,
-                "pedagio_por_fracao": transp.pedagio_por_fracao if hasattr(transp, "pedagio_por_fracao") else True,
-            }
 
     # Usar calculadora centralizada para obter resultado detalhado
     resultado_calculo = CalculadoraFrete.calcular_frete_unificado(
         peso=peso_real,
         valor_mercadoria=valor_mercadoria,
-        tabela_dados=tabela_dados,  # CORREÇÃO: dados_tabela -> tabela_dados
+        tabela_dados=tabela_dados,
         transportadora_optante=tabela_dados.get("transportadora_optante", True),
         transportadora_config=transportadora_config,
         cidade={"icms": tabela_dados.get("icms_destino", 0)},
@@ -1275,29 +1247,26 @@ def analise_diferencas(frete_id):
     # Extrair detalhes do cálculo
     detalhes = resultado_calculo.get("detalhes", {})
 
-    # DEBUG: Imprimir valores recebidos da calculadora
-    print("\n" + "=" * 60)
-    print("DEBUG - VALORES RECEBIDOS DA CALCULADORA:")
-    print(f"  peso_para_calculo: {detalhes.get('peso_para_calculo', 0)}")
-    print(f"  frete_base: {detalhes.get('frete_base', 0)}")
-    print(f"  gris: {detalhes.get('gris', 0)}")
-    print(f"  adv: {detalhes.get('adv', 0)}")
-    print(f"  rca: {detalhes.get('rca', 0)}")
-    print(f"  pedagio: {detalhes.get('pedagio', 0)}")
-    print(f"  componentes_antes_minimo: {detalhes.get('componentes_antes_minimo', 0)}")
-    print(f"  frete_liquido_antes_minimo: {detalhes.get('frete_liquido_antes_minimo', 0)}")
-    print("=" * 60 + "\n")
-
     # ========== COMPONENTES DETALHADOS ==========
 
+    # Valores da tabela (agora de tabela_dados, funciona com qualquer fonte)
+    tab_valor_kg = tabela_dados.get("valor_kg", 0) or 0
+    tab_percentual_valor = tabela_dados.get("percentual_valor", 0) or 0
+    tab_frete_minimo_peso = tabela_dados.get("frete_minimo_peso", 0) or 0
+    tab_frete_minimo_valor = tabela_dados.get("frete_minimo_valor", 0) or 0
+    tab_percentual_gris = tabela_dados.get("percentual_gris", 0) or 0
+    tab_percentual_adv = tabela_dados.get("percentual_adv", 0) or 0
+    tab_percentual_rca = tabela_dados.get("percentual_rca", 0) or 0
+    tab_pedagio_por_100kg = tabela_dados.get("pedagio_por_100kg", 0) or 0
+
     # Peso considerado
-    peso_minimo_tabela = frete.tabela_frete_minimo_peso or 0
+    peso_minimo_tabela = tab_frete_minimo_peso
     peso_considerado = detalhes.get("peso_para_calculo", peso_real)
 
     # Frete base (peso + valor)
-    frete_peso = (peso_considerado * (frete.tabela_valor_kg or 0)) if frete.tabela_valor_kg else 0
+    frete_peso = (peso_considerado * tab_valor_kg) if tab_valor_kg else 0
     frete_valor = (
-        (valor_mercadoria * ((frete.tabela_percentual_valor or 0) / 100)) if frete.tabela_percentual_valor else 0
+        (valor_mercadoria * (tab_percentual_valor / 100)) if tab_percentual_valor else 0
     )
     frete_base = detalhes.get("frete_base", frete_peso + frete_valor)
 
@@ -1325,17 +1294,15 @@ def analise_diferencas(frete_id):
     valor_icms_cotacao = total_bruto_cotacao - total_liquido if percentual_icms_cotacao > 0 else 0
 
     # Ajuste de mínimo
-    frete_minimo_valor = frete.tabela_frete_minimo_valor or 0
+    frete_minimo_valor = tab_frete_minimo_valor
     ajuste_minimo_valor = max(0, frete_minimo_valor - total_liquido_antes_minimo)
 
     # Informações sobre pedágio
-    if frete.tabela_pedagio_por_100kg and peso_considerado > 0:
+    if tab_pedagio_por_100kg and peso_considerado > 0:
         if transportadora_config.get("pedagio_por_fracao", True):
-            # Por fração (arredonda para cima)
             fracoes_100kg = float(math.ceil(peso_considerado / 100))
             tipo_pedagio = "por fração"
         else:
-            # Direto (valor exato)
             fracoes_100kg = peso_considerado / 100
             tipo_pedagio = "direto"
     else:
@@ -1343,9 +1310,6 @@ def analise_diferencas(frete_id):
         tipo_pedagio = "não aplicado"
 
     # ========== MONTAGEM DOS COMPONENTES PARA VISUALIZAÇÃO ==========
-
-    # Contador para indexar apenas componentes tipo 'valor' (que terão campos de entrada)
-    input_index = 0
 
     componentes = [
         {
@@ -1359,25 +1323,25 @@ def analise_diferencas(frete_id):
         },
         {
             "nome": "Frete por Peso",
-            "valor_tabela": f"R$ {frete.tabela_valor_kg or 0:.4f}/kg",
+            "valor_tabela": f"R$ {tab_valor_kg:.4f}/kg",
             "valor_usado": f"{peso_considerado:.2f} kg",
-            "formula": f"{peso_considerado:.2f} × {frete.tabela_valor_kg or 0:.4f}",
+            "formula": f"{peso_considerado:.2f} × {tab_valor_kg:.4f}",
             "valor_calculado": frete_peso,
             "unidade": "R$",
             "tipo": "valor",
-            "input_index": 0,  # Adiciona índice para o campo de entrada
-            "pos_minimo": False,  # Sempre antes
+            "input_index": 0,
+            "pos_minimo": False,
         },
         {
             "nome": "Frete por Valor (%)",
-            "valor_tabela": f"{frete.tabela_percentual_valor or 0:.2f}%",
+            "valor_tabela": f"{tab_percentual_valor:.2f}%",
             "valor_usado": f"R$ {valor_mercadoria:.2f}",
-            "formula": f"{valor_mercadoria:.2f} × {frete.tabela_percentual_valor or 0:.2f}%",
+            "formula": f"{valor_mercadoria:.2f} × {tab_percentual_valor:.2f}%",
             "valor_calculado": frete_valor,
             "unidade": "R$",
             "tipo": "valor",
-            "input_index": 1,  # Adiciona índice para o campo de entrada
-            "pos_minimo": False,  # Sempre antes
+            "input_index": 1,
+            "pos_minimo": False,
         },
         {
             "nome": "Frete Base",
@@ -1387,25 +1351,25 @@ def analise_diferencas(frete_id):
             "valor_calculado": frete_base,
             "unidade": "R$",
             "tipo": "subtotal",
-            "pos_minimo": False,  # Sempre antes
+            "pos_minimo": False,
         },
     ]
 
     # GRIS com indicação de mínimo e posição
-    gris_minimo = tabela_dados.get("gris_minimo", 0)
+    gris_minimo = tabela_dados.get("gris_minimo", 0) or 0
     gris_calculado = (
-        (valor_mercadoria * ((frete.tabela_percentual_gris or 0) / 100)) if frete.tabela_percentual_gris else 0
+        (valor_mercadoria * (tab_percentual_gris / 100)) if tab_percentual_gris else 0
     )
     componentes.append(
         {
             "nome": f'GRIS {"(PÓS-MÍNIMO)" if transportadora_config["aplica_gris_pos_minimo"] else ""}',
-            "valor_tabela": f"{frete.tabela_percentual_gris or 0:.2f}% (Mín: R$ {gris_minimo:.2f})",
+            "valor_tabela": f"{tab_percentual_gris:.2f}% (Mín: R$ {gris_minimo:.2f})",
             "valor_usado": f"R$ {valor_mercadoria:.2f}",
-            "formula": f"max({valor_mercadoria:.2f} × {frete.tabela_percentual_gris or 0:.2f}%, {gris_minimo:.2f})",
+            "formula": f"max({valor_mercadoria:.2f} × {tab_percentual_gris:.2f}%, {gris_minimo:.2f})",
             "valor_calculado": gris,
             "unidade": "R$",
             "tipo": "valor",
-            "input_index": 2,  # Terceiro campo de entrada
+            "input_index": 2,
             "pos_minimo": transportadora_config["aplica_gris_pos_minimo"],
             "tem_minimo": gris_minimo > 0,
             "valor_sem_minimo": gris_calculado,
@@ -1413,20 +1377,20 @@ def analise_diferencas(frete_id):
     )
 
     # ADV com indicação de mínimo e posição
-    adv_minimo = tabela_dados.get("adv_minimo", 0)
+    adv_minimo = tabela_dados.get("adv_minimo", 0) or 0
     adv_calculado = (
-        (valor_mercadoria * ((frete.tabela_percentual_adv or 0) / 100)) if frete.tabela_percentual_adv else 0
+        (valor_mercadoria * (tab_percentual_adv / 100)) if tab_percentual_adv else 0
     )
     componentes.append(
         {
             "nome": f'ADV {"(PÓS-MÍNIMO)" if transportadora_config["aplica_adv_pos_minimo"] else ""}',
-            "valor_tabela": f"{frete.tabela_percentual_adv or 0:.2f}% (Mín: R$ {adv_minimo:.2f})",
+            "valor_tabela": f"{tab_percentual_adv:.2f}% (Mín: R$ {adv_minimo:.2f})",
             "valor_usado": f"R$ {valor_mercadoria:.2f}",
-            "formula": f"max({valor_mercadoria:.2f} × {frete.tabela_percentual_adv or 0:.2f}%, {adv_minimo:.2f})",
+            "formula": f"max({valor_mercadoria:.2f} × {tab_percentual_adv:.2f}%, {adv_minimo:.2f})",
             "valor_calculado": adv,
             "unidade": "R$",
             "tipo": "valor",
-            "input_index": 3,  # Quarto campo de entrada
+            "input_index": 3,
             "pos_minimo": transportadora_config["aplica_adv_pos_minimo"],
             "tem_minimo": adv_minimo > 0,
             "valor_sem_minimo": adv_calculado,
@@ -1437,13 +1401,13 @@ def analise_diferencas(frete_id):
     componentes.append(
         {
             "nome": f'RCA {"(PÓS-MÍNIMO)" if transportadora_config["aplica_rca_pos_minimo"] else ""}',
-            "valor_tabela": f"{frete.tabela_percentual_rca or 0:.2f}%",
+            "valor_tabela": f"{tab_percentual_rca:.2f}%",
             "valor_usado": f"R$ {valor_mercadoria:.2f}",
-            "formula": f"{valor_mercadoria:.2f} × {frete.tabela_percentual_rca or 0:.2f}%",
+            "formula": f"{valor_mercadoria:.2f} × {tab_percentual_rca:.2f}%",
             "valor_calculado": rca,
             "unidade": "R$",
             "tipo": "valor",
-            "input_index": 4,  # Quinto campo de entrada
+            "input_index": 4,
             "pos_minimo": transportadora_config["aplica_rca_pos_minimo"],
         }
     )
@@ -1452,25 +1416,24 @@ def analise_diferencas(frete_id):
     componentes.append(
         {
             "nome": f'Pedágio ({tipo_pedagio}) {"(PÓS-MÍNIMO)" if transportadora_config["aplica_pedagio_pos_minimo"] else ""}',
-            "valor_tabela": f"R$ {frete.tabela_pedagio_por_100kg or 0:.2f}/100kg",
+            "valor_tabela": f"R$ {tab_pedagio_por_100kg:.2f}/100kg",
             "valor_usado": f'{peso_considerado:.2f} kg = {fracoes_100kg:.2f} {"frações" if transportadora_config["pedagio_por_fracao"] else "× 100kg"}',
-            "formula": f"{fracoes_100kg:.2f} × R$ {frete.tabela_pedagio_por_100kg or 0:.2f}",
+            "formula": f"{fracoes_100kg:.2f} × R$ {tab_pedagio_por_100kg:.2f}",
             "valor_calculado": pedagio,
             "unidade": "R$",
             "tipo": "valor",
-            "input_index": 5,  # Sexto campo de entrada
+            "input_index": 5,
             "pos_minimo": transportadora_config["aplica_pedagio_pos_minimo"],
         }
     )
 
     # Valores fixos - Sempre mostrar todos para consistência
-    current_input_index = 6  # Começa em 6 após os componentes anteriores
+    current_input_index = 6
     for nome, valor, campo_config in [
         ("TAS", tas, "aplica_tas_pos_minimo"),
         ("Despacho", despacho, "aplica_despacho_pos_minimo"),
         ("CT-e", valor_cte_tabela, "aplica_cte_pos_minimo"),
     ]:
-        # Sempre adicionar o componente (mesmo se zero) para consistência com Frete por Peso/Valor
         componentes.append(
             {
                 "nome": f'{nome} (fixo) {"(PÓS-MÍNIMO)" if transportadora_config[campo_config] else ""}',
@@ -1480,11 +1443,11 @@ def analise_diferencas(frete_id):
                 "valor_calculado": valor,
                 "unidade": "R$",
                 "tipo": "valor",
-                "input_index": current_input_index,  # Adiciona índice incrementado
+                "input_index": current_input_index,
                 "pos_minimo": transportadora_config[campo_config],
             }
         )
-        current_input_index += 1  # Incrementa para o próximo
+        current_input_index += 1
 
     # Subtotal antes do mínimo
     componentes.append(
@@ -1592,17 +1555,102 @@ def analise_diferencas(frete_id):
         "valor_liquido_transportadora": valor_liquido_transportadora,
     }
 
+    return componentes, resumo_cotacao, configuracao_info
+
+
+@fretes_bp.route("/analise-diferencas/<int:frete_id>")
+@login_required
+def analise_diferencas(frete_id):
+    """Mostra análise detalhada das diferenças com dados da tabela - com toggle Embarque/Cadastrada"""
+    frete = Frete.query.get_or_404(frete_id)
+
+    from app.utils.tabela_frete_manager import TabelaFreteManager
+
+    # Buscar configuração da transportadora (NÃO muda entre fontes)
+    transportadora_config = {
+        "aplica_gris_pos_minimo": False,
+        "aplica_adv_pos_minimo": False,
+        "aplica_rca_pos_minimo": False,
+        "aplica_pedagio_pos_minimo": False,
+        "aplica_tas_pos_minimo": False,
+        "aplica_despacho_pos_minimo": False,
+        "aplica_cte_pos_minimo": False,
+        "pedagio_por_fracao": True,
+    }
+
+    if frete.transportadora:
+        transp = frete.transportadora
+        if hasattr(transp, "aplica_gris_pos_minimo"):
+            transportadora_config = {
+                "aplica_gris_pos_minimo": transp.aplica_gris_pos_minimo or False,
+                "aplica_adv_pos_minimo": transp.aplica_adv_pos_minimo or False,
+                "aplica_rca_pos_minimo": transp.aplica_rca_pos_minimo or False,
+                "aplica_pedagio_pos_minimo": transp.aplica_pedagio_pos_minimo or False,
+                "aplica_tas_pos_minimo": transp.aplica_tas_pos_minimo or False,
+                "aplica_despacho_pos_minimo": transp.aplica_despacho_pos_minimo or False,
+                "aplica_cte_pos_minimo": transp.aplica_cte_pos_minimo or False,
+                "pedagio_por_fracao": transp.pedagio_por_fracao if hasattr(transp, "pedagio_por_fracao") else True,
+            }
+
+    # ========== FONTE 1: Tabela Embarque (dados fixados no fechamento) ==========
+    tabela_dados_embarque = TabelaFreteManager.preparar_dados_tabela(frete)
+    tabela_dados_embarque["icms_destino"] = frete.tabela_icms_destino
+    tabela_dados_embarque["transportadora_optante"] = frete.transportadora.optante if frete.transportadora else True
+
+    componentes_embarque, resumo_embarque, config_info_embarque = _calcular_componentes_analise(
+        frete, tabela_dados_embarque, transportadora_config
+    )
+
+    # ========== FONTE 2: Tabela Cadastrada (tabela atual do banco) ==========
+    tabela_cadastrada = None
+    tabela_nao_encontrada = False
+    componentes_cadastrada = None
+    resumo_cadastrada = None
+    tabela_dados_cadastrada = None
+
+    from app.tabelas.models import TabelaFrete as TabelaFreteModel
+    from sqlalchemy import func as sa_func
+
+    tabela_cadastrada = TabelaFreteModel.query.filter(
+        TabelaFreteModel.transportadora_id == frete.transportadora_id,
+        sa_func.upper(sa_func.trim(TabelaFreteModel.nome_tabela)) == sa_func.upper(sa_func.trim(frete.tabela_nome_tabela or '')),
+        TabelaFreteModel.uf_origem == 'SP',
+        TabelaFreteModel.uf_destino == frete.uf_destino,
+        TabelaFreteModel.tipo_carga == frete.tipo_carga,
+        TabelaFreteModel.modalidade == frete.modalidade,
+    ).first()
+
+    if tabela_cadastrada:
+        tabela_dados_cadastrada = TabelaFreteManager.preparar_dados_tabela(tabela_cadastrada)
+        tabela_dados_cadastrada["icms_destino"] = frete.tabela_icms_destino
+        tabela_dados_cadastrada["transportadora_optante"] = frete.transportadora.optante if frete.transportadora else True
+
+        componentes_cadastrada, resumo_cadastrada, _ = _calcular_componentes_analise(
+            frete, tabela_dados_cadastrada, transportadora_config
+        )
+    else:
+        tabela_nao_encontrada = True
+
+    # ========== RENDER ==========
     resumo_cte = {"total_liquido": None, "percentual_icms": None, "valor_icms": None, "total_bruto": frete.valor_cte}
 
     return render_template(
         "fretes/analise_diferencas.html",
         frete=frete,
-        componentes=componentes,
-        tabela_dados=tabela_dados,
-        resumo_cotacao=resumo_cotacao,
+        # Dados Embarque (padrão - renderizados no HTML)
+        componentes=componentes_embarque,
+        tabela_dados=tabela_dados_embarque,
+        resumo_cotacao=resumo_embarque,
+        configuracao_info=config_info_embarque,
+        # Dados Cadastrada (injetados como JSON para JS)
+        componentes_cadastrada=componentes_cadastrada,
+        tabela_dados_cadastrada=tabela_dados_cadastrada,
+        resumo_cadastrada=resumo_cadastrada,
+        # Controle
         resumo_cte=resumo_cte,
-        configuracao_info=configuracao_info,
         transportadora_config=transportadora_config,
+        tabela_nao_encontrada=tabela_nao_encontrada,
+        tabela_cadastrada=tabela_cadastrada,
     )
 
 

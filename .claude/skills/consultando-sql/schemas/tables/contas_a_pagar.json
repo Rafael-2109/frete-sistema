@@ -149,6 +149,34 @@
   ],
   "indices": [
     {
+      "name": "ix_contas_a_pagar_partner_id",
+      "columns": [
+        "partner_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_pagar_parcela",
+      "columns": [
+        "parcela"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_pagar_cnpj",
+      "columns": [
+        "cnpj"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_pagar_odoo_line_id",
+      "columns": [
+        "odoo_line_id"
+      ],
+      "unique": true
+    },
+    {
       "name": "ix_contas_a_pagar_titulo_nf",
       "columns": [
         "titulo_nf"
@@ -210,34 +238,6 @@
         "vencimento"
       ],
       "unique": false
-    },
-    {
-      "name": "ix_contas_a_pagar_partner_id",
-      "columns": [
-        "partner_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_contas_a_pagar_parcela",
-      "columns": [
-        "parcela"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_contas_a_pagar_cnpj",
-      "columns": [
-        "cnpj"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_contas_a_pagar_odoo_line_id",
-      "columns": [
-        "odoo_line_id"
-      ],
-      "unique": true
     }
   ]
 }

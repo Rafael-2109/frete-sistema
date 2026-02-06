@@ -453,6 +453,42 @@
 
                     <span class="text-muted">|</span>
 
+                    <!-- Filtro CNPJ/Prefixo -->
+                    <div class="d-flex align-items-center gap-1">
+                        <span class="small text-muted"><i class="fas fa-id-card me-1"></i>CNPJ:</span>
+                        <input type="text" class="form-control form-control-sm filtro-texto"
+                               id="filtro-cnpj" placeholder="CNPJ ou prefixo"
+                               style="width: 160px;">
+                    </div>
+
+                    <span class="text-muted">|</span>
+
+                    <!-- Filtro Range de Valor -->
+                    <div class="d-flex align-items-center gap-1">
+                        <span class="small text-muted"><i class="fas fa-dollar-sign me-1"></i>Valor:</span>
+                        <input type="number" class="form-control form-control-sm filtro-valor"
+                               id="filtro-valor-min" placeholder="Min"
+                               step="0.01" min="0"
+                               style="width: 100px;">
+                        <span class="small text-muted">a</span>
+                        <input type="number" class="form-control form-control-sm filtro-valor"
+                               id="filtro-valor-max" placeholder="Max"
+                               step="0.01" min="0"
+                               style="width: 100px;">
+                    </div>
+
+                    <span class="text-muted">|</span>
+
+                    <!-- Filtro Nome Fornecedor -->
+                    <div class="d-flex align-items-center gap-1">
+                        <span class="small text-muted"><i class="fas fa-building me-1"></i>Fornecedor:</span>
+                        <input type="text" class="form-control form-control-sm filtro-texto"
+                               id="filtro-fornecedor" placeholder="Nome parcial"
+                               style="width: 170px;">
+                    </div>
+
+                    <span class="text-muted">|</span>
+
                     <!-- Limpar Filtros -->
                     <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-limpar-filtros"
                             title="Limpar todos os filtros">
@@ -1962,6 +1998,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 ? 'R$ ' + cand.diferenca_valor.toLocaleString('pt-BR', {minimumFractionDigits: 2})
                 : '-';
 
+            // Separar move name e ref quando formato "NAME (REF)"
+            const moveRaw = cand.odoo_move_name || '-';
+            const moveMatch = moveRaw.match(/^(.+?)\s*\((.+)\)$/);
+            const moveName = moveMatch ? moveMatch[1] : moveRaw;
+            const moveRef = moveMatch ? moveMatch[2] : '';
+
             container.innerHTML += `
                 <div class="match-candidato ${scoreClass} border rounded" data-move-line-id="${cand.odoo_move_line_id}">
                     <div class="row align-items-center">
@@ -1970,7 +2012,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
                         <div class="col-md-3">
                             <strong>${cand.odoo_partner_name || '-'}</strong>${financeira}
-                            <br><small class="text-muted">Move: ${cand.odoo_move_name || '-'}</small>
+                            <br><small class="text-muted">Move: ${moveName}</small>
+                            ${moveRef ? '<br><small class="text-muted" style="font-size:0.7em">(' + moveRef + ')</small>' : ''}
                         </div>
                         <div class="col-md-2">
                             <strong>NF:</strong> ${cand.nf_numero || '-'}
@@ -2008,54 +2051,27 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         try {
-            // Primeiro executar match individual para salvar
-            const respMatch = await fetchComRetry(
-                '/financeiro/comprovantes/api/match/executar',
+            // Confirmacao direta: envia dados do candidato selecionado
+            // Nao re-executa batch — cria lancamento CONFIRMADO diretamente
+            const resp = await fetchComRetry(
+                `/financeiro/comprovantes/api/match/${comprovanteId}/confirmar-direto`,
                 {
                     method: 'POST',
-                    body: JSON.stringify({ comprovante_ids: [comprovanteId] }),
+                    body: JSON.stringify(candidato),
                     headers: {
                         'Content-Type': 'application/json',
                         ...getCsrfHeaders()
                     }
                 }
             );
-            await respMatch.json();
+            const resultado = await resp.json();
 
-            // Buscar lancamento criado para este comprovante + move_line
-            const respResultados = await fetch(
-                `/financeiro/comprovantes/api/match/resultados?comprovante_id=${comprovanteId}&status=PENDENTE`
-            );
-            const dadosResultados = await respResultados.json();
-
-            if (dadosResultados.lancamentos && dadosResultados.lancamentos.length > 0) {
-                // Encontrar o lancamento com o mesmo move_line_id
-                const lancamento = dadosResultados.lancamentos.find(
-                    l => l.odoo_move_line_id === candidato.odoo_move_line_id
-                ) || dadosResultados.lancamentos[0];
-
-                // Confirmar
-                const respConfirmar = await fetchComRetry(
-                    `/financeiro/comprovantes/api/match/${lancamento.id}/confirmar`,
-                    {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            ...getCsrfHeaders()
-                        }
-                    }
-                );
-                const resultado = await respConfirmar.json();
-
-                if (resultado.sucesso) {
-                    alert('Match confirmado com sucesso!');
-                    bootstrap.Modal.getInstance(document.getElementById('modalCandidatos')).hide();
-                    recarregarTabela();
-                } else {
-                    alert('Erro ao confirmar: ' + (resultado.erro || 'Erro desconhecido'));
-                }
+            if (resultado.sucesso) {
+                alert('Match confirmado com sucesso!');
+                bootstrap.Modal.getInstance(document.getElementById('modalCandidatos')).hide();
+                recarregarTabela();
             } else {
-                alert('Nenhum lancamento encontrado para confirmar. Tente executar o match batch primeiro.');
+                alert('Erro ao confirmar: ' + (resultado.erro || 'Erro desconhecido'));
             }
         } catch (err) {
             alert('Erro: ' + err.message);
@@ -2599,6 +2615,20 @@ document.addEventListener('DOMContentLoaded', function() {
         popularFiltroConfianca();
     });
 
+    // Funcao utilitaria de debounce para inputs de texto
+    var debounceTimer = null;
+    function debounceRedraw(delay) {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(function() {
+            tabela.draw();
+        }, delay || 300);
+    }
+
+    // Funcao para normalizar CNPJ (remover pontuacao)
+    function normalizarCNPJ(str) {
+        return (str || '').replace(/[.\-\/\s]/g, '');
+    }
+
     // Custom search function registrada no DataTables
     $.fn.dataTable.ext.search.push(function(settings, searchData, dataIndex) {
         // Aplicar apenas na tabela de comprovantes
@@ -2667,6 +2697,31 @@ document.addEventListener('DOMContentLoaded', function() {
             if (estado === 'exclude' && temCondicao)  return false;  // quer NAO, mas tem
         }
 
+        // --- 3. Filtro de CNPJ/Prefixo ---
+        var filtroCnpj = document.getElementById('filtro-cnpj').value.trim();
+        if (filtroCnpj) {
+            var cnpjNorm = normalizarCNPJ(filtroCnpj).toLowerCase();
+            var dadoCnpj = normalizarCNPJ(rowData.beneficiario_cnpj_cpf).toLowerCase();
+            if (dadoCnpj.indexOf(cnpjNorm) === -1) return false;
+        }
+
+        // --- 4. Filtro de Range de Valor ---
+        var valorMin = document.getElementById('filtro-valor-min').value.trim();
+        var valorMax = document.getElementById('filtro-valor-max').value.trim();
+        if (valorMin || valorMax) {
+            var valorPago = rowData.valor_pago;
+            if (valorPago == null) return false;
+            if (valorMin && valorPago < parseFloat(valorMin)) return false;
+            if (valorMax && valorPago > parseFloat(valorMax)) return false;
+        }
+
+        // --- 5. Filtro de Nome Fornecedor ---
+        var filtroFornec = document.getElementById('filtro-fornecedor').value.trim();
+        if (filtroFornec) {
+            var nomeBenef = (rowData.beneficiario_razao_social || '').toLowerCase();
+            if (nomeBenef.indexOf(filtroFornec.toLowerCase()) === -1) return false;
+        }
+
         return true;
     });
 
@@ -2718,6 +2773,16 @@ document.addEventListener('DOMContentLoaded', function() {
         tabela.draw();
     });
 
+    // Handler para inputs de texto (CNPJ + Fornecedor) com debounce
+    $('.filtro-texto').on('input', function() {
+        debounceRedraw(300);
+    });
+
+    // Handler para inputs de valor (Min + Max) com debounce
+    $('.filtro-valor').on('input', function() {
+        debounceRedraw(300);
+    });
+
     // Limpar todos os filtros (botao geral)
     document.getElementById('btn-limpar-filtros').addEventListener('click', function() {
         // Reset checkboxes de confianca
@@ -2734,6 +2799,11 @@ document.addEventListener('DOMContentLoaded', function() {
             cb.indeterminate = true;
             cb.dataset.tristate = 'neutral';
         });
+        // Reset filtros de CNPJ, Valor e Fornecedor
+        document.getElementById('filtro-cnpj').value = '';
+        document.getElementById('filtro-valor-min').value = '';
+        document.getElementById('filtro-valor-max').value = '';
+        document.getElementById('filtro-fornecedor').value = '';
         tabela.draw();
     });
 
@@ -2763,6 +2833,12 @@ document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll('.filtro-check').forEach(function(cb) {
             if (cb.dataset.tristate && cb.dataset.tristate !== 'neutral') count++;
         });
+
+        // Contar filtros de CNPJ, Valor e Fornecedor ativos
+        if (document.getElementById('filtro-cnpj').value.trim()) count++;
+        if (document.getElementById('filtro-valor-min').value.trim()) count++;
+        if (document.getElementById('filtro-valor-max').value.trim()) count++;
+        if (document.getElementById('filtro-fornecedor').value.trim()) count++;
 
         // Atualizar badge geral (botao Filtros)
         var badge = document.getElementById('badge-filtros-ativos');

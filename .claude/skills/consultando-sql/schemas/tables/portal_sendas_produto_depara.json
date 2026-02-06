@@ -68,9 +68,9 @@
   ],
   "indices": [
     {
-      "name": "ix_portal_sendas_produto_depara_ativo",
+      "name": "ix_portal_sendas_produto_depara_codigo_sendas",
       "columns": [
-        "ativo"
+        "codigo_sendas"
       ],
       "unique": false
     },
@@ -89,9 +89,9 @@
       "unique": false
     },
     {
-      "name": "ix_portal_sendas_produto_depara_codigo_sendas",
+      "name": "ix_portal_sendas_produto_depara_ativo",
       "columns": [
-        "codigo_sendas"
+        "ativo"
       ],
       "unique": false
     }

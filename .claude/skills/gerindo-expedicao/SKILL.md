@@ -122,6 +122,8 @@ A escolha correta evita resultados errados e retrabalho.
 | **Estoque de produto** ("quanto tem de X?") | `consultando_produtos_estoque.py` | `--produto X --completo` |
 | **Entradas recentes** ("chegou X?") | `consultando_produtos_estoque.py` | `--produto X --entradas` |
 | **Ruptura/falta** ("vai faltar X?") | `consultando_produtos_estoque.py` | `--ruptura --dias 7` |
+| **Scan ruptura proativo** ("o que vai faltar?") | `consultando_produtos_estoque.py` | `--scan-ruptura-global --dias 7` |
+| **Co-passageiros embarque** ("quem vai no embarque 1234?") | `consultando_situacao_pedidos.py` | `--co-passageiros-embarque 1234` |
 | **Quando pedido fica disponivel** | `analisando_disponibilidade_estoque.py` | `--pedido VCD123` |
 | **Disponibilidade de grupo** | `analisando_disponibilidade_estoque.py` | `--grupo atacadao --completude` |
 | **Prazo de entrega** ("quando chega?") | `calculando_leadtime_entrega.py` | `--pedido X --data-embarque Y` |
@@ -360,12 +362,14 @@ python .claude/skills/gerindo-expedicao/scripts/consultando_situacao_pedidos.py 
 | `--consolidar-com` | Buscar pedidos para consolidar | `--consolidar-com "assai 123"` |
 | `--ate-data` | Data limite de expedicao | `--ate-data amanha`, `--ate-data 15/12` |
 | `--em-separacao` | Buscar em Separacao (nao CarteiraPrincipal) | flag |
+| `--co-passageiros-embarque` | Lista todos clientes/pedidos/NFs no mesmo embarque | `--co-passageiros-embarque 1234` |
 | `--limit` | Limite de resultados (default: 100) | `--limit 20` |
 
 **Combinacoes suportadas:**
 - `--grupo atacadao --produto ketchup` → Pedidos do Atacadao com ketchup
 - `--cliente Carrefour --produto palmito` → Pedidos do Carrefour com palmito
 - `--cliente "45.543.915"` → Busca por CNPJ
+- `--co-passageiros-embarque 1234` → Quem embarcou junto no embarque 1234
 
 ---
 
@@ -388,7 +392,8 @@ python .claude/skills/gerindo-expedicao/scripts/consultando_produtos_estoque.py 
 | `--saidas` | Mostrar saidas recentes (qtd < 0) | flag |
 | `--pendente` | Quantidade pendente de embarque + lista pedidos | flag |
 | `--sobra` | Calcular sobra de estoque apos demanda | flag |
-| `--ruptura` | Previsao de rupturas | flag |
+| `--scan-ruptura-global` | Scan proativo: analisa APENAS produtos com separacoes ativas, lista priorizados por risco | flag |
+| `--ruptura` | Previsao de rupturas (todos produtos com movimentacao) | flag |
 | `--dias` | Horizonte de projecao em dias (default: 7) | `--dias 14` |
 | `--limit` | Limite de resultados (default: 100) | `--limit 50` |
 | `--limit-entradas` | Limite de movimentacoes por produto (default: 100) | `--limit-entradas 20` |

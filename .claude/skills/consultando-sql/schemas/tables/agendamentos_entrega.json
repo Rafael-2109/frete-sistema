@@ -1,6 +1,6 @@
 {
   "name": "agendamentos_entrega",
-  "description": "Agendamentos de entrega.",
+  "description": "Agendamentos de entrega. Reagendamentos: GROUP BY entrega_id HAVING COUNT(*) > N. Campos: entrega_id, data_agendada, hora_agendada, forma_agendamento, status (aguardando, confirmado, etc.).",
   "fields": [
     {
       "name": "id",

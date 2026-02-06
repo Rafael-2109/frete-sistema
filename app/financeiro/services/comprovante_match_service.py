@@ -336,6 +336,86 @@ class ComprovanteMatchService:
         logger.info(f"Lancamento {lancamento_id} CONFIRMADO por {usuario}")
         return {'sucesso': True, 'lancamento': lanc.to_dict()}
 
+    def confirmar_match_direto(
+        self, comprovante_id: int, candidato_data: Dict, usuario: str
+    ) -> Dict:
+        """
+        Confirma match diretamente a partir dos dados do candidato selecionado no modal.
+
+        Nao re-executa o matching — cria LancamentoComprovante CONFIRMADO
+        com os dados exatos fornecidos pela UI.
+
+        Args:
+            comprovante_id: ID do comprovante
+            candidato_data: Dict com dados do candidato (retornado por buscar_candidatos_comprovante)
+            usuario: Nome do usuario que confirmou
+
+        Returns:
+            Dict com sucesso + lancamento criado
+        """
+        comp = ComprovantePagamentoBoleto.query.get(comprovante_id)
+        if not comp:
+            return {'sucesso': False, 'erro': f'Comprovante {comprovante_id} nao encontrado'}
+
+        # Validar campos obrigatorios do candidato
+        odoo_move_line_id = candidato_data.get('odoo_move_line_id')
+        if not odoo_move_line_id:
+            return {'sucesso': False, 'erro': 'odoo_move_line_id e obrigatorio'}
+
+        # Rejeitar lancamentos PENDENTE/CONFIRMADO existentes do mesmo comprovante
+        existentes = LancamentoComprovante.query.filter(
+            LancamentoComprovante.comprovante_id == comprovante_id,
+            LancamentoComprovante.status.in_(['PENDENTE', 'CONFIRMADO']),
+        ).all()
+        for lanc_exist in existentes:
+            lanc_exist.status = 'REJEITADO'
+            lanc_exist.rejeitado_em = agora_brasil()
+            lanc_exist.rejeitado_por = usuario
+            lanc_exist.motivo_rejeicao = f'Substituido: confirmacao direta por {usuario}'
+
+        # Parsear vencimento
+        vencimento = None
+        venc_str = candidato_data.get('odoo_vencimento')
+        if venc_str:
+            try:
+                vencimento = datetime.strptime(venc_str, '%Y-%m-%d').date()
+            except (ValueError, TypeError):
+                pass
+
+        # Criar lancamento CONFIRMADO com dados do candidato
+        lanc = LancamentoComprovante(
+            comprovante_id=comprovante_id,
+            odoo_move_line_id=odoo_move_line_id,
+            odoo_move_id=candidato_data.get('odoo_move_id'),
+            odoo_move_name=candidato_data.get('odoo_move_name'),
+            odoo_partner_id=candidato_data.get('odoo_partner_id'),
+            odoo_partner_name=candidato_data.get('odoo_partner_name'),
+            odoo_partner_cnpj=candidato_data.get('odoo_partner_cnpj'),
+            odoo_company_id=candidato_data.get('odoo_company_id'),
+            nf_numero=candidato_data.get('nf_numero'),
+            parcela=candidato_data.get('parcela'),
+            odoo_valor_original=candidato_data.get('odoo_valor_original'),
+            odoo_valor_residual=candidato_data.get('odoo_valor_residual'),
+            odoo_valor_recalculado=candidato_data.get('odoo_valor_recalculado'),
+            odoo_vencimento=vencimento,
+            match_score=candidato_data.get('score', 0),
+            match_criterios=json.dumps(candidato_data.get('criterios', []), ensure_ascii=False),
+            diferenca_valor=candidato_data.get('diferenca_valor'),
+            beneficiario_e_financeira=candidato_data.get('beneficiario_e_financeira', False),
+            status='CONFIRMADO',
+            confirmado_em=agora_brasil(),
+            confirmado_por=usuario,
+        )
+        db.session.add(lanc)
+        db.session.commit()
+
+        logger.info(
+            f"Match direto CONFIRMADO: comp={comprovante_id} "
+            f"move_line={odoo_move_line_id} score={candidato_data.get('score')} "
+            f"por {usuario}"
+        )
+        return {'sucesso': True, 'lancamento': lanc.to_dict()}
+
     def rejeitar_match(self, lancamento_id: int, usuario: str, motivo: str = None) -> Dict:
         """Rejeita um match (PENDENTE -> REJEITADO)."""
         lanc = LancamentoComprovante.query.get(lancamento_id)
@@ -762,6 +842,7 @@ class ComprovanteMatchService:
             ['parent_state', '=', 'posted'],
             ['date_maturity', '!=', '2000-01-01'],
             ['company_id', 'in', company_ids],
+            ['amount_residual', '!=', 0],
         ]
 
         try:
@@ -835,10 +916,25 @@ class ComprovanteMatchService:
 
         # Estrategia 1: Com separador (-, /, espaco)
         # Tolera ruido OCR no final: "78908-4 5" → captura NF=78908, parcela=4, ignora " 5"
-        sep_match = re.match(r'^0*(\d+)\s*[-/\s]\s*0*(\d{1,3})(?:\s+\d{1,2})?$', doc)
+        # Captura NF e bloco de parcela SEM remover zeros (para detectar formato PPTT)
+        sep_match = re.match(r'^0*(\d+)\s*[-/\s]\s*(\d{1,4})(?:\s+\d{1,2})?$', doc)
         if sep_match:
             nf = sep_match.group(1)
-            parcela = int(sep_match.group(2))
+            parcela_bloco = sep_match.group(2)  # string original, ex: "0203", "3", "02"
+
+            # Detectar formato PPTT (ex: "0203" = parcela 02 de 03, "0103" = parcela 01 de 03)
+            # Condicoes: 4 digitos, PP >= 01, TT >= PP, ambos <= 99
+            if len(parcela_bloco) == 4:
+                pp = int(parcela_bloco[:2])
+                tt = int(parcela_bloco[2:])
+                if 1 <= pp <= tt <= 99:
+                    parcela = pp
+                else:
+                    # Nao e PPTT valido — interpretar como numero inteiro
+                    parcela = int(parcela_bloco.lstrip('0') or '0')
+            else:
+                # 1-3 digitos: interpretar normalmente (remover zeros a esquerda)
+                parcela = int(parcela_bloco.lstrip('0') or '0')
 
             # Validar NF contra conhecidas
             if nf in nfs_conhecidas:

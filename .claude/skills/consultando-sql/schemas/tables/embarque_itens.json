@@ -1,6 +1,6 @@
 {
   "name": "embarque_itens",
-  "description": "Itens individuais dentro de um embarque.",
+  "description": "Itens individuais dentro de um embarque. Campos: embarque_id, separacao_lote_id, cnpj_cliente, cliente, pedido, nota_fiscal, peso, valor, volumes, pallets, uf_destino, cidade_destino. Para co-passageiros: SELECT * FROM embarque_itens WHERE embarque_id = X.",
   "fields": [
     {
       "name": "id",

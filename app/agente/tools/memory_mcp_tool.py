@@ -174,7 +174,7 @@ def _execute_with_context(func):
 # =====================================================================
 
 try:
-    from claude_agent_sdk import tool, create_sdk_mcp_server
+    from claude_agent_sdk import tool, create_sdk_mcp_server, ToolAnnotations
 
     @tool(
         "view_memories",
@@ -184,7 +184,13 @@ try:
         "Use path='/memories' para listar diretórios. "
         "Use path='/memories/user.xml' para ver arquivo específico. "
         "Esta ferramenta é sua ÚNICA fonte de contexto cross-session.",
-        {"path": str}
+        {"path": str},
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
     )
     async def view_memories(args: dict[str, Any]) -> dict[str, Any]:
         """
@@ -260,7 +266,13 @@ try:
         "/memories/learned/regras.xml (regras de negócio), "
         "/memories/corrections/dominio.xml (correções). "
         "Se o arquivo já existir, o conteúdo será SUBSTITUÍDO.",
-        {"path": str, "content": str}
+        {"path": str, "content": str},
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
     )
     async def save_memory(args: dict[str, Any]) -> dict[str, Any]:
         """
@@ -341,7 +353,13 @@ try:
         "Substitui um trecho de texto em um arquivo de memória existente. "
         "O old_str deve ser encontrado exatamente UMA vez no arquivo. "
         "Use para atualizar informações específicas sem reescrever o arquivo inteiro.",
-        {"path": str, "old_str": str, "new_str": str}
+        {"path": str, "old_str": str, "new_str": str},
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
     )
     async def update_memory(args: dict[str, Any]) -> dict[str, Any]:
         """
@@ -412,7 +430,13 @@ try:
         "delete_memory",
         "Deleta um arquivo ou diretório de memória. "
         "Não é possível deletar o diretório raiz /memories.",
-        {"path": str}
+        {"path": str},
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=True,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
     )
     async def delete_memory(args: dict[str, Any]) -> dict[str, Any]:
         """
@@ -469,7 +493,13 @@ try:
         "Lista todos os arquivos de memória persistente do usuário. "
         "Use no INÍCIO de cada sessão para verificar o que há salvo. "
         "Retorna paths e preview do conteúdo de cada memória.",
-        {}
+        {},
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
     )
     async def list_memories(args: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG001
         """
@@ -515,7 +545,13 @@ try:
         "Limpa TODAS as memórias do usuário. "
         "Use apenas quando o usuário pedir explicitamente para limpar tudo. "
         "Esta ação é IRREVERSÍVEL.",
-        {}
+        {},
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=True,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
     )
     async def clear_memories(args: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG001
         """

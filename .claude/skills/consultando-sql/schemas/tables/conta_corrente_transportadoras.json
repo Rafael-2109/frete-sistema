@@ -1,0 +1,109 @@
+{
+  "name": "conta_corrente_transportadoras",
+  "description": "Conta corrente com transportadoras. Saldo = SUM(valor_credito) - SUM(valor_debito). tipo_movimentacao: CREDITO, DEBITO, COMPENSACAO. status: ATIVO, COMPENSADO, DESCONSIDERADO. Cada registro vincula a um frete_id.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "transportadora_id",
+      "type": "integer",
+      "description": "FK → transportadoras.id",
+      "nullable": false
+    },
+    {
+      "name": "frete_id",
+      "type": "integer",
+      "description": "FK → fretes.id",
+      "nullable": false
+    },
+    {
+      "name": "tipo_movimentacao",
+      "type": "varchar(20)",
+      "description": "CREDITO, DEBITO, COMPENSACAO",
+      "nullable": false
+    },
+    {
+      "name": "valor_diferenca",
+      "type": "float",
+      "description": "Diferença entre valor_pago e valor_considerado",
+      "nullable": false
+    },
+    {
+      "name": "valor_credito",
+      "type": "float",
+      "description": "Para créditos a favor da empresa",
+      "default": 0
+    },
+    {
+      "name": "valor_debito",
+      "type": "float",
+      "description": "Para débitos a favor da transportadora",
+      "default": 0
+    },
+    {
+      "name": "descricao",
+      "type": "varchar(255)",
+      "nullable": false
+    },
+    {
+      "name": "observacoes",
+      "type": "text"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "description": "ATIVO, COMPENSADO, DESCONSIDERADO",
+      "default": "ATIVO"
+    },
+    {
+      "name": "compensado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "compensado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "compensacao_frete_id",
+      "type": "integer",
+      "description": "Frete usado para compensação"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)",
+      "nullable": false
+    }
+  ],
+  "query_hints": [
+    {
+      "descricao": "Saldo por transportadora (creditos - debitos)",
+      "sql": "SELECT t.razao_social, SUM(cc.valor_credito) AS total_credito, SUM(cc.valor_debito) AS total_debito, SUM(cc.valor_credito) - SUM(cc.valor_debito) AS saldo FROM conta_corrente_transportadoras cc JOIN transportadoras t ON t.id = cc.transportadora_id WHERE cc.status = 'ATIVO' GROUP BY t.razao_social ORDER BY saldo DESC"
+    },
+    {
+      "descricao": "Movimentacoes de uma transportadora",
+      "sql": "SELECT cc.tipo_movimentacao, cc.valor_diferenca, cc.valor_credito, cc.valor_debito, cc.descricao, cc.status, cc.criado_em FROM conta_corrente_transportadoras cc WHERE cc.transportadora_id = :transportadora_id ORDER BY cc.criado_em DESC"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "transportadora_id",
+      "references": "transportadoras.id"
+    },
+    {
+      "column": "frete_id",
+      "references": "fretes.id"
+    },
+    {
+      "column": "compensacao_frete_id",
+      "references": "fretes.id"
+    }
+  ]
+}

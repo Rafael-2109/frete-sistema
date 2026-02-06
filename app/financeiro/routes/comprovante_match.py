@@ -171,6 +171,43 @@ def comprovante_match_confirmar(lancamento_id):
 
 
 # =============================================================================
+# CONFIRMAR MATCH DIRETO (a partir do modal de candidatos)
+# =============================================================================
+
+@financeiro_bp.route('/comprovantes/api/match/<int:comprovante_id>/confirmar-direto', methods=['POST'])
+@login_required
+def comprovante_match_confirmar_direto(comprovante_id):
+    """
+    Confirma match diretamente com dados do candidato selecionado no modal.
+
+    Nao re-executa matching — cria LancamentoComprovante CONFIRMADO
+    com os dados exatos fornecidos pela UI.
+
+    Body JSON: dados do candidato retornados por buscar_candidatos_comprovante.
+    """
+    try:
+        from app.financeiro.services.comprovante_match_service import ComprovanteMatchService
+
+        candidato_data = request.get_json()
+        if not candidato_data:
+            return jsonify({'sucesso': False, 'erro': 'Body JSON com dados do candidato e obrigatorio'}), 400
+
+        usuario = current_user.nome if hasattr(current_user, 'nome') else str(current_user)
+
+        service = ComprovanteMatchService()
+        resultado = service.confirmar_match_direto(comprovante_id, candidato_data, usuario)
+
+        if resultado.get('sucesso'):
+            return jsonify(resultado)
+        else:
+            return jsonify(resultado), 400
+
+    except Exception as e:
+        logger.error(f"Erro confirmar direto comp={comprovante_id}: {e}", exc_info=True)
+        return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+
+# =============================================================================
 # CONFIRMAR MATCH EM BATCH
 # =============================================================================
 

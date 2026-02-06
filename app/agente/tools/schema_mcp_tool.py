@@ -157,6 +157,13 @@ def _format_schema(schema: dict) -> str:
             parts.append(" — " + ", ".join(attrs))
         lines.append("".join(parts))
 
+    # Query hints
+    hints = schema.get('query_hints', [])
+    if hints:
+        lines.append("\n💡 Query Hints:")
+        for hint in hints:
+            lines.append(f"  * {hint['descricao']}: {hint['sql']}")
+
     # Índices
     indices = schema.get('indices', [])
     if indices:
@@ -180,7 +187,7 @@ def _format_schema(schema: dict) -> str:
 # =====================================================================
 
 try:
-    from claude_agent_sdk import tool, create_sdk_mcp_server
+    from claude_agent_sdk import tool, create_sdk_mcp_server, ToolAnnotations
 
     @tool(
         "consultar_schema",
@@ -189,7 +196,13 @@ try:
         "Use ANTES de sugerir operações de cadastro ou alteração para "
         "garantir que todos os campos corretos sejam incluídos. "
         "Exemplo: consultar_schema({'tabela': 'cadastro_palletizacao'})",
-        {"tabela": str}
+        {"tabela": str},
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
     )
     async def consultar_schema(args: dict[str, Any]) -> dict[str, Any]:
         """
@@ -251,7 +264,13 @@ try:
         "Evita inventar valores que não existem no banco. "
         "Apenas campos varchar/text são aceitos. "
         "Exemplo: consultar_valores_campo({'tabela': 'cadastro_palletizacao', 'campo': 'categoria_produto'})",
-        {"tabela": str, "campo": str}
+        {"tabela": str, "campo": str},
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
     )
     async def consultar_valores_campo(args: dict[str, Any]) -> dict[str, Any]:
         """

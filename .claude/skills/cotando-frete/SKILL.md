@@ -11,6 +11,9 @@ description: |
   - Comparacao: "qual transportadora mais barata para RJ?"
   - Lead time: "prazo de entrega para Manaus?" (lead_time vem nos vinculos)
 
+  - Frete real: "quanto gastei de frete com Atacadao?", "divergencia CTe", "fretes pendentes Odoo"
+  - Despesas frete: "custo real do pedido com despesas extras"
+
   NAO USAR QUANDO:
   - Criar embarque/separacao → usar **gerindo-expedicao**
   - Status de entrega pos-faturamento → usar **monitorando-entregas**
@@ -65,6 +68,12 @@ Skill para consultar precos de frete, calcular cotacoes detalhadas e explicar a 
 | **Frete de separacao** | `consultar_pedido_frete.py` | `--separacao SEP-2025-001` |
 | **Frete de NF** | `consultar_pedido_frete.py` | `--nf 144533` |
 | **Recalcular frete** | `consultar_pedido_frete.py` | `--pedido VCD123 --recalcular` |
+| **Quanto GASTEI de frete** | `consultando_frete_real.py` | `--cliente "Atacadao" --de 2026-01-01` |
+| **Frete REAL de pedido** | `consultando_frete_real.py` | `--pedido VCD123` |
+| **Divergencia CTe vs cotacao** | `consultando_frete_real.py` | `--divergencias` |
+| **Fretes pendentes Odoo** | `consultando_frete_real.py` | `--pendentes-odoo` |
+| **Frete por transportadora** | `consultando_frete_real.py` | `--transportadora "Braspress"` |
+| **Custo real com despesas** | `consultando_frete_real.py` | `--pedido VCD123 --com-despesas` |
 
 ### Regras de Decisao (em ordem de prioridade)
 
@@ -80,10 +89,16 @@ Skill para consultar precos de frete, calcular cotacoes detalhadas e explicar a 
    → Use `consultar_pedido_frete.py`
    → Exemplo: "frete do pedido VCD123" → `--pedido VCD123`
 
-4. **Se pergunta sobre EXPLICACAO do calculo:**
+4. **Se pergunta sobre FRETE REAL GASTO (historico, divergencias, pendentes Odoo):**
+   → Use `consultando_frete_real.py`
+   → Exemplo: "quanto gastei de frete com Atacadao?" → `--cliente "Atacadao"`
+   → Exemplo: "divergencias de CTe" → `--divergencias`
+   → Exemplo: "fretes pendentes no Odoo" → `--pendentes-odoo`
+
+5. **Se pergunta sobre EXPLICACAO do calculo:**
    → Leia `references/calculo_frete.md` e explique o passo relevante
 
-5. **Se pergunta sobre TERMOS (GRIS, ADV, etc.):**
+6. **Se pergunta sobre TERMOS (GRIS, ADV, etc.):**
    → Leia `references/glossario_frete.md` e explique
 
 ### Fluxo de Ambiguidade de Cidade
@@ -266,7 +281,7 @@ source .venv/bin/activate && python .claude/skills/cotando-frete/scripts/consult
 \* Pelo menos um obrigatorio
 
 **Fontes de dados por parametro:**
-- `--pedido` → busca UNIFICADA: `separacao` (sincronizado_nf=false) + `carteira_principal` (saldo ativo). Retorna todos os contextos do pedido
+- `--pedido` → busca UNIFICADA: `separacao` (sincronizado_nf=false, qtd_saldo>0) + `carteira_principal` (qtd_saldo_produto_pedido>0). Retorna todos os contextos do pedido
 - `--separacao` → busca em `separacao` (sincronizado_nf=false, qtd_saldo>0)
 - `--nf` → busca em `faturamento_produto`
 
@@ -328,6 +343,63 @@ Se `resumo.requer_clarificacao = false` (1 unico contexto):
 }
 ```
 
+### 4. consultando_frete_real.py
+
+Consulta frete REAL (historico de gastos, divergencias, pendentes Odoo).
+
+```bash
+source .venv/bin/activate && python .claude/skills/cotando-frete/scripts/consultando_frete_real.py [opcoes]
+```
+
+**Parametros:**
+
+| Param | Obrig | Descricao |
+|-------|-------|-----------|
+| `--pedido` | * | Frete real do pedido (via chain embarque) |
+| `--cliente` | * | Total frete real por cliente/grupo (entity resolution) |
+| `--transportadora` | * | Frete agregado por transportadora |
+| `--divergencias` | * | Listar divergencias CTe vs cotacao > R$5 |
+| `--pendentes-odoo` | * | Fretes aprovados nao lancados no Odoo |
+| `--de` | Nao | Data inicio (YYYY-MM-DD) |
+| `--ate` | Nao | Data fim (YYYY-MM-DD) |
+| `--com-despesas` | Nao | Incluir breakdown de DespesaExtra |
+| `--limite` | Nao | Max resultados (default: 50) |
+
+\* Pelo menos um modo obrigatorio
+
+**Modos de operacao:**
+
+- `--pedido VCD123`: Traversa chain Separacao → EmbarqueItem → Embarque → Frete. Retorna custo real com breakdown.
+- `--cliente "Atacadao"`: Entity resolution por LIKE no nome + agrupamento por prefixo CNPJ (8 digitos = grupo).
+- `--transportadora "Braspress"`: Agrega fretes por transportadora com breakdown UF/tipo_carga.
+- `--divergencias`: Filtra `ABS(valor_cte - valor_cotado) > 5.00`. Retorna lista com percentual divergencia.
+- `--pendentes-odoo`: Filtra `status='APROVADO' AND lancado_odoo_em IS NULL`.
+
+**Retorno esperado (--pedido):**
+```json
+{
+  "sucesso": true,
+  "modo": "pedido",
+  "pedido": "VCD123",
+  "total_fretes": 2,
+  "valor_total_cotado": 1500.00,
+  "valor_total_pago": 1650.00,
+  "valor_total_cte": 1620.00,
+  "fretes": [
+    {
+      "frete_id": 42,
+      "embarque_numero": 1001,
+      "transportadora": "BRASPRESS",
+      "valor_cotado": 750.00,
+      "valor_cte": 810.00,
+      "valor_pago": 825.00,
+      "numeros_nfs": "144533,144534",
+      "despesas": []
+    }
+  ]
+}
+```
+
 ---
 
 ## Exemplos de Uso
@@ -383,7 +455,25 @@ Comando: --pedido VCD2565291 --recalcular
 Resultado: "Recalculei com tabelas atuais. Melhor opcao: [transportadora] por R$ [valor]."
 ```
 
-### Cenario 6: Explicar calculo de frete
+### Cenario 6: Frete real gasto com cliente
+
+```
+Pergunta: "quanto gastei de frete com o Atacadao nos ultimos 3 meses?"
+Raciocinio: Frete REAL gasto → consultando_frete_real.py
+Comando: --cliente "Atacadao" --de 2025-11-01 --ate 2026-02-01
+Resultado: "O grupo Atacadao teve R$ 45.230,00 em fretes (23 embarques). Breakdown por UF: SP 45%, RJ 30%, MG 25%."
+```
+
+### Cenario 7: Divergencias de CTe
+
+```
+Pergunta: "tem alguma divergencia de CTe este mes?"
+Raciocinio: Divergencias → consultando_frete_real.py
+Comando: --divergencias --de 2026-02-01
+Resultado: "Encontrei 5 divergencias. Maior: Frete #42 (Braspress) - CTe R$ 810 vs cotacao R$ 750 (+8%)."
+```
+
+### Cenario 8: Explicar calculo de frete
 
 ```
 Pergunta: "como funciona o calculo de frete?"
@@ -429,3 +519,7 @@ Acao: Ler o reference e explicar os 10 passos ao usuario
 | `carteira_principal` | Pedidos em carteira com saldo | consultar_pedido_frete.py |
 | `separacao` | Separacoes com peso real | consultar_pedido_frete.py |
 | `faturamento_produto` | NFs faturadas | consultar_pedido_frete.py |
+| `fretes` | Frete real (cotado, CTe, pago) | consultando_frete_real.py |
+| `embarques` | Embarques com transportadora | consultando_frete_real.py |
+| `embarque_itens` | Itens do embarque (link separacao) | consultando_frete_real.py |
+| `despesas_extras` | Despesas extras de frete | consultando_frete_real.py |

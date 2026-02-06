@@ -68,6 +68,9 @@ Skill para consultar status de entregas, canhotos, devoluções e agendamentos.
 | **Canhotos pendentes** | `consultando_canhotos.py` | `--pendentes` |
 | **Devoluções abertas** | `consultando_devolucoes.py` | `--abertas` |
 | **Devolução de NF específica** | `consultando_devolucoes.py` | `--nf 12345` |
+| **Devoluções de cliente** | `consultando_devolucoes_detalhadas.py` | `--cliente "Sendas"` |
+| **Produtos mais devolvidos** | `consultando_devolucoes_detalhadas.py` | `--ranking` |
+| **Custo de devoluções** | `consultando_devolucoes_detalhadas.py` | `--custo` |
 | **Agendamento de entrega** | `consultando_agendamentos.py` | `--nf 12345` |
 | **Agendamentos do dia** | `consultando_agendamentos.py` | `--data 2025-02-05` |
 
@@ -255,6 +258,83 @@ source .venv/bin/activate && python .claude/skills/monitorando-entregas/scripts/
 | `--pendentes` | Não | Apenas agendamentos aguardando confirmação |
 | `--confirmados` | Não | Apenas agendamentos confirmados |
 | `--limite` | Não | Máximo de registros |
+
+### 5. consultando_devolucoes_detalhadas.py
+
+Consulta devoluções detalhadas com entity resolution e análises agregadas.
+
+```bash
+source .venv/bin/activate && python .claude/skills/monitorando-entregas/scripts/consultando_devolucoes_detalhadas.py [opções]
+```
+
+**Parâmetros (modos mutuamente exclusivos):**
+
+| Param | Obrig | Descrição |
+|-------|-------|-----------|
+| `--cliente` | Sim* | Histórico de devoluções por cliente (LIKE no nome_emitente) |
+| `--produto` | Sim* | Produtos devolvidos (LIKE na descricao_produto_cliente ou descricao_produto_interno) |
+| `--ranking` | Sim* | Top N produtos mais devolvidos (GROUP BY codigo_produto_interno) |
+| `--custo` | Sim* | Custo total de devoluções (via despesas_extras.tipo_despesa='DEVOLUCAO') |
+| `--de` | Não | Data início (YYYY-MM-DD) |
+| `--ate` | Não | Data fim (YYYY-MM-DD) |
+| `--limite` | Não | Máximo de registros (default: 50) |
+| `--incluir-custo` | Não | Incluir custo (apenas com --cliente) |
+| `--ordenar-por` | Não | 'ocorrencias' ou 'quantidade' (apenas com --ranking, default: ocorrencias) |
+
+*Um dos 4 modos deve ser especificado.
+
+**Retorno esperado (modo --cliente):**
+```json
+{
+  "sucesso": true,
+  "modo": "cliente",
+  "resumo": {
+    "mensagem": "Historico de devolucoes de 12 NFDs do cliente 'Sendas'",
+    "total_nfds": 12,
+    "exibindo": 10,
+    "valor_total_devolucoes": 45678.90,
+    "custo_total": 3456.78,
+    "cliente": "Sendas",
+    "periodo": {"de": "2025-01-01", "ate": "2025-12-31"}
+  },
+  "nfds": [
+    {
+      "id": 123,
+      "numero_nfd": "12345",
+      "nome_emitente": "Sendas Distribuidora SA",
+      "cnpj_emitente": "12.345.678/0001-99",
+      "data_registro": "2025-01-15",
+      "valor_total": 4567.89,
+      "status": "REGISTRADA",
+      "motivo": "AVARIA",
+      "total_linhas": 3
+    }
+  ]
+}
+```
+
+**Retorno esperado (modo --ranking):**
+```json
+{
+  "sucesso": true,
+  "modo": "ranking",
+  "resumo": {
+    "mensagem": "Top 10 produtos mais devolvidos (ordenado por ocorrencias)",
+    "criterio": "ocorrencias",
+    "total_produtos": 10
+  },
+  "ranking": [
+    {
+      "produto_referencia": "PALMITO-400G",
+      "descricao_produto_interno": "Palmito Inteiro 400g",
+      "total_ocorrencias": 45,
+      "qtd_total": 234.0,
+      "total_nfds": 38,
+      "total_clientes": 12
+    }
+  ]
+}
+```
 
 ---
 

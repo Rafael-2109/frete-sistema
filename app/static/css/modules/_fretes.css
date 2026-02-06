@@ -265,6 +265,10 @@
           border: 1px solid hsl(0 0% 20%);
           page-break-inside: avoid;
       }
+
+      #toggle-fonte-tabela {
+          display: none !important;
+      }
   }
 
 } /* End @layer modules */

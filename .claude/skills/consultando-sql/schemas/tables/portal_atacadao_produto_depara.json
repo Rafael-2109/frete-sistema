@@ -75,16 +75,16 @@
       "unique": false
     },
     {
-      "name": "ix_portal_atacadao_produto_depara_codigo_atacadao",
+      "name": "ix_portal_atacadao_produto_depara_ativo",
       "columns": [
-        "codigo_atacadao"
+        "ativo"
       ],
       "unique": false
     },
     {
-      "name": "ix_portal_atacadao_produto_depara_ativo",
+      "name": "ix_portal_atacadao_produto_depara_codigo_atacadao",
       "columns": [
-        "ativo"
+        "codigo_atacadao"
       ],
       "unique": false
     },

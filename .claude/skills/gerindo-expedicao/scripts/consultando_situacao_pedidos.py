@@ -1402,6 +1402,147 @@ def consultar_situacao_pedidos_por_produto(args):
     return resultado
 
 
+def consultar_co_passageiros_embarque(args):
+    """
+    Lista todos os clientes/pedidos/NFs que compartilham o mesmo embarque.
+    Util para saber "quem mais vai no caminhao".
+
+    Aceita --co-passageiros-embarque <numero_embarque>
+    """
+    from app import db
+    from sqlalchemy import text
+
+    numero_embarque = args.co_passageiros_embarque
+
+    try:
+        numero_embarque = int(numero_embarque)
+    except (ValueError, TypeError):
+        return {
+            'sucesso': False,
+            'erro': f"Numero de embarque invalido: '{numero_embarque}'. Informe um numero inteiro."
+        }
+
+    # Buscar embarque pelo numero
+    sql_embarque = """
+        SELECT
+            e.id,
+            e.numero,
+            e.data_embarque,
+            e.tipo_carga,
+            e.peso_total,
+            e.valor_total,
+            e.pallet_total,
+            e.status,
+            e.modalidade,
+            t.razao_social as transportadora
+        FROM embarques e
+        LEFT JOIN transportadoras t ON t.id = e.transportadora_id
+        WHERE e.numero = :numero
+    """
+    result = db.session.execute(text(sql_embarque), {'numero': numero_embarque})
+    row = result.fetchone()
+
+    if not row:
+        return {
+            'sucesso': False,
+            'erro': f"Embarque numero {numero_embarque} nao encontrado."
+        }
+
+    embarque = dict(zip(result.keys(), row))
+
+    # Buscar todos os itens do embarque
+    sql_itens = """
+        SELECT
+            ei.id,
+            ei.cnpj_cliente,
+            ei.cliente,
+            ei.pedido,
+            ei.nota_fiscal,
+            ei.peso,
+            ei.valor,
+            ei.volumes,
+            ei.pallets,
+            ei.uf_destino,
+            ei.cidade_destino,
+            ei.status,
+            ei.protocolo_agendamento,
+            ei.data_agenda,
+            ei.agendamento_confirmado
+        FROM embarque_itens ei
+        WHERE ei.embarque_id = :embarque_id
+        AND ei.status = 'ativo'
+        ORDER BY ei.uf_destino, ei.cidade_destino, ei.cliente
+    """
+    result_itens = db.session.execute(text(sql_itens), {'embarque_id': embarque['id']})
+    itens = [dict(zip(result_itens.keys(), r)) for r in result_itens.fetchall()]
+
+    # Agregar por cliente (um cliente pode ter multiplos pedidos no mesmo embarque)
+    clientes_dict = {}
+    for item in itens:
+        chave = item['cnpj_cliente'] or item['cliente']
+        if chave not in clientes_dict:
+            clientes_dict[chave] = {
+                'cliente': item['cliente'],
+                'cnpj': item['cnpj_cliente'],
+                'uf_destino': item['uf_destino'],
+                'cidade_destino': item['cidade_destino'],
+                'pedidos': [],
+                'peso_total': 0,
+                'valor_total': 0,
+                'volumes_total': 0,
+                'pallets_total': 0
+            }
+        clientes_dict[chave]['pedidos'].append({
+            'pedido': item['pedido'],
+            'nota_fiscal': item['nota_fiscal'],
+            'peso': item['peso'],
+            'valor': item['valor'],
+            'volumes': item['volumes'],
+            'pallets': item['pallets'],
+            'agendamento': item['protocolo_agendamento'],
+            'data_agenda': item['data_agenda'],
+            'confirmado': item['agendamento_confirmado']
+        })
+        clientes_dict[chave]['peso_total'] += (item['peso'] or 0)
+        clientes_dict[chave]['valor_total'] += (item['valor'] or 0)
+        clientes_dict[chave]['volumes_total'] += (item['volumes'] or 0)
+        clientes_dict[chave]['pallets_total'] += (item['pallets'] or 0)
+
+    clientes_lista = sorted(clientes_dict.values(), key=lambda c: c['peso_total'], reverse=True)
+
+    # Destinos unicos
+    destinos = list({f"{item['cidade_destino']}/{item['uf_destino']}" for item in itens})
+
+    return {
+        'sucesso': True,
+        'modo': 'co_passageiros_embarque',
+        'embarque': {
+            'numero': embarque['numero'],
+            'data_embarque': embarque['data_embarque'],
+            'tipo_carga': embarque['tipo_carga'],
+            'transportadora': embarque['transportadora'],
+            'modalidade': embarque['modalidade'],
+            'peso_total': embarque['peso_total'],
+            'valor_total': embarque['valor_total'],
+            'pallet_total': embarque['pallet_total'],
+            'status': embarque['status']
+        },
+        'resumo': {
+            'total_clientes': len(clientes_lista),
+            'total_itens': len(itens),
+            'total_destinos': len(destinos),
+            'destinos': destinos,
+            'mensagem': (
+                f"Embarque {numero_embarque}: {len(clientes_lista)} cliente(s), "
+                f"{len(itens)} item(ns), {len(destinos)} destino(s). "
+                f"Transp: {embarque['transportadora'] or 'N/D'}. "
+                f"Tipo: {embarque['tipo_carga'] or 'N/D'}."
+            )
+        },
+        'clientes': clientes_lista
+    }
+
+
 def main():
     from app import create_app
 
@@ -1422,6 +1563,7 @@ Exemplos:
   python consultando_situacao_pedidos.py --produto "azeitona verde pouch" --em-separacao
   python consultando_situacao_pedidos.py --produto palmito --ate-data amanha
   python consultando_situacao_pedidos.py --produto pessego --ate-data 15/12
+  python consultando_situacao_pedidos.py --co-passageiros-embarque 1234
         """
     )
 
@@ -1436,6 +1578,7 @@ Exemplos:
     parser.add_argument('--produto', help='Termo de busca do produto (nome, abreviacao)')
     parser.add_argument('--ate-data', dest='ate_data', help='Data limite de expedicao (hoje, amanha, dd/mm/yyyy, dd/mm, dd)')
     parser.add_argument('--em-separacao', dest='em_separacao', action='store_true', help='Buscar em Separacao ao inves de CarteiraPrincipal')
+    parser.add_argument('--co-passageiros-embarque', dest='co_passageiros_embarque', help='Numero do embarque para listar co-passageiros')
     parser.add_argument('--limit', type=int, default=100, help='Limite de resultados (default: 100)')
 
     args = parser.parse_args()
@@ -1444,7 +1587,9 @@ Exemplos:
     with app.app_context():
         # Determinar qual analise executar
         # IMPORTANTE: Verificar combinacoes ANTES dos filtros individuais
-        if args.grupo and args.produto:
+        if args.co_passageiros_embarque:
+            resultado = consultar_co_passageiros_embarque(args)
+        elif args.grupo and args.produto:
             resultado = consultar_situacao_pedidos_grupo_produto(args)
         elif args.cliente and args.produto:
             # GAP-03: cliente + produto
@@ -1467,7 +1612,7 @@ Exemplos:
         else:
             resultado = {
                 'sucesso': False,
-                'erro': 'Informe ao menos um filtro: --grupo, --cliente, --atrasados, --verificar-bonificacao, --pedido com --status, --consolidar-com, ou --produto'
+                'erro': 'Informe ao menos um filtro: --grupo, --cliente, --atrasados, --verificar-bonificacao, --pedido com --status, --consolidar-com, --produto, ou --co-passageiros-embarque'
             }
 
         print(json.dumps(resultado, ensure_ascii=False, indent=2, default=decimal_default))

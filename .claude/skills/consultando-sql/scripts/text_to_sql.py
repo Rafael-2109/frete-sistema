@@ -294,6 +294,13 @@ class SchemaProvider:
                 else:
                     lines.append(f"  {field['name']} ({type_str})")
 
+            # Query hints (padrões SQL úteis para esta tabela)
+            hints = schema.get('query_hints', [])
+            if hints:
+                lines.append("Query Hints:")
+                for hint in hints:
+                    lines.append(f"  * {hint['descricao']}: {hint['sql']}")
+
             # Foreign keys
             fks = schema.get('foreign_keys', [])
             if fks:

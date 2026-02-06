@@ -1,6 +1,6 @@
 {
   "name": "despesas_extras",
-  "description": "Despesas extras de frete (estadia, pedágio, etc.).",
+  "description": "Despesas extras de frete. tipo_despesa: REENTREGA, TDE, DEVOLUCAO, PERNOITE, DIARIA, COMPLEMENTO DE FRETE, COMPRA/AVARIA, TRANSFERENCIA, DESCARGA, ESTACIONAMENTO, CARRO DEDICADO, ARMAZENAGEM. Para custo de devolucao: tipo_despesa=DEVOLUCAO. Link para NFDevolucao via nfd_id. valor_despesa contem o valor.",
   "fields": [
     {
       "name": "id",
@@ -134,6 +134,24 @@
       "nullable": false
     }
   ],
+  "query_hints": [
+    {
+      "descricao": "Ranking tipos de despesa extra por valor total",
+      "sql": "SELECT tipo_despesa, COUNT(*) AS qtd, SUM(valor_despesa) AS total FROM despesas_extras GROUP BY tipo_despesa ORDER BY total DESC"
+    },
+    {
+      "descricao": "Despesas por transportadora",
+      "sql": "SELECT t.razao_social, COUNT(*) AS qtd, SUM(de.valor_despesa) AS total FROM despesas_extras de JOIN transportadoras t ON t.id = de.transportadora_id GROUP BY t.razao_social ORDER BY total DESC"
+    },
+    {
+      "descricao": "Custo total de devolucoes (via tipo_despesa DEVOLUCAO)",
+      "sql": "SELECT SUM(valor_despesa) AS custo_devolucoes, COUNT(*) AS qtd FROM despesas_extras WHERE tipo_despesa = 'DEVOLUCAO'"
+    },
+    {
+      "descricao": "Entregas com custo extra (despesa vinculada a frete)",
+      "sql": "SELECT f.id, f.numero_cte, t.razao_social, f.valor_pago, de.tipo_despesa, de.valor_despesa FROM despesas_extras de JOIN fretes f ON f.id = de.frete_id LEFT JOIN transportadoras t ON t.id = f.transportadora_id ORDER BY de.valor_despesa DESC"
+    }
+  ],
   "foreign_keys": [
     {
       "column": "frete_id",
@@ -157,13 +175,6 @@
     }
   ],
   "indices": [
-    {
-      "name": "ix_despesas_extras_nfd_id",
-      "columns": [
-        "nfd_id"
-      ],
-      "unique": false
-    },
     {
       "name": "ix_despesas_extras_despesa_cte_id",
       "columns": [
@@ -203,6 +214,13 @@
       "name": "ix_despesas_extras_status",
       "columns": [
         "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_despesas_extras_nfd_id",
+      "columns": [
+        "nfd_id"
       ],
       "unique": false
     }

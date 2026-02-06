@@ -1,6 +1,6 @@
 # Indice de Referencias
 
-**Ultima atualizacao**: 31/01/2026
+**Ultima atualizacao**: 06/02/2026
 **Gerado por**: Reestruturacao arquitetural
 
 ---
@@ -12,7 +12,10 @@
 | Campos CarteiraPrincipal / Separacao | [modelos/CAMPOS_CARTEIRA_SEPARACAO.md](modelos/CAMPOS_CARTEIRA_SEPARACAO.md) |
 | Campos Embarque, Faturamento, etc. | [modelos/MODELOS_CAMPOS.md](modelos/MODELOS_CAMPOS.md) |
 | Queries SQL / JOINs | [modelos/QUERIES_MAPEAMENTO.md](modelos/QUERIES_MAPEAMENTO.md) |
+| Cadeia Pedido -> Entrega (JOINs, estados, formulas) | [modelos/CADEIA_PEDIDO_ENTREGA.md](modelos/CADEIA_PEDIDO_ENTREGA.md) |
 | Regras de negocio | [negocio/REGRAS_NEGOCIO.md](negocio/REGRAS_NEGOCIO.md) |
+| Frete Real vs Teorico (4 valores, divergencias, conta corrente) | [negocio/FRETE_REAL_VS_TEORICO.md](negocio/FRETE_REAL_VS_TEORICO.md) |
+| Margem e Custeio (formula margem, tabelas de custo) | [negocio/MARGEM_CUSTEIO.md](negocio/MARGEM_CUSTEIO.md) |
 | Recebimento de materiais | [negocio/RECEBIMENTO_MATERIAIS.md](negocio/RECEBIMENTO_MATERIAIS.md) |
 | Historico de decisoes | [negocio/historia_organizada.md](negocio/historia_organizada.md) |
 

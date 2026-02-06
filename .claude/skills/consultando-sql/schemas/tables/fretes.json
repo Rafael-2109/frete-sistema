@@ -1,6 +1,6 @@
 {
   "name": "fretes",
-  "description": "Fretes contratados para embarques. Valores e transportadoras.",
+  "description": "Fretes contratados para embarques. 4 tipos de valor: valor_cotado (calculado pela tabela de frete), valor_cte (cobrado pela transportadora no CTe), valor_considerado (validado internamente), valor_pago (efetivamente pago). Para custo real use valor_pago. Divergencia: ABS(valor_cte - valor_cotado). numeros_nfs e campo CSV com NFs do frete. tipo_carga: DIRETA ou FRACIONADA. Pendentes Odoo: status=APROVADO AND lancado_odoo_em IS NULL.",
   "fields": [
     {
       "name": "id",
@@ -284,7 +284,44 @@
       "references": "conhecimento_transporte.id"
     }
   ],
+  "query_hints": [
+    {
+      "descricao": "Custo real total (frete + despesas extras)",
+      "sql": "SELECT f.id, f.valor_pago, COALESCE(SUM(de.valor_despesa), 0) AS despesas, f.valor_pago + COALESCE(SUM(de.valor_despesa), 0) AS custo_total FROM fretes f LEFT JOIN despesas_extras de ON de.frete_id = f.id GROUP BY f.id, f.valor_pago"
+    },
+    {
+      "descricao": "Divergencia CTe vs cotacao (transportadora cobrando mais)",
+      "sql": "SELECT f.id, f.numero_cte, t.razao_social, f.valor_cotado, f.valor_cte, ABS(f.valor_cte - f.valor_cotado) AS diferenca FROM fretes f JOIN transportadoras t ON t.id = f.transportadora_id WHERE f.valor_cte IS NOT NULL AND ABS(f.valor_cte - f.valor_cotado) > 5.00 ORDER BY diferenca DESC"
+    },
+    {
+      "descricao": "Fretes pendentes de lancamento no Odoo",
+      "sql": "SELECT f.id, f.numero_cte, f.valor_pago, t.razao_social FROM fretes f JOIN transportadoras t ON t.id = f.transportadora_id WHERE f.status = 'APROVADO' AND f.lancado_odoo_em IS NULL ORDER BY f.criado_em"
+    },
+    {
+      "descricao": "Frete medio por kg e UF",
+      "sql": "SELECT uf_destino, AVG(valor_pago / NULLIF(peso_total, 0)) AS frete_medio_kg FROM fretes WHERE valor_pago IS NOT NULL AND peso_total > 0 GROUP BY uf_destino ORDER BY frete_medio_kg DESC"
+    },
+    {
+      "descricao": "Gasto por tipo de carga (DIRETA vs FRACIONADA)",
+      "sql": "SELECT tipo_carga, COUNT(*) AS qtd, SUM(valor_pago) AS total_pago, AVG(valor_pago) AS media FROM fretes WHERE valor_pago IS NOT NULL GROUP BY tipo_carga"
+    },
+    {
+      "descricao": "Ranking transportadoras por valor total pago",
+      "sql": "SELECT t.razao_social, COUNT(*) AS qtd_fretes, SUM(f.valor_pago) AS total_pago, AVG(f.valor_pago) AS media_frete FROM fretes f JOIN transportadoras t ON t.id = f.transportadora_id WHERE f.valor_pago IS NOT NULL GROUP BY t.razao_social ORDER BY total_pago DESC"
+    },
+    {
+      "descricao": "Evolucao mensal do custo de frete",
+      "sql": "SELECT DATE_TRUNC('month', criado_em) AS mes, COUNT(*) AS qtd, SUM(valor_pago) AS total FROM fretes WHERE valor_pago IS NOT NULL GROUP BY mes ORDER BY mes"
+    }
+  ],
   "indices": [
+    {
+      "name": "ix_fretes_cnpj_cliente",
+      "columns": [
+        "cnpj_cliente"
+      ],
+      "unique": false
+    },
     {
       "name": "ix_fretes_odoo_dfe_id",
       "columns": [
@@ -307,13 +344,6 @@
       "unique": false
     },
     {
-      "name": "ix_fretes_numero_cte",
-      "columns": [
-        "numero_cte"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_fretes_odoo_invoice_id",
       "columns": [
         "odoo_invoice_id"
@@ -321,9 +351,9 @@
       "unique": false
     },
     {
-      "name": "ix_fretes_cnpj_cliente",
+      "name": "ix_fretes_numero_cte",
       "columns": [
-        "cnpj_cliente"
+        "numero_cte"
       ],
       "unique": false
     }

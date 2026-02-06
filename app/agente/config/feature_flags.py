@@ -24,7 +24,7 @@ MAX_BUDGET_USD = float(os.getenv("AGENT_MAX_BUDGET_USD", "2.0"))
 
 # Context Clearing automatico — remove thinking/tool_uses antigos
 # ATIVO por default: a Anthropic recomenda habilitar para conversas longas.
-# O system_prompt.md contém instruções explícitas de compactação (Rule R6).
+# O hook PreCompact (client.py) contém instruções explícitas de compactação.
 # NOTA (2026-02): clear-thinking e clear-tool-uses foram promovidos a GA.
 #   Beta headers removidos — flag controla apenas log/documentação.
 # Para desativar: AGENT_CONTEXT_CLEARING=false

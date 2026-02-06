@@ -59,6 +59,53 @@
     </div>
     {% endif %}
 
+    <!-- Toggle Fonte da Tabela -->
+    <div class="row mb-3" id="toggle-fonte-tabela">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body py-2">
+                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                        <div class="d-flex align-items-center gap-3">
+                            <strong><i class="fas fa-database"></i> Fonte dos Dados:</strong>
+                            <div class="btn-group" role="group">
+                                <input type="radio" class="btn-check" name="fonteTabela"
+                                       id="fonte-embarque" value="embarque" checked>
+                                <label class="btn btn-outline-primary btn-sm" for="fonte-embarque">
+                                    <i class="fas fa-ship"></i> Tabela Embarque
+                                </label>
+                                <input type="radio" class="btn-check" name="fonteTabela"
+                                       id="fonte-cadastrada" value="cadastrada"
+                                       {{ 'disabled' if tabela_nao_encontrada }}>
+                                <label class="btn btn-outline-warning btn-sm" for="fonte-cadastrada">
+                                    <i class="fas fa-edit"></i> Tabela Cadastrada
+                                </label>
+                            </div>
+                        </div>
+                        <div>
+                            <span class="badge bg-primary" id="badge-fonte-embarque">
+                                <i class="fas fa-lock"></i> Dados fixados no embarque
+                            </span>
+                            <span class="badge bg-warning text-dark d-none" id="badge-fonte-cadastrada">
+                                <i class="fas fa-sync"></i> Tabela atual
+                                {% if tabela_cadastrada %}
+                                (atualizada em {{ tabela_cadastrada.criado_em.strftime('%d/%m/%Y') }})
+                                {% endif %}
+                            </span>
+                        </div>
+                    </div>
+                    {% if tabela_nao_encontrada %}
+                    <div class="alert alert-warning mt-2 mb-0 py-1">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        Tabela cadastrada não encontrada para "{{ frete.tabela_nome_tabela }}" /
+                        {{ frete.uf_destino }} / {{ frete.tipo_carga }} / {{ frete.modalidade }}.
+                        Opção desabilitada.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Informações do Frete -->
     <div class="row mb-4">
         <div class="col-12">
@@ -87,7 +134,7 @@
                         </div>
                         <div class="col-md-3">
                             <strong>Tabela Usada:</strong><br>
-                            {{ tabela_dados.nome_tabela or 'N/A' }}<br>
+                            <span id="nome-tabela-display">{{ tabela_dados.nome_tabela or 'N/A' }}</span><br>
                             <small class="text-muted">Modalidade: {{ frete.modalidade }}</small>
                         </div>
                     </div>
@@ -103,11 +150,13 @@
                 <div class="card-header card-header-theme-dark">
                     <h5 class="mb-0">
                         <i class="fas fa-table"></i> Componentes da Tabela de Frete
+                        <span class="badge bg-primary ms-2" id="badge-tabela-embarque">TABELA EMBARQUE</span>
+                        <span class="badge bg-warning text-dark ms-2 d-none" id="badge-tabela-cadastrada">TABELA CADASTRADA</span>
                     </h5>
                 </div>
                 <div class="card-body">
                     <div class="table-responsive">
-                        <table class="table table-hover table-sm">
+                        <table class="table table-hover table-sm" id="tabela-componentes">
                             <thead class="table-thead-theme">
                                 <tr>
                                     <th width="140">Componente</th>
@@ -120,7 +169,7 @@
                                     <th width="80" class="text-end">Diferença</th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody id="tbody-componentes">
                                 {% for componente in componentes %}
                                 <tr {% if componente.tipo in ['subtotal_pre', 'subtotal_pos' , 'total' , 'total_final' ]
                                     %}class="table-active font-weight-bold" {% endif %}>
@@ -241,27 +290,27 @@
                         <tr>
                             <td><strong>Total Líquido:</strong></td>
                             <td class="text-end">
-                                <span class="badge badge-valor-destaque">
+                                <span class="badge badge-valor-destaque" id="resumo-total-liquido">
                                     {{ (resumo_cotacao.total_liquido)|moeda_carteira }}
                                 </span>
                             </td>
                         </tr>
                         <tr>
                             <td><strong>% ICMS:</strong></td>
-                            <td style="text-align: right;">
+                            <td style="text-align: right;" id="resumo-percentual-icms">
                                 {{ (resumo_cotacao.percentual_icms*100)|numero_br(2) }}%
                             </td>
                         </tr>
                         <tr>
                             <td><strong>Valor ICMS:</strong></td>
-                            <td style="text-align: right;">
+                            <td style="text-align: right;" id="resumo-valor-icms">
                                 {{ (resumo_cotacao.valor_icms)|moeda_carteira }}
                             </td>
                         </tr>
                         <tr class="table-success">
                             <td><strong>Total Bruto Final:</strong></td>
                             <td style="text-align: right;">
-                                <h5 class="mb-0">
+                                <h5 class="mb-0" id="resumo-total-bruto">
                                     {{ (resumo_cotacao.total_bruto)|moeda_carteira }}
                                 </h5>
                             </td>
@@ -364,19 +413,33 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-        const componentesCalculados = {{ componentes|tojson }};
-        // Cria array apenas com componentes tipo 'valor' para indexação correta
-        const componentesValor = componentesCalculados.filter(c => c.tipo === 'valor');
-        const valorCotacaoTotal = {{ resumo_cotacao.total_bruto }};
+        // ========== DATASETS POR FONTE ==========
+        const datasets = {
+            embarque: {
+                componentes: {{ componentes|tojson }},
+                resumo: {{ resumo_cotacao|tojson }},
+                nomeTabela: {{ (tabela_dados.nome_tabela or 'N/A')|tojson }}
+            },
+            cadastrada: {
+                componentes: {{ componentes_cadastrada|tojson if componentes_cadastrada else 'null' }},
+                resumo: {{ resumo_cadastrada|tojson if resumo_cadastrada else 'null' }},
+                nomeTabela: {{ (tabela_dados_cadastrada.nome_tabela if tabela_dados_cadastrada else 'N/A')|tojson }}
+            }
+        };
+
+        let fonteAtiva = 'embarque';
+        let componentesCalculados = datasets.embarque.componentes;
+        let componentesValor = componentesCalculados.filter(c => c.tipo === 'valor');
+        let valorCotacaoTotal = datasets.embarque.resumo.total_bruto;
         const valorCteInformado = {{ frete.valor_cte or 0 }};
 
-    // Função para converter valor brasileiro para float
+    // ========== FUNÇÕES UTILITÁRIAS ==========
+
     function converterValor(valor) {
-        if (!valor || valor.trim() === '') return 0;
-        return parseFloat(valor.replace(/\./g, '').replace(',', '.')) || 0;
+        if (!valor || String(valor).trim() === '') return 0;
+        return parseFloat(String(valor).replace(/\./g, '').replace(',', '.')) || 0;
     }
 
-    // Função para formatar valor para exibição
     function formatarValor(valor) {
         return valor.toLocaleString('pt-BR', {
             style: 'currency',
@@ -384,7 +447,164 @@
         });
     }
 
-    // Calcula total líquido CTe automaticamente
+    function formatarNumero(valor, decimais) {
+        return valor.toLocaleString('pt-BR', {
+            minimumFractionDigits: decimais,
+            maximumFractionDigits: decimais
+        });
+    }
+
+    // ========== PRESERVAÇÃO DE VALORES CTe ==========
+
+    function salvarValoresCte() {
+        const valores = {};
+        document.querySelectorAll('.valor-cte-campo').forEach(function(campo) {
+            valores[campo.getAttribute('data-componente')] = campo.value;
+        });
+        valores['percentual_icms'] = document.getElementById('percentual-icms-cte').value;
+        return valores;
+    }
+
+    function restaurarValoresCte(valores) {
+        document.querySelectorAll('.valor-cte-campo').forEach(function(campo) {
+            const idx = campo.getAttribute('data-componente');
+            if (valores[idx]) campo.value = valores[idx];
+        });
+        if (valores['percentual_icms']) {
+            document.getElementById('percentual-icms-cte').value = valores['percentual_icms'];
+        }
+    }
+
+    // ========== RENDERIZAÇÃO DA TABELA ==========
+
+    function gerarBadgeTipo(comp) {
+        const badges = {
+            'peso': '<span class="badge bg-warning text-dark badge-sm">PESO</span>',
+            'subtotal': '<span class="badge bg-success badge-sm">SUBTOTAL</span>',
+            'subtotal_pre': '<span class="badge bg-primary badge-sm">PRÉ-MÍNIMO</span>',
+            'subtotal_pos': '<span class="badge bg-secondary badge-sm">PÓS-MÍNIMO</span>',
+            'ajuste': '<span class="badge bg-warning text-dark badge-sm">AJUSTE MÍNIMO</span>',
+            'total': '<span class="badge bg-success badge-sm">TOTAL</span>',
+            'total_final': '<span class="badge bg-dark badge-sm">FINAL</span>',
+        };
+
+        let html = badges[comp.tipo] || '';
+
+        if (comp.tipo === 'icms') {
+            html += '<span class="badge bg-info badge-sm">ICMS</span>';
+            if (comp.fonte) {
+                html += ` <span class="badge bg-light badge-sm" title="Origem do ICMS">${comp.fonte}</span>`;
+            }
+        }
+
+        if (comp.pos_minimo) {
+            html += ' <span class="badge bg-warning badge-sm" title="Aplicado APÓS o frete mínimo"><i class="fas fa-exclamation-triangle"></i> PÓS-MÍNIMO</span>';
+        }
+
+        if (comp.tem_minimo && comp.valor_sem_minimo && comp.valor_sem_minimo < comp.valor_calculado) {
+            html += ' <span class="badge bg-info badge-sm" title="Valor mínimo aplicado"><i class="fas fa-arrow-up"></i> MÍNIMO APLICADO</span>';
+        }
+
+        return html;
+    }
+
+    function renderizarTbody(comps) {
+        const tbody = document.getElementById('tbody-componentes');
+        let html = '';
+
+        comps.forEach(function(comp) {
+            const isHighlight = ['subtotal_pre', 'subtotal_pos', 'total', 'total_final'].includes(comp.tipo);
+            const trClass = isHighlight ? 'class="table-active font-weight-bold"' : '';
+
+            const valorCalcDisplay = comp.unidade === 'R$'
+                ? `<span class="badge badge-valor-destaque">${formatarValor(comp.valor_calculado)}</span>`
+                : `<span class="badge badge-valor-calculado">${formatarValor(comp.valor_calculado)} ${comp.unidade}</span>`;
+
+            let cteCol = '<span class="text-muted">-</span>';
+            let tabelaCteCol = '<span class="text-muted">-</span>';
+            let difCol = '<span class="text-muted">-</span>';
+
+            if (comp.tipo === 'valor') {
+                cteCol = `<input type="text" class="form-control form-control-sm valor-cte-campo" data-componente="${comp.input_index}" placeholder="0,00" style="font-size: 11px;">`;
+                tabelaCteCol = `<span class="usado-transportadora text-dark" data-componente="${comp.input_index}" style="font-size: 11px; font-weight: bold;">-</span>`;
+                difCol = `<span class="diferenca-componente text-dark" data-componente="${comp.input_index}" style="font-size: 11px; font-weight: bold;">-</span>`;
+            }
+
+            const obsHtml = comp.observacao ? `<br><small class="text-muted">${comp.observacao}</small>` : '';
+
+            html += `<tr ${trClass}>
+                <td><strong>${comp.nome}</strong> ${gerarBadgeTipo(comp)}${obsHtml}</td>
+                <td><small><strong>${comp.valor_tabela}</strong></small></td>
+                <td><small>${comp.valor_usado}</small></td>
+                <td><code style="font-size: 11px;">${comp.formula}</code></td>
+                <td class="text-end">${valorCalcDisplay}</td>
+                <td style="text-align: center;">${cteCol}</td>
+                <td style="text-align: center;">${tabelaCteCol}</td>
+                <td style="text-align: right;">${difCol}</td>
+            </tr>`;
+        });
+
+        tbody.innerHTML = html;
+    }
+
+    function atualizarResumoCotacao(resumo) {
+        document.getElementById('resumo-total-liquido').innerHTML = formatarValor(resumo.total_liquido);
+        document.getElementById('resumo-percentual-icms').textContent = formatarNumero(resumo.percentual_icms * 100, 2) + '%';
+        document.getElementById('resumo-valor-icms').textContent = formatarValor(resumo.valor_icms);
+        document.getElementById('resumo-total-bruto').textContent = formatarValor(resumo.total_bruto);
+    }
+
+    // ========== ALTERNÂNCIA DE FONTE ==========
+
+    function renderizarComponentes(fonte) {
+        const dataset = datasets[fonte];
+        if (!dataset || !dataset.componentes) return;
+
+        // Salvar valores CTe digitados
+        const valoresCte = salvarValoresCte();
+
+        // Atualizar variáveis globais
+        componentesCalculados = dataset.componentes;
+        componentesValor = componentesCalculados.filter(c => c.tipo === 'valor');
+        valorCotacaoTotal = dataset.resumo.total_bruto;
+
+        // Re-renderizar tabela
+        renderizarTbody(componentesCalculados);
+
+        // Atualizar resumo da cotação
+        atualizarResumoCotacao(dataset.resumo);
+
+        // Atualizar nome da tabela
+        document.getElementById('nome-tabela-display').textContent = dataset.nomeTabela;
+
+        // Restaurar valores CTe e re-registrar eventos
+        registrarEventosCte();
+        restaurarValoresCte(valoresCte);
+
+        // Recalcular diferenças
+        atualizarDiferencasComponentes();
+        atualizarIcmsCte();
+    }
+
+    // ========== TOGGLE EVENT LISTENER ==========
+
+    document.querySelectorAll('input[name="fonteTabela"]').forEach(function(radio) {
+        radio.addEventListener('change', function() {
+            fonteAtiva = this.value;
+            renderizarComponentes(fonteAtiva);
+
+            // Toggle badges de fonte
+            document.getElementById('badge-fonte-embarque').classList.toggle('d-none', fonteAtiva !== 'embarque');
+            document.getElementById('badge-fonte-cadastrada').classList.toggle('d-none', fonteAtiva !== 'cadastrada');
+
+            // Toggle badge no card de componentes
+            document.getElementById('badge-tabela-embarque').classList.toggle('d-none', fonteAtiva !== 'embarque');
+            document.getElementById('badge-tabela-cadastrada').classList.toggle('d-none', fonteAtiva !== 'cadastrada');
+        });
+    });
+
+    // ========== CÁLCULOS CTe ==========
+
     function calcularTotalLiquidoCte() {
         let totalLiquido = 0;
         document.querySelectorAll('.valor-cte-campo').forEach(function (campo) {
@@ -397,92 +617,60 @@
         return totalLiquido;
     }
 
-    // Atualiza diferenças dos componentes
     function atualizarDiferencasComponentes() {
-        console.log('=== INICIANDO atualizarDiferencasComponentes ===');
-
-        // Primeiro calcula o total líquido CTe automaticamente
         const totalLiquidoCte = calcularTotalLiquidoCte();
 
         document.querySelectorAll('.valor-cte-campo').forEach(function (campo) {
-            // ✅ CORREÇÃO: Usa o data-componente do próprio campo que agora é o input_index
             const componenteIndex = parseInt(campo.getAttribute('data-componente'));
             const valorCte = converterValor(campo.value);
-            // Busca no array filtrado usando o índice correto
             const componente = componentesValor[componenteIndex];
             const valorCalculado = componente ? componente.valor_calculado : 0;
             const diferenca = valorCte - valorCalculado;
 
-            // ✅ CORREÇÃO: Busca pelos elementos usando o data-componente correto
             const spanDiferenca = document.querySelector(`.diferenca-componente[data-componente="${componenteIndex}"]`);
             const spanUsadoTransp = document.querySelector(`.usado-transportadora[data-componente="${componenteIndex}"]`);
 
-            console.log(`Campo data-componente="${componenteIndex}":`, {
-                valorCte: valorCte,
-                valorCalculado: valorCalculado,
-                diferenca: diferenca,
-                spanDiferenca: spanDiferenca,
-                spanUsadoTransp: spanUsadoTransp,
-                componenteInfo: componente
-            });
-
-            if (!spanDiferenca || !spanUsadoTransp) {
-                console.error(`Elementos não encontrados para data-componente="${componenteIndex}"`);
-                return;
-            }
+            if (!spanDiferenca || !spanUsadoTransp) return;
 
             if (valorCte > 0) {
-                // Calcula valor da tabela que a transportadora usou (cálculo reverso)
                 let tabelaCte = '';
-                const componenteTipo = componente;  // Usa o componente já buscado
-
-                // ✅ CÁLCULO REVERSO: Qual valor da tabela a transportadora usou
-                // Declarar variáveis uma única vez no início
-                const pesoConsiderado = {{ frete.peso_considerado or frete.peso_total or 0 }};
+                const pesoConsiderado = {{ frete.peso_total or 0 }};
                 const valorMercadoria = {{ frete.valor_total_nfs or 0 }};
-                
-                if (componenteTipo.nome === 'Frete por Peso' && valorCte > 0) {
-                    // CTe ÷ peso considerado = valor por kg usado pela transportadora
+
+                if (componente.nome === 'Frete por Peso') {
                     if (pesoConsiderado > 0) {
                         const valorKgCte = valorCte / pesoConsiderado;
                         tabelaCte = `R$ ${valorKgCte.toFixed(4)}/kg`;
                     }
-                } else if (componenteTipo.nome === 'Frete por Valor (%)' && valorCte > 0) {
-                    // CTe ÷ valor mercadoria × 100 = percentual usado pela transportadora
+                } else if (componente.nome === 'Frete por Valor (%)') {
                     if (valorMercadoria > 0) {
                         const percentualCte = (valorCte / valorMercadoria) * 100;
                         tabelaCte = `${percentualCte.toFixed(4)}%`;
                     }
-                } else if (componenteTipo.nome.includes('GRIS') && valorCte > 0) {
-                    // CTe ÷ valor mercadoria × 100 = percentual GRIS usado pela transportadora
+                } else if (componente.nome.includes('GRIS')) {
                     if (valorMercadoria > 0) {
                         const percentualGrisCte = (valorCte / valorMercadoria) * 100;
-                        
                         tabelaCte = `${percentualGrisCte.toFixed(4)}%`;
                     }
-                } else if (componenteTipo.nome.includes('ADV') && valorCte > 0) {
-                    // CTe ÷ valor mercadoria × 100 = percentual ADV usado pela transportadora
+                } else if (componente.nome.includes('ADV')) {
                     if (valorMercadoria > 0) {
                         const percentualAdvCte = (valorCte / valorMercadoria) * 100;
                         tabelaCte = `${percentualAdvCte.toFixed(4)}%`;
                     }
-                } else if (componenteTipo.nome.includes('RCA') && valorCte > 0) {
-                    // CTe ÷ valor mercadoria × 100 = percentual RCA usado pela transportadora
+                } else if (componente.nome.includes('RCA')) {
                     if (valorMercadoria > 0) {
                         const percentualRcaCte = (valorCte / valorMercadoria) * 100;
                         tabelaCte = `${percentualRcaCte.toFixed(4)}%`;
                     }
-                } else if (componenteTipo.nome.includes('Pedágio') && valorCte > 0) {
-                    // CTe ÷ frações de 100kg = valor por 100kg usado pela transportadora
+                } else if (componente.nome.includes('Pedágio')) {
                     if (pesoConsiderado > 0) {
-                        const fracoes = Math.ceil(pesoConsiderado / 100); // Frações de 100kg
+                        const fracoes = Math.ceil(pesoConsiderado / 100);
                         if (fracoes > 0) {
                             const valorPor100kgCte = valorCte / fracoes;
                             tabelaCte = `R$ ${valorPor100kgCte.toFixed(2)}/100kg`;
                         }
                     }
                 } else {
-                    // Para valores fixos, mostra o valor como tabela fixa
                     tabelaCte = `R$ ${valorCte.toFixed(2)} (fixo)`;
                 }
 
@@ -490,19 +678,15 @@
                 spanDiferenca.innerHTML = `<span class="${diferenca >= 0 ? 'text-danger' : 'text-success'}">
                     ${diferenca >= 0 ? '+' : ''}${formatarValor(diferenca)}
                 </span>`;
-                console.log(`Atualizado campo data-componente="${componenteIndex}": Tabela CTe = ${tabelaCte}, Diferença = ${formatarValor(diferenca)}`);
             } else {
                 spanUsadoTransp.innerHTML = '-';
                 spanDiferenca.innerHTML = '-';
-                console.log(`Campo data-componente="${componenteIndex}" vazio, mostrando "-"`);
             }
         });
 
-    console.log('=== FINALIZANDO atualizarDiferencasComponentes ===');
-    atualizarResumoFinal();
+        atualizarResumoFinal();
     }
 
-    // Atualiza ICMS CTe automaticamente
     function atualizarIcmsCte() {
         const totalLiquido = parseFloat(document.getElementById('total-liquido-cte').value) || 0;
         const percentualIcms = converterValor(document.getElementById('percentual-icms-cte').value);
@@ -511,7 +695,6 @@
         let totalBrutoCte = totalLiquido;
 
         if (percentualIcms > 0 && totalLiquido > 0) {
-            // ✅ CÁLCULO CORRETO: valor_bruto = valor_liquido / (1 - icms_decimal)
             const icmsDecimal = percentualIcms / 100;
             totalBrutoCte = totalLiquido / (1 - icmsDecimal);
             valorIcms = totalBrutoCte - totalLiquido;
@@ -523,9 +706,7 @@
         atualizarResumoFinal();
     }
 
-    // Atualiza resumo final
     function atualizarResumoFinal() {
-        // Usa o total bruto CTe calculado automaticamente em vez do valor original
         const totalBrutoCteElement = document.getElementById('total-bruto-cte');
         const totalBrutoCteCalculado = totalBrutoCteElement ? converterValor(totalBrutoCteElement.textContent.replace('R$', '')) : valorCteInformado;
 
@@ -553,67 +734,28 @@
         document.getElementById('status-diferenca').className = statusClass;
     }
 
-    // Event listeners - simplificado para garantir funcionamento
-    document.querySelectorAll('.valor-cte-campo').forEach(function (campo) {
-        const componenteIndex = campo.getAttribute('data-componente');
-        console.log('Configurando event listener para campo data-componente=', componenteIndex, ':', campo);
+    // ========== EVENT LISTENERS CTe ==========
 
-        // Usando apenas 'input' que é mais confiável
-        campo.addEventListener('input', function () {
-            console.log('Evento input detectado no campo data-componente=', componenteIndex, 'valor:', this.value);
-            atualizarDiferencasComponentes();
-            atualizarIcmsCte();
+    function registrarEventosCte() {
+        document.querySelectorAll('.valor-cte-campo').forEach(function (campo) {
+            campo.addEventListener('input', function () {
+                atualizarDiferencasComponentes();
+                atualizarIcmsCte();
+            });
         });
 
-        // Backup com 'keyup' 
-        campo.addEventListener('keyup', function () {
-            console.log('Evento keyup detectado no campo data-componente=', componenteIndex, 'valor:', this.value);
-            atualizarDiferencasComponentes();
-            atualizarIcmsCte();
-        });
-    });
+        document.getElementById('percentual-icms-cte').addEventListener('input', atualizarIcmsCte);
+    }
 
-    document.getElementById('percentual-icms-cte').addEventListener('input', atualizarIcmsCte);
+    // ========== INICIALIZAÇÃO ==========
 
-    // Diagnóstico inicial - quantos elementos foram encontrados
-    console.log('=== DIAGNÓSTICO INICIAL ===');
-    console.log('Componentes calculados:', componentesCalculados.length);
-    console.log('Campos CTe encontrados:', document.querySelectorAll('.valor-cte-campo').length);
-    console.log('Elementos diferença encontrados:', document.querySelectorAll('.diferenca-componente').length);
-    console.log('Elementos tabela CTe encontrados:', document.querySelectorAll('.usado-transportadora').length);
+    registrarEventosCte();
 
-    // Lista todos os data-componente encontrados
-    document.querySelectorAll('.valor-cte-campo').forEach(function (campo) {
-        const componenteIndex = campo.getAttribute('data-componente');
-        console.log(`Campo encontrado: data-componente="${componenteIndex}"`);
-    });
-
-    // Lista todos os componentes e seus tipos
-    componentesCalculados.forEach(function (comp, index) {
-        console.log(`Componente ${index}: nome="${comp.nome}", tipo="${comp.tipo}"`);
-    });
-    
-    // Lista componentes tipo 'valor' com seus índices corretos
-    console.log('=== COMPONENTES TIPO VALOR (com input_index) ===');
-    componentesValor.forEach(function (comp, index) {
-        console.log(`Índice ${index}: nome="${comp.nome}", input_index=${comp.input_index}`);
-    });
-
-    // Verifica quais elementos realmente existem
-    document.querySelectorAll('[data-componente]').forEach(function (elemento) {
-        const componenteIndex = elemento.getAttribute('data-componente');
-        const classes = elemento.className;
-        console.log(`Elemento encontrado: data-componente="${componenteIndex}", classes="${classes}"`);
-    });
-
-    // Cálculos iniciais - aguarda um pouco para garantir que DOM está pronto
-    console.log('Iniciando cálculos...');
     setTimeout(function () {
         calcularTotalLiquidoCte();
         atualizarDiferencasComponentes();
         atualizarIcmsCte();
         atualizarResumoFinal();
-        console.log('Cálculos iniciais concluídos');
     }, 100);
 });
 </script>

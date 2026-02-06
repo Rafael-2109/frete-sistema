@@ -57,7 +57,7 @@ MAX_RECENT_SESSIONS = 10
 # ============================================================================
 
 try:
-    from claude_agent_sdk import tool, create_sdk_mcp_server
+    from claude_agent_sdk import tool, create_sdk_mcp_server, ToolAnnotations
 
     @tool(
         "search_sessions",
@@ -68,6 +68,12 @@ try:
             "Retorna trechos relevantes com data e contexto."
         ),
         {"query": str},
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
     )
     async def search_sessions(args: Dict[str, Any]) -> Dict[str, Any]:
         """Busca texto em sessões anteriores do usuário."""
@@ -172,6 +178,12 @@ try:
             "quando precisar de contexto sobre interações anteriores."
         ),
         {"limit": int},
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
     )
     async def list_recent_sessions(args: Dict[str, Any]) -> Dict[str, Any]:
         """Lista sessões recentes do usuário."""

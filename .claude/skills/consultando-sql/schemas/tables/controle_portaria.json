@@ -1,6 +1,6 @@
 {
   "name": "controle_portaria",
-  "description": "Controle de entrada/saída na portaria.",
+  "description": "Controle de entrada/saida na portaria da fabrica. Veiculos na fabrica: data_saida IS NULL. Tempo carregamento: hora_saida - hora_entrada. Campos: placa, empresa, tipo_carga (Coleta, Devolucao, etc.), hora_chegada, hora_entrada, hora_saida, data_chegada, data_entrada, data_saida, embarque_id, motorista_id. NOTA: status e property calculada, NAO coluna.",
   "fields": [
     {
       "name": "id",
