@@ -13,7 +13,9 @@ import re
 import hashlib
 import time
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
+
+from app.utils.timezone import agora_utc_naive
 from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -64,7 +66,7 @@ def _get_or_create_teams_user(usuario: str) -> Optional[int]:
             cargo='Usuário Teams',
             sistema_logistica=True,
             sistema_motochefe=False,
-            aprovado_em=datetime.now(timezone.utc),
+            aprovado_em=agora_utc_naive(),
             aprovado_por='sistema-teams-bot',
             observacoes='Auto-cadastrado via Teams Bot',
         )
@@ -319,7 +321,6 @@ def _get_or_create_teams_session(
         session_expired = False
         if session and session.updated_at:
             try:
-                from app.utils.timezone import agora_utc_naive
                 ttl_threshold = agora_utc_naive() - timedelta(hours=TEAMS_SESSION_TTL_HOURS)
                 # Forçar naive para dados legados que podem ter tzinfo
                 updated_naive = session.updated_at.replace(tzinfo=None) if session.updated_at.tzinfo else session.updated_at
@@ -338,7 +339,7 @@ def _get_or_create_teams_session(
         if not session or session_expired:
             # Adiciona timestamp para sessões expiradas (permite histórico)
             if session_expired:
-                session_id = f"{base_session_id}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+                session_id = f"{base_session_id}_{agora_utc_naive().strftime('%Y%m%d_%H%M%S')}"
             else:
                 session_id = base_session_id
 
@@ -401,23 +402,22 @@ def _obter_resposta_agente(
     # Modelo padrão para Teams (Sonnet por velocidade)
     from app.agente.config.feature_flags import TEAMS_DEFAULT_MODEL
 
-    # Executa a coroutine de forma sincrona
+    # Executa a coroutine de forma sincrona.
+    # asyncio.run() instala ThreadedChildWatcher automaticamente,
+    # necessário para o SDK gerenciar o CLI subprocess.
+    # new_event_loop() NÃO instala child watcher → "Command failed with exit code 1".
+    # Mesmo padrão do web agent (routes.py:628).
     try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            response = loop.run_until_complete(
-                client.get_response(
-                    prompt=prompt_completo,
-                    user_name=usuario,
-                    sdk_session_id=sdk_session_id,
-                    user_id=user_id,
-                    model=TEAMS_DEFAULT_MODEL,
-                    can_use_tool=can_use_tool,
-                )
+        response = asyncio.run(
+            client.get_response(
+                prompt=prompt_completo,
+                user_name=usuario,
+                sdk_session_id=sdk_session_id,
+                user_id=user_id,
+                model=TEAMS_DEFAULT_MODEL,
+                can_use_tool=can_use_tool,
             )
-        finally:
-            loop.close()
+        )
 
         resposta_texto = _extrair_texto_resposta(response)
         new_sdk_session_id = getattr(response, 'session_id', None)
@@ -702,11 +702,11 @@ def process_teams_task_async(
                 if resposta_texto:
                     task.status = 'completed'
                     task.resposta = _sanitizar_texto(resposta_texto)
-                    task.completed_at = datetime.now(timezone.utc)
+                    task.completed_at = agora_utc_naive()
                 else:
                     task.status = 'error'
                     task.resposta = 'O agente não retornou uma resposta.'
-                    task.completed_at = datetime.now(timezone.utc)
+                    task.completed_at = agora_utc_naive()
 
                 try:
                     db.session.commit()
@@ -726,11 +726,11 @@ def process_teams_task_async(
                                 if resposta_texto:
                                     task.status = 'completed'
                                     task.resposta = _sanitizar_texto(resposta_texto)
-                                    task.completed_at = datetime.now(timezone.utc)
+                                    task.completed_at = agora_utc_naive()
                                 else:
                                     task.status = 'error'
                                     task.resposta = 'O agente não retornou uma resposta.'
-                                    task.completed_at = datetime.now(timezone.utc)
+                                    task.completed_at = agora_utc_naive()
                                 db.session.commit()
                                 logger.info("[TEAMS-ASYNC] Retry commit bem-sucedido (re-fetched)")
                             else:
@@ -762,7 +762,7 @@ def process_teams_task_async(
                 if task and task.status not in ('completed', 'error'):
                     task.status = 'error'
                     task.resposta = f'Erro ao processar: {str(e)[:500]}'
-                    task.completed_at = datetime.now(timezone.utc)
+                    task.completed_at = agora_utc_naive()
                     db.session.commit()
             except Exception:
                 logger.error("[TEAMS-ASYNC] Erro ao marcar task como error", exc_info=True)
@@ -795,7 +795,7 @@ def cleanup_stale_teams_tasks() -> int:
         from app.teams.models import TeamsTask
         from app import db
 
-        threshold = datetime.now(timezone.utc) - timedelta(minutes=5)
+        threshold = agora_utc_naive() - timedelta(minutes=5)
 
         # P2-C: Usar updated_at ao invés de created_at para evitar matar tasks legítimas.
         # Uma task criada há 5+ min pode ter mudado para awaiting_user_input há 30s.
@@ -809,7 +809,7 @@ def cleanup_stale_teams_tasks() -> int:
         for task in stale_tasks:
             task.status = 'timeout'
             task.resposta = 'Tempo limite excedido no processamento.'
-            task.completed_at = datetime.now(timezone.utc)
+            task.completed_at = agora_utc_naive()
             count += 1
 
         if count > 0:
